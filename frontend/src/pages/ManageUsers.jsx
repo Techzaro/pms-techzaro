@@ -1,0 +1,363 @@
+import { useState, useEffect } from "react";
+import { MdAdd, MdCheckCircle, MdDelete, MdEdit } from "react-icons/md";
+import { useNavigate } from "react-router-dom";
+import DashboardLayout from "../components/layout/DashboardLayout";
+import "./ManageUsers.css";
+
+function ManageUsers() {
+  const [users, setUsers] = useState([]);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newUser, setNewUser] = useState({ fullName: "", email: "", password: "", role: "member" });
+  const [loading, setLoading] = useState(false);
+  const [savingUserId, setSavingUserId] = useState(null);
+  const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState("");
+
+  const showMessage = (text, type = "success") => {
+    setMessage(text);
+    setMessageType(type);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => {
+      setMessage("");
+      setMessageType("");
+    }, 4000);
+  };
+
+  const authHeaders = () => {
+    const token = localStorage.getItem("token");
+    return {
+      "Content-Type": "application/json",
+      Authorization: token ? `Bearer ${token}` : "",
+    };
+  };
+
+  const fetchUsers = async () => {
+    setLoading(true);
+
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/users", {
+        headers: {
+          Accept: "application/json",
+          ...authHeaders(),
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error("Unable to load users");
+      }
+
+      const data = await res.json();
+      setUsers(data.users ?? data);
+    } catch (error) {
+      console.error(error);
+      showMessage("Unable to load users. Please login again if required.", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const role = localStorage.getItem("role");
+    const token = localStorage.getItem("token");
+
+    if (!token || role !== "admin") {
+      navigate("/");
+      return;
+    }
+
+    fetchUsers();
+  }, [navigate]);
+
+  const openModal = () => setIsAddModalOpen(true);
+  const closeModal = () => setIsAddModalOpen(false);
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setNewUser((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleRoleChange = (userId, newRole) => {
+    setUsers((prev) =>
+      prev.map((user) => (user.id === userId ? { ...user, role: newRole } : user))
+    );
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!window.confirm("Delete this user?")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/users/${userId}`, {
+        method: "DELETE",
+        headers: {
+          Accept: "application/json",
+          ...authHeaders(),
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error("Unable to delete user");
+      }
+
+      setUsers((prev) => prev.filter((user) => user.id !== userId));
+    } catch (error) {
+      console.error(error);
+      showMessage("Failed to delete user.", "error");
+    }
+  };
+
+  const handleUpdateUser = async (user) => {
+    setSavingUserId(user.id);
+
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/users/${user.id}`, {
+        method: "PUT",
+        headers: {
+          Accept: "application/json",
+          ...authHeaders(),
+        },
+        body: JSON.stringify({ role: user.role }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Unable to update user");
+      }
+
+      const data = await res.json();
+      setUsers((prev) => prev.map((item) => (item.id === user.id ? { ...item, role: data.user.role } : item)));
+      showMessage("User role updated successfully.");
+    } catch (error) {
+      console.error(error);
+      showMessage("Failed to update user role.", "error");
+    } finally {
+      setSavingUserId(null);
+    }
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!newUser.fullName.trim()) {
+      showMessage("Please enter the full name.", "error");
+      return;
+    }
+
+    if (!newUser.email.trim()) {
+      showMessage("Please enter the email.", "error");
+      return;
+    }
+
+    if (!newUser.password.trim()) {
+      showMessage("Please enter the password.", "error");
+      return;
+    }
+
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/users", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          ...authHeaders(),
+        },
+        body: JSON.stringify({
+          name: newUser.fullName,
+          email: newUser.email,
+          password: newUser.password,
+          role: newUser.role,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Unable to create user");
+      }
+
+      setUsers((prev) => [data.user, ...prev]);
+      setNewUser({ fullName: "", email: "", password: "", role: "member" });
+      closeModal();
+      showMessage("User created successfully.");
+    } catch (error) {
+      console.error(error);
+      showMessage(error.message || "User creation failed.", "error");
+    }
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="manage-users-page">
+        <div className="manage-users-header">
+          <div>
+            <h1>User Management</h1>
+            <p>Register and manage users from the database in one place.</p>
+          </div>
+          <button className="primary-button add-user-button" onClick={openModal}>
+            <MdAdd /> Add New User
+          </button>
+        </div>
+
+        {message && (
+          <div className={`message ${messageType}`}>
+            {message}
+          </div>
+        )}
+
+        <div className="manage-users-table-card">
+          <div className="table-card-header">
+            <h2>Existing Users</h2>
+          </div>
+
+          <table className="manage-user-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan="5" className="loading-row">
+                    Loading users...
+                  </td>
+                </tr>
+              ) : users.length ? (
+                users.map((user) => (
+                  <tr key={user.id}>
+                    <td>{user.name}</td>
+                    <td>{user.email}</td>
+                    <td>
+                      <select
+                        className="role-select"
+                        value={user.role}
+                        onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                      >
+                        <option value="admin">Admin</option>
+                        <option value="manager">Manager</option>
+                        <option value="team_lead">Team Lead</option>
+                        <option value="member">Member</option>
+                      </select>
+                    </td>
+                    <td>Active</td>
+                    <td>
+                      <div className="action-buttons">
+                        <button
+                          className="btn-update"
+                          onClick={() => handleUpdateUser(user)}
+                          disabled={savingUserId === user.id}
+                          aria-label="Update user role"
+                        >
+                          <MdEdit size={24} />
+                        </button>
+                        <button
+                          className="btn-delete"
+                          onClick={() => handleDeleteUser(user.id)}
+                          aria-label="Delete user"
+                        >
+                          <MdDelete size={24} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5" className="empty-row">
+                    No users found yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {isAddModalOpen && (
+          <div className="user-modal-overlay">
+            <div className="user-modal-content">
+              <div className="user-modal-header">
+                <div>
+                  <h2>Add New User</h2>
+                  <p className="modal-subtitle">
+                    Register a new user in the backend and assign their role.
+                  </p>
+                </div>
+                <button onClick={closeModal} className="close-modal-button">
+                  Close
+                </button>
+              </div>
+
+              <form className="user-form" onSubmit={handleSubmit}>
+                <div className="user-form-grid">
+                  <div className="form-row">
+                    <label htmlFor="fullName">Full Name</label>
+                    <input
+                      type="text"
+                      id="fullName"
+                      name="fullName"
+                      value={newUser.fullName}
+                      onChange={handleChange}
+                      placeholder="Enter full name"
+                    />
+                  </div>
+
+                  <div className="form-row">
+                    <label htmlFor="email">Email Address</label>
+                    <input
+                      type="email"
+                      id="email"
+                      name="email"
+                      value={newUser.email}
+                      onChange={handleChange}
+                      placeholder="Enter email address"
+                    />
+                  </div>
+                </div>
+
+                <div className="user-form-grid">
+                  <div className="form-row">
+                    <label htmlFor="password">Password</label>
+                    <input
+                      type="password"
+                      id="password"
+                      name="password"
+                      value={newUser.password}
+                      onChange={handleChange}
+                      placeholder="Create a password"
+                    />
+                  </div>
+
+                  <div className="form-row">
+                    <label htmlFor="role">Role</label>
+                    <select id="role" name="role" value={newUser.role} onChange={handleChange}>
+                      <option value="admin">Admin</option>
+                      <option value="manager">Manager</option>
+                      <option value="team_lead">Team Lead</option>
+                      <option value="member">Member</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="user-form-actions">
+                  <button type="button" className="secondary-button" onClick={closeModal}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="primary-button">
+                    Create User
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    </DashboardLayout>
+  );
+}
+
+export default ManageUsers;

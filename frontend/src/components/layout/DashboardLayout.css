@@ -1,0 +1,160 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: Arial, Helvetica, sans-serif;
+}
+.dashboard-page {
+  background: #f5f7fb;
+  min-height: 100vh;
+}
+
+/* MAIN CONTENT */
+
+
+
+/* WELCOME SECTION */
+
+.welcome-box {
+  margin-bottom: 30px;
+}
+
+.welcome-box h1 {
+  font-size: 30px;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+.welcome-box p {
+  color: #64748b;
+  font-size: 15px;
+}
+
+/* STATUS BUTTONS */
+
+.status-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 35px;
+}
+
+.status-buttons{
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.status-btn{
+    padding: 10px 18px;
+    border-radius: 10px;
+    border: 1px solid #dbe2ea;
+
+    background: white;
+
+    font-size: 14px;
+    font-weight: 500;
+
+    white-space: nowrap;
+
+    width: auto;
+
+    cursor: pointer;
+
+    transition: 0.3s;
+}
+
+.status-btn:hover {
+  transform: translateY(-2px);
+}
+
+.all {
+  color: #222;
+}
+
+.pending {
+  color: #f59e0b;
+}
+
+.in-progress {
+  color: #2563eb;
+}
+
+.completed {
+  color: #111827;
+  font-weight: bold;
+}
+
+.failed {
+  color: #ef4444;
+}
+
+.abandoned {
+  color: grey;
+}
+
+/* CARDS */
+
+.dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.card-box {
+  background: white;
+  border-radius: 16px;
+  padding: 25px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  transition: 0.3s;
+}
+
+.card-box:hover {
+  transform: translateY(-4px);
+}
+
+.card-box h3 {
+  font-size: 17px;
+  color: #475569;
+  margin-bottom: 12px;
+}
+
+.card-box h2 {
+  font-size: 32px;
+  color: #0f172a;
+}
+.main-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 0 20px 20px;
+}
+
+/* Project details (and similar): hide calendar/events rail — main area uses full width */
+.main-layout--no-right {
+  gap: 0;
+}
+
+.main-layout--no-right .dashboard-content {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+  width: 100%;
+}
+
+.dashboard-content {
+  flex: 1;
+  padding: 25px;
+  background: #f5f7fb;
+  min-height: 100vh;
+}
+
+@media (max-width: 1200px) {
+  .main-layout {
+    flex-direction: column;
+  }
+
+  .dashboard-content {
+    min-height: auto;
+  }
+}

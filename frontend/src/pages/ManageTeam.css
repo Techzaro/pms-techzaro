@@ -1,0 +1,422 @@
+.manage-team-page {
+  padding: 24px;
+}
+
+.manage-team-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.manage-team-header h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.message-box {
+  border-radius: 16px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+
+.message-success {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.message-error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+/* =========================
+   MAIN GRID
+========================= */
+.team-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 20px;
+
+  /* FIX FOR STRETCHING */
+  align-items: start;
+}
+
+/* =========================
+   LEFT SIDE CARDS
+========================= */
+.team-sidecards {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+
+  /* IMPORTANT */
+  align-self: start;
+}
+
+/* =========================
+   COMMON CARD
+========================= */
+.team-card {
+  background: #ffffff;
+  border: 1px solid #e6e8ea;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 12px 35px rgba(15, 23, 42, 0.06);
+
+  /* IMPORTANT */
+  height: fit-content;
+}
+
+.team-card h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.team-card p {
+  color: #4b5563;
+  margin: 10px 0 0;
+  line-height: 1.5;
+}
+
+/* =========================
+   CREATE TEAM CARD
+========================= */
+.create-team-card {
+  background: linear-gradient(180deg, #4f7df5 0%, #3464e8 100%);
+  color: white;
+
+  /* IMPORTANT */
+  height: fit-content;
+}
+
+.create-team-card p {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+/* =========================
+   ASSIGN MEMBER CARD
+========================= */
+.assign-member-card {
+  border: 1px solid #b7f0d6;
+  background: #ffffff;
+
+  /* IMPORTANT */
+  height: fit-content;
+}
+
+.assign-member-card h2 {
+  color: #065f46;
+}
+
+/* =========================
+   FORM ROWS
+========================= */
+.create-team-card .form-row,
+.assign-member-card .form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+/* =========================
+   LABELS
+========================= */
+.create-team-card label,
+.assign-member-card label {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* =========================
+   INPUTS + SELECTS
+========================= */
+.create-team-card input,
+.create-team-card select,
+.assign-member-card input,
+.assign-member-card select {
+  width: 100%;
+  border-radius: 14px;
+  padding: 13px 15px;
+  font-size: 14px;
+  outline: none;
+  transition: 0.2s ease;
+}
+
+/* =========================
+   CREATE CARD INPUTS
+========================= */
+.create-team-card input,
+.create-team-card select {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.14);
+  color: white;
+}
+
+.create-team-card input::placeholder {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* DROPDOWN OPTIONS FIX */
+.create-team-card select option {
+  background: white;
+  color: #111827;
+}
+
+/* =========================
+   ASSIGN MEMBER INPUTS
+========================= */
+.assign-member-card label {
+  color: #111827;
+}
+
+.assign-member-card input,
+.assign-member-card select {
+  background: #f9fafb;
+  border: 1px solid #d1d5db;
+  color: #111827;
+}
+
+.assign-member-card select option {
+  background: white;
+  color: #111827;
+}
+
+/* =========================
+   INPUT FOCUS
+========================= */
+.create-team-card input:focus,
+.create-team-card select:focus,
+.assign-member-card input:focus,
+.assign-member-card select:focus {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 4px rgba(147, 197, 253, 0.2);
+}
+
+/* =========================
+   BUTTONS
+========================= */
+.create-team-card .primary-button,
+.assign-member-card .primary-button,
+.project-button {
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  padding: 14px 20px;
+  font-weight: 700;
+  transition: 0.25s ease;
+  margin-top: 14px;
+}
+
+/* CREATE TEAM BUTTON */
+.create-team-card .primary-button {
+  width: 100%;
+  background: white;
+  color: #2563eb;
+}
+
+.create-team-card .primary-button:hover {
+  background: #eff6ff;
+}
+
+/* ASSIGN MEMBER BUTTON */
+.assign-member-card .primary-button {
+  width: 100%;
+  background: #2563eb;
+  color: white;
+}
+
+.assign-member-card .primary-button:hover {
+  background: #1d4ed8;
+}
+
+/* =========================
+   RIGHT SIDE
+========================= */
+.team-list {
+  display: grid;
+  gap: 20px;
+
+  /* IMPORTANT */
+  align-self: start;
+}
+
+.team-preview {
+  padding: 24px;
+}
+
+/* =========================
+   TEAM HEADER
+========================= */
+.team-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.team-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.team-preview-header h3 {
+  margin: 0;
+  font-size: 22px;
+}
+
+/* =========================
+   ACTION BUTTONS
+========================= */
+.team-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.icon-button {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  background: white;
+  color: #374151;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.icon-button:hover {
+  background: #f3f4f6;
+}
+
+/* =========================
+   MEMBER BOX
+========================= */
+.team-members-box {
+  background: #f8fafc;
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 14px;
+}
+
+.team-members-box > span {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 8px;
+  letter-spacing: 0.04em;
+}
+
+.member-leader-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.no-members-note {
+  margin: 0;
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+/* =========================
+   MEMBER CHIP + CROWN
+========================= */
+.team-member-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e5e7eb;
+  background: white;
+  color: #111827;
+  border-radius: 14px;
+  padding: 8px 12px 8px 8px;
+  margin: 6px 6px 0 0;
+}
+
+.team-member-chip-leader {
+  border-color: #eab308;
+  background: #fffbeb;
+  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.25);
+}
+
+.leader-crown-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+}
+
+.leader-crown-btn:hover {
+  color: #ca8a04;
+  background: rgba(250, 204, 21, 0.2);
+}
+
+.leader-crown-btn.is-leader {
+  color: #a16207;
+  background: rgba(250, 204, 21, 0.35);
+}
+
+.leader-crown-btn.is-leader svg {
+  fill: #facc15;
+  stroke: #a16207;
+}
+
+.remove-member-btn {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 6px;
+  margin-left: auto;
+}
+
+.team-member-chip strong {
+  font-weight: 600;
+}
+
+/* =========================
+   PROJECT BUTTON
+========================= */
+.project-button {
+  width: 100%;
+  background: #2563eb;
+  color: white;
+}
+
+.project-button:hover {
+  background: #1d4ed8;
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+@media (max-width: 980px) {
+  .team-grid {
+    grid-template-columns: 1fr;
+  }
+}

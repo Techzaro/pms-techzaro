@@ -1,0 +1,221 @@
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+
+import Login from "./pages/Login";
+import Admin from "./pages/Admin";
+import Manager from "./pages/Manager";
+import TeamLead from "./pages/TeamLead";
+import Member from "./pages/Member";
+import Tasks from "./pages/Tasks";
+import Projects from "./pages/Projects";
+import CreateProject from "./pages/CreateProject";
+import ProjectDetails from "./pages/ProjectDetails";
+import AddTask from "./pages/AddTask";
+import ManageUsers from "./pages/ManageUsers";
+import Deliveries from "./pages/Deliveries";
+import Details from "./pages/Details";
+import History from "./pages/History";
+import Reports from "./pages/Reports";
+import ManageTeam from "./pages/ManageTeam";
+import Profile from "./pages/Profile";
+
+import ProtectedRoute from "./components/ProtectedRoute";
+
+function App() {
+
+  return (
+
+    <BrowserRouter>
+
+      <Routes>
+
+        {/* PUBLIC */}
+
+        <Route path="/" element={<Login />} />
+
+
+        {/* ADMIN */}
+
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <Admin />
+            </ProtectedRoute>
+          }
+        />
+
+
+        {/* MANAGER */}
+
+        <Route
+          path="/manager"
+          element={
+            <ProtectedRoute>
+              <Manager />
+            </ProtectedRoute>
+          }
+        />
+
+
+        {/* TEAM LEAD */}
+
+        <Route
+          path="/teamlead"
+          element={
+            <ProtectedRoute>
+              <TeamLead />
+            </ProtectedRoute>
+          }
+        />
+
+
+        {/* MEMBER */}
+
+        <Route
+          path="/member"
+          element={
+            <ProtectedRoute>
+              <Member />
+            </ProtectedRoute>
+          }
+        />
+/* TASKS */
+
+<Route
+  path="/tasks"
+  element={
+    <ProtectedRoute>
+      <Tasks />
+    </ProtectedRoute>
+  }
+/>
+
+/* ADD TASK */
+
+<Route
+  path="/add-task"
+  element={
+    <ProtectedRoute>
+      <AddTask />
+    </ProtectedRoute>
+  }
+/>
+
+
+/* PROJECTS */
+
+<Route
+  path="/projects"
+  element={
+    <ProtectedRoute>
+      <Projects />
+    </ProtectedRoute>
+  }
+/>
+
+/* CREATE PROJECT */
+
+<Route
+  path="/create-project"
+  element={
+    <ProtectedRoute>
+      <CreateProject />
+    </ProtectedRoute>
+  }
+/>
+
+/* PROJECT DETAILS */
+
+<Route
+  path="/projects/:projectId"
+  element={
+    <ProtectedRoute>
+      <ProjectDetails />
+    </ProtectedRoute>
+  }
+/>
+
+/* DELIVERIES */
+
+<Route
+  path="/deliveries"
+  element={
+    <ProtectedRoute>
+      <Deliveries />
+    </ProtectedRoute>
+  }
+/>
+
+/* DETAILS */
+
+<Route
+  path="/details"
+  element={
+    <ProtectedRoute>
+      <Details />
+    </ProtectedRoute>
+  }
+/>
+
+/* HISTORY */
+
+<Route
+  path="/history"
+  element={
+    <ProtectedRoute>
+      <History />
+    </ProtectedRoute>
+  }
+/>
+
+/* REPORTS */
+
+<Route
+  path="/reports"
+  element={
+    <ProtectedRoute>
+      <Reports />
+    </ProtectedRoute>
+  }
+/>
+
+/* MANAGE USERS */
+
+<Route
+  path="/manage-users"
+  element={
+    <ProtectedRoute>
+      <ManageUsers />
+    </ProtectedRoute>
+  }
+/>
+
+/* MANAGE TEAM */
+
+<Route
+  path="/manage-team"
+  element={
+    <ProtectedRoute>
+      <ManageTeam />
+    </ProtectedRoute>
+  }
+/>
+
+/* PROFILE */
+
+<Route
+  path="/profile"
+  element={
+    <ProtectedRoute>
+      <Profile />
+    </ProtectedRoute>
+  }
+/>
+      </Routes>
+
+    </BrowserRouter>
+
+  );
+}
+
+export default App;
