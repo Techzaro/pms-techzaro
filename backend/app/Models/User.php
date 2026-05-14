@@ -1,5 +1,9 @@
 <?php
 
+/**
+ * Eloquent model for application users and authentication.
+ */
+
 namespace App\Models;
 
 use Laravel\Sanctum\HasApiTokens;
@@ -8,6 +12,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
+/**
+ * Eloquent model for application users.
+ * Uses Sanctum tokens and standard authentication behavior.
+ */
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;

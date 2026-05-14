@@ -1,3 +1,8 @@
+/**
+ * ProjectDetails page component.
+ * Rendered when the user navigates to /projectdetails or related route.
+ */
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -24,6 +29,13 @@ import "./ProjectDetails.css";
 
 const API = "http://127.0.0.1:8000/api";
 
+/**
+ * Perform the status slug.
+ */
+
+/**
+ * Handle status slug.
+ */
 function statusSlug(status) {
   return (status || "")
     .toLowerCase()
@@ -31,6 +43,13 @@ function statusSlug(status) {
     .replace(/[^a-z0-9_]/g, "");
 }
 
+/**
+ * Perform the format short date.
+ */
+
+/**
+ * Handle format short date.
+ */
 function formatShortDate(value) {
   if (!value) return "—";
   const d = new Date(value);
@@ -38,6 +57,13 @@ function formatShortDate(value) {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
+/**
+ * Perform the time ago.
+ */
+
+/**
+ * Handle time ago.
+ */
 function timeAgo(iso) {
   if (!iso) return "";
   const then = new Date(iso).getTime();
@@ -48,7 +74,21 @@ function timeAgo(iso) {
   return `${Math.floor(sec / 86400)} days ago`;
 }
 
+/**
+ * Perform the task status label.
+ */
+
+/**
+ * Handle task status label.
+ */
 function taskStatusLabel(status) {
+  /**
+   * Perform the s.
+   */
+
+  /**
+   * Handle s.
+   */
   const s = (status || "").toLowerCase();
   if (s === "completed" || s === "done") return "Completed";
   if (s === "in_progress") return "In Progress";
@@ -56,6 +96,13 @@ function taskStatusLabel(status) {
   return status || "Pending";
 }
 
+/**
+ * Perform the initials.
+ */
+
+/**
+ * Handle initials.
+ */
 function initials(name) {
   if (!name) return "?";
   const parts = name.trim().split(/\s+/);
@@ -64,10 +111,24 @@ function initials(name) {
   return (a + b).toUpperCase() || a.toUpperCase();
 }
 
+/**
+ * Perform the sanitize html.
+ */
+
+/**
+ * Handle sanitize html.
+ */
 function sanitizeHtml(html) {
   return String(html || "").replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
 }
 
+/**
+ * Perform the project details.
+ */
+
+/**
+ * Page displaying full project details, tasks, milestones and notes.
+ */
 function ProjectDetails() {
   const { projectId } = useParams();
   const navigate = useNavigate();
@@ -146,11 +207,25 @@ function ProjectDetails() {
     };
   }, [loadProject, navigate, showMessage]);
 
+  /**
+   * Perform the handle task form change.
+   */
+
+  /**
+   * Handle handle task form change.
+   */
   const handleTaskFormChange = (e) => {
     const { name, value } = e.target;
     setTaskForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  /**
+   * Perform the handle add task.
+   */
+
+  /**
+   * Handle handle add task.
+   */
   const handleAddTask = async (e) => {
     e.preventDefault();
     if (!taskForm.title.trim()) {
@@ -187,6 +262,13 @@ function ProjectDetails() {
     }
   };
 
+  /**
+   * Perform the handle delete task.
+   */
+
+  /**
+   * Handle handle delete task.
+   */
   const handleDeleteTask = async (taskId) => {
     if (!window.confirm("Delete this task?")) return;
     try {
@@ -207,6 +289,13 @@ function ProjectDetails() {
     }
   };
 
+  /**
+   * Perform the handle save notes.
+   */
+
+  /**
+   * Handle handle save notes.
+   */
   const handleSaveNotes = async () => {
     setNotesSaving(true);
     try {
@@ -232,6 +321,13 @@ function ProjectDetails() {
     }
   };
 
+  /**
+   * Perform the handle toggle goal.
+   */
+
+  /**
+   * Handle handle toggle goal.
+   */
   const handleToggleGoal = async (index) => {
     const list = Array.isArray(project.goals_checklist) ? [...project.goals_checklist] : [];
     if (!list[index]) return;
@@ -256,6 +352,13 @@ function ProjectDetails() {
     }
   };
 
+  /**
+   * Perform the handle delete project.
+   */
+
+  /**
+   * Handle handle delete project.
+   */
   const handleDeleteProject = async () => {
     if (!window.confirm("Delete this project permanently?")) return;
     try {
@@ -312,6 +415,13 @@ function ProjectDetails() {
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
+  /**
+   * Perform the render rail.
+   */
+
+  /**
+   * Handle render rail.
+   */
   const renderRail = () => (
     <div className="pd-rail">
       <section className="pd-rail-card">
@@ -390,6 +500,13 @@ function ProjectDetails() {
     </div>
   );
 
+  /**
+   * Perform the overview inner.
+   */
+
+  /**
+   * Handle overview inner.
+   */
   const overviewInner = (
     <>
       <div className="pd-shell-split">

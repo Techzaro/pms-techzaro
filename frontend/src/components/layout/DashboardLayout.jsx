@@ -1,9 +1,20 @@
+/**
+ * DashboardLayout component.
+ */
+
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import RightSidebar from "./RightSidebar";
 
 import "./DashboardLayout.css";
 
+/**
+ * Perform the dashboard layout.
+ */
+
+/**
+ * Dashboard layout wrapper that renders navigation and main content areas.
+ */
 function DashboardLayout({ children, hideRightSidebar = false }) {
   return (
     <div className="dashboard-page">

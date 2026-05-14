@@ -1,5 +1,16 @@
+/**
+ * RightSidebar component.
+ */
+
 import "./RightSidebar.css";
 
+/**
+ * Perform the right sidebar.
+ */
+
+/**
+ * Right sidebar component used for dashboard details and quick actions.
+ */
 function RightSidebar() {
   return (
     <aside className="right-sidebar">

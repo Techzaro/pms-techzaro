@@ -1,3 +1,7 @@
+/**
+ * Sidebar component.
+ */
+
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 
@@ -17,6 +21,13 @@ import {
 
 import "./Sidebar.css";
 
+/**
+ * Perform the sidebar.
+ */
+
+/**
+ * Sidebar navigation component used in dashboard layout.
+ */
 function Sidebar() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -56,13 +67,34 @@ function Sidebar() {
       });
   }, []);
 
+  /**
+   * Perform the open profile modal.
+   */
+
+  /**
+   * Handle open profile modal.
+   */
   const openProfileModal = () => setIsProfileModalOpen(true);
+  /**
+   * Perform the close profile modal.
+   */
+
+  /**
+   * Handle close profile modal.
+   */
   const closeProfileModal = () => {
     setIsProfileModalOpen(false);
     setNewPassword("");
     setConfirmPassword("");
   };
 
+  /**
+   * Perform the handle password change.
+   */
+
+  /**
+   * Handle handle password change.
+   */
   const handlePasswordChange = async () => {
     if (!newPassword || !confirmPassword) {
       alert("Please enter and confirm your new password.");

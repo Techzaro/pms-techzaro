@@ -1,10 +1,17 @@
 <?php
 
+/**
+ * Eloquent model that represents a task within a project.
+ */
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Eloquent model for tasks attached to projects.
+ */
 class Task extends Model
 {
     protected $fillable = [
@@ -23,10 +30,18 @@ class Task extends Model
         'end_date' => 'datetime',
     ];
 
+    /**
+     * Perform the project.
+     */
+
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
     }
+
+    /**
+     * Perform the assignee.
+     */
 
     public function assignee(): BelongsTo
     {

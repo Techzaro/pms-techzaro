@@ -1,5 +1,9 @@
 <?php
 
+/**
+ * Controller for administration and user account management.
+ */
+
 namespace App\Http\Controllers;
 
 use App\Models\User;
@@ -7,8 +11,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
+/**
+ * User management controller.
+ * Handles listing, creating, updating, and deleting users.
+ */
 class UserController extends Controller
 {
+    /**
+     * Return a list of all users.
+     */
     public function index()
     {
         $users = User::select('id', 'name', 'email', 'role')->orderBy('created_at', 'desc')->get();
@@ -18,6 +29,9 @@ class UserController extends Controller
         ]);
     }
 
+    /**
+     * Create a new user account.
+     */
     public function store(Request $request)
     {
         $request->validate([
@@ -41,6 +55,9 @@ class UserController extends Controller
         ], 201);
     }
 
+    /**
+     * Update the role of an existing user.
+     */
     public function update(Request $request, User $user)
     {
         $request->validate([
@@ -57,6 +74,9 @@ class UserController extends Controller
         ]);
     }
 
+    /**
+     * Delete a user from the system.
+     */
     public function destroy(User $user)
     {
         $user->delete();
@@ -67,6 +87,9 @@ class UserController extends Controller
         ]);
     }
 
+    /**
+     * Return a simplified user list for team assignment.
+     */
     public function getTeamUsers(Request $request)
     {
         $users = User::select('id', 'name', 'email', 'role')

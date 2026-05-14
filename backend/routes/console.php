@@ -1,5 +1,9 @@
 <?php
 
+/**
+ * Console PHP file for the project.
+ */
+
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 

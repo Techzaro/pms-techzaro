@@ -1,13 +1,23 @@
 <?php
 
+/**
+ * Controller for creating and deleting project tasks.
+ */
+
 namespace App\Http\Controllers;
 
 use App\Models\Project;
 use App\Models\Task;
 use Illuminate\Http\Request;
 
+/**
+ * Controller responsible for creating and removing project tasks.
+ */
 class TaskController extends Controller
 {
+    /**
+     * Create a new task under a given project.
+     */
     public function store(Request $request, Project $project)
     {
         $validated = $request->validate([
@@ -36,6 +46,9 @@ class TaskController extends Controller
         ], 201);
     }
 
+    /**
+     * Delete the provided task.
+     */
     public function destroy(Task $task)
     {
         $task->delete();

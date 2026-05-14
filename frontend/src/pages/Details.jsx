@@ -1,5 +1,17 @@
+/**
+ * Details page component.
+ * Rendered when the user navigates to /details or related route.
+ */
+
 import DashboardLayout from "../components/layout/DashboardLayout";
 
+/**
+ * Perform the details.
+ */
+
+/**
+ * Generic details page for showing item-specific details.
+ */
 function Details() {
   return (
     <DashboardLayout>

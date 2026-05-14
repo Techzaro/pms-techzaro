@@ -1,6 +1,17 @@
+/**
+ * Login page component.
+ * Handles user authentication and redirects based on role.
+ */
 import { useState } from "react";
 import "./Login.css";
 
+/**
+ * Perform the login.
+ */
+
+/**
+ * Login page component which authenticates users and routes them by role.
+ */
 function Login() {
 
   const [email, setEmail] = useState("");
@@ -9,6 +20,9 @@ function Login() {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
 
+  /**
+   * Display a temporary status message to the user.
+   */
   const showMessage = (text, type = "success") => {
     setMessage(text);
     setMessageType(type);
@@ -19,6 +33,9 @@ function Login() {
     }, 4000);
   };
 
+  /**
+   * Submit login credentials to the backend and handle response.
+   */
   const handleLogin = async () => {
     if (!email.trim()) {
       showMessage("Please enter your email.", "error");

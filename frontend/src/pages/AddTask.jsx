@@ -1,8 +1,20 @@
+/**
+ * AddTask page component.
+ * Rendered when the user navigates to /addtask or related route.
+ */
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import "./AddTask.css";
 
+/**
+ * Perform the add task.
+ */
+
+/**
+ * Page to add a new task inside a project.
+ */
 function AddTask() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("details");
@@ -22,6 +34,13 @@ function AddTask() {
   const [links, setLinks] = useState([]);
   const [newLink, setNewLink] = useState("");
 
+  /**
+   * Perform the handle change.
+   */
+
+  /**
+   * Handle handle change.
+   */
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
@@ -30,6 +49,13 @@ function AddTask() {
     }));
   };
 
+  /**
+   * Perform the handle multi select.
+   */
+
+  /**
+   * Handle handle multi select.
+   */
   const handleMultiSelect = (e) => {
     const selectedOptions = Array.from(e.target.selectedOptions, (option) => option.value);
     setFormData((prev) => ({
@@ -38,11 +64,25 @@ function AddTask() {
     }));
   };
 
+  /**
+   * Perform the handle file upload.
+   */
+
+  /**
+   * Handle handle file upload.
+   */
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
     setUploadedFiles((prev) => [...prev, ...files]);
   };
 
+  /**
+   * Perform the handle add link.
+   */
+
+  /**
+   * Handle handle add link.
+   */
   const handleAddLink = () => {
     if (newLink.trim()) {
       setLinks((prev) => [...prev, newLink]);
@@ -50,20 +90,48 @@ function AddTask() {
     }
   };
 
+  /**
+   * Perform the handle remove file.
+   */
+
+  /**
+   * Handle handle remove file.
+   */
   const handleRemoveFile = (index) => {
     setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  /**
+   * Perform the handle remove link.
+   */
+
+  /**
+   * Handle handle remove link.
+   */
   const handleRemoveLink = (index) => {
     setLinks((prev) => prev.filter((_, i) => i !== index));
   };
 
+  /**
+   * Perform the handle submit.
+   */
+
+  /**
+   * Handle handle submit.
+   */
   const handleSubmit = (e) => {
     e.preventDefault();
     console.log("Task Data:", { formData, uploadedFiles, links });
     alert("Task will be created after database setup!");
   };
 
+  /**
+   * Perform the handle close.
+   */
+
+  /**
+   * Handle handle close.
+   */
   const handleClose = () => {
     navigate("/tasks");
   };

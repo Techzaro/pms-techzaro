@@ -1,3 +1,7 @@
+/**
+ * Main React application router.
+ * Defines public and protected routes for different user roles.
+ */
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Login from "./pages/Login";
@@ -19,6 +23,10 @@ import ManageTeam from "./pages/ManageTeam";
 import Profile from "./pages/Profile";
 
 import ProtectedRoute from "./components/ProtectedRoute";
+
+/**
+ * Perform the app.
+ */
 
 function App() {
 

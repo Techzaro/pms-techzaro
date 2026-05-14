@@ -1,3 +1,8 @@
+/**
+ * CreateProject page component.
+ * Rendered when the user navigates to /createproject or related route.
+ */
+
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import ReactQuill from "react-quill-new";
@@ -5,6 +10,13 @@ import "react-quill-new/dist/quill.snow.css";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import "./CreateProject.css";
 
+/**
+ * Perform the create project.
+ */
+
+/**
+ * Page to create a new project with details, goals, milestones and assigned users.
+ */
 function CreateProject() {
   const [formData, setFormData] = useState({
     title: "",
@@ -50,6 +62,13 @@ function CreateProject() {
     }
   }, []);
 
+  /**
+   * Perform the fetch users.
+   */
+
+  /**
+   * Fetch the list of users from the backend for assignment.
+   */
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -71,6 +90,13 @@ function CreateProject() {
     }
   };
 
+  /**
+   * Perform the fetch teams.
+   */
+
+  /**
+   * Fetch the list of teams from the backend for project assignment.
+   */
   const fetchTeams = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -92,6 +118,13 @@ function CreateProject() {
     }
   };
 
+  /**
+   * Perform the handle input change.
+   */
+
+  /**
+   * Update the form state when a field value changes.
+   */
   const handleInputChange = (e) => {
     const { name, value } = e.target;
 
@@ -101,6 +134,13 @@ function CreateProject() {
     }));
   };
 
+  /**
+   * Perform the handle user select.
+   */
+
+  /**
+   * Toggle a user in the assigned users list.
+   */
   const handleUserSelect = (userId) => {
     setFormData((prev) => ({
       ...prev,
@@ -110,6 +150,13 @@ function CreateProject() {
     }));
   };
 
+  /**
+   * Perform the update rich text.
+   */
+
+  /**
+   * Update a rich text field value in the form state.
+   */
   const updateRichText = (field, html) => {
     setFormData((prev) => ({
       ...prev,
@@ -151,6 +198,13 @@ function CreateProject() {
     "video",
   ];
 
+  /**
+   * Perform the handle create project.
+   */
+
+  /**
+   * Submit the create project request to the backend API.
+   */
   const handleCreateProject = async (e) => {
     e.preventDefault();
 

@@ -1,7 +1,19 @@
+/**
+ * Profile page component.
+ * Rendered when the user navigates to /profile or related route.
+ */
+
 import { useEffect, useState } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import "./Profile.css";
 
+/**
+ * Perform the profile.
+ */
+
+/**
+ * User profile page for editing personal data.
+ */
 function Profile() {
   const [openModal, setOpenModal] = useState(false);
   const [user, setUser] = useState({
@@ -14,6 +26,13 @@ function Profile() {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
 
+  /**
+   * Display a temporary message banner to the user.
+   */
+
+  /**
+   * Display a temporary status message to the user.
+   */
   const showMessage = (text, type = "success") => {
     setMessage(text);
     setMessageType(type);
@@ -52,6 +71,13 @@ function Profile() {
       });
   }, []);
 
+  /**
+   * Perform the handle change password.
+   */
+
+  /**
+   * Handle handle change password.
+   */
   const handleChangePassword = async () => {
     if (!newPassword.trim()) {
       showMessage("Please enter the new password.", "error");

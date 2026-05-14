@@ -1,5 +1,17 @@
+/**
+ * Reports page component.
+ * Rendered when the user navigates to /reports or related route.
+ */
+
 import DashboardLayout from "../components/layout/DashboardLayout";
 
+/**
+ * Perform the reports.
+ */
+
+/**
+ * Page showing aggregated reports and statistics.
+ */
 function Reports() {
   return (
     <DashboardLayout>

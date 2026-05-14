@@ -1,8 +1,20 @@
+/**
+ * Projects page component.
+ * Rendered when the user navigates to /projects or related route.
+ */
+
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import "./Projects.css";
 
+/**
+ * Perform the projects.
+ */
+
+/**
+ * Project list page for viewing and navigating projects.
+ */
 function Projects() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -12,6 +24,13 @@ function Projects() {
     fetchProjects();
   }, []);
 
+  /**
+   * Perform the fetch projects.
+   */
+
+  /**
+   * Handle fetch projects.
+   */
   const fetchProjects = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -44,6 +63,13 @@ function Projects() {
     }
   };
 
+  /**
+   * Perform the get status badge color.
+   */
+
+  /**
+   * Handle get status badge color.
+   */
   const getStatusBadgeColor = (status) => {
     switch (status?.toLowerCase()) {
       case "completed":

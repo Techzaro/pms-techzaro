@@ -1,7 +1,19 @@
+/**
+ * Member page component.
+ * Rendered when the user navigates to /member or related route.
+ */
+
 import Header from "../components/layout/Header";
 import Sidebar from "../components/layout/Sidebar";
 import RightSidebar from "../components/layout/RightSidebar";
 
+/**
+ * Perform the admin.
+ */
+
+/**
+ * Admin dashboard page.
+ */
 function Admin() {
   return (
     <div className="dashboard-page">

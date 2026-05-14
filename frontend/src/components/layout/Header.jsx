@@ -1,8 +1,19 @@
+/**
+ * Header component.
+ */
+
 
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import "./Header.css";
 
+/**
+ * Perform the header.
+ */
+
+/**
+ * Header component used in dashboard layout.
+ */
 function Header() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [user, setUser] = useState({
@@ -11,6 +22,13 @@ function Header() {
     role: localStorage.getItem("role") || "Member",
   });
 
+  /**
+   * Perform the toggle profile modal.
+   */
+
+  /**
+   * Handle toggle profile modal.
+   */
   const toggleProfileModal = () => setIsProfileOpen((prev) => !prev);
 
   useEffect(() => {

@@ -1,14 +1,24 @@
 <?php
 
+/**
+ * Controller responsible for authentication actions such as login, logout, and password changes.
+ */
+
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
+/**
+ * Controller responsible for authentication actions.
+ * Handles login, logout, and password update operations.
+ */
 class AuthController extends Controller
 {
     /**
      * LOGIN
+     *
+     * Validate user credentials and generate a Sanctum token.
      */
     public function login(Request $request)
     {

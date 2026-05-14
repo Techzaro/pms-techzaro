@@ -1,9 +1,21 @@
+/**
+ * ManageUsers page component.
+ * Rendered when the user navigates to /manageusers or related route.
+ */
+
 import { useState, useEffect } from "react";
 import { MdAdd, MdCheckCircle, MdDelete, MdEdit } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import "./ManageUsers.css";
 
+/**
+ * Perform the manage users.
+ */
+
+/**
+ * Admin page for managing application users.
+ */
 function ManageUsers() {
   const [users, setUsers] = useState([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -13,6 +25,13 @@ function ManageUsers() {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
 
+  /**
+   * Display a temporary message banner to the user.
+   */
+
+  /**
+   * Display a temporary status message to the user.
+   */
   const showMessage = (text, type = "success") => {
     setMessage(text);
     setMessageType(type);
@@ -23,6 +42,13 @@ function ManageUsers() {
     }, 4000);
   };
 
+  /**
+   * Perform the auth headers.
+   */
+
+  /**
+   * Handle auth headers.
+   */
   const authHeaders = () => {
     const token = localStorage.getItem("token");
     return {
@@ -31,6 +57,13 @@ function ManageUsers() {
     };
   };
 
+  /**
+   * Perform the fetch users.
+   */
+
+  /**
+   * Fetch the list of users from the backend for assignment.
+   */
   const fetchUsers = async () => {
     setLoading(true);
 
@@ -70,20 +103,55 @@ function ManageUsers() {
     fetchUsers();
   }, [navigate]);
 
+  /**
+   * Perform the open modal.
+   */
+
+  /**
+   * Handle open modal.
+   */
   const openModal = () => setIsAddModalOpen(true);
+  /**
+   * Perform the close modal.
+   */
+
+  /**
+   * Handle close modal.
+   */
   const closeModal = () => setIsAddModalOpen(false);
 
+  /**
+   * Perform the handle change.
+   */
+
+  /**
+   * Handle handle change.
+   */
   const handleChange = (event) => {
     const { name, value } = event.target;
     setNewUser((prev) => ({ ...prev, [name]: value }));
   };
 
+  /**
+   * Perform the handle role change.
+   */
+
+  /**
+   * Handle handle role change.
+   */
   const handleRoleChange = (userId, newRole) => {
     setUsers((prev) =>
       prev.map((user) => (user.id === userId ? { ...user, role: newRole } : user))
     );
   };
 
+  /**
+   * Perform the handle delete user.
+   */
+
+  /**
+   * Handle handle delete user.
+   */
   const handleDeleteUser = async (userId) => {
     if (!window.confirm("Delete this user?")) {
       return;
@@ -109,6 +177,13 @@ function ManageUsers() {
     }
   };
 
+  /**
+   * Perform the handle update user.
+   */
+
+  /**
+   * Handle handle update user.
+   */
   const handleUpdateUser = async (user) => {
     setSavingUserId(user.id);
 
@@ -137,6 +212,13 @@ function ManageUsers() {
     }
   };
 
+  /**
+   * Perform the handle submit.
+   */
+
+  /**
+   * Handle handle submit.
+   */
   const handleSubmit = async (event) => {
     event.preventDefault();
 

@@ -1,8 +1,20 @@
+/**
+ * Admin page component.
+ * Rendered when the user navigates to /admin or related route.
+ */
+
 import { useEffect, useState } from "react";
 import Header from "../components/layout/Header";
 import Sidebar from "../components/layout/Sidebar";
 import RightSidebar from "../components/layout/RightSidebar";
 
+/**
+ * Perform the admin.
+ */
+
+/**
+ * Admin dashboard page.
+ */
 function Admin() {
   const [greeting, setGreeting] = useState("Welcome");
 

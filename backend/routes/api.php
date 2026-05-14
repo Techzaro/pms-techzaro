@@ -1,5 +1,12 @@
 <?php
 
+/**
+ * API route definitions for the PMS backend.
+ *
+ * Public routes are available without authentication.
+ * Protected routes require a valid Sanctum token.
+ * Role-specific routes use RoleMiddleware to enforce access.
+ */
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use App\Http\Controllers\AuthController;
@@ -9,9 +16,7 @@ use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TeamController;
 
 /*
-|--------------------------------------------------------------------------
 | PUBLIC ROUTES
-|--------------------------------------------------------------------------
 */
 
 // Login (no auth required)
@@ -19,9 +24,7 @@ Route::post('/login', [AuthController::class, 'login']);
 
 
 /*
-|--------------------------------------------------------------------------
 | PROTECTED ROUTES (Need Token)
-|--------------------------------------------------------------------------
 */
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -67,9 +70,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
 
     /*
-    |--------------------------------------------------------------------------
     | ROLE BASED ROUTES
-    |--------------------------------------------------------------------------
     */
 
     // ADMIN ROUTES

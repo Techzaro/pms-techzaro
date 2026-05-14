@@ -36,27 +36,38 @@
 }
 
 /* =========================
-   MAIN GRID
+   HEADER BUTTON
 ========================= */
-.team-grid {
-  display: grid;
-  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-  gap: 20px;
+.create-team-header-btn {
+  border: none;
+  border-radius: 14px;
+  padding: 12px 20px;
+  background: #2563eb;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.25s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+}
 
-  /* FIX FOR STRETCHING */
-  align-items: start;
+.create-team-header-btn:hover {
+  background: #1d4ed8;
+}
+
+.create-team-header-btn:active {
+  transform: scale(0.98);
 }
 
 /* =========================
-   LEFT SIDE CARDS
+   MAIN GRID - SIMPLIFIED (NO SIDEBAR)
 ========================= */
-.team-sidecards {
-  display: flex;
-  flex-direction: column;
+.team-list-simple {
+  display: grid;
   gap: 20px;
-
-  /* IMPORTANT */
-  align-self: start;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
 }
 
 /* =========================
@@ -85,172 +96,11 @@
   line-height: 1.5;
 }
 
-/* =========================
-   CREATE TEAM CARD
-========================= */
-.create-team-card {
-  background: linear-gradient(180deg, #4f7df5 0%, #3464e8 100%);
-  color: white;
 
-  /* IMPORTANT */
-  height: fit-content;
-}
-
-.create-team-card p {
-  color: rgba(255, 255, 255, 0.88);
-}
 
 /* =========================
-   ASSIGN MEMBER CARD
+   TEAM PREVIEW
 ========================= */
-.assign-member-card {
-  border: 1px solid #b7f0d6;
-  background: #ffffff;
-
-  /* IMPORTANT */
-  height: fit-content;
-}
-
-.assign-member-card h2 {
-  color: #065f46;
-}
-
-/* =========================
-   FORM ROWS
-========================= */
-.create-team-card .form-row,
-.assign-member-card .form-row {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 14px;
-}
-
-/* =========================
-   LABELS
-========================= */
-.create-team-card label,
-.assign-member-card label {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-/* =========================
-   INPUTS + SELECTS
-========================= */
-.create-team-card input,
-.create-team-card select,
-.assign-member-card input,
-.assign-member-card select {
-  width: 100%;
-  border-radius: 14px;
-  padding: 13px 15px;
-  font-size: 14px;
-  outline: none;
-  transition: 0.2s ease;
-}
-
-/* =========================
-   CREATE CARD INPUTS
-========================= */
-.create-team-card input,
-.create-team-card select {
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.14);
-  color: white;
-}
-
-.create-team-card input::placeholder {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-/* DROPDOWN OPTIONS FIX */
-.create-team-card select option {
-  background: white;
-  color: #111827;
-}
-
-/* =========================
-   ASSIGN MEMBER INPUTS
-========================= */
-.assign-member-card label {
-  color: #111827;
-}
-
-.assign-member-card input,
-.assign-member-card select {
-  background: #f9fafb;
-  border: 1px solid #d1d5db;
-  color: #111827;
-}
-
-.assign-member-card select option {
-  background: white;
-  color: #111827;
-}
-
-/* =========================
-   INPUT FOCUS
-========================= */
-.create-team-card input:focus,
-.create-team-card select:focus,
-.assign-member-card input:focus,
-.assign-member-card select:focus {
-  border-color: #93c5fd;
-  box-shadow: 0 0 0 4px rgba(147, 197, 253, 0.2);
-}
-
-/* =========================
-   BUTTONS
-========================= */
-.create-team-card .primary-button,
-.assign-member-card .primary-button,
-.project-button {
-  border: none;
-  border-radius: 14px;
-  cursor: pointer;
-  padding: 14px 20px;
-  font-weight: 700;
-  transition: 0.25s ease;
-  margin-top: 14px;
-}
-
-/* CREATE TEAM BUTTON */
-.create-team-card .primary-button {
-  width: 100%;
-  background: white;
-  color: #2563eb;
-}
-
-.create-team-card .primary-button:hover {
-  background: #eff6ff;
-}
-
-/* ASSIGN MEMBER BUTTON */
-.assign-member-card .primary-button {
-  width: 100%;
-  background: #2563eb;
-  color: white;
-}
-
-.assign-member-card .primary-button:hover {
-  background: #1d4ed8;
-}
-
-/* =========================
-   RIGHT SIDE
-========================= */
-.team-list {
-  display: grid;
-  gap: 20px;
-
-  /* IMPORTANT */
-  align-self: start;
-}
-
-.team-preview {
-  padding: 24px;
-}
 
 /* =========================
    TEAM HEADER
@@ -406,17 +256,59 @@
   width: 100%;
   background: #2563eb;
   color: white;
+  border: none;
+  border-radius: 14px;
+  padding: 14px 20px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.25s ease;
+  margin-top: 14px;
+  font-size: 16px;
 }
 
 .project-button:hover {
   background: #1d4ed8;
 }
 
+.project-button:active {
+  transform: scale(0.98);
+}
+
+/* =========================
+   EMPTY STATE
+========================= */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px !important;
+  color: #6b7280;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
 /* =========================
    RESPONSIVE
 ========================= */
 @media (max-width: 980px) {
-  .team-grid {
+  .team-list-simple {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .team-list-simple {
+    grid-template-columns: 1fr;
+  }
+  
+  .manage-team-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .create-team-header-btn {
+    width: 100%;
   }
 }

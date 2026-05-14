@@ -1,18 +1,33 @@
 <?php
 
+/**
+ * Controller for team creation, member assignment, and leader management.
+ */
+
 namespace App\Http\Controllers;
 
 use App\Models\Team;
 use App\Models\User;
 use Illuminate\Http\Request;
 
+/**
+ * Team management controller.
+ * Handles teams, members, leaders, and deletion.
+ */
 class TeamController extends Controller
 {
+    /**
+     * Return all teams with leaders and members.
+     */
     public function index()
     {
         $teams = Team::with(['leader:id,name', 'members:id,name'])->orderBy('created_at', 'desc')->get();
         return response()->json($teams);
     }
+
+    /**
+     * Validate request data and create a new resource.
+     */
 
     public function store(Request $request)
     {
@@ -31,6 +46,10 @@ class TeamController extends Controller
             'team' => $team->load(['leader:id,name', 'members:id,name']),
         ], 201);
     }
+
+    /**
+     * Set the team leader for a team.
+     */
 
     public function setLeader(Request $request, Team $team)
     {
@@ -53,6 +72,10 @@ class TeamController extends Controller
         ]);
     }
 
+    /**
+     * Attach a member to the specified team.
+     */
+
     public function addMember(Request $request, Team $team)
     {
         $validated = $request->validate([
@@ -73,6 +96,10 @@ class TeamController extends Controller
         ]);
     }
 
+    /**
+     * Remove a member from the specified team.
+     */
+
     public function removeMember(Team $team, User $user)
     {
         if ((int) $team->leader_id === (int) $user->id) {
@@ -87,6 +114,10 @@ class TeamController extends Controller
             'team' => $team->load(['leader:id,name', 'members:id,name']),
         ]);
     }
+
+    /**
+     * Delete the specified resource.
+     */
 
     public function destroy(Team $team)
     {

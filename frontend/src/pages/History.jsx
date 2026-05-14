@@ -1,5 +1,17 @@
+/**
+ * History page component.
+ * Rendered when the user navigates to /history or related route.
+ */
+
 import DashboardLayout from "../components/layout/DashboardLayout";
 
+/**
+ * Perform the history.
+ */
+
+/**
+ * Page showing recent activity history.
+ */
 function History() {
   return (
     <DashboardLayout>

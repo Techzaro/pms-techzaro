@@ -1,15 +1,22 @@
 <?php
 
+/**
+ * Controller for project CRUD operations and project detail retrieval.
+ */
+
 namespace App\Http\Controllers;
 
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Http\Request;
 
+/**
+ * Project controller for CRUD operations and project details logic.
+ */
 class ProjectController extends Controller
 {
     /**
-     * Get all projects
+     * Get all projects with creator and team relationships.
      */
     public function index()
     {
@@ -92,6 +99,9 @@ class ProjectController extends Controller
         ]);
     }
 
+    /**
+     * Compute project completion percent based on finished tasks.
+     */
     private function computeProgressPercent(Project $project): int
     {
         $tasks = $project->tasks;
@@ -183,6 +193,12 @@ class ProjectController extends Controller
         ]);
     }
 
+    /**
+     * Replace all milestone rows for the project.
+     *
+     * This helper removes existing milestones and recreates them
+     * from the provided milestone array.
+     */
     private function replaceProjectMilestones(Project $project, ?array $rows): void
     {
         if ($rows === null) {
