@@ -1,5 +1,8 @@
 /* Project details — Techxaro-style (blue #3B82F6), full-width when app right sidebar hidden */
-
+.main{
+  display: flex;
+  justify-content: space-between;
+}
 .pd-page--tx {
   --tx-blue: #3b82f6;
   --tx-blue-dark: #2563eb;
@@ -68,12 +71,10 @@
 }
 
 .pd-hero-tx {
-  background: var(--tx-card);
-  border: 1px solid var(--tx-border);
   border-radius: 16px;
   padding: 22px 24px;
-  box-shadow: var(--tx-shadow);
   margin-bottom: 16px;
+  width: 685px;
 }
 
 .pd-title-row {
@@ -195,6 +196,7 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 16px;
+  width: 650px;
 }
 
 @media (max-width: 900px) {
@@ -212,14 +214,27 @@
 .pd-mini-stat {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 5px;
   background: var(--tx-card);
   border: 1px solid var(--tx-border);
   border-radius: var(--tx-radius);
-  padding: 12px 14px;
+  padding: 12px 15px;
   box-shadow: var(--tx-shadow);
+  width: 320px;
 }
-
+.pd-mini-stat1 {
+  display: flex;
+  align-items: center;
+  gap:2px;
+  background: var(--tx-card);
+  border: 1px solid var(--tx-border);
+  border-radius: var(--tx-radius);
+  padding: 10px 5px;
+  box-shadow: var(--tx-shadow);
+  width: 350px;
+  margin-left: 80px;
+  
+}
 .pd-mini-stat__ic {
   flex-shrink: 0;
   width: 44px;
@@ -335,6 +350,7 @@
   border-radius: var(--tx-radius);
   padding: 16px 18px;
   box-shadow: var(--tx-shadow);
+  width: 300px;
 }
 
 .pd-rail-card__title {

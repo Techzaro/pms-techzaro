@@ -5,6 +5,8 @@
 
 import { useState, useEffect } from "react";
 import { MdAdd, MdCheckCircle, MdDelete, MdEdit } from "react-icons/md";
+import { IoSearchOutline } from "react-icons/io5";
+import { CiCirclePlus } from "react-icons/ci";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import "./ManageUsers.css";
@@ -274,11 +276,18 @@ function ManageUsers() {
         <div className="manage-users-header">
           <div>
             <h1>User Management</h1>
-            <p>Register and manage users from the database in one place.</p>
+            <p>Manage users, roles and access permissions.</p>
           </div>
           <button className="primary-button add-user-button" onClick={openModal}>
-            <MdAdd /> Add New User
+            <CiCirclePlus fontSize={"21px"} /> Add User
           </button>
+        </div>
+
+        <div className="bar">
+          <div className="search-bar">
+            <IoSearchOutline fontSize={"25px"} />
+            <input type="text" placeholder="Search users by name or email....." />
+          </div>
         </div>
 
         {message && (
@@ -295,30 +304,38 @@ function ManageUsers() {
           <table className="manage-user-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Email</th>
+                <th>User</th>
                 <th>Role</th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="5" className="loading-row">
+                  <td colSpan="4" className="loading-row">
                     Loading users...
                   </td>
                 </tr>
               ) : users.length ? (
                 users.map((user) => (
                   <tr key={user.id}>
-                    <td>{user.name}</td>
-                    <td>{user.email}</td>
+                    {/* User Column */}
+                    <td style={{ textAlign: "left" }}>
+                      <div className="user-info">
+                        <span className="user-name">{user.name}</span>
+                        <span className="user-email">{user.email}</span>
+                      </div>
+                    </td>
+
+                    {/* Role Column */}
                     <td>
                       <select
                         className="role-select"
                         value={user.role}
-                        onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                        onChange={(e) =>
+                          handleRoleChange(user.id, e.target.value)
+                        }
                       >
                         <option value="admin">Admin</option>
                         <option value="manager">Manager</option>
@@ -326,7 +343,11 @@ function ManageUsers() {
                         <option value="member">Member</option>
                       </select>
                     </td>
+
+                    {/* Status Column */}
                     <td>Active</td>
+
+                    {/* Actions Column */}
                     <td>
                       <div className="action-buttons">
                         <button
@@ -337,6 +358,7 @@ function ManageUsers() {
                         >
                           <MdEdit size={24} />
                         </button>
+
                         <button
                           className="btn-delete"
                           onClick={() => handleDeleteUser(user.id)}
@@ -350,7 +372,7 @@ function ManageUsers() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" className="empty-row">
+                  <td colSpan="4" className="empty-row">
                     No users found yet.
                   </td>
                 </tr>

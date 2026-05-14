@@ -425,25 +425,6 @@ function ProjectDetails() {
   const renderRail = () => (
     <div className="pd-rail">
       <section className="pd-rail-card">
-        <h3 className="pd-rail-card__title">Deadlines</h3>
-        <ul className="pd-milestones">
-          {milestones.length === 0 ? (
-            <li className="pd-muted">No milestones.</li>
-          ) : (
-            milestones.map((m) => (
-              <li key={m.id} className="pd-milestones__item">
-                <span className={`pd-dot pd-dot--${statusSlug(m.status)}`} />
-                <div>
-                  <div className="pd-milestones__title">{m.title}</div>
-                  <div className="pd-milestones__date">{formatShortDate(m.due_date)}</div>
-                </div>
-              </li>
-            ))
-          )}
-        </ul>
-      </section>
-
-      <section className="pd-rail-card">
         <h3 className="pd-rail-card__title">Tasks</h3>
         {tasks.length === 0 ? (
           <p className="pd-muted" style={{ margin: 0 }}>
@@ -702,10 +683,11 @@ function ProjectDetails() {
           <ChevronRight size={14} aria-hidden />
           <span>{project.title}</span>
         </nav>
+         <div className="main">
 
         <header className="pd-hero-tx">
           <div className="pd-hero-tx__main">
-            <div className="pd-title-row">
+            <div className="pd-title-CCrow">
               <div className="pd-title-icon" aria-hidden>
                 <Monitor size={28} strokeWidth={1.75} />
               </div>
@@ -727,7 +709,27 @@ function ProjectDetails() {
             </div>
           </div>
         </header>
+              <section className="pd-rail-card">
+        <h3 className="pd-rail-card__title">Deadlines</h3>
+        <ul className="pd-milestones">
+          {milestones.length === 0 ? (
+            <li className="pd-muted">No milestones.</li>
+          ) : (
+            milestones.map((m) => (
+              <li key={m.id} className="pd-milestones__item">
+                <span className={`pd-dot pd-dot--${statusSlug(m.status)}`} />
+                <div>
+                  <div className="pd-milestones__title">{m.title}</div>
+                  <div className="pd-milestones__date">{formatShortDate(m.due_date)}</div>
+                </div>
+              </li>
+            ))
+          )}
+        </ul>
+      </section>
 
+         </div>
+     
         <div className="pd-stat-strip">
           <div className="pd-mini-stat">
             <div className="pd-mini-stat__ic pd-mini-stat__ic--blue">
@@ -741,29 +743,25 @@ function ProjectDetails() {
               <span className="pd-mini-stat__val">{progress}%</span>
             </div>
           </div>
-          <div className="pd-mini-stat">
+          <div className="pd-mini-stat1">
             <div className="pd-mini-stat__ic pd-mini-stat__ic--orange">
               <ClipboardList size={20} />
             </div>
             <div className="pd-mini-stat__text">
-              <span className="pd-mini-stat__label">Tasks</span>
+              <span className="pd-mini-stat__label">Task</span>
               <span className="pd-mini-stat__num">{tasks.length}</span>
             </div>
-          </div>
-          <div className="pd-mini-stat">
-            <div className="pd-mini-stat__ic pd-mini-stat__ic--indigo">
+              <div className="pd-mini-stat__ic pd-mini-stat__ic--indigo">
               <Users size={20} />
             </div>
-            <div className="pd-mini-stat__text">
+              <div className="pd-mini-stat__text">
               <span className="pd-mini-stat__label">Members</span>
               <span className="pd-mini-stat__num">{memberCount}</span>
             </div>
-          </div>
-          <div className="pd-mini-stat">
-            <div className="pd-mini-stat__ic pd-mini-stat__ic--green">
+              <div className="pd-mini-stat__ic pd-mini-stat__ic--green">
               <CalendarDays size={20} />
             </div>
-            <div className="pd-mini-stat__text">
+             <div className="pd-mini-stat__text">
               <span className="pd-mini-stat__label">Deadline</span>
               <span className="pd-mini-stat__num pd-mini-stat__num--sm">{formatShortDate(project.end_date)}</span>
             </div>

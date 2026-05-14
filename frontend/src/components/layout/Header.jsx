@@ -6,7 +6,7 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import "./Header.css";
-
+import { MdKeyboardArrowDown } from "react-icons/md";
 /**
  * Perform the header.
  */
@@ -61,18 +61,18 @@ function Header() {
 
   return (
     <div className="header-container">
-        <div className="header-left">
-            <div className="logo-box">
-                <b>TX</b>
-            </div>
-            <div className="logo-text">
-               <h3>Techxaro</h3>
-               <span>PMS Portal</span>
-            </div>
+      <div className="header-left">
+        <div className="logo-box">
+          <b>TX</b>
         </div>
+        <div className="logo-text">
+          <h3>Techxaro</h3>
+          <span>PMS Portal</span>
+        </div>
+      </div>
 
       <div className="header-search">
- <i className="fa-solid fa-magnifying-glass search-icon"></i>
+        <i className="fa-solid fa-magnifying-glass search-icon"></i>
 
         <input
           type="text"
@@ -85,25 +85,30 @@ function Header() {
 
       <div className="header-right">
 
-       <Link to="/add-task" className="task-btn">
-            + Task
-       </Link>
+        <Link to="/add-task" className="task-btn">
+          + Task
+        </Link>
 
-       <Link to="/deliverables" className="project-btn">
-            + Deliverables
-       </Link>
+        <Link to="/deliverables" className="project-btn">
+          + Deliverables
+        </Link>
         <hr />
 
-<div className="user-info" onClick={toggleProfileModal}>
+        <div className="user-info" onClick={toggleProfileModal}>
+
+          <div className="user-avatar">
+            {user.name.charAt(0).toUpperCase()}
+          </div>
+
 
           <div className="user-text">
             <h6>{user.name}</h6>
             <span>{user.role}</span>
           </div>
+           <div className="arrow-icon">
+               <MdKeyboardArrowDown fontSize={"25px"} />
+           </div>
 
-          <div className="user-avatar">
-            {user.name.charAt(0).toUpperCase()}
-          </div>
 
           {isProfileOpen && (
             <div className="header-modal-card" onClick={(e) => e.stopPropagation()}>
