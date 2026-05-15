@@ -1,36 +1,18 @@
-/**
- * Projects page component.
- * Rendered when the user navigates to /projects or related route.
- */
-
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import "./Projects.css";
 
-/**
- * Perform the projects.
- */
-
-/**
- * Project list page for viewing and navigating projects.
- */
 function Projects() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchProjects();
   }, []);
 
-  /**
-   * Perform the fetch projects.
-   */
-
-  /**
-   * Handle fetch projects.
-   */
   const fetchProjects = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -53,8 +35,6 @@ function Projects() {
 
       const data = await response.json();
 
-      console.log("Projects API Response:", data);
-
       setProjects(data.projects || data || []);
     } catch (error) {
       console.error("Error fetching projects:", error);
@@ -63,23 +43,19 @@ function Projects() {
     }
   };
 
-  /**
-   * Perform the get status badge color.
-   */
-
-  /**
-   * Handle get status badge color.
-   */
   const getStatusBadgeColor = (status) => {
     switch (status?.toLowerCase()) {
       case "completed":
         return "#d1fae5";
+
       case "in_progress":
       case "in progress":
         return "#fef3c7";
+
       case "on_hold":
       case "on hold":
         return "#fee2e2";
+
       default:
         return "#e0e7ff";
     }
@@ -88,6 +64,9 @@ function Projects() {
   return (
     <DashboardLayout>
       <div className="projects-page">
+
+        {/* HEADER */}
+
         <div className="projects-header">
           <div>
             <h1>Projects</h1>
@@ -95,52 +74,101 @@ function Projects() {
           </div>
 
           <div className="header-actions">
-            <button className="filter-btn">View Completed</button>
+            <button className="filter-btn">
+              View Completed
+            </button>
+
             <Link to="/create-project">
-              <button className="create-btn">+ Create Project</button>
+              <button className="create-btn">
+                + Create Project
+              </button>
             </Link>
           </div>
         </div>
 
+        {/* PROJECT CARDS */}
+
         <div className="projects-container">
+
           {loading ? (
-            <div style={{ textAlign: "center", padding: "40px", color: "#6b7280" }}>
+            <div className="loading-text">
               Loading projects...
             </div>
+
           ) : projects.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px", color: "#6b7280" }}>
-              <p>No projects found. Create one to get started!</p>
+            <div className="loading-text">
+              No projects found
             </div>
+
           ) : (
             projects.map((project) => (
-              <div key={project.id} className="project-card">
+              <div
+                key={project.id}
+                className="project-card"
+              >
+
+                {/* CARD HEADER */}
+
                 <div className="card-header">
-                  <h3>{project.title || project.name}</h3>
-                  <p className="card-subtitle">{project.description}</p>
+                  <h3>
+                    {project.title || project.name}
+                  </h3>
+
+                  <div
+                    className="card-subtitle"
+                    dangerouslySetInnerHTML={{
+                      __html:
+                        project.description ||
+                        "No description",
+                    }}
+                  />
                 </div>
 
-                <div className="card-body">
-                  <p className="card-info">
-                    <strong>Project Details:</strong> {project.team?.name || "No Team"}
-                  </p>
+                {/* CARD BODY */}
 
-                  <p className="card-goals">
+                <div className="card-body">
+
+                  <div className="card-info">
+                    <strong>Project Details:</strong>{" "}
+                    {project.team?.name || "No Team"}
+                  </div>
+
+                  <div className="card-goals">
                     <strong>📋 Project Goals:</strong>
                     <br />
-                    {project.goals || "No goals defined"}
-                  </p>
 
-                  <p className="card-sheets">
+                    <div
+                      dangerouslySetInnerHTML={{
+                        __html:
+                          project.goals ||
+                          "No goals defined",
+                      }}
+                    />
+                  </div>
+
+                  <div className="card-sheets">
                     <strong>📄 Sheets & Documents:</strong>
                     <br />
-                    {project.sheets_documents || "No documents"}
-                  </p>
+
+                    <div
+                      dangerouslySetInnerHTML={{
+                        __html:
+                          project.sheets_documents ||
+                          "No documents",
+                      }}
+                    />
+                  </div>
 
                   <div className="card-website">
                     <strong>🌐 Website</strong>
+
                     {project.website_link ? (
                       <p>
-                        <a href={project.website_link} target="_blank" rel="noopener noreferrer">
+                        <a
+                          href={project.website_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
                           {project.website_link}
                         </a>
                       </p>
@@ -150,12 +178,25 @@ function Projects() {
                   </div>
                 </div>
 
+                {/* CARD FOOTER */}
+
                 <div className="card-footer">
+
                   <div className="date-info">
-                    <span className="date-icon">📅</span>
-                    {project.start_date && project.end_date ? (
+                    <span className="date-icon">
+                      📅
+                    </span>
+
+                    {project.start_date &&
+                    project.end_date ? (
                       <span>
-                        {new Date(project.start_date).toLocaleDateString()} - {new Date(project.end_date).toLocaleDateString()}
+                        {new Date(
+                          project.start_date
+                        ).toLocaleDateString()}
+                        {" - "}
+                        {new Date(
+                          project.end_date
+                        ).toLocaleDateString()}
                       </span>
                     ) : (
                       <span>No dates set</span>
@@ -166,7 +207,10 @@ function Projects() {
                     <span
                       className="status-badge"
                       style={{
-                        backgroundColor: getStatusBadgeColor(project.status),
+                        backgroundColor:
+                          getStatusBadgeColor(
+                            project.status
+                          ),
                       }}
                     >
                       {project.status || "Planned"}
@@ -174,17 +218,23 @@ function Projects() {
                   </div>
                 </div>
 
+                {/* ACTION */}
+
                 <div className="card-actions">
                   <button
                     className="view-details-btn"
-                    onClick={() => navigate(`/projects/${project.id}`)}
+                    onClick={() =>
+                      navigate(`/projects/${project.id}`)
+                    }
                   >
                     View Details →
                   </button>
                 </div>
+
               </div>
             ))
           )}
+
         </div>
       </div>
     </DashboardLayout>

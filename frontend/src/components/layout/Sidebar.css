@@ -1,5 +1,5 @@
 .sidebar {
-  width: 260px;
+  width: 210px;
   background: white;
   height: calc(100vh - 90px);
   margin-top: 15px;
@@ -10,7 +10,7 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  overflow-y: auto;
+  overflow-y: 0;
   border: 1px solid #e5e7eb;
 }
 
