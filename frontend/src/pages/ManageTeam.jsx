@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { Crown } from "lucide-react";
 import { MdAdd, MdDelete, MdEdit, MdPeople } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
-import TeamManagementModal from "../components/TeamManagementModal";
+// import TeamManagementModal from "../components/TeamManagementModal";
 import "./ManageTeam.css";
 
 /**
@@ -292,7 +292,8 @@ function ManageTeam() {
         </div>
       </div>
 
-      <TeamManagementModal
+      {/* TeamManagementModal - To be implemented with FigmaCreateProjectModal or custom component */}
+      {/* <TeamManagementModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onTeamCreated={() => {
@@ -302,7 +303,7 @@ function ManageTeam() {
         teams={teams}
         users={users}
         loading={loading}
-      />
+      /> */}
     </DashboardLayout>
   );
 }

@@ -11,7 +11,6 @@ import TeamLead from "./pages/TeamLead";
 import Member from "./pages/Member";
 import Tasks from "./pages/Tasks";
 import Projects from "./pages/Projects";
-import CreateProject from "./pages/CreateProject";
 import ProjectDetails from "./pages/ProjectDetails";
 import AddTask from "./pages/AddTask";
 import ManageUsers from "./pages/ManageUsers";
@@ -121,16 +120,6 @@ function App() {
   }
 />
 
-/* CREATE PROJECT */
-
-<Route
-  path="/create-project"
-  element={
-    <ProtectedRoute>
-      <CreateProject />
-    </ProtectedRoute>
-  }
-/>
 
 /* PROJECT DETAILS */
 
