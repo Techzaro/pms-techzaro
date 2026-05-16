@@ -2,6 +2,7 @@
  * Main React application router.
  * Defines public and protected routes for different user roles.
  */
+
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Login from "./pages/Login";
@@ -10,7 +11,9 @@ import Manager from "./pages/Manager";
 import TeamLead from "./pages/TeamLead";
 import Member from "./pages/Member";
 import Tasks from "./pages/Tasks";
+import Taskby from "./pages/Taskby";
 import Projects from "./pages/Projects";
+import CreateProject from "./pages/CreateProject";
 import ProjectDetails from "./pages/ProjectDetails";
 import AddTask from "./pages/AddTask";
 import ManageUsers from "./pages/ManageUsers";
@@ -22,23 +25,16 @@ import ManageTeam from "./pages/ManageTeam";
 import Profile from "./pages/Profile";
 
 import ProtectedRoute from "./components/ProtectedRoute";
-
-/**
- * Perform the app.
- */
+import TaskDetails from "./pages/TaskDetails";
 
 function App() {
-
   return (
-
     <BrowserRouter>
-
       <Routes>
 
         {/* PUBLIC */}
 
         <Route path="/" element={<Login />} />
-
 
         {/* ADMIN */}
 
@@ -51,7 +47,6 @@ function App() {
           }
         />
 
-
         {/* MANAGER */}
 
         <Route
@@ -62,7 +57,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
 
         {/* TEAM LEAD */}
 
@@ -75,7 +69,6 @@ function App() {
           }
         />
 
-
         {/* MEMBER */}
 
         <Route
@@ -86,132 +79,162 @@ function App() {
             </ProtectedRoute>
           }
         />
-/* TASKS */
 
-<Route
-  path="/tasks"
-  element={
-    <ProtectedRoute>
-      <Tasks />
-    </ProtectedRoute>
-  }
-/>
+        {/* TASKS */}
 
-/* ADD TASK */
+        <Route
+          path="/tasks"
+          element={
+            <ProtectedRoute>
+              <Tasks />
+            </ProtectedRoute>
+          }
+        />
 
-<Route
-  path="/add-task"
-  element={
-    <ProtectedRoute>
-      <AddTask />
-    </ProtectedRoute>
-  }
-/>
+        {/* TASK BY */}
 
+        <Route
+          path="/taskby"
+          element={
+            <ProtectedRoute>
+              <Taskby />
+            </ProtectedRoute>
+          }
+        />
+        {/* TASK Details */}
 
-/* PROJECTS */
+        <Route
+          path="/taskdetails"
+          element={
+            <ProtectedRoute>
+              <TaskDetails/>
+            </ProtectedRoute>
+          }
+        />
 
-<Route
-  path="/projects"
-  element={
-    <ProtectedRoute>
-      <Projects />
-    </ProtectedRoute>
-  }
-/>
+        {/* ADD TASK */}
 
+        <Route
+          path="/add-task"
+          element={
+            <ProtectedRoute>
+              <AddTask />
+            </ProtectedRoute>
+          }
+        />
 
-/* PROJECT DETAILS */
+        {/* PROJECTS */}
 
-<Route
-  path="/projects/:projectId"
-  element={
-    <ProtectedRoute>
-      <ProjectDetails />
-    </ProtectedRoute>
-  }
-/>
+        <Route
+          path="/projects"
+          element={
+            <ProtectedRoute>
+              <Projects />
+            </ProtectedRoute>
+          }
+        />
 
-/* DELIVERIES */
+        {/* CREATE PROJECT */}
 
-<Route
-  path="/deliveries"
-  element={
-    <ProtectedRoute>
-      <Deliveries />
-    </ProtectedRoute>
-  }
-/>
+        <Route
+          path="/create-project"
+          element={
+            <ProtectedRoute>
+              <CreateProject />
+            </ProtectedRoute>
+          }
+        />
 
-/* DETAILS */
+        {/* PROJECT DETAILS */}
 
-<Route
-  path="/details"
-  element={
-    <ProtectedRoute>
-      <Details />
-    </ProtectedRoute>
-  }
-/>
+        <Route
+          path="/projects/:projectId"
+          element={
+            <ProtectedRoute>
+              <ProjectDetails />
+            </ProtectedRoute>
+          }
+        />
 
-/* HISTORY */
+        {/* DELIVERIES */}
 
-<Route
-  path="/history"
-  element={
-    <ProtectedRoute>
-      <History />
-    </ProtectedRoute>
-  }
-/>
+        <Route
+          path="/deliveries"
+          element={
+            <ProtectedRoute>
+              <Deliveries />
+            </ProtectedRoute>
+          }
+        />
 
-/* REPORTS */
+        {/* DETAILS */}
 
-<Route
-  path="/reports"
-  element={
-    <ProtectedRoute>
-      <Reports />
-    </ProtectedRoute>
-  }
-/>
+        <Route
+          path="/details"
+          element={
+            <ProtectedRoute>
+              <Details />
+            </ProtectedRoute>
+          }
+        />
 
-/* MANAGE USERS */
+        {/* HISTORY */}
 
-<Route
-  path="/manage-users"
-  element={
-    <ProtectedRoute>
-      <ManageUsers />
-    </ProtectedRoute>
-  }
-/>
+        <Route
+          path="/history"
+          element={
+            <ProtectedRoute>
+              <History />
+            </ProtectedRoute>
+          }
+        />
 
-/* MANAGE TEAM */
+        {/* REPORTS */}
 
-<Route
-  path="/manage-team"
-  element={
-    <ProtectedRoute>
-      <ManageTeam />
-    </ProtectedRoute>
-  }
-/>
+        <Route
+          path="/reports"
+          element={
+            <ProtectedRoute>
+              <Reports />
+            </ProtectedRoute>
+          }
+        />
 
-/* PROFILE */
+        {/* MANAGE USERS */}
 
-<Route
-  path="/profile"
-  element={
-    <ProtectedRoute>
-      <Profile />
-    </ProtectedRoute>
-  }
-/>
+        <Route
+          path="/manage-users"
+          element={
+            <ProtectedRoute>
+              <ManageUsers />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* MANAGE TEAM */}
+
+        <Route
+          path="/manage-team"
+          element={
+            <ProtectedRoute>
+              <ManageTeam />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* PROFILE */}
+
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+
       </Routes>
-
     </BrowserRouter>
-
   );
 }
 

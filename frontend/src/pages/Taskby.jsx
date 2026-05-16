@@ -4,9 +4,8 @@ import { IoIosArrowDown } from "react-icons/io";
 import { LuArrowDownToLine } from "react-icons/lu";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
-import "../pages/Task.css";
 
-function Tasks() {
+const Taskby = () => {
   const navigate = useNavigate();
 
   const tasks = [
@@ -44,7 +43,7 @@ function Tasks() {
     <DashboardLayout>
       <div className="Task">
         <div className="task-text">
-          <h3>Tasks Assigned To You</h3>
+          <h3>Tasks Assigned By You</h3>
           <p>Manage and track your tasks</p>
         </div>
 
@@ -57,9 +56,9 @@ function Tasks() {
 
           <div
             className="export"
-            onClick={() => navigate("/taskby")}
+            onClick={() => navigate("/tasks")}
           >
-            <span>Assigned by you</span>
+            <span>Assigned To you</span>
             <LuArrowDownToLine />
           </div>
         </div>
@@ -168,7 +167,7 @@ function Tasks() {
             <div>
               <button
                 className="view-btn"
-                onClick={() => navigate("/taskdetails")}
+                onClick={() => navigate(`/details/${task.id}`)}
               >
                 View
               </button>
@@ -179,6 +178,6 @@ function Tasks() {
       </div>
     </DashboardLayout>
   );
-}
+};
 
-export default Tasks;
+export default Taskby;

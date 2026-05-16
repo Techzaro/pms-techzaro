@@ -1,13 +1,9 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-
+import { Link, useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
-import FigmaCreateProjectModal from "../components/FigmaCreateProjectModal";
-
 import "./Projects.css";
 
 function Projects() {
-  const [showModal, setShowModal] = useState(false);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -39,8 +35,6 @@ function Projects() {
 
       const data = await response.json();
 
-      console.log("Projects API Response:", data);
-
       setProjects(data.projects || data || []);
     } catch (error) {
       console.error("Error fetching projects:", error);
@@ -69,102 +63,103 @@ function Projects() {
 
   return (
     <DashboardLayout>
-
       <div className="projects-page">
 
-        <div className="projects-header">
+        {/* HEADER */}
 
+        <div className="projects-header">
           <div>
             <h1>Projects</h1>
             <p>Showing: All Active Projects</p>
           </div>
 
           <div className="header-actions">
-
             <button className="filter-btn">
               View Completed
             </button>
 
-            <button
-              className="create-btn"
-              onClick={() => setShowModal(true)}
-            >
-              + Create Project
-            </button>
-
+            <Link to="/create-project">
+              <button className="create-btn">
+                + Create Project
+              </button>
+            </Link>
           </div>
         </div>
+
+        {/* PROJECT CARDS */}
 
         <div className="projects-container">
 
           {loading ? (
-
-            <div
-              style={{
-                textAlign: "center",
-                padding: "40px",
-                color: "#6b7280",
-              }}
-            >
+            <div className="loading-text">
               Loading projects...
             </div>
 
           ) : projects.length === 0 ? (
-
-            <div
-              style={{
-                textAlign: "center",
-                padding: "40px",
-                color: "#6b7280",
-              }}
-            >
-              <p>
-                No projects found. Create one to get started!
-              </p>
+            <div className="loading-text">
+              No projects found
             </div>
 
           ) : (
-
             projects.map((project) => (
-
               <div
                 key={project.id}
                 className="project-card"
               >
+
+                {/* CARD HEADER */}
 
                 <div className="card-header">
                   <h3>
                     {project.title || project.name}
                   </h3>
 
-                  <p className="card-subtitle">
-                    {project.description}
-                  </p>
+                  <div
+                    className="card-subtitle"
+                    dangerouslySetInnerHTML={{
+                      __html:
+                        project.description ||
+                        "No description",
+                    }}
+                  />
                 </div>
+
+                {/* CARD BODY */}
 
                 <div className="card-body">
 
-                  <p className="card-info">
+                  <div className="card-info">
                     <strong>Project Details:</strong>{" "}
                     {project.team?.name || "No Team"}
-                  </p>
+                  </div>
 
-                  <p className="card-goals">
+                  <div className="card-goals">
                     <strong>📋 Project Goals:</strong>
                     <br />
 
-                    {project.goals || "No goals defined"}
-                  </p>
+                    <div
+                      dangerouslySetInnerHTML={{
+                        __html:
+                          project.goals ||
+                          "No goals defined",
+                      }}
+                    />
+                  </div>
 
-                  <p className="card-sheets">
+                  <div className="card-sheets">
                     <strong>📄 Sheets & Documents:</strong>
                     <br />
 
-                    {project.sheets_documents || "No documents"}
-                  </p>
+                    <div
+                      dangerouslySetInnerHTML={{
+                        __html:
+                          project.sheets_documents ||
+                          "No documents",
+                      }}
+                    />
+                  </div>
 
                   <div className="card-website">
-
                     <strong>🌐 Website</strong>
 
                     {project.website_link ? (
@@ -180,21 +175,20 @@ function Projects() {
                     ) : (
                       <p>No website</p>
                     )}
-
                   </div>
                 </div>
+
+                {/* CARD FOOTER */}
 
                 <div className="card-footer">
 
                   <div className="date-info">
-
                     <span className="date-icon">
                       📅
                     </span>
 
                     {project.start_date &&
                     project.end_date ? (
-
                       <span>
                         {new Date(
                           project.start_date
@@ -204,15 +198,12 @@ function Projects() {
                           project.end_date
                         ).toLocaleDateString()}
                       </span>
-
                     ) : (
                       <span>No dates set</span>
                     )}
-
                   </div>
 
                   <div className="status-section">
-
                     <span
                       className="status-badge"
                       style={{
@@ -224,12 +215,12 @@ function Projects() {
                     >
                       {project.status || "Planned"}
                     </span>
-
                   </div>
                 </div>
 
-                <div className="card-actions">
+                {/* ACTION */}
 
+                <div className="card-actions">
                   <button
                     className="view-details-btn"
                     onClick={() =>
@@ -238,24 +229,14 @@ function Projects() {
                   >
                     View Details →
                   </button>
-
                 </div>
+
               </div>
             ))
           )}
+
         </div>
       </div>
-
-      <FigmaCreateProjectModal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        onSubmit={(projectData) => {
-          console.log('Project submitted:', projectData);
-          setShowModal(false);
-          fetchProjects();
-        }}
-      />
-
     </DashboardLayout>
   );
 }
