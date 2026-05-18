@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import CreateProjectModal from "../components/CreateProjectModal";
 import "./Projects.css";
@@ -52,7 +52,7 @@ function Projects() {
 
       case "in_progress":
       case "in progress":
-        return "#fef3c7";
+        return "#ddd6fe";
 
       case "on_hold":
       case "on hold":
@@ -70,12 +70,14 @@ function Projects() {
         {/* HEADER */}
 
         <div className="projects-header">
+
           <div>
             <h1>Projects</h1>
-            <p>Showing: All Active Projects</p>
+            <p>Manage and track your projects</p>
           </div>
 
           <div className="header-actions">
+
             <button className="filter-btn">
               View Completed
             </button>
@@ -86,33 +88,39 @@ function Projects() {
             >
               + Create Project
             </button>
+
           </div>
         </div>
 
-        {/* PROJECT CARDS */}
+        {/* PROJECTS */}
 
         <div className="projects-container">
 
           {loading ? (
+
             <div className="loading-text">
               Loading projects...
             </div>
 
           ) : projects.length === 0 ? (
+
             <div className="loading-text">
               No projects found
             </div>
 
           ) : (
+
             projects.map((project) => (
+
               <div
                 key={project.id}
                 className="project-card"
               >
 
-                {/* CARD HEADER */}
+                {/* HEADER */}
 
-                <div className="card-header">
+                <div className="project-card-header">
+
                   <h3>
                     {project.title || project.name}
                   </h3>
@@ -122,128 +130,100 @@ function Projects() {
                     dangerouslySetInnerHTML={{
                       __html:
                         project.description ||
-                        "No description",
+                        "No description available",
                     }}
                   />
+
                 </div>
 
-                {/* CARD BODY */}
+                {/* PROGRESS */}
 
-                <div className="card-body">
+                <div className="progress-section">
 
-                  <div className="card-info">
-                    <strong>Project Details:</strong>{" "}
-                    {project.team?.name || "No Team"}
+                  <div className="progress-top">
+
+                    <span>Progress</span>
+
+                    <span>
+                      {project.progress || 65}%
+                    </span>
+
                   </div>
 
-                  <div className="card-goals">
-                    <strong>📋 Project Goals:</strong>
-                    <br />
+                  <div className="progress-bar">
 
                     <div
-                      dangerouslySetInnerHTML={{
-                        __html:
-                          project.goals ||
-                          "No goals defined",
+                      className="progress-fill"
+                      style={{
+                        width: `${project.progress || 65}%`,
                       }}
-                    />
-                  </div>
+                    ></div>
 
-                  <div className="card-sheets">
-                    <strong>📄 Sheets & Documents:</strong>
-                    <br />
-
-                    <div
-                      dangerouslySetInnerHTML={{
-                        __html:
-                          project.sheets_documents ||
-                          "No documents",
-                      }}
-                    />
-                  </div>
-
-                  <div className="card-website">
-                    <strong>🌐 Website</strong>
-
-                    {project.website_link ? (
-                      <p>
-                        <a
-                          href={project.website_link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          {project.website_link}
-                        </a>
-                      </p>
-                    ) : (
-                      <p>No website</p>
-                    )}
                   </div>
                 </div>
 
-                {/* CARD FOOTER */}
+                {/* FOOTER */}
 
                 <div className="card-footer">
 
                   <div className="date-info">
+
                     <span className="date-icon">
                       📅
                     </span>
 
-                    {project.start_date &&
-                    project.end_date ? (
+                    {project.end_date ? (
                       <span>
-                        {new Date(
-                          project.start_date
-                        ).toLocaleDateString()}
-                        {" - "}
                         {new Date(
                           project.end_date
                         ).toLocaleDateString()}
                       </span>
                     ) : (
-                      <span>No dates set</span>
+                      <span>30 Oct 2026</span>
                     )}
+
                   </div>
 
-                  <div className="status-section">
-                    <span
-                      className="status-badge"
-                      style={{
-                        backgroundColor:
-                          getStatusBadgeColor(
-                            project.status
-                          ),
-                      }}
-                    >
-                      {project.status || "Planned"}
-                    </span>
-                  </div>
                 </div>
 
-                {/* ACTION */}
+                {/* ACTIONS */}
 
-                <div className="card-actions">
+                <div className="project-card-actions">
+
+                  <span
+                    className="status-badge"
+                    style={{
+                      backgroundColor:
+                        getStatusBadgeColor(
+                          project.status
+                        ),
+                    }}
+                  >
+                    {project.status || "In Progress"}
+                  </span>
+
                   <button
                     className="view-details-btn"
                     onClick={() =>
                       navigate(`/projects/${project.id}`)
                     }
                   >
-                    View Details →
+                    View →
                   </button>
+
                 </div>
 
               </div>
             ))
           )}
-
         </div>
       </div>
-            {showModal && (
+
+      {showModal && (
         <div className="modal-overlay">
-         <CreateProjectModal
-          onClose={() => setShowModal(false)}/>
+          <CreateProjectModal
+            onClose={() => setShowModal(false)}
+          />
         </div>
       )}
     </DashboardLayout>
