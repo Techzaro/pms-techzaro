@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import CreateProjectModal from "../components/CreateProjectModal";
 import "./Projects.css";
 
 function Projects() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
 
   const navigate = useNavigate();
 
@@ -78,11 +80,12 @@ function Projects() {
               View Completed
             </button>
 
-            <Link to="/create-project">
-              <button className="create-btn">
-                + Create Project
-              </button>
-            </Link>
+            <button
+              className="create-btn"
+              onClick={() => setShowModal(true)}
+            >
+              + Create Project
+            </button>
           </div>
         </div>
 
@@ -237,6 +240,12 @@ function Projects() {
 
         </div>
       </div>
+            {showModal && (
+        <div className="modal-overlay">
+         <CreateProjectModal
+          onClose={() => setShowModal(false)}/>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

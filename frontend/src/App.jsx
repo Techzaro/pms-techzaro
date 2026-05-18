@@ -13,7 +13,7 @@ import Member from "./pages/Member";
 import Tasks from "./pages/Tasks";
 import Taskby from "./pages/Taskby";
 import Projects from "./pages/Projects";
-import CreateProject from "./pages/CreateProject";
+// import CreateProject from "./pages/CreateProject";
 import ProjectDetails from "./pages/ProjectDetails";
 import AddTask from "./pages/AddTask";
 import ManageUsers from "./pages/ManageUsers";
@@ -136,14 +136,14 @@ function App() {
 
         {/* CREATE PROJECT */}
 
-        <Route
+        {/* <Route
           path="/create-project"
           element={
             <ProtectedRoute>
               <CreateProject />
             </ProtectedRoute>
           }
-        />
+        /> */}
 
         {/* PROJECT DETAILS */}
 
