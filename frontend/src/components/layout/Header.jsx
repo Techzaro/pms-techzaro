@@ -1,38 +1,46 @@
-/**
- * Header component.
- */
-
-
-import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
-import "./Header.css";
 import { MdKeyboardArrowDown } from "react-icons/md";
-/**
- * Perform the header.
- */
 
-/**
- * Header component used in dashboard layout.
- */
+import "./Header.css";
+
+import CreateTaskModal from "../CreateTaskModal";
+import CreateDeliverableModel from "../layout/CreateDeliverableModel";
+
 function Header() {
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  const [isProfileOpen, setIsProfileOpen] =
+    useState(false);
+
+  const [showTaskModal, setShowTaskModal] =
+    useState(false);
+
+  const [
+    showDeliverableModal,
+    setShowDeliverableModal,
+  ] = useState(false);
+
   const [user, setUser] = useState({
-    name: localStorage.getItem("name") || "User",
-    email: localStorage.getItem("email") || "user@example.com",
-    role: localStorage.getItem("role") || "Member",
+    name:
+      localStorage.getItem("name") ||
+      "User",
+
+    email:
+      localStorage.getItem("email") ||
+      "user@example.com",
+
+    role:
+      localStorage.getItem("role") ||
+      "Member",
   });
 
-  /**
-   * Perform the toggle profile modal.
-   */
-
-  /**
-   * Handle toggle profile modal.
-   */
-  const toggleProfileModal = () => setIsProfileOpen((prev) => !prev);
+  const toggleProfileModal = () =>
+    setIsProfileOpen((prev) => !prev);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+
+    const token =
+      localStorage.getItem("token");
+
     if (!token) return;
 
     fetch("http://127.0.0.1:8000/api/user", {
@@ -42,97 +50,201 @@ function Header() {
       },
     })
       .then((res) => res.json())
+
       .then((data) => {
+
         if (data && data.name) {
+
           setUser({
             name: data.name,
             email: data.email,
             role: data.role,
           });
-          localStorage.setItem("name", data.name);
-          localStorage.setItem("email", data.email);
-          localStorage.setItem("role", data.role);
+
+          localStorage.setItem(
+            "name",
+            data.name
+          );
+
+          localStorage.setItem(
+            "email",
+            data.email
+          );
+
+          localStorage.setItem(
+            "role",
+            data.role
+          );
         }
       })
-      .catch(() => {
-        // ignore fetch errors and use fallback values
-      });
+
+      .catch(() => {});
   }, []);
 
   return (
-    <div className="header-container">
-      <div className="header-left">
-        <div className="logo-box">
-          <b>TX</b>
-        </div>
-        <div className="logo-text">
-          <h3>Techxaro</h3>
-          <span>PMS Portal</span>
-        </div>
-      </div>
+    <>
 
-      <div className="header-search">
-        <i className="fa-solid fa-magnifying-glass search-icon"></i>
+      <div className="header-container">
 
-        <input
-          type="text"
-          className="form-control"
-          placeholder="Search projects, tasks or employees..."
-        />
+        {/* LEFT */}
 
-      </div>
+        <div className="header-left">
 
-
-      <div className="header-right">
-
-        <Link to="/add-task" className="task-btn">
-          + Task
-        </Link>
-
-        <Link to="/deliverables" className="project-btn">
-          + Deliverables
-        </Link>
-        <hr />
-
-        <div className="user-info" onClick={toggleProfileModal}>
-
-          <div className="user-avatar">
-            {user.name.charAt(0).toUpperCase()}
+          <div className="logo-box">
+            <b>TX</b>
           </div>
 
-
-          <div className="user-text">
-            <h6>{user.name}</h6>
-            <span>{user.role}</span>
+          <div className="logo-text">
+            <h3>Techxaro</h3>
+            <span>PMS Portal</span>
           </div>
-           <div className="arrow-icon">
-               <MdKeyboardArrowDown fontSize={"25px"} />
-           </div>
 
+        </div>
 
-          {isProfileOpen && (
-            <div className="header-modal-card" onClick={(e) => e.stopPropagation()}>
-              <div className="header-modal-top">
-                <h3>Your Profile</h3>
-                <p className="modal-subtitle">Latest account details</p>
-              </div>
-              <div className="header-modal-item">
-                <span>Name</span>
-                <strong>{user.name}</strong>
-              </div>
-              <div className="header-modal-item">
-                <span>Email</span>
-                <strong>{user.email}</strong>
-              </div>
-              <div className="header-modal-item">
-                <span>Role</span>
-                <strong>{user.role}</strong>
-              </div>
+        {/* SEARCH */}
+
+        <div className="header-search">
+
+          <i className="fa-solid fa-magnifying-glass search-icon"></i>
+
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Search projects, tasks or employees..."
+          />
+
+        </div>
+
+        {/* RIGHT */}
+
+        <div className="header-right">
+
+          {/* TASK BUTTON */}
+
+          <button
+            className="task-btn"
+            onClick={() =>
+              setShowTaskModal(true)
+            }
+          >
+            + Task
+          </button>
+
+          {/* DELIVERABLE BUTTON */}
+
+          <button
+            className="project-btn"
+            onClick={() =>
+              setShowDeliverableModal(true)
+            }
+          >
+            + Deliverables
+          </button>
+
+          <hr />
+
+          {/* USER */}
+
+          <div
+            className="user-info"
+            onClick={toggleProfileModal}
+          >
+
+            <div className="user-avatar">
+              {user.name
+                .charAt(0)
+                .toUpperCase()}
             </div>
-          )}
+
+            <div className="user-text">
+
+              <h6>{user.name}</h6>
+
+              <span>{user.role}</span>
+
+            </div>
+
+            <div className="arrow-icon">
+              <MdKeyboardArrowDown
+                fontSize={"25px"}
+              />
+            </div>
+
+            {isProfileOpen && (
+
+              <div
+                className="header-modal-card"
+                onClick={(e) =>
+                  e.stopPropagation()
+                }
+              >
+
+                <div className="header-modal-top">
+
+                  <h3>Your Profile</h3>
+
+                  <p className="modal-subtitle">
+                    Latest account details
+                  </p>
+
+                </div>
+
+                <div className="header-modal-item">
+                  <span>Name</span>
+
+                  <strong>
+                    {user.name}
+                  </strong>
+                </div>
+
+                <div className="header-modal-item">
+                  <span>Email</span>
+
+                  <strong>
+                    {user.email}
+                  </strong>
+                </div>
+
+                <div className="header-modal-item">
+                  <span>Role</span>
+
+                  <strong>
+                    {user.role}
+                  </strong>
+                </div>
+
+              </div>
+            )}
+
+          </div>
+
         </div>
+
       </div>
-    </div>
+
+      {/* TASK MODAL */}
+
+      {showTaskModal && (
+
+        <CreateTaskModal
+          onClose={() =>
+            setShowTaskModal(false)
+          }
+        />
+      )}
+
+      {/* DELIVERABLE MODAL */}
+
+      {showDeliverableModal && (
+
+        <CreateDeliverableModel
+          onClose={() =>
+            setShowDeliverableModal(false)
+          }
+        />
+      )}
+
+    </>
   );
 }
 

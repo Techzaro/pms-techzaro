@@ -15,14 +15,13 @@ import Taskby from "./pages/Taskby";
 import Projects from "./pages/Projects";
 import CreateProject from "./pages/CreateProject";
 import ProjectDetails from "./pages/ProjectDetails";
-import AddTask from "./pages/AddTask";
 import ManageUsers from "./pages/ManageUsers";
 import Deliveries from "./pages/Deliveries";
 import Details from "./pages/Details";
 import History from "./pages/History";
 import Reports from "./pages/Reports";
 import ManageTeam from "./pages/ManageTeam";
-import Profile from "./pages/Profile";
+
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import TaskDetails from "./pages/TaskDetails";
@@ -112,16 +111,7 @@ function App() {
           }
         />
 
-        {/* ADD TASK */}
-
-        <Route
-          path="/add-task"
-          element={
-            <ProtectedRoute>
-              <AddTask />
-            </ProtectedRoute>
-          }
-        />
+     
 
         {/* PROJECTS */}
 
@@ -231,16 +221,6 @@ function App() {
           }
         />
 
-        {/* PROFILE */}
-
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <Profile />
-            </ProtectedRoute>
-          }
-        />
 
       </Routes>
     </BrowserRouter>
