@@ -166,12 +166,12 @@ function Deliveries() {
             </div>
 
             <div>
-              <button
-                className="view-btn"
-                onClick={() => navigate(`/details/${task.id}`)}
-              >
-                View
-              </button>
+            <button
+  className="view-btn"
+  onClick={() => navigate(`/deliverable/${task.id}`)}
+>
+  View
+</button>
             </div>
 
           </div>
