@@ -1,178 +1,125 @@
-/* =========================================================
-   PROJECT DETAILS PAGE CSS - UPDATED FIX
-========================================================= */
-
 .main {
   display: flex;
   align-items: flex-start;
   gap: 24px;
   width: 100%;
+  margin-bottom: 24px;
 }
-
-/* PAGE */
 
 .pd-page--tx {
-  --tx-blue: #3b82f6;
-  --tx-blue-dark: #2563eb;
-  --tx-bg: #f5f7fb;
-  --tx-card: #ffffff;
-  --tx-border: #e5e7eb;
-  --tx-text: #0f172a;
-  --tx-muted: #64748b;
-  --tx-radius: 16px;
-  --tx-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
-
   width: 100%;
-  padding: 0 0 40px;
-  background: var(--tx-bg);
+  padding: 20px;
+  background: #f5f7fb;
 }
-
-/* =========================================================
-   LEFT CONTENT
-========================================================= */
 
 .pd-content {
   flex: 1;
-  min-width: 0;
 }
 
-/* =========================================================
-   HERO
-========================================================= */
+.pd-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.pd-breadcrumb a {
+  text-decoration: none;
+  color: #4f46e5;
+}
 
 .pd-hero-tx {
-  background: transparent;
-  padding: 0;
-  margin-bottom: 20px;
-  width: 100%;
+  background: white;
+  border-radius: 18px;
+  padding: 30px;
+  border: 1px solid #e5e7eb;
 }
 
 .pd-title-row {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 14px;
+  gap: 18px;
+  align-items: flex-start;
 }
 
 .pd-title-icon {
-  width: 58px;
-  height: 58px;
+  width: 64px;
+  height: 64px;
   border-radius: 16px;
-  background: #e8f0ff;
-  color: var(--tx-blue);
+  background: #eef2ff;
+  color: #4f46e5;
 
   display: flex;
   align-items: center;
   justify-content: center;
-
-  border: 1px solid #bfdbfe;
 }
 
 .pd-title-tx {
-  margin: 0;
-  font-size: 42px;
+  font-size: 36px;
   font-weight: 800;
-  line-height: 1.1;
-  color: var(--tx-text);
+  margin: 0;
+  color: #111827;
 }
 
 .pd-desc-tx {
-  margin-top: 8px;
-  font-size: 16px;
+  margin-top: 10px;
+  color: #6b7280;
   line-height: 1.7;
-  color: #475569;
-  max-width: 850px;
 }
-
-/* =========================================================
-   ACTIONS
-========================================================= */
 
 .pd-hero-actions {
   display: flex;
-  align-items: center;
   gap: 14px;
+  margin-top: 24px;
   flex-wrap: wrap;
-  margin-top: 22px;
 }
 
 .pd-pill-status {
   padding: 10px 18px;
+  background: #dbeafe;
+  color: #2563eb;
   border-radius: 999px;
   font-size: 13px;
   font-weight: 700;
-
-  background: #dbeafe;
-  color: #2563eb;
 }
 
 .pd-btn-tx {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
 
-  padding: 11px 18px;
+  padding: 12px 18px;
 
+  border: 1px solid #e5e7eb;
+  background: white;
   border-radius: 12px;
-  border: 1px solid var(--tx-border);
-
-  background: #fff;
-  color: var(--tx-text);
 
   cursor: pointer;
-
-  font-size: 14px;
   font-weight: 600;
-
-  transition: 0.2s ease;
-}
-
-.pd-btn-tx:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .pd-btn-tx--danger {
   color: #dc2626;
-  border-color: #fecaca;
 }
-
-/* =========================================================
-   RIGHT SIDEBAR
-========================================================= */
 
 .pd-rail {
   width: 320px;
   flex-shrink: 0;
-
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
 }
 
 .pd-rail-card {
-  background: var(--tx-card);
-  border: 1px solid var(--tx-border);
-
-  border-radius: var(--tx-radius);
-
-  padding: 22px;
-
-  box-shadow: var(--tx-shadow);
+  background: white;
+  border-radius: 18px;
+  padding: 24px;
+  border: 1px solid #e5e7eb;
 }
 
 .pd-rail-card__title {
   margin: 0 0 18px;
-
-  font-size: 22px;
-  font-weight: 800;
-
-  color: var(--tx-text);
+  font-size: 20px;
+  font-weight: 700;
 }
-
-/* =========================================================
-   DEADLINES
-========================================================= */
 
 .pd-milestones {
   list-style: none;
@@ -182,24 +129,16 @@
 
 .pd-milestones__item {
   display: flex;
-  align-items: flex-start;
   gap: 12px;
-
   padding: 14px 0;
-
-  border-bottom: 1px solid #edf2f7;
-}
-
-.pd-milestones__item:last-child {
-  border-bottom: none;
+  border-bottom: 1px solid #f1f5f9;
 }
 
 .pd-dot {
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   margin-top: 7px;
-  flex-shrink: 0;
 }
 
 .pd-dot--completed {
@@ -215,21 +154,13 @@
 }
 
 .pd-milestones__title {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--tx-text);
+  font-weight: 600;
 }
 
 .pd-milestones__date {
-  margin-top: 5px;
-
-  font-size: 14px;
-  color: var(--tx-muted);
+  font-size: 13px;
+  color: #6b7280;
 }
-
-/* =========================================================
-   STATS
-========================================================= */
 
 .pd-stat-strip {
   display: flex;
@@ -245,20 +176,15 @@
   align-items: center;
   gap: 14px;
 
-  background: var(--tx-card);
-  border: 1px solid var(--tx-border);
-
-  border-radius: var(--tx-radius);
-
-  padding: 20px;
-
-  box-shadow: var(--tx-shadow);
+  background: white;
+  border-radius: 18px;
+  padding: 22px;
+  border: 1px solid #e5e7eb;
 }
 
 .pd-mini-stat__ic {
   width: 52px;
   height: 52px;
-
   border-radius: 14px;
 
   display: flex;
@@ -268,7 +194,7 @@
 
 .pd-mini-stat__ic--blue {
   background: #eff6ff;
-  color: #3b82f6;
+  color: #2563eb;
 }
 
 .pd-mini-stat__ic--orange {
@@ -287,145 +213,188 @@
 }
 
 .pd-mini-stat__label {
+  display: block;
   font-size: 12px;
-  font-weight: 700;
-  color: var(--tx-muted);
-  text-transform: uppercase;
+  color: #6b7280;
+  margin-bottom: 6px;
 }
 
 .pd-mini-stat__num {
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 800;
-  color: var(--tx-text);
 }
 
-/* =========================================================
-   SHELL
-========================================================= */
+.pd-mini-stat__bar {
+  width: 220px;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.pd-mini-stat__bar span {
+  display: block;
+  height: 100%;
+  background: #4f46e5;
+}
+
+.pd-mini-stat__val {
+  display: block;
+  margin-top: 8px;
+  font-weight: 700;
+}
+
+.pd-focus {
+  display: flex;
+  gap: 24px;
+}
+
+.pd-focus__main {
+  flex: 1;
+}
 
 .pd-shell {
-  background: var(--tx-card);
-
-  border: 1px solid var(--tx-border);
-
+  background: white;
   border-radius: 18px;
-
+  border: 1px solid #e5e7eb;
   overflow: hidden;
-
-  box-shadow: var(--tx-shadow);
 }
 
 .pd-tabs-tx {
   display: flex;
-  align-items: center;
   gap: 10px;
-
   padding: 0 18px;
-
-  border-bottom: 1px solid var(--tx-border);
-
-  background: #fafbfd;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .pd-tab-tx {
-  display: inline-flex;
+  border: none;
+  background: transparent;
+  padding: 18px 10px;
+  cursor: pointer;
+
+  display: flex;
   align-items: center;
   gap: 8px;
 
-  padding: 18px 10px;
-
-  border: none;
-  background: transparent;
-
-  cursor: pointer;
-
-  font-size: 15px;
   font-weight: 600;
-
-  color: #64748b;
-
-  transition: 0.2s ease;
-}
-
-.pd-tab-tx:hover {
-  color: #3b82f6;
+  color: #6b7280;
 }
 
 .pd-tab-tx--on {
-  color: #3b82f6;
-  border-bottom: 2px solid #3b82f6;
+  color: #4f46e5;
+  border-bottom: 2px solid #4f46e5;
 }
 
 .pd-shell-body {
   padding: 28px;
 }
 
-/* =========================================================
-   TASKS CARD
-========================================================= */
-
-.pd-task {
-  margin-bottom: 22px;
+.pd-shell-split {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
 }
 
-.pd-task-title {
-  font-size: 15px;
+.pd-bottom-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.pd-card-flat {
+  background: white;
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+  padding: 24px;
+}
+
+.pd-card-flat__head {
+  margin-bottom: 18px;
+}
+
+.pd-block-title {
+  font-size: 20px;
   font-weight: 700;
-  color: var(--tx-text);
-  margin-bottom: 10px;
+  margin: 0;
 }
 
-.pd-task-progress {
+.pd-table {
   width: 100%;
-  height: 12px;
-
-  border-radius: 999px;
-  overflow: hidden;
-
-  background: #e5e7eb;
+  border-collapse: collapse;
 }
 
-.pd-task-progress-bar {
-  height: 100%;
-  border-radius: 999px;
-  background: #22c55e;
+.pd-table th {
+  text-align: left;
+  padding: 14px;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 14px;
 }
 
-.pd-task-date {
-  margin-top: 10px;
+.pd-table td {
+  padding: 16px 14px;
+  border-bottom: 1px solid #f1f5f9;
+}
 
+.pd-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.pd-member {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pd-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #eef2ff;
+  color: #4338ca;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-weight: 700;
+}
+
+.pd-member-name {
+  font-weight: 600;
+}
+
+.pd-member-role {
   font-size: 13px;
-  color: var(--tx-muted);
+  color: #6b7280;
 }
 
-/* =========================================================
-   RESPONSIVE
-========================================================= */
+.pd-badge-member {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  font-size: 12px;
+  font-weight: 600;
+}
 
 @media (max-width: 1200px) {
-  .main {
+  .main,
+  .pd-focus,
+  .pd-stat-strip {
     flex-direction: column;
+  }
+
+  .pd-shell-split,
+  .pd-bottom-grid {
+    grid-template-columns: 1fr;
   }
 
   .pd-rail {
     width: 100%;
-  }
-
-  .pd-stat-strip {
-    flex-direction: column;
-  }
-}
-
-@media (max-width: 768px) {
-  .pd-title-tx {
-    font-size: 30px;
-  }
-
-  .pd-tabs-tx {
-    overflow-x: auto;
-  }
-
-  .pd-shell-body {
-    padding: 20px;
   }
 }

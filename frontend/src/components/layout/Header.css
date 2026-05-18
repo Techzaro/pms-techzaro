@@ -147,17 +147,25 @@
 
 .user-info {
   position: relative;
-
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  cursor: pointer;
+  width: auto;
+  gap: 25px; /* yahan se gap control hoga */
+}
+.user-avatar,
+.user-text,
+.arrow-icon {
   display: flex;
   align-items: center;
-  gap: 12px;
-
-  cursor: pointer;
 }
-
 .user-text {
   display: flex;
   flex-direction: column;
+  margin-right: 6px;
+
 }
 
 .user-text h6 {
@@ -190,8 +198,10 @@
   font-size: 20px;
   font-weight: 700;
 }
-.arrow-icon{
-  margin-bottom: 15px;
+.arrow-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 /* MODAL */
 
@@ -305,4 +315,23 @@
   .header-modal-card {
     width: 260px;
   }
+}
+
+.user-info {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.user-avatar {
+  margin-right: 12px;
+}
+
+.user-text {
+  margin-right: 10px;
+}
+
+.arrow-icon {
+  display: flex;
+  align-items: center;
 }

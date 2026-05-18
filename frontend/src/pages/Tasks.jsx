@@ -11,32 +11,36 @@ function Tasks() {
 
   const tasks = [
     {
-      id: 1,
+      id: 101,
       initials: "LI",
       bgColor: "#FFE8CC",
       textColor: "#F59E0B",
-      name: "Lorem ipsum",
-      role: "Member",
+      name: "Muhammad Sufyan",
+      role: "Project Manager",
       title: "Ecommerce homepage design",
       description: "Design and implement the new ecommerce homepage.",
       status: "In Progress",
       priority: "High",
       date1: "22-04-2026",
       date2: "28-04-2026",
+      assigned_by: "Muhammad Sufyan",
+      assigned_to: "You",
     },
     {
-      id: 2,
-      initials: "LI",
+      id: 102,
+      initials: "LN",
       bgColor: "#DCFCE7",
       textColor: "#22C55E",
-      name: "Lorem ipsum",
-      role: "Member",
-      title: "Ecommerce homepage design",
-      description: "Design and implement the new ecommerce homepage.",
+      name: "Leyla Nazir",
+      role: "Team Lead",
+      title: "Dashboard performance audit",
+      description: "Review current dashboard performance and propose improvements.",
       status: "Pending",
       priority: "Medium",
-      date1: "22-04-2026",
-      date2: "28-04-2026",
+      date1: "24-04-2026",
+      date2: "30-04-2026",
+      assigned_by: "Leyla Nazir",
+      assigned_to: "You",
     },
   ];
 
@@ -168,7 +172,7 @@ function Tasks() {
             <div>
               <button
                 className="view-btn"
-                onClick={() => navigate("/taskdetails")}
+                onClick={() => navigate(`/details/${task.id}`)}
               >
                 View
               </button>
