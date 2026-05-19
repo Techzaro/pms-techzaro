@@ -2,6 +2,10 @@
   padding: 24px;
 }
 
+/* =========================
+   HEADER
+========================= */
+
 .manage-team-header {
   display: flex;
   flex-wrap: wrap;
@@ -15,6 +19,10 @@
   margin: 0;
   font-size: 28px;
 }
+
+/* =========================
+   MESSAGE BOX
+========================= */
 
 .message-box {
   border-radius: 16px;
@@ -38,6 +46,7 @@
 /* =========================
    HEADER BUTTON
 ========================= */
+
 .create-team-header-btn {
   border: none;
   border-radius: 14px;
@@ -62,8 +71,9 @@
 }
 
 /* =========================
-   MAIN GRID - SIMPLIFIED (NO SIDEBAR)
+   TEAM GRID
 ========================= */
+
 .team-list-simple {
   display: grid;
   gap: 20px;
@@ -71,16 +81,15 @@
 }
 
 /* =========================
-   COMMON CARD
+   TEAM CARD
 ========================= */
+
 .team-card {
   background: #ffffff;
   border: 1px solid #e6e8ea;
   border-radius: 20px;
   padding: 24px;
   box-shadow: 0 12px 35px rgba(15, 23, 42, 0.06);
-
-  /* IMPORTANT */
   height: fit-content;
 }
 
@@ -96,15 +105,10 @@
   line-height: 1.5;
 }
 
-
-
-/* =========================
-   TEAM PREVIEW
-========================= */
-
 /* =========================
    TEAM HEADER
 ========================= */
+
 .team-preview-header {
   display: flex;
   justify-content: space-between;
@@ -127,6 +131,7 @@
 /* =========================
    ACTION BUTTONS
 ========================= */
+
 .team-actions {
   display: flex;
   gap: 10px;
@@ -153,6 +158,7 @@
 /* =========================
    MEMBER BOX
 ========================= */
+
 .team-members-box {
   background: #f8fafc;
   border-radius: 16px;
@@ -183,8 +189,9 @@
 }
 
 /* =========================
-   MEMBER CHIP + CROWN
+   MEMBER CHIP
 ========================= */
+
 .team-member-chip {
   display: inline-flex;
   align-items: center;
@@ -210,13 +217,12 @@
   flex-shrink: 0;
   width: 36px;
   height: 36px;
-  padding: 0;
   border: none;
   border-radius: 10px;
   background: transparent;
   color: #9ca3af;
   cursor: pointer;
-  transition: color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+  transition: 0.2s ease;
 }
 
 .leader-crown-btn:hover {
@@ -239,7 +245,6 @@
   border: none;
   color: #ef4444;
   font-size: 18px;
-  line-height: 1;
   cursor: pointer;
   padding: 4px 6px;
   margin-left: auto;
@@ -252,6 +257,7 @@
 /* =========================
    PROJECT BUTTON
 ========================= */
+
 .project-button {
   width: 100%;
   background: #2563eb;
@@ -277,6 +283,7 @@
 /* =========================
    EMPTY STATE
 ========================= */
+
 .empty-state {
   text-align: center;
   padding: 48px 24px !important;
@@ -290,19 +297,192 @@
 }
 
 /* =========================
+   MODAL OVERLAY
+========================= */
+
+.user-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  z-index: 999;
+  padding: 20px;
+}
+
+/* =========================
+   MODAL BOX
+========================= */
+
+.user-modal-content {
+  width: 30%;
+  max-width: 720px;
+
+  background: #ffffff;
+
+  border-radius: 24px;
+
+  padding: 32px;
+
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.18);
+
+  animation: modalShow 0.25s ease;
+}
+
+/* =========================
+   MODAL ANIMATION
+========================= */
+
+@keyframes modalShow {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* =========================
+   MODAL HEADER
+========================= */
+
+.user-modal-header {
+  margin-bottom: 26px;
+}
+
+.user-modal-header h2 {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.modal-subtitle {
+  margin-top: 8px;
+  color: #6b7280;
+  font-size: 15px;
+}
+
+/* =========================
+   FORM
+========================= */
+
+.user-form {
+  width: 100%;
+}
+
+.user-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 22px;
+  margin-bottom: 22px;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-row label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.form-row input,
+.form-row select {
+  width: 100%;
+  height: 58px;
+
+  border: 1px solid #d1d5db;
+  border-radius: 16px;
+
+  padding: 0 16px;
+
+  font-size: 15px;
+
+  background: #f9fafb;
+
+  outline: none;
+
+  transition: 0.2s ease;
+}
+
+.form-row input:focus,
+.form-row select:focus {
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+/* =========================
+   FORM BUTTONS
+========================= */
+
+.user-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: 30px;
+}
+
+.secondary-button,
+.primary-button {
+  border: none;
+  border-radius: 16px;
+  padding: 14px 24px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.secondary-button {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.secondary-button:hover {
+  background: #e5e7eb;
+}
+
+.primary-button {
+  background: #2563eb;
+  color: white;
+}
+
+.primary-button:hover {
+  background: #1d4ed8;
+}
+
+/* =========================
    RESPONSIVE
 ========================= */
+
 @media (max-width: 980px) {
   .team-list-simple {
     grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 640px) {
-  .team-list-simple {
-    grid-template-columns: 1fr;
+@media (max-width: 768px) {
+  .user-modal-content {
+    padding: 24px;
   }
-  
+
+  .user-modal-header h2 {
+    font-size: 26px;
+  }
+}
+
+@media (max-width: 640px) {
   .manage-team-header {
     flex-direction: column;
     align-items: flex-start;
@@ -310,5 +490,23 @@
 
   .create-team-header-btn {
     width: 100%;
+  }
+
+  .team-list-simple {
+    grid-template-columns: 1fr;
+  }
+
+  .user-form-actions {
+    flex-direction: column;
+  }
+
+  .secondary-button,
+  .primary-button {
+    width: 100%;
+  }
+
+  .user-modal-content {
+    border-radius: 18px;
+    padding: 20px;
   }
 }

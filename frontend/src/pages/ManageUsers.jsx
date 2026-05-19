@@ -407,6 +407,19 @@ function ManageUsers() {
             <IoSearchOutline fontSize={"25px"} />
             <input type="text" placeholder="Search users by name or email....." />
           </div>
+          <select className="bar-role">
+            <option value="">Admin</option>
+            <option value="">Manager</option>
+            <option value="">User</option>
+          </select>
+          <select className="bar-status">
+            <option value="">Active</option>
+            <option value="">Resigned</option>
+          </select>
+          <select className="bar-sort">
+            <option value="">Ascending</option>
+            <option value="">Dscending</option>
+          </select>
         </div>
 
         {message && (

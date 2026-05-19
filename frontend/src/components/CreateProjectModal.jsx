@@ -1,4 +1,4 @@
-﻿import "./layout/CreateProjectModal.css";
+import "./layout/CreateProjectModal.css";
 
 const CreateProjectModal = ({ onClose }) => {
   return (
@@ -116,9 +116,11 @@ const CreateProjectModal = ({ onClose }) => {
               </div>
 
               <select>
-                <option>To Do</option>
+                <option>Completed</option>
                 <option>In Progress</option>
-                <option>Done</option>
+                <option>Pending</option>
+                <option>Failed</option>
+                <option>Abandoned</option>
               </select>
 
             </div>

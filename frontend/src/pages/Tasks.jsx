@@ -4,6 +4,7 @@ import { IoIosArrowDown } from "react-icons/io";
 import { LuArrowDownToLine } from "react-icons/lu";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
+import { IoSearchOutline } from "react-icons/io5";
 import "../pages/Task.css";
 
 function Tasks() {
@@ -54,9 +55,13 @@ function Tasks() {
 
         <div className="task-btns">
           <div className="all-time">
-            <CiCalendar />
-            <span>All Time</span>
-            <IoIosArrowDown />
+            <select name="" id="">
+              <option value="">All Time</option>
+              <option value="">Month</option>
+              <option value="">Week</option>
+              <option value="">Day</option>
+            </select>
+
           </div>
 
           <div
@@ -97,7 +102,10 @@ function Tasks() {
           Abandoned
         </p>
       </div>
-
+      <div className="tasks-search-bar">
+        <IoSearchOutline fontSize={"20px"} />
+        <input type="text" placeholder="Search by task name" />
+      </div>
       {/* TABLE */}
 
       <div className="container">
