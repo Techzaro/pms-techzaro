@@ -1,5 +1,4 @@
-<<<<<<< HEAD
-=======
+
 import "./layout/CreateTaskModal.css";
 
 const CreateTaskModal = ({ onClose }) => {
@@ -218,4 +217,4 @@ const CreateTaskModal = ({ onClose }) => {
 };
 
 export default CreateTaskModal;
->>>>>>> b4ebd099e62d2237becaacc40557cd22ddd6f79d
+

@@ -25,6 +25,7 @@ import ManageTeam from "./pages/ManageTeam";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import TaskDetails from "./pages/TaskDetails";
+import DeliverableDetails from "./pages/DeliverableDetails";
 
 function App() {
   return (
@@ -106,12 +107,12 @@ function App() {
           path="/taskdetails"
           element={
             <ProtectedRoute>
-              <TaskDetails/>
+              <TaskDetails />
             </ProtectedRoute>
           }
         />
 
-     
+
 
         {/* PROJECTS */}
 
@@ -153,6 +154,16 @@ function App() {
           element={
             <ProtectedRoute>
               <Deliveries />
+            </ProtectedRoute>
+          }
+        />
+        {/* DELIVERABLE DETAILS */}
+
+        <Route
+          path="/deliverable-details/:id"
+          element={
+            <ProtectedRoute>
+              <DeliverableDetails/>
             </ProtectedRoute>
           }
         />

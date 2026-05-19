@@ -27,6 +27,21 @@
   font-size: 14px;
 }
 
+.projects-search-bar {
+  border: 1px solid lightgray;
+  background-color: white;
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  border-radius: 10px;
+  width: 48%;
+  margin-bottom: 10px;
+  gap: 10px;
+}
+.projects-search-bar input{
+  outline: 0;
+  flex: 1;
+}
 .header-actions {
   display: flex;
   gap: 12px;

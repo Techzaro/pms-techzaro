@@ -27,8 +27,8 @@ function Sidebar() {
 
   const [isProfileModalOpen, setIsProfileModalOpen] =
     useState(false);
-
-  const [user, setUser] = useState({
+    
+    const [user, setUser] = useState({
     name:
       localStorage.getItem("name") || "User",
 
