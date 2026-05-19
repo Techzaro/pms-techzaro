@@ -81,16 +81,14 @@ function Login() {
         localStorage.setItem("token", data.token);
         localStorage.setItem("role", data.role);
         if (data.user) {
+          localStorage.setItem("userId", data.user.id);
           localStorage.setItem("name", data.user.name || "User");
           localStorage.setItem("email", data.user.email || "user@example.com");
         }
 
-        if (data.role === "admin") {
+        if (data.role === "admin" || data.role === "manager") {
+          // Managers should receive the same dashboard entry point as admins.
           window.location.href = "/admin";
-        }
-
-        else if (data.role === "manager") {
-          window.location.href = "/manager";
         }
 
         else if (data.role === "teamlead" || data.role === "team_lead") {

@@ -40,8 +40,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Change password
     Route::put('/user/change-password', [AuthController::class, 'changePassword']);
 
-    // User management (admin only)
-    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin')->group(function () {
+    // User management (admin and manager)
+    // RoleMiddleware is applied here so admins and managers may access user CRUD routes.
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
         Route::get('/users', [UserController::class, 'index']);
         Route::post('/users', [UserController::class, 'store']);
         Route::put('/users/{user}', [UserController::class, 'update']);

@@ -37,7 +37,7 @@ function App() {
         <Route path="/" element={<Login />} />
 
         {/* ADMIN */}
-
+        {/* Note: managers are redirected here after login to share the admin dashboard experience. */}
         <Route
           path="/admin"
           element={

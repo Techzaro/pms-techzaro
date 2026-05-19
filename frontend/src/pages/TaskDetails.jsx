@@ -1,4 +1,4 @@
-﻿const TaskDetails = () => {
+const TaskDetails = () => {
   return (
     <div>
       Task Details
