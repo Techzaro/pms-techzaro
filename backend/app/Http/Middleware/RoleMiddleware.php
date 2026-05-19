@@ -18,13 +18,23 @@ class RoleMiddleware
     /**
      * Validate authenticated user role before route execution.
      */
-    public function handle(Request $request, Closure $next, $role)
+    public function handle(Request $request, Closure $next, ...$roles)
     {
         if (!$request->user()) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if ($request->user()->role !== $role) {
+        $allowed = [];
+
+        foreach ($roles as $role) {
+            foreach (array_map('trim', explode(',', $role)) as $item) {
+                if ($item !== '') {
+                    $allowed[] = $item;
+                }
+            }
+        }
+
+        if (!in_array($request->user()->role, $allowed)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 

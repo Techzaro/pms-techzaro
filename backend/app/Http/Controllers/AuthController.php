@@ -43,6 +43,13 @@ class AuthController extends Controller
             // logged in user
             $user = Auth::user();
 
+            if ($user->active === false) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'You do not exist in the system. You have resigned and no longer have access.'
+                ], 403);
+            }
+
             // generate token
             $token = $user->createToken('auth_token')->plainTextToken;
 

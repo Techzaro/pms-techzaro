@@ -68,6 +68,11 @@ function Sidebar() {
           });
 
           localStorage.setItem(
+            "userId",
+            data.id
+          );
+
+          localStorage.setItem(
             "name",
             data.name
           );
@@ -165,8 +170,8 @@ function Sidebar() {
 
         <hr />
 
-        {user.role === "admin" && (
-
+        {(user.role === "admin" || user.role === "manager") && (
+          // Admins and managers both see the user management link.
           <Link
             to="/manage-users"
             className={`sidebar-link ${

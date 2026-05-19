@@ -186,7 +186,8 @@
 }
 
 .btn-update,
-.btn-delete {
+.btn-delete,
+.btn-resign {
   width: 42px;
   height: 42px;
   border: none;
@@ -203,13 +204,67 @@
   color: #2563eb;
 }
 
-.btn-delete {
+.btn-resign {
   color: #dc2626;
 }
 
 .btn-update:hover,
-.btn-delete:hover {
+.btn-delete:hover,
+.btn-resign:hover {
   background: #e5e7eb;
+}
+
+.btn-update:disabled,
+.btn-resign:disabled,
+.role-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.resigned-row {
+  background: #e5e7eb; /* light gray */
+  color: #fff;
+}
+
+.resigned-row td {
+  border-bottom-color: rgba(0,0,0,0.06);
+  color: #fff;
+}
+
+.resigned-row .user-email {
+  color: #111827;
+}
+
+.resigned-row .role-select {
+  color: #111827;
+}
+
+.resigned-row .role-select,
+.resigned-row .btn-update,
+.resigned-row .btn-resign {
+  opacity: 0.9;
+}
+
+.resigned-row:hover {
+  background: #d1d5db;
+}
+
+/* Resigned status badge (red stamped style) */
+.resigned-badge {
+  display: inline-block;
+  background: #b91c1c;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.resign-icon {
+  width: 20px;
+  height: 20px;
 }
 
 /* ========================= */

@@ -3,21 +3,15 @@
  * Rendered when the user navigates to /manager or related route.
  */
 
-import DashboardLayout from "../components/layout/DashboardLayout";
-
-/**
- * Perform the manager.
- */
+import Admin from "./Admin";
 
 /**
  * Manager dashboard page.
+ *
+ * Managers should see the same dashboard experience as admins.
  */
 function Manager() {
-  return (
-    <DashboardLayout>
-      <h1>Manager Dashboard</h1>
-    </DashboardLayout>
-  );
+  return <Admin />;
 }
 
 export default Manager;

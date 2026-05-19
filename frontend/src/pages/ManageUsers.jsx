@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { MdAdd, MdCheckCircle, MdDelete, MdEdit } from "react-icons/md";
+import { MdEdit } from "react-icons/md";
 import { IoSearchOutline } from "react-icons/io5";
 import { CiCirclePlus } from "react-icons/ci";
 import { useNavigate } from "react-router-dom";
@@ -26,6 +26,24 @@ function ManageUsers() {
   const [savingUserId, setSavingUserId] = useState(null);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
+  const [currentUserId, setCurrentUserId] = useState(() => {
+    const savedId = localStorage.getItem("userId");
+    return savedId ? Number(savedId) : null;
+  });
+  const [currentUserRole, setCurrentUserRole] = useState(localStorage.getItem("role") || "");
+
+  // Inline icons/badges used by the user table
+  const ResignIcon = ({ className = "" }) => (
+    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+      <rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M3 7.5h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <rect x="6" y="9" width="12" height="6" rx="1" fill="currentColor" />
+    </svg>
+  );
+
+  const ResignedBadge = () => (
+    <span className="resigned-badge" aria-hidden>RESIGNED</span>
+  );
 
   /**
    * Display a temporary message banner to the user.
@@ -82,12 +100,42 @@ function ManageUsers() {
       }
 
       const data = await res.json();
-      setUsers(data.users ?? data);
+      const usersData = (data.users ?? data).map((user) => ({
+        ...user,
+        active: user.active !== false,
+      }));
+      setUsers(usersData);
     } catch (error) {
       console.error(error);
       showMessage("Unable to load users. Please login again if required.", "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCurrentUser = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const res = await fetch("http://127.0.0.1:8000/api/user", {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) return;
+
+      const data = await res.json();
+      if (data && data.id) {
+        setCurrentUserId(data.id);
+        setCurrentUserRole(data.role || "");
+        localStorage.setItem("userId", data.id);
+        localStorage.setItem("role", data.role);
+      }
+    } catch {
+      // ignore errors here; user role is already from localStorage
     }
   };
 
@@ -97,9 +145,17 @@ function ManageUsers() {
     const role = localStorage.getItem("role");
     const token = localStorage.getItem("token");
 
-    if (!token || role !== "admin") {
+    // Allow both admins and managers to access this page.
+    if (!token || (role !== "admin" && role !== "manager")) {
       navigate("/");
       return;
+    }
+
+    setCurrentUserId(localStorage.getItem("userId") ? Number(localStorage.getItem("userId")) : null);
+    setCurrentUserRole(role);
+
+    if (!localStorage.getItem("userId")) {
+      fetchCurrentUser();
     }
 
     fetchUsers();
@@ -148,38 +204,6 @@ function ManageUsers() {
   };
 
   /**
-   * Perform the handle delete user.
-   */
-
-  /**
-   * Handle handle delete user.
-   */
-  const handleDeleteUser = async (userId) => {
-    if (!window.confirm("Delete this user?")) {
-      return;
-    }
-
-    try {
-      const res = await fetch(`http://127.0.0.1:8000/api/users/${userId}`, {
-        method: "DELETE",
-        headers: {
-          Accept: "application/json",
-          ...authHeaders(),
-        },
-      });
-
-      if (!res.ok) {
-        throw new Error("Unable to delete user");
-      }
-
-      setUsers((prev) => prev.filter((user) => user.id !== userId));
-    } catch (error) {
-      console.error(error);
-      showMessage("Failed to delete user.", "error");
-    }
-  };
-
-  /**
    * Perform the handle update user.
    */
 
@@ -187,6 +211,11 @@ function ManageUsers() {
    * Handle handle update user.
    */
   const handleUpdateUser = async (user) => {
+    if (!user.active) {
+      showMessage("Resigned users cannot be updated.", "error");
+      return;
+    }
+
     setSavingUserId(user.id);
 
     try {
@@ -204,7 +233,7 @@ function ManageUsers() {
       }
 
       const data = await res.json();
-      setUsers((prev) => prev.map((item) => (item.id === user.id ? { ...item, role: data.user.role } : item)));
+      setUsers((prev) => prev.map((item) => (item.id === user.id ? { ...item, role: data.user.role, active: data.user.active } : item)));
       showMessage("User role updated successfully.");
     } catch (error) {
       console.error(error);
@@ -212,6 +241,94 @@ function ManageUsers() {
     } finally {
       setSavingUserId(null);
     }
+  };
+
+  const handleResignUser = async (userId) => {
+    const confirmation = window.confirm("Resign this user? They will no longer be able to access the system.");
+    if (!confirmation) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/users/${userId}`, {
+        method: "PUT",
+        headers: {
+          Accept: "application/json",
+          ...authHeaders(),
+        },
+        body: JSON.stringify({ active: false }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Unable to resign user");
+      }
+
+      const data = await res.json();
+      setUsers((prev) => prev.map((item) => (item.id === userId ? { ...item, active: data.user.active } : item)));
+      showMessage("User resigned successfully.");
+    } catch (error) {
+      console.error(error);
+      showMessage("Failed to resign user.", "error");
+    }
+  };
+
+  const renderUserRow = (user) => {
+    const isSelf = currentUserId === user.id;
+    const isTargetAdmin = user.role === "admin";
+    const isActive = user.active !== false;
+    const canModifyUser =
+      isActive &&
+      !isSelf &&
+      !(currentUserRole === "manager" && isTargetAdmin);
+
+    return (
+      <tr key={user.id} className={!isActive ? "resigned-row" : ""}>
+        <td style={{ textAlign: "left" }}>
+          <div className="user-info">
+            <span className="user-name">{user.name}</span>
+            <span className="user-email">{user.email}</span>
+          </div>
+        </td>
+
+        <td>
+          <select
+            className="role-select"
+            value={user.role}
+            onChange={(e) => handleRoleChange(user.id, e.target.value)}
+            disabled={!canModifyUser}
+          >
+            <option value="admin">Admin</option>
+            <option value="manager">Manager</option>
+            <option value="team_lead">Team Lead</option>
+            <option value="member">Member</option>
+          </select>
+        </td>
+
+        <td>{!isActive ? <ResignedBadge /> : "Active"}</td>
+
+        <td>
+          <div className="action-buttons">
+            <button
+              className="btn-update"
+              onClick={() => handleUpdateUser(user)}
+              disabled={savingUserId === user.id || !canModifyUser}
+              aria-label="Update user role"
+            >
+              <MdEdit size={24} />
+            </button>
+
+            <button
+              className="btn-resign"
+              onClick={() => handleResignUser(user.id)}
+              disabled={!canModifyUser}
+              aria-label="Resign user"
+            >
+              <ResignIcon className="resign-icon" />
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
   };
 
   /**
@@ -238,6 +355,8 @@ function ManageUsers() {
       showMessage("Please enter the password.", "error");
       return;
     }
+
+    
 
     try {
       const res = await fetch("http://127.0.0.1:8000/api/users", {
@@ -318,58 +437,7 @@ function ManageUsers() {
                   </td>
                 </tr>
               ) : users.length ? (
-                users.map((user) => (
-                  <tr key={user.id}>
-                    {/* User Column */}
-                    <td style={{ textAlign: "left" }}>
-                      <div className="user-info">
-                        <span className="user-name">{user.name}</span>
-                        <span className="user-email">{user.email}</span>
-                      </div>
-                    </td>
-
-                    {/* Role Column */}
-                    <td>
-                      <select
-                        className="role-select"
-                        value={user.role}
-                        onChange={(e) =>
-                          handleRoleChange(user.id, e.target.value)
-                        }
-                      >
-                        <option value="admin">Admin</option>
-                        <option value="manager">Manager</option>
-                        <option value="team_lead">Team Lead</option>
-                        <option value="member">Member</option>
-                      </select>
-                    </td>
-
-                    {/* Status Column */}
-                    <td>Active</td>
-
-                    {/* Actions Column */}
-                    <td>
-                      <div className="action-buttons">
-                        <button
-                          className="btn-update"
-                          onClick={() => handleUpdateUser(user)}
-                          disabled={savingUserId === user.id}
-                          aria-label="Update user role"
-                        >
-                          <MdEdit size={24} />
-                        </button>
-
-                        <button
-                          className="btn-delete"
-                          onClick={() => handleDeleteUser(user.id)}
-                          aria-label="Delete user"
-                        >
-                          <MdDelete size={24} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                users.map(renderUserRow)
               ) : (
                 <tr>
                   <td colSpan="4" className="empty-row">
