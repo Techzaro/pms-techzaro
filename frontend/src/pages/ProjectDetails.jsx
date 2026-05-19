@@ -473,7 +473,7 @@ function ProjectDetails() {
           onChange={(e) => setNotesDraft(e.target.value)}
           placeholder="Client notes or internal reminders…"
         />
-        <button type="button" className="pd-btn pd-btn--primary pd-btn--block" disabled={notesSaving} onClick={handleSaveNotes}>
+        <button type="button" className="pd-btn" disabled={notesSaving} onClick={handleSaveNotes}>
           {notesSaving ? "Saving…" : "Save notes"}
         </button>
       </section>
@@ -694,6 +694,7 @@ function ProjectDetails() {
 
   return (
     <DashboardLayout {...layoutProps}>
+      <div className="pd-main-layout">
       <div className="pd-page pd-page--tx">
         {message && <div className={`pd-toast pd-toast--${messageType}`}>{message}</div>}
 
@@ -741,7 +742,7 @@ function ProjectDetails() {
               <span className="pd-mini-stat__val">{progress}%</span>
             </div>
           </div>
-          <div className="pd-mini-stat">
+          <div className="pd-mini-stat1">
             <div className="pd-mini-stat__ic pd-mini-stat__ic--orange">
               <ClipboardList size={20} />
             </div>
@@ -749,23 +750,23 @@ function ProjectDetails() {
               <span className="pd-mini-stat__label">Tasks</span>
               <span className="pd-mini-stat__num">{tasks.length}</span>
             </div>
-          </div>
-          <div className="pd-mini-stat">
-            <div className="pd-mini-stat__ic pd-mini-stat__ic--indigo">
-              <Users size={20} />
+            <div className="pd-mini-stat2">
+              <div className="pd-mini-stat__ic pd-mini-stat__ic--indigo">
+                <Users size={20} />
+              </div>
+              <div className="pd-mini-stat__text">
+                <span className="pd-mini-stat__label">Members</span>
+                <span className="pd-mini-stat__num">{memberCount}</span>
+              </div>
             </div>
-            <div className="pd-mini-stat__text">
-              <span className="pd-mini-stat__label">Members</span>
-              <span className="pd-mini-stat__num">{memberCount}</span>
-            </div>
-          </div>
-          <div className="pd-mini-stat">
-            <div className="pd-mini-stat__ic pd-mini-stat__ic--green">
-              <CalendarDays size={20} />
-            </div>
-            <div className="pd-mini-stat__text">
-              <span className="pd-mini-stat__label">Deadline</span>
-              <span className="pd-mini-stat__num pd-mini-stat__num--sm">{formatShortDate(project.end_date)}</span>
+            <div className="pd-mini-stat3">
+              <div className="pd-mini-stat__ic pd-mini-stat__ic--green">
+                <CalendarDays size={20} />
+              </div>
+              <div className="pd-mini-stat__text">
+                <span className="pd-mini-stat__label">Deadline</span>
+                <span className="pd-mini-stat__num pd-mini-stat__num--sm">{formatShortDate(project.end_date)}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1002,8 +1003,12 @@ function ProjectDetails() {
             </div>
           </div>
 
-          {renderRail()}
-        </div>
+          </div>
+      </div>
+      
+      <div>
+                {renderRail()}
+      </div>
       </div>
     </DashboardLayout>
   );

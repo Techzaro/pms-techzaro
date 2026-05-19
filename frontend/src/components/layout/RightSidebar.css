@@ -1,6 +1,7 @@
 .right-sidebar {
-    width: 300px;
-    min-width: 300px;
+    width: 100%;
+    max-width: 300px;
+    min-width: 260px;
     background: white;
     border-radius: 20px;
     margin-top: 15px;
@@ -10,6 +11,7 @@
     position: sticky;
     top: 75px;
     align-self: flex-start;
+    box-sizing: border-box;
 }
 
 .right-card {
@@ -26,6 +28,7 @@
     align-items: flex-start;
     gap: 12px;
     margin-bottom: 16px;
+    flex-wrap: wrap;
 }
 
 .right-card-header h3 {
@@ -52,6 +55,12 @@
     cursor: pointer;
     font-size: 12px;
     font-weight: 600;
+    transition: 0.3s ease;
+}
+
+.calendar-action:hover,
+.event-btn:hover {
+    opacity: 0.9;
 }
 
 .calendar-grid {
@@ -113,6 +122,7 @@
     margin: 0;
     color: #6b7280;
     font-size: 13px;
+    line-height: 1.5;
 }
 
 .event-time {
@@ -123,8 +133,141 @@
     font-weight: 700;
 }
 
+/* =========================
+   LARGE TABLETS
+========================= */
 @media (max-width: 1200px) {
     .right-sidebar {
-        display: none;
+        max-width: 100%;
+        min-width: 100%;
+        position: static;
+        margin-top: 20px;
+    }
+}
+
+/* =========================
+   TABLETS
+========================= */
+@media (max-width: 992px) {
+    .right-sidebar {
+        padding: 14px;
+        border-radius: 18px;
+    }
+
+    .right-card {
+        padding: 16px;
+    }
+
+    .right-card-header h3 {
+        font-size: 17px;
+    }
+
+    .calendar-grid {
+        gap: 6px;
+    }
+
+    .calendar-cell {
+        height: 30px;
+        font-size: 12px;
+    }
+}
+
+/* =========================
+   MOBILE DEVICES
+========================= */
+@media (max-width: 768px) {
+    .right-sidebar {
+        width: 100%;
+        min-width: 100%;
+        padding: 12px;
+        border-radius: 16px;
+    }
+
+    .right-card {
+        padding: 14px;
+        border-radius: 18px;
+    }
+
+    .right-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .right-card-header h3 {
+        font-size: 16px;
+    }
+
+    .calendar-action,
+    .event-btn {
+        width: 100%;
+        text-align: center;
+    }
+
+    .calendar-grid {
+        gap: 5px;
+    }
+
+    .calendar-cell {
+        height: 28px;
+        min-height: 28px;
+        font-size: 11px;
+        border-radius: 10px;
+    }
+
+    .event-item,
+    .task-item {
+        padding: 12px;
+    }
+
+    .event-item h4,
+    .task-item h4 {
+        font-size: 14px;
+    }
+
+    .event-item p,
+    .task-item p {
+        font-size: 12px;
+    }
+}
+
+/* =========================
+   SMALL MOBILE DEVICES
+========================= */
+@media (max-width: 480px) {
+    .right-sidebar {
+        padding: 10px;
+    }
+
+    .right-card {
+        padding: 12px;
+    }
+
+    .calendar-grid {
+        gap: 4px;
+    }
+
+    .calendar-day-label {
+        font-size: 10px;
+    }
+
+    .calendar-cell {
+        height: 24px;
+        min-height: 24px;
+        font-size: 10px;
+    }
+
+    .event-item,
+    .task-item {
+        padding: 10px;
+        border-radius: 14px;
+    }
+
+    .event-item h4,
+    .task-item h4 {
+        font-size: 13px;
+    }
+
+    .event-time {
+        font-size: 11px;
     }
 }

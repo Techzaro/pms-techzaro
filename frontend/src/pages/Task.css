@@ -21,6 +21,21 @@
     gap: 15px;
 }
 
+.tasks-search-bar {
+    border: 1px solid lightgray;
+    background-color: white;
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    border-radius: 10px;
+    width: 48%;
+    margin-bottom: 10px;
+    gap: 10px;
+}
+.tasks-search-bar input{
+    outline: 0;
+    flex: 1;
+}
 .all-time {
     display: flex;
     justify-content: center;

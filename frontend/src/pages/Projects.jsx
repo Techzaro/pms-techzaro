@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import CreateProjectModal from "../components/CreateProjectModal";
+import { IoSearchOutline } from "react-icons/io5";
 import "./Projects.css";
 
 function Projects() {
@@ -78,9 +79,15 @@ function Projects() {
 
           <div className="header-actions">
 
-            <button className="filter-btn">
-              View Completed
-            </button>
+            <div className="all-time">
+              <select name="" id="">
+                <option value="">All Time</option>
+                <option value="">Month</option>
+                <option value="">Week</option>
+                <option value="">Day</option>
+              </select>
+
+            </div>
 
             <button
               className="create-btn"
@@ -91,7 +98,10 @@ function Projects() {
 
           </div>
         </div>
-
+        <div className="projects-search-bar">
+            <IoSearchOutline fontSize={"20px"} />
+          <input type="text" placeholder="Search by project name" />
+        </div>
         {/* PROJECTS */}
 
         <div className="projects-container">
