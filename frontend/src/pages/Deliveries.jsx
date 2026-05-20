@@ -3,6 +3,7 @@ import { useState } from "react";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
 import { IoSearchOutline } from "react-icons/io5";
+import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import "../pages/Deliveries.css";
 
 function Deliveries() {
@@ -177,7 +178,7 @@ function Deliveries() {
               <div>
                 <button className="view-btn"
                   onClick={() =>
-                    navigate(`/deliverable-details/${project.id}`)
+                    navigate(`/deliverable-details/${task.id}`)
                   }
                 >
                   View
@@ -192,6 +193,12 @@ function Deliveries() {
         </div>
 
       </div>
+
+      {showModal && (
+        <CreateDeliverableModel
+          onClose={() => setShowModal(false)}
+        />
+      )}
 
     </DashboardLayout>
   );
