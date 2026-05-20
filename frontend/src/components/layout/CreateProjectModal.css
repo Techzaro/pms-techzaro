@@ -382,3 +382,21 @@
     font-size: 22px;
   }
 }
+
+@media (max-width: 480px) {
+  .cp-modal {
+    max-height: 100vh;
+    border-radius: 16px;
+  }
+  .cp-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .cp-close-btn {
+    align-self: flex-end;
+  }
+  .cp-field textarea {
+    min-height: 160px;
+  }
+}

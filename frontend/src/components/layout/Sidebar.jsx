@@ -13,22 +13,22 @@ import {
   MdPerson,
   MdPeople,
   MdLogout,
+  MdMenu,
+  MdClose,
 } from "react-icons/md";
 
 import "./Sidebar.css";
 
 import ProfileModal from "../ProfileModal";
 
-/**
- * Sidebar navigation component used in dashboard layout.
- */
-
 function Sidebar() {
 
   const [isProfileModalOpen, setIsProfileModalOpen] =
     useState(false);
     
-    const [user, setUser] = useState({
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  const [user, setUser] = useState({
     name:
       localStorage.getItem("name") || "User",
 
@@ -94,136 +94,141 @@ function Sidebar() {
 
   }, []);
 
-  /**
-   * OPEN PROFILE MODAL
-   */
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const handler = () => setIsMobileOpen(prev => !prev);
+    window.addEventListener("toggle-sidebar", handler);
+    return () => window.removeEventListener("toggle-sidebar", handler);
+  }, []);
 
   const openProfileModal = () =>
     setIsProfileModalOpen(true);
-
-  /**
-   * CLOSE PROFILE MODAL
-   */
 
   const closeProfileModal = () => {
     setIsProfileModalOpen(false);
   };
 
+  const toggleMobile = () => setIsMobileOpen(prev => !prev);
+
   return (
+    <>
+      <button className="sidebar-toggle" onClick={toggleMobile} aria-label="Toggle sidebar">
+        {isMobileOpen ? <MdClose size={24} /> : <MdMenu size={24} />}
+      </button>
 
-    <div className="sidebar">
+      <div className={`sidebar ${isMobileOpen ? "sidebar--open" : ""}`}>
 
-      {/* TOP LINKS */}
+        <div>
 
-      <div>
-
-        <Link
-          to="/admin"
-          className={`sidebar-link ${
-            location.pathname === "/admin"
-              ? "active"
-              : ""
-          }`}
-        >
-          <MdDashboard />
-          Dashboard
-        </Link>
-
-        <Link
-          to="/deliveries"
-          className={`sidebar-link ${
-            location.pathname === "/deliveries"
-              ? "active"
-              : ""
-          }`}
-        >
-          <MdAssignment />
-          Deliverables
-        </Link>
-
-        <Link
-          to="/projects"
-          className={`sidebar-link ${
-            location.pathname === "/projects" ||
-            location.pathname.startsWith(
-              "/projects/"
-            )
-              ? "active"
-              : ""
-          }`}
-        >
-          <MdOutlineDescription />
-          Projects
-        </Link>
-
-        <Link
-          to="/tasks"
-          className={`sidebar-link ${
-            location.pathname === "/tasks"
-              ? "active"
-              : ""
-          }`}
-        >
-          <MdTask />
-          Tasks
-        </Link>
-
-        <hr />
-
-        {(user.role === "admin" || user.role === "manager") && (
-          // Admins and managers both see the user management link.
           <Link
-            to="/manage-users"
+            to="/admin"
             className={`sidebar-link ${
-              location.pathname ===
-              "/manage-users"
+              location.pathname === "/admin"
                 ? "active"
                 : ""
             }`}
           >
-            <MdPerson />
-            Manage Users
+            <MdDashboard />
+            Dashboard
           </Link>
-        )}
 
-        <Link
-          to="/manage-team"
-          className={`sidebar-link ${
-            location.pathname ===
-            "/manage-team"
-              ? "active"
-              : ""
-          }`}
-        >
-          <MdPeople />
-          Manage Team
-        </Link>
+          <Link
+            to="/deliveries"
+            className={`sidebar-link ${
+              location.pathname === "/deliveries"
+                ? "active"
+                : ""
+            }`}
+          >
+            <MdAssignment />
+            Deliverables
+          </Link>
+
+          <Link
+            to="/projects"
+            className={`sidebar-link ${
+              location.pathname === "/projects" ||
+              location.pathname.startsWith(
+                "/projects/"
+              )
+                ? "active"
+                : ""
+            }`}
+          >
+            <MdOutlineDescription />
+            Projects
+          </Link>
+
+          <Link
+            to="/tasks"
+            className={`sidebar-link ${
+              location.pathname === "/tasks"
+                ? "active"
+                : ""
+            }`}
+          >
+            <MdTask />
+            Tasks
+          </Link>
+
+          <hr />
+
+          {(user.role === "admin" || user.role === "manager") && (
+            <Link
+              to="/manage-users"
+              className={`sidebar-link ${
+                location.pathname ===
+                "/manage-users"
+                  ? "active"
+                  : ""
+              }`}
+            >
+              <MdPerson />
+              Manage Users
+            </Link>
+          )}
+
+          <Link
+            to="/manage-team"
+            className={`sidebar-link ${
+              location.pathname ===
+              "/manage-team"
+                ? "active"
+                : ""
+            }`}
+          >
+            <MdPeople />
+            Manage Team
+          </Link>
+
+        </div>
+
+        <div className="sidebar-bottom">
+
+          <button
+            className="sidebar-link profile-link"
+            onClick={openProfileModal}
+          >
+            <MdPerson />
+            Profile
+          </button>
+
+          <Link
+            to="/"
+            className="sidebar-link logout-link"
+          >
+            <MdLogout />
+            Logout Account
+          </Link>
+
+        </div>
 
       </div>
 
-      {/* BOTTOM */}
-
-      <div className="sidebar-bottom">
-
-        <button
-          className="sidebar-link profile-link"
-          onClick={openProfileModal}
-        >
-          <MdPerson />
-          Profile
-        </button>
-
-        <Link
-          to="/"
-          className="sidebar-link logout-link"
-        >
-          <MdLogout />
-          Logout Account
-        </Link>
-
-      </div>
-
-      {/* PROFILE MODAL */}
+      {isMobileOpen && <div className="sidebar-backdrop" onClick={toggleMobile} />}
 
       {isProfileModalOpen && (
         <ProfileModal
@@ -231,8 +236,7 @@ function Sidebar() {
           onClose={closeProfileModal}
         />
       )}
-
-    </div>
+    </>
   );
 }
 

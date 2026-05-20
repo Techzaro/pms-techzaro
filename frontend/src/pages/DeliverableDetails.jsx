@@ -72,7 +72,7 @@ function initials(name) {
 }
 
 function DeliverableDetails() {
-  const { id } = useParams();
+  const { projectId } = useParams();
 
   const navigate = useNavigate();
 
@@ -104,7 +104,7 @@ function DeliverableDetails() {
     try {
       const token = localStorage.getItem("token");
 
-      const res = await fetch(`${API}/projects/${id}`, {
+        const res = await fetch(`${API}/projects/${projectId}`, {
         headers: {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
@@ -128,7 +128,7 @@ function DeliverableDetails() {
     } finally {
       setLoading(false);
     }
-  }, [id, navigate, showMessage]);
+  }, [projectId, navigate, showMessage]);
 
   useEffect(() => {
     loadProject();
@@ -144,7 +144,7 @@ function DeliverableDetails() {
     try {
       const token = localStorage.getItem("token");
 
-      const res = await fetch(`${API}/projects/${id}`, {
+        const res = await fetch(`${API}/projects/${projectId}`, {
         method: "DELETE",
         headers: {
           Accept: "application/json",
