@@ -162,15 +162,14 @@ function App() {
         />
         {/* DELIVERABLE DETAILS */}
 
-        <Route
-          path="/deliverable-details/:id"
-          element={
-            <ProtectedRoute>
-              <DeliverableDetails/>
-            </ProtectedRoute>
-          }
-        />
-
+<Route
+  path="/deliverable-details/:projectId"
+  element={
+    <ProtectedRoute>
+      <DeliverableDetails />
+    </ProtectedRoute>
+  }
+/>
         {/* DETAILS */}
 
         <Route
@@ -234,15 +233,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
-<Route
-  path="/deliverable/:taskId"
-  element={
-    <ProtectedRoute>
-      <DeliverableDetails />
-    </ProtectedRoute>
-  }
-/>
 
       </Routes>
     </BrowserRouter>

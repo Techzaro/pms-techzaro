@@ -396,3 +396,28 @@
     flex: 1;
   }
 }
+
+@media (max-width: 480px) {
+  .task-modal {
+    max-height: 100vh;
+    border-radius: 14px;
+  }
+  .task-body {
+    padding: 16px;
+  }
+  .task-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 20px;
+  }
+  .task-header h2 {
+    font-size: 22px;
+  }
+  .task-field textarea {
+    min-height: 160px;
+  }
+  .task-link-box {
+    flex-direction: column;
+  }
+}

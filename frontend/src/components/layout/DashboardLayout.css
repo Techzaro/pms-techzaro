@@ -4,16 +4,38 @@
   box-sizing: border-box;
   font-family: Arial, Helvetica, sans-serif;
 }
+
 .dashboard-page {
   background: #f5f7fb;
   min-height: 100vh;
 }
 
-/* MAIN CONTENT */
+.main-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 0 20px 20px;
+}
 
+.main-layout--no-right {
+  gap: 0;
+}
 
+.main-layout--no-right .dashboard-content {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+  width: 100%;
+}
 
-/* WELCOME SECTION */
+.dashboard-content {
+  flex: 1;
+  padding: 25px;
+  background: #f5f7fb;
+  min-height: 100vh;
+  min-width: 0;
+  width: 100%;
+}
 
 .welcome-box {
   margin-bottom: 30px;
@@ -30,8 +52,6 @@
   font-size: 15px;
 }
 
-/* STATUS BUTTONS */
-
 .status-buttons {
   display: flex;
   gap: 12px;
@@ -39,61 +59,28 @@
   margin-bottom: 35px;
 }
 
-.status-buttons{
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-.status-btn{
-    padding: 10px 18px;
-    border-radius: 10px;
-    border: 1px solid #dbe2ea;
-
-    background: white;
-
-    font-size: 14px;
-    font-weight: 500;
-
-    white-space: nowrap;
-
-    width: auto;
-
-    cursor: pointer;
-
-    transition: 0.3s;
+.status-btn {
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid #dbe2ea;
+  background: white;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: 0.3s;
 }
 
 .status-btn:hover {
   transform: translateY(-2px);
 }
 
-.all {
-  color: #222;
-}
-
-.pending {
-  color: #f59e0b;
-}
-
-.in-progress {
-  color: #2563eb;
-}
-
-.completed {
-  color: #111827;
-  font-weight: bold;
-}
-
-.failed {
-  color: #ef4444;
-}
-
-.abandoned {
-  color: grey;
-}
-
-/* CARDS */
+.all { color: #222; }
+.pending { color: #f59e0b; }
+.in-progress { color: #2563eb; }
+.completed { color: #111827; font-weight: bold; }
+.failed { color: #ef4444; }
+.abandoned { color: grey; }
 
 .dashboard-cards {
   display: grid;
@@ -123,38 +110,84 @@
   font-size: 32px;
   color: #0f172a;
 }
-.main-layout {
-  display: flex;
-  align-items: flex-start;
-  gap: 20px;
-  padding: 0 20px 20px;
-}
-
-/* Project details (and similar): hide calendar/events rail — main area uses full width */
-.main-layout--no-right {
-  gap: 0;
-}
-
-.main-layout--no-right .dashboard-content {
-  flex: 1;
-  min-width: 0;
-  max-width: none;
-  width: 100%;
-}
-
-.dashboard-content {
-  flex: 1;
-  padding: 25px;
-  background: #f5f7fb;
-  min-height: 100vh;
-}
 
 @media (max-width: 1200px) {
   .main-layout {
     flex-direction: column;
   }
-
   .dashboard-content {
     min-height: auto;
+  }
+}
+
+@media (max-width: 992px) {
+  .dashboard-content {
+    padding: 20px;
+  }
+  .main-layout {
+    padding: 0 16px 20px;
+    gap: 16px;
+  }
+  .welcome-box h1 {
+    font-size: 26px;
+  }
+  .dashboard-cards {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-content {
+    padding: 16px;
+  }
+  .main-layout {
+    padding: 0 12px 16px;
+    gap: 12px;
+  }
+  .welcome-box h1 {
+    font-size: 22px;
+  }
+  .welcome-box p {
+    font-size: 14px;
+  }
+  .status-buttons {
+    gap: 8px;
+  }
+  .status-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+  .dashboard-cards {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .card-box {
+    padding: 18px;
+  }
+  .card-box h2 {
+    font-size: 26px;
+  }
+  .card-box h3 {
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-content {
+    padding: 12px;
+  }
+  .dashboard-cards {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .card-box {
+    padding: 14px;
+  }
+  .card-box h2 {
+    font-size: 22px;
+  }
+  .welcome-box h1 {
+    font-size: 20px;
   }
 }

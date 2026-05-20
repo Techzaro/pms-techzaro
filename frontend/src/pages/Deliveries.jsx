@@ -183,8 +183,6 @@ function Deliveries() {
                 >
                   View
                 </button>
-
-
               </div>
 
             </div>

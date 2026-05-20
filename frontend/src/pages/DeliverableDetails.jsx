@@ -107,7 +107,12 @@ const DEMO_DELIVERABLE = {
 };
 
 function DeliverableDetails() {
+<<<<<<< HEAD
+  const { projectId } = useParams();
+
+=======
   const { id, taskId } = useParams();
+>>>>>>> dev
   const navigate = useNavigate();
   const deliverableId = id || taskId;
 
@@ -146,9 +151,77 @@ function DeliverableDetails() {
     }, 4000);
   }, []);
 
+<<<<<<< HEAD
+  const loadProject = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+
+        const res = await fetch(`${API}/projects/${projectId}`, {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to load project");
+      }
+
+      const data = await res.json();
+
+      setProject(data.project);
+    } catch (error) {
+      console.error(error);
+      showMessage("Unable to load project");
+
+      setTimeout(() => {
+        navigate("/projects");
+      }, 1500);
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId, navigate, showMessage]);
+
+  useEffect(() => {
+    loadProject();
+  }, [loadProject]);
+
+  const handleDeleteProject = async () => {
+    const confirmDelete = window.confirm(
+      "Delete this project permanently?"
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      const token = localStorage.getItem("token");
+
+        const res = await fetch(`${API}/projects/${projectId}`, {
+        method: "DELETE",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error("Delete failed");
+      }
+
+      showMessage("Project deleted");
+
+      setTimeout(() => {
+        navigate("/projects");
+      }, 1000);
+    } catch (error) {
+      console.error(error);
+      showMessage("Could not delete project");
+    }
+=======
   const handleTaskFormChange = (e) => {
     const { name, value } = e.target;
     setTaskForm((prev) => ({ ...prev, [name]: value }));
+>>>>>>> dev
   };
 
   const handleDeleteDeliverable = async () => {
