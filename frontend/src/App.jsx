@@ -21,7 +21,10 @@ import Details from "./pages/Details";
 import History from "./pages/History";
 import Reports from "./pages/Reports";
 import ManageTeam from "./pages/ManageTeam";
+<<<<<<< HEAD
 
+=======
+>>>>>>> dev
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import TaskDetails from "./pages/TaskDetails";
