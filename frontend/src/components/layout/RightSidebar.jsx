@@ -2,18 +2,20 @@
  * RightSidebar component.
  */
 
+import { MdClose } from "react-icons/md";
 import "./RightSidebar.css";
-
-/**
- * Perform the right sidebar.
- */
 
 /**
  * Right sidebar component used for dashboard details and quick actions.
  */
-function RightSidebar() {
+function RightSidebar({ isOpen, onClose }) {
   return (
-    <aside className="right-sidebar">
+    <>
+      {isOpen && <div className="right-backdrop" onClick={onClose} />}
+      <aside className={`right-sidebar ${isOpen ? "right-sidebar--open" : ""}`}>
+      <button className="right-close" onClick={onClose} aria-label="Close right sidebar">
+        <MdClose size={20} />
+      </button>
       <div className="right-card calendar-card">
         <div className="right-card-header">
           <div>
@@ -120,6 +122,7 @@ function RightSidebar() {
         </div>
       </div>
     </aside>
+    </>
   );
 }
 

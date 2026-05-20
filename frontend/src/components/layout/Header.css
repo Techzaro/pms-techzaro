@@ -303,17 +303,92 @@
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 992px) {
   .header-container {
     padding: 0 16px;
+    height: 64px;
+  }
+
+  .task-btn,
+  .project-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .user-text h6 {
+    font-size: 15px;
+  }
+
+  .logo-box {
+    width: 38px;
+    height: 38px;
+    font-size: 15px;
+  }
+
+  .logo-text h3 {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .header-container {
+    padding: 0 12px;
+    height: 60px;
+    border-radius: 0;
   }
 
   .project-btn {
     display: none;
   }
 
+  .task-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
   .header-modal-card {
     width: 260px;
+    right: -10px;
+  }
+
+  .user-text {
+    display: none;
+  }
+
+  .arrow-icon {
+    display: none;
+  }
+
+  .header-container hr {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-container {
+    padding: 0 10px;
+    height: 56px;
+  }
+
+  .logo-text {
+    display: none;
+  }
+
+  .task-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .user-avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 15px;
+    margin-right: 0;
+  }
+
+  .header-modal-card {
+    width: 220px;
+    padding: 16px;
   }
 }
 

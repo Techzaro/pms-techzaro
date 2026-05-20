@@ -89,12 +89,14 @@ function Projects() {
 
             </div>
 
-            <button
-              className="create-btn"
-              onClick={() => setShowModal(true)}
-            >
-              + Create Project
-            </button>
+            {localStorage.getItem("role") !== "member" && (
+              <button
+                className="create-btn"
+                onClick={() => setShowModal(true)}
+              >
+                + Create Project
+              </button>
+            )}
 
           </div>
         </div>

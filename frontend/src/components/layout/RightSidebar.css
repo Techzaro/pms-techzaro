@@ -133,15 +133,62 @@
     font-weight: 700;
 }
 
+.right-close {
+    display: none;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 8px;
+    background: #f3f4f6;
+    color: #374151;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+}
+
+.right-backdrop {
+    display: none;
+}
+
 /* =========================
    LARGE TABLETS
 ========================= */
 @media (max-width: 1200px) {
     .right-sidebar {
-        max-width: 100%;
-        min-width: 100%;
-        position: static;
-        margin-top: 20px;
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 320px;
+        min-width: 320px;
+        max-width: 90vw;
+        height: 100vh;
+        margin-top: 0;
+        border-radius: 20px 0 0 20px;
+        z-index: 10002;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+        overflow-y: auto;
+        padding-top: 56px;
+    }
+
+    .right-sidebar--open {
+        transform: translateX(0);
+    }
+
+    .right-close {
+        display: flex;
+    }
+
+    .right-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.4);
+        z-index: 10001;
     }
 }
 

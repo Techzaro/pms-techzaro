@@ -52,23 +52,29 @@ Route::middleware('auth:sanctum')->group(function () {
     // Get users for team management (all authenticated users)
     Route::get('/team-users', [UserController::class, 'getTeamUsers']);
 
-    // Team management (all authenticated users)
-    Route::get('/teams', [TeamController::class, 'index']);
-    Route::post('/teams', [TeamController::class, 'store']);
-    Route::put('/teams/{team}/leader', [TeamController::class, 'setLeader']);
-    Route::post('/teams/{team}/members', [TeamController::class, 'addMember']);
-    Route::delete('/teams/{team}/members/{user}', [TeamController::class, 'removeMember']);
-    Route::delete('/teams/{team}', [TeamController::class, 'destroy']);
+    // Team management (admin and manager)
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
+        Route::get('/teams', [TeamController::class, 'index']);
+        Route::post('/teams', [TeamController::class, 'store']);
+        Route::put('/teams/{team}/leader', [TeamController::class, 'setLeader']);
+        Route::post('/teams/{team}/members', [TeamController::class, 'addMember']);
+        Route::delete('/teams/{team}/members/{user}', [TeamController::class, 'removeMember']);
+        Route::delete('/teams/{team}', [TeamController::class, 'destroy']);
+    });
 
-    // Project management (all authenticated users)
+    // Project management – read only (all authenticated users)
     Route::get('/projects', [ProjectController::class, 'index']);
-    Route::post('/projects', [ProjectController::class, 'store']);
     Route::get('/projects/{project}', [ProjectController::class, 'show']);
-    Route::put('/projects/{project}', [ProjectController::class, 'update']);
-    Route::patch('/projects/{project}', [ProjectController::class, 'patch']);
-    Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
-    Route::post('/projects/{project}/tasks', [TaskController::class, 'store']);
-    Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
+
+    // Project management – write (admin, manager, team_lead)
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
+        Route::post('/projects', [ProjectController::class, 'store']);
+        Route::put('/projects/{project}', [ProjectController::class, 'update']);
+        Route::patch('/projects/{project}', [ProjectController::class, 'patch']);
+        Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
+        Route::post('/projects/{project}/tasks', [TaskController::class, 'store']);
+        Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
+    });
 
     /*
     | ROLE BASED ROUTES

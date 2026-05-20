@@ -1,23 +1,17 @@
 /**
  * TeamLead page component.
- * Rendered when the user navigates to /teamlead or related route.
+ * Rendered when the user navigates to /teamlead/dashboard.
  */
 
-import DashboardLayout from "../components/layout/DashboardLayout";
-
-/**
- * Perform the team lead.
- */
+import Admin from "./Admin";
 
 /**
  * Team lead dashboard page.
+ *
+ * Team leads should see the same dashboard experience as admins.
  */
 function TeamLead() {
-  return (
-    <DashboardLayout>
-      <h1>Team Lead Dashboard</h1>
-    </DashboardLayout>
-  );
+  return <Admin />;
 }
 
 export default TeamLead;

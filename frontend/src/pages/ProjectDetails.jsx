@@ -717,14 +717,18 @@ function ProjectDetails() {
             )}
             <div className="pd-hero-actions">
               <span className={`pd-pill-status pd-pill-status--${statusSlug(project.status)}`}>{project.status}</span>
-              <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => navigate("/create-project")}>
-                <Pencil size={16} />
-                Edit Project
-              </button>
-              <button type="button" className="pd-btn-tx pd-btn-tx--danger" onClick={handleDeleteProject}>
-                <Trash2 size={16} />
-                Delete
-              </button>
+              {localStorage.getItem("role") !== "member" && (
+                <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => navigate("/create-project")}>
+                  <Pencil size={16} />
+                  Edit Project
+                </button>
+              )}
+              {localStorage.getItem("role") !== "member" && (
+                <button type="button" className="pd-btn-tx pd-btn-tx--danger" onClick={handleDeleteProject}>
+                  <Trash2 size={16} />
+                  Delete
+                </button>
+              )}
             </div>
           </div>
         </header>

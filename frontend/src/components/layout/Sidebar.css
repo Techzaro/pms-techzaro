@@ -1,7 +1,7 @@
 .sidebar-toggle {
   display: none;
   position: fixed;
-  top: 14px;
+  top: 18px;
   left: 14px;
   z-index: 10001;
   width: 42px;
@@ -271,7 +271,7 @@
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 992px) {
   .sidebar-toggle {
     display: flex;
   }

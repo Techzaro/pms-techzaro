@@ -124,9 +124,20 @@ function Sidebar() {
         <div>
 
           <Link
-            to="/admin"
+            to={(() => {
+              const role = user.role;
+              if (role === "admin") return "/admin/dashboard";
+              if (role === "manager") return "/manager/dashboard";
+              if (role === "teamlead" || role === "team_lead") return "/teamlead/dashboard";
+              return "/member/dashboard";
+            })()}
             className={`sidebar-link ${
-              location.pathname === "/admin"
+              !isProfileModalOpen && (
+                location.pathname === "/admin/dashboard" ||
+                location.pathname === "/manager/dashboard" ||
+                location.pathname === "/teamlead/dashboard" ||
+                location.pathname === "/member/dashboard"
+              )
                 ? "active"
                 : ""
             }`}
@@ -138,7 +149,9 @@ function Sidebar() {
           <Link
             to="/deliveries"
             className={`sidebar-link ${
-              location.pathname === "/deliveries"
+              !isProfileModalOpen && (location.pathname === "/deliveries" ||
+              location.pathname.startsWith("/deliverable-details/") ||
+              location.pathname.startsWith("/deliverable/"))
                 ? "active"
                 : ""
             }`}
@@ -150,10 +163,10 @@ function Sidebar() {
           <Link
             to="/projects"
             className={`sidebar-link ${
-              location.pathname === "/projects" ||
+              !isProfileModalOpen && (location.pathname === "/projects" ||
               location.pathname.startsWith(
                 "/projects/"
-              )
+              ))
                 ? "active"
                 : ""
             }`}
@@ -165,7 +178,12 @@ function Sidebar() {
           <Link
             to="/tasks"
             className={`sidebar-link ${
-              location.pathname === "/tasks"
+              !isProfileModalOpen && (location.pathname === "/tasks" ||
+              location.pathname === "/taskby" ||
+              location.pathname === "/taskdetails" ||
+              location.pathname === "/details" ||
+              location.pathname.startsWith("/details/") ||
+              location.pathname.startsWith("/taskdetails/"))
                 ? "active"
                 : ""
             }`}
@@ -180,7 +198,7 @@ function Sidebar() {
             <Link
               to="/manage-users"
               className={`sidebar-link ${
-                location.pathname ===
+                !isProfileModalOpen && location.pathname ===
                 "/manage-users"
                   ? "active"
                   : ""
@@ -191,25 +209,29 @@ function Sidebar() {
             </Link>
           )}
 
-          <Link
-            to="/manage-team"
-            className={`sidebar-link ${
-              location.pathname ===
-              "/manage-team"
-                ? "active"
-                : ""
-            }`}
-          >
-            <MdPeople />
-            Manage Team
-          </Link>
+          {(user.role === "admin" || user.role === "manager") && (
+            <Link
+              to="/manage-team"
+              className={`sidebar-link ${
+                !isProfileModalOpen && location.pathname ===
+                "/manage-team"
+                  ? "active"
+                  : ""
+              }`}
+            >
+              <MdPeople />
+              Manage Team
+            </Link>
+          )}
 
         </div>
 
         <div className="sidebar-bottom">
 
           <button
-            className="sidebar-link profile-link"
+            className={`sidebar-link profile-link ${
+              isProfileModalOpen ? "active" : ""
+            }`}
             onClick={openProfileModal}
           >
             <MdPerson />

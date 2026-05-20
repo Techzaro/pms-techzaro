@@ -86,17 +86,14 @@ function Login() {
           localStorage.setItem("email", data.user.email || "user@example.com");
         }
 
-        if (data.role === "admin" || data.role === "manager") {
-          // Managers should receive the same dashboard entry point as admins.
-          window.location.href = "/admin";
-        }
-
-        else if (data.role === "teamlead" || data.role === "team_lead") {
-          window.location.href = "/teamlead";
-        }
-
-        else {
-          window.location.href = "/member";
+        if (data.role === "admin") {
+          window.location.href = "/admin/dashboard";
+        } else if (data.role === "manager") {
+          window.location.href = "/manager/dashboard";
+        } else if (data.role === "teamlead" || data.role === "team_lead") {
+          window.location.href = "/teamlead/dashboard";
+        } else {
+          window.location.href = "/member/dashboard";
         }
 
       } else {

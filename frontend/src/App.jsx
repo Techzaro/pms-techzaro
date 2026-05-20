@@ -35,10 +35,10 @@ function App() {
 
         <Route path="/" element={<Login />} />
 
-        {/* ADMIN */}
-        {/* Note: managers are redirected here after login to share the admin dashboard experience. */}
+        {/* ADMIN DASHBOARD */}
+
         <Route
-          path="/admin"
+          path="/admin/dashboard"
           element={
             <ProtectedRoute>
               <Admin />
@@ -46,10 +46,10 @@ function App() {
           }
         />
 
-        {/* MANAGER */}
+        {/* MANAGER DASHBOARD */}
 
         <Route
-          path="/manager"
+          path="/manager/dashboard"
           element={
             <ProtectedRoute>
               <Manager />
@@ -57,10 +57,10 @@ function App() {
           }
         />
 
-        {/* TEAM LEAD */}
+        {/* TEAM LEAD DASHBOARD */}
 
         <Route
-          path="/teamlead"
+          path="/teamlead/dashboard"
           element={
             <ProtectedRoute>
               <TeamLead />
@@ -68,10 +68,10 @@ function App() {
           }
         />
 
-        {/* MEMBER */}
+        {/* MEMBER DASHBOARD */}
 
         <Route
-          path="/member"
+          path="/member/dashboard"
           element={
             <ProtectedRoute>
               <Member />
