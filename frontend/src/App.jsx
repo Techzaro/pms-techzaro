@@ -21,7 +21,7 @@ import Details from "./pages/Details";
 import History from "./pages/History";
 import Reports from "./pages/Reports";
 import ManageTeam from "./pages/ManageTeam";
-import DeliverableDetails from "./pages/DeliverableDetails"; // file name exactly
+
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import TaskDetails from "./pages/TaskDetails";

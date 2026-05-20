@@ -53,7 +53,7 @@ const CreateDeliverableTask = ({ onClose }) => {
 
                 <select>
                   <option>
-                    Enter deliverable name
+                    Select Task
                   </option>
                 </select>
 
@@ -107,7 +107,7 @@ const CreateDeliverableTask = ({ onClose }) => {
 
               <select>
                 <option>
-                  Planned
+                  Pending
                 </option>
 
                 <option>
@@ -116,6 +116,12 @@ const CreateDeliverableTask = ({ onClose }) => {
 
                 <option>
                   Completed
+                </option>
+                <option>
+                  Abandoned
+                </option>
+                <option>
+                  Failed
                 </option>
               </select>
 
