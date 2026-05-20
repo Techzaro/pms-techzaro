@@ -103,9 +103,23 @@ const CreateTaskModal = ({ onClose }) => {
               <label>Status</label>
 
               <select>
-                <option>Planned</option>
-                <option>In Progress</option>
-                <option>Completed</option>
+                    <option>
+                  Pending
+                </option>
+
+                <option>
+                  In Progress
+                </option>
+
+                <option>
+                  Completed
+                </option>
+                <option>
+                  Abandoned
+                </option>
+                <option>
+                  Failed
+                </option>
               </select>
 
             </div>

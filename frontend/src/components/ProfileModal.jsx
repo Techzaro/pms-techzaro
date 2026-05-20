@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 
 import "../components/ProfileModal.css";
 
@@ -91,8 +92,7 @@ function ProfileModal({
     }
   };
 
-  return (
-
+  return createPortal(
     <div
       className="profile-overlay"
       onClick={onClose}
@@ -104,8 +104,6 @@ function ProfileModal({
           e.stopPropagation()
         }
       >
-
-        {/* HEADER */}
 
         <div className="profile-header">
 
@@ -126,8 +124,6 @@ function ProfileModal({
           </div>
 
         </div>
-
-        {/* BODY */}
 
         <div className="profile-body">
 
@@ -213,8 +209,6 @@ function ProfileModal({
 
         </div>
 
-        {/* FOOTER */}
-
         <div className="profile-footer">
 
           <button
@@ -235,7 +229,8 @@ function ProfileModal({
 
       </div>
 
-    </div>
+    </div>,
+    document.body
   );
 }
 

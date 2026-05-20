@@ -81,6 +81,7 @@
   color: #ef4444;
 }
 
+<<<<<<< HEAD
 .profile-overlay {
   position: fixed;
   inset: 0;
@@ -226,6 +227,10 @@
 }
 
 @media (max-width: 1200px) {
+=======
+/* RESPONSIVE */
+@media (max-width: 1100px) {
+>>>>>>> dev
   .sidebar {
     width: 100%;
     height: auto;
@@ -264,6 +269,7 @@
     margin-left: auto;
   }
 }
+<<<<<<< HEAD
 
 @media (max-width: 768px) {
   .sidebar-toggle {
@@ -353,3 +359,5 @@
     font-size: 22px;
   }
 }
+=======
+>>>>>>> dev
