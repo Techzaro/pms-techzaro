@@ -262,8 +262,9 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 999;
+  z-index: 10002;
   padding: 20px;
+  backdrop-filter: blur(4px);
 }
 
 .user-modal-content {
