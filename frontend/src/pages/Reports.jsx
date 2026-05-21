@@ -82,15 +82,23 @@ const teamMembers = [
 
 function Reports() {
   const [timeFilter, setTimeFilter] = useState("All Time");
+  const userName = localStorage.getItem("name") || "Lorem Ipsum";
+  const userRole = localStorage.getItem("role") || "Member";
 
   return (
     <DashboardLayout>
       <div className="reports-page">
 
-        {/* HEADER */}
+        {/* WELCOME HEADER */}
+        <div className="reports-welcome">
+          <h1>Welcome, {userName}</h1>
+          <p>Role: {userRole}</p>
+        </div>
+
+        {/* REPORT HEADER */}
         <div className="reports-header">
           <div>
-            <h1>Team Performance Report</h1>
+            <h2>Team Performance Report</h2>
             <p>Track progress, tasks, and performance across your team</p>
           </div>
           <div className="reports-header-actions">
@@ -153,9 +161,9 @@ function Reports() {
                 </div>
               </div>
 
-              <div className="table-badge badge-blue">{member.assigned}</div>
-              <div className="table-badge badge-green">{member.completed}</div>
-              <div className="table-badge badge-yellow">{member.pending}</div>
+              <div className="table-badge badge-blue">{String(member.assigned).padStart(2, "0")}</div>
+              <div className="table-badge badge-green">{String(member.completed).padStart(2, "0")}</div>
+              <div className="table-badge badge-yellow">{String(member.pending).padStart(2, "0")}</div>
 
               <div className="table-tasks">
                 {member.tasks.map((task, i) => (
