@@ -25,6 +25,7 @@ import ManageTeam from "./pages/ManageTeam";
 import ProtectedRoute from "./components/ProtectedRoute";
 import TaskDetails from "./pages/TaskDetails";
 import DeliverableDetails from "./pages/DeliverableDetails";
+import Calender from "./pages/Calender";
 
 function App() {
   return (
@@ -226,6 +227,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ManageTeam />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/calender"
+          element={
+            <ProtectedRoute>
+              <Calender/>
             </ProtectedRoute>
           }
         />

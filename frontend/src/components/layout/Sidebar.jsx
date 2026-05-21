@@ -12,6 +12,8 @@ import {
   MdOutlineDescription,
   MdPerson,
   MdPeople,
+  MdCalendarToday,
+  MdBarChart,
   MdLogout,
 } from "react-icons/md";
 
@@ -231,6 +233,19 @@ function Sidebar() {
             <span>Tasks</span>
           </Link>
 
+          <Link
+            to="/calender"
+            className={`sidebar-link ${
+              !isProfileModalOpen && (location.pathname === "/calender" ||
+              location.pathname.startsWith("/calender/"))
+                ? "active"
+                : ""
+            }`}
+          >
+            <MdCalendarToday />
+            Calendar
+          </Link>
+
           <hr />
 
           {(user.role === "admin" || user.role === "manager") && (
@@ -264,6 +279,19 @@ function Sidebar() {
               <span>Team</span>
             </Link>
           )}
+
+          <Link
+            to="/reports"
+            className={`sidebar-link ${
+              !isProfileModalOpen && location.pathname ===
+              "/reports"
+                ? "active"
+                : ""
+            }`}
+          >
+            <MdBarChart />
+            Reports
+          </Link>
 
         </div>
 
