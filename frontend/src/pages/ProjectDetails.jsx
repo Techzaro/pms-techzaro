@@ -379,11 +379,9 @@ function ProjectDetails() {
     }
   };
 
-  const layoutProps = { hideRightSidebar: true };
-
   if (loading) {
     return (
-      <DashboardLayout {...layoutProps}>
+      <DashboardLayout>
         <div className="pd-loading">Loading project…</div>
       </DashboardLayout>
     );
@@ -391,7 +389,7 @@ function ProjectDetails() {
 
   if (!project) {
     return (
-      <DashboardLayout {...layoutProps}>
+      <DashboardLayout>
         <div className="pd-loading pd-error">Project not found.</div>
       </DashboardLayout>
     );
@@ -693,7 +691,7 @@ function ProjectDetails() {
   );
 
   return (
-    <DashboardLayout {...layoutProps}>
+    <DashboardLayout>
       <div className="pd-main-layout">
       <div className="pd-page pd-page--tx">
         {message && <div className={`pd-toast pd-toast--${messageType}`}>{message}</div>}

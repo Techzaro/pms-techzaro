@@ -248,8 +248,15 @@
   .header-actions {
     width: 100%;
   }
-  .header-actions button {
-    flex: 1;
+  .header-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .header-actions button,
+  .header-actions .all-time {
+    flex: none;
+    width: auto;
   }
   .project-card-header h3 {
     font-size: 22px;
@@ -265,6 +272,9 @@
   }
   .project-card-actions {
     padding: 14px 18px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 }
 
@@ -282,14 +292,15 @@
     font-size: 14px;
   }
   .project-card-actions {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
   }
   .status-badge {
-    text-align: center;
+    text-align: left;
   }
   .view-details-btn {
-    width: 100%;
-    text-align: center;
+    width: auto;
   }
 }

@@ -1,7 +1,13 @@
 
+import { useEffect } from "react";
 import "./layout/CreateTaskModal.css";
 
 const CreateTaskModal = ({ onClose }) => {
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: true } }));
+    return () => window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: false } }));
+  }, []);
+
   return (
     <div className="task-overlay">
 
@@ -25,13 +31,6 @@ const CreateTaskModal = ({ onClose }) => {
             </div>
 
           </div>
-
-          <button
-            className="task-close-btn"
-            onClick={onClose}
-          >
-            ✕
-          </button>
 
         </div>
 

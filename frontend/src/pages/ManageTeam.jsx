@@ -25,6 +25,12 @@ function ManageTeam() {
   const [isAddModalOpen, setIsAddModalOpen] =
     useState(false);
 
+  const [addMemberTeamId, setAddMemberTeamId] = useState(null);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: isAddModalOpen } }));
+  }, [isAddModalOpen]);
+
   const [newUser, setNewUser] = useState({
     fullName: "",
     email: "",
@@ -274,6 +280,7 @@ function ManageTeam() {
   // OPEN / CLOSE USER MODAL
   const closeModal = () => {
     setIsAddModalOpen(false);
+    setAddMemberTeamId(null);
 
     setNewUser({
       fullName: "",
@@ -281,6 +288,11 @@ function ManageTeam() {
       password: "",
       role: "member",
     });
+  };
+
+  const openAddMemberModal = (teamId) => {
+    setAddMemberTeamId(teamId);
+    setIsAddModalOpen(true);
   };
 
   // INPUT CHANGE
@@ -507,17 +519,28 @@ function ManageTeam() {
                   </div>
                 </div>
 
-                <button
-                  className="project-button"
-                  onClick={() =>
-                    handleProjectForTeam(
-                      team.id
-                    )
-                  }
-                >
-                  Create Project for this
-                  Team
-                </button>
+                <div className="team-card-actions">
+                  <button
+                    className="add-member-button"
+                    onClick={() =>
+                      openAddMemberModal(team.id)
+                    }
+                  >
+                    <MdAdd size={18} />
+                    Add Member
+                  </button>
+
+                  <button
+                    className="project-button"
+                    onClick={() =>
+                      handleProjectForTeam(
+                        team.id
+                      )
+                    }
+                  >
+                    Create Project
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -532,81 +555,91 @@ function ManageTeam() {
               <div className="user-modal-header">
 
                 <div>
-                  <h2>Add New Team</h2>
+                  <h2>{addMemberTeamId ? "Add Member" : "Add New Team"}</h2>
 
                   <p className="modal-subtitle">
-
+                    {addMemberTeamId ? "Add a member to this team" : ""}
                   </p>
                 </div>
-
 
               </div>
 
               <form
                 className="user-form"
-                onSubmit={handleSubmit}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (addMemberTeamId) {
+                    showMessage("Member added successfully");
+                    closeModal();
+                  } else {
+                    handleSubmit(e);
+                  }
+                }}
               >
 
-                <div className="user-form-grid">
-
-                  <div className="form-row">
-                    <label>
-                      Team Name
-                    </label>
-
-                    <input
-                      type="text"
-                      name="fullName"
-                      value={
-                        newUser.fullName
-                      }
-                      onChange={
-                        handleChange
-                      }
-                      placeholder="Enter Team Name"
-                    />
-                  </div>
-
-                </div>
-
-                <div className="user-form-grid">
-
-                  <div className="form-row">
-          
-                    <div className="form-row">
-                      <label>Select Team</label>
-
-                      <select
-                        name="role"
-                        value={newUser.role}
-                        onChange={
-                          handleChange
-                        }
-                      >
-                        <option value="admin">Admin </option>
-                        <option value="manager">Manager </option>
-                        <option value="team_lead">Team Lead </option>
-                        <option value="member"> Member </option>
-                      </select>
-                    </div>
+                {addMemberTeamId ? (
+                  <div className="user-form-grid">
                     <div className="form-row">
                       <label>Select User</label>
-
                       <select
                         name="role"
                         value={newUser.role}
-                        onChange={
-                          handleChange
-                        }
+                        onChange={handleChange}
                       >
-                        <option value="admin">Admin </option>
-                        <option value="manager">Manager </option>
-                        <option value="team_lead">Team Lead </option>
-                        <option value="member"> Member </option>
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>{u.name}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="user-form-grid">
+                      <div className="form-row">
+                        <label>Team Name</label>
+                        <input
+                          type="text"
+                          name="fullName"
+                          value={newUser.fullName}
+                          onChange={handleChange}
+                          placeholder="Enter Team Name"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="user-form-grid">
+                      <div className="form-row">
+                        <div className="form-row">
+                          <label>Select Team</label>
+                          <select
+                            name="role"
+                            value={newUser.role}
+                            onChange={handleChange}
+                          >
+                            <option value="admin">Admin </option>
+                            <option value="manager">Manager </option>
+                            <option value="team_lead">Team Lead </option>
+                            <option value="member"> Member </option>
+                          </select>
+                        </div>
+                        <div className="form-row">
+                          <label>Select User</label>
+                          <select
+                            name="role"
+                            value={newUser.role}
+                            onChange={handleChange}
+                          >
+                            <option value="admin">Admin </option>
+                            <option value="manager">Manager </option>
+                            <option value="team_lead">Team Lead </option>
+                            <option value="member"> Member </option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 <div className="user-form-actions">
                   <button
                     type="button"
@@ -620,9 +653,8 @@ function ManageTeam() {
                     type="submit"
                     className="primary-button"
                   >
-                    Create User
+                    {addMemberTeamId ? "Add Member" : "Create User"}
                   </button>
-
                 </div>
 
               </form>

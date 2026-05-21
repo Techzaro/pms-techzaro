@@ -1,3 +1,4 @@
+import { useState } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import { CiCalendar } from "react-icons/ci";
 import { IoIosArrowDown } from "react-icons/io";
@@ -6,9 +7,11 @@ import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
 import { IoSearchOutline } from "react-icons/io5";
 import "../pages/Task.css";
+import CreateTaskModal from "../components/CreateTaskModal";
 
 function Tasks() {
   const navigate = useNavigate();
+  const [showTaskModal, setShowTaskModal] = useState(false);
 
   const tasks = [
     {
@@ -63,6 +66,14 @@ function Tasks() {
             </select>
 
           </div>
+
+          <button
+            className="export task-btn--mobile"
+            onClick={() => setShowTaskModal(true)}
+            style={{ whiteSpace: "nowrap" }}
+          >
+            + Task
+          </button>
 
           <div
             className="export"
@@ -189,6 +200,10 @@ function Tasks() {
           </div>
         ))}
       </div>
+
+      {showTaskModal && (
+        <CreateTaskModal onClose={() => setShowTaskModal(false)} />
+      )}
     </DashboardLayout>
   );
 }

@@ -432,7 +432,30 @@
     font-size: 26px;
   }
   .add-user-button {
+    width: auto;
+  }
+  .bar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .search-bar {
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex: none;
+    padding: 8px 12px;
+  }
+  .bar-role,
+  .bar-status,
+  .bar-sort {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    font-size: 13px;
   }
   .manage-users-table-card {
     padding: 16px;

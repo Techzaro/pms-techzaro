@@ -390,7 +390,13 @@
   transform: scale(1.05);
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1200px) and (min-width: 769px) {
+  .right-toggle {
+    display: flex;
+  }
+}
+
+@media (max-width: 768px) {
   .right-toggle {
     display: flex;
   }
@@ -422,6 +428,20 @@
 @media (max-width: 768px) {
   .dashboard-sections {
     gap: 14px;
+  }
+  .section-header {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .section-header h3 {
+    font-size: 18px;
+  }
+  .view-link {
+    flex: none;
+    width: auto;
+    padding: 8px 14px;
+    font-size: 13px;
   }
   .workload-item,
   .activity-item,

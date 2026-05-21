@@ -34,6 +34,10 @@ function Header() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: isProfileOpen } }));
+  }, [isProfileOpen]);
+
   const showFullLogo = sidebarOpen || !isSmallScreen;
 
   const [user, setUser] = useState({
@@ -123,7 +127,7 @@ function Header() {
             <b>TX</b>
           </div>
 
-          <div className={"logo-text" + (showFullLogo ? "" : " logo-text--hidden")}>
+          <div className={"logo-text" + (showFullLogo || isSmallScreen ? "" : " logo-text--hidden")}>
             <h3>Techxaro</h3>
             <span>PMS Portal</span>
           </div>

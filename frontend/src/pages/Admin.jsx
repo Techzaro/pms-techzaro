@@ -10,6 +10,13 @@ import "../components/layout/DashboardLayout.css";
 function Admin() {
   const [greeting, setGreeting] = useState("Welcome");
   const [rightOpen, setRightOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = (e) => setModalOpen(e.detail.open);
+    window.addEventListener("modal-state", handler);
+    return () => window.removeEventListener("modal-state", handler);
+  }, []);
 
   useEffect(() => {
     const name = localStorage.getItem("name") || "User";
@@ -924,15 +931,21 @@ function Admin() {
         </div>
       </div>
 
-      {/* TOGGLE BUTTON */}
-      <button
-        className="right-toggle"
-        onClick={() =>
-          setRightOpen((prev) => !prev)
-        }
-      >
-        ➜
-      </button>
+      {!modalOpen && (
+        <button
+          className={`right-toggle${rightOpen ? " right-toggle--open" : ""}`}
+          onClick={() => setRightOpen((prev) => !prev)}
+          aria-label="Toggle right sidebar"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            {rightOpen ? (
+              <path d="M7 4L13 10L7 16" />
+            ) : (
+              <path d="M13 4L7 10L13 16" />
+            )}
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

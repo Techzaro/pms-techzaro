@@ -1,6 +1,12 @@
+import { useEffect } from "react";
 import "./layout/CreateProjectModal.css";
 
 const CreateProjectModal = ({ onClose }) => {
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: true } }));
+    return () => window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: false } }));
+  }, []);
+
   return (
     <div className="cp-overlay">
       <div className="cp-modal">

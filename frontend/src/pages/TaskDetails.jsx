@@ -158,11 +158,9 @@ function TaskDetails() {
     setTimeout(() => navigate("/tasks"), 800);
   };
 
-  const layoutProps = { hideRightSidebar: true };
-
   if (loading) {
     return (
-      <DashboardLayout {...layoutProps}>
+      <DashboardLayout>
         <div className="pd-loading">Loading task…</div>
       </DashboardLayout>
     );
@@ -170,7 +168,7 @@ function TaskDetails() {
 
   if (!task) {
     return (
-      <DashboardLayout {...layoutProps}>
+      <DashboardLayout>
         <div className="pd-loading pd-error">Task not found.</div>
       </DashboardLayout>
     );
@@ -453,7 +451,7 @@ function TaskDetails() {
   );
 
   return (
-    <DashboardLayout {...layoutProps}>
+    <DashboardLayout>
       <div className="pd-main-layout">
       <div className="pd-page pd-page--tx">
         {message && <div className={`pd-toast pd-toast--${messageType}`}>{message}</div>}
