@@ -19,6 +19,23 @@ function Header() {
     setShowDeliverableModal,
   ] = useState(false);
 
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth <= 1200);
+
+  useEffect(() => {
+    const handler = (e) => setSidebarOpen(e.detail.open);
+    window.addEventListener("sidebar-state", handler);
+    return () => window.removeEventListener("sidebar-state", handler);
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => setIsSmallScreen(window.innerWidth <= 1200);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const showFullLogo = sidebarOpen || !isSmallScreen;
+
   const [user, setUser] = useState({
     name:
       localStorage.getItem("name") ||
@@ -90,11 +107,23 @@ function Header() {
 
         <div className="header-left">
 
+          <button
+            className="header-menu-btn"
+            onClick={() => window.dispatchEvent(new Event("toggle-sidebar"))}
+            aria-label="Toggle sidebar"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M3 12H21" />
+              <path d="M3 6H21" />
+              <path d="M3 18H21" />
+            </svg>
+          </button>
+
           <div className="logo-box">
             <b>TX</b>
           </div>
 
-          <div className="logo-text">
+          <div className={"logo-text" + (showFullLogo ? "" : " logo-text--hidden")}>
             <h3>Techxaro</h3>
             <span>PMS Portal</span>
           </div>

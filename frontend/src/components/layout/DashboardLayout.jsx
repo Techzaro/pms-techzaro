@@ -33,12 +33,16 @@ function DashboardLayout({ children, hideRightSidebar = false }) {
 
       {!hideRightSidebar && (
         <button
-          className="right-toggle"
+          className={`right-toggle${rightOpen ? " right-toggle--open" : ""}`}
           onClick={() => setRightOpen((prev) => !prev)}
           aria-label="Toggle right sidebar"
         >
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M7 4L13 10L7 16" />
+            {rightOpen ? (
+              <path d="M13 4L7 10L13 16" />
+            ) : (
+              <path d="M7 4L13 10L7 16" />
+            )}
           </svg>
         </button>
       )}

@@ -122,6 +122,7 @@
   padding: 18px 14px;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
+  text-align: left;
 }
 
 .manage-user-table tbody tr {
@@ -132,22 +133,29 @@
   background: #f9fafb;
 }
 
-.user-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.manage-user-table .user-info {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  text-align: left !important;
+  line-height: 1.2;
+  width: 100%;
 }
 
-.user-name {
-  font-size: 15px;
+.manage-user-table .user-name {
+  font-size: 14px;
   font-weight: 600;
   color: #111827;
+  line-height: 1.2;
 }
 
-.user-email {
-  font-size: 13px;
+.manage-user-table .user-email {
+  font-size: 11px;
   color: #6b7280;
   word-break: break-word;
+  line-height: 1.2;
 }
 
 .role-select {

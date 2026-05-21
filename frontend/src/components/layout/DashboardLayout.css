@@ -371,7 +371,7 @@
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: 9998;
+  z-index: 10003;
   width: 48px;
   height: 48px;
   border: none;
@@ -391,12 +391,6 @@
 }
 
 @media (max-width: 1200px) {
-  .main-layout {
-    flex-direction: column;
-  }
-  .dashboard-content {
-    min-height: auto;
-  }
   .right-toggle {
     display: flex;
   }

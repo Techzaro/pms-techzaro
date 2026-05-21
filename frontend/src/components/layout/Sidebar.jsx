@@ -13,8 +13,6 @@ import {
   MdPerson,
   MdPeople,
   MdLogout,
-  MdMenu,
-  MdClose,
 } from "react-icons/md";
 
 import "./Sidebar.css";
@@ -99,6 +97,10 @@ function Sidebar() {
   }, [location.pathname]);
 
   useEffect(() => {
+    window.dispatchEvent(new CustomEvent("sidebar-state", { detail: { open: isMobileOpen } }));
+  }, [isMobileOpen]);
+
+  useEffect(() => {
     const handler = () => setIsMobileOpen(prev => !prev);
     window.addEventListener("toggle-sidebar", handler);
     return () => window.removeEventListener("toggle-sidebar", handler);
@@ -115,11 +117,23 @@ function Sidebar() {
 
   return (
     <>
-      <button className="sidebar-toggle" onClick={toggleMobile} aria-label="Toggle sidebar">
-        {isMobileOpen ? <MdClose size={24} /> : <MdMenu size={24} />}
-      </button>
-
       <div className={`sidebar ${isMobileOpen ? "sidebar--open" : ""}`}>
+
+        <div className="sidebar-mobile-header">
+          <button className="sidebar-close-btn" onClick={toggleMobile} aria-label="Close sidebar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M18 6L6 18" />
+              <path d="M6 6L18 18" />
+            </svg>
+          </button>
+          <div className="sidebar-logo-box">
+            <b>TX</b>
+          </div>
+          <div className="sidebar-logo-text">
+            <h3>Techxaro</h3>
+            <span>PMS Portal</span>
+          </div>
+        </div>
 
         <div>
 
