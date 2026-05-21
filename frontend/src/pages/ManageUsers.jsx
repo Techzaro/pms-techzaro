@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { useCallback } from "react";
 import { MdEdit } from "react-icons/md";
 import { IoSearchOutline } from "react-icons/io5";
 import { CiCirclePlus } from "react-icons/ci";
@@ -26,6 +27,10 @@ function ManageUsers() {
   const [savingUserId, setSavingUserId] = useState(null);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: isAddModalOpen } }));
+  }, [isAddModalOpen]);
   const [currentUserId, setCurrentUserId] = useState(() => {
     const savedId = localStorage.getItem("userId");
     return savedId ? Number(savedId) : null;
@@ -408,15 +413,19 @@ function ManageUsers() {
             <input type="text" placeholder="Search users by name or email....." />
           </div>
           <select className="bar-role">
+            <option value="">Select Role</option>
             <option value="">Admin</option>
             <option value="">Manager</option>
-            <option value="">User</option>
+            <option value="">Team-Lead</option>
+            <option value="">Member</option>
           </select>
           <select className="bar-status">
+            <option value="">Select Status</option>
             <option value="">Active</option>
             <option value="">Resigned</option>
           </select>
           <select className="bar-sort">
+            <option value="">Sort By</option>
             <option value="">Ascending</option>
             <option value="">Dscending</option>
           </select>
@@ -472,9 +481,6 @@ function ManageUsers() {
                     Register a new user in the backend and assign their role.
                   </p>
                 </div>
-                <button onClick={closeModal} className="close-modal-button">
-                  Close
-                </button>
               </div>
 
               <form className="user-form" onSubmit={handleSubmit}>

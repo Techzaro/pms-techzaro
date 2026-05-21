@@ -281,6 +281,10 @@
   }
 }
 
+.task-btn--mobile {
+  display: none;
+}
+
 @media (max-width: 768px) {
   .task-text h3 {
     font-size: 20px;
@@ -292,9 +296,18 @@
   .task-btns {
     width: 100%;
   }
+  .task-btns {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
   .task-btns > div,
   .task-btns > .export {
-    flex: 1;
+    flex: none;
+    width: auto;
+  }
+  .task-btn--mobile {
+    display: flex;
   }
   .task-progress {
     gap: 6px;

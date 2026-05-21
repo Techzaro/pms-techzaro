@@ -1,3 +1,4 @@
+import { useState } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import { CiCalendar } from "react-icons/ci";
 import { IoIosArrowDown } from "react-icons/io";
@@ -5,9 +6,12 @@ import { LuArrowDownToLine } from "react-icons/lu";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
 import { IoSearchOutline } from "react-icons/io5";
+import CreateTaskModal from "../components/CreateTaskModal";
+import "../pages/Task.css";
 
 const Taskby = () => {
   const navigate = useNavigate();
+  const [showTaskModal, setShowTaskModal] = useState(false);
 
   const tasks = [
     {
@@ -59,6 +63,14 @@ const Taskby = () => {
             <IoIosArrowDown />
           </div>
 
+          <button
+            className="export task-btn--mobile"
+            onClick={() => setShowTaskModal(true)}
+            style={{ whiteSpace: "nowrap" }}
+          >
+            + Task
+          </button>
+
           <div
             className="export"
             onClick={() => navigate("/tasks")}
@@ -68,6 +80,10 @@ const Taskby = () => {
           </div>
         </div>
       </div>
+
+      {showTaskModal && (
+        <CreateTaskModal onClose={() => setShowTaskModal(false)} />
+      )}
 
       <div className="task-progress">
         <p className="All">All</p>

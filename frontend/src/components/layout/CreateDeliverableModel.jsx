@@ -1,6 +1,12 @@
+import { useEffect } from "react";
 import "../layout/CreateDeliverableModel.css";
 
 const CreateDeliverableTask = ({ onClose }) => {
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: true } }));
+    return () => window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: false } }));
+  }, []);
+
   return (
     <div className="deliverable-overlay">
 
@@ -25,13 +31,6 @@ const CreateDeliverableTask = ({ onClose }) => {
             </div>
 
           </div>
-
-          <button
-            className="deliverable-close-btn"
-            onClick={onClose}
-          >
-            ✕
-          </button>
 
         </div>
 

@@ -26,6 +26,8 @@ function Sidebar() {
     
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
+  const [isTabletExpanded, setIsTabletExpanded] = useState(false);
+
   const [user, setUser] = useState({
     name:
       localStorage.getItem("name") || "User",
@@ -115,9 +117,28 @@ function Sidebar() {
 
   const toggleMobile = () => setIsMobileOpen(prev => !prev);
 
+  const toggleTablet = () => setIsTabletExpanded(prev => !prev);
+
+  const handleMouseLeave = () => {
+    if (window.innerWidth <= 1200 && window.innerWidth >= 769) {
+      setIsTabletExpanded(false);
+    }
+  };
+
+  const handleSidebarClick = (e) => {
+    if (window.innerWidth <= 1200 && window.innerWidth >= 769) {
+      e.stopPropagation();
+      setIsTabletExpanded(true);
+    }
+  };
+
   return (
     <>
-      <div className={`sidebar ${isMobileOpen ? "sidebar--open" : ""}`}>
+      <div
+        className={`sidebar ${isMobileOpen ? "sidebar--open" : ""} ${isTabletExpanded ? "sidebar--tablet-expanded" : ""}`}
+        onMouseLeave={handleMouseLeave}
+        onClick={handleSidebarClick}
+      >
 
         <div className="sidebar-mobile-header">
           <button className="sidebar-close-btn" onClick={toggleMobile} aria-label="Close sidebar">
@@ -155,9 +176,10 @@ function Sidebar() {
                 ? "active"
                 : ""
             }`}
+            onClick={(e) => e.stopPropagation()}
           >
             <MdDashboard />
-            Dashboard
+            <span>Dashboard</span>
           </Link>
 
           <Link
@@ -169,9 +191,10 @@ function Sidebar() {
                 ? "active"
                 : ""
             }`}
+            onClick={(e) => e.stopPropagation()}
           >
             <MdAssignment />
-            Deliverables
+            <span>Deliverables</span>
           </Link>
 
           <Link
@@ -184,9 +207,10 @@ function Sidebar() {
                 ? "active"
                 : ""
             }`}
+            onClick={(e) => e.stopPropagation()}
           >
             <MdOutlineDescription />
-            Projects
+            <span>Projects</span>
           </Link>
 
           <Link
@@ -201,9 +225,10 @@ function Sidebar() {
                 ? "active"
                 : ""
             }`}
+            onClick={(e) => e.stopPropagation()}
           >
             <MdTask />
-            Tasks
+            <span>Tasks</span>
           </Link>
 
           <hr />
@@ -217,9 +242,10 @@ function Sidebar() {
                   ? "active"
                   : ""
               }`}
+              onClick={(e) => e.stopPropagation()}
             >
               <MdPerson />
-              Manage Users
+              <span>Users</span>
             </Link>
           )}
 
@@ -232,9 +258,10 @@ function Sidebar() {
                   ? "active"
                   : ""
               }`}
+              onClick={(e) => e.stopPropagation()}
             >
               <MdPeople />
-              Manage Team
+              <span>Team</span>
             </Link>
           )}
 
@@ -246,18 +273,19 @@ function Sidebar() {
             className={`sidebar-link profile-link ${
               isProfileModalOpen ? "active" : ""
             }`}
-            onClick={openProfileModal}
+            onClick={(e) => { e.stopPropagation(); openProfileModal(); }}
           >
             <MdPerson />
-            Profile
+            <span>Profile</span>
           </button>
 
           <Link
             to="/"
             className="sidebar-link logout-link"
+            onClick={(e) => e.stopPropagation()}
           >
             <MdLogout />
-            Logout Account
+            <span>Logout</span>
           </Link>
 
         </div>
@@ -265,6 +293,7 @@ function Sidebar() {
       </div>
 
       {isMobileOpen && <div className="sidebar-backdrop" onClick={toggleMobile} />}
+      {isTabletExpanded && <div className="sidebar-tablet-backdrop" onClick={toggleTablet} />}
 
       {isProfileModalOpen && (
         <ProfileModal
