@@ -126,7 +126,7 @@ function Projects() {
 
               <div
                 key={project.id}
-                className="project-card"
+                className="projects-card"
               >
 
                 {/* HEADER */}

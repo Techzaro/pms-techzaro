@@ -90,17 +90,15 @@
   gap: 24px;
 }
 
-.project-card {
+.projects-card {
   background: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 20px;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
   transition: all 0.3s ease;
 }
 
-.project-card:hover {
+.projects-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
 }
@@ -167,6 +165,9 @@
   gap: 8px;
   color: #6b7280;
   font-size: 13px;
+}
+.date-icon {
+  margin-left: 22px;
 }
 
 .project-card-actions {
