@@ -5,7 +5,9 @@
 import { useEffect, useState } from "react";
 import Header from "../components/layout/Header";
 import Sidebar from "../components/layout/Sidebar";
+import RightSidebar from "../components/layout/RightSidebar";
 import "../components/layout/DashboardLayout.css";
+import "./Admin.css";
 
 function Admin() {
   const [greeting, setGreeting] = useState("Welcome");
@@ -180,12 +182,12 @@ function Admin() {
 
           {/* SUMMARY CARDS */}
           <div
+            className="summary-cards-grid"
             style={{
               display: "grid",
               gridTemplateColumns:
                 "repeat(auto-fit, minmax(100px, 1fr))",
               gap: "20px",
-              marginBottom: "30px",
             }}
           >
             {summaryCards.map((card) => (
@@ -271,197 +273,31 @@ function Admin() {
               </div>
             ))}
           </div>
-
+<br />
           {/* TODAY WORKLOAD */}
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: "20px",
-              padding: "24px",
-              boxShadow:
-                "0 2px 10px rgba(0,0,0,0.05)",
-              marginBottom: "30px",
-            }}
-          >
-            {/* HEADER */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent:
-                  "space-between",
-                alignItems: "center",
-                marginBottom: "24px",
-              }}
-            >
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: "22px",
-                  fontWeight: "700",
-                  color: "#111827",
-                }}
-              >
-                Today’s Workload
-              </h3>
-
-              <button
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#6366F1",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                }}
-              >
-                View All Tasks
-              </button>
+          <div className="workload-card">
+            <div className="workload-card-header">
+              <h3>Today's Workload</h3>
+              <button className="workload-view-btn">View All Tasks</button>
             </div>
 
-            {/* WORKLOAD LIST */}
-            <div
-              style={{
-                border: "1px solid #F1F5F9",
-                borderRadius: "18px",
-                overflow: "hidden",
-              }}
-            >
+            <div className="workload-list">
               {todayWorkload.map((item, index) => (
-                <div
-                  key={index}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "120px 1fr 150px 170px",
-                    alignItems: "center",
-                    padding: "20px",
-                    borderBottom:
-                      index !==
-                        todayWorkload.length - 1
-                        ? "1px solid #F3F4F6"
-                        : "none",
-                  }}
-                >
-                  {/* TIME */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "14px",
-                    }}
+                <div key={index} className="workload-item">
+                  <div className="workload-item-left">
+                    <span className="workload-time">{item.time}</span>
+                    <span className="workload-dot" />
+                    <div>
+                      <p className="workload-title">{item.title}</p>
+                      <span className="workload-member">{item.member}</span>
+                    </div>
+                  </div>
+                  <span
+                    className="workload-priority"
+                    data-priority={item.status}
                   >
-                    <span
-                      style={{
-                        color: "#9CA3AF",
-                        fontSize: "14px",
-                        minWidth: "70px",
-                      }}
-                    >
-                      {item.time}
-                    </span>
-
-                    <div
-                      style={{
-                        width: "12px",
-                        height: "12px",
-                        borderRadius: "50%",
-                        background: "#4F46E5",
-                        boxShadow:
-                          "0 0 0 4px rgba(79,70,229,0.15)",
-                      }}
-                    />
-                  </div>
-
-                  {/* TASK DETAIL */}
-                  <div>
-                    <h4
-                      style={{
-                        margin: 0,
-                        fontSize: "17px",
-                        fontWeight: "700",
-                        color: "#111827",
-                      }}
-                    >
-                      {item.title}
-                    </h4>
-
-                    <p
-                      style={{
-                        margin: "5px 0 0",
-                        fontSize: "14px",
-                        color: "#9CA3AF",
-                      }}
-                    >
-                      {item.member}
-                    </p>
-                  </div>
-
-                  {/* AVATARS */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                    }}
-                  >
-                    {Array.from({
-                      length: item.avatars,
-                    }).map((_, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          width: "34px",
-                          height: "34px",
-                          borderRadius: "50%",
-                          background: "#111",
-                          border:
-                            "2px solid #fff",
-                          marginLeft:
-                            idx !== 0
-                              ? "-10px"
-                              : "0",
-                        }}
-                      />
-                    ))}
-                  </div>
-
-                  {/* PRIORITY */}
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent:
-                        "flex-end",
-                    }}
-                  >
-                    <span
-                      style={{
-                        padding:
-                          "10px 16px",
-                        borderRadius:
-                          "10px",
-                        fontSize: "13px",
-                        fontWeight: "600",
-                        background:
-                          item.status ===
-                            "High Priority"
-                            ? "#FEE2E2"
-                            : item.status ===
-                              "Medium Priority"
-                              ? "#FEF3C7"
-                              : "#F3F4F6",
-
-                        color:
-                          item.status ===
-                            "High Priority"
-                            ? "#EF4444"
-                            : item.status ===
-                              "Medium Priority"
-                              ? "#D97706"
-                              : "#6B7280",
-                      }}
-                    >
-                      {item.status}
-                    </span>
-                  </div>
+                    {item.status}
+                  </span>
                 </div>
               ))}
             </div>
@@ -929,6 +765,8 @@ function Admin() {
           </div>
 
         </div>
+
+        <RightSidebar isOpen={rightOpen} onClose={() => setRightOpen(false)} />
       </div>
 
       {!modalOpen && (
