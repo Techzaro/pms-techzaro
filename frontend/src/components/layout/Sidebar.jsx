@@ -15,6 +15,7 @@ import {
   MdCalendarToday,
   MdBarChart,
   MdLogout,
+  MdKeyboardArrowDown,
 } from "react-icons/md";
 
 import "./Sidebar.css";
@@ -29,6 +30,7 @@ function Sidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const [isTabletExpanded, setIsTabletExpanded] = useState(false);
+  const [tasksOpen, setTasksOpen] = useState(true);
 
   const [user, setUser] = useState({
     name:
@@ -215,23 +217,41 @@ function Sidebar() {
             <span>Projects</span>
           </Link>
 
-          <Link
-            to="/tasks"
-            className={`sidebar-link ${
-              !isProfileModalOpen && (location.pathname === "/tasks" ||
-              location.pathname === "/taskby" ||
-              location.pathname === "/taskdetails" ||
-              location.pathname === "/details" ||
-              location.pathname.startsWith("/details/") ||
-              location.pathname.startsWith("/taskdetails/"))
-                ? "active"
-                : ""
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MdTask />
-            <span>Tasks</span>
-          </Link>
+          {/* TASKS DROPDOWN */}
+          <div className={`sidebar-link ${!isProfileModalOpen && (location.pathname === "/tasks" || location.pathname === "/taskby" || location.pathname === "/taskdetails" || location.pathname === "/details" || location.pathname.startsWith("/details/") || location.pathname.startsWith("/taskdetails/")) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+            <div
+              onClick={() => setTasksOpen((prev) => !prev)}
+              style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
+            >
+              <MdTask />
+              <span style={{ flex: 1 }}>Tasks</span>
+              <MdKeyboardArrowDown
+                size={18}
+                style={{
+                  transition: "transform 0.2s",
+                  transform: tasksOpen ? "rotate(180deg)" : "rotate(0deg)",
+                }}
+              />
+            </div>
+            {tasksOpen && (
+              <div style={{ display: "flex", flexDirection: "column", marginLeft: 12 }}>
+                <Link
+                  to="/tasks"
+                  className={`sidebar-sub-link ${location.pathname === "/tasks" ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Assigned to You
+                </Link>
+                <Link
+                  to="/taskby"
+                  className={`sidebar-sub-link ${location.pathname === "/taskby" ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Assigned by You
+                </Link>
+              </div>
+            )}
+          </div>
 
           <Link
             to="/calender"

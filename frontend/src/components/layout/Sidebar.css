@@ -45,6 +45,29 @@
   color: white;
 }
 
+.sidebar-sub-link {
+  display: block;
+  padding: 10px 12px;
+  margin: 2px 0;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  color: #374151;
+  transition: 0.2s;
+}
+
+.sidebar-sub-link:hover {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.sidebar-sub-link.active {
+  background: #eef2ff;
+  color: #4f46e5;
+  font-weight: 600;
+}
+
 .sidebar hr {
   border: none;
   border-top: 1px solid #e5e7eb;
