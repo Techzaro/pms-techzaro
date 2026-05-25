@@ -361,7 +361,7 @@ function ManageUsers() {
       return;
     }
 
-    
+
 
     try {
       const res = await fetch("http://127.0.0.1:8000/api/users", {
@@ -473,7 +473,13 @@ function ManageUsers() {
 
         {isAddModalOpen && (
           <div className="user-modal-overlay">
-            <div className="user-modal-content">
+            <div
+              className="user-modal-content"
+              style={{
+                maxWidth: "1100px",
+                width: "100%",
+              }}
+            >
               <div className="user-modal-header">
                 <div>
                   <h2>Add New User</h2>
@@ -484,61 +490,166 @@ function ManageUsers() {
               </div>
 
               <form className="user-form" onSubmit={handleSubmit}>
-                <div className="user-form-grid">
-                  <div className="form-row">
-                    <label htmlFor="fullName">Full Name</label>
-                    <input
-                      type="text"
-                      id="fullName"
-                      name="fullName"
-                      value={newUser.fullName}
-                      onChange={handleChange}
-                      placeholder="Enter full name"
-                    />
+
+                {/* MAIN TWO COLUMNS */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "24px",
+                  }}
+                >
+
+                  {/* LEFT SIDE */}
+                  <div>
+                    <div className="user-form-grid">
+                      <div className="form-row">
+                        <label htmlFor="fullName">Full Name</label>
+                        <input
+                          type="text"
+                          id="fullName"
+                          name="fullName"
+                          value={newUser.fullName}
+                          onChange={handleChange}
+                          placeholder="Enter full name"
+                        />
+                      </div>
+
+                      <div className="form-row">
+                        <label htmlFor="email">Email Address</label>
+                        <input
+                          type="email"
+                          id="email"
+                          name="email"
+                          value={newUser.email}
+                          onChange={handleChange}
+                          placeholder="Enter email address"
+                        />
+                      </div>
+                      {/* CONTACT */}
+                      <div className="form-row">
+                        <label>Contact No</label>
+
+                        <input
+                          type="text"
+                          placeholder="Enter contact number"
+                        />
+                      </div>
+
+                      {/* ADDRESS */}
+                      <div className="form-row">
+                        <label>Address</label>
+
+                        <input
+                          type="text"
+                          placeholder="Enter address"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="user-form-grid">
+                      <div className="form-row">
+                        <label htmlFor="password">Password</label>
+                        <input
+                          type="password"
+                          id="password"
+                          name="password"
+                          value={newUser.password}
+                          onChange={handleChange}
+                          placeholder="Create a password"
+                        />
+                      </div>
+
+                    </div>
                   </div>
 
-                  <div className="form-row">
-                    <label htmlFor="email">Email Address</label>
-                    <input
-                      type="email"
-                      id="email"
-                      name="email"
-                      value={newUser.email}
-                      onChange={handleChange}
-                      placeholder="Enter email address"
-                    />
+                  {/* RIGHT SIDE */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "18px",
+                    }}
+                  >
+                    {/* DESTINATION */}
+                    <div className="form-row">
+                      <label>Destination Name</label>
+
+                      <select>
+                        <option>Select Destination</option>
+                        <option>Lahore</option>
+                        <option>Karachi</option>
+                        <option>Islamabad</option>
+                      </select>
+                    </div>
+
+                    {/* DEPARTMENT */}
+                    <div className="form-row">
+                      <label>Department Name</label>
+
+                      <select>
+                        <option>Select Department</option>
+                        <option>Development</option>
+                        <option>Design</option>
+                        <option>Marketing</option>
+                      </select>
+                    </div>
+
+                    {/* TEAM LEAD */}
+                    <div className="form-row">
+                      <label>Team Lead Name</label>
+
+                      <select>
+                        <option>Select Team Lead</option>
+                        <option>Ahmad</option>
+                        <option>Ali</option>
+                        <option>Sarah</option>
+                      </select>
+                    </div>
+                    <div className="form-row">
+                      <label htmlFor="role">Role</label>
+
+                      <select
+                        id="role"
+                        name="role"
+                        value={newUser.role}
+                        onChange={handleChange}
+                      >
+                        <option value="admin">Admin</option>
+                        <option value="manager">Manager</option>
+                        <option value="team_lead">
+                          Team Lead
+                        </option>
+                        <option value="member">Member</option>
+                      </select>
+                    </div>
+
+                    {/* EMPLOYEE CODE */}
+                    <div className="form-row">
+                      <label>Employee Code</label>
+
+                      <input
+                        type="text"
+                        placeholder="Enter employee code"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                <div className="user-form-grid">
-                  <div className="form-row">
-                    <label htmlFor="password">Password</label>
-                    <input
-                      type="password"
-                      id="password"
-                      name="password"
-                      value={newUser.password}
-                      onChange={handleChange}
-                      placeholder="Create a password"
-                    />
-                  </div>
-
-                  <div className="form-row">
-                    <label htmlFor="role">Role</label>
-                    <select id="role" name="role" value={newUser.role} onChange={handleChange}>
-                      <option value="admin">Admin</option>
-                      <option value="manager">Manager</option>
-                      <option value="team_lead">Team Lead</option>
-                      <option value="member">Member</option>
-                    </select>
-                  </div>
-                </div>
-
+                {/* BUTTONS */}
                 <div className="user-form-actions">
-                  <button type="button" className="secondary-button" onClick={closeModal}>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={closeModal}
+                  >
                     Cancel
                   </button>
-                  <button type="submit" className="primary-button">
+
+                  <button
+                    type="submit"
+                    className="primary-button"
+                  >
                     Create User
                   </button>
                 </div>
