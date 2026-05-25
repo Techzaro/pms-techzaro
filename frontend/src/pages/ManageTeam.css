@@ -434,9 +434,13 @@
   }
   .user-modal-content {
     padding: 24px;
+    max-width: 95%;
   }
   .user-modal-header h2 {
     font-size: 26px;
+  }
+  .user-form-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -455,6 +459,13 @@
   }
   .team-card {
     padding: 18px;
+  }
+  .team-card-actions {
+    flex-direction: column;
+  }
+  .add-member-button,
+  .project-button {
+    width: 100%;
   }
   .user-form-actions {
     flex-direction: column;
