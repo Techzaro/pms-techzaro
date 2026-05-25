@@ -23,7 +23,18 @@
   gap: 15px;
   flex-wrap: wrap;
 }
-
+.add-subtask-btn{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 15px;
+  border: 1px solid #5B5FEF;
+  background-color: #5B5FEF;
+  height: 40px;
+  gap: 10px;
+  border-radius: 10px;
+  color: white;
+}
 .tasks-search-bar {
   border: 1px solid lightgray;
   background-color: white;
