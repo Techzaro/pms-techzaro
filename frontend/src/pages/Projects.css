@@ -90,29 +90,28 @@
   gap: 24px;
 }
 
-.project-card {
+.projects-card {
   background: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 20px;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
   transition: all 0.3s ease;
+  padding: 10px;
 }
 
-.project-card:hover {
+.projects-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
 }
 
-.project-card-header {
-  padding: 26px 24px 18px;
+.projects-card-header {
+  padding: 0px 0px 18px;
   position: relative;
 }
 
-.project-card-header h3 {
+.projects-card-header h3 {
   margin: 0 0 14px;
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 1.25;
   color: #111827;
@@ -167,6 +166,9 @@
   gap: 8px;
   color: #6b7280;
   font-size: 13px;
+}
+.date-icon {
+  margin-left: 22px;
 }
 
 .project-card-actions {
