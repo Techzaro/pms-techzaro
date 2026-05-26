@@ -23,7 +23,18 @@
   gap: 15px;
   flex-wrap: wrap;
 }
-
+.add-subtask-btn{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 15px;
+  border: 1px solid #5B5FEF;
+  background-color: #5B5FEF;
+  height: 40px;
+  gap: 10px;
+  border-radius: 10px;
+  color: white;
+}
 .tasks-search-bar {
   border: 1px solid lightgray;
   background-color: white;
@@ -245,29 +256,16 @@
   .tasks-search-bar {
     max-width: 100%;
   }
-  .table-header {
-    display: none;
+  .container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
+  .table-header,
   .table-row {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 20px;
-    border-bottom: 1px solid #E5E7EB;
-    align-items: stretch;
-  }
-  .table-row > div {
-    width: 100%;
+    min-width: 750px;
   }
   .table-row .user-box {
     flex-direction: row;
-  }
-  .table-row .date-box {
-    display: flex;
-    gap: 12px;
-  }
-  .table-row .view-btn {
-    width: 100%;
   }
   .task-description {
     max-width: 100%;
@@ -322,17 +320,24 @@
   .container {
     border-radius: 12px;
   }
-  .table-row {
-    padding: 14px;
+  .avatar {
+    width: 44px;
+    height: 44px;
   }
-  .user-name {
-    font-size: 14px;
+  .view-btn {
+    padding: 8px 14px;
+    font-size: 13px;
   }
-  .task-title {
-    font-size: 15px;
-  }
-  .badge {
+  .search-bar {
     padding: 8px 12px;
+    font-size: 13px;
+  }
+  .All, .Pending, .Progress, .Completed, .Failed, .Aban {
+    padding: 6px 10px;
     font-size: 12px;
+  }
+  .table-header,
+  .table-row {
+    min-width: 600px;
   }
 }

@@ -159,7 +159,7 @@ function DeliverableDetails() {
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <DashboardLayout hideRightSidebar={true}>
         <div className="pd-loading">Loading deliverable…</div>
       </DashboardLayout>
     );
@@ -167,7 +167,7 @@ function DeliverableDetails() {
 
   if (!deliverable) {
     return (
-      <DashboardLayout>
+      <DashboardLayout hideRightSidebar={true}>
         <div className="pd-loading pd-error">Deliverable not found.</div>
       </DashboardLayout>
     );
@@ -452,7 +452,7 @@ function DeliverableDetails() {
   );
 
   return (
-    <DashboardLayout>
+    <DashboardLayout hideRightSidebar={true}>
       <div className="pd-main-layout">
       <div className="pd-page pd-page--tx">
         {message && <div className={`pd-toast pd-toast--${messageType}`}>{message}</div>}

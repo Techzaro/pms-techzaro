@@ -1,5 +1,5 @@
-.project-page {
-  padding: 24px;
+.projects-page {
+  padding: 0;
 }
 
 .projects-header {
@@ -265,29 +265,16 @@
   .delivery-serach-bar {
     max-width: 100%;
   }
-  .table-header {
-    display: none;
+  .container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
+  .table-header,
   .table-row {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 20px;
-    border-bottom: 1px solid #E5E7EB;
-    align-items: stretch;
-  }
-  .table-row > div {
-    width: 100%;
+    min-width: 750px;
   }
   .table-row .user-box {
     flex-direction: row;
-  }
-  .table-row .date-box {
-    display: flex;
-    gap: 12px;
-  }
-  .table-row .view-btn {
-    width: auto;
   }
   .task-description {
     max-width: 100%;
@@ -325,8 +312,9 @@
   .container {
     border-radius: 12px;
   }
+  .table-header,
   .table-row {
-    padding: 14px;
+    min-width: 600px;
   }
   .user-name {
     font-size: 14px;
@@ -337,5 +325,23 @@
   .badge {
     padding: 8px 12px;
     font-size: 12px;
+  }
+  .delivery-serach-bar {
+    padding: 8px;
+    min-width: 140px;
+  }
+  .avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 15px;
+  }
+  .create-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+  .header-actions .all-time {
+    padding: 8px 12px;
+    height: 36px;
+    font-size: 13px;
   }
 }

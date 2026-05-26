@@ -7,7 +7,7 @@ const summaryCards = [
     title: "Total Assigned",
     value: 78,
     label: "All tasks assigned",
-    icon: "assigned",
+    icon: "/Vector-5.svg",
     color: "#6366f1",
     bgColor: "#eef2ff",
   },
@@ -15,7 +15,7 @@ const summaryCards = [
     title: "Completed",
     value: 40,
     label: "51% completion rate",
-    icon: "completed",
+    icon: "/Vector-2.svg",
     color: "#10b981",
     bgColor: "#ecfdf5",
   },
@@ -23,7 +23,7 @@ const summaryCards = [
     title: "Pending",
     value: 18,
     label: "Tasks in progress",
-    icon: "pending",
+    icon: "/Vector-1 (3).svg",
     color: "#f59e0b",
     bgColor: "#fffbeb",
   },
@@ -31,7 +31,7 @@ const summaryCards = [
     title: "Overdue",
     value: 8,
     label: "Require attention",
-    icon: "overdue",
+    icon: "/Vector-3.svg",
     color: "#ef4444",
     bgColor: "#fef2f2",
   },
@@ -90,10 +90,7 @@ function Reports() {
       <div className="reports-page">
 
         {/* WELCOME HEADER */}
-        <div className="reports-welcome">
-          <h1>Welcome, {userName}</h1>
-          <p>Role: {userRole}</p>
-        </div>
+       
 
         {/* REPORT HEADER */}
         <div className="reports-header">
@@ -124,7 +121,9 @@ function Reports() {
           {summaryCards.map((card) => (
             <div key={card.title} className="summary-card">
               <div className="summary-card-top">
-                <span className={`summary-icon summary-icon-${card.icon}`} />
+                <span className={`summary-icon`} style={{ background: card.bgColor }}>
+                  <img src={card.icon} alt={card.title} style={{ width: 20, height: 20 }} />
+                </span>
                 <span className="summary-title">{card.title}</span>
               </div>
               <div className="summary-value" style={{ color: card.color }}>
@@ -136,50 +135,62 @@ function Reports() {
         </div>
 
         {/* TABLE */}
-        <div className="reports-table">
-          <div className="table-header">
-            <span>Team Member</span>
-            <span>Assigned</span>
-            <span>Completed</span>
-            <span>Pending</span>
-            <span>Tasks</span>
-            <span>Action</span>
-          </div>
-
-          {teamMembers.map((member, idx) => (
-            <div key={idx} className="table-row">
-              <div className="table-member">
-                <div
-                  className="member-avatar"
-                  style={{ color: member.avatarColor, background: member.avatarColor + "18" }}
-                >
-                  {member.initials}
-                </div>
-                <div>
-                  <div className="member-name">{member.name}</div>
-                  <div className="member-role">{member.role}</div>
-                </div>
-              </div>
-
-              <div className="table-badge badge-blue">{String(member.assigned).padStart(2, "0")}</div>
-              <div className="table-badge badge-green">{String(member.completed).padStart(2, "0")}</div>
-              <div className="table-badge badge-yellow">{String(member.pending).padStart(2, "0")}</div>
-
-              <div className="table-tasks">
-                {member.tasks.map((task, i) => (
-                  <div key={i} className="task-item">
-                    <span className="task-dot" />
-                    {task}
-                  </div>
-                ))}
-              </div>
-
-              <button className="table-action-btn">
-                View Profile
-                <span>→</span>
-              </button>
+        <div className="reports-table-wrapper">
+          <div className="reports-table">
+            <div className="table-header">
+              <span className="th-member">Team Member</span>
+              <span className="th-stat">Assigned</span>
+              <span className="th-stat">Completed</span>
+              <span className="th-stat">Pending</span>
+              <span className="th-tasks">Tasks</span>
+              <span className="th-action">Action</span>
             </div>
-          ))}
+
+            {teamMembers.map((member, idx) => (
+              <div key={idx} className="table-row">
+                <div className="table-member">
+                  <div
+                    className="member-avatar"
+                    style={{ background: member.avatarColor, color: "#fff" }}
+                  >
+                    {member.initials}
+                  </div>
+                  <div className="member-info">
+                    <div className="member-name">{member.name}</div>
+                    <div className="member-role">{member.role}</div>
+                  </div>
+                </div>
+
+                <div className="stat-cell">
+                  <span className="stat-badge assigned">{member.assigned}</span>
+                </div>
+                <div className="stat-cell">
+                  <span className="stat-badge completed">{member.completed}</span>
+                </div>
+                <div className="stat-cell">
+                  <span className="stat-badge pending">{member.pending}</span>
+                </div>
+
+                <div className="table-tasks">
+                  {member.tasks.map((task, i) => (
+                    <div key={i} className="task-badge">
+                      <span className="task-badge-dot" />
+                      {task}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="action-cell">
+                  <button className="table-action-btn">
+                    Profile
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M5 3L9 7L5 11" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
       </div>

@@ -1,5 +1,5 @@
 .manage-team-page {
-  padding: 24px;
+  padding: 0;
 }
 
 .manage-team-header {
@@ -62,7 +62,7 @@
 .team-list-simple {
   display: grid;
   gap: 20px;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
 }
 
 .team-card {
@@ -427,16 +427,20 @@
 
 @media (max-width: 768px) {
   .manage-team-page {
-    padding: 16px;
+    padding: 0;
   }
   .manage-team-header h1 {
     font-size: 24px;
   }
   .user-modal-content {
     padding: 24px;
+    max-width: 95%;
   }
   .user-modal-header h2 {
     font-size: 26px;
+  }
+  .user-form-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -455,6 +459,13 @@
   }
   .team-card {
     padding: 18px;
+  }
+  .team-card-actions {
+    flex-direction: column;
+  }
+  .add-member-button,
+  .project-button {
+    width: 100%;
   }
   .user-form-actions {
     flex-direction: column;

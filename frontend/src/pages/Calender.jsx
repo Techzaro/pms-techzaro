@@ -8,7 +8,9 @@ import {
   Plus,
 } from "lucide-react";
 
-import DashboardCalender from "../components/layout/DashboardCalender";
+import Header from "../components/layout/Header";
+import Sidebar from "../components/layout/Sidebar";
+import "../components/layout/DashboardLayout.css";
 import Event from "../components/Event";
 
 const calendarData = [
@@ -75,11 +77,17 @@ const Calender = () => {
   const totalBoxes = getTotalBoxes();
 
   return (
-    <DashboardCalender>
-      <div className="calender-layout">
-        
-        {/* LEFT SIDE */}
-        <div className="calendar-main">
+    <div className="dashboard-page">
+      <Header />
+
+      <div className="main-layout">
+        <Sidebar />
+
+        <div className="dashboard-content">
+          <div className="calender-layout">
+
+            {/* LEFT SIDE */}
+            <div className="calendar-main">
 
           {/* HEADER */}
           <div className="calendar-header">
@@ -259,6 +267,10 @@ const Calender = () => {
             </div>
 
           </div>
+
+        </div>
+
+        </div>
 
         </div>
 
@@ -450,7 +462,7 @@ const Calender = () => {
       )}
 
       <Event isOpen={showEventModal} onClose={() => setShowEventModal(false)} />
-    </DashboardCalender>
+    </div>
   );
 };
 

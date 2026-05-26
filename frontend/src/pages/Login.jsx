@@ -51,6 +51,7 @@ function Login() {
 
       setLoading(true);
 
+      // const res = await fetch("https://api.pms.techxaro.com/api/login", {
       const res = await fetch("http://127.0.0.1:8000/api/login", {
         method: "POST",
         headers: {
