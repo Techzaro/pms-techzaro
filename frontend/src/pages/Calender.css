@@ -178,6 +178,76 @@
     color: #374151;
 }
 
+.event-subtitle {
+    font-size: 14px;
+    color: #6b7280;
+    margin: 0;
+}
+
+.popup-action-row {
+    display: flex;
+    gap: 12px;
+}
+
+.attendee-list {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.attendee-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #6366f1;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+}
+
+.attendee-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #e5e7eb;
+    color: #374151;
+    font-weight: 700;
+}
+
+.popup-divider {
+    height: 1px;
+    background: #e5e7eb;
+    margin: 20px 0;
+}
+
+.popup-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.popup-section-heading {
+    font-weight: 700;
+    color: #111827;
+}
+
+.popup-file-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
+    color: #374151;
+}
+
 /* EVENTS */
 
 .calendar-event {
