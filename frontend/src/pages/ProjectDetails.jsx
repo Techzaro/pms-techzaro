@@ -27,7 +27,8 @@ import {
 import DashboardLayout from "../components/layout/DashboardLayout";
 import "./ProjectDetails.css";
 
-const API = "http://127.0.0.1:8000/api";
+import API_URL from "../config/api";
+const API = API_URL;
 
 /**
  * Perform the status slug.

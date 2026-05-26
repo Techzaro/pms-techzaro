@@ -4,6 +4,7 @@
 
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
+import API_URL from "../../config/api";
 
 import {
   MdDashboard,
@@ -61,7 +62,7 @@ function Sidebar() {
 
     if (!token) return;
 
-    fetch("http://127.0.0.1:8000/api/user", {
+    fetch(`${API_URL}/user`, {
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${token}`,
@@ -259,7 +260,7 @@ function Sidebar() {
               />
             </div>
             {tasksOpen && (
-              <div style={{ display: "flex", flexDirection: "column", marginLeft: 6 }}>
+              <div className="sidebar-sub-links">
                 <Link
                   to="/tasks"
                   className={`sidebar-sub-link ${location.pathname === "/tasks" ? "active" : ""}`}

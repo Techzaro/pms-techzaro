@@ -95,7 +95,7 @@ function Reports() {
         {/* REPORT HEADER */}
         <div className="reports-header">
           <div>
-            <h2>Team Performance Report</h2>
+            <h1>Team Performance Report</h1>
             <p>Track progress, tasks, and performance across your team</p>
           </div>
           <div className="reports-header-actions">

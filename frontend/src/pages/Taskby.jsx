@@ -189,16 +189,12 @@ const Taskby = () => {
         {/* TABLE HEADER */}
 
         <div className="table-header">
-          <div>Assigned By</div>
+          <div>Assigned by</div>
 
           <div>Task</div>
-
           <div>Status</div>
-
           <div>Priority</div>
-
           <div>Date</div>
-
           <div>Action</div>
         </div>
 

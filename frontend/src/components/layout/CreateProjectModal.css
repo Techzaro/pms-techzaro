@@ -19,6 +19,7 @@
   max-height: 95vh;
 
   overflow-y: auto;
+  scrollbar-width: none;
 
   background: #ffffff;
 
@@ -27,6 +28,10 @@
   border: 1px solid #e5e7eb;
 
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+}
+
+.cp-modal::-webkit-scrollbar {
+  display: none;
 }
 
 /* HEADER */
@@ -340,7 +345,7 @@
 
 /* RESPONSIVE */
 
-@media (max-width: 900px) {
+@media (max-width: 992px) {
 
   .cp-body {
     grid-template-columns: 1fr;

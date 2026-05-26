@@ -32,6 +32,10 @@ const CreateSubtaskModal = ({ onClose }) => {
 
           </div>
 
+          <button className="task-close-btn" onClick={onClose}>
+            ✕
+          </button>
+
         </div>
 
         {/* BODY */}

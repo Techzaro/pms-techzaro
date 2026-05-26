@@ -21,7 +21,8 @@
 .projects-header p {
   margin: 0;
   color: #6b7280;
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .header-actions {
@@ -145,24 +146,60 @@
 
 .table-header {
   display: grid;
-  grid-template-columns: 2fr 3fr 1.5fr 1.5fr 1fr 1fr;
+  grid-template-columns: 1fr 7.5fr 0.4fr 0.4fr 0.3fr 0.3fr;
   align-items: center;
-  gap: 20px;
-  padding: 25px 20px;
-  background: #F9FAFB;
-  font-weight: 600;
-  color: #4B5563;
-  border-bottom: 1px solid #E5E7EB;
+  gap: 6px;
+  padding: 14px 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.table-header > div {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  text-transform: none;
+  min-width: 0;
+}
+
+.table-header > div:nth-child(1),
+.table-header > div:nth-child(2) {
+  text-align: left;
+}
+
+.table-header > div:nth-child(3),
+.table-header > div:nth-child(4),
+.table-header > div:nth-child(5),
+.table-header > div:nth-child(6) {
+  text-align: right;
 }
 
 .table-row {
   display: grid;
-  grid-template-columns: 2fr 3fr 1.5fr 1.5fr 1fr 1fr;
+  grid-template-columns: 1fr 7.5fr 0.4fr 0.4fr 0.3fr 0.3fr;
   align-items: center;
-  gap: 20px;
-  padding: 25px 20px;
-  border-bottom: 1px solid #F1F5F9;
+  gap: 6px;
+  padding: 12px 12px;
+  border-bottom: 1px solid #f1f5f9;
   transition: 0.3s;
+}
+
+.table-row > div {
+  min-width: 0;
+}
+
+.table-row > div:nth-child(1) {
+  text-align: left;
+}
+
+.table-row > div:nth-child(2) {
+  text-align: left;
+}
+
+.table-row > div:nth-child(3),
+.table-row > div:nth-child(4),
+.table-row > div:nth-child(5),
+.table-row > div:nth-child(6) {
+  text-align: right;
 }
 
 .table-row:hover {
@@ -172,7 +209,8 @@
 .user-box {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 12px;
+  justify-content: flex-start;
 }
 
 .avatar {
@@ -209,17 +247,17 @@
 .task-description {
   font-size: 14px;
   color: #6B7280;
-  line-height: 1.6;
-  max-width: 300px;
+  line-height: 1.5;
+  overflow-wrap: break-word;
 }
 
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border-radius: 8px;
-  font-size: 14px;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
   font-weight: 500;
 }
 

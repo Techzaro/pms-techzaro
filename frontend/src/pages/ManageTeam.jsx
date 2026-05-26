@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { Crown } from "lucide-react";
 import { MdAdd, MdDelete, MdEdit, MdPeople } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import API_URL from "../config/api";
 import "./ManageTeam.css";
 
 function ManageTeam() {
@@ -69,7 +70,7 @@ function ManageTeam() {
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/api/team-users",
+        `${API_URL}/team-users`,
         {
           headers: {
             Accept: "application/json",
@@ -110,7 +111,7 @@ function ManageTeam() {
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/api/teams",
+        `${API_URL}/teams`,
         {
           headers: {
             Accept: "application/json",
@@ -143,7 +144,7 @@ function ManageTeam() {
       const token = localStorage.getItem("token");
 
       const response = await fetch(
-        `http://127.0.0.1:8000/api/teams/${teamId}/leader`,
+        `${API_URL}/teams/${teamId}/leader`,
         {
           method: "PUT",
           headers: {
@@ -190,7 +191,7 @@ function ManageTeam() {
       const token = localStorage.getItem("token");
 
       const response = await fetch(
-        `http://127.0.0.1:8000/api/teams/${teamId}/members/${memberId}`,
+        `${API_URL}/teams/${teamId}/members/${memberId}`,
         {
           method: "DELETE",
           headers: {
@@ -233,7 +234,7 @@ function ManageTeam() {
       const token = localStorage.getItem("token");
 
       const response = await fetch(
-        `http://127.0.0.1:8000/api/teams/${teamId}`,
+        `${API_URL}/teams/${teamId}`,
         {
           method: "DELETE",
           headers: {
@@ -311,7 +312,7 @@ function ManageTeam() {
       const token = localStorage.getItem("token");
 
       const response = await fetch(
-        "http://127.0.0.1:8000/api/register",
+        `${API_URL}/register`,
         {
           method: "POST",
           headers: {
@@ -561,6 +562,8 @@ function ManageTeam() {
                     {addMemberTeamId ? "Add a member to this team" : ""}
                   </p>
                 </div>
+
+                <button className="user-modal-close" onClick={closeModal}>✕</button>
 
               </div>
 

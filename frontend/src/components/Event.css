@@ -1,22 +1,29 @@
 .event-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(15, 23, 42, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10002;
   padding: 16px;
+  backdrop-filter: blur(4px);
 }
 
 .event-modal {
   background: #fff;
   border-radius: 20px;
-  width: 440px;
-  max-width: 100%;
+  width: 100%;
+  max-width: 440px;
   max-height: 90vh;
   overflow-y: auto;
+  overflow-x: hidden;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  box-sizing: border-box;
+}
+
+.event-modal * {
+  box-sizing: border-box;
 }
 
 .event-header {
@@ -71,6 +78,7 @@
 
 .event-input {
   width: 100%;
+  min-width: 0;
   padding: 12px 14px;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
@@ -92,6 +100,7 @@
 
 .event-textarea {
   width: 100%;
+  min-width: 0;
   padding: 12px 14px;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
@@ -120,6 +129,7 @@
 
 .event-datetime-row .event-input {
   flex: 1;
+  min-width: 0;
 }
 
 .event-type-pills {
@@ -287,11 +297,21 @@
 }
 
 @media (max-width: 480px) {
+  .event-overlay {
+    padding: 8px;
+  }
   .event-modal {
     border-radius: 14px;
+    max-width: 100%;
+  }
+  .event-header {
+    padding: 14px 14px 0;
   }
   .event-header h2 {
     font-size: 18px;
+  }
+  .event-step {
+    padding: 14px 14px 18px;
   }
   .event-label {
     font-size: 14px;
@@ -302,7 +322,23 @@
     padding: 10px 12px;
     font-size: 13px;
   }
-  .event-step {
-    padding: 14px 16px 18px;
+  .event-datetime-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .event-type-pills {
+    gap: 6px;
+  }
+  .type-pill {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  .event-footer {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .btn-cancel,
+  .btn-primary {
+    width: 100%;
   }
 }

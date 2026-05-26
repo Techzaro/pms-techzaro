@@ -32,6 +32,10 @@ const CreateDeliverableTask = ({ onClose }) => {
 
           </div>
 
+          <button className="deliverable-close-btn" onClick={onClose}>
+            ✕
+          </button>
+
         </div>
 
         {/* BODY */}

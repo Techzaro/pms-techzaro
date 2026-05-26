@@ -6,7 +6,7 @@ function CreateProject() {
   const navigate = useNavigate();
 
   return (
-    <DashboardLayout>
+    <DashboardLayout hideRightSidebar={true}>
       <div className="min-h-screen flex items-center justify-center">
         <CreateProjectModal onClose={() => navigate(-1)} />
       </div>
