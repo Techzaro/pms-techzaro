@@ -30,7 +30,14 @@ function Sidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const [isTabletExpanded, setIsTabletExpanded] = useState(false);
-  const [tasksOpen, setTasksOpen] = useState(true);
+  const [tasksOpen, setTasksOpen] = useState(() => sessionStorage.getItem("tasksOpen") === "true");
+  const toggleTasks = () => {
+    setTasksOpen((prev) => {
+      const next = !prev;
+      sessionStorage.setItem("tasksOpen", next);
+      return next;
+    });
+  };
 
   const [user, setUser] = useState({
     name:
@@ -100,6 +107,24 @@ function Sidebar() {
 
   useEffect(() => {
     setIsMobileOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const isTasksRoute =
+      location.pathname === "/tasks" ||
+      location.pathname === "/taskby" ||
+      location.pathname === "/taskdetails" ||
+      location.pathname === "/details" ||
+      location.pathname.startsWith("/details/") ||
+      location.pathname.startsWith("/taskdetails/");
+
+    if (isTasksRoute) {
+      setTasksOpen(true);
+      sessionStorage.setItem("tasksOpen", true);
+    } else {
+      setTasksOpen(false);
+      sessionStorage.setItem("tasksOpen", false);
+    }
   }, [location.pathname]);
 
   useEffect(() => {
@@ -220,7 +245,7 @@ function Sidebar() {
           {/* TASKS DROPDOWN */}
           <div className={`sidebar-link ${!isProfileModalOpen && (location.pathname === "/tasks" || location.pathname === "/taskby" || location.pathname === "/taskdetails" || location.pathname === "/details" || location.pathname.startsWith("/details/") || location.pathname.startsWith("/taskdetails/")) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
             <div
-              onClick={() => setTasksOpen((prev) => !prev)}
+              onClick={toggleTasks}
               style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
             >
               <MdTask />
@@ -234,7 +259,7 @@ function Sidebar() {
               />
             </div>
             {tasksOpen && (
-              <div style={{ display: "flex", flexDirection: "column", marginLeft: 12 }}>
+              <div style={{ display: "flex", flexDirection: "column", marginLeft: 6 }}>
                 <Link
                   to="/tasks"
                   className={`sidebar-sub-link ${location.pathname === "/tasks" ? "active" : ""}`}

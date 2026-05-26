@@ -256,44 +256,16 @@
   .tasks-search-bar {
     max-width: 100%;
   }
-  .table-header {
-    display: none;
+  .container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
+  .table-header,
   .table-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px 20px;
-    padding: 18px 20px;
-    border-bottom: 1px solid #E5E7EB;
-    align-items: start;
+    min-width: 750px;
   }
   .table-row .user-box {
-    grid-column: 1 / -1;
     flex-direction: row;
-  }
-  .table-row > div:nth-child(2) {
-    grid-column: 1 / -1;
-  }
-  .table-row > div:nth-child(3) {
-    grid-column: 1;
-  }
-  .table-row > div:nth-child(4) {
-    grid-column: 2;
-    text-align: right;
-  }
-  .table-row .date-box {
-    display: flex;
-    gap: 12px;
-    grid-column: 1;
-  }
-  .table-row > div:last-child {
-    grid-column: 2;
-    display: flex;
-    justify-content: flex-end;
-    align-items: flex-end;
-  }
-  .table-row .view-btn {
-    width: auto;
   }
   .task-description {
     max-width: 100%;
@@ -348,60 +320,24 @@
   .container {
     border-radius: 12px;
   }
-  .table-row {
-    grid-template-columns: 1fr;
-    padding: 14px;
-    gap: 8px;
-  }
-  .table-row .user-box {
-    grid-column: 1;
-  }
-  .table-row > div:nth-child(2) {
-    grid-column: 1;
-  }
-  .table-row > div:nth-child(3) {
-    grid-column: 1;
-  }
-  .table-row > div:nth-child(4) {
-    grid-column: 1;
-    text-align: left;
-  }
-  .table-row .date-box {
-    grid-column: 1;
-  }
-  .table-row > div:last-child {
-    grid-column: 1;
-    justify-content: stretch;
-  }
-  .table-row .view-btn {
-    width: 100%;
-  }
-  .user-name {
-    font-size: 14px;
-  }
-  .task-title {
-    font-size: 15px;
-  }
-  .badge {
-    padding: 8px 12px;
-    font-size: 12px;
-  }
-  .export,
-  .all-time {
-    padding: 8px 12px;
-    font-size: 13px;
-    height: 36px;
-  }
-  .task-btns {
-    gap: 6px;
-  }
-  .tasks-search-bar {
-    padding: 8px;
-    min-width: 140px;
-  }
   .avatar {
     width: 44px;
     height: 44px;
-    font-size: 15px;
+  }
+  .view-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+  .search-bar {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  .All, .Pending, .Progress, .Completed, .Failed, .Aban {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .table-header,
+  .table-row {
+    min-width: 600px;
   }
 }

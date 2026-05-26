@@ -6,9 +6,11 @@ function CreateProject() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-[#F8F9FD] flex items-center justify-center p-8">
-      <CreateProjectModal onClose={() => navigate(-1)} />
-    </div>
+    <DashboardLayout>
+      <div className="min-h-screen flex items-center justify-center">
+        <CreateProjectModal onClose={() => navigate(-1)} />
+      </div>
+    </DashboardLayout>
   );
 }
 

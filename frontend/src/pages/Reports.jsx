@@ -90,10 +90,7 @@ function Reports() {
       <div className="reports-page">
 
         {/* WELCOME HEADER */}
-        <div className="reports-welcome">
-          <h1>Welcome, {userName}</h1>
-          <p>Role: {userRole}</p>
-        </div>
+       
 
         {/* REPORT HEADER */}
         <div className="reports-header">

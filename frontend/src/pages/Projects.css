@@ -1,7 +1,5 @@
 .projects-page {
-  padding: 24px;
-  background: #f5f7fb;
-  min-height: 100vh;
+  padding: 0;
 }
 
 .projects-header {
@@ -239,7 +237,7 @@
 
 @media (max-width: 768px) {
   .projects-page {
-    padding: 16px;
+    padding: 0;
   }
   .projects-header {
     flex-direction: column;

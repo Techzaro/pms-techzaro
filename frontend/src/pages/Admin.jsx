@@ -5,13 +5,11 @@
 import { useEffect, useState } from "react";
 import Header from "../components/layout/Header";
 import Sidebar from "../components/layout/Sidebar";
-import RightSidebar from "../components/layout/RightSidebar";
 import "../components/layout/DashboardLayout.css";
 import "./Admin.css";
 
 function Admin() {
   const [greeting, setGreeting] = useState("Welcome");
-  const [rightOpen, setRightOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
@@ -766,24 +764,8 @@ function Admin() {
 
         </div>
 
-        <RightSidebar isOpen={rightOpen} onClose={() => setRightOpen(false)} />
       </div>
 
-      {!modalOpen && (
-        <button
-          className={`right-toggle${rightOpen ? " right-toggle--open" : ""}`}
-          onClick={() => setRightOpen((prev) => !prev)}
-          aria-label="Toggle right sidebar"
-        >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            {rightOpen ? (
-              <path d="M7 4L13 10L7 16" />
-            ) : (
-              <path d="M13 4L7 10L13 16" />
-            )}
-          </svg>
-        </button>
-      )}
     </div>
   );
 }
