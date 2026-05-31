@@ -327,10 +327,10 @@ function Sidebar() {
           )}
 
           <Link
-            to="/reports"
+            to={user.role === "admin" || user.role === "manager" || user.role === "team_lead" ? "/reports" : "/user-performance/me"}
             className={`sidebar-link ${
-              !isProfileModalOpen && location.pathname ===
-              "/reports"
+              !isProfileModalOpen && (location.pathname ===
+              "/reports" || location.pathname.startsWith("/user-performance/"))
                 ? "active"
                 : ""
             }`}

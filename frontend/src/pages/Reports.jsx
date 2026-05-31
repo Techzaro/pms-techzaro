@@ -1,5 +1,7 @@
 import DashboardLayout from "../components/layout/DashboardLayout";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import ExportReport from "./ExportReport";
 import "./Reports.css";
 
 const summaryCards = [
@@ -82,8 +84,10 @@ const teamMembers = [
 
 function Reports() {
   const [timeFilter, setTimeFilter] = useState("All Time");
+  const [showExportModal, setShowExportModal] = useState(false);
   const userName = localStorage.getItem("name") || "Lorem Ipsum";
   const userRole = localStorage.getItem("role") || "Member";
+  const navigate = useNavigate();
 
   return (
     <DashboardLayout>
@@ -109,7 +113,10 @@ function Reports() {
               <option>Last 30 Days</option>
               <option>This Month</option>
             </select>
-            <button className="reports-export-btn">
+            <button
+              className="reports-export-btn"
+              onClick={() => setShowExportModal(true)}
+            >
               Export Report
               <span>↓</span>
             </button>
@@ -181,7 +188,10 @@ function Reports() {
                 </div>
 
                 <div className="action-cell">
-                  <button className="table-action-btn">
+                  <button
+                    className="table-action-btn"
+                    onClick={() => navigate(`/user-performance/${idx}`)}
+                  >
                     Profile
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M5 3L9 7L5 11" />
@@ -194,6 +204,8 @@ function Reports() {
         </div>
 
       </div>
+
+      <ExportReport isOpen={showExportModal} onClose={() => setShowExportModal(false)} />
     </DashboardLayout>
   );
 }
