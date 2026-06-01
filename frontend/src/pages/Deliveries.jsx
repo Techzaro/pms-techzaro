@@ -118,7 +118,7 @@ function Deliveries() {
         <div className="container">
 
           <div className="table-header">
-            <div>Assigned By</div>
+            <div>Assigned by</div>
             <div>Task</div>
             <div>Status</div>
             <div>Priority</div>

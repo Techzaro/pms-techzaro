@@ -2,16 +2,27 @@ import { useState } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import { CiCalendar } from "react-icons/ci";
 import { IoIosArrowDown } from "react-icons/io";
-import { LuArrowDownToLine } from "react-icons/lu";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
 import { IoSearchOutline } from "react-icons/io5";
 import CreateTaskModal from "../components/CreateTaskModal";
+import CreateSubtaskModal from "../components/CreateSubtaskModal";
 import "../pages/Task.css";
 
 const Taskby = () => {
   const navigate = useNavigate();
-  const [showTaskModal, setShowTaskModal] = useState(false);
+
+  /* MODAL STATES */
+
+  const [showTaskModal, setShowTaskModal] =
+    useState(false);
+
+  const [
+    showSubtaskModal,
+    setShowSubtaskModal,
+  ] = useState(false);
+
+  /* TASK DATA */
 
   const tasks = [
     {
@@ -22,7 +33,8 @@ const Taskby = () => {
       name: "Sara Yousaf",
       role: "Designer",
       title: "Landing page redesign",
-      description: "Refresh the landing page with improved visual hierarchy.",
+      description:
+        "Refresh the landing page with improved visual hierarchy.",
       status: "In Progress",
       priority: "High",
       date1: "20-04-2026",
@@ -30,6 +42,7 @@ const Taskby = () => {
       assigned_by: "You",
       assigned_to: "Sara Yousaf",
     },
+
     {
       id: 202,
       initials: "AH",
@@ -38,7 +51,8 @@ const Taskby = () => {
       name: "Ali Hamza",
       role: "Developer",
       title: "API integration task",
-      description: "Connect the payment API and verify order flow.",
+      description:
+        "Connect the payment API and verify order flow.",
       status: "Pending",
       priority: "Medium",
       date1: "25-04-2026",
@@ -50,40 +64,82 @@ const Taskby = () => {
 
   return (
     <DashboardLayout>
+      {/* HEADER */}
+
       <div className="Task">
         <div className="task-text">
           <h3>Tasks Assigned By You</h3>
-          <p>Manage and track your tasks</p>
+
+          <p>
+            Manage and track your tasks
+          </p>
         </div>
 
+        {/* BUTTONS */}
+
         <div className="task-btns">
+          {/* FILTER */}
+
           <div className="all-time">
             <CiCalendar />
+
             <span>All Time</span>
+
             <IoIosArrowDown />
           </div>
 
+          {/* ADD TASK */}
+
           <button
             className="export task-btn--mobile"
-            onClick={() => setShowTaskModal(true)}
-            style={{ whiteSpace: "nowrap" }}
+            onClick={() =>
+              setShowTaskModal(true)
+            }
+            style={{
+              whiteSpace: "nowrap",
+            }}
           >
             + Task
           </button>
 
+          {/* ADD SUBTASK */}
+
           <div
-            className="export"
-            onClick={() => navigate("/tasks")}
+            className="add-subtask-btn"
+            onClick={() =>
+              setShowSubtaskModal(true)
+            }
+            style={{
+              cursor: "pointer",
+            }}
           >
-            <span>Assigned To you</span>
-            <LuArrowDownToLine />
+            ⊕
+            <span>Add Subtask</span>
           </div>
         </div>
       </div>
 
+      {/* TASK MODAL */}
+
       {showTaskModal && (
-        <CreateTaskModal onClose={() => setShowTaskModal(false)} />
+        <CreateTaskModal
+          onClose={() =>
+            setShowTaskModal(false)
+          }
+        />
       )}
+
+      {/* SUBTASK MODAL */}
+
+      {showSubtaskModal && (
+        <CreateSubtaskModal
+          onClose={() =>
+            setShowSubtaskModal(false)
+          }
+        />
+      )}
+
+      {/* STATUS FILTERS */}
 
       <div className="task-progress">
         <p className="All">All</p>
@@ -113,15 +169,28 @@ const Taskby = () => {
           Abandoned
         </p>
       </div>
-   <div className="tasks-search-bar">
-          <IoSearchOutline fontSize={"20px"} />
-          <input type="text" placeholder="Search by task name" />
-        </div>
+
+      {/* SEARCH BAR */}
+
+      <div className="tasks-search-bar">
+        <IoSearchOutline
+          fontSize={"20px"}
+        />
+
+        <input
+          type="text"
+          placeholder="Search by task name"
+        />
+      </div>
+
       {/* TABLE */}
 
       <div className="container">
+        {/* TABLE HEADER */}
+
         <div className="table-header">
-          <div>Assigned By</div>
+          <div>Assigned by</div>
+
           <div>Task</div>
           <div>Status</div>
           <div>Priority</div>
@@ -129,32 +198,46 @@ const Taskby = () => {
           <div>Action</div>
         </div>
 
-        {tasks.map((task) => (
-          <div className="table-row" key={task.id}>
+        {/* TABLE ROWS */}
 
+        {tasks.map((task) => (
+          <div
+            className="table-row"
+            key={task.id}
+          >
             {/* USER */}
 
             <div className="user-box">
               <div
                 className="avatar"
                 style={{
-                  background: task.bgColor,
-                  color: task.textColor,
+                  background:
+                    task.bgColor,
+
+                  color:
+                    task.textColor,
                 }}
               >
                 {task.initials}
               </div>
 
               <div>
-                <div className="user-name">{task.name}</div>
-                <div className="user-role">{task.role}</div>
+                <div className="user-name">
+                  {task.name}
+                </div>
+
+                <div className="user-role">
+                  {task.role}
+                </div>
               </div>
             </div>
 
             {/* TASK */}
 
             <div>
-              <div className="task-title">{task.title}</div>
+              <div className="task-title">
+                {task.title}
+              </div>
 
               <div className="task-description">
                 {task.description}
@@ -166,6 +249,7 @@ const Taskby = () => {
             <div>
               <span className="badge status-badge">
                 <span className="dot"></span>
+
                 {task.status}
               </span>
             </div>
@@ -175,6 +259,7 @@ const Taskby = () => {
             <div>
               <span className="badge priority-badge">
                 <span className="dot"></span>
+
                 {task.priority}
               </span>
             </div>
@@ -183,6 +268,7 @@ const Taskby = () => {
 
             <div className="date-box">
               <div>{task.date1}</div>
+
               <div>{task.date2}</div>
             </div>
 
@@ -191,12 +277,15 @@ const Taskby = () => {
             <div>
               <button
                 className="view-btn"
-                onClick={() => navigate(`/details/${task.id}`)}
+                onClick={() =>
+                  navigate(
+                    `/details/${task.id}`
+                  )
+                }
               >
                 View
               </button>
             </div>
-
           </div>
         ))}
       </div>

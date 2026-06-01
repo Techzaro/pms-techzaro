@@ -1,6 +1,6 @@
 .calender-layout {
     display: flex;
-    gap: 24px;
+    gap: 20px;
     align-items: flex-start;
     width: 100%;
 }
@@ -8,10 +8,6 @@
 .calendar-main {
     flex: 1;
     min-width: 0;
-}
-
-.calendar-page {
-    padding: 24px;
 }
 
 /* HEADER */
@@ -27,15 +23,17 @@
 }
 
 .calendar-header h1 {
-    margin: 0;
+    margin: 0 0 8px;
     font-size: 32px;
+    font-weight: 700;
     color: #111827;
 }
 
 .calendar-header p {
-    margin-top: 6px;
+    margin: 0;
     color: #6b7280;
-    font-size: 14px;
+    font-size: 15px;
+    font-weight: 500;
 }
 
 .calendar-header-actions {
@@ -73,6 +71,7 @@
     border-radius: 24px;
     padding: 24px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    min-width: 0;
 }
 
 /* TOPBAR */
@@ -175,6 +174,76 @@
 .date-number {
     margin: 0 0 12px;
     font-weight: 600;
+    color: #374151;
+}
+
+.event-subtitle {
+    font-size: 14px;
+    color: #6b7280;
+    margin: 0;
+}
+
+.popup-action-row {
+    display: flex;
+    gap: 12px;
+}
+
+.attendee-list {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.attendee-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #6366f1;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+}
+
+.attendee-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #e5e7eb;
+    color: #374151;
+    font-weight: 700;
+}
+
+.popup-divider {
+    height: 1px;
+    background: #e5e7eb;
+    margin: 20px 0;
+}
+
+.popup-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.popup-section-heading {
+    font-weight: 700;
+    color: #111827;
+}
+
+.popup-file-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
     color: #374151;
 }
 
@@ -281,7 +350,7 @@
     max-width: 300px;
     min-width: 260px;
     background: white;
-    border-radius: 20px;
+    border-radius: 20px 0 0 20px;
     margin-top: 15px;
     padding: 15px;
     border: 1px solid #e5e7eb;

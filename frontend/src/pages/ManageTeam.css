@@ -1,5 +1,5 @@
 .manage-team-page {
-  padding: 24px;
+  padding: 0;
 }
 
 .manage-team-header {
@@ -12,8 +12,17 @@
 }
 
 .manage-team-header h1 {
+  margin: 0 0 8px;
+  font-size: 32px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.manage-team-header p {
   margin: 0;
-  font-size: 28px;
+  color: #6b7280;
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .message-box {
@@ -62,7 +71,7 @@
 .team-list-simple {
   display: grid;
   gap: 20px;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
 }
 
 .team-card {
@@ -309,6 +318,11 @@
   animation: modalShow 0.25s ease;
   max-height: 90vh;
   overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.user-modal-content::-webkit-scrollbar {
+  display: none;
 }
 
 @keyframes modalShow {
@@ -323,6 +337,10 @@
 }
 
 .user-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
   margin-bottom: 26px;
 }
 
@@ -337,6 +355,26 @@
   margin-top: 8px;
   color: #6b7280;
   font-size: 15px;
+}
+
+.user-modal-close {
+  border: none;
+  background: #f3f4f6;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.user-modal-close:hover {
+  background: #e5e7eb;
 }
 
 .user-form {
@@ -427,16 +465,20 @@
 
 @media (max-width: 768px) {
   .manage-team-page {
-    padding: 16px;
+    padding: 0;
   }
   .manage-team-header h1 {
     font-size: 24px;
   }
   .user-modal-content {
     padding: 24px;
+    max-width: 95%;
   }
   .user-modal-header h2 {
     font-size: 26px;
+  }
+  .user-form-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -455,6 +497,14 @@
   }
   .team-card {
     padding: 18px;
+  }
+  .team-card-actions {
+    flex-direction: row;
+  }
+  .add-member-button,
+  .project-button {
+    padding: 8px 12px;
+    font-size: 13px;
   }
   .user-form-actions {
     flex-direction: column;

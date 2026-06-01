@@ -6,12 +6,12 @@
   position: sticky;
   top: 75px;
   padding: 20px;
-  border-radius: 22px;
+  border-radius: 0 22px 22px 0;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   border: 1px solid #e5e7eb;
-  overflow-y: auto;
+  overflow: auto hidden;
   transition: transform 0.3s ease;
   flex-shrink: 0;
   z-index: 10000;
@@ -45,6 +45,38 @@
   color: white;
 }
 
+.sidebar-sub-links {
+  display: flex;
+  flex-direction: column;
+  margin-left: 6px;
+  border-radius: 12px;
+  padding: 4px;
+  background: #4f46e5;
+}
+
+.sidebar-sub-link {
+  display: block;
+  padding: 7px 8px;
+  margin: 2px 0;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  color: #fff;
+  transition: 0.2s;
+}
+
+.sidebar-sub-link:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.sidebar-sub-link.active {
+  background: #fff;
+  color: #111827;
+  font-weight: 600;
+}
+
 .sidebar hr {
   border: none;
   border-top: 1px solid #e5e7eb;
@@ -66,12 +98,13 @@
 .profile-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.65);
+  background: rgba(15, 23, 42, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 99999;
   padding: 20px;
+  backdrop-filter: blur(4px);
 }
 
 .profile-modal {
@@ -224,7 +257,7 @@
     width: 68px;
     height: calc(100vh - 90px);
     margin-top: 15px;
-    border-radius: 16px;
+    border-radius: 0 16px 16px 0;
     transform: none;
     padding: 12px 8px;
     overflow: hidden;
@@ -371,7 +404,8 @@
     padding: 20px;
     flex-direction: column;
     gap: 0;
-    overflow-y: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
     border: none;
     box-shadow: 4px 0 24px rgba(15, 23, 42, 0.12);
   }

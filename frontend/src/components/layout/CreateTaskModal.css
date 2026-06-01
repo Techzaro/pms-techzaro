@@ -27,15 +27,16 @@
 
   border-radius: 24px;
 
-  overflow: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
 
   box-shadow: 0 25px 80px rgba(0, 0, 0, 0.18);
 
-  /* IMPORTANT */
   max-height: 95vh;
+}
 
-  display: flex;
-  flex-direction: column;
+.task-modal::-webkit-scrollbar {
+  display: none;
 }
 
 /* HEADER */
@@ -111,10 +112,6 @@
   gap: 24px;
 
   padding: 28px;
-
-  overflow-y: auto;
-
-  flex: 1;
 }
 
 /* LEFT */
@@ -322,8 +319,6 @@
   border-top: 1px solid #e5e7eb;
 
   background: #fff;
-
-  flex-shrink: 0;
 }
 
 .task-checkbox {
@@ -396,6 +391,23 @@
 
   .task-footer-btns button {
     flex: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .task-header {
+    padding: 16px 20px;
+  }
+  .task-header h2 {
+    font-size: 24px;
+  }
+  .task-body {
+    padding: 20px;
+  }
+  .task-close-btn {
+    width: 38px;
+    height: 38px;
+    font-size: 16px;
   }
 }
 

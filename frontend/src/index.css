@@ -6,6 +6,10 @@
 @layer theme, base, components, utilities;
 @config "../tailwind.config.js";
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   @apply leading-[normal] m-0;
 }

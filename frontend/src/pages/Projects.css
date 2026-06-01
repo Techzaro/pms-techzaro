@@ -1,7 +1,5 @@
 .projects-page {
-  padding: 24px;
-  background: #f5f7fb;
-  min-height: 100vh;
+  padding: 0;
 }
 
 .projects-header {
@@ -23,7 +21,8 @@
 .projects-header p {
   margin: 0;
   color: #6b7280;
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .projects-search-bar {
@@ -96,6 +95,7 @@
   border-radius: 20px;
   overflow: hidden;
   transition: all 0.3s ease;
+  padding: 16px;
 }
 
 .projects-card:hover {
@@ -103,14 +103,14 @@
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
 }
 
-.project-card-header {
-  padding: 26px 24px 18px;
+.projects-card-header {
+  padding: 0 0 18px;
   position: relative;
 }
 
-.project-card-header h3 {
-  margin: 0 0 14px;
-  font-size: 28px;
+.projects-card-header h3 {
+  margin: 0 0 16px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 1.25;
   color: #111827;
@@ -218,7 +218,7 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(15, 23, 42, 0.45);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -238,7 +238,7 @@
 
 @media (max-width: 768px) {
   .projects-page {
-    padding: 16px;
+    padding: 0;
   }
   .projects-header {
     flex-direction: column;

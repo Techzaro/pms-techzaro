@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import "../pages/Calender.css";
+import "../components/Event.css";
 import {
   ChevronLeft,
   ChevronRight,
@@ -7,7 +8,9 @@ import {
   Plus,
 } from "lucide-react";
 
-import DashboardCalender from "../components/layout/DashboardCalender";
+import Header from "../components/layout/Header";
+import Sidebar from "../components/layout/Sidebar";
+import "../components/layout/DashboardLayout.css";
 import Event from "../components/Event";
 
 const calendarData = [
@@ -15,9 +18,11 @@ const calendarData = [
     day: 1,
     events: [
       {
+  
         title: "Design Review",
         time: "9:30 AM",
         className: "event-purple",
+         
       },
     ],
   },
@@ -25,6 +30,7 @@ const calendarData = [
     day: 2,
     events: [
       {
+      
         title: "Client Call",
         time: "9:30 AM",
         className: "event-green",
@@ -35,6 +41,7 @@ const calendarData = [
     day: 3,
     events: [
       {
+        
         title: "Project Sync",
         time: "9:30 AM",
         className: "event-purple",
@@ -45,6 +52,7 @@ const calendarData = [
     day: 5,
     events: [
       {
+        
         title: "UI Workshop",
         time: "9:30 AM",
         className: "event-orange",
@@ -56,6 +64,8 @@ const calendarData = [
 const Calender = () => {
   const [viewMode, setViewMode] = useState("Month");
   const [showEventModal, setShowEventModal] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [showDayPopup, setShowDayPopup] = useState(false);
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   const getTotalBoxes = () => {
@@ -67,11 +77,17 @@ const Calender = () => {
   const totalBoxes = getTotalBoxes();
 
   return (
-    <DashboardCalender>
-      <div className="calender-layout">
-        
-        {/* LEFT SIDE */}
-        <div className="calendar-main">
+    <div className="dashboard-page">
+      <Header />
+
+      <div className="main-layout">
+        <Sidebar />
+
+        <div className="dashboard-content">
+          <div className="calender-layout">
+
+            {/* LEFT SIDE */}
+            <div className="calendar-main">
 
           {/* HEADER */}
           <div className="calendar-header">
@@ -176,6 +192,13 @@ const Calender = () => {
                   <div
                     key={index}
                     className="calendar-date-box"
+                    onClick={() => {
+                      if (currentDay <= 31) {
+                        setSelectedDay(currentDay);
+                        setShowDayPopup(true);
+                      }
+                    }}
+                    style={{ cursor: currentDay <= 31 ? "pointer" : "default" }}
                   >
 
                     <p className="date-number">
@@ -244,6 +267,10 @@ const Calender = () => {
             </div>
 
           </div>
+
+        </div>
+
+        </div>
 
         </div>
 
@@ -338,8 +365,104 @@ const Calender = () => {
 
       </div>
 
+      {/* DAY POPUP */}
+      {showDayPopup && selectedDay && (
+        <div
+          className="event-overlay"
+          onClick={() => setShowDayPopup(false)}
+          style={{ zIndex: 10001 }}
+        >
+          <div
+            className="event-modal"
+            style={{ maxWidth: 520 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(() => {
+              const dayData = calendarData.find((d) => d.day === selectedDay);
+              const event = dayData?.events?.[0];
+              return (
+                <>
+                  <div className="event-header">
+                    <div>
+                      <p className="event-label" style={{ marginBottom: 8 }}>
+                        {event ? event.type || "Meeting" : "Daily event"}
+                      </p>
+                      <h2 style={{ margin: 0, fontSize: 24 }}>
+                        {event ? event.title : `No event on May ${selectedDay}`}
+                      </h2>
+                      {event && (
+                        <p className="event-subtitle" style={{ marginTop: 8, color: "#6b7280", fontSize: 14 }}>
+                          Today • {event.time} • {event.type || "Meeting"}
+                        </p>
+                      )}
+                    </div>
+                    <button className="event-close" onClick={() => setShowDayPopup(false)}>
+                      ×
+                    </button>
+                  </div>
+
+                  <div className="event-step">
+                    {event ? (
+                      <>
+                        <div className="popup-action-row" style={{ gap: 12, marginBottom: 20 }}>
+                          <button className="btn-primary" style={{ flex: 1 }}>
+                            Join Google Meet
+                          </button>
+                        </div>
+
+                        <div className="popup-info-row" style={{ marginBottom: 20 }}>
+                          <div>
+                            <p className="event-label" style={{ marginBottom: 8 }}>Attendees</p>
+                            <div className="attendee-list">
+                              <span className="attendee-avatar">A</span>
+                              <span className="attendee-avatar">B</span>
+                              <span className="attendee-avatar">C</span>
+                              <span className="attendee-more">+4</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="popup-divider" />
+
+                        <div className="popup-section">
+                          <div className="popup-section-heading">Description</div>
+                          <p style={{ color: "#4b5563", lineHeight: 1.7, marginTop: 8 }}>
+                            Review sprint blockers and align priorities for deployment.
+                          </p>
+                        </div>
+
+                        <div className="popup-section" style={{ marginTop: 16 }}>
+                          <div className="popup-section-heading">Files</div>
+                          <div className="popup-file-row">
+                            <span>Meeting notes</span>
+                            <span style={{ color: "#6366f1" }}>View</span>
+                          </div>
+                        </div>
+
+                        <div className="event-footer" style={{ marginTop: 24 }}>
+                          <button className="btn-cancel" onClick={() => setShowDayPopup(false)}>
+                            Delete
+                          </button>
+                          <button className="btn-primary" onClick={() => setShowDayPopup(false)}>
+                            Edit Event
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <p style={{ color: "#9ca3af", textAlign: "center", padding: "20px 0" }}>
+                        No events for this day.
+                      </p>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
       <Event isOpen={showEventModal} onClose={() => setShowEventModal(false)} />
-    </DashboardCalender>
+    </div>
   );
 };
 

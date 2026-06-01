@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import CreateProjectModal from "../components/CreateProjectModal";
 import { IoSearchOutline } from "react-icons/io5";
+import API_URL from "../config/api";
 import "./Projects.css";
 
 function Projects() {
@@ -21,7 +22,7 @@ function Projects() {
       const token = localStorage.getItem("token");
 
       const response = await fetch(
-        "http://127.0.0.1:8000/api/projects",
+        `${API_URL}/projects`,
         {
           method: "GET",
           headers: {

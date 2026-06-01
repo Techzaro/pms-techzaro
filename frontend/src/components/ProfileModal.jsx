@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 
+import API_URL from "../config/api";
 import "../components/ProfileModal.css";
 
 function ProfileModal({
@@ -42,7 +43,7 @@ function ProfileModal({
         localStorage.getItem("token");
 
       const response = await fetch(
-        "http://127.0.0.1:8000/api/user/change-password",
+        `${API_URL}/user/change-password`,
         {
           method: "PUT",
 
@@ -95,7 +96,6 @@ function ProfileModal({
   return createPortal(
     <div
       className="profile-overlay"
-      onClick={onClose}
     >
 
       <div

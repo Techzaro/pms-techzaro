@@ -26,6 +26,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import TaskDetails from "./pages/TaskDetails";
 import DeliverableDetails from "./pages/DeliverableDetails";
 import Calender from "./pages/Calender";
+import UserPerformance from "./pages/UserPerformance";
 
 function App() {
   return (
@@ -235,6 +236,16 @@ function App() {
           element={
             <ProtectedRoute>
               <Calender/>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* USER PERFORMANCE */}
+        <Route
+          path="/user-performance/:userId"
+          element={
+            <ProtectedRoute>
+              <UserPerformance />
             </ProtectedRoute>
           }
         />

@@ -1087,3 +1087,108 @@
 .pd-card-flat + .pd-card-flat {
   margin-top: 16px;
 }
+
+/* ── Comprehensive Responsive ── */
+
+@media (max-width: 992px) {
+  .pd-title-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .pd-hero-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .pd-btn-tx {
+    font-size: 13px;
+    padding: 8px 14px;
+  }
+  .pd-breadcrumb {
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .pd-hero-tx__main {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .pd-hero-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .pd-btn-tx {
+    width: 100%;
+    justify-content: center;
+  }
+  .pd-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .pd-field--full {
+    grid-column: 1 !important;
+  }
+  .pd-rail-card {
+    padding: 14px;
+  }
+  .pd-pill-status {
+    font-size: 12px;
+    padding: 5px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .pd-title-tx {
+    font-size: 18px;
+  }
+  .pd-hero-tx {
+    padding: 14px;
+  }
+  .pd-desc-tx {
+    font-size: 13px;
+  }
+  .pd-mini-stat,
+  .pd-mini-stat1 {
+    padding: 10px;
+  }
+  .pd-mini-stat__num {
+    font-size: 18px;
+  }
+  .pd-shell-body {
+    padding: 10px;
+  }
+  .pd-tab-tx {
+    padding: 10px 12px;
+    font-size: 11px;
+  }
+  .pd-tab-tx svg {
+    display: none;
+  }
+  .pd-block-title {
+    font-size: 14px;
+  }
+  .pd-member {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .pd-badge-owner,
+  .pd-badge-member {
+    margin-left: 0;
+  }
+  .pd-table th,
+  .pd-table td {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .pd-shell-right {
+    padding: 12px;
+  }
+  .pd-meta-rows li {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .pd-notes {
+    font-size: 12px;
+    min-height: 70px;
+  }
+}

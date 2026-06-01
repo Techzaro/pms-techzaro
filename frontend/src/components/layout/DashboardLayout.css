@@ -14,7 +14,7 @@
   display: flex;
   align-items: flex-start;
   gap: 20px;
-  padding: 0 20px 20px;
+  padding: 0 0 20px;
 }
 
 .main-layout--no-right {
@@ -42,14 +42,16 @@
 }
 
 .welcome-box h1 {
-  font-size: 30px;
-  color: #1e293b;
-  margin-bottom: 8px;
+  font-size: 32px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 8px;
 }
 
 .welcome-box p {
-  color: #64748b;
+  color: #6b7280;
   font-size: 15px;
+  font-weight: 500;
 }
 
 .status-buttons {
@@ -407,7 +409,7 @@
     padding: 20px;
   }
   .main-layout {
-    padding: 0 16px 20px;
+    padding: 0 0 20px;
     gap: 16px;
   }
   .welcome-box h1 {
@@ -461,11 +463,11 @@
     padding: 16px;
   }
   .main-layout {
-    padding: 0 12px 16px;
+    padding: 0 0 16px;
     gap: 12px;
   }
   .welcome-box h1 {
-    font-size: 22px;
+    font-size: 24px;
   }
   .welcome-box p {
     font-size: 14px;

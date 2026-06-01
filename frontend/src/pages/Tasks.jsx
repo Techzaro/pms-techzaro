@@ -8,10 +8,12 @@ import { useNavigate } from "react-router-dom";
 import { IoSearchOutline } from "react-icons/io5";
 import "../pages/Task.css";
 import CreateTaskModal from "../components/CreateTaskModal";
+import CreateSubtaskModal from "../components/CreateSubtaskModal";
 
 function Tasks() {
   const navigate = useNavigate();
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showSubtaskModal, setShowSubtaskModal] = useState(false);
 
   const tasks = [
     {
@@ -76,11 +78,12 @@ function Tasks() {
           </button>
 
           <div
-            className="export"
-            onClick={() => navigate("/taskby")}
+            className="add-subtask-btn"
+            onClick={() => setShowSubtaskModal(true)}
+            style={{ cursor: "pointer" }}
           >
-            <span>Assigned by you</span>
-            <LuArrowDownToLine />
+             ⊕
+            <span>Add Subtask</span>
           </div>
         </div>
       </div>
@@ -121,7 +124,7 @@ function Tasks() {
 
       <div className="container">
         <div className="table-header">
-          <div>Assigned By</div>
+          <div>Assigned by</div>
           <div>Task</div>
           <div>Status</div>
           <div>Priority</div>
@@ -203,6 +206,9 @@ function Tasks() {
 
       {showTaskModal && (
         <CreateTaskModal onClose={() => setShowTaskModal(false)} />
+      )}
+      {showSubtaskModal && (
+        <CreateSubtaskModal onClose={() => setShowSubtaskModal(false)} />
       )}
     </DashboardLayout>
   );

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import "./Event.css";
 
 function Event({ isOpen, onClose }) {
@@ -13,6 +14,15 @@ function Event({ isOpen, onClose }) {
     endTime: "10:00",
     eventType: "Meeting",
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [isOpen]);
 
   const eventTypes = [
     { label: "Meeting", color: "blue" },
@@ -41,8 +51,8 @@ function Event({ isOpen, onClose }) {
 
   if (!isOpen) return null;
 
-  return (
-    <div className="event-overlay" onClick={handleCancel}>
+  return createPortal(
+    <div className="event-overlay">
       <div className="event-modal" onClick={(e) => e.stopPropagation()}>
 
         <div className="event-header">
@@ -154,7 +164,7 @@ function Event({ isOpen, onClose }) {
 
       </div>
     </div>
-  );
+  , document.body);
 }
 
 export default Event;
