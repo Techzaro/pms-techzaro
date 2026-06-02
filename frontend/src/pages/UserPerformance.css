@@ -516,6 +516,22 @@
     grid-template-columns: 1fr 0.8fr 0.6fr 0.5fr;
     font-size: 12px;
   }
+
+  .up-chart-area {
+    height: 180px;
+  }
+
+  .up-chart-card {
+    padding: 18px;
+  }
+
+  .up-table-section {
+    padding: 18px;
+  }
+
+  .up-profile-info h1 {
+    font-size: 24px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -540,5 +556,28 @@
   .up-th-priority,
   .up-td-priority {
     display: none;
+  }
+
+  .up-chart-tabs {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .up-chart-tabs button {
+    font-size: 13px;
+    padding: 6px 14px;
+  }
+
+  .up-table-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .up-table-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .up-profile-info h1 {
+    font-size: 22px;
   }
 }
