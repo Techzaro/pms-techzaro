@@ -345,9 +345,32 @@
 }
 
 @media (max-width: 1100px) {
+  .header-container {
+    padding: 0 20px;
+    height: 72px;
+  }
   .header-search {
-    max-width: 240px;
+    max-width: 220px;
     min-width: 120px;
+  }
+  .header-right {
+    gap: 10px;
+  }
+  .task-btn,
+  .project-btn {
+    padding: 9px 16px;
+    font-size: 13px;
+  }
+  .user-text h6 {
+    font-size: 16px;
+  }
+  .logo-box {
+    width: 42px;
+    height: 42px;
+    font-size: 16px;
+  }
+  .logo-text h3 {
+    font-size: 17px;
   }
 }
 

@@ -11,6 +11,11 @@
   z-index: 10002;
   backdrop-filter: blur(4px);
   overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.er-overlay::-webkit-scrollbar {
+  display: none;
 }
 
 .er-modal {
@@ -428,6 +433,16 @@
 
 /* ── Responsive ── */
 
+@media (max-width: 992px) {
+  .er-modal {
+    padding: 28px 24px;
+  }
+
+  .er-header h2 {
+    font-size: 24px;
+  }
+}
+
 @media (max-width: 768px) {
   .er-overlay {
     padding: 20px 12px;
@@ -494,9 +509,39 @@
   }
 }
 
+@media (max-width: 600px) {
+  .er-modal {
+    padding: 22px 16px;
+    border-radius: 20px;
+  }
+
+  .er-overlay {
+    padding: 16px 10px;
+  }
+}
+
 @media (max-width: 480px) {
+  .er-modal {
+    padding: 20px 14px;
+    border-radius: 16px;
+  }
+
+  .er-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .er-close-btn {
+    align-self: flex-end;
+  }
+
   .er-export-type-grid,
   .er-export-type-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .er-format-grid,
+  .er-format-grid-2 {
     grid-template-columns: 1fr;
   }
 
@@ -508,5 +553,10 @@
   .er-date-btn {
     width: 100%;
     text-align: center;
+  }
+
+  .er-checkbox-row {
+    flex-direction: column;
+    gap: 14px;
   }
 }
