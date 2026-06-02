@@ -33,10 +33,12 @@ class TeamController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
         ]);
 
         $team = Team::create([
             'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
             'leader_id' => null,
             'created_by' => $request->user()->id,
         ]);

@@ -95,4 +95,12 @@ class Project extends Model
     {
         return $this->hasMany(ProjectFile::class)->latest();
     }
+
+    /**
+     * Deliverables belonging to this project.
+     */
+    public function deliverables()
+    {
+        return $this->hasMany(Deliverable::class)->latest();
+    }
 }
