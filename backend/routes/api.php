@@ -41,8 +41,14 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
 
+    // My profile (current user)
+    Route::get('/auth/my-profile', [AuthController::class, 'myProfile']);
+
     // Change password
     Route::put('/user/change-password', [AuthController::class, 'changePassword']);
+
+    // First-time password change (no old password required)
+    Route::put('/user/first-time-change-password', [AuthController::class, 'firstTimeChangePassword']);
 
     /*
     | DASHBOARD
@@ -57,6 +63,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/users', [UserController::class, 'store']);
         Route::put('/users/{user}', [UserController::class, 'update']);
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
+        Route::put('/users/{user}/resign', [UserController::class, 'resign']);
+        Route::get('/users/{id}/profile', [UserController::class, 'profile']);
+        Route::post('/test-email', [UserController::class, 'testEmail']);
     });
 
     // Get users for team management (all authenticated users)
