@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { MdKeyboardArrowDown } from "react-icons/md";
+import { useNavigate } from "react-router-dom";
 
 import API_URL from "../../config/api";
 import { authToken, getCurrentRole, getUser, setUser } from "../../utils/auth";
@@ -9,20 +10,31 @@ import CreateTaskModal from "../CreateTaskModal";
 import CreateDeliverableModel from "../layout/CreateDeliverableModel";
 
 function Header() {
+  const navigate = useNavigate();
+  const searchRef = useRef(null);
 
-  const [isProfileOpen, setIsProfileOpen] =
-    useState(false);
-
-  const [showTaskModal, setShowTaskModal] =
-    useState(false);
-
-  const [
-    showDeliverableModal,
-    setShowDeliverableModal,
-  ] = useState(false);
-
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showDeliverableModal, setShowDeliverableModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth <= 1200);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState({ pages: [], projects: [], tasks: [], users: [] });
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+
+  const pageLinks = [
+    { name: "Dashboard", path: "/admin/dashboard", keywords: "dashboard home" },
+    { name: "Projects", path: "/projects", keywords: "projects list" },
+    { name: "Tasks Assigned to You", path: "/tasks", keywords: "my tasks assigned" },
+    { name: "Tasks Assigned by You", path: "/taskby", keywords: "tasks created by me" },
+    { name: "Deliverables", path: "/deliveries", keywords: "deliveries deliverables" },
+    { name: "Calendar", path: "/calender", keywords: "calendar events schedule" },
+    { name: "Manage Users", path: "/manage-users", keywords: "users manage" },
+    { name: "Manage Team", path: "/manage-team", keywords: "team manage" },
+    { name: "Reports", path: "/reports", keywords: "reports analytics" },
+    { name: "History", path: "/history", keywords: "history activity log" },
+  ];
 
   useEffect(() => {
     const handler = (e) => setSidebarOpen(e.detail.open);
@@ -53,6 +65,84 @@ function Header() {
 
   const toggleProfileModal = () =>
     setIsProfileOpen((prev) => !prev);
+
+  const handleSearch = async (query) => {
+    setSearchQuery(query);
+    if (query.trim().length < 2) {
+      setSearchResults({ pages: [], projects: [], tasks: [], users: [] });
+      setShowSearchDropdown(false);
+      return;
+    }
+
+    const q = query.toLowerCase();
+
+    const matchedPages = pageLinks.filter(
+      (p) => p.name.toLowerCase().includes(q) || p.keywords.includes(q)
+    );
+
+    let matchedProjects = [];
+    let matchedTasks = [];
+    let matchedUsers = [];
+
+    try {
+      const token = authToken();
+      const headers = { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" };
+
+      const [projRes, taskRes, userRes] = await Promise.allSettled([
+        fetch(`${API_URL}/projects`, { headers }),
+        fetch(`${API_URL}/tasks`, { headers }),
+        fetch(`${API_URL}/users`, { headers }),
+      ]);
+
+      if (projRes.status === "fulfilled" && projRes.value.ok) {
+        const projData = await projRes.value.json();
+        const projList = projData.projects ?? projData ?? [];
+        matchedProjects = projList
+          .filter((p) => p.name?.toLowerCase().includes(q))
+          .slice(0, 5)
+          .map((p) => ({ id: p.id, name: p.name, path: `/projects/${p.id}` }));
+      }
+
+      if (taskRes.status === "fulfilled" && taskRes.value.ok) {
+        const taskData = await taskRes.value.json();
+        const taskList = taskData.tasks ?? taskData ?? [];
+        matchedTasks = taskList
+          .filter((t) => t.name?.toLowerCase().includes(q) || t.title?.toLowerCase().includes(q))
+          .slice(0, 5)
+          .map((t) => ({ id: t.id, name: t.name || t.title, path: `/details/${t.id}` }));
+      }
+
+      if (userRes.status === "fulfilled" && userRes.value.ok) {
+        const userData = await userRes.value.json();
+        const userList = userData.users ?? userData ?? [];
+        matchedUsers = userList
+          .filter((u) => u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q))
+          .slice(0, 5)
+          .map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, path: `/user-profile/${u.id}` }));
+      }
+    } catch {
+      // API not available, show only page results
+    }
+
+    setSearchResults({ pages: matchedPages, projects: matchedProjects, tasks: matchedTasks, users: matchedUsers });
+    setShowSearchDropdown(true);
+  };
+
+  const handleSearchSelect = (path) => {
+    setShowSearchDropdown(false);
+    setSearchQuery("");
+    navigate(path);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setShowSearchDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
 
@@ -120,7 +210,7 @@ function Header() {
 
         {/* SEARCH */}
 
-        <div className="header-search">
+        <div className="header-search" ref={searchRef}>
 
           <i className="fa-solid fa-magnifying-glass search-icon"></i>
 
@@ -128,7 +218,68 @@ function Header() {
             type="text"
             className="form-control"
             placeholder="Search projects, tasks or employees..."
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            onFocus={() => searchQuery.length >= 2 && setShowSearchDropdown(true)}
           />
+
+          {showSearchDropdown && (
+            <div className="search-dropdown">
+              {searchResults.pages.length === 0 && searchResults.projects.length === 0 && searchResults.tasks.length === 0 && searchResults.users.length === 0 ? (
+                <div className="search-dropdown-empty">No results found</div>
+              ) : (
+                <>
+                  {searchResults.pages.length > 0 && (
+                    <div className="search-dropdown-section">
+                      <div className="search-dropdown-label">Pages</div>
+                      {searchResults.pages.map((item) => (
+                        <div key={item.path} className="search-dropdown-item" onClick={() => handleSearchSelect(item.path)}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+                          <span>{item.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {searchResults.projects.length > 0 && (
+                    <div className="search-dropdown-section">
+                      <div className="search-dropdown-label">Projects</div>
+                      {searchResults.projects.map((item) => (
+                        <div key={item.id} className="search-dropdown-item" onClick={() => handleSearchSelect(item.path)}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                          <span>{item.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {searchResults.tasks.length > 0 && (
+                    <div className="search-dropdown-section">
+                      <div className="search-dropdown-label">Tasks</div>
+                      {searchResults.tasks.map((item) => (
+                        <div key={item.id} className="search-dropdown-item" onClick={() => handleSearchSelect(item.path)}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                          <span>{item.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {searchResults.users.length > 0 && (
+                    <div className="search-dropdown-section">
+                      <div className="search-dropdown-label">Users</div>
+                      {searchResults.users.map((item) => (
+                        <div key={item.id} className="search-dropdown-item" onClick={() => handleSearchSelect(item.path)}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                          <div>
+                            <span>{item.name}</span>
+                            <small style={{ color: "#9ca3af", marginLeft: 6, fontSize: 11 }}>{item.email}</small>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
         </div>
 

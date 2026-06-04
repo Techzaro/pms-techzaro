@@ -345,7 +345,7 @@ function ManageTeam() {
               <option value="oldest">Oldest First</option>
               <option value="name-asc">Name A-Z</option>
               <option value="name-desc">Name Z-A</option>
-              <option value="members">Most Members</option>
+
             </select>
           </div>
         </div>

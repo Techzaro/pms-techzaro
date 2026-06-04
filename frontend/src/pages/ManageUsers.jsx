@@ -55,6 +55,10 @@ function ManageUsers() {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
   const [addErrors, setAddErrors] = useState({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [sortOrder, setSortOrder] = useState("");
 
   const [currentUserId, setCurrentUserId] = useState(() => {
     const user = getUser();
@@ -342,6 +346,24 @@ function ManageUsers() {
     );
   };
 
+  const filteredUsers = users.filter((user) => {
+    const matchesSearch =
+      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesRole = roleFilter === "" || user.role === roleFilter;
+    const matchesStatus =
+      statusFilter === "" ||
+      (statusFilter === "active" && user.active !== false) ||
+      (statusFilter === "resigned" && user.active === false);
+    return matchesSearch && matchesRole && matchesStatus;
+  });
+
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    if (sortOrder === "asc") return a.name.localeCompare(b.name);
+    if (sortOrder === "desc") return b.name.localeCompare(a.name);
+    return 0;
+  });
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -398,21 +420,21 @@ function ManageUsers() {
         <div className="bar">
           <div className="search-bar">
             <IoSearchOutline fontSize={"25px"} />
-            <input type="text" placeholder="Search users by name or email....." />
+            <input type="text" placeholder="Search users by name or email....." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
-          <select className="bar-role">
-            <option value="">Select Role</option>
+          <select className="bar-role" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+            <option value="">Role</option>
             <option value="admin">Admin</option>
             <option value="manager">Manager</option>
             <option value="team_lead">Team-Lead</option>
             <option value="member">Member</option>
           </select>
-          <select className="bar-status">
-            <option value="">Select Status</option>
+          <select className="bar-status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">Status</option>
             <option value="active">Active</option>
             <option value="resigned">Resigned</option>
           </select>
-          <select className="bar-sort">
+          <select className="bar-sort" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
             <option value="">Sort By</option>
             <option value="asc">Ascending</option>
             <option value="desc">Descending</option>
@@ -442,7 +464,15 @@ function ManageUsers() {
                   </td>
                 </tr>
               ) : users.length ? (
-                users.map(renderUserRow)
+                sortedUsers.length ? (
+                  sortedUsers.map(renderUserRow)
+                ) : (
+                  <tr>
+                    <td colSpan="4" className="empty-row">
+                      No users match your search or filters.
+                    </td>
+                  </tr>
+                )
               ) : (
                 <tr>
                   <td colSpan="4" className="empty-row">
