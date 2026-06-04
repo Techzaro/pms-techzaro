@@ -5,6 +5,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import API_URL from "../../config/api";
+import { authToken, authHeaders, getCurrentRole, getUser, setUser, clearSession } from "../../utils/auth";
 
 import {
   MdDashboard,
@@ -21,13 +22,8 @@ import {
 
 import "./Sidebar.css";
 
-import ProfileModal from "../ProfileModal";
-
 function Sidebar() {
 
-  const [isProfileModalOpen, setIsProfileModalOpen] =
-    useState(false);
-    
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const [isTabletExpanded, setIsTabletExpanded] = useState(false);
@@ -40,25 +36,20 @@ function Sidebar() {
     });
   };
 
-  const [user, setUser] = useState({
-    name:
-      localStorage.getItem("name") || "User",
-
-    email:
-      localStorage.getItem("email") ||
-      "user@example.com",
-
-    role:
-      localStorage.getItem("role") ||
-      "Member",
+  const [user, setUserState] = useState(() => {
+    const stored = getUser();
+    return {
+      name: stored?.name || "User",
+      email: stored?.email || "user@example.com",
+      role: stored?.role || "Member",
+    };
   });
 
   const location = useLocation();
 
   useEffect(() => {
 
-    const token =
-      localStorage.getItem("token");
+    const token = authToken();
 
     if (!token) return;
 
@@ -73,31 +64,14 @@ function Sidebar() {
 
         if (data && data.name) {
 
-          setUser({
+          setUserState({
             name: data.name,
             email: data.email,
             role: data.role,
           });
 
-          localStorage.setItem(
-            "userId",
-            data.id
-          );
-
-          localStorage.setItem(
-            "name",
-            data.name
-          );
-
-          localStorage.setItem(
-            "email",
-            data.email
-          );
-
-          localStorage.setItem(
-            "role",
-            data.role
-          );
+          const role = getCurrentRole();
+          setUser(role, { id: data.id, name: data.name, email: data.email, role: data.role });
         }
       })
       .catch(() => {
@@ -137,13 +111,6 @@ function Sidebar() {
     window.addEventListener("toggle-sidebar", handler);
     return () => window.removeEventListener("toggle-sidebar", handler);
   }, []);
-
-  const openProfileModal = () =>
-    setIsProfileModalOpen(true);
-
-  const closeProfileModal = () => {
-    setIsProfileModalOpen(false);
-  };
 
   const toggleMobile = () => setIsMobileOpen(prev => !prev);
 
@@ -197,12 +164,10 @@ function Sidebar() {
               return "/member/dashboard";
             })()}
             className={`sidebar-link ${
-              !isProfileModalOpen && (
-                location.pathname === "/admin/dashboard" ||
-                location.pathname === "/manager/dashboard" ||
-                location.pathname === "/teamlead/dashboard" ||
-                location.pathname === "/member/dashboard"
-              )
+              location.pathname === "/admin/dashboard" ||
+              location.pathname === "/manager/dashboard" ||
+              location.pathname === "/teamlead/dashboard" ||
+              location.pathname === "/member/dashboard"
                 ? "active"
                 : ""
             }`}
@@ -215,9 +180,9 @@ function Sidebar() {
           <Link
             to="/deliveries"
             className={`sidebar-link ${
-              !isProfileModalOpen && (location.pathname === "/deliveries" ||
+              location.pathname === "/deliveries" ||
               location.pathname.startsWith("/deliverable-details/") ||
-              location.pathname.startsWith("/deliverable/"))
+              location.pathname.startsWith("/deliverable/")
                 ? "active"
                 : ""
             }`}
@@ -230,10 +195,8 @@ function Sidebar() {
           <Link
             to="/projects"
             className={`sidebar-link ${
-              !isProfileModalOpen && (location.pathname === "/projects" ||
-              location.pathname.startsWith(
-                "/projects/"
-              ))
+              location.pathname === "/projects" ||
+              location.pathname.startsWith("/projects/")
                 ? "active"
                 : ""
             }`}
@@ -244,7 +207,7 @@ function Sidebar() {
           </Link>
 
           {/* TASKS DROPDOWN */}
-          <div className={`sidebar-link ${!isProfileModalOpen && (location.pathname === "/tasks" || location.pathname === "/taskby" || location.pathname === "/taskdetails" || location.pathname === "/details" || location.pathname.startsWith("/details/") || location.pathname.startsWith("/taskdetails/")) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+          <div className={`sidebar-link ${location.pathname === "/tasks" || location.pathname === "/taskby" || location.pathname === "/taskdetails" || location.pathname === "/details" || location.pathname.startsWith("/details/") || location.pathname.startsWith("/taskdetails/") ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
             <div
               onClick={toggleTasks}
               style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
@@ -282,8 +245,8 @@ function Sidebar() {
           <Link
             to="/calender"
             className={`sidebar-link ${
-              !isProfileModalOpen && (location.pathname === "/calender" ||
-              location.pathname.startsWith("/calender/"))
+              location.pathname === "/calender" ||
+              location.pathname.startsWith("/calender/")
                 ? "active"
                 : ""
             }`}
@@ -298,8 +261,8 @@ function Sidebar() {
             <Link
               to="/manage-users"
               className={`sidebar-link ${
-                !isProfileModalOpen && location.pathname ===
-                "/manage-users"
+                location.pathname === "/manage-users" ||
+                location.pathname.startsWith("/user-profile/")
                   ? "active"
                   : ""
               }`}
@@ -314,8 +277,7 @@ function Sidebar() {
             <Link
               to="/manage-team"
               className={`sidebar-link ${
-                !isProfileModalOpen && location.pathname ===
-                "/manage-team"
+                location.pathname === "/manage-team"
                   ? "active"
                   : ""
               }`}
@@ -329,8 +291,7 @@ function Sidebar() {
           <Link
             to={user.role === "admin" || user.role === "manager" || user.role === "team_lead" ? "/reports" : "/user-performance/me"}
             className={`sidebar-link ${
-              !isProfileModalOpen && (location.pathname ===
-              "/reports" || location.pathname.startsWith("/user-performance/"))
+              location.pathname === "/reports" || location.pathname.startsWith("/user-performance/")
                 ? "active"
                 : ""
             }`}
@@ -343,20 +304,24 @@ function Sidebar() {
 
         <div className="sidebar-bottom">
 
-          <button
+          <Link
+            to="/my-profile"
             className={`sidebar-link profile-link ${
-              isProfileModalOpen ? "active" : ""
+              location.pathname === "/my-profile" ? "active" : ""
             }`}
-            onClick={(e) => { e.stopPropagation(); openProfileModal(); }}
+            onClick={(e) => e.stopPropagation()}
           >
             <MdPerson />
             <span>Profile</span>
-          </button>
+          </Link>
 
           <Link
             to="/"
             className="sidebar-link logout-link"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              clearSession(getCurrentRole());
+            }}
           >
             <MdLogout />
             <span>Logout</span>
@@ -368,13 +333,6 @@ function Sidebar() {
 
       {isMobileOpen && <div className="sidebar-backdrop" onClick={toggleMobile} />}
       {isTabletExpanded && <div className="sidebar-tablet-backdrop" onClick={toggleTablet} />}
-
-      {isProfileModalOpen && (
-        <ProfileModal
-          user={user}
-          onClose={closeProfileModal}
-        />
-      )}
     </>
   );
 }

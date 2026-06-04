@@ -1,0 +1,190 @@
+<?php
+
+/**
+ * Controller for providing dashboard data based on user role.
+ */
+
+namespace App\Http\Controllers;
+
+use App\Models\Project;
+use App\Models\Task;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Dashboard controller.
+ * Returns role-specific summary stats, workload, and recent activity.
+ */
+class DashboardController extends Controller
+{
+    /**
+     * Get dashboard data based on user role.
+     */
+    public function index(Request $request)
+    {
+        $user = $request->user();
+        $role = $user->role;
+
+        return response()->json([
+            'summary' => $this->getSummary($user, $role),
+            'todayWorkload' => $this->getTodayWorkload($user, $role),
+            'activeProjects' => $this->getActiveProjects($user, $role),
+            'recentActivity' => $this->getRecentActivity($user, $role),
+            'upcomingDeadlines' => $this->getUpcomingDeadlines($user, $role),
+        ]);
+    }
+
+    /**
+     * Summary cards: active projects, tasks due, completed, pending.
+     */
+    private function getSummary(User $user, string $role): array
+    {
+        $projectQuery = Project::query();
+        $taskQuery = Task::query();
+
+        // Filter by role
+        if ($role === 'team_lead' || $role === 'member') {
+            $projectIds = $this->getUserProjectIds($user);
+            $projectQuery->whereIn('id', $projectIds);
+            $taskQuery->whereIn('project_id', $projectIds);
+        }
+
+        $activeProjects = $projectQuery->clone()
+            ->whereIn('status', ['In Progress', 'Active', 'planned'])
+            ->count();
+
+        $tasksDueToday = $taskQuery->clone()
+            ->whereDate('end_date', today())
+            ->whereNotIn('status', ['completed', 'done', 'abandoned'])
+            ->count();
+
+        $completedTasks = $taskQuery->clone()
+            ->whereIn('status', ['completed', 'done'])
+            ->count();
+
+        $pendingTasks = $taskQuery->clone()
+            ->whereNotIn('status', ['completed', 'done', 'abandoned'])
+            ->count();
+
+        $totalTasks = $taskQuery->clone()->count();
+
+        return [
+            'active_projects' => $activeProjects,
+            'tasks_due_today' => $tasksDueToday,
+            'completed_tasks' => $completedTasks,
+            'pending_tasks' => $pendingTasks,
+            'total_tasks' => $totalTasks,
+        ];
+    }
+
+    /**
+     * Today's workload: tasks due today or in progress.
+     */
+    private function getTodayWorkload(User $user, string $role): array
+    {
+        $query = Task::with(['project:id,title', 'assignee:id,name'])
+            ->where(function ($q) {
+                $q->whereDate('end_date', today())
+                  ->orWhere('status', 'in_progress');
+            })
+            ->whereNotIn('status', ['completed', 'done', 'abandoned'])
+            ->latest()
+            ->limit(10);
+
+        if ($role === 'team_lead' || $role === 'member') {
+            $query->whereIn('project_id', $this->getUserProjectIds($user));
+        }
+
+        return $query->get()->toArray();
+    }
+
+    /**
+     * Active projects with progress.
+     */
+    private function getActiveProjects(User $user, string $role): array
+    {
+        $query = Project::with(['creator:id,name', 'team:id,name'])
+            ->whereIn('status', ['In Progress', 'Active', 'planned'])
+            ->latest()
+            ->limit(6);
+
+        if ($role === 'team_lead' || $role === 'member') {
+            $query->whereIn('id', $this->getUserProjectIds($user));
+        }
+
+        $projects = $query->get();
+
+        return $projects->map(function ($project) {
+            $tasks = $project->tasks;
+            $total = $tasks->count();
+            $done = $tasks->filter(fn ($t) => in_array(strtolower((string) $t->status), ['done', 'completed'], true))->count();
+            $progress = $total > 0 ? (int) round(($done / $total) * 100) : 0;
+
+            return [
+                'id' => $project->id,
+                'name' => $project->title,
+                'client' => $project->client_name,
+                'progress' => $progress,
+                'deadline' => $project->end_date?->format('M d, Y'),
+                'team' => $project->team?->name,
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Recent activity across projects.
+     */
+    private function getRecentActivity(User $user, string $role): array
+    {
+        $query = DB::table('project_activities')
+            ->join('users', 'project_activities.user_id', '=', 'users.id')
+            ->join('projects', 'project_activities.project_id', '=', 'projects.id')
+            ->select('project_activities.summary', 'project_activities.created_at', 'users.name as user_name', 'projects.title as project_title')
+            ->latest()
+            ->limit(10);
+
+        if ($role === 'team_lead' || $role === 'member') {
+            $query->whereIn('project_activities.project_id', $this->getUserProjectIds($user));
+        }
+
+        return $query->get()->toArray();
+    }
+
+    /**
+     * Upcoming deadlines (tasks ending within 7 days).
+     */
+    private function getUpcomingDeadlines(User $user, string $role): array
+    {
+        $query = Task::with(['project:id,title'])
+            ->whereNotIn('status', ['completed', 'done', 'abandoned'])
+            ->where('end_date', '>=', now())
+            ->where('end_date', '<=', now()->addDays(7))
+            ->orderBy('end_date')
+            ->limit(10);
+
+        if ($role === 'team_lead' || $role === 'member') {
+            $query->whereIn('project_id', $this->getUserProjectIds($user));
+        }
+
+        return $query->get()->map(fn ($task) => [
+            'id' => $task->id,
+            'title' => $task->title,
+            'project' => $task->project?->title,
+            'end_date' => $task->end_date?->format('M d, Y'),
+        ])->toArray();
+    }
+
+    /**
+     * Get project IDs accessible to a user.
+     * Members/Team Leads see projects they're assigned to or that belong to their team.
+     */
+    private function getUserProjectIds(User $user)
+    {
+        return Project::where(function ($q) use ($user) {
+            $q->where('created_by', $user->id)
+              ->orWhereJsonContains('assigned_users', $user->id)
+              ->orWhereHas('team.members', fn ($m) => $m->where('users.id', $user->id));
+        })->pluck('id');
+    }
+}

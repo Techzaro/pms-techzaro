@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 
 import API_URL from "../config/api";
+import { authToken } from "../utils/auth";
 import "../components/ProfileModal.css";
 
 function ProfileModal({
@@ -39,8 +40,7 @@ function ProfileModal({
 
     try {
 
-      const token =
-        localStorage.getItem("token");
+      const token = authToken();
 
       const response = await fetch(
         `${API_URL}/user/change-password`,

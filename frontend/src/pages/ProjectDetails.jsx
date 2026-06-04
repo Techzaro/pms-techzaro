@@ -27,6 +27,7 @@ import {
 import DashboardLayout from "../components/layout/DashboardLayout";
 import "./ProjectDetails.css";
 
+import { authToken, getCurrentRole } from "../utils/auth";
 import API_URL from "../config/api";
 const API = API_URL;
 
@@ -169,7 +170,7 @@ function ProjectDetails() {
   }, []);
 
   const loadProject = useCallback(async () => {
-    const token = localStorage.getItem("token");
+    const token = authToken();
     const res = await fetch(`${API}/projects/${projectId}`, {
       headers: {
         Accept: "application/json",
@@ -234,7 +235,7 @@ function ProjectDetails() {
       return;
     }
     try {
-      const token = localStorage.getItem("token");
+      const token = authToken();
       const res = await fetch(`${API}/projects/${projectId}/tasks`, {
         method: "POST",
         headers: {
@@ -273,7 +274,7 @@ function ProjectDetails() {
   const handleDeleteTask = async (taskId) => {
     if (!window.confirm("Delete this task?")) return;
     try {
-      const token = localStorage.getItem("token");
+      const token = authToken();
       const res = await fetch(`${API}/tasks/${taskId}`, {
         method: "DELETE",
         headers: {
@@ -300,7 +301,7 @@ function ProjectDetails() {
   const handleSaveNotes = async () => {
     setNotesSaving(true);
     try {
-      const token = localStorage.getItem("token");
+      const token = authToken();
       const res = await fetch(`${API}/projects/${projectId}`, {
         method: "PATCH",
         headers: {
@@ -334,7 +335,7 @@ function ProjectDetails() {
     if (!list[index]) return;
     list[index] = { ...list[index], done: !list[index].done };
     try {
-      const token = localStorage.getItem("token");
+      const token = authToken();
       const res = await fetch(`${API}/projects/${projectId}`, {
         method: "PATCH",
         headers: {
@@ -363,7 +364,7 @@ function ProjectDetails() {
   const handleDeleteProject = async () => {
     if (!window.confirm("Delete this project permanently?")) return;
     try {
-      const token = localStorage.getItem("token");
+      const token = authToken();
       const res = await fetch(`${API}/projects/${projectId}`, {
         method: "DELETE",
         headers: {
@@ -716,13 +717,13 @@ function ProjectDetails() {
             )}
             <div className="pd-hero-actions">
               <span className={`pd-pill-status pd-pill-status--${statusSlug(project.status)}`}>{project.status}</span>
-              {localStorage.getItem("role") !== "member" && (
+              {getCurrentRole() !== "member" && (
                 <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => navigate("/create-project")}>
                   <Pencil size={16} />
                   Edit Project
                 </button>
               )}
-              {localStorage.getItem("role") !== "member" && (
+              {getCurrentRole() !== "member" && (
                 <button type="button" className="pd-btn-tx pd-btn-tx--danger" onClick={handleDeleteProject}>
                   <Trash2 size={16} />
                   Delete

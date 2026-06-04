@@ -1,19 +1,12 @@
 <?php
 
-/**
- * Eloquent model that represents a task within a project.
- */
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Builder;
 
-/**
- * Eloquent model for tasks attached to projects.
- */
-class Task extends Model
+class Deliverable extends Model
 {
     protected $fillable = [
         'project_id',
@@ -21,19 +14,15 @@ class Task extends Model
         'description',
         'status',
         'priority',
-        'start_date',
-        'end_date',
+        'due_date',
         'assigned_to',
+        'created_by',
     ];
 
     protected $casts = [
-        'start_date' => 'datetime',
-        'end_date' => 'datetime',
+        'due_date' => 'date',
     ];
 
-    /**
-     * Scope: filter tasks by status, priority, date range, assigned_to, project_id.
-     */
     public function scopeFilter(Builder $query, array $filters): Builder
     {
         if (!empty($filters['status'])) {
@@ -56,32 +45,21 @@ class Task extends Model
             $query->where('title', 'like', '%' . $filters['search'] . '%');
         }
 
-        if (!empty($filters['start_date_from'])) {
-            $query->where('start_date', '>=', $filters['start_date_from']);
-        }
-
-        if (!empty($filters['start_date_to'])) {
-            $query->where('start_date', '<=', $filters['start_date_to']);
-        }
-
         return $query;
     }
-
-    /**
-     * Perform the project.
-     */
 
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
     }
 
-    /**
-     * Perform the assignee.
-     */
-
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 }

@@ -7,6 +7,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Project;
+use App\Models\ProjectFile;
 use App\Models\User;
 use Illuminate\Http\Request;
 
@@ -16,11 +17,16 @@ use Illuminate\Http\Request;
 class ProjectController extends Controller
 {
     /**
-     * Get all projects with creator and team relationships.
+     * Get all projects with creator, team, and task counts for progress calculation.
      */
     public function index()
     {
-        $projects = Project::with(['creator', 'team'])->latest()->get();
+        $projects = Project::with(['creator', 'team'])
+            ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
+                $q->whereIn('status', ['done', 'completed']);
+            }])
+            ->latest()
+            ->get();
 
         return response()->json($projects);
     }
@@ -47,7 +53,7 @@ class ProjectController extends Controller
             'sidebar_notes' => 'nullable|string',
             'team_id' => 'nullable|exists:teams,id',
             'assigned_users' => 'nullable|array',
-            'status' => 'required|string',
+            'status' => 'nullable|string|max:64',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
             'milestones' => 'nullable|array',
@@ -62,6 +68,7 @@ class ProjectController extends Controller
         $validated['created_by'] = $request->user()->id;
         $validated['assigned_users'] = $validated['assigned_users'] ?? [];
         $validated['priority'] = $validated['priority'] ?? 'Medium';
+        $validated['status'] = $validated['status'] ?? 'in_progress';
 
         $project = Project::create($validated);
         $this->replaceProjectMilestones($project, $milestones);
@@ -190,6 +197,70 @@ class ProjectController extends Controller
 
         return response()->json([
             'message' => 'Project deleted successfully',
+        ]);
+    }
+
+    /**
+     * Upload a file attachment to a project.
+     */
+    public function uploadFile(Request $request, Project $project)
+    {
+        $request->validate([
+            'file' => 'required|file|max:10240',
+        ]);
+
+        $file = $request->file('file');
+        $path = $file->store('project-files', 'public');
+
+        $attachment = $project->files()->create([
+            'name' => $file->getClientOriginalName(),
+            'url' => '/storage/' . $path,
+        ]);
+
+        return response()->json([
+            'message' => 'File uploaded successfully',
+            'file' => $attachment,
+        ], 201);
+    }
+
+    /**
+     * Add a link attachment to a project.
+     */
+    public function addLink(Request $request, Project $project)
+    {
+        $validated = $request->validate([
+            'url' => 'required|url|max:2048',
+            'name' => 'nullable|string|max:255',
+        ]);
+
+        $attachment = $project->files()->create([
+            'name' => $validated['name'] ?? $validated['url'],
+            'url' => $validated['url'],
+        ]);
+
+        return response()->json([
+            'message' => 'Link added successfully',
+            'file' => $attachment,
+        ], 201);
+    }
+
+    /**
+     * Delete a file attachment.
+     */
+    public function deleteFile(Project $project, ProjectFile $file)
+    {
+        if ($file->url && str_starts_with($file->url, '/storage/')) {
+            $relativePath = str_replace('/storage/', '', $file->url);
+            $fullPath = storage_path('app/public/' . $relativePath);
+            if (file_exists($fullPath)) {
+                unlink($fullPath);
+            }
+        }
+
+        $file->delete();
+
+        return response()->json([
+            'message' => 'File deleted successfully',
         ]);
     }
 

@@ -16,6 +16,8 @@ import Projects from "./pages/Projects";
 import CreateProject from "./pages/CreateProject";
 import ProjectDetails from "./pages/ProjectDetails";
 import ManageUsers from "./pages/ManageUsers";
+import UserProfile from "./pages/UserProfile";
+import MyProfile from "./pages/MyProfile";
 import Deliveries from "./pages/Deliveries";
 import Details from "./pages/Details";
 import History from "./pages/History";
@@ -217,6 +219,28 @@ function App() {
           element={
             <ProtectedRoute>
               <ManageUsers />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* USER PROFILE */}
+
+        <Route
+          path="/user-profile/:userId"
+          element={
+            <ProtectedRoute>
+              <UserProfile />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* MY PROFILE */}
+
+        <Route
+          path="/my-profile"
+          element={
+            <ProtectedRoute>
+              <MyProfile />
             </ProtectedRoute>
           }
         />

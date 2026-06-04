@@ -33,6 +33,8 @@ class TeamController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'member_ids' => 'nullable|array',
+            'member_ids.*' => 'integer|exists:users,id',
         ]);
 
         $team = Team::create([
@@ -40,6 +42,11 @@ class TeamController extends Controller
             'leader_id' => null,
             'created_by' => $request->user()->id,
         ]);
+
+        if (!empty($validated['member_ids'])) {
+            $uniqueIds = array_unique($validated['member_ids']);
+            $team->members()->attach($uniqueIds);
+        }
 
         return response()->json([
             'message' => 'Team created successfully',
@@ -79,19 +86,38 @@ class TeamController extends Controller
     public function addMember(Request $request, Team $team)
     {
         $validated = $request->validate([
-            'user_id' => 'required|exists:users,id',
+            'user_id' => 'required_without:user_ids|integer|exists:users,id',
+            'user_ids' => 'required_without:user_id|array',
+            'user_ids.*' => 'integer|exists:users,id',
         ]);
 
-        if ($team->members()->where('user_id', $validated['user_id'])->exists()) {
+        $idsToAttach = [];
+
+        if (!empty($validated['user_ids'])) {
+            $idsToAttach = array_unique($validated['user_ids']);
+        } elseif (!empty($validated['user_id'])) {
+            $idsToAttach = [$validated['user_id']];
+        }
+
+        $alreadyMemberIds = $team->members()
+            ->whereIn('user_id', $idsToAttach)
+            ->pluck('user_id')
+            ->toArray();
+
+        $newIds = array_diff($idsToAttach, $alreadyMemberIds);
+
+        if (empty($newIds)) {
             return response()->json([
-                'message' => 'This user is already a member of the team.',
+                'message' => 'All selected users are already members of this team.',
             ], 409);
         }
 
-        $team->members()->attach($validated['user_id']);
+        $team->members()->attach($newIds);
 
         return response()->json([
-            'message' => 'Member added successfully',
+            'message' => count($newIds) === 1
+                ? 'Member added successfully'
+                : count($newIds) . ' members added successfully',
             'team' => $team->load(['leader:id,name', 'members:id,name']),
         ]);
     }

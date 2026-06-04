@@ -29,7 +29,9 @@ class RoleMiddleware
         foreach ($roles as $role) {
             foreach (array_map('trim', explode(',', $role)) as $item) {
                 if ($item !== '') {
-                    $allowed[] = $item;
+                    // Normalize role aliases
+                    $normalized = $item === 'teamlead' ? 'team_lead' : $item;
+                    $allowed[] = $normalized;
                 }
             }
         }

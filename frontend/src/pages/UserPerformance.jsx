@@ -5,6 +5,7 @@ import Sidebar from "../components/layout/Sidebar";
 import MemberExportReport from "./MemberExportReport";
 import "../components/layout/DashboardLayout.css";
 import "../pages/UserPerformance.css";
+import { getUser } from "../utils/auth";
 import "../pages/Calender.css";
 
 const summaryCards = [
@@ -91,8 +92,9 @@ function UserPerformance() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showExportModal, setShowExportModal] = useState(false);
 
-  const userName = localStorage.getItem("name") || "Umar Naseer";
-  const userRole = localStorage.getItem("role") || "Frontend Developer";
+  const stored = getUser();
+  const userName = stored?.name || "Umar Naseer";
+  const userRole = stored?.role || "Frontend Developer";
   const isMember = userRole === "member";
 
   const filteredTasks = tasks.filter((task) => {
