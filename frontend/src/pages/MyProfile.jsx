@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { MdEdit } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import API_URL from "../config/api";
+import { authToken, getCurrentRole } from "../utils/auth";
 import "./UserProfile.css";
 
 function MyProfile() {
@@ -22,7 +23,7 @@ function MyProfile() {
   const [messageType, setMessageType] = useState("");
 
   const authHeaders = () => {
-    const token = localStorage.getItem("token");
+    const token = authToken();
     return {
       "Content-Type": "application/json",
       Authorization: token ? `Bearer ${token}` : "",
@@ -56,7 +57,7 @@ function MyProfile() {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = authToken();
     if (!token) {
       navigate("/");
       return;
@@ -198,7 +199,7 @@ function MyProfile() {
               <div className="info-card-header">
                 <h3>Personal Information</h3>
                 <button className="btn-edit" onClick={openPasswordModal}>
-                  <MdEdit size={16} /> Edit
+                  <MdEdit size={16} /> Update Password
                 </button>
               </div>
               <div className="info-card-body">

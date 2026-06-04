@@ -4,12 +4,13 @@
  */
 
 import { useState, useEffect } from "react";
-import { MdVisibility, MdEdit } from "react-icons/md";
+import { MdVisibility } from "react-icons/md";
 import { IoSearchOutline } from "react-icons/io5";
 import { CiCirclePlus } from "react-icons/ci";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import API_URL from "../config/api";
+import { authToken, getCurrentRole, getUser, setUser } from "../utils/auth";
 import "./ManageUsers.css";
 
 const DEPARTMENTS = [
@@ -56,11 +57,11 @@ function ManageUsers() {
   const [addErrors, setAddErrors] = useState({});
 
   const [currentUserId, setCurrentUserId] = useState(() => {
-    const savedId = localStorage.getItem("userId");
-    return savedId ? Number(savedId) : null;
+    const user = getUser();
+    return user?.id ? Number(user.id) : null;
   });
   const [currentUserRole, setCurrentUserRole] = useState(
-    localStorage.getItem("role") || ""
+    getCurrentRole() || ""
   );
 
   const ResignIcon = ({ className = "" }) => (
@@ -96,7 +97,7 @@ function ManageUsers() {
   };
 
   const authHeaders = () => {
-    const token = localStorage.getItem("token");
+    const token = authToken();
     return {
       "Content-Type": "application/json",
       Authorization: token ? `Bearer ${token}` : "",
@@ -126,7 +127,7 @@ function ManageUsers() {
 
   const fetchCurrentUser = async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = authToken();
       if (!token) return;
       const res = await fetch(`${API_URL}/user`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -136,8 +137,8 @@ function ManageUsers() {
       if (data && data.id) {
         setCurrentUserId(data.id);
         setCurrentUserRole(data.role || "");
-        localStorage.setItem("userId", data.id);
-        localStorage.setItem("role", data.role);
+        const role = getCurrentRole();
+        setUser(role, { id: data.id, name: data.name, email: data.email, role: data.role });
       }
     } catch {
       // ignore
@@ -147,17 +148,16 @@ function ManageUsers() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const role = localStorage.getItem("role");
-    const token = localStorage.getItem("token");
+    const role = getCurrentRole();
+    const token = authToken();
     if (!token || (role !== "admin" && role !== "manager")) {
       navigate("/");
       return;
     }
-    setCurrentUserId(
-      localStorage.getItem("userId") ? Number(localStorage.getItem("userId")) : null
-    );
+    const user = getUser();
+    setCurrentUserId(user?.id ? Number(user.id) : null);
     setCurrentUserRole(role);
-    if (!localStorage.getItem("userId")) {
+    if (!user?.id) {
       fetchCurrentUser();
     }
     fetchUsers();
@@ -327,14 +327,6 @@ function ManageUsers() {
               aria-label="View user profile"
             >
               <MdVisibility size={24} />
-            </button>
-            <button
-              className="btn-edit"
-              onClick={() => navigate(`/user-profile/${user.id}`)}
-              disabled={!canModifyUser}
-              aria-label="Edit user"
-            >
-              <MdEdit size={20} />
             </button>
             <button
               className="btn-resign"

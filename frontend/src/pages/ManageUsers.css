@@ -226,8 +226,7 @@
 .btn-update,
 .btn-view,
 .btn-delete,
-.btn-resign,
-.btn-edit {
+.btn-resign {
   width: 42px;
   height: 42px;
   border: none;
@@ -241,8 +240,7 @@
 }
 
 .btn-update,
-.btn-view,
-.btn-edit {
+.btn-view {
   color: #2563eb;
 }
 
@@ -252,14 +250,12 @@
 
 .btn-update:hover,
 .btn-delete:hover,
-.btn-resign:hover,
-.btn-edit:hover {
+.btn-resign:hover {
   background: #e5e7eb;
 }
 
 .btn-update:disabled,
 .btn-resign:disabled,
-.btn-edit:disabled,
 .role-select:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -283,8 +279,7 @@
 
 .resigned-row .role-select,
 .resigned-row .btn-update,
-.resigned-row .btn-resign,
-.resigned-row .btn-edit {
+.resigned-row .btn-resign {
   opacity: 0.9;
 }
 
@@ -778,8 +773,7 @@
   }
   .btn-update,
   .btn-view,
-  .btn-delete,
-  .btn-edit {
+  .btn-delete {
     width: 38px;
     height: 38px;
   }

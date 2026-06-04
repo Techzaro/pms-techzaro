@@ -5,6 +5,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import API_URL from "../../config/api";
+import { authToken, authHeaders, getCurrentRole, getUser, setUser, clearSession } from "../../utils/auth";
 
 import {
   MdDashboard,
@@ -35,25 +36,20 @@ function Sidebar() {
     });
   };
 
-  const [user, setUser] = useState({
-    name:
-      localStorage.getItem("name") || "User",
-
-    email:
-      localStorage.getItem("email") ||
-      "user@example.com",
-
-    role:
-      localStorage.getItem("role") ||
-      "Member",
+  const [user, setUserState] = useState(() => {
+    const stored = getUser();
+    return {
+      name: stored?.name || "User",
+      email: stored?.email || "user@example.com",
+      role: stored?.role || "Member",
+    };
   });
 
   const location = useLocation();
 
   useEffect(() => {
 
-    const token =
-      localStorage.getItem("token");
+    const token = authToken();
 
     if (!token) return;
 
@@ -68,31 +64,14 @@ function Sidebar() {
 
         if (data && data.name) {
 
-          setUser({
+          setUserState({
             name: data.name,
             email: data.email,
             role: data.role,
           });
 
-          localStorage.setItem(
-            "userId",
-            data.id
-          );
-
-          localStorage.setItem(
-            "name",
-            data.name
-          );
-
-          localStorage.setItem(
-            "email",
-            data.email
-          );
-
-          localStorage.setItem(
-            "role",
-            data.role
-          );
+          const role = getCurrentRole();
+          setUser(role, { id: data.id, name: data.name, email: data.email, role: data.role });
         }
       })
       .catch(() => {
@@ -339,7 +318,10 @@ function Sidebar() {
           <Link
             to="/"
             className="sidebar-link logout-link"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              clearSession(getCurrentRole());
+            }}
           >
             <MdLogout />
             <span>Logout</span>

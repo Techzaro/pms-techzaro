@@ -2,6 +2,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ExportReport from "./ExportReport";
+import { getUser } from "../utils/auth";
 import "./Reports.css";
 
 const summaryCards = [
@@ -85,8 +86,9 @@ const teamMembers = [
 function Reports() {
   const [timeFilter, setTimeFilter] = useState("All Time");
   const [showExportModal, setShowExportModal] = useState(false);
-  const userName = localStorage.getItem("name") || "Lorem Ipsum";
-  const userRole = localStorage.getItem("role") || "Member";
+  const stored = getUser();
+  const userName = stored?.name || "Lorem Ipsum";
+  const userRole = stored?.role || "Member";
   const navigate = useNavigate();
 
   return (

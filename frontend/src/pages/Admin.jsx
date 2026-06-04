@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import Header from "../components/layout/Header";
 import Sidebar from "../components/layout/Sidebar";
 import "../components/layout/DashboardLayout.css";
+import { getUser, getCurrentRole } from "../utils/auth";
 import "./Admin.css";
 
 function Admin() {
@@ -19,7 +20,8 @@ function Admin() {
   }, []);
 
   useEffect(() => {
-    const name = localStorage.getItem("name") || "User";
+    const stored = getUser();
+    const name = stored?.name || "User";
     const hasVisited = localStorage.getItem("adminVisited");
 
     if (!hasVisited) {
@@ -168,8 +170,7 @@ function Admin() {
             <h1>{greeting}</h1>
 
             <p>
-              {localStorage.getItem("role") ||
-                "Member"}
+              {getCurrentRole() || "Member"}
             </p>
 
             <p>

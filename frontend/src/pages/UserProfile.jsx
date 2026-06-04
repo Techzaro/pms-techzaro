@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { MdEdit, MdArrowBack } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import API_URL from "../config/api";
+import { authToken, getCurrentRole } from "../utils/auth";
 import "./UserProfile.css";
 import "./ManageUsers.css";
 
@@ -51,7 +52,7 @@ function UserProfile() {
   ];
 
   const authHeaders = () => {
-    const token = localStorage.getItem("token");
+    const token = authToken();
     return {
       "Content-Type": "application/json",
       Authorization: token ? `Bearer ${token}` : "",
@@ -85,8 +86,8 @@ function UserProfile() {
   };
 
   useEffect(() => {
-    const role = localStorage.getItem("role");
-    const token = localStorage.getItem("token");
+    const role = getCurrentRole();
+    const token = authToken();
     if (!token || (role !== "admin" && role !== "manager")) {
       navigate("/");
       return;
@@ -242,7 +243,6 @@ function UserProfile() {
   }
 
   const { user, account } = profileData;
-  const isResigned = user.active === false;
 
   return (
     <DashboardLayout hideRightSidebar={true}>
@@ -254,11 +254,6 @@ function UserProfile() {
         </div>
 
         {message && <div className={`profile-message ${messageType}`}>{message}</div>}
-        {isResigned && (
-          <div className="resigned-banner">
-            This account has been resigned and cannot be modified.
-          </div>
-        )}
         <div className="profile-layout">
           {/* LEFT SIDE */}
           <div className="profile-left">
@@ -279,13 +274,8 @@ function UserProfile() {
             <div className="profile-info-card">
               <div className="info-card-header">
                 <h3>Personal Information</h3>
-                <button
-                  className="btn-edit"
-                  onClick={openEditModal}
-                  disabled={isResigned}
-                  title={isResigned ? "Resigned users cannot be edited" : "Edit user"}
-                >
-                  <MdEdit size={16} /> {isResigned ? "Resigned" : "Edit"}
+                <button className="btn-edit" onClick={openEditModal} disabled={!user.active} style={!user.active ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
+                  <MdEdit size={16} /> Edit
                 </button>
               </div>
               <div className="info-card-body">

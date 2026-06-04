@@ -6,6 +6,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import API_URL from "../config/api";
+import { saveSession, clearAllSessions, authToken } from "../utils/auth";
 import "./Login.css";
 
 function Login() {
@@ -50,7 +51,7 @@ function Login() {
 
   const handleLogin = async () => {
     if (!email.trim()) {
-      showMessage("Please enter your email.", "error");
+      showMessage("Please enter your email address.", "error");
       return;
     }
 
@@ -84,17 +85,19 @@ function Login() {
       }
 
       if (!res.ok) {
-        throw new Error(data.message || "Unable to login");
+        if (res.status === 401) {
+          throw new Error("Incorrect email or password. Please try again.");
+        } else if (res.status === 403) {
+          throw new Error(data.message || "Your account has been deactivated. Please contact admin.");
+        } else if (res.status === 422) {
+          throw new Error(data.message || "Please enter valid email and password.");
+        } else {
+          throw new Error(data.message || "Something went wrong. Please try again.");
+        }
       }
 
       if (data.status) {
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("role", data.role);
-        if (data.user) {
-          localStorage.setItem("userId", data.user.id);
-          localStorage.setItem("name", data.user.name || "User");
-          localStorage.setItem("email", data.user.email || "user@example.com");
-        }
+        saveSession(data.role, data.token, data.user || {});
 
         if (data.must_change_password) {
           setMustChangePassword(true);
@@ -103,11 +106,11 @@ function Login() {
           redirectToDashboard(data.role);
         }
       } else {
-        showMessage(data.message, "error");
+        showMessage(data.message || "Incorrect email or password. Please try again.", "error");
       }
     } catch (error) {
       console.log(error);
-      showMessage(error.message || "Server Error", "error");
+      showMessage(error.message || "Something went wrong. Please try again.", "error");
     } finally {
       setLoading(false);
     }
@@ -134,19 +137,19 @@ function Login() {
     }
 
     if (newPassword.length < 6) {
-      showPasswordMessage("Password must be at least 6 characters.", "error");
+      showPasswordMessage("Password must be at least 6 characters long.", "error");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      showPasswordMessage("Passwords do not match.", "error");
+      showPasswordMessage("Passwords do not match. Please re-enter.", "error");
       return;
     }
 
     try {
       setChangingPassword(true);
 
-      const token = localStorage.getItem("token");
+      const token = authToken();
 
       const res = await fetch(`${API_URL}/user/first-time-change-password`, {
         method: "PUT",
@@ -163,14 +166,10 @@ function Login() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.message || "Failed to change password");
+        throw new Error(data.message || "Failed to change password. Please try again.");
       }
 
-      localStorage.removeItem("token");
-      localStorage.removeItem("role");
-      localStorage.removeItem("userId");
-      localStorage.removeItem("name");
-      localStorage.removeItem("email");
+      clearAllSessions();
 
       showMessage("Password changed successfully. Please login with your new password.", "success");
       setMustChangePassword(false);
@@ -180,7 +179,7 @@ function Login() {
       setPassword("");
 
     } catch (error) {
-      showPasswordMessage(error.message || "Failed to change password.", "error");
+      showPasswordMessage(error.message || "Failed to change password. Please try again.", "error");
     } finally {
       setChangingPassword(false);
     }
@@ -208,6 +207,18 @@ function Login() {
               This is your first login. Please change your password to continue.
             </p>
 
+            {message && (
+              <div className={`message ${messageType}`}>
+                {message}
+              </div>
+            )}
+
+            {passwordMessage && (
+              <div className={`message ${passwordMessageType}`}>
+                {passwordMessage}
+              </div>
+            )}
+
             <input
               type="password"
               placeholder="Enter New Password"
@@ -230,19 +241,7 @@ function Login() {
                 {changingPassword ? "Changing..." : "Change Password & Login"}
               </button>
             </div>
-
-            {passwordMessage && (
-              <div className={`message ${passwordMessageType}`}>
-                {passwordMessage}
-              </div>
-            )}
           </div>
-
-          {message && (
-            <div className={`message ${messageType}`}>
-              {message}
-            </div>
-          )}
         </div>
       </div>
     );
@@ -266,6 +265,12 @@ function Login() {
         <div className="login-box">
           <h2>Welcome</h2>
           <p className="subtitle">Login to continue your work</p>
+
+          {message && (
+            <div className={`message ${messageType}`}>
+              {message}
+            </div>
+          )}
 
           <input
             type="email"
@@ -297,12 +302,6 @@ function Login() {
             </div>
           </div>
         </div>
-
-        {message && (
-          <div className={`message ${messageType}`}>
-            {message}
-          </div>
-        )}
       </div>
     </div>
   );

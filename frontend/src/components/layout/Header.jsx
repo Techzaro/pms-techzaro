@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { MdKeyboardArrowDown } from "react-icons/md";
 
 import API_URL from "../../config/api";
+import { authToken, getCurrentRole, getUser, setUser } from "../../utils/auth";
 import "./Header.css";
 
 import CreateTaskModal from "../CreateTaskModal";
@@ -41,18 +42,13 @@ function Header() {
 
   const showFullLogo = sidebarOpen || !isSmallScreen;
 
-  const [user, setUser] = useState({
-    name:
-      localStorage.getItem("name") ||
-      "User",
-
-    email:
-      localStorage.getItem("email") ||
-      "user@example.com",
-
-    role:
-      localStorage.getItem("role") ||
-      "Member",
+  const [user, setUserState] = useState(() => {
+    const stored = getUser();
+    return {
+      name: stored?.name || "User",
+      email: stored?.email || "user@example.com",
+      role: stored?.role || "Member",
+    };
   });
 
   const toggleProfileModal = () =>
@@ -60,8 +56,7 @@ function Header() {
 
   useEffect(() => {
 
-    const token =
-      localStorage.getItem("token");
+    const token = authToken();
 
     if (!token) return;
 
@@ -77,26 +72,14 @@ function Header() {
 
         if (data && data.name) {
 
-          setUser({
+          setUserState({
             name: data.name,
             email: data.email,
             role: data.role,
           });
 
-          localStorage.setItem(
-            "name",
-            data.name
-          );
-
-          localStorage.setItem(
-            "email",
-            data.email
-          );
-
-          localStorage.setItem(
-            "role",
-            data.role
-          );
+          const role = getCurrentRole();
+          setUser(role, { name: data.name, email: data.email, role: data.role });
         }
       })
 

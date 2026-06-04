@@ -97,6 +97,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/projects/{project}', [ProjectController::class, 'update']);
         Route::patch('/projects/{project}', [ProjectController::class, 'patch']);
         Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
+        Route::post('/projects/{project}/files', [ProjectController::class, 'uploadFile']);
+        Route::post('/projects/{project}/links', [ProjectController::class, 'addLink']);
+        Route::delete('/projects/{project}/files/{file}', [ProjectController::class, 'deleteFile']);
     });
 
     /*
