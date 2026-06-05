@@ -30,6 +30,7 @@ class UserController extends Controller
     public function index()
     {
         $users = User::select('id', 'name', 'email', 'role', 'active', 'contact_no', 'address', 'department', 'designation', 'employee_code', 'created_at')
+            ->where('active', true)
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -257,6 +258,7 @@ class UserController extends Controller
     public function getTeamUsers(Request $request)
     {
         $users = User::select('id', 'name', 'email', 'role')
+            ->where('active', true)
             ->orderBy('name')
             ->get();
 

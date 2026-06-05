@@ -103,4 +103,16 @@ class Project extends Model
     {
         return $this->hasMany(Deliverable::class)->latest();
     }
+
+    /**
+     * Resolve assigned_users JSON array to User models.
+     */
+    public function getAssignedUsersResolvedAttribute()
+    {
+        $ids = $this->assigned_users ?? [];
+        if (empty($ids)) {
+            return [];
+        }
+        return User::whereIn('id', $ids)->select('id', 'name', 'role')->get();
+    }
 }

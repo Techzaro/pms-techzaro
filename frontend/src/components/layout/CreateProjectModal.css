@@ -345,6 +345,15 @@
   background: #f3f4f6;
 }
 
+.cp-dropdown-item--disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cp-dropdown-item--disabled:hover {
+  background: transparent;
+}
+
 .cp-dropdown-item input[type="checkbox"] {
   width: 16px;
   height: 16px;

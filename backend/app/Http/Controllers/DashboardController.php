@@ -43,11 +43,13 @@ class DashboardController extends Controller
         $projectQuery = Project::query();
         $taskQuery = Task::query();
 
-        // Filter by role
         if ($role === 'team_lead' || $role === 'member') {
             $projectIds = $this->getUserProjectIds($user);
             $projectQuery->whereIn('id', $projectIds);
-            $taskQuery->whereIn('project_id', $projectIds);
+            $taskQuery->whereIn('project_id', $projectIds)->where(function ($q) use ($user) {
+                $q->where('assigned_by', $user->id)
+                  ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
+            });
         }
 
         $activeProjects = $projectQuery->clone()
@@ -83,7 +85,7 @@ class DashboardController extends Controller
      */
     private function getTodayWorkload(User $user, string $role): array
     {
-        $query = Task::with(['project:id,title', 'assignee:id,name'])
+        $query = Task::with(['project:id,title', 'assignees:id,name'])
             ->where(function ($q) {
                 $q->whereDate('end_date', today())
                   ->orWhere('status', 'in_progress');
@@ -93,7 +95,11 @@ class DashboardController extends Controller
             ->limit(10);
 
         if ($role === 'team_lead' || $role === 'member') {
-            $query->whereIn('project_id', $this->getUserProjectIds($user));
+            $query->whereIn('project_id', $this->getUserProjectIds($user))
+                  ->where(function ($q) use ($user) {
+                      $q->where('assigned_by', $user->id)
+                        ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
+                  });
         }
 
         return $query->get()->toArray();
@@ -140,6 +146,7 @@ class DashboardController extends Controller
         $query = DB::table('project_activities')
             ->join('users', 'project_activities.user_id', '=', 'users.id')
             ->join('projects', 'project_activities.project_id', '=', 'projects.id')
+            ->where('users.active', true)
             ->select('project_activities.summary', 'project_activities.created_at', 'users.name as user_name', 'projects.title as project_title')
             ->latest()
             ->limit(10);
@@ -164,7 +171,11 @@ class DashboardController extends Controller
             ->limit(10);
 
         if ($role === 'team_lead' || $role === 'member') {
-            $query->whereIn('project_id', $this->getUserProjectIds($user));
+            $query->whereIn('project_id', $this->getUserProjectIds($user))
+                  ->where(function ($q) use ($user) {
+                      $q->where('assigned_by', $user->id)
+                        ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
+                  });
         }
 
         return $query->get()->map(fn ($task) => [
