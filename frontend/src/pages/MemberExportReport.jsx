@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import { jsPDF } from "jspdf";
 import "../pages/ExportReport.css";
 
 const exportTypes = [
@@ -89,32 +90,321 @@ function MemberExportReport({ isOpen, onClose }) {
     attachments: false,
     completed: true,
   });
+  const [showReview, setShowReview] = useState(false);
 
   const toggleCheck = (id) => setChecks((p) => ({ ...p, [id]: !p[id] }));
 
-  const handleExport = () => {
-    alert("Report exported successfully!");
-    onClose();
+  const generatePDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    let y = 20;
+
+    // PMS Logo
+    doc.setFillColor(79, 70, 229);
+    doc.roundedRect(20, y, 8, 8, 2, 2, "F");
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(17, 24, 39);
+    doc.text("PMS", 32, y + 6.5);
+    y += 18;
+
+    // Report Title
+    const reportTitle = exportType === "activity" ? "My Activity Report" : exportType === "schedule" ? "My Schedule Report" : "My Progress Report";
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text(reportTitle, pageWidth / 2, y, { align: "center" });
+    y += 12;
+
+    // Profile
+    doc.setFillColor(107, 114, 128);
+    doc.circle(pageWidth / 2, y + 8, 8, "F");
+    y += 20;
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("Umar Naseer", pageWidth / 2, y, { align: "center" });
+    y += 5;
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(156, 163, 175);
+    doc.text("Frontend Developer", pageWidth / 2, y, { align: "center" });
+    y += 5;
+    doc.setTextColor(55, 65, 81);
+    doc.text(customDate, pageWidth / 2, y, { align: "center" });
+    y += 12;
+
+    // Divider
+    doc.setDrawColor(229, 231, 235);
+    doc.line(20, y, pageWidth - 20, y);
+    y += 10;
+
+    // Helper functions
+    const addSectionTitle = (title) => {
+      doc.setFontSize(13);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(17, 24, 39);
+      doc.text(title, 20, y);
+      y += 8;
+    };
+
+    const addStatCards = (stats) => {
+      const cardWidth = (pageWidth - 50) / stats.length;
+      stats.forEach((stat, i) => {
+        const x = 20 + i * cardWidth + 2;
+        doc.setDrawColor(229, 231, 235);
+        doc.roundedRect(x, y, cardWidth - 4, 22, 3, 3, "S");
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(107, 114, 128);
+        doc.text(stat.label, x + (cardWidth - 4) / 2, y + 7, { align: "center" });
+        doc.setFontSize(16);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(...stat.rgb);
+        doc.text(stat.value, x + (cardWidth - 4) / 2, y + 16, { align: "center" });
+      });
+      y += 28;
+    };
+
+    const addTable = (headers, rows, colWidths) => {
+      // Header
+      doc.setFillColor(249, 250, 251);
+      doc.rect(20, y, pageWidth - 40, 8, "F");
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(107, 114, 128);
+      let x = 22;
+      headers.forEach((h, i) => {
+        doc.text(h, x, y + 5.5);
+        x += colWidths[i];
+      });
+      y += 8;
+      // Rows
+      doc.setFont("helvetica", "normal");
+      rows.forEach((row, ri) => {
+        if (y > 270) { doc.addPage(); y = 20; }
+        if (ri < rows.length - 1) {
+          doc.setDrawColor(229, 231, 235);
+          doc.line(20, y + 7, pageWidth - 20, y + 7);
+        }
+        x = 22;
+        row.forEach((cell, ci) => {
+          doc.setFontSize(8);
+          if (cell.color) {
+            doc.setTextColor(...cell.color);
+          } else {
+            doc.setTextColor(17, 24, 39);
+          }
+          doc.text(cell.text || cell, x, y + 5.5);
+          x += colWidths[ci];
+        });
+        y += 7;
+      });
+      y += 5;
+    };
+
+    const addTimeline = (events) => {
+      events.forEach((ev, i) => {
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.setFillColor(79, 70, 229);
+        doc.circle(24, y + 2, 2, "F");
+        if (i < events.length - 1) {
+          doc.setDrawColor(229, 231, 235);
+          doc.line(24, y + 4, 24, y + 10);
+        }
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(107, 114, 128);
+        doc.text(ev.date, 30, y + 3);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(17, 24, 39);
+        doc.text(ev.action, 58, y + 3);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(107, 114, 128);
+        doc.text(ev.detail, 130, y + 3);
+        y += 10;
+      });
+      y += 3;
+    };
+
+    // ── ACTIVITY REPORT ──
+    if (exportType === "activity") {
+      addSectionTitle("Activity Summary");
+      addStatCards([
+        { label: "Total Task", value: "78", rgb: [79, 70, 229] },
+        { label: "Completed", value: "40", rgb: [22, 163, 74] },
+        { label: "Pending", value: "18", rgb: [245, 158, 11] },
+        { label: "Overdue", value: "8", rgb: [239, 68, 68] },
+      ]);
+
+      doc.setDrawColor(229, 231, 235);
+      doc.line(20, y, pageWidth - 20, y);
+      y += 8;
+
+      addSectionTitle("Activity Timeline");
+      addTimeline([
+        { date: "01 May", action: "Task Created", detail: "Landing Page Design" },
+        { date: "03 May", action: "Task Updated", detail: "API Integration" },
+        { date: "05 May", action: "Task Completed", detail: "User Flow Design" },
+        { date: "07 May", action: "File Uploaded", detail: "Wireframes.pdf" },
+      ]);
+
+      doc.line(20, y, pageWidth - 20, y);
+      y += 8;
+
+      addSectionTitle("Task History");
+      addTable(
+        ["Task", "Project", "Status", "Date"],
+        [
+          [{ text: "Landing Page Redesign" }, { text: "Ecommerce Website" }, { text: "Completed", color: [22, 163, 74] }, { text: "12 May" }],
+          [{ text: "API Integration" }, { text: "Mobile App" }, { text: "In Progress", color: [37, 99, 235] }, { text: "10 May" }],
+          [{ text: "Dashboard Design" }, { text: "CRM Dashboard" }, { text: "Completed", color: [22, 163, 74] }, { text: "08 May" }],
+          [{ text: "User Flow Design" }, { text: "Mobile App" }, { text: "Completed", color: [22, 163, 74] }, { text: "08 May" }],
+          [{ text: "Wireframe Design" }, { text: "Website Redesign" }, { text: "Completed", color: [22, 163, 74] }, { text: "08 May" }],
+        ],
+        [55, 50, 35, 30]
+      );
+    }
+
+    // ── SCHEDULE REPORT ──
+    if (exportType === "schedule") {
+      addSectionTitle("Events");
+      addTable(
+        ["Name", "Date", "Status", "Type"],
+        [
+          [{ text: "Task Created" }, { text: "03 May" }, { text: "10:00 AM" }, { text: "Task", color: [37, 99, 235] }],
+          [{ text: "Task Updated" }, { text: "08 May" }, { text: "11:00 AM" }, { text: "Review", color: [22, 163, 74] }],
+          [{ text: "Task Completed" }, { text: "12 May" }, { text: "02:00 PM" }, { text: "Meeting", color: [37, 99, 235] }],
+          [{ text: "File Uploaded" }, { text: "17 May" }, { text: "10:30 AM" }, { text: "Personal", color: [217, 119, 6] }],
+        ],
+        [50, 35, 40, 40]
+      );
+
+      doc.line(20, y, pageWidth - 20, y);
+      y += 8;
+
+      addSectionTitle("Deadlines");
+      [
+        { name: "Landing Page Design", date: "01 May, 2026" },
+        { name: "API Integration", date: "03 May, 2026" },
+        { name: "User Flow Design", date: "05 May, 2026" },
+        { name: "Wireframes.pdf", date: "07 May, 2026" },
+      ].forEach((item, i) => {
+        if (y > 270) { doc.addPage(); y = 20; }
+        if (i > 0) {
+          doc.setDrawColor(229, 231, 235);
+          doc.line(20, y - 2, pageWidth - 20, y - 2);
+        }
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(17, 24, 39);
+        doc.text(item.name, 22, y + 3);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(107, 114, 128);
+        doc.text(item.date, pageWidth - 22, y + 3, { align: "right" });
+        y += 8;
+      });
+      y += 5;
+
+      doc.line(20, y, pageWidth - 20, y);
+      y += 8;
+
+      addSectionTitle("Deliverables");
+      addTable(
+        ["Deliverables", "Status", "Date"],
+        [
+          [{ text: "Ecommerce homepage design" }, { text: "Completed", color: [22, 163, 74] }, { text: "12 May" }],
+          [{ text: "Ecommerce homepage design" }, { text: "In Progress", color: [37, 99, 235] }, { text: "10 May" }],
+          [{ text: "Ecommerce homepage design" }, { text: "Pending", color: [217, 119, 6] }, { text: "08 May" }],
+          [{ text: "Ecommerce homepage design" }, { text: "Failed", color: [239, 68, 68] }, { text: "07 May" }],
+          [{ text: "Ecommerce homepage design" }, { text: "Abandoned", color: [107, 114, 128] }, { text: "05 May" }],
+        ],
+        [80, 50, 40]
+      );
+    }
+
+    // ── PROGRESS REPORT ──
+    if (exportType === "progress") {
+      addSectionTitle("Performance Overview");
+      addStatCards([
+        { label: "Assigned", value: "78", rgb: [79, 70, 229] },
+        { label: "Completed", value: "40", rgb: [22, 163, 74] },
+        { label: "Pending", value: "18", rgb: [245, 158, 11] },
+        { label: "Overdue", value: "8", rgb: [239, 68, 68] },
+      ]);
+
+      doc.setDrawColor(229, 231, 235);
+      doc.line(20, y, pageWidth - 20, y);
+      y += 8;
+
+      addSectionTitle("Events");
+      addTimeline([
+        { date: "01 May", action: "Task Created", detail: "Landing Page Design" },
+        { date: "03 May", action: "Task Updated", detail: "API Integration" },
+        { date: "05 May", action: "Task Completed", detail: "User Flow Design" },
+        { date: "07 May", action: "File Uploaded", detail: "Wireframes.pdf" },
+      ]);
+
+      doc.line(20, y, pageWidth - 20, y);
+      y += 8;
+
+      addSectionTitle("Deliverables");
+      addTable(
+        ["Task", "Project", "Status", "Date"],
+        [
+          [{ text: "Landing Page Redesign" }, { text: "Ecommerce Website" }, { text: "Completed", color: [22, 163, 74] }, { text: "12 May" }],
+          [{ text: "API Integration" }, { text: "Mobile App" }, { text: "In Progress", color: [37, 99, 235] }, { text: "10 May" }],
+          [{ text: "Dashboard Design" }, { text: "CRM Dashboard" }, { text: "Completed", color: [22, 163, 74] }, { text: "08 May" }],
+          [{ text: "User Flow Design" }, { text: "Mobile App" }, { text: "Completed", color: [22, 163, 74] }, { text: "07 May" }],
+          [{ text: "Wireframe Design" }, { text: "Website Redesign" }, { text: "Completed", color: [22, 163, 74] }, { text: "05 May" }],
+        ],
+        [55, 50, 35, 30]
+      );
+    }
+
+    // Footer on all pages
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setDrawColor(229, 231, 235);
+      doc.line(20, 280, pageWidth - 20, 280);
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(156, 163, 175);
+      doc.text("Generated by PMS", 20, 285);
+      doc.text(`Page ${i} of ${totalPages}`, pageWidth - 20, 285, { align: "right" });
+    }
+
+    // Download
+    const fileName = exportType === "activity" ? "My-Activity-Report.pdf" : exportType === "schedule" ? "My-Schedule-Report.pdf" : "My-Progress-Report.pdf";
+    doc.save(fileName);
+    setShowReview(false);
   };
+
+  const handleExport = () => {
+    generatePDF();
+  };
+
+  const handleReview = () => setShowReview(true);
 
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="er-overlay" onClick={onClose}>
-      <div className="er-modal" onClick={(e) => e.stopPropagation()}>
-
-        {/* HEADER */}
-        <div className="er-header">
-          <div>
-            <h2>Export Report</h2>
-            <p>Choose your preferences and export your report.</p>
+    <>
+      {/* MAIN MODAL */}
+      <div className="er-overlay">
+        <div className="er-modal" onClick={(e) => e.stopPropagation()}>
+  
+          {/* HEADER */}
+          <div className="er-header">
+            <div>
+              <h2>Export Report</h2>
+              <p>Choose your preferences and export your report.</p>
+            </div>
+            <button className="er-close-btn" onClick={onClose}>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 5L5 15M5 5l10 10" />
+              </svg>
+            </button>
           </div>
-          <button className="er-close-btn" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 5L5 15M5 5l10 10" />
-            </svg>
-          </button>
-        </div>
 
         {/* SECTION 1: CHOOSE PROJECTS & TASKS */}
         <div className="er-section">
@@ -228,16 +518,318 @@ function MemberExportReport({ isOpen, onClose }) {
         {/* FOOTER */}
         <div className="er-footer">
           <button className="er-cancel-btn" onClick={onClose}>Cancel</button>
-          <button className="er-export-btn" onClick={handleExport}>
+          <button className="er-export-btn" onClick={handleReview} disabled={fileFormat === "excel"} style={fileFormat === "excel" ? { opacity: 0.5, cursor: "not-allowed" } : {}}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
             </svg>
-            Export Report
+            Report Review
           </button>
         </div>
 
       </div>
-    </div>,
+    </div>
+
+      {/* REVIEW POPUP */}
+      {showReview && (
+        <div className="er-overlay" onClick={() => setShowReview(false)}>
+          <div className="er-review-modal" onClick={(e) => e.stopPropagation()}>
+
+            {/* Close button */}
+            <button className="er-close-btn" style={{ position: "absolute", top: 16, right: 16, zIndex: 10 }} onClick={() => setShowReview(false)}>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 5L5 15M5 5l10 10" />
+              </svg>
+            </button>
+
+            {/* PMS Logo */}
+            <div style={{ padding: "24px 32px 0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 6, background: "#4f46e5" }}></div>
+                <span style={{ fontSize: 18, fontWeight: 700, color: "#111827" }}>PMS</span>
+              </div>
+            </div>
+
+            {/* Report Header */}
+            <div style={{ textAlign: "center", padding: "24px 32px 0" }}>
+              <h1 style={{ fontSize: 22, fontWeight: 700, color: "#111827", marginBottom: 0 }}>
+                {exportType === "activity" ? "My Activity Report" : exportType === "schedule" ? "My Schedule Report" : "My Progress Report"}
+              </h1>
+            </div>
+
+            {/* Profile Section */}
+            <div style={{ textAlign: "center", padding: "24px 32px 20px" }}>
+              <div style={{ width: 80, height: 80, borderRadius: "50%", background: "#6b7280", margin: "0 auto 12px", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                <svg width="50" height="50" viewBox="0 0 50 50" fill="none">
+                  <circle cx="25" cy="20" r="10" fill="#4b5563" />
+                  <path d="M5 48c0-11 9-20 20-20s20 9 20 20" fill="#4b5563" />
+                </svg>
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#111827" }}>Umar Naseer</div>
+              <div style={{ fontSize: 14, color: "#9ca3af", marginBottom: 12 }}>Frontend Developer</div>
+              <div style={{ display: "inline-block", padding: "6px 16px", background: "#f9fafb", borderRadius: 20, fontSize: 13, color: "#374151", border: "1px solid #e5e7eb" }}>
+                {customDate}
+              </div>
+            </div>
+
+            <div style={{ borderTop: "1px solid #e5e7eb", margin: "0 32px" }}></div>
+
+            {/* ── ACTIVITY REPORT ── */}
+            {exportType === "activity" && (
+              <>
+                {/* Activity Summary */}
+                <div style={{ padding: "24px 32px" }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}>Activity Summary</h2>
+                  <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                    {[
+                      { label: "Total Task", value: "78", color: "#4f46e5" },
+                      { label: "Completed", value: "40", color: "#16a34a" },
+                      { label: "Pending", value: "18", color: "#f59e0b" },
+                      { label: "Overdue", value: "8", color: "#ef4444" },
+                    ].map((stat) => (
+                      <div key={stat.label} style={{ flex: 1, minWidth: 100, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: "20px 16px", textAlign: "center" }}>
+                        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 8 }}>{stat.label}</div>
+                        <div style={{ fontSize: 32, fontWeight: 700, color: stat.color }}>{stat.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ borderTop: "1px solid #e5e7eb", margin: "0 32px" }}></div>
+
+                {/* Activity Timeline */}
+                <div style={{ padding: "24px 32px" }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 20 }}>Activity Timeline</h2>
+                  <div style={{ position: "relative", paddingLeft: 20 }}>
+                    <div style={{ position: "absolute", left: 6, top: 4, bottom: 4, width: 2, background: "#e5e7eb" }}></div>
+                    {[
+                      { date: "01 May", action: "Task Created", detail: "Landing Page Design" },
+                      { date: "03 May", action: "Task Updated", detail: "API Integration" },
+                      { date: "05 May", action: "Task Completed", detail: "User Flow Design" },
+                      { date: "07 May", action: "File Uploaded", detail: "Wireframes.pdf" },
+                    ].map((item, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 16, marginBottom: i < 3 ? 20 : 0, position: "relative" }}>
+                        <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#4f46e5", position: "absolute", left: -20, top: 5, zIndex: 1 }}></div>
+                        <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ display: "flex", gap: 40, alignItems: "center" }}>
+                            <span style={{ fontSize: 13, color: "#6b7280", minWidth: 60 }}>{item.date}</span>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{item.action}</span>
+                          </div>
+                          <span style={{ fontSize: 13, color: "#6b7280" }}>{item.detail}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ borderTop: "1px solid #e5e7eb", margin: "0 32px" }}></div>
+
+                {/* Task History */}
+                <div style={{ padding: "24px 32px" }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}>Task History</h2>
+                  <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr", padding: "12px 20px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", fontSize: 13, fontWeight: 600, color: "#6b7280" }}>
+                      <span>Task</span><span>Project</span><span style={{ textAlign: "center" }}>Status</span><span style={{ textAlign: "right" }}>Date</span>
+                    </div>
+                    {[
+                      { task: "Landing Page Redesign", project: "Ecommerce Website", status: "Completed", date: "12 May" },
+                      { task: "API Integration", project: "Mobile App", status: "In Progress", date: "10 May" },
+                      { task: "Dashboard Design", project: "CRM Dashboard", status: "Completed", date: "08 May" },
+                      { task: "User Flow Design", project: "Mobile App", status: "Completed", date: "08 May" },
+                      { task: "Wireframe Design", project: "Website Redesign", status: "Completed", date: "08 May" },
+                    ].map((row, i) => (
+                      <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr", padding: "14px 20px", borderBottom: i < 4 ? "1px solid #e5e7eb" : "none", fontSize: 14, alignItems: "center" }}>
+                        <span style={{ fontWeight: 500, color: "#111827" }}>{row.task}</span>
+                        <span style={{ color: "#6b7280" }}>{row.project}</span>
+                        <span style={{ textAlign: "center" }}>
+                          <span style={{ display: "inline-block", padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 500, background: row.status === "Completed" ? "#dcfce7" : "#dbeafe", color: row.status === "Completed" ? "#16a34a" : "#2563eb" }}>{row.status}</span>
+                        </span>
+                        <span style={{ textAlign: "right", color: "#6b7280" }}>{row.date}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ── SCHEDULE REPORT ── */}
+            {exportType === "schedule" && (
+              <>
+                {/* Events */}
+                <div style={{ padding: "24px 32px" }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}>Events</h2>
+                  <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", padding: "12px 20px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", fontSize: 13, fontWeight: 600, color: "#6b7280" }}>
+                      <span>Name</span><span>Date</span><span>Status</span><span style={{ textAlign: "right" }}>Type</span>
+                    </div>
+                    {[
+                      { name: "Task Created", date: "03 May", status: "10:00 AM", type: "Task", typeColor: { bg: "#dbeafe", text: "#2563eb" } },
+                      { name: "Task Updated", date: "08 May", status: "11:00 AM", type: "Review", typeColor: { bg: "#dcfce7", text: "#16a34a" } },
+                      { name: "Task Completed", date: "12 May", status: "02:00 PM", type: "Meeting", typeColor: { bg: "#dbeafe", text: "#2563eb" } },
+                      { name: "File Uploaded", date: "17 May", status: "10:30 AM", type: "Personal", typeColor: { bg: "#fef3c7", text: "#d97706" } },
+                    ].map((row, i) => (
+                      <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", padding: "14px 20px", borderBottom: i < 3 ? "1px solid #e5e7eb" : "none", fontSize: 14, alignItems: "center" }}>
+                        <span style={{ fontWeight: 500, color: "#111827" }}>{row.name}</span>
+                        <span style={{ color: "#6b7280" }}>{row.date}</span>
+                        <span style={{ color: "#6b7280" }}>{row.status}</span>
+                        <span style={{ textAlign: "right" }}>
+                          <span style={{ display: "inline-block", padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 500, background: row.typeColor.bg, color: row.typeColor.text }}>{row.type}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ borderTop: "1px solid #e5e7eb", margin: "0 32px" }}></div>
+
+                {/* Deadlines */}
+                <div style={{ padding: "24px 32px" }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}>Deadlines</h2>
+                  <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
+                    {[
+                      { name: "Landing Page Design", date: "01 May, 2026" },
+                      { name: "API Integration", date: "03 May, 2026" },
+                      { name: "User Flow Design", date: "05 May, 2026" },
+                      { name: "Wireframes.pdf", date: "07 May, 2026" },
+                    ].map((item, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: i < 3 ? "1px solid #e5e7eb" : "none", fontSize: 14 }}>
+                        <span style={{ fontWeight: 500, color: "#111827" }}>{item.name}</span>
+                        <span style={{ color: "#6b7280" }}>{item.date}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ borderTop: "1px solid #e5e7eb", margin: "0 32px" }}></div>
+
+                {/* Deliverables */}
+                <div style={{ padding: "24px 32px" }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}>Deliverables</h2>
+                  <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", padding: "12px 20px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", fontSize: 13, fontWeight: 600, color: "#6b7280" }}>
+                      <span>Deliverables</span><span style={{ textAlign: "center" }}>Status</span><span style={{ textAlign: "right" }}>Date</span>
+                    </div>
+                    {[
+                      { name: "Ecommerce homepage design", desc: "Design and implement the new ecommerce homepage.", status: "Completed", date: "12 May", statusColor: { bg: "#dcfce7", text: "#16a34a" } },
+                      { name: "Ecommerce homepage design", desc: "Design and implement the new ecommerce homepage.", status: "In Progress", date: "10 May", statusColor: { bg: "#dbeafe", text: "#2563eb" } },
+                      { name: "Ecommerce homepage design", desc: "Design and implement the new ecommerce homepage.", status: "Pending", date: "08 May", statusColor: { bg: "#fef3c7", text: "#d97706" } },
+                      { name: "Ecommerce homepage design", desc: "Design and implement the new ecommerce homepage.", status: "Failed", date: "07 May", statusColor: { bg: "#fef2f2", text: "#ef4444" } },
+                      { name: "Ecommerce homepage design", desc: "Design and implement the new ecommerce homepage.", status: "Abandoned", date: "05 May", statusColor: { bg: "#f3f4f6", text: "#6b7280" } },
+                    ].map((row, i) => (
+                      <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", padding: "14px 20px", borderBottom: i < 4 ? "1px solid #e5e7eb" : "none", fontSize: 14, alignItems: "center" }}>
+                        <div>
+                          <div style={{ fontWeight: 500, color: "#111827" }}>{row.name}</div>
+                          <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>{row.desc}</div>
+                        </div>
+                        <span style={{ textAlign: "center" }}>
+                          <span style={{ display: "inline-block", padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 500, background: row.statusColor.bg, color: row.statusColor.text }}>{row.status}</span>
+                        </span>
+                        <span style={{ textAlign: "right", color: "#6b7280" }}>{row.date}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ── PROGRESS REPORT ── */}
+            {exportType === "progress" && (
+              <>
+                {/* Performance Overview */}
+                <div style={{ padding: "24px 32px" }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}>Performance Overview</h2>
+                  <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                    {[
+                      { label: "Assigned", value: "78", color: "#4f46e5" },
+                      { label: "Completed", value: "40", color: "#16a34a" },
+                      { label: "Pending", value: "18", color: "#f59e0b" },
+                      { label: "Overdue", value: "8", color: "#ef4444" },
+                    ].map((stat) => (
+                      <div key={stat.label} style={{ flex: 1, minWidth: 100, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: "20px 16px", textAlign: "center" }}>
+                        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 8 }}>{stat.label}</div>
+                        <div style={{ fontSize: 32, fontWeight: 700, color: stat.color }}>{stat.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ borderTop: "1px solid #e5e7eb", margin: "0 32px" }}></div>
+
+                {/* Events */}
+                <div style={{ padding: "24px 32px" }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 20 }}>Events</h2>
+                  <div style={{ position: "relative", paddingLeft: 20 }}>
+                    <div style={{ position: "absolute", left: 6, top: 4, bottom: 4, width: 2, background: "#e5e7eb" }}></div>
+                    {[
+                      { date: "01 May", action: "Task Created", detail: "Landing Page Design" },
+                      { date: "03 May", action: "Task Updated", detail: "API Integration" },
+                      { date: "05 May", action: "Task Completed", detail: "User Flow Design" },
+                      { date: "07 May", action: "File Uploaded", detail: "Wireframes.pdf" },
+                    ].map((item, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 16, marginBottom: i < 3 ? 20 : 0, position: "relative" }}>
+                        <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#4f46e5", position: "absolute", left: -20, top: 5, zIndex: 1 }}></div>
+                        <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ display: "flex", gap: 40, alignItems: "center" }}>
+                            <span style={{ fontSize: 13, color: "#6b7280", minWidth: 60 }}>{item.date}</span>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{item.action}</span>
+                          </div>
+                          <span style={{ fontSize: 13, color: "#6b7280" }}>{item.detail}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ borderTop: "1px solid #e5e7eb", margin: "0 32px" }}></div>
+
+                {/* Deliverables */}
+                <div style={{ padding: "24px 32px" }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}>Deliverables</h2>
+                  <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr", padding: "12px 20px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb", fontSize: 13, fontWeight: 600, color: "#6b7280" }}>
+                      <span>Task</span><span>Project</span><span style={{ textAlign: "center" }}>Status</span><span style={{ textAlign: "right" }}>Date</span>
+                    </div>
+                    {[
+                      { task: "Landing Page Redesign", project: "Ecommerce Website", status: "Completed", date: "12 May", statusColor: { bg: "#dcfce7", text: "#16a34a" } },
+                      { task: "API Integration", project: "Mobile App", status: "In Progress", date: "10 May", statusColor: { bg: "#dbeafe", text: "#2563eb" } },
+                      { task: "Dashboard Design", project: "CRM Dashboard", status: "Completed", date: "08 May", statusColor: { bg: "#dcfce7", text: "#16a34a" } },
+                      { task: "User Flow Design", project: "Mobile App", status: "Completed", date: "07 May", statusColor: { bg: "#dcfce7", text: "#16a34a" } },
+                      { task: "Wireframe Design", project: "Website Redesign", status: "Completed", date: "05 May", statusColor: { bg: "#dcfce7", text: "#16a34a" } },
+                    ].map((row, i) => (
+                      <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr", padding: "14px 20px", borderBottom: i < 4 ? "1px solid #e5e7eb" : "none", fontSize: 14, alignItems: "center" }}>
+                        <span style={{ fontWeight: 500, color: "#111827" }}>{row.task}</span>
+                        <span style={{ color: "#6b7280" }}>{row.project}</span>
+                        <span style={{ textAlign: "center" }}>
+                          <span style={{ display: "inline-block", padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 500, background: row.statusColor.bg, color: row.statusColor.text }}>{row.status}</span>
+                        </span>
+                        <span style={{ textAlign: "right", color: "#6b7280" }}>{row.date}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Footer */}
+            <div style={{ borderTop: "1px solid #e5e7eb", padding: "16px 32px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>Generated by PMS</span>
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>Page 1 of 6</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+                <button className="er-cancel-btn" onClick={() => setShowReview(false)}>Cancel</button>
+                <button className="er-export-btn" onClick={handleExport} disabled={fileFormat === "excel"} style={fileFormat === "excel" ? { opacity: 0.5, cursor: "not-allowed" } : {}}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
+                  </svg>
+                  Report Download
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+    </>,
     document.body
   );
 }

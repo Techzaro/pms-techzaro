@@ -183,109 +183,95 @@ function UserPerformance() {
                 ))}
               </div>
 
-              {/* TASK DONE CHART */}
-              <div className="up-chart-card">
-                <div className="up-chart-header">
-                  <h2>Task Done</h2>
-                  <div className="up-chart-tabs">
-                    {["Daily", "Weekly", "Monthly"].map((tab) => (
-                      <button
-                        key={tab}
-                        className={activeChartTab === tab ? "active" : ""}
-                        onClick={() => setActiveChartTab(tab)}
-                      >
-                        {tab}
-                      </button>
+              {/* TASK STATUS BREAKDOWN & WORKLOAD */}
+              <div className="up-charts-row">
+                {/* Task Status Breakdown */}
+                <div className="up-chart-card">
+                  <div className="up-chart-header">
+                    <h3>Task Status Breakdown</h3>
+                    <select className="up-chart-select">
+                      <option>All Time</option>
+                      <option>This Month</option>
+                      <option>This Week</option>
+                    </select>
+                  </div>
+                  <p className="up-chart-subtitle">42 Total Task</p>
+                  <div className="up-breakdown-list">
+                    {[
+                      { label: "Completed", percent: 52.1, color: "#10b981" },
+                      { label: "Pending", percent: 22.8, color: "#f59e0b" },
+                      { label: "In Review", percent: 13.9, color: "#6366f1" },
+                      { label: "Overdue", percent: 11.2, color: "#ef4444" },
+                    ].map((item) => (
+                      <div key={item.label} className="up-breakdown-item">
+                        <div className="up-breakdown-label">
+                          <span className="up-breakdown-dot" style={{ background: item.color }}></span>
+                          <span>{item.label}</span>
+                        </div>
+                        <div className="up-breakdown-bar-wrapper">
+                          <div className="up-breakdown-bar">
+                            <div className="up-breakdown-bar-fill" style={{ width: item.percent + "%", background: item.color }}></div>
+                          </div>
+                          <span className="up-breakdown-percent">{item.percent}%</span>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
-                <div className="up-chart-area">
-                  <div className="up-chart-y-axis">
-                    {[400, 300, 200, 100, 0].map((val) => (
-                      <span key={val}>{val}</span>
-                    ))}
+
+                {/* Workload & Capacity */}
+                <div className="up-chart-card">
+                  <div className="up-chart-header">
+                    <h3>Workload & Capacity</h3>
+                    <select className="up-chart-select">
+                      <option>This Week</option>
+                      <option>Last Week</option>
+                      <option>This Month</option>
+                    </select>
                   </div>
-                  <div className="up-chart-content">
-                    <div
-                      className="up-chart-grid-line"
-                      style={{ bottom: "25%" }}
-                    ></div>
-                    <div
-                      className="up-chart-grid-line"
-                      style={{ bottom: "50%" }}
-                    ></div>
-                    <div
-                      className="up-chart-grid-line"
-                      style={{ bottom: "75%" }}
-                    ></div>
-                    <div className="up-chart-bars">
+                  <div className="up-workload-chart">
+                    <div className="up-workload-y-axis">
+                      <span>100%</span>
+                      <span>75%</span>
+                      <span>50%</span>
+                      <span>25%</span>
+                      <span>0%</span>
+                    </div>
+                    <div className="up-workload-bars">
                       {[
-                        65, 85, 120, 180, 280, 350, 380, 320, 260, 150, 100,
-                        80,
-                      ].map((h, i) => (
-                        <div key={i} className="up-chart-bar-wrapper">
-                          <div
-                            className="up-chart-bar"
-                            style={{ height: `${(h / 400) * 100}%` }}
-                          ></div>
-                          <span className="up-chart-bar-label">
-                            {
-                              [
-                                "May",
-                                "Jun",
-                                "Jul",
-                                "Aug",
-                                "Sep",
-                                "Oct",
-                                "Nov",
-                                "Dec",
-                                "Jan",
-                                "Feb",
-                                "Mar",
-                                "Apr",
-                              ][i]
-                            }
-                          </span>
+                        { day: "Mon", percent: 60 },
+                        { day: "Tue", percent: 75 },
+                        { day: "Wed", percent: 100 },
+                        { day: "Thu", percent: 85 },
+                        { day: "Fri", percent: 95 },
+                        { day: "Sat", percent: 40 },
+                        { day: "Sun", percent: 80 },
+                      ].map((item) => (
+                        <div key={item.day} className="up-workload-bar-col">
+                          <div className="up-workload-bar-track">
+                            <div
+                              className="up-workload-bar-fill"
+                              style={{
+                                height: item.percent + "%",
+                                background: item.percent >= 90 ? "linear-gradient(180deg, #6366f1, #818cf8)" : item.percent >= 70 ? "linear-gradient(180deg, #6366f1, #a5b4fc)" : "linear-gradient(180deg, #6366f1, #c7d2fe)",
+                              }}
+                            ></div>
+                          </div>
+                          <span className="up-workload-day">{item.day}</span>
                         </div>
                       ))}
-                    </div>
-                    <div className="up-chart-line-overlay">
-                      <svg
-                        viewBox="0 0 600 200"
-                        preserveAspectRatio="none"
-                        style={{ width: "100%", height: "100%" }}
-                      >
-                        <defs>
-                          <linearGradient
-                            id="lineGradient"
-                            x1="0%"
-                            y1="0%"
-                            x2="100%"
-                            y2="0%"
-                          >
-                            <stop offset="0%" stopColor="#6366f1" />
-                            <stop offset="100%" stopColor="#6366f1" />
-                          </linearGradient>
-                        </defs>
-                        <path
-                          d="M0,150 C30,140 60,100 90,80 C120,60 150,40 180,30 C210,20 240,25 270,35 C300,45 330,60 360,75 C390,90 420,110 450,130 C480,150 510,160 540,170 C570,180 600,185 600,185"
-                          fill="none"
-                          stroke="url(#lineGradient)"
-                          strokeWidth="2.5"
-                        />
-                        <circle cx="90" cy="80" r="4" fill="#6366f1" />
-                        <circle cx="180" cy="30" r="4" fill="#6366f1" />
-                        <circle cx="350" cy="75" r="4" fill="#6366f1" />
-                      </svg>
                     </div>
                   </div>
                 </div>
               </div>
 
+              {/* TASK DONE CHART */}
+          
+
               {/* TASKS TABLE SECTION */}
               <div className="up-table-section">
                 <div className="up-table-tabs">
-                  {["Tasks", "Projects", "Activity"].map((tab) => (
+                  {["Tasks", "Projects"].map((tab) => (
                     <button
                       key={tab}
                       className={activeTaskTab === tab ? "active" : ""}
