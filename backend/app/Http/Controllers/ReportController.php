@@ -46,7 +46,7 @@ class ReportController extends Controller
         }
 
         $members = $query->get()->map(function ($member) use ($timeFilter) {
-            $taskQuery = Task::where('assigned_to', $member->id);
+            $taskQuery = Task::whereHas('assignees', fn ($q) => $q->where('users.id', $member->id));
 
             $taskQuery = $this->applyTimeFilter($taskQuery, $timeFilter);
 
@@ -99,7 +99,7 @@ class ReportController extends Controller
     {
         $timeFilter = $request->query('period', 'all');
 
-        $taskQuery = Task::where('assigned_to', $user->id);
+        $taskQuery = Task::whereHas('assignees', fn ($q) => $q->where('users.id', $user->id));
         $taskQuery = $this->applyTimeFilter($taskQuery, $timeFilter);
 
         $assigned = (clone $taskQuery)->count();
@@ -107,13 +107,13 @@ class ReportController extends Controller
         $pending = (clone $taskQuery)->clone()->whereNotIn('status', ['completed', 'done', 'abandoned'])->count();
         $failed = (clone $taskQuery)->clone()->whereIn('status', ['failed', 'abandoned'])->count();
 
-        $recentTasks = Task::where('assigned_to', $user->id)
+        $recentTasks = Task::whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
             ->with('project:id,title')
             ->latest()
             ->limit(10)
             ->get();
 
-        $projectStats = Task::where('assigned_to', $user->id)
+        $projectStats = Task::whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
             ->join('projects', 'projects.id', '=', 'tasks.project_id')
             ->select(
                 'projects.id as project_id',
@@ -147,21 +147,22 @@ class ReportController extends Controller
      */
     public function projectReport(Project $project)
     {
-        $tasks = $project->tasks()->with('assignee:id,name,email,role')->get();
+        $tasks = $project->tasks()->with('assignees:id,name,email,role')->get();
 
         $total = $tasks->count();
         $completed = $tasks->filter(fn ($t) => in_array(strtolower((string) $t->status), ['done', 'completed'], true))->count();
         $pending = $tasks->filter(fn ($t) => !in_array(strtolower((string) $t->status), ['done', 'completed', 'failed', 'abandoned'], true))->count();
         $failed = $tasks->filter(fn ($t) => in_array(strtolower((string) $t->status), ['failed', 'abandoned'], true))->count();
 
-        $byAssignee = $tasks->groupBy('assigned_to')->map(function ($tasks, $userId) {
-            $assignee = $tasks->first()->assignee;
-            return [
-                'user' => $assignee ? ['id' => $assignee->id, 'name' => $assignee->name] : null,
-                'total' => $tasks->count(),
-                'completed' => $tasks->filter(fn ($t) => in_array(strtolower((string) $t->status), ['done', 'completed'], true))->count(),
-            ];
-        })->values();
+        $byAssignee = $tasks->flatMap(fn ($t) => $t->assignees->map(fn ($a) => ['user' => ['id' => $a->id, 'name' => $a->name], 'task_id' => $t->id, 'status' => $t->status]))
+            ->groupBy('user.id')
+            ->map(function ($items, $userId) {
+                return [
+                    'user' => $items->first()['user'],
+                    'total' => $items->count(),
+                    'completed' => $items->filter(fn ($i) => in_array(strtolower((string) $i['status']), ['done', 'completed'], true))->count(),
+                ];
+            })->values();
 
         return response()->json([
             'project' => [

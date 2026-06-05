@@ -195,6 +195,16 @@
   background: #f8fafc;
 }
 
+.pd-btn-tx--primary {
+  border-color: #6366f1;
+  color: #fff;
+  background: #6366f1;
+}
+
+.pd-btn-tx--primary:hover {
+  background: #4f46e5;
+}
+
 .pd-btn-tx--danger {
   border-color: #fecaca;
   color: #dc2626;
@@ -677,6 +687,23 @@
 
 .pd-link-manage:hover {
   text-decoration: underline;
+}
+
+.pd-btn-assign {
+  border: none;
+  background: #4f46e5;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+  white-space: nowrap;
+}
+
+.pd-btn-assign:hover {
+  background: #4338ca;
 }
 
 .pd-pill {

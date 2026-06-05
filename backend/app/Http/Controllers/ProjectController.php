@@ -8,6 +8,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Project;
 use App\Models\ProjectFile;
+use App\Models\Team;
 use App\Models\User;
 use Illuminate\Http\Request;
 
@@ -66,9 +67,19 @@ class ProjectController extends Controller
         unset($validated['milestones']);
 
         $validated['created_by'] = $request->user()->id;
-        $validated['assigned_users'] = $validated['assigned_users'] ?? [];
         $validated['priority'] = $validated['priority'] ?? 'Medium';
         $validated['status'] = $validated['status'] ?? 'in_progress';
+
+        if (!empty($validated['team_id']) && empty($validated['assigned_users'])) {
+            $team = Team::with('leader:id')->find($validated['team_id']);
+            if ($team && $team->leader_id) {
+                $validated['assigned_users'] = [$team->leader_id];
+            } else {
+                $validated['assigned_users'] = $validated['assigned_users'] ?? [];
+            }
+        } else {
+            $validated['assigned_users'] = $validated['assigned_users'] ?? [];
+        }
 
         $project = Project::create($validated);
         $this->replaceProjectMilestones($project, $milestones);
@@ -88,14 +99,14 @@ class ProjectController extends Controller
             'creator:id,name,email,role',
             'team.leader:id,name',
             'team.members:id,name,email,role',
-            'tasks.assignee:id,name,email,role',
+            'tasks.assignees:id,name,email,role',
             'milestones',
             'activities' => fn ($q) => $q->with('user:id,name')->latest()->limit(30),
             'files',
         ]);
 
         $memberIds = $project->assigned_users ?? [];
-        $members = User::whereIn('id', $memberIds)->orderBy('name')->get(['id', 'name', 'email', 'role']);
+        $members = User::whereIn('id', $memberIds)->where('active', true)->orderBy('name')->get(['id', 'name', 'email', 'role']);
 
         $payload = $project->toArray();
         $payload['members'] = $members;

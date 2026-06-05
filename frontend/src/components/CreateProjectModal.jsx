@@ -15,7 +15,7 @@ const CreateProjectModal = ({ onClose }) => {
   const [error, setError] = useState("");
   const [formErrors, setFormErrors] = useState({});
   const [teams, setTeams] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
 
   const [form, setForm] = useState({
     title: "",
@@ -72,13 +72,29 @@ const CreateProjectModal = ({ onClose }) => {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
     })
       .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setUsers(Array.isArray(data) ? data : data?.users || []))
+      .then((data) => setAllUsers(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, []);
 
+  const displayUsers = (() => {
+    if (form.team_id) {
+      const selectedTeam = teams.find((t) => String(t.id) === String(form.team_id));
+      if (selectedTeam && selectedTeam.members && selectedTeam.members.length > 0) {
+        return selectedTeam.members;
+      }
+    }
+    return allUsers;
+  })();
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === "team_id") {
+        next.assigned_users = [];
+      }
+      return next;
+    });
     if (formErrors[name]) {
       setFormErrors((prev) => {
         const next = { ...prev };
@@ -405,15 +421,16 @@ const CreateProjectModal = ({ onClose }) => {
 
                   {membersOpen && (
                     <div className="cp-dropdown-menu">
-                      {users.length === 0 ? (
+                      {displayUsers.length === 0 ? (
                         <div className="cp-dropdown-empty">No users available</div>
                       ) : (
-                        users.map((user) => (
-                          <label key={user.id} className="cp-dropdown-item">
+                        displayUsers.map((user) => (
+                          <label key={user.id} className={`cp-dropdown-item ${form.team_id ? "cp-dropdown-item--disabled" : ""}`}>
                             <input
                               type="checkbox"
                               checked={form.assigned_users.includes(user.id)}
                               onChange={() => toggleMember(user.id)}
+                              disabled={!!form.team_id}
                             />
                             <span>{user.name}</span>
                           </label>

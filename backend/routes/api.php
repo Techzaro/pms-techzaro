@@ -117,6 +117,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/tasks/{task}/status', [TaskController::class, 'updateStatus']);
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
 
+    // Subtask creation under a parent task
+    Route::post('/tasks/{task}/subtasks', [TaskController::class, 'storeSubtask']);
+
     // My tasks / Assigned by me
     Route::get('/my-tasks', [TaskController::class, 'myTasks']);
     Route::get('/assigned-tasks', [TaskController::class, 'assignedByMe']);

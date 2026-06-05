@@ -579,7 +579,7 @@ function DeliverableDetails() {
                               tasks.map((t) => (
                                 <tr key={t.id}>
                                   <td className="pd-table-strong">{t.title}</td>
-                                  <td>{t.assignee?.name || "—"}</td>
+                                  <td>{t.assignees?.map((a) => a.name).join(", ") || "—"}</td>
                                   <td>
                                     <span className={`pd-pill pd-pill--task-${statusSlug(taskStatusLabel(t.status))}`}>
                                       {taskStatusLabel(t.status)}

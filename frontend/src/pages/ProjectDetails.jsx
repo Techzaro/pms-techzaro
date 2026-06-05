@@ -25,6 +25,7 @@ import {
   Users,
 } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import CreateTaskModal from "../components/CreateTaskModal";
 import "./ProjectDetails.css";
 
 import { authToken, getCurrentRole } from "../utils/auth";
@@ -150,6 +151,7 @@ function ProjectDetails() {
     priority: "Medium",
     status: "pending",
   });
+  const [showTaskModal, setShowTaskModal] = useState(false);
 
   const memberCount = useMemo(() => {
     if (!project) return 0;
@@ -693,6 +695,7 @@ function ProjectDetails() {
   );
 
   return (
+    <>
     <DashboardLayout hideRightSidebar={true}>
       <div className="pd-main-layout">
       <div className="pd-page pd-page--tx">
@@ -800,7 +803,14 @@ function ProjectDetails() {
                 {tab === "tasks" && (
                   <div className="pd-tab-panel">
                     <section className="pd-card-flat pd-card-flat--table">
-                      <h2 className="pd-block-title">All tasks</h2>
+                      <div className="pd-card-flat__head">
+                        <h2 className="pd-block-title pd-block-title--inline">All tasks</h2>
+                        {getCurrentRole() !== "member" && (
+                          <button className="pd-btn-assign" onClick={() => setShowTaskModal(true)}>
+                            + Assign Task
+                          </button>
+                        )}
+                      </div>
                       <div className="pd-table-wrap">
                         <table className="pd-table">
                           <thead>
@@ -824,7 +834,7 @@ function ProjectDetails() {
                               tasks.map((t) => (
                                 <tr key={t.id}>
                                   <td className="pd-table-strong">{t.title}</td>
-                                  <td>{t.assignee?.name || "—"}</td>
+                                  <td>{t.assignees?.map((a) => a.name).join(", ") || "—"}</td>
                                   <td>
                                     <span className={`pd-pill pd-pill--task-${statusSlug(taskStatusLabel(t.status))}`}>
                                       {taskStatusLabel(t.status)}
@@ -1015,6 +1025,18 @@ function ProjectDetails() {
       </div>
       </div>
     </DashboardLayout>
+
+    {showTaskModal && (
+      <CreateTaskModal
+        onClose={(refresh) => {
+          setShowTaskModal(false);
+          if (refresh) loadProject();
+        }}
+        projectId={projectId}
+        projectName={project?.title || ""}
+      />
+    )}
+    </>
   );
 }
 
