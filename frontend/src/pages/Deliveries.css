@@ -306,6 +306,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
+  padding-left: 40px;
 }
 
 .action-icon-btn {
@@ -319,12 +320,14 @@
   cursor: pointer;
   font-size: 18px;
   transition: 0.2s;
-  padding: 0;
+  
+  
 }
 
 .action-icon-btn.action-view {
   background: #EEF2FF;
   color: #4F46E5;
+
 }
 
 .action-icon-btn.action-view:hover {

@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { PiLineVerticalLight } from "react-icons/pi";
 import {
   Activity,
   Building2,
@@ -27,6 +28,7 @@ import {
 import DashboardLayout from "../components/layout/DashboardLayout";
 import CreateTaskModal from "../components/CreateTaskModal";
 import EditProjectModal from "../components/EditProjectModal";
+import ConfirmModal from "../components/ConfirmModal";
 import "./ProjectDetails.css";
 
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
@@ -145,6 +147,9 @@ function ProjectDetails() {
   const [messageType, setMessageType] = useState("");
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [deleteProjectConfirmOpen, setDeleteProjectConfirmOpen] = useState(false);
+  const [deleteTaskConfirmOpen, setDeleteTaskConfirmOpen] = useState(false);
+  const [deleteTaskId, setDeleteTaskId] = useState(null);
 
   const memberCount = useMemo(() => {
     if (!project) return 0;
@@ -206,7 +211,14 @@ function ProjectDetails() {
 
 
   const handleDeleteTask = async (taskId) => {
-    if (!window.confirm("Delete this task?")) return;
+    setDeleteTaskId(taskId);
+    setDeleteTaskConfirmOpen(true);
+  };
+
+  const confirmDeleteTask = async () => {
+    const taskId = deleteTaskId;
+    setDeleteTaskConfirmOpen(false);
+    setDeleteTaskId(null);
     try {
       const token = authToken();
       const res = await fetch(`${API}/tasks/${taskId}`, {
@@ -296,7 +308,11 @@ function ProjectDetails() {
    * Handle handle delete project.
    */
   const handleDeleteProject = async () => {
-    if (!window.confirm("Delete this project permanently?")) return;
+    setDeleteProjectConfirmOpen(true);
+  };
+
+  const confirmDeleteProject = async () => {
+    setDeleteProjectConfirmOpen(false);
     try {
       const token = authToken();
       const res = await fetch(`${API}/projects/${projectId}`, {
@@ -346,7 +362,7 @@ function ProjectDetails() {
     { id: "team", label: "Team", icon: Users },
     { id: "activity", label: "Activity", icon: Activity },
     { id: "files", label: "Files", icon: FolderOpen },
-    { id: "settings", label: "Settings", icon: Settings },
+   
   ];
 
   /**
@@ -683,30 +699,34 @@ function ProjectDetails() {
               <span className="pd-mini-stat__val">{progress}%</span>
             </div>
           </div>
+          <div className="pd-stat"> 
           <div className="pd-mini-stat1">
             <div className="pd-mini-stat__ic pd-mini-stat__ic--orange">
               <ClipboardList size={20} />
             </div>
             <div className="pd-mini-stat__text">
-              <span className="pd-mini-stat__label">Tasks</span>
               <span className="pd-mini-stat__num">{tasks.length}</span>
+              <span className="pd-mini-stat__label">Tasks</span>
             </div>
+            </div>
+            <PiLineVerticalLight fontSize={60} color="#aab1b9" />
             <div className="pd-mini-stat2">
               <div className="pd-mini-stat__ic pd-mini-stat__ic--indigo">
                 <Users size={20} />
               </div>
               <div className="pd-mini-stat__text">
-                <span className="pd-mini-stat__label">Members</span>
                 <span className="pd-mini-stat__num">{memberCount}</span>
+                <span className="pd-mini-stat__label">Members</span>
               </div>
             </div>
+            <PiLineVerticalLight fontSize={60} color="#aab1b9" />
             <div className="pd-mini-stat3">
               <div className="pd-mini-stat__ic pd-mini-stat__ic--green">
                 <CalendarDays size={20} />
               </div>
               <div className="pd-mini-stat__text">
-                <span className="pd-mini-stat__label">Deadline</span>
                 <span className="pd-mini-stat__num pd-mini-stat__num--sm">{formatShortDate(project.end_date)}</span>
+                <span className="pd-mini-stat__label">Deadline</span>
               </div>
             </div>
           </div>
@@ -927,6 +947,28 @@ function ProjectDetails() {
         }}
       />
     )}
+
+    <ConfirmModal
+      isOpen={deleteProjectConfirmOpen}
+      onClose={() => setDeleteProjectConfirmOpen(false)}
+      onConfirm={confirmDeleteProject}
+      title="Confirm Deletion"
+      message="Are you sure you want to delete this project? This action cannot be undone."
+      confirmText="Delete"
+      cancelText="Cancel"
+      danger
+    />
+
+    <ConfirmModal
+      isOpen={deleteTaskConfirmOpen}
+      onClose={() => { setDeleteTaskConfirmOpen(false); setDeleteTaskId(null); }}
+      onConfirm={confirmDeleteTask}
+      title="Confirm Deletion"
+      message="Are you sure you want to delete this task? This action cannot be undone."
+      confirmText="Delete"
+      cancelText="Cancel"
+      danger
+    />
     </>
   );
 }

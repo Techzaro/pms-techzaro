@@ -13,6 +13,7 @@ import {
   MdCreateNewFolder,
 } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import ConfirmModal from "../components/ConfirmModal";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import "./ManageTeam.css";
@@ -62,12 +63,20 @@ function ManageTeam() {
   const [addMemberTeamId, setAddMemberTeamId] = useState(null);
 
   const [teamName, setTeamName] = useState("");
+  const [teamDescription, setTeamDescription] = useState("");
   const [selectedMemberIds, setSelectedMemberIds] = useState([]);
 
   const [selectedUserIds, setSelectedUserIds] = useState([]);
 
   const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+
+  const [deleteTeamConfirmOpen, setDeleteTeamConfirmOpen] = useState(false);
+  const [deleteTeamId, setDeleteTeamId] = useState(null);
+  const [leaderConfirmOpen, setLeaderConfirmOpen] = useState(false);
+  const [leaderConfirmData, setLeaderConfirmData] = useState({ teamId: null, memberId: null, memberName: "" });
+  const [removeMemberConfirmOpen, setRemoveMemberConfirmOpen] = useState(false);
+  const [removeMemberData, setRemoveMemberData] = useState({ teamId: null, memberId: null, memberName: "" });
 
   const navigate = useNavigate();
 
@@ -125,6 +134,15 @@ function ManageTeam() {
   };
 
   const handleSetLeader = async (teamId, memberId) => {
+    const member = teams.flatMap(t => t.members).find(m => Number(m.id) === Number(memberId));
+    setLeaderConfirmData({ teamId, memberId, memberName: member?.name || "this member" });
+    setLeaderConfirmOpen(true);
+  };
+
+  const confirmSetLeader = async () => {
+    const { teamId, memberId } = leaderConfirmData;
+    setLeaderConfirmOpen(false);
+    setLeaderConfirmData({ teamId: null, memberId: null, memberName: "" });
     try {
       const token = authToken();
       const response = await fetch(`${API_URL}/teams/${teamId}/leader`, {
@@ -147,6 +165,15 @@ function ManageTeam() {
   };
 
   const handleRemoveMember = async (teamId, memberId) => {
+    const member = teams.flatMap(t => t.members).find(m => Number(m.id) === Number(memberId));
+    setRemoveMemberData({ teamId, memberId, memberName: member?.name || "this member" });
+    setRemoveMemberConfirmOpen(true);
+  };
+
+  const confirmRemoveMember = async () => {
+    const { teamId, memberId } = removeMemberData;
+    setRemoveMemberConfirmOpen(false);
+    setRemoveMemberData({ teamId: null, memberId: null, memberName: "" });
     try {
       const token = authToken();
       const response = await fetch(`${API_URL}/teams/${teamId}/members/${memberId}`, {
@@ -164,6 +191,14 @@ function ManageTeam() {
   };
 
   const handleDeleteTeam = async (teamId) => {
+    setDeleteTeamId(teamId);
+    setDeleteTeamConfirmOpen(true);
+  };
+
+  const confirmDeleteTeam = async () => {
+    const teamId = deleteTeamId;
+    setDeleteTeamConfirmOpen(false);
+    setDeleteTeamId(null);
     try {
       const token = authToken();
       const response = await fetch(`${API_URL}/teams/${teamId}`, {
@@ -187,6 +222,7 @@ function ManageTeam() {
   const openCreateTeamModal = () => {
     setAddMemberTeamId(null);
     setTeamName("");
+    setTeamDescription("");
     setSelectedMemberIds([]);
     setIsMemberDropdownOpen(false);
     setIsUserDropdownOpen(false);
@@ -205,6 +241,7 @@ function ManageTeam() {
     setIsModalOpen(false);
     setAddMemberTeamId(null);
     setTeamName("");
+    setTeamDescription("");
     setSelectedMemberIds([]);
     setSelectedUserIds([]);
     setIsMemberDropdownOpen(false);
@@ -251,7 +288,7 @@ function ManageTeam() {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name: teamName, member_ids: selectedMemberIds }),
+        body: JSON.stringify({ name: teamName, description: teamDescription, member_ids: selectedMemberIds }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Failed to create team");
@@ -311,6 +348,7 @@ function ManageTeam() {
     });
 
   return (
+    <>
     <DashboardLayout>
       <div className="mt-page">
         {/* HEADER */}
@@ -593,6 +631,28 @@ function ManageTeam() {
                   </div>
 
                   <div style={{ width: "100%", marginBottom: "20px" }}>
+                    <label className="mt-field-label">Description</label>
+                    <textarea
+                      style={{
+                        width: "100%",
+                        minHeight: "80px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "12px",
+                        padding: "12px 14px",
+                        fontSize: "14px",
+                        background: "#f9fafb",
+                        outline: "none",
+                        boxSizing: "border-box",
+                        resize: "vertical",
+                        fontFamily: "inherit",
+                      }}
+                      value={teamDescription}
+                      onChange={(e) => setTeamDescription(e.target.value)}
+                      placeholder="Enter team description (optional)"
+                    />
+                  </div>
+
+                  <div style={{ width: "100%", marginBottom: "20px" }}>
                     <label className="mt-field-label">Select Members</label>
                     <div
                       style={{
@@ -676,6 +736,39 @@ function ManageTeam() {
         )}
       </div>
     </DashboardLayout>
+
+    <ConfirmModal
+      isOpen={deleteTeamConfirmOpen}
+      onClose={() => { setDeleteTeamConfirmOpen(false); setDeleteTeamId(null); }}
+      onConfirm={confirmDeleteTeam}
+      title="Delete Team"
+      message="Are you sure you want to delete this team? All associated team data may be affected. This action cannot be undone."
+      confirmText="Delete Team"
+      cancelText="Cancel"
+      danger
+    />
+
+    <ConfirmModal
+      isOpen={leaderConfirmOpen}
+      onClose={() => { setLeaderConfirmOpen(false); setLeaderConfirmData({ teamId: null, memberId: null, memberName: "" }); }}
+      onConfirm={confirmSetLeader}
+      title="Confirm Team Assignment"
+      message={`Are you sure you want to assign ${leaderConfirmData.memberName} as Team Lead? This will update team responsibilities and permissions.`}
+      confirmText="Confirm"
+      cancelText="Cancel"
+    />
+
+    <ConfirmModal
+      isOpen={removeMemberConfirmOpen}
+      onClose={() => { setRemoveMemberConfirmOpen(false); setRemoveMemberData({ teamId: null, memberId: null, memberName: "" }); }}
+      onConfirm={confirmRemoveMember}
+      title="Remove Member"
+      message={`Are you sure you want to remove ${removeMemberData.memberName} from this team? This action cannot be undone.`}
+      confirmText="Remove"
+      cancelText="Cancel"
+      danger
+    />
+    </>
   );
 }
 

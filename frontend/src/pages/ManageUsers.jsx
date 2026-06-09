@@ -9,6 +9,7 @@ import { IoSearchOutline } from "react-icons/io5";
 import { CiCirclePlus } from "react-icons/ci";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import ConfirmModal from "../components/ConfirmModal";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, getUser, setUser, rolePath } from "../utils/auth";
 import "./ManageUsers.css";
@@ -40,15 +41,40 @@ function ManageUsers() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newUser, setNewUser] = useState({
     fullName: "",
-    email: "",
-    role: "member",
-    contact_no: "",
-    address: "",
+    fatherName: "",
+    idCardNumber: "",
+    presentAddress: "",
+    permanentAddress: "",
+    phoneNumber: "",
+    emergencyContactName: "",
+    emergencyContactRelation: "",
+    emergencyContactPhone: "",
+    personalEmail: "",
+    professionalEmail: "",
+    professionalEmailPassword: "",
+    recoveryEmail: "",
     department: "",
     departmentCustom: "",
     designation: "",
     designationCustom: "",
-    employee_code: "",
+    hiredFor: "",
+    employeeCode: "",
+    jobStartedDate: "",
+    jobEndedDate: "",
+    role: "member",
+    grossSalary: "",
+    appliedVia: "",
+    bankName: "",
+    bankAccountNumber: "",
+    bankAccountTitle: "",
+    employmentContract: null,
+    offerLetter: null,
+    techxaroRegulations: null,
+    latestEducationCert: null,
+    cv: null,
+    previousExpLetter: null,
+    previousSalarySlip: null,
+    otherDocument: null,
   });
   const [loading, setLoading] = useState(false);
   const [savingUserId, setSavingUserId] = useState(null);
@@ -59,6 +85,8 @@ function ManageUsers() {
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [sortOrder, setSortOrder] = useState("");
+  const [resignConfirmOpen, setResignConfirmOpen] = useState(false);
+  const [resignUserId, setResignUserId] = useState(null);
 
   const [currentUserId, setCurrentUserId] = useState(() => {
     const user = getUser();
@@ -175,30 +203,61 @@ function ManageUsers() {
     setAddErrors({});
     setNewUser({
       fullName: "",
-      email: "",
-      role: "member",
-      contact_no: "",
-      address: "",
+      fatherName: "",
+      idCardNumber: "",
+      presentAddress: "",
+      permanentAddress: "",
+      phoneNumber: "",
+      emergencyContactName: "",
+      emergencyContactRelation: "",
+      emergencyContactPhone: "",
+      personalEmail: "",
+      professionalEmail: "",
+      professionalEmailPassword: "",
+      recoveryEmail: "",
       department: "",
       departmentCustom: "",
       designation: "",
       designationCustom: "",
-      employee_code: "",
+      hiredFor: "",
+      employeeCode: "",
+      jobStartedDate: "",
+      jobEndedDate: "",
+      role: "member",
+      grossSalary: "",
+      appliedVia: "",
+      bankName: "",
+      bankAccountNumber: "",
+      bankAccountTitle: "",
+      employmentContract: null,
+      offerLetter: null,
+      techxaroRegulations: null,
+      latestEducationCert: null,
+      cv: null,
+      previousExpLetter: null,
+      previousSalarySlip: null,
+      otherDocument: null,
     });
   };
 
   const validateAddForm = () => {
     const errors = {};
     if (!newUser.fullName.trim()) errors.fullName = "Full Name is required.";
-    if (!newUser.email.trim()) {
-      errors.email = "Email Address is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.email.trim())) {
-      errors.email = "Please enter a valid email address.";
-    } else if (users.some((u) => u.email.toLowerCase() === newUser.email.trim().toLowerCase())) {
-      errors.email = "This email is already registered.";
+    if (!newUser.fatherName.trim()) errors.fatherName = "Father Name is required.";
+    if (!newUser.idCardNumber.trim()) errors.idCardNumber = "ID Card Number is required.";
+    if (!newUser.presentAddress.trim()) errors.presentAddress = "Present Address is required.";
+    if (!newUser.phoneNumber.trim()) errors.phoneNumber = "Phone Number is required.";
+    if (!newUser.personalEmail.trim()) {
+      errors.personalEmail = "Personal Email is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.personalEmail.trim())) {
+      errors.personalEmail = "Please enter a valid email address.";
     }
-    if (!newUser.contact_no.trim()) errors.contact_no = "Contact Number is required.";
-    if (!newUser.address.trim()) errors.address = "Address is required.";
+    if (!newUser.professionalEmail.trim()) {
+      errors.professionalEmail = "Professional Email is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.professionalEmail.trim())) {
+      errors.professionalEmail = "Please enter a valid email address.";
+    }
+    if (!newUser.professionalEmailPassword.trim()) errors.professionalEmailPassword = "Professional Email Password is required.";
     if (!newUser.department) {
       errors.department = "Department is required.";
     } else if (newUser.department === "__custom__" && !newUser.departmentCustom.trim()) {
@@ -209,7 +268,8 @@ function ManageUsers() {
     } else if (newUser.designation === "__custom__" && !newUser.designationCustom.trim()) {
       errors.designationCustom = "Custom Designation is required.";
     }
-    if (!newUser.employee_code.trim()) errors.employee_code = "Employee Code is required.";
+    if (!newUser.employeeCode.trim()) errors.employeeCode = "Employee Code is required.";
+    if (!newUser.jobStartedDate) errors.jobStartedDate = "Job Start Date is required.";
     return errors;
   };
 
@@ -256,13 +316,14 @@ function ManageUsers() {
   };
 
   const handleResignUser = async (userId) => {
-    const userToResign = users.find(u => u.id === userId);
-    const userName = userToResign ? userToResign.name : "this user";
+    setResignUserId(userId);
+    setResignConfirmOpen(true);
+  };
 
-    const confirmation = window.confirm(
-      `Are you sure you want to resign ${userName}? They will no longer be able to access the system.`
-    );
-    if (!confirmation) return;
+  const confirmResignUser = async () => {
+    const userId = resignUserId;
+    setResignConfirmOpen(false);
+    setResignUserId(null);
 
     try {
       const res = await fetch(`${API_URL}/users/${userId}/resign`, {
@@ -377,20 +438,53 @@ function ManageUsers() {
     const finalDesignation =
       newUser.designation === "__custom__" ? newUser.designationCustom : newUser.designation;
 
+    const formData = new FormData();
+    formData.append("name", newUser.fullName);
+    formData.append("father_name", newUser.fatherName);
+    formData.append("id_card_number", newUser.idCardNumber);
+    formData.append("present_address", newUser.presentAddress);
+    formData.append("permanent_address", newUser.permanentAddress);
+    formData.append("phone_number", newUser.phoneNumber);
+    formData.append("emergency_contact_name", newUser.emergencyContactName);
+    formData.append("emergency_contact_relation", newUser.emergencyContactRelation);
+    formData.append("emergency_contact_phone", newUser.emergencyContactPhone);
+    formData.append("personal_email", newUser.personalEmail);
+    formData.append("email", newUser.professionalEmail);
+    formData.append("professional_email_password", newUser.professionalEmailPassword);
+    formData.append("recovery_email", newUser.recoveryEmail);
+    formData.append("department", finalDepartment || "");
+    formData.append("designation", finalDesignation || "");
+    formData.append("hired_for", newUser.hiredFor);
+    formData.append("employee_code", newUser.employeeCode);
+    formData.append("job_started_date", newUser.jobStartedDate);
+    formData.append("job_ended_date", newUser.jobEndedDate);
+    formData.append("role", newUser.role);
+    formData.append("gross_salary", newUser.grossSalary);
+    formData.append("applied_via", newUser.appliedVia);
+    formData.append("bank_name", newUser.bankName);
+    formData.append("bank_account_number", newUser.bankAccountNumber);
+    formData.append("bank_account_title", newUser.bankAccountTitle);
+
+    const fileFields = [
+      "employmentContract", "offerLetter", "techxaroRegulations",
+      "latestEducationCert", "cv", "previousExpLetter",
+      "previousSalarySlip", "otherDocument",
+    ];
+    const fileApiNames = [
+      "employment_contract", "offer_letter", "techxaro_regulations",
+      "latest_education_cert", "cv", "previous_exp_letter",
+      "previous_salary_slip", "other_document",
+    ];
+    fileFields.forEach((field, i) => {
+      if (newUser[field]) formData.append(fileApiNames[i], newUser[field]);
+    });
+
     try {
+      const token = authToken();
       const res = await fetch(`${API_URL}/users`, {
         method: "POST",
-        headers: { Accept: "application/json", ...authHeaders() },
-        body: JSON.stringify({
-          name: newUser.fullName,
-          email: newUser.email,
-          role: newUser.role,
-          contact_no: newUser.contact_no || null,
-          address: newUser.address || null,
-          department: finalDepartment || null,
-          designation: finalDesignation || null,
-          employee_code: newUser.employee_code || null,
-        }),
+        headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: formData,
       });
 
       const data = await res.json();
@@ -406,6 +500,7 @@ function ManageUsers() {
   };
 
   return (
+    <>
     <DashboardLayout>
       <div className="manage-users-page">
         <div className="manage-users-header">
@@ -506,117 +601,98 @@ function ManageUsers() {
               </div>
 
               <form className="user-form" onSubmit={handleSubmit}>
+                {/* ===== Personal Information ===== */}
+                <h3 className="form-section-title">Personal Information</h3>
                 <div className="user-form-grid">
                   <div className="form-row">
-                    <label htmlFor="fullName">Full Name</label>
-                    <input
-                      type="text"
-                      id="fullName"
-                      name="fullName"
-                      value={newUser.fullName}
-                      onChange={handleChange}
-                      placeholder="Enter full name"
-                      className={addErrors.fullName ? "field-error" : ""}
-                    />
+                    <label htmlFor="fullName">Employee Full Name *</label>
+                    <input type="text" id="fullName" name="fullName" value={newUser.fullName} onChange={handleChange} placeholder="Enter full name" className={addErrors.fullName ? "field-error" : ""} />
                     {addErrors.fullName && <span className="field-error-text">{addErrors.fullName}</span>}
                   </div>
                   <div className="form-row">
-                    <label htmlFor="email">Email Address</label>
-                    <input
-                      type="email"
-                      id="email"
-                      name="email"
-                      value={newUser.email}
-                      onChange={handleChange}
-                      placeholder="Enter email address"
-                      className={addErrors.email ? "field-error" : ""}
-                    />
-                    {addErrors.email && <span className="field-error-text">{addErrors.email}</span>}
+                    <label htmlFor="fatherName">Father Name *</label>
+                    <input type="text" id="fatherName" name="fatherName" value={newUser.fatherName} onChange={handleChange} placeholder="Enter father name" className={addErrors.fatherName ? "field-error" : ""} />
+                    {addErrors.fatherName && <span className="field-error-text">{addErrors.fatherName}</span>}
                   </div>
                   <div className="form-row">
-                    <label htmlFor="contact_no">Contact No</label>
-                    <input
-                      type="text"
-                      id="contact_no"
-                      name="contact_no"
-                      value={newUser.contact_no}
-                      onChange={handleChange}
-                      placeholder="Enter contact number"
-                      className={addErrors.contact_no ? "field-error" : ""}
-                    />
-                    {addErrors.contact_no && <span className="field-error-text">{addErrors.contact_no}</span>}
+                    <label htmlFor="idCardNumber">ID Card Number *</label>
+                    <input type="text" id="idCardNumber" name="idCardNumber" value={newUser.idCardNumber} onChange={handleChange} placeholder="Enter ID card number" className={addErrors.idCardNumber ? "field-error" : ""} />
+                    {addErrors.idCardNumber && <span className="field-error-text">{addErrors.idCardNumber}</span>}
                   </div>
                   <div className="form-row">
-                    <label htmlFor="address">Address</label>
-                    <input
-                      type="text"
-                      id="address"
-                      name="address"
-                      value={newUser.address}
-                      onChange={handleChange}
-                      placeholder="Enter address"
-                      className={addErrors.address ? "field-error" : ""}
-                    />
-                    {addErrors.address && <span className="field-error-text">{addErrors.address}</span>}
+                    <label htmlFor="phoneNumber">Phone Number *</label>
+                    <input type="text" id="phoneNumber" name="phoneNumber" value={newUser.phoneNumber} onChange={handleChange} placeholder="Enter phone number" className={addErrors.phoneNumber ? "field-error" : ""} />
+                    {addErrors.phoneNumber && <span className="field-error-text">{addErrors.phoneNumber}</span>}
+                  </div>
+                </div>
+
+                {/* ===== Address ===== */}
+                <h3 className="form-section-title">Address</h3>
+                <div className="user-form-grid">
+                  <div className="form-row">
+                    <label htmlFor="presentAddress">Present Address *</label>
+                    <input type="text" id="presentAddress" name="presentAddress" value={newUser.presentAddress} onChange={handleChange} placeholder="Enter present address" className={addErrors.presentAddress ? "field-error" : ""} />
+                    {addErrors.presentAddress && <span className="field-error-text">{addErrors.presentAddress}</span>}
                   </div>
                   <div className="form-row">
-                    <label htmlFor="department">Department</label>
-                    <select
-                      id="department"
-                      name="department"
-                      value={newUser.department}
-                      onChange={handleChange}
-                      className={addErrors.department ? "field-error" : ""}
-                    >
-                      <option value="">Select Department</option>
-                      {DEPARTMENTS.map((d) =>
-                        d === "__custom__" ? (
-                          <option key="custom" value="__custom__">
-                            Custom / Type Here
-                          </option>
-                        ) : (
-                          <option key={d} value={d}>
-                            {d}
-                          </option>
-                        )
-                      )}
-                    </select>
-                    {addErrors.department && <span className="field-error-text">{addErrors.department}</span>}
+                    <label htmlFor="permanentAddress">Permanent Address</label>
+                    <input type="text" id="permanentAddress" name="permanentAddress" value={newUser.permanentAddress} onChange={handleChange} placeholder="Enter permanent address" />
                   </div>
-                  {newUser.department === "__custom__" && (
-                    <div className="form-row">
-                      <label htmlFor="departmentCustom">Custom Department</label>
-                      <input
-                        type="text"
-                        id="departmentCustom"
-                        name="departmentCustom"
-                        value={newUser.departmentCustom}
-                        onChange={handleChange}
-                        placeholder="Enter custom department"
-                        className={addErrors.departmentCustom ? "field-error" : ""}
-                      />
-                      {addErrors.departmentCustom && <span className="field-error-text">{addErrors.departmentCustom}</span>}
-                    </div>
-                  )}
+                </div>
+
+                {/* ===== Emergency Contact ===== */}
+                <h3 className="form-section-title">Emergency Contact</h3>
+                <div className="user-form-grid">
                   <div className="form-row">
-                    <label htmlFor="designation">Designation</label>
-                    <select
-                      id="designation"
-                      name="designation"
-                      value={newUser.designation}
-                      onChange={handleChange}
-                      className={addErrors.designation ? "field-error" : ""}
-                    >
+                    <label htmlFor="emergencyContactName">Name</label>
+                    <input type="text" id="emergencyContactName" name="emergencyContactName" value={newUser.emergencyContactName} onChange={handleChange} placeholder="Emergency contact name" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="emergencyContactRelation">Relation</label>
+                    <input type="text" id="emergencyContactRelation" name="emergencyContactRelation" value={newUser.emergencyContactRelation} onChange={handleChange} placeholder="e.g. Father, Mother, Spouse" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="emergencyContactPhone">Phone</label>
+                    <input type="text" id="emergencyContactPhone" name="emergencyContactPhone" value={newUser.emergencyContactPhone} onChange={handleChange} placeholder="Emergency contact phone" />
+                  </div>
+                </div>
+
+                {/* ===== Email Accounts ===== */}
+                <h3 className="form-section-title">Email Accounts</h3>
+                <div className="user-form-grid">
+                  <div className="form-row">
+                    <label htmlFor="personalEmail">Personal Email Address *</label>
+                    <input type="email" id="personalEmail" name="personalEmail" value={newUser.personalEmail} onChange={handleChange} placeholder="Enter personal email" className={addErrors.personalEmail ? "field-error" : ""} />
+                    {addErrors.personalEmail && <span className="field-error-text">{addErrors.personalEmail}</span>}
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="professionalEmail">Professional Email Address *</label>
+                    <input type="email" id="professionalEmail" name="professionalEmail" value={newUser.professionalEmail} onChange={handleChange} placeholder="Enter professional email" className={addErrors.professionalEmail ? "field-error" : ""} />
+                    {addErrors.professionalEmail && <span className="field-error-text">{addErrors.professionalEmail}</span>}
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="professionalEmailPassword">Password of Professional Email *</label>
+                    <input type="password" id="professionalEmailPassword" name="professionalEmailPassword" value={newUser.professionalEmailPassword} onChange={handleChange} placeholder="Enter password" className={addErrors.professionalEmailPassword ? "field-error" : ""} />
+                    {addErrors.professionalEmailPassword && <span className="field-error-text">{addErrors.professionalEmailPassword}</span>}
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="recoveryEmail">Recovery Email</label>
+                    <input type="email" id="recoveryEmail" name="recoveryEmail" value={newUser.recoveryEmail} onChange={handleChange} placeholder="Email for recovery" />
+                  </div>
+                </div>
+
+                {/* ===== Employment Details ===== */}
+                <h3 className="form-section-title">Employment Details</h3>
+                <div className="user-form-grid">
+                  <div className="form-row">
+                    <label htmlFor="designation">Designation / Role *</label>
+                    <select id="designation" name="designation" value={newUser.designation} onChange={handleChange} className={addErrors.designation ? "field-error" : ""}>
                       <option value="">Select Designation</option>
                       {DESIGNATIONS.map((d) =>
                         d === "__custom__" ? (
-                          <option key="custom" value="__custom__">
-                            Custom / Type Here
-                          </option>
+                          <option key="custom" value="__custom__">Custom / Type Here</option>
                         ) : (
-                          <option key={d} value={d}>
-                            {d}
-                          </option>
+                          <option key={d} value={d}>{d}</option>
                         )
                       )}
                     </select>
@@ -625,39 +701,119 @@ function ManageUsers() {
                   {newUser.designation === "__custom__" && (
                     <div className="form-row">
                       <label htmlFor="designationCustom">Custom Designation</label>
-                      <input
-                        type="text"
-                        id="designationCustom"
-                        name="designationCustom"
-                        value={newUser.designationCustom}
-                        onChange={handleChange}
-                        placeholder="Enter custom designation"
-                        className={addErrors.designationCustom ? "field-error" : ""}
-                      />
+                      <input type="text" id="designationCustom" name="designationCustom" value={newUser.designationCustom} onChange={handleChange} placeholder="Enter custom designation" className={addErrors.designationCustom ? "field-error" : ""} />
                       {addErrors.designationCustom && <span className="field-error-text">{addErrors.designationCustom}</span>}
                     </div>
                   )}
                   <div className="form-row">
-                    <label htmlFor="employee_code">Employee Code</label>
-                    <input
-                      type="text"
-                      id="employee_code"
-                      name="employee_code"
-                      value={newUser.employee_code}
-                      onChange={handleChange}
-                      placeholder="Enter employee code"
-                      className={addErrors.employee_code ? "field-error" : ""}
-                    />
-                    {addErrors.employee_code && <span className="field-error-text">{addErrors.employee_code}</span>}
+                    <label htmlFor="department">Department *</label>
+                    <select id="department" name="department" value={newUser.department} onChange={handleChange} className={addErrors.department ? "field-error" : ""}>
+                      <option value="">Select Department</option>
+                      {DEPARTMENTS.map((d) =>
+                        d === "__custom__" ? (
+                          <option key="custom" value="__custom__">Custom / Type Here</option>
+                        ) : (
+                          <option key={d} value={d}>{d}</option>
+                        )
+                      )}
+                    </select>
+                    {addErrors.department && <span className="field-error-text">{addErrors.department}</span>}
+                  </div>
+                  {newUser.department === "__custom__" && (
+                    <div className="form-row">
+                      <label htmlFor="departmentCustom">Custom Department</label>
+                      <input type="text" id="departmentCustom" name="departmentCustom" value={newUser.departmentCustom} onChange={handleChange} placeholder="Enter custom department" className={addErrors.departmentCustom ? "field-error" : ""} />
+                      {addErrors.departmentCustom && <span className="field-error-text">{addErrors.departmentCustom}</span>}
+                    </div>
+                  )}
+                  <div className="form-row">
+                    <label htmlFor="hiredFor">Hired For</label>
+                    <input type="text" id="hiredFor" name="hiredFor" value={newUser.hiredFor} onChange={handleChange} placeholder="e.g. Full-time, Part-time, Contract" />
                   </div>
                   <div className="form-row">
-                    <label htmlFor="role">Role</label>
+                    <label htmlFor="employeeCode">Employee Code *</label>
+                    <input type="text" id="employeeCode" name="employeeCode" value={newUser.employeeCode} onChange={handleChange} placeholder="Enter employee code" className={addErrors.employeeCode ? "field-error" : ""} />
+                    {addErrors.employeeCode && <span className="field-error-text">{addErrors.employeeCode}</span>}
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="role">System Role</label>
                     <select id="role" name="role" value={newUser.role} onChange={handleChange}>
                       <option value="admin">Admin</option>
                       <option value="manager">Manager</option>
                       <option value="team_lead">Team Lead</option>
                       <option value="member">Member</option>
                     </select>
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="jobStartedDate">Job Started Date *</label>
+                    <input type="date" id="jobStartedDate" name="jobStartedDate" value={newUser.jobStartedDate} onChange={handleChange} className={addErrors.jobStartedDate ? "field-error" : ""} />
+                    {addErrors.jobStartedDate && <span className="field-error-text">{addErrors.jobStartedDate}</span>}
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="jobEndedDate">Job Ended Date</label>
+                    <input type="date" id="jobEndedDate" name="jobEndedDate" value={newUser.jobEndedDate} onChange={handleChange} />
+                  </div>
+                </div>
+
+                {/* ===== Salary & Bank ===== */}
+                <h3 className="form-section-title">Salary & Bank Details</h3>
+                <div className="user-form-grid">
+                  <div className="form-row">
+                    <label htmlFor="grossSalary">Gross Salary</label>
+                    <input type="number" id="grossSalary" name="grossSalary" value={newUser.grossSalary} onChange={handleChange} placeholder="Enter gross salary" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="appliedVia">Applied Via</label>
+                    <input type="text" id="appliedVia" name="appliedVia" value={newUser.appliedVia} onChange={handleChange} placeholder="e.g. Website, Referral, LinkedIn" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="bankName">Bank Name</label>
+                    <input type="text" id="bankName" name="bankName" value={newUser.bankName} onChange={handleChange} placeholder="Enter bank name" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="bankAccountNumber">Bank Account Number</label>
+                    <input type="text" id="bankAccountNumber" name="bankAccountNumber" value={newUser.bankAccountNumber} onChange={handleChange} placeholder="Enter account number" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="bankAccountTitle">Bank Account Title</label>
+                    <input type="text" id="bankAccountTitle" name="bankAccountTitle" value={newUser.bankAccountTitle} onChange={handleChange} placeholder="Enter account title" />
+                  </div>
+                </div>
+
+                {/* ===== Documents ===== */}
+                <h3 className="form-section-title">Documents</h3>
+                <div className="user-form-grid">
+                  <div className="form-row">
+                    <label htmlFor="employmentContract">Employment Contract</label>
+                    <input type="file" id="employmentContract" onChange={(e) => setNewUser((p) => ({ ...p, employmentContract: e.target.files[0] || null }))} accept=".pdf,.doc,.docx" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="offerLetter">Offer Letter</label>
+                    <input type="file" id="offerLetter" onChange={(e) => setNewUser((p) => ({ ...p, offerLetter: e.target.files[0] || null }))} accept=".pdf,.doc,.docx" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="techxaroRegulations">Techxaro Regulations</label>
+                    <input type="file" id="techxaroRegulations" onChange={(e) => setNewUser((p) => ({ ...p, techxaroRegulations: e.target.files[0] || null }))} accept=".pdf,.doc,.docx" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="latestEducationCert">Latest Educational Certificate</label>
+                    <input type="file" id="latestEducationCert" onChange={(e) => setNewUser((p) => ({ ...p, latestEducationCert: e.target.files[0] || null }))} accept=".pdf,.doc,.docx,.jpg,.png" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="cv">CV</label>
+                    <input type="file" id="cv" onChange={(e) => setNewUser((p) => ({ ...p, cv: e.target.files[0] || null }))} accept=".pdf,.doc,.docx" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="previousExpLetter">Previous Job Experience Letter</label>
+                    <input type="file" id="previousExpLetter" onChange={(e) => setNewUser((p) => ({ ...p, previousExpLetter: e.target.files[0] || null }))} accept=".pdf,.doc,.docx" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="previousSalarySlip">Previous Salary Slip</label>
+                    <input type="file" id="previousSalarySlip" onChange={(e) => setNewUser((p) => ({ ...p, previousSalarySlip: e.target.files[0] || null }))} accept=".pdf,.doc,.docx,.jpg,.png" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="otherDocument">Revised / Other Document</label>
+                    <input type="file" id="otherDocument" onChange={(e) => setNewUser((p) => ({ ...p, otherDocument: e.target.files[0] || null }))} accept=".pdf,.doc,.docx,.jpg,.png" />
                   </div>
                 </div>
 
@@ -676,6 +832,18 @@ function ManageUsers() {
 
       </div>
     </DashboardLayout>
+
+    <ConfirmModal
+      isOpen={resignConfirmOpen}
+      onClose={() => { setResignConfirmOpen(false); setResignUserId(null); }}
+      onConfirm={confirmResignUser}
+      title="Confirm Resignation"
+      message="Are you sure you want to resign? This action may affect your access and assigned responsibilities."
+      confirmText="Confirm Resignation"
+      cancelText="Cancel"
+      danger
+    />
+    </>
   );
 }
 

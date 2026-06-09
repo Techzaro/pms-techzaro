@@ -20,6 +20,7 @@ import {
   Users,
 } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import ConfirmModal from "../components/ConfirmModal";
 import { rolePath } from "../utils/auth";
 import "./ProjectDetails.css";
 
@@ -128,6 +129,7 @@ function DeliverableDetails() {
     priority: "Medium",
     status: "pending",
   });
+  const [deleteDeliverableConfirmOpen, setDeleteDeliverableConfirmOpen] = useState(false);
 
   const memberCount = useMemo(() => {
     if (!deliverable) return 0;
@@ -153,7 +155,11 @@ function DeliverableDetails() {
   };
 
   const handleDeleteDeliverable = async () => {
-    if (!window.confirm("Delete this deliverable permanently?")) return;
+    setDeleteDeliverableConfirmOpen(true);
+  };
+
+  const confirmDeleteDeliverable = async () => {
+    setDeleteDeliverableConfirmOpen(false);
     showMessage("Deliverable deleted.");
     setTimeout(() => navigate(rolePath("deliveries")), 800);
   };
@@ -453,6 +459,7 @@ function DeliverableDetails() {
   );
 
   return (
+    <>
     <DashboardLayout hideRightSidebar={true}>
       <div className="pd-main-layout">
       <div className="pd-page pd-page--tx">
@@ -771,6 +778,18 @@ function DeliverableDetails() {
       </div>
       </div>
     </DashboardLayout>
+
+    <ConfirmModal
+      isOpen={deleteDeliverableConfirmOpen}
+      onClose={() => setDeleteDeliverableConfirmOpen(false)}
+      onConfirm={confirmDeleteDeliverable}
+      title="Confirm Deletion"
+      message="Are you sure you want to delete this deliverable? This action cannot be undone."
+      confirmText="Delete"
+      cancelText="Cancel"
+      danger
+    />
+    </>
   );
 }
 

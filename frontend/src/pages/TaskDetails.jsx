@@ -13,6 +13,7 @@ import {
 import DashboardLayout from "../components/layout/DashboardLayout";
 import CreateSubtaskModal from "../components/CreateSubtaskModal";
 import EditTaskModal from "../components/EditTaskModal";
+import ConfirmModal from "../components/ConfirmModal";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import "./TaskDetails.css";
@@ -100,6 +101,7 @@ function TaskDetails() {
   const [tab, setTab] = useState("overview");
   const [showSubtaskModal, setShowSubtaskModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [deleteTaskConfirmOpen, setDeleteTaskConfirmOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
 
@@ -136,7 +138,11 @@ function TaskDetails() {
   }, []);
 
   const handleDeleteTask = async () => {
-    if (!window.confirm("Delete this task permanently?")) return;
+    setDeleteTaskConfirmOpen(true);
+  };
+
+  const confirmDeleteTask = async () => {
+    setDeleteTaskConfirmOpen(false);
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${taskId}`, {
@@ -164,6 +170,7 @@ function TaskDetails() {
   if (!task) return <DashboardLayout hideRightSidebar><div className="td-loading td-error">Task not found.</div></DashboardLayout>;
 
   return (
+    <>
     <DashboardLayout hideRightSidebar>
       <div className="td-page">
         {message && <div className={`td-toast td-toast--${messageType}`}>{message}</div>}
@@ -247,9 +254,16 @@ function TaskDetails() {
 
             {/* TABS */}
             <div className="td-tabs">
-              {["overview", "subtasks", "team", "activity", "files"].map((id) => (
+              {[
+                { id: "overview", label: "Overview", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
+                { id: "subtasks", label: "Tasks", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="M9 3v4M14 3v4"/><path d="M9 12l2 2 4-4"/></svg> },
+                { id: "team", label: "Team", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg> },
+                { id: "activity", label: "Activity", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
+                { id: "files", label: "Files", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg> },
+              ].map(({ id, label, icon }) => (
                 <button key={id} className={`td-tab ${tab === id ? "td-tab--on" : ""}`} onClick={() => setTab(id)}>
-                  {id.charAt(0).toUpperCase() + id.slice(1)}
+                  {icon}
+                  {label}
                 </button>
               ))}
             </div>
@@ -494,6 +508,18 @@ function TaskDetails() {
         />
       )}
     </DashboardLayout>
+
+    <ConfirmModal
+      isOpen={deleteTaskConfirmOpen}
+      onClose={() => setDeleteTaskConfirmOpen(false)}
+      onConfirm={confirmDeleteTask}
+      title="Confirm Deletion"
+      message="Are you sure you want to delete this task? This action cannot be undone."
+      confirmText="Delete"
+      cancelText="Cancel"
+      danger
+    />
+    </>
   );
 }
 
