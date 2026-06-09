@@ -76,7 +76,7 @@ function Projects() {
   };
 
   const getProgressColor = (percent) => {
-    const grey = [209, 213, 219];
+    const grey = [107, 114, 128];
     const blue = [79, 70, 229];
     const t = Math.min(percent, 100) / 100;
     const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
@@ -187,7 +187,8 @@ function Projects() {
                         className="progress-fill"
                         style={{
                           width: `${progress}%`,
-                          background: getProgressColor(progress),
+                          minWidth: progress === 0 ? "100%" : "0",
+                          background: progress === 0 ? "#d1d5db" : getProgressColor(progress),
                         }}
                       ></div>
                     </div>

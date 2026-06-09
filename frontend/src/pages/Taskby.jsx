@@ -206,13 +206,13 @@ const Taskby = () => {
       </div>
 
       <div className="container">
-        <div className="table-header">
-          <div>Assigned to</div>
-          <div>Task Name</div>
+           <div className="table-header">
+          <div className="task-name-column" style={{ marginRight: "40px" }}>Assigned by</div>
+          <div className="task-name-column" style={{ paddingLeft: "33px" }}>Task Name</div>
           <div>Type</div>
-          <div>Status</div>
-          <div>Priority</div>
-          <div>Date</div>
+          <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
+          <div className="priority-column" style={{ paddingRight: "10px" }}>Priority</div>
+          <div className="date-column" style={{ paddingRight: "50px" }}>  Date</div>
           <div>Action</div>
         </div>
 
@@ -229,18 +229,18 @@ const Taskby = () => {
               const projectStatus = calculateProjectStatus(item);
               const primaryUser = item.assigned_user;
               return (
-                <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }} key={`project-${item.id}-${primaryUser?.id || 0}`}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 12px", borderBottom: "1px solid #f1f5f9" }} key={`project-${item.id}-${primaryUser?.id || 0}`}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                       {getInitials(primaryUser?.name)}
                     </div>
-                    <div style={{ overflow: "hidden", minWidth: 0 }}>
+                    <div style={{ minWidth: 0 }}>
                       <div className="user-name">{primaryUser?.name || "Unassigned"}</div>
                       <div className="user-role">{primaryUser?.role || ""}</div>
                     </div>
                   </div>
                   <div>
-                    <div className="task-title">{item.title}</div>
+                    <div className="task-title" style={{paddingLeft:"50px"}}>{item.title}</div>
                   </div>
                   <div>
                     <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
@@ -275,18 +275,18 @@ const Taskby = () => {
             const assignees = item.assignees || [];
             const primaryAssignee = assignees[0];
             return (
-              <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }} key={`task-${item.id}-${primaryAssignee?.id || 0}`}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 12px", borderBottom: "1px solid #f1f5f9" }} key={`task-${item.id}-${primaryAssignee?.id || 0}`}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                     {getInitials(primaryAssignee?.name)}
                   </div>
-                  <div style={{ overflow: "hidden", minWidth: 0 }}>
+                  <div style={{ minWidth: 0 }}>
                     <div className="user-name">{primaryAssignee?.name || "Unassigned"}</div>
                     <div className="user-role">{primaryAssignee?.role || ""}</div>
                   </div>
                 </div>
                 <div>
-                  <div className="task-title">{item.title}</div>
+                  <div className="task-title" style={{paddingLeft:"50px"}}>{item.title}</div>
                 </div>
                 <div>
                   <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>

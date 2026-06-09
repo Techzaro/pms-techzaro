@@ -283,11 +283,11 @@ function Tasks() {
       <div className="container">
         <div className="table-header">
           <div>Assigned by</div>
-          <div>Task Name</div>
+          <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task Name</div>
           <div>Type</div>
-          <div>Status</div>
-          <div>Priority</div>
-          <div>Date</div>
+          <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
+          <div className="priority-column" style={{ paddingRight: "10px" }}>Priority</div>
+          <div className="date-column" style={{ paddingRight: "50px" }}>  Date</div>
           <div>Action</div>
         </div>
 
@@ -303,21 +303,21 @@ function Tasks() {
             if (isProject) {
               const projectStatus = calculateProjectStatus(item);
               return (
-                <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }} key={`project-${item.id}`}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 12px", borderBottom: "1px solid #f1f5f9" }} key={`project-${item.id}`}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                       {getInitials(item.creator?.name)}
                     </div>
-                    <div style={{ overflow: "hidden", minWidth: 0 }}>
+                    <div style={{ minWidth: 0 }}>
                       <div className="user-name">{item.creator?.name || "System"}</div>
                       <div className="user-role">{item.creator?.role || ""}</div>
                     </div>
                   </div>
                   <div>
-                    <div className="task-title">{item.title}</div>
+                    <div className="task-title" style={{paddingLeft:"50px"}}>{item.title}</div>
                   </div>
                   <div>
-                    <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                    <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5", padding: "6px",backgroundColor:"#e0eaf0", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
                       Project
                     </span>
                   </div>
@@ -357,18 +357,18 @@ function Tasks() {
 
             const assigner = item.assigner;
             return (
-              <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }} key={`task-${item.id}`}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 12px", borderBottom: "1px solid #f1f5f9" }} key={`task-${item.id}`}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                     {getInitials(assigner?.name)}
                   </div>
-                  <div style={{ overflow: "hidden", minWidth: 0 }}>
+                  <div style={{ minWidth: 0 }}>
                     <div className="user-name">{assigner?.name || "System"}</div>
                     <div className="user-role">{assigner?.role || ""}</div>
                   </div>
                 </div>
                 <div>
-                  <div className="task-title">{item.title}</div>
+                  <div className="task-title" style={{paddingLeft:"50px"}}>{item.title}</div>
                 </div>
                 <div>
                   <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
