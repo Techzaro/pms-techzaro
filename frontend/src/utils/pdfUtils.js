@@ -102,7 +102,7 @@ export function addAutoTable(doc, headers, rows, y, opts = {}) {
   const tableWidth = opts.width || pageWidth - 40;
   const startX = opts.x || 20;
 
-  const result = autoTable(doc, {
+  autoTable(doc, {
     startY: y,
     margin: { left: startX, right: startX },
     head: [headers],
@@ -128,7 +128,7 @@ export function addAutoTable(doc, headers, rows, y, opts = {}) {
     didDrawCell: opts.didDrawCell || null,
   });
 
-  return result.finalY + 5;
+  return doc.lastAutoTable.finalY + 5;
 }
 
 export function addTimeline(doc, events, y) {
