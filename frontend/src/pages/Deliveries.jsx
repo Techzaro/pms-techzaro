@@ -175,10 +175,10 @@ function Deliveries() {
 
           <div className="table-header">
             <div>Assigned by</div>
-            <div>Task Name</div>
-            <div>Status</div>
-            <div>Priority</div>
-            <div>Date</div>
+            <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task Name</div>
+            <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
+            <div className="priority-column" style={{ paddingRight: "8px" }}>Priority</div>
+            <div className="date-column" style={{ paddingRight: "30px" }}>  Date</div>
             <div>Action</div>
           </div>
 
@@ -212,7 +212,7 @@ function Deliveries() {
                   </div>
 
                   <div>
-                    <div className="task-title">{item.title}</div>
+                    <div className="task-title" style={{ paddingLeft: "40px" }}>{item.title}</div>
                   </div>
 
                   <div>
@@ -233,7 +233,7 @@ function Deliveries() {
                     <div>{formatDate(item.due_date)}</div>
                   </div>
 
-                  <div className="action-btns">
+                  <div className="action-btns" >
                     <button
                       className="action-icon-btn action-view"
                       title="View"

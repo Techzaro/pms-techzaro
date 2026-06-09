@@ -586,6 +586,33 @@
   margin-bottom: 20px;
 }
 
+.form-section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e40af;
+  margin: 24px 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.form-section-title:first-child {
+  margin-top: 0;
+}
+
+.user-form input[type="file"] {
+  padding: 12px;
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.user-form input[type="file"]:hover {
+  border-color: #2563eb;
+}
+
 .form-row {
   display: flex;
   flex-direction: column;

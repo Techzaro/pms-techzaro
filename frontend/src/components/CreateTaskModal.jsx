@@ -83,10 +83,10 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 setAllUsers(users);
                 setDisplayUsers(users);
               })
-              .catch(() => {});
+              .catch(() => { });
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     } else {
       fetch(`${API_URL}/projects`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -97,7 +97,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
           const list = data?.data || data;
           setProjects(Array.isArray(list) ? list : []);
         })
-        .catch(() => {});
+        .catch(() => { });
 
       fetch(`${API_URL}/team-users`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -109,7 +109,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
           setAllUsers(users);
           setDisplayUsers(users);
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [projectId]);
 
@@ -255,7 +255,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           body: fd,
         });
-      } catch {}
+      } catch { }
     }
 
     for (const link of links) {
@@ -269,7 +269,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
           },
           body: JSON.stringify(link),
         });
-      } catch {}
+      } catch { }
     }
   };
 
@@ -440,43 +440,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
               ></textarea>
             </div>
 
-            <div className="task-field">
-              <label>Requirements</label>
-              <div className="cp-goals-input-row">
-                <input
-                  type="text"
-                  placeholder="Enter a requirement"
-                  value={reqInput}
-                  onChange={(e) => setReqInput(e.target.value)}
-                  onKeyDown={handleReqKeyDown}
-                />
-                <button
-                  type="button"
-                  className="cp-goals-add-btn"
-                  onClick={handleAddRequirement}
-                  disabled={!reqInput.trim()}
-                >
-                  Add
-                </button>
-              </div>
-
-              {requirementsList.length > 0 && (
-                <div className="cp-goals-list">
-                  {requirementsList.map((req, index) => (
-                    <div key={index} className="cp-goals-item">
-                      <span className="cp-goals-item-text">{req}</span>
-                      <button
-                        type="button"
-                        className="cp-goals-item-remove"
-                        onClick={() => handleRemoveRequirement(index)}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
 
             {/* ATTACHMENTS */}
             <div className="task-field">
@@ -631,6 +594,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 + Add Phase
               </button>
 
+
               {milestones.length > 0 && (
                 <div className="task-phase-list">
                   {milestones.map((m, index) => (
@@ -659,32 +623,71 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 </div>
               )}
             </div>
+            <div className="task-field">
+              <label>Requirements</label>
+              <div className="cp-goals-input-row">
+                <input
+                  type="text"
+                  placeholder="Enter a requirement"
+                  value={reqInput}
+                  onChange={(e) => setReqInput(e.target.value)}
+                  onKeyDown={handleReqKeyDown}
+                />
+                <button
+                  type="button"
+                  className="cp-goals-add-btn"
+                  onClick={handleAddRequirement}
+                  disabled={!reqInput.trim()}
+                >
+                  Add
+                </button>
+              </div>
 
+              {requirementsList.length > 0 && (
+                <div className="cp-goals-list">
+                  {requirementsList.map((req, index) => (
+                    <div key={index} className="cp-goals-item">
+                      <span className="cp-goals-item-text">{req}</span>
+                      <button
+                        type="button"
+                        className="cp-goals-item-remove"
+                        onClick={() => handleRemoveRequirement(index)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+        
           </div>
 
-        {error && <div className="task-error-banner">{error}</div>}
+          {error && <div className="task-error-banner">{error}</div>}
 
-        {/* FOOTER */}
-        <div className="task-footer">
-          <button
-            type="button"
-            className="task-cancel-btn"
-            onClick={() => onClose(false)}
-            disabled={loading}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="task-create-btn"
-            onClick={handleSubmit}
-            disabled={loading}
-          >
-            {loading ? "Creating..." : "+ Create Task"}
-          </button>
-        </div>
+
+
+
 
         </form>
+         <div className="task-footer">
+              <button
+                type="button"
+                className="task-cancel-btn"
+                onClick={() => onClose(false)}
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="task-create-btn"
+                onClick={handleSubmit}
+                disabled={loading}
+              >
+                {loading ? "Creating..." : "+ Create Task"}
+              </button>
+            </div>
 
       </div>
     </div>

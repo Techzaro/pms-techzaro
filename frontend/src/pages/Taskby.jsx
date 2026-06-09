@@ -206,13 +206,13 @@ const Taskby = () => {
       </div>
 
       <div className="container">
-        <div className="table-header">
-          <div>Assigned to</div>
-          <div>Task Name</div>
+           <div className="table-header">
+          <div>Assigned by</div>
+          <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task Name</div>
           <div>Type</div>
-          <div>Status</div>
-          <div>Priority</div>
-          <div>Date</div>
+          <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
+          <div className="priority-column" style={{ paddingRight: "10px" }}>Priority</div>
+          <div className="date-column" style={{ paddingRight: "50px" }}>  Date</div>
           <div>Action</div>
         </div>
 
@@ -240,7 +240,7 @@ const Taskby = () => {
                     </div>
                   </div>
                   <div>
-                    <div className="task-title">{item.title}</div>
+                    <div className="task-title"style={{paddingLeft:"50px"}}>{item.title}</div>
                   </div>
                   <div>
                     <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
@@ -286,7 +286,7 @@ const Taskby = () => {
                   </div>
                 </div>
                 <div>
-                  <div className="task-title">{item.title}</div>
+                  <div className="task-title"style={{paddingLeft:"50px"}}>{item.title}</div>
                 </div>
                 <div>
                   <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>

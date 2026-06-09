@@ -5,10 +5,10 @@ import UserSelectDropdown from "./UserSelectDropdown";
 import "./layout/CreateProjectModal.css";
 
 const PRESET_PHASES = [
-  "Design",
-  "Development",
-  "Testing",
-  "Launch",
+  "Planned",
+  "In Progress",
+  "Paused",
+  "Completed",
 ];
 
 const CreateProjectModal = ({ onClose }) => {
