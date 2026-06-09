@@ -1,13 +1,14 @@
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import CreateProjectModal from "../components/CreateProjectModal";
+import { rolePath } from "../utils/auth";
 
 function CreateProject() {
   const navigate = useNavigate();
 
   const handleClose = (created) => {
     if (created) {
-      navigate("/projects");
+      navigate(rolePath("projects"));
     } else {
       navigate(-1);
     }

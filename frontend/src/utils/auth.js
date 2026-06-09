@@ -66,9 +66,10 @@ export function authToken() {
 
 export function authHeaders() {
   const t = authToken();
+  if (!t) return { "Content-Type": "application/json" };
   return {
     "Content-Type": "application/json",
-    Authorization: t ? `Bearer ${t}` : "",
+    Authorization: `Bearer ${t}`,
   };
 }
 
@@ -115,4 +116,24 @@ export function getDisplayUser() {
     email: user.email || "",
     role: user.role || role,
   };
+}
+
+/* ───── role-prefixed path helper ───── */
+
+const ROLE_URL_MAP = {
+  admin: "admin",
+  manager: "manager",
+  team_lead: "teamlead",
+  teamlead: "teamlead",
+  member: "member",
+};
+
+export function rolePath(page = "") {
+  const role = getCurrentRole() || "member";
+  const urlRole = ROLE_URL_MAP[role] || "member";
+  return page ? `/${urlRole}/${page}` : `/${urlRole}/dashboard`;
+}
+
+export function getUrlRole() {
+  return ROLE_URL_MAP[getCurrentRole()] || "member";
 }

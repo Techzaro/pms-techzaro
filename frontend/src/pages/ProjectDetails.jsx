@@ -26,9 +26,10 @@ import {
 } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import CreateTaskModal from "../components/CreateTaskModal";
+import EditProjectModal from "../components/EditProjectModal";
 import "./ProjectDetails.css";
 
-import { authToken, getCurrentRole } from "../utils/auth";
+import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 const API = API_URL;
 
@@ -142,16 +143,8 @@ function ProjectDetails() {
   const [notesSaving, setNotesSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
-  const [taskForm, setTaskForm] = useState({
-    title: "",
-    description: "",
-    start_date: "",
-    end_date: "",
-    assigned_to: "",
-    priority: "Medium",
-    status: "pending",
-  });
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const memberCount = useMemo(() => {
     if (!project) return 0;
@@ -200,7 +193,7 @@ function ProjectDetails() {
         if (!cancelled) {
           console.error(e);
           showMessage("Unable to load project details.", "error");
-          setTimeout(() => navigate("/projects"), 2000);
+          setTimeout(() => navigate(rolePath("projects")), 2000);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -211,68 +204,7 @@ function ProjectDetails() {
     };
   }, [loadProject, navigate, showMessage]);
 
-  /**
-   * Perform the handle task form change.
-   */
 
-  /**
-   * Handle handle task form change.
-   */
-  const handleTaskFormChange = (e) => {
-    const { name, value } = e.target;
-    setTaskForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  /**
-   * Perform the handle add task.
-   */
-
-  /**
-   * Handle handle add task.
-   */
-  const handleAddTask = async (e) => {
-    e.preventDefault();
-    if (!taskForm.title.trim()) {
-      showMessage("Task title is required.", "error");
-      return;
-    }
-    try {
-      const token = authToken();
-      const res = await fetch(`${API}/projects/${projectId}/tasks`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(taskForm),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to create task");
-      await loadProject();
-      setTaskForm({
-        title: "",
-        description: "",
-        start_date: "",
-        end_date: "",
-        assigned_to: "",
-        priority: "Medium",
-        status: "pending",
-      });
-      showMessage("Task added.");
-    } catch (err) {
-      console.error(err);
-      showMessage(err.message || "Failed to add task.", "error");
-    }
-  };
-
-  /**
-   * Perform the handle delete task.
-   */
-
-  /**
-   * Handle handle delete task.
-   */
   const handleDeleteTask = async (taskId) => {
     if (!window.confirm("Delete this task?")) return;
     try {
@@ -376,7 +308,7 @@ function ProjectDetails() {
       });
       if (!res.ok) throw new Error("Delete failed");
       showMessage("Project deleted.");
-      setTimeout(() => navigate("/projects"), 800);
+      setTimeout(() => navigate(rolePath("projects")), 800);
     } catch (err) {
       console.error(err);
       showMessage("Could not delete project.", "error");
@@ -406,7 +338,7 @@ function ProjectDetails() {
   const files = project.files || [];
   const checklist = Array.isArray(project.goals_checklist) ? project.goals_checklist : [];
   const progress = typeof project.progress_percent === "number" ? project.progress_percent : 0;
-  const recentTasks = [...tasks].slice(0, 6);
+  const recentTasks = tasks.filter((t) => t.status === 'in_progress').slice(0, 6);
 
   const tabs = [
     { id: "overview", label: "Overview", icon: ListChecks },
@@ -596,6 +528,7 @@ function ProjectDetails() {
                 <span className="pd-meta-rows__value">{project.category || "—"}</span>
               </div>
             </li>
+            {["admin", "manager"].includes(getCurrentRole()) && (
             <li>
               <span className="pd-meta-rows__ic">
                 <DollarSign size={18} />
@@ -607,6 +540,7 @@ function ProjectDetails() {
                 </span>
               </div>
             </li>
+            )}
           </ul>
         </aside>
       </div>
@@ -657,7 +591,7 @@ function ProjectDetails() {
         <section className="pd-card-flat">
           <div className="pd-card-flat__head">
             <h2 className="pd-block-title pd-block-title--inline">Team members</h2>
-            <Link to="/manage-team" className="pd-link-manage">
+            <Link to={rolePath("manage-team")} className="pd-link-manage">
               Manage
             </Link>
           </div>
@@ -702,7 +636,7 @@ function ProjectDetails() {
         {message && <div className={`pd-toast pd-toast--${messageType}`}>{message}</div>}
 
         <nav className="pd-breadcrumb" aria-label="Breadcrumb">
-          <Link to="/projects">Projects</Link>
+          <Link to={rolePath("projects")}>Projects</Link>
           <ChevronRight size={14} aria-hidden />
           <span>{project.title}</span>
         </nav>
@@ -720,13 +654,13 @@ function ProjectDetails() {
             )}
             <div className="pd-hero-actions">
               <span className={`pd-pill-status pd-pill-status--${statusSlug(project.status)}`}>{project.status}</span>
-              {getCurrentRole() !== "member" && (
-                <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => navigate("/create-project")}>
+              {["admin", "manager"].includes(getCurrentRole()) && (
+                <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => setShowEditModal(true)}>
                   <Pencil size={16} />
                   Edit Project
                 </button>
               )}
-              {getCurrentRole() !== "member" && (
+              {["admin", "manager"].includes(getCurrentRole()) && (
                 <button type="button" className="pd-btn-tx pd-btn-tx--danger" onClick={handleDeleteProject}>
                   <Trash2 size={16} />
                   Delete
@@ -805,7 +739,7 @@ function ProjectDetails() {
                     <section className="pd-card-flat pd-card-flat--table">
                       <div className="pd-card-flat__head">
                         <h2 className="pd-block-title pd-block-title--inline">All tasks</h2>
-                        {getCurrentRole() !== "member" && (
+                        {["admin", "manager"].includes(getCurrentRole()) && (
                           <button className="pd-btn-assign" onClick={() => setShowTaskModal(true)}>
                             + Assign Task
                           </button>
@@ -858,59 +792,7 @@ function ProjectDetails() {
                         </table>
                       </div>
                     </section>
-                    <section className="pd-card-flat">
-                      <h2 className="pd-block-title">Add task</h2>
-                      <form className="pd-task-form" onSubmit={handleAddTask}>
-                        <div className="pd-form-grid">
-                          <label className="pd-field">
-                            <span>Title</span>
-                            <input name="title" value={taskForm.title} onChange={handleTaskFormChange} required />
-                          </label>
-                          <label className="pd-field">
-                            <span>Priority</span>
-                            <select name="priority" value={taskForm.priority} onChange={handleTaskFormChange}>
-                              <option>Low</option>
-                              <option>Medium</option>
-                              <option>High</option>
-                            </select>
-                          </label>
-                          <label className="pd-field">
-                            <span>Status</span>
-                            <select name="status" value={taskForm.status} onChange={handleTaskFormChange}>
-                              <option value="pending">Pending</option>
-                              <option value="in_progress">In Progress</option>
-                              <option value="completed">Completed</option>
-                            </select>
-                          </label>
-                          <label className="pd-field">
-                            <span>Assign to</span>
-                            <select name="assigned_to" value={taskForm.assigned_to} onChange={handleTaskFormChange}>
-                              <option value="">Unassigned</option>
-                              {members.map((u) => (
-                                <option key={u.id} value={u.id}>
-                                  {u.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="pd-field">
-                            <span>Start</span>
-                            <input type="date" name="start_date" value={taskForm.start_date} onChange={handleTaskFormChange} />
-                          </label>
-                          <label className="pd-field">
-                            <span>Due</span>
-                            <input type="date" name="end_date" value={taskForm.end_date} onChange={handleTaskFormChange} />
-                          </label>
-                        </div>
-                        <label className="pd-field pd-field--full">
-                          <span>Description</span>
-                          <textarea name="description" rows={3} value={taskForm.description} onChange={handleTaskFormChange} />
-                        </label>
-                        <button type="submit" className="pd-btn pd-btn--primary">
-                          Add task
-                        </button>
-                      </form>
-                    </section>
+
                   </div>
                 )}
 
@@ -1034,6 +916,15 @@ function ProjectDetails() {
         }}
         projectId={projectId}
         projectName={project?.title || ""}
+      />
+    )}
+    {showEditModal && (
+      <EditProjectModal
+        project={project}
+        onClose={(refresh) => {
+          setShowEditModal(false);
+          if (refresh) loadProject();
+        }}
       />
     )}
     </>

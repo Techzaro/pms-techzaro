@@ -231,13 +231,13 @@
 }
 
 .mt-icon-delete {
-  color: #ef4444;
+  color: #111827;
   border-color: #fecaca;
 }
 
 .mt-icon-delete:hover {
   background: #fef2f2;
-  color: #dc2626;
+  color: #111827;
 }
 
 /* ===== Sections ===== */
@@ -380,7 +380,7 @@
 }
 
 .mt-chip-remove:hover {
-  color: #ef4444;
+  color: #111827;
 }
 
 /* ===== Card Footer ===== */

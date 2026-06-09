@@ -13,7 +13,7 @@ import {
   MdCreateNewFolder,
 } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
-import { authToken } from "../utils/auth";
+import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import "./ManageTeam.css";
 
@@ -72,6 +72,12 @@ function ManageTeam() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const role = getCurrentRole();
+    const token = authToken();
+    if (!token || (role !== "admin" && role !== "manager")) {
+      navigate("/");
+      return;
+    }
     fetchUsers();
     fetchTeams();
   }, []);
@@ -175,7 +181,7 @@ function ManageTeam() {
   };
 
   const handleProjectForTeam = (teamId) => {
-    navigate(`/create-project?teamId=${teamId}`);
+    navigate(rolePath(`create-project?teamId=${teamId}`));
   };
 
   const openCreateTeamModal = () => {

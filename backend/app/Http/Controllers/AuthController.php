@@ -59,13 +59,22 @@ class AuthController extends Controller
             // Track last login
             $user->update(['last_login_at' => now()]);
 
+            // Normalize role (teamlead → team_lead)
+            $role = $user->role === 'teamlead' ? 'team_lead' : $user->role;
+
             return response()->json([
                 'status' => true,
                 'message' => 'Login successful',
                 'token' => $token,
-                'role' => $user->role,
+                'role' => $role,
                 'must_change_password' => $user->must_change_password,
-                'user' => $user
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => $role,
+                    'active' => $user->active,
+                ],
             ]);
         } catch (\Throwable $e) {
             return response()->json([
@@ -194,6 +203,9 @@ class AuthController extends Controller
 
             $user->password = bcrypt($request->new_password);
             $user->save();
+
+            // Revoke all other tokens on password change for security
+            $user->tokens()->where('id', '!=', $request->user()->currentAccessToken()->id)->delete();
 
             return response()->json([
                 'status' => true,

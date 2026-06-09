@@ -1,0 +1,177 @@
+/* ===== UserSelectDropdown — matches Create Team design ===== */
+
+.usd-wrap {
+  position: relative;
+  width: 100%;
+}
+
+/* Trigger */
+.usd-trigger {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 52px;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  padding: 0 14px;
+  font-size: 14px;
+  background: #f9fafb;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.usd-trigger:hover {
+  border-color: #a5b4fc;
+  background: #fff;
+}
+
+.usd-trigger--open {
+  border-color: #6366f1;
+  background: #fff;
+}
+
+.usd-trigger--error {
+  border-color: #111827 !important;
+  background: #f9fafb !important;
+}
+
+.usd-trigger--disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.usd-placeholder {
+  color: #9ca3af;
+}
+
+.usd-value {
+  color: #111827;
+  font-weight: 500;
+}
+
+.usd-arrow {
+  color: #6b7280;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.usd-arrow--open {
+  transform: rotate(180deg);
+}
+
+/* Dropdown */
+.usd-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+
+.usd-dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  background: #f8fafc;
+}
+
+.usd-selectall {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  margin: 0;
+}
+
+.usd-selectall input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #4f46e5;
+  cursor: pointer;
+}
+
+.usd-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4f46e5;
+  background: #eef2ff;
+  padding: 3px 10px;
+  border-radius: 8px;
+}
+
+.usd-dropdown-items {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.usd-dropdown-items::-webkit-scrollbar {
+  width: 5px;
+}
+
+.usd-dropdown-items::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.usd-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid #f8fafc;
+}
+
+.usd-item:last-child {
+  border-bottom: none;
+}
+
+.usd-item:hover {
+  background: #f8fafc;
+}
+
+.usd-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #4f46e5;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.usd-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+  flex: 1;
+}
+
+.usd-role {
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-transform: capitalize;
+}
+
+.usd-empty {
+  padding: 20px 14px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 14px;
+  margin: 0;
+}

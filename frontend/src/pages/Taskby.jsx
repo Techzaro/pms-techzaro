@@ -1,29 +1,45 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import { CiCalendar } from "react-icons/ci";
 import { IoIosArrowDown } from "react-icons/io";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
-import { IoSearchOutline } from "react-icons/io5";
+import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
 import CreateTaskModal from "../components/CreateTaskModal";
 import API_URL from "../config/api";
-import { authToken } from "../utils/auth";
+import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
-  pending: "#F59E0B",
-  in_progress: "#3B82F6",
-  review: "#8B5CF6",
-  completed: "#22C55E",
-  done: "#22C55E",
-  failed: "#EF4444",
-  abandoned: "#6B7280",
+  pending: "#FEF3C7",
+  in_progress: "#DBEAFE",
+  review: "#EDE9FE",
+  completed: "#DCFCE7",
+  done: "#DCFCE7",
+  failed: "#FEE2E2",
+  abandoned: "#F3F4F6",
+};
+
+const STATUS_TEXT_COLORS = {
+  pending: "#92400E",
+  in_progress: "#1E40AF",
+  review: "#5B21B6",
+  completed: "#166534",
+  done: "#166534",
+  failed: "#991B1B",
+  abandoned: "#374151",
 };
 
 const PRIORITY_COLORS = {
-  High: "#EF4444",
-  Medium: "#F59E0B",
-  Low: "#22C55E",
+  High: "#FEE2E2",
+  Medium: "#FEF3C7",
+  Low: "#DCFCE7",
+};
+
+const PRIORITY_TEXT_COLORS = {
+  High: "#991B1B",
+  Medium: "#92400E",
+  Low: "#166534",
 };
 
 const Taskby = () => {
@@ -32,17 +48,24 @@ const Taskby = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const fetchTasks = () => {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
-    if (search) params.append("search", search);
+    if (debouncedSearch) params.append("search", debouncedSearch);
     if (statusFilter) params.append("status", statusFilter);
 
     fetch(`${API_URL}/assigned-tasks?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
     })
       .then((res) => (res.ok ? res.json() : { data: [] }))
       .then((data) => {
@@ -54,7 +77,7 @@ const Taskby = () => {
 
   useEffect(() => {
     fetchTasks();
-  }, [search, statusFilter]);
+  }, [debouncedSearch, statusFilter]);
 
   const handleModalClose = (refresh) => {
     setShowTaskModal(false);
@@ -137,6 +160,7 @@ const Taskby = () => {
             <IoIosArrowDown />
           </div>
 
+          {["admin", "manager"].includes(getCurrentRole()) && (
           <button
             className="export task-btn--mobile"
             onClick={() => setShowTaskModal(true)}
@@ -144,6 +168,7 @@ const Taskby = () => {
           >
             + Task
           </button>
+          )}
         </div>
       </div>
 
@@ -183,7 +208,7 @@ const Taskby = () => {
       <div className="container">
         <div className="table-header">
           <div>Assigned to</div>
-          <div>Name</div>
+          <div>Task Name</div>
           <div>Type</div>
           <div>Status</div>
           <div>Priority</div>
@@ -202,16 +227,15 @@ const Taskby = () => {
 
             if (isProject) {
               const projectStatus = calculateProjectStatus(item);
-              const assigned = item.assigned_users_resolved || [];
-              const primaryUser = assigned[0];
+              const primaryUser = item.assigned_user;
               return (
-                <div className="table-row" key={`project-${item.id}`}>
-                  <div className="user-box">
+                <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }} key={`project-${item.id}-${primaryUser?.id || 0}`}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden" }}>
                     <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                       {getInitials(primaryUser?.name)}
                     </div>
-                    <div>
-                      <div className="user-name">{primaryUser?.name || "Unassigned"}{assigned.length > 1 ? ` +${assigned.length - 1}` : ""}</div>
+                    <div style={{ overflow: "hidden", minWidth: 0 }}>
+                      <div className="user-name">{primaryUser?.name || "Unassigned"}</div>
                       <div className="user-role">{primaryUser?.role || ""}</div>
                     </div>
                   </div>
@@ -224,14 +248,14 @@ const Taskby = () => {
                     </span>
                   </div>
                   <div>
-                    <span className="badge status-badge">
-                      <span className="dot" style={{ background: STATUS_COLORS[item.status] || "#6B7280" }}></span>
+                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                       {projectStatus}
                     </span>
                   </div>
                   <div>
-                    <span className="badge priority-badge">
-                      <span className="dot" style={{ background: PRIORITY_COLORS[item.priority] || "#F59E0B" }}></span>
+                    <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                      <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
                       {item.priority}
                     </span>
                   </div>
@@ -239,9 +263,9 @@ const Taskby = () => {
                     <div>{formatDate(item.start_date)}</div>
                     <div>{formatDate(item.end_date)}</div>
                   </div>
-                  <div>
-                    <button className="view-btn" onClick={() => navigate(`/projects/${item.id}`)}>
-                      View
+                  <div className="action-btns">
+                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`))}>
+                      <IoEyeOutline />
                     </button>
                   </div>
                 </div>
@@ -251,13 +275,13 @@ const Taskby = () => {
             const assignees = item.assignees || [];
             const primaryAssignee = assignees[0];
             return (
-              <div className="table-row" key={`task-${item.id}`}>
-                <div className="user-box">
+              <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }} key={`task-${item.id}-${primaryAssignee?.id || 0}`}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden" }}>
                   <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                     {getInitials(primaryAssignee?.name)}
                   </div>
-                  <div>
-                    <div className="user-name">{primaryAssignee?.name || "Unassigned"}{assignees.length > 1 ? ` +${assignees.length - 1}` : ""}</div>
+                  <div style={{ overflow: "hidden", minWidth: 0 }}>
+                    <div className="user-name">{primaryAssignee?.name || "Unassigned"}</div>
                     <div className="user-role">{primaryAssignee?.role || ""}</div>
                   </div>
                 </div>
@@ -270,14 +294,14 @@ const Taskby = () => {
                   </span>
                 </div>
                 <div>
-                  <span className="badge status-badge">
-                    <span className="dot" style={{ background: STATUS_COLORS[item.status] || "#6B7280" }}></span>
+                  <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                    <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                     {formatStatus(item.status)}
                   </span>
                 </div>
                 <div>
-                  <span className="badge priority-badge">
-                    <span className="dot" style={{ background: PRIORITY_COLORS[item.priority] || "#F59E0B" }}></span>
+                  <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                    <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
                     {item.priority}
                   </span>
                 </div>
@@ -285,9 +309,9 @@ const Taskby = () => {
                   <div>{formatDate(item.start_date)}</div>
                   <div>{formatDate(item.end_date)}</div>
                 </div>
-                <div>
-                  <button className="view-btn" onClick={() => navigate(`/details/${item.id}`)}>
-                    View
+                <div className="action-btns">
+                  <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`))}>
+                    <IoEyeOutline />
                   </button>
                 </div>
               </div>

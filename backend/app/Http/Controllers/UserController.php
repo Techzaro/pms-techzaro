@@ -57,11 +57,14 @@ class UserController extends Controller
 
         $plainPassword = Str::random(10);
 
+        // Normalize role (teamlead → team_lead)
+        $role = $request->input('role') === 'teamlead' ? 'team_lead' : $request->input('role');
+
         $user = User::create([
             'name' => $request->input('name'),
             'email' => $request->input('email'),
             'password' => Hash::make($plainPassword),
-            'role' => $request->input('role'),
+            'role' => $role,
             'active' => true,
             'must_change_password' => true,
             'contact_no' => $request->input('contact_no'),
@@ -150,6 +153,11 @@ class UserController extends Controller
             if ($request->has($field)) {
                 $user->$field = $request->input($field);
             }
+        }
+
+        // Normalize role (teamlead → team_lead)
+        if ($user->role === 'teamlead') {
+            $user->role = 'team_lead';
         }
 
         $user->save();

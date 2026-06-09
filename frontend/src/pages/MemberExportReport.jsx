@@ -1,6 +1,20 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { jsPDF } from "jspdf";
+import {
+  createDoc,
+  getPageWidth,
+  addLogo,
+  addTitle,
+  addSubtitle,
+  addDivider,
+  addSectionTitle,
+  addStatCards,
+  addAutoTable,
+  addTimeline,
+  addFooter,
+  savePdf,
+  COLORS,
+} from "../utils/pdfUtils";
 import "../pages/ExportReport.css";
 
 const exportTypes = [
@@ -95,32 +109,21 @@ function MemberExportReport({ isOpen, onClose }) {
   const toggleCheck = (id) => setChecks((p) => ({ ...p, [id]: !p[id] }));
 
   const generatePDF = () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
+    const doc = createDoc();
     let y = 20;
 
-    // PMS Logo
-    doc.setFillColor(79, 70, 229);
-    doc.roundedRect(20, y, 8, 8, 2, 2, "F");
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(17, 24, 39);
-    doc.text("PMS", 32, y + 6.5);
-    y += 18;
+    y = addLogo(doc, y);
 
-    // Report Title
     const reportTitle = exportType === "activity" ? "My Activity Report" : exportType === "schedule" ? "My Schedule Report" : "My Progress Report";
-    doc.setFontSize(18);
-    doc.setFont("helvetica", "bold");
-    doc.text(reportTitle, pageWidth / 2, y, { align: "center" });
-    y += 12;
+    y = addTitle(doc, reportTitle, y);
 
-    // Profile
+    const pageWidth = getPageWidth(doc);
     doc.setFillColor(107, 114, 128);
     doc.circle(pageWidth / 2, y + 8, 8, "F");
     y += 20;
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
+    doc.setTextColor(...COLORS.text);
     doc.text("Umar Naseer", pageWidth / 2, y, { align: "center" });
     y += 5;
     doc.setFontSize(10);
@@ -132,250 +135,130 @@ function MemberExportReport({ isOpen, onClose }) {
     doc.text(customDate, pageWidth / 2, y, { align: "center" });
     y += 12;
 
-    // Divider
-    doc.setDrawColor(229, 231, 235);
-    doc.line(20, y, pageWidth - 20, y);
-    y += 10;
+    y = addDivider(doc, y);
 
-    // Helper functions
-    const addSectionTitle = (title) => {
-      doc.setFontSize(13);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(17, 24, 39);
-      doc.text(title, 20, y);
-      y += 8;
-    };
-
-    const addStatCards = (stats) => {
-      const cardWidth = (pageWidth - 50) / stats.length;
-      stats.forEach((stat, i) => {
-        const x = 20 + i * cardWidth + 2;
-        doc.setDrawColor(229, 231, 235);
-        doc.roundedRect(x, y, cardWidth - 4, 22, 3, 3, "S");
-        doc.setFontSize(8);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(107, 114, 128);
-        doc.text(stat.label, x + (cardWidth - 4) / 2, y + 7, { align: "center" });
-        doc.setFontSize(16);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(...stat.rgb);
-        doc.text(stat.value, x + (cardWidth - 4) / 2, y + 16, { align: "center" });
-      });
-      y += 28;
-    };
-
-    const addTable = (headers, rows, colWidths) => {
-      // Header
-      doc.setFillColor(249, 250, 251);
-      doc.rect(20, y, pageWidth - 40, 8, "F");
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(107, 114, 128);
-      let x = 22;
-      headers.forEach((h, i) => {
-        doc.text(h, x, y + 5.5);
-        x += colWidths[i];
-      });
-      y += 8;
-      // Rows
-      doc.setFont("helvetica", "normal");
-      rows.forEach((row, ri) => {
-        if (y > 270) { doc.addPage(); y = 20; }
-        if (ri < rows.length - 1) {
-          doc.setDrawColor(229, 231, 235);
-          doc.line(20, y + 7, pageWidth - 20, y + 7);
-        }
-        x = 22;
-        row.forEach((cell, ci) => {
-          doc.setFontSize(8);
-          if (cell.color) {
-            doc.setTextColor(...cell.color);
-          } else {
-            doc.setTextColor(17, 24, 39);
-          }
-          doc.text(cell.text || cell, x, y + 5.5);
-          x += colWidths[ci];
-        });
-        y += 7;
-      });
-      y += 5;
-    };
-
-    const addTimeline = (events) => {
-      events.forEach((ev, i) => {
-        if (y > 270) { doc.addPage(); y = 20; }
-        doc.setFillColor(79, 70, 229);
-        doc.circle(24, y + 2, 2, "F");
-        if (i < events.length - 1) {
-          doc.setDrawColor(229, 231, 235);
-          doc.line(24, y + 4, 24, y + 10);
-        }
-        doc.setFontSize(8);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(107, 114, 128);
-        doc.text(ev.date, 30, y + 3);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(17, 24, 39);
-        doc.text(ev.action, 58, y + 3);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(107, 114, 128);
-        doc.text(ev.detail, 130, y + 3);
-        y += 10;
-      });
-      y += 3;
-    };
-
-    // ── ACTIVITY REPORT ──
     if (exportType === "activity") {
-      addSectionTitle("Activity Summary");
-      addStatCards([
-        { label: "Total Task", value: "78", rgb: [79, 70, 229] },
-        { label: "Completed", value: "40", rgb: [22, 163, 74] },
-        { label: "Pending", value: "18", rgb: [245, 158, 11] },
-        { label: "Overdue", value: "8", rgb: [239, 68, 68] },
-      ]);
+      y = addSectionTitle(doc, "Activity Summary", y);
+      y = addStatCards(doc, [
+        { label: "Total Task", value: "78", color: COLORS.primary },
+        { label: "Completed", value: "40", color: COLORS.success },
+        { label: "Pending", value: "18", color: COLORS.warning },
+        { label: "Overdue", value: "8", color: COLORS.danger },
+      ], y);
 
-      doc.setDrawColor(229, 231, 235);
-      doc.line(20, y, pageWidth - 20, y);
-      y += 8;
-
-      addSectionTitle("Activity Timeline");
-      addTimeline([
+      y = addDivider(doc, y);
+      y = addSectionTitle(doc, "Activity Timeline", y);
+      y = addTimeline(doc, [
         { date: "01 May", action: "Task Created", detail: "Landing Page Design" },
         { date: "03 May", action: "Task Updated", detail: "API Integration" },
         { date: "05 May", action: "Task Completed", detail: "User Flow Design" },
         { date: "07 May", action: "File Uploaded", detail: "Wireframes.pdf" },
-      ]);
+      ], y);
 
-      doc.line(20, y, pageWidth - 20, y);
-      y += 8;
-
-      addSectionTitle("Task History");
-      addTable(
+      y = addDivider(doc, y);
+      y = addSectionTitle(doc, "Task History", y);
+      y = addAutoTable(doc,
         ["Task", "Project", "Status", "Date"],
         [
-          [{ text: "Landing Page Redesign" }, { text: "Ecommerce Website" }, { text: "Completed", color: [22, 163, 74] }, { text: "12 May" }],
-          [{ text: "API Integration" }, { text: "Mobile App" }, { text: "In Progress", color: [37, 99, 235] }, { text: "10 May" }],
-          [{ text: "Dashboard Design" }, { text: "CRM Dashboard" }, { text: "Completed", color: [22, 163, 74] }, { text: "08 May" }],
-          [{ text: "User Flow Design" }, { text: "Mobile App" }, { text: "Completed", color: [22, 163, 74] }, { text: "08 May" }],
-          [{ text: "Wireframe Design" }, { text: "Website Redesign" }, { text: "Completed", color: [22, 163, 74] }, { text: "08 May" }],
+          ["Landing Page Redesign", "Ecommerce Website", "Completed", "12 May"],
+          ["API Integration", "Mobile App", "In Progress", "10 May"],
+          ["Dashboard Design", "CRM Dashboard", "Completed", "08 May"],
+          ["User Flow Design", "Mobile App", "Completed", "08 May"],
+          ["Wireframe Design", "Website Redesign", "Completed", "08 May"],
         ],
-        [55, 50, 35, 30]
+        y,
+        { columnStyles: { 2: { cellWidth: 30, halign: "center" }, 3: { cellWidth: 25, halign: "right" } } }
       );
     }
 
-    // ── SCHEDULE REPORT ──
     if (exportType === "schedule") {
-      addSectionTitle("Events");
-      addTable(
+      y = addSectionTitle(doc, "Events", y);
+      y = addAutoTable(doc,
         ["Name", "Date", "Status", "Type"],
         [
-          [{ text: "Task Created" }, { text: "03 May" }, { text: "10:00 AM" }, { text: "Task", color: [37, 99, 235] }],
-          [{ text: "Task Updated" }, { text: "08 May" }, { text: "11:00 AM" }, { text: "Review", color: [22, 163, 74] }],
-          [{ text: "Task Completed" }, { text: "12 May" }, { text: "02:00 PM" }, { text: "Meeting", color: [37, 99, 235] }],
-          [{ text: "File Uploaded" }, { text: "17 May" }, { text: "10:30 AM" }, { text: "Personal", color: [217, 119, 6] }],
+          ["Task Created", "03 May", "10:00 AM", "Task"],
+          ["Task Updated", "08 May", "11:00 AM", "Review"],
+          ["Task Completed", "12 May", "02:00 PM", "Meeting"],
+          ["File Uploaded", "17 May", "10:30 AM", "Personal"],
         ],
-        [50, 35, 40, 40]
+        y,
+        { columnStyles: { 0: { cellWidth: 45 }, 1: { cellWidth: 30 }, 2: { cellWidth: 30, halign: "center" }, 3: { cellWidth: 30, halign: "right" } } }
       );
 
-      doc.line(20, y, pageWidth - 20, y);
-      y += 8;
-
-      addSectionTitle("Deadlines");
+      y = addDivider(doc, y);
+      y = addSectionTitle(doc, "Deadlines", y);
       [
         { name: "Landing Page Design", date: "01 May, 2026" },
         { name: "API Integration", date: "03 May, 2026" },
         { name: "User Flow Design", date: "05 May, 2026" },
         { name: "Wireframes.pdf", date: "07 May, 2026" },
-      ].forEach((item, i) => {
+      ].forEach((item) => {
         if (y > 270) { doc.addPage(); y = 20; }
-        if (i > 0) {
-          doc.setDrawColor(229, 231, 235);
-          doc.line(20, y - 2, pageWidth - 20, y - 2);
-        }
         doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(17, 24, 39);
+        doc.setTextColor(...COLORS.text);
         doc.text(item.name, 22, y + 3);
         doc.setFont("helvetica", "normal");
-        doc.setTextColor(107, 114, 128);
+        doc.setTextColor(...COLORS.muted);
         doc.text(item.date, pageWidth - 22, y + 3, { align: "right" });
         y += 8;
       });
       y += 5;
 
-      doc.line(20, y, pageWidth - 20, y);
-      y += 8;
-
-      addSectionTitle("Deliverables");
-      addTable(
+      y = addDivider(doc, y);
+      y = addSectionTitle(doc, "Deliverables", y);
+      y = addAutoTable(doc,
         ["Deliverables", "Status", "Date"],
         [
-          [{ text: "Ecommerce homepage design" }, { text: "Completed", color: [22, 163, 74] }, { text: "12 May" }],
-          [{ text: "Ecommerce homepage design" }, { text: "In Progress", color: [37, 99, 235] }, { text: "10 May" }],
-          [{ text: "Ecommerce homepage design" }, { text: "Pending", color: [217, 119, 6] }, { text: "08 May" }],
-          [{ text: "Ecommerce homepage design" }, { text: "Failed", color: [239, 68, 68] }, { text: "07 May" }],
-          [{ text: "Ecommerce homepage design" }, { text: "Abandoned", color: [107, 114, 128] }, { text: "05 May" }],
+          ["Ecommerce homepage design", "Completed", "12 May"],
+          ["Ecommerce homepage design", "In Progress", "10 May"],
+          ["Ecommerce homepage design", "Pending", "08 May"],
+          ["Ecommerce homepage design", "Failed", "07 May"],
+          ["Ecommerce homepage design", "Abandoned", "05 May"],
         ],
-        [80, 50, 40]
+        y,
+        { columnStyles: { 1: { cellWidth: 35, halign: "center" }, 2: { cellWidth: 30, halign: "right" } } }
       );
     }
 
-    // ── PROGRESS REPORT ──
     if (exportType === "progress") {
-      addSectionTitle("Performance Overview");
-      addStatCards([
-        { label: "Assigned", value: "78", rgb: [79, 70, 229] },
-        { label: "Completed", value: "40", rgb: [22, 163, 74] },
-        { label: "Pending", value: "18", rgb: [245, 158, 11] },
-        { label: "Overdue", value: "8", rgb: [239, 68, 68] },
-      ]);
+      y = addSectionTitle(doc, "Performance Overview", y);
+      y = addStatCards(doc, [
+        { label: "Assigned", value: "78", color: COLORS.primary },
+        { label: "Completed", value: "40", color: COLORS.success },
+        { label: "Pending", value: "18", color: COLORS.warning },
+        { label: "Overdue", value: "8", color: COLORS.danger },
+      ], y);
 
-      doc.setDrawColor(229, 231, 235);
-      doc.line(20, y, pageWidth - 20, y);
-      y += 8;
-
-      addSectionTitle("Events");
-      addTimeline([
+      y = addDivider(doc, y);
+      y = addSectionTitle(doc, "Events", y);
+      y = addTimeline(doc, [
         { date: "01 May", action: "Task Created", detail: "Landing Page Design" },
         { date: "03 May", action: "Task Updated", detail: "API Integration" },
         { date: "05 May", action: "Task Completed", detail: "User Flow Design" },
         { date: "07 May", action: "File Uploaded", detail: "Wireframes.pdf" },
-      ]);
+      ], y);
 
-      doc.line(20, y, pageWidth - 20, y);
-      y += 8;
-
-      addSectionTitle("Deliverables");
-      addTable(
+      y = addDivider(doc, y);
+      y = addSectionTitle(doc, "Deliverables", y);
+      y = addAutoTable(doc,
         ["Task", "Project", "Status", "Date"],
         [
-          [{ text: "Landing Page Redesign" }, { text: "Ecommerce Website" }, { text: "Completed", color: [22, 163, 74] }, { text: "12 May" }],
-          [{ text: "API Integration" }, { text: "Mobile App" }, { text: "In Progress", color: [37, 99, 235] }, { text: "10 May" }],
-          [{ text: "Dashboard Design" }, { text: "CRM Dashboard" }, { text: "Completed", color: [22, 163, 74] }, { text: "08 May" }],
-          [{ text: "User Flow Design" }, { text: "Mobile App" }, { text: "Completed", color: [22, 163, 74] }, { text: "07 May" }],
-          [{ text: "Wireframe Design" }, { text: "Website Redesign" }, { text: "Completed", color: [22, 163, 74] }, { text: "05 May" }],
+          ["Landing Page Redesign", "Ecommerce Website", "Completed", "12 May"],
+          ["API Integration", "Mobile App", "In Progress", "10 May"],
+          ["Dashboard Design", "CRM Dashboard", "Completed", "08 May"],
+          ["User Flow Design", "Mobile App", "Completed", "07 May"],
+          ["Wireframe Design", "Website Redesign", "Completed", "05 May"],
         ],
-        [55, 50, 35, 30]
+        y,
+        { columnStyles: { 2: { cellWidth: 30, halign: "center" }, 3: { cellWidth: 25, halign: "right" } } }
       );
     }
 
-    // Footer on all pages
-    const totalPages = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= totalPages; i++) {
-      doc.setPage(i);
-      doc.setDrawColor(229, 231, 235);
-      doc.line(20, 280, pageWidth - 20, 280);
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(156, 163, 175);
-      doc.text("Generated by PMS", 20, 285);
-      doc.text(`Page ${i} of ${totalPages}`, pageWidth - 20, 285, { align: "right" });
-    }
+    addFooter(doc);
 
-    // Download
     const fileName = exportType === "activity" ? "My-Activity-Report.pdf" : exportType === "schedule" ? "My-Schedule-Report.pdf" : "My-Progress-Report.pdf";
-    doc.save(fileName);
+    savePdf(doc, fileName);
     setShowReview(false);
   };
 
@@ -573,10 +456,8 @@ function MemberExportReport({ isOpen, onClose }) {
 
             <div style={{ borderTop: "1px solid #e5e7eb", margin: "0 32px" }}></div>
 
-            {/* ── ACTIVITY REPORT ── */}
             {exportType === "activity" && (
               <>
-                {/* Activity Summary */}
                 <div style={{ padding: "24px 32px" }}>
                   <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}>Activity Summary</h2>
                   <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
@@ -596,7 +477,6 @@ function MemberExportReport({ isOpen, onClose }) {
 
                 <div style={{ borderTop: "1px solid #e5e7eb", margin: "0 32px" }}></div>
 
-                {/* Activity Timeline */}
                 <div style={{ padding: "24px 32px" }}>
                   <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 20 }}>Activity Timeline</h2>
                   <div style={{ position: "relative", paddingLeft: 20 }}>
@@ -623,7 +503,6 @@ function MemberExportReport({ isOpen, onClose }) {
 
                 <div style={{ borderTop: "1px solid #e5e7eb", margin: "0 32px" }}></div>
 
-                {/* Task History */}
                 <div style={{ padding: "24px 32px" }}>
                   <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}>Task History</h2>
                   <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
@@ -651,10 +530,8 @@ function MemberExportReport({ isOpen, onClose }) {
               </>
             )}
 
-            {/* ── SCHEDULE REPORT ── */}
             {exportType === "schedule" && (
               <>
-                {/* Events */}
                 <div style={{ padding: "24px 32px" }}>
                   <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}>Events</h2>
                   <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
@@ -681,7 +558,6 @@ function MemberExportReport({ isOpen, onClose }) {
 
                 <div style={{ borderTop: "1px solid #e5e7eb", margin: "0 32px" }}></div>
 
-                {/* Deadlines */}
                 <div style={{ padding: "24px 32px" }}>
                   <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}>Deadlines</h2>
                   <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
@@ -701,7 +577,6 @@ function MemberExportReport({ isOpen, onClose }) {
 
                 <div style={{ borderTop: "1px solid #e5e7eb", margin: "0 32px" }}></div>
 
-                {/* Deliverables */}
                 <div style={{ padding: "24px 32px" }}>
                   <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}>Deliverables</h2>
                   <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
@@ -731,10 +606,8 @@ function MemberExportReport({ isOpen, onClose }) {
               </>
             )}
 
-            {/* ── PROGRESS REPORT ── */}
             {exportType === "progress" && (
               <>
-                {/* Performance Overview */}
                 <div style={{ padding: "24px 32px" }}>
                   <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}>Performance Overview</h2>
                   <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
@@ -754,7 +627,6 @@ function MemberExportReport({ isOpen, onClose }) {
 
                 <div style={{ borderTop: "1px solid #e5e7eb", margin: "0 32px" }}></div>
 
-                {/* Events */}
                 <div style={{ padding: "24px 32px" }}>
                   <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 20 }}>Events</h2>
                   <div style={{ position: "relative", paddingLeft: 20 }}>
@@ -781,7 +653,6 @@ function MemberExportReport({ isOpen, onClose }) {
 
                 <div style={{ borderTop: "1px solid #e5e7eb", margin: "0 32px" }}></div>
 
-                {/* Deliverables */}
                 <div style={{ padding: "24px 32px" }}>
                   <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}>Deliverables</h2>
                   <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>

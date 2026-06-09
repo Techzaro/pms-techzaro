@@ -1,7 +1,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
-import { authToken } from "../utils/auth";
+import { authToken, getUser } from "../utils/auth";
+import UserSelectDropdown from "./UserSelectDropdown";
 import "./layout/CreateTaskModal.css";
 
 const CreateSubtaskModal = ({ parentId, projectId, onClose }) => {
@@ -23,8 +24,6 @@ const CreateSubtaskModal = ({ parentId, projectId, onClose }) => {
   const [pendingFiles, setPendingFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const [linkInput, setLinkInput] = useState("");
-  const [assignOpen, setAssignOpen] = useState(false);
-  const assignRef = useRef(null);
   const fileInputRef = useRef(null);
   const dropRef = useRef(null);
 
@@ -34,23 +33,18 @@ const CreateSubtaskModal = ({ parentId, projectId, onClose }) => {
   }, []);
 
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (assignRef.current && !assignRef.current.contains(e.target)) {
-        setAssignOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  useEffect(() => {
     const token = authToken();
+    const currentUser = getUser();
     fetch(`${API_URL}/team-users`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
     })
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
-        const users = Array.isArray(data) ? data : [];
+        let users = Array.isArray(data) ? data : [];
+        if (currentUser && !users.some((u) => u.id === currentUser.id)) {
+          users = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role }, ...users];
+        }
         setAllUsers(users);
       })
       .catch(() => {});
@@ -69,13 +63,8 @@ const CreateSubtaskModal = ({ parentId, projectId, onClose }) => {
     }
   };
 
-  const toggleUser = (userId) => {
-    setForm((prev) => {
-      const selected = prev.assigned_to.includes(userId)
-        ? prev.assigned_to.filter((id) => id !== userId)
-        : [...prev.assigned_to, userId];
-      return { ...prev, assigned_to: selected };
-    });
+  const handleAssignedToChange = (ids) => {
+    setForm((prev) => ({ ...prev, assigned_to: ids }));
     if (formErrors.assigned_to) {
       setFormErrors((prev) => {
         const next = { ...prev };
@@ -233,43 +222,13 @@ const CreateSubtaskModal = ({ parentId, projectId, onClose }) => {
                 <label>
                   Assign To <span>*</span>
                 </label>
-                <div className="task-checkbox-dropdown" ref={assignRef}>
-                  <button
-                    type="button"
-                    className={`task-checkbox-trigger ${assignOpen ? "task-checkbox-trigger--open" : ""} ${formErrors.assigned_to ? "field-error" : ""}`}
-                    onClick={() => setAssignOpen(!assignOpen)}
-                  >
-                    <span>
-                      {form.assigned_to.length === 0
-                        ? "Select user(s)"
-                        : `${form.assigned_to.length} user(s) selected`}
-                    </span>
-                    <span className={`task-checkbox-arrow ${assignOpen ? "open" : ""}`}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </span>
-                  </button>
-
-                  {assignOpen && (
-                    <div className="task-checkbox-list task-checkbox-list--open">
-                      {allUsers.length === 0 ? (
-                        <div className="task-checkbox-empty">No users available</div>
-                      ) : (
-                        allUsers.map((user) => (
-                          <label key={user.id} className="task-checkbox-item">
-                            <input
-                              type="checkbox"
-                              checked={form.assigned_to.includes(user.id)}
-                              onChange={() => toggleUser(user.id)}
-                            />
-                            <span>{user.name}</span>
-                          </label>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
+                <UserSelectDropdown
+                  users={allUsers}
+                  selectedIds={form.assigned_to}
+                  onChange={handleAssignedToChange}
+                  placeholder="Click to select members"
+                  error={!!formErrors.assigned_to}
+                />
                 {formErrors.assigned_to && <span className="field-error-text">{formErrors.assigned_to}</span>}
               </div>
 

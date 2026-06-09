@@ -1,39 +1,49 @@
 import { getCurrentRole, getToken, clearSession } from "../utils/auth";
+import { showGlobalLoading, hideGlobalLoading } from "../utils/loadingManager";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 /**
  * Global fetch interceptor.
- * On 401, force logout only if the token for this role hasn't been
- * replaced by another tab.
+ * Automatically shows/hides the global loading spinner for fetch calls.
+ * Pass { skipLoader: true } in the fetch options to skip the spinner.
  *
- * Multi-tab rule: each role (admin, manager, team_lead, member) can
- * have ONE active session.  If a second tab logs in with the same
- * role, the old tab is kicked out.  Different roles coexist.
+ * Usage:
+ *   fetch(url)                          → shows spinner
+ *   fetch(url, { skipLoader: true })    → skips spinner
  */
 const originalFetch = window.fetch;
 window.fetch = async function (...args) {
-  const role = getCurrentRole();
-  const tokenAtRequest = getToken(role);
-  const res = await originalFetch.apply(this, args);
+  const [resource, config] = args;
+  const skipLoader = config?.skipLoader === true;
 
-  if (res.status === 401) {
-    const tokenNow = getToken(role);
-
-    // Only log out if THIS tab's token hasn't been replaced by another tab
-    if (tokenNow && tokenNow === tokenAtRequest) {
-      clearSession(role);
-      window.location.href = "/?message=" + encodeURIComponent("Your session has expired. Please login again.");
-    }
+  if (!skipLoader) {
+    showGlobalLoading();
   }
 
-  return res;
+  try {
+    const role = getCurrentRole();
+    const tokenAtRequest = getToken(role);
+    const res = await originalFetch.apply(this, args);
+
+    if (res.status === 401) {
+      const tokenNow = getToken(role);
+      if (tokenNow && tokenNow === tokenAtRequest) {
+        clearSession(role);
+        window.location.href = "/?message=" + encodeURIComponent("Your session has expired. Please login again.");
+      }
+    }
+
+    return res;
+  } finally {
+    if (!skipLoader) {
+      hideGlobalLoading();
+    }
+  }
 };
 
 /**
  * Listen for storage changes from other tabs.
- * If another tab logs in with the SAME role, this tab should redirect
- * to the login page (the old session is superseded).
  */
 window.addEventListener("storage", (e) => {
   if (!e.key) return;
@@ -41,7 +51,6 @@ window.addEventListener("storage", (e) => {
   const role = getCurrentRole();
   if (!role) return;
 
-  // Another tab changed this role's token → same role logged in elsewhere
   if (e.key === `token_${role}` && e.oldValue && e.newValue && e.oldValue !== e.newValue) {
     clearSession(role);
     window.location.href = "/?message=" + encodeURIComponent("You have been logged in from another tab.");

@@ -102,19 +102,21 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/projects/{project}/files/{file}', [ProjectController::class, 'deleteFile']);
     });
 
+    // Project completion (any assigned user can mark it complete)
+    Route::post('/projects/{project}/complete', [ProjectController::class, 'completeProject']);
+
     /*
     | TASK MANAGEMENT
     */
 
-    // Tasks under a project (write: admin, manager, team_lead)
-    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
-        Route::post('/projects/{project}/tasks', [TaskController::class, 'store']);
-    });
+    // Tasks under a project (any authenticated user can create)
+    Route::post('/projects/{project}/tasks', [TaskController::class, 'store']);
 
     // Task CRUD (all authenticated users can read; write handled per-route)
     Route::get('/tasks/{task}', [TaskController::class, 'show']);
     Route::put('/tasks/{task}', [TaskController::class, 'update']);
     Route::patch('/tasks/{task}/status', [TaskController::class, 'updateStatus']);
+    Route::post('/tasks/{task}/complete', [TaskController::class, 'completeTask']);
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
 
     // Subtask creation under a parent task
@@ -130,11 +132,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/deliverables', [DeliverableController::class, 'index']);
     Route::get('/deliverables/{deliverable}', [DeliverableController::class, 'show']);
 
-    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
-        Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']);
-        Route::put('/deliverables/{deliverable}', [DeliverableController::class, 'update']);
-        Route::delete('/deliverables/{deliverable}', [DeliverableController::class, 'destroy']);
-    });
+Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
+    Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']);
+    Route::put('/deliverables/{deliverable}', [DeliverableController::class, 'update']);
+    Route::delete('/deliverables/{deliverable}', [DeliverableController::class, 'destroy']);
+});
+
+Route::patch('/deliverables/{deliverable}/delivered', [DeliverableController::class, 'markDelivered']);
 
     /*
     | CALENDAR / EVENTS

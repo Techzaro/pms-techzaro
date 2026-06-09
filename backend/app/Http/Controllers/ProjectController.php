@@ -6,6 +6,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Deliverable;
 use App\Models\Project;
 use App\Models\ProjectFile;
 use App\Models\Team;
@@ -69,6 +70,7 @@ class ProjectController extends Controller
         $validated['created_by'] = $request->user()->id;
         $validated['priority'] = $validated['priority'] ?? 'Medium';
         $validated['status'] = $validated['status'] ?? 'in_progress';
+        $validated['start_date'] = $validated['start_date'] ?? now()->toDateTimeString();
 
         if (!empty($validated['team_id']) && empty($validated['assigned_users'])) {
             $team = Team::with('leader:id')->find($validated['team_id']);
@@ -95,15 +97,35 @@ class ProjectController extends Controller
      */
     public function show(Project $project)
     {
+        $user = request()->user();
+
         $project->load([
             'creator:id,name,email,role',
-            'team.leader:id,name',
+            'team.leader:id,name,email,role',
             'team.members:id,name,email,role',
             'tasks.assignees:id,name,email,role',
             'milestones',
             'activities' => fn ($q) => $q->with('user:id,name')->latest()->limit(30),
             'files',
         ]);
+
+        $isCreator = $project->created_by === $user->id;
+        $isAssigned = in_array($user->id, $project->assigned_users ?? []);
+        $isTeamMember = $project->team_id && $project->team && (
+            $project->team->members->contains('id', $user->id) ||
+            $project->team->leader_id === $user->id
+        );
+
+        if (!$isCreator && !$isAssigned && !$isTeamMember && !in_array($user->role, ['admin', 'manager', 'team_lead'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($project->team && $project->team->leader) {
+            $leaderInMembers = $project->team->members->contains('id', $project->team->leader_id);
+            if (!$leaderInMembers) {
+                $project->team->members->push($project->team->leader);
+            }
+        }
 
         $memberIds = $project->assigned_users ?? [];
         $members = User::whereIn('id', $memberIds)->where('active', true)->orderBy('name')->get(['id', 'name', 'email', 'role']);
@@ -137,8 +159,15 @@ class ProjectController extends Controller
      */
     public function update(Request $request, Project $project)
     {
+        $user = $request->user();
+        $isCreator = $project->created_by === $user->id;
+
+        if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
+            'title' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
             'goals' => 'nullable|string',
             'goals_checklist' => 'nullable|array',
@@ -183,6 +212,13 @@ class ProjectController extends Controller
      */
     public function patch(Request $request, Project $project)
     {
+        $user = $request->user();
+        $isCreator = $project->created_by === $user->id;
+
+        if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
         $validated = $request->validate([
             'sidebar_notes' => 'sometimes|nullable|string',
             'goals_checklist' => 'sometimes|nullable|array',
@@ -200,10 +236,51 @@ class ProjectController extends Controller
     }
 
     /**
+     * Complete a project (assigned users can mark it done).
+     */
+    public function completeProject(Project $project)
+    {
+        $user = request()->user();
+        $isCreator = $project->created_by === $user->id;
+        $isAssigned = in_array($user->id, $project->assigned_users ?? []);
+
+        if (!$isCreator && !$isAssigned && !in_array($user->role, ['admin', 'manager', 'team_lead'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $project->update(['status' => 'completed']);
+
+        $deliverable = Deliverable::create([
+            'project_id' => $project->id,
+            'task_id' => null,
+            'title' => $project->title,
+            'description' => $project->description,
+            'status' => 'deliverable',
+            'priority' => $project->priority ?? 'Medium',
+            'due_date' => $project->end_date,
+            'assigned_to' => $user->id,
+            'created_by' => $project->created_by,
+        ]);
+
+        return response()->json([
+            'message' => 'Project marked as completed',
+            'project' => $project->fresh(),
+            'deliverable' => $deliverable,
+        ]);
+    }
+
+    /**
      * Delete a project
      */
     public function destroy(Project $project)
     {
+        $user = request()->user();
+        $isCreator = $project->created_by === $user->id;
+
+        if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
         $project->delete();
 
         return response()->json([

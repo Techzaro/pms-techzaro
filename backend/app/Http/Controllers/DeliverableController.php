@@ -16,11 +16,15 @@ use Illuminate\Http\Request;
 class DeliverableController extends Controller
 {
     /**
-     * List all deliverables with filtering.
+     * List deliverables filtered for the logged-in user.
+     * Every user only sees deliverables assigned to them.
      */
     public function index(Request $request)
     {
-        $deliverables = Deliverable::with(['project:id,title', 'assignee:id,name,email,role', 'creator:id,name'])
+        $user = $request->user();
+
+        $deliverables = Deliverable::with(['project:id,title', 'assignee:id,name,email,role', 'creator:id,name,role'])
+            ->where('assigned_to', $user->id)
             ->latest()
             ->filter($request->query())
             ->paginate(15);
@@ -33,6 +37,14 @@ class DeliverableController extends Controller
      */
     public function show(Deliverable $deliverable)
     {
+        $user = request()->user();
+        $isCreator = $deliverable->created_by === $user->id;
+        $isAssignee = $deliverable->assigned_to === $user->id;
+
+        if (!$isCreator && !$isAssignee && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
         $deliverable->load([
             'project:id,title',
             'assignee:id,name,email,role',
@@ -79,6 +91,13 @@ class DeliverableController extends Controller
      */
     public function update(Request $request, Deliverable $deliverable)
     {
+        $user = $request->user();
+        $isCreator = $deliverable->created_by === $user->id;
+
+        if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'description' => 'sometimes|nullable|string',
@@ -101,10 +120,43 @@ class DeliverableController extends Controller
      */
     public function destroy(Deliverable $deliverable)
     {
+        $user = request()->user();
+        $isCreator = $deliverable->created_by === $user->id;
+
+        if (!$isCreator && !in_array($user->role, ['admin'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
         $deliverable->delete();
 
         return response()->json([
             'message' => 'Deliverable deleted successfully',
+        ]);
+    }
+
+    /**
+     * Mark a deliverable as delivered.
+     * Also marks the linked task as completed on the assigner's side.
+     */
+    public function markDelivered(Deliverable $deliverable)
+    {
+        $user = request()->user();
+        $isCreator = $deliverable->created_by === $user->id;
+        $isAssignee = $deliverable->assigned_to === $user->id;
+
+        if (!$isCreator && !$isAssignee && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $deliverable->update(['status' => 'delivered']);
+
+        if ($deliverable->task_id) {
+            $deliverable->task()->update(['status' => 'completed']);
+        }
+
+        return response()->json([
+            'message' => 'Deliverable marked as delivered',
+            'deliverable' => $deliverable->fresh()->load(['assignee:id,name,email,role', 'creator:id,name,role', 'task:id,title,status']),
         ]);
     }
 }

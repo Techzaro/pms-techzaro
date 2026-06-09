@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { MdEdit, MdArrowBack } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import API_URL from "../config/api";
-import { authToken, getCurrentRole } from "../utils/auth";
+import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import "./UserProfile.css";
 import "./ManageUsers.css";
 
@@ -233,7 +233,7 @@ function UserProfile() {
         <div className="user-profile-page">
           <div className="profile-error">
             <p>{error}</p>
-            <button className="primary-button" onClick={() => navigate("/manage-users")}>
+            <button className="primary-button" onClick={() => navigate(rolePath("manage-users"))}>
               Go Back
             </button>
           </div>

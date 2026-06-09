@@ -4,7 +4,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import CreateProjectModal from "../components/CreateProjectModal";
 import { IoSearchOutline } from "react-icons/io5";
 import API_URL from "../config/api";
-import { authToken, getCurrentRole } from "../utils/auth";
+import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import "./Projects.css";
 
 function Projects() {
@@ -73,6 +73,17 @@ function Projects() {
     }
 
     return "In Progress";
+  };
+
+  const getProgressColor = (percent) => {
+    const grey = [209, 213, 219];
+    const blue = [79, 70, 229];
+    const t = Math.min(percent, 100) / 100;
+    const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const r = Math.round(grey[0] + (blue[0] - grey[0]) * eased);
+    const g = Math.round(grey[1] + (blue[1] - grey[1]) * eased);
+    const b = Math.round(grey[2] + (blue[2] - grey[2]) * eased);
+    return `rgb(${r}, ${g}, ${b})`;
   };
 
   const getStatusBadgeColor = (status) => {
@@ -176,7 +187,7 @@ function Projects() {
                         className="progress-fill"
                         style={{
                           width: `${progress}%`,
-                          background: progress > 0 ? "#4f46e5" : "#d1d5db",
+                          background: getProgressColor(progress),
                         }}
                       ></div>
                     </div>
@@ -209,7 +220,7 @@ function Projects() {
 
                     <button
                       className="view-details-btn"
-                      onClick={() => navigate(`/projects/${project.id}`)}
+                      onClick={() => navigate(rolePath(`projects/project-details/${project.id}`))}
                     >
                       View →
                     </button>

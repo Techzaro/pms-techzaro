@@ -12,8 +12,9 @@ import {
 } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import CreateSubtaskModal from "../components/CreateSubtaskModal";
+import EditTaskModal from "../components/EditTaskModal";
 import API_URL from "../config/api";
-import { authToken } from "../utils/auth";
+import { authToken, getUser, rolePath } from "../utils/auth";
 import "./TaskDetails.css";
 
 function formatShortDate(value) {
@@ -46,21 +47,40 @@ function statusLabel(status) {
 
 function statusColor(status) {
   const s = (status || "").toLowerCase();
-  if (s === "completed" || s === "done") return "#22c55e";
-  if (s === "in_progress") return "#3b82f6";
-  if (s === "pending") return "#f59e0b";
-  if (s === "review") return "#8b5cf6";
-  if (s === "failed") return "#ef4444";
-  if (s === "abandoned") return "#6b7280";
-  return "#6b7280";
+  if (s === "completed" || s === "done") return "#166534";
+  if (s === "in_progress") return "#1E40AF";
+  if (s === "pending") return "#92400E";
+  if (s === "review") return "#5B21B6";
+  if (s === "failed") return "#991B1B";
+  if (s === "abandoned") return "#374151";
+  return "#374151";
+}
+
+function statusBgColor(status) {
+  const s = (status || "").toLowerCase();
+  if (s === "completed" || s === "done") return "#DCFCE7";
+  if (s === "in_progress") return "#DBEAFE";
+  if (s === "pending") return "#FEF3C7";
+  if (s === "review") return "#EDE9FE";
+  if (s === "failed") return "#FEE2E2";
+  if (s === "abandoned") return "#F3F4F6";
+  return "#F3F4F6";
 }
 
 function priorityColor(priority) {
   const p = (priority || "").toLowerCase();
-  if (p === "high") return "#ef4444";
-  if (p === "medium") return "#f59e0b";
-  if (p === "low") return "#22c55e";
-  return "#6b7280";
+  if (p === "high") return "#991B1B";
+  if (p === "medium") return "#92400E";
+  if (p === "low") return "#166534";
+  return "#374151";
+}
+
+function priorityBgColor(priority) {
+  const p = (priority || "").toLowerCase();
+  if (p === "high") return "#FEE2E2";
+  if (p === "medium") return "#FEF3C7";
+  if (p === "low") return "#DCFCE7";
+  return "#F3F4F6";
 }
 
 function initials(name) {
@@ -79,6 +99,7 @@ function TaskDetails() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("overview");
   const [showSubtaskModal, setShowSubtaskModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
 
@@ -96,6 +117,8 @@ function TaskDetails() {
 
   useEffect(() => { fetchTask(true); }, [fetchTask]);
 
+  const currentUser = getUser();
+  const isCreator = task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10);
   const assignees = task?.assignees || [];
   const assigner = task?.assigner;
   const subtasks = task?.subtasks || [];
@@ -120,7 +143,7 @@ function TaskDetails() {
         method: "DELETE",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       });
-      if (res.ok) { showMessage("Task deleted."); setTimeout(() => navigate("/tasks"), 800); }
+      if (res.ok) { showMessage("Task deleted."); setTimeout(() => navigate(rolePath("tasks")), 800); }
       else showMessage("Failed to delete task.", "error");
     } catch { showMessage("Failed to delete task.", "error"); }
   };
@@ -149,7 +172,7 @@ function TaskDetails() {
           {/* ===== LEFT ===== */}
           <div className="td-main">
             <nav className="td-breadcrumb">
-              <Link to="/tasks">Tasks</Link>
+              <Link to={rolePath("tasks")}>Tasks</Link>
               <ChevronRight size={14} />
               <span>{task.title}</span>
             </nav>
@@ -159,6 +182,17 @@ function TaskDetails() {
               <div className="td-title-actions">
                 <button className="td-nav-btn"><ChevronLeft size={18} /></button>
                 <button className="td-nav-btn"><ChevronRight size={18} /></button>
+                {isCreator && (
+                  <>
+                    <button className="td-btn-outline" onClick={() => setShowEditModal(true)}>
+                      <Pencil size={15} strokeWidth={2.5} />
+                      Edit
+                    </button>
+                    <button className="td-btn-danger" onClick={handleDeleteTask}>
+                      Delete
+                    </button>
+                  </>
+                )}
                 <button className="td-btn-primary" onClick={() => setShowSubtaskModal(true)}>
                   <Plus size={16} strokeWidth={2.5} />
                   Add Subtask
@@ -169,18 +203,14 @@ function TaskDetails() {
             {task.description && <p className="td-desc">{task.description}</p>}
 
             <div className="td-badges">
-              <span className="td-badge" style={{ background: statusColor(task.status) + "15", color: statusColor(task.status) }}>
+              <span className="td-badge" style={{ background: statusBgColor(task.status), color: statusColor(task.status) }}>
                 <span className="td-badge-dot" style={{ background: statusColor(task.status) }} />
                 {statusLabel(task.status)}
               </span>
-              <span className="td-badge" style={{ background: priorityColor(task.priority) + "15", color: priorityColor(task.priority) }}>
+              <span className="td-badge" style={{ background: priorityBgColor(task.priority), color: priorityColor(task.priority) }}>
                 <span className="td-badge-dot" style={{ background: priorityColor(task.priority) }} />
                 {task.priority} Priority
               </span>
-              <button className="td-badge-link">
-                <Pencil size={13} />
-                Edit Task
-              </button>
             </div>
 
             {/* STATS */}
@@ -291,7 +321,7 @@ function TaskDetails() {
                               </div>
                             </td>
                             <td>
-                              <span className="td-pill" style={{ background: statusColor(t.status) + "15", color: statusColor(t.status) }}>
+                              <span className="td-pill" style={{ background: statusBgColor(t.status), color: statusColor(t.status) }}>
                                 <span className="td-pill-dot" style={{ background: statusColor(t.status) }} />
                                 {statusLabel(t.status)}
                               </span>
@@ -389,7 +419,7 @@ function TaskDetails() {
                             </div>
                           </td>
                           <td>
-                            <span className="td-pill" style={{ background: statusColor(t.status) + "15", color: statusColor(t.status) }}>
+                            <span className="td-pill" style={{ background: statusBgColor(t.status), color: statusColor(t.status) }}>
                               <span className="td-pill-dot" style={{ background: statusColor(t.status) }} />
                               {statusLabel(t.status)}
                             </span>
@@ -448,6 +478,13 @@ function TaskDetails() {
           </aside>
         </div>
       </div>
+
+      {showEditModal && (
+        <EditTaskModal
+          task={task}
+          onClose={(refresh) => { setShowEditModal(false); if (refresh) fetchTask(false); }}
+        />
+      )}
 
       {showSubtaskModal && (
         <CreateSubtaskModal

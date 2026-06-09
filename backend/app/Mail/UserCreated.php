@@ -27,7 +27,7 @@ class UserCreated extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your PMS Account Has Been Created',
+            subject: 'Your PMS TechXaro Account Has Been Created',
         );
     }
 
@@ -65,19 +65,26 @@ class UserCreated extends Mailable
                             </tr>
                             <tr>
                                 <td style="padding:40px 30px;">
-                                    <h2 style="color:#111827;margin:0 0 8px;font-size:22px;">Hello {$name},</h2>
-                                    <p style="color:#6b7280;font-size:15px;line-height:1.7;margin:0 0 24px;">Your PMS account has been created successfully. Below are your login credentials:</p>
+                                    <p style="color:#111827;font-size:15px;line-height:1.7;margin:0 0 16px;">Dear {$name},</p>
+
+                                    <p style="color:#111827;font-size:15px;line-height:1.7;margin:0 0 16px;">Welcome to <strong>PMS TechXaro</strong>.</p>
+
+                                    <p style="color:#111827;font-size:15px;line-height:1.7;margin:0 0 24px;">Your account has been successfully created. Please find your login details below:</p>
 
                                     <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:24px;">
                                         <tr>
                                             <td style="padding:20px;">
                                                 <table width="100%" cellpadding="0" cellspacing="0">
                                                     <tr>
-                                                        <td style="padding:8px 0;color:#6b7280;font-size:13px;font-weight:600;width:140px;">Login URL</td>
+                                                        <td style="padding:8px 0;color:#6b7280;font-size:13px;font-weight:600;width:140px;">Platform Name</td>
+                                                        <td style="padding:8px 0;color:#111827;font-size:14px;">PMS TechXaro</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td style="padding:8px 0;color:#6b7280;font-size:13px;font-weight:600;">Platform Link</td>
                                                         <td style="padding:8px 0;color:#111827;font-size:14px;"><a href="{$loginUrl}" style="color:#2563eb;text-decoration:none;">{$loginUrl}</a></td>
                                                     </tr>
                                                     <tr>
-                                                        <td style="padding:8px 0;color:#6b7280;font-size:13px;font-weight:600;">Email</td>
+                                                        <td style="padding:8px 0;color:#6b7280;font-size:13px;font-weight:600;">Username</td>
                                                         <td style="padding:8px 0;color:#111827;font-size:14px;">{$email}</td>
                                                     </tr>
                                                     <tr>
@@ -89,14 +96,31 @@ class UserCreated extends Mailable
                                         </tr>
                                     </table>
 
-                                    <p style="color:#dc2626;font-size:14px;line-height:1.6;margin:0 0 24px;">⚠ For security purposes, please change your password after your first login.</p>
+                                    <p style="color:#111827;font-size:15px;line-height:1.7;margin:0 0 16px;">Kindly log in to the platform and familiarize yourself with its features and functionalities.</p>
 
-                                    <p style="color:#6b7280;font-size:14px;margin:0;">Regards,<br><strong>PMS Team</strong></p>
+                                    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef3c7;border:1px solid #f59e0b;border-radius:12px;margin-bottom:24px;">
+                                        <tr>
+                                            <td style="padding:20px;">
+                                                <p style="color:#92400e;font-size:14px;font-weight:700;margin:0 0 8px;">&#9888; Important Security Notice:</p>
+                                                <ul style="color:#92400e;font-size:14px;line-height:1.8;margin:0;padding-left:20px;">
+                                                    <li>Do not share your login credentials with anyone.</li>
+                                                    <li>We strongly recommend changing your password after your first login.</li>
+                                                    <li>You are responsible for maintaining the confidentiality of your account.</li>
+                                                </ul>
+                                            </td>
+                                        </tr>
+                                    </table>
+
+                                    <p style="color:#6b7280;font-size:14px;line-height:1.7;margin:0 0 24px;">If you experience any issues accessing the platform or have any questions, please contact the HR Department or your reporting manager for assistance.</p>
+
+                                    <p style="color:#111827;font-size:15px;line-height:1.7;margin:0 0 24px;">We wish you a productive experience with PMS TechXaro.</p>
+
+                                    <p style="color:#6b7280;font-size:14px;margin:0;">Best Regards,<br><strong>TechXaro Pvt. Ltd.</strong></p>
                                 </td>
                             </tr>
                             <tr>
                                 <td style="background-color:#f9fafb;padding:20px 30px;text-align:center;border-top:1px solid #e5e7eb;">
-                                    <p style="color:#9ca3af;font-size:12px;margin:0;">© 2026 Techxaro. All rights reserved.</p>
+                                    <p style="color:#9ca3af;font-size:12px;margin:0;">&copy; 2026 Techxaro. All rights reserved.</p>
                                 </td>
                             </tr>
                         </table>

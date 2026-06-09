@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
+import UserSelectDropdown from "./UserSelectDropdown";
 import "./layout/CreateTaskModal.css";
 
 const PRESET_PHASES = [
@@ -38,13 +39,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   const [pendingFiles, setPendingFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const [linkInput, setLinkInput] = useState("");
-  const [assignOpen, setAssignOpen] = useState(false);
-  const assignRef = useRef(null);
   const fileInputRef = useRef(null);
   const dropRef = useRef(null);
-
-  const currentUser = getUser();
-  const currentUserId = currentUser?.id;
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: true } }));
@@ -52,38 +48,40 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   }, []);
 
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (assignRef.current && !assignRef.current.contains(e.target)) {
-        setAssignOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  useEffect(() => {
     const token = authToken();
+    const currentUser = getUser();
+
+    const ensureCurrentUser = (users) => {
+      if (!currentUser) return users;
+      const exists = users.some((u) => u.id === currentUser.id);
+      if (!exists) {
+        return [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role }, ...users];
+      }
+      return users;
+    };
 
     if (projectId) {
       fetch(`${API_URL}/projects/${projectId}`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
       })
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           const project = data?.project;
           if (project?.team?.members && project.team.members.length > 0) {
-            setDisplayUsers(project.team.members);
+            setDisplayUsers(ensureCurrentUser(project.team.members));
           } else if (project?.members && project.members.length > 0) {
-            setDisplayUsers(project.members.filter((u) => u.id !== currentUserId));
+            setDisplayUsers(ensureCurrentUser(project.members));
           } else {
             fetch(`${API_URL}/team-users`, {
               headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+              skipLoader: true,
             })
               .then((res) => (res.ok ? res.json() : []))
               .then((data) => {
-                const users = Array.isArray(data) ? data : [];
+                const users = ensureCurrentUser(Array.isArray(data) ? data : []);
                 setAllUsers(users);
-                setDisplayUsers(users.filter((u) => u.id !== currentUserId));
+                setDisplayUsers(users);
               })
               .catch(() => {});
           }
@@ -92,6 +90,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     } else {
       fetch(`${API_URL}/projects`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
       })
         .then((res) => (res.ok ? res.json() : []))
         .then((data) => {
@@ -102,12 +101,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
 
       fetch(`${API_URL}/team-users`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
       })
         .then((res) => (res.ok ? res.json() : []))
         .then((data) => {
           const users = Array.isArray(data) ? data : [];
           setAllUsers(users);
-          setDisplayUsers(users.filter((u) => u.id !== currentUserId));
+          setDisplayUsers(users);
         })
         .catch(() => {});
     }
@@ -123,21 +123,22 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         const token = authToken();
         fetch(`${API_URL}/projects/${value}`, {
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          skipLoader: true,
         })
           .then((res) => (res.ok ? res.json() : null))
           .then((data) => {
             const project = data?.project;
             if (project?.team?.members && project.team.members.length > 0) {
-              setDisplayUsers(project.team.members.filter((u) => u.id !== currentUserId));
+              setDisplayUsers(project.team.members);
             } else {
-              setDisplayUsers(allUsers.filter((u) => u.id !== currentUserId));
+              setDisplayUsers(allUsers);
             }
           })
           .catch(() => {
-            setDisplayUsers(allUsers.filter((u) => u.id !== currentUserId));
+            setDisplayUsers(allUsers);
           });
       } else {
-        setDisplayUsers(allUsers.filter((u) => u.id !== currentUserId));
+        setDisplayUsers(allUsers);
       }
     } else {
       setForm((prev) => ({ ...prev, [name]: value }));
@@ -152,13 +153,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     }
   };
 
-  const toggleUser = (userId) => {
-    setForm((prev) => {
-      const selected = prev.assigned_to.includes(userId)
-        ? prev.assigned_to.filter((id) => id !== userId)
-        : [...prev.assigned_to, userId];
-      return { ...prev, assigned_to: selected };
-    });
+  const handleAssignedToChange = (ids) => {
+    setForm((prev) => ({ ...prev, assigned_to: ids }));
     if (formErrors.assigned_to) {
       setFormErrors((prev) => {
         const next = { ...prev };
@@ -288,15 +284,19 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e?.preventDefault) e.preventDefault();
     setError("");
 
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      console.log("CreateTaskModal: form validation failed");
+      return;
+    }
 
     setLoading(true);
 
     try {
       const token = authToken();
+      console.log("CreateTaskModal: token ok, building body");
 
       const firstMilestone = milestones.length > 0 ? milestones[0] : null;
       const lastMilestone = milestones.length > 0 ? milestones[milestones.length - 1] : null;
@@ -313,7 +313,10 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         priority: form.priority,
       };
 
-      const response = await fetch(`${API_URL}/projects/${projectId || form.project_id}/tasks`, {
+      const url = `${API_URL}/projects/${projectId || form.project_id}/tasks`;
+      console.log("CreateTaskModal: posting to", url, body);
+
+      const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -323,7 +326,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         body: JSON.stringify(body),
       });
 
+      console.log("CreateTaskModal: response status", response.status);
       const data = await response.json();
+      console.log("CreateTaskModal: response body", data);
 
       if (!response.ok) {
         const msg = data.message || "Failed to create task";
@@ -331,13 +336,14 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         throw new Error(errors || msg);
       }
 
-      const taskId = data.task?.id;
-      if (taskId && (pendingFiles.length > 0 || links.length > 0)) {
-        await uploadAttachments(taskId, token);
+      const taskIds = data.tasks?.map(t => t.id) || (data.task?.id ? [data.task.id] : []);
+      if (taskIds.length > 0 && (pendingFiles.length > 0 || links.length > 0)) {
+        await Promise.all(taskIds.map(id => uploadAttachments(id, token)));
       }
 
       onClose(true);
     } catch (err) {
+      console.error("CreateTaskModal: error", err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -397,43 +403,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 <label>
                   Assign To <span>*</span>
                 </label>
-                <div className="task-checkbox-dropdown" ref={assignRef}>
-                  <button
-                    type="button"
-                    className={`task-checkbox-trigger ${assignOpen ? "task-checkbox-trigger--open" : ""} ${formErrors.assigned_to ? "field-error" : ""}`}
-                    onClick={() => setAssignOpen(!assignOpen)}
-                  >
-                    <span>
-                      {form.assigned_to.length === 0
-                        ? "Select user(s)"
-                        : `${form.assigned_to.length} user(s) selected`}
-                    </span>
-                    <span className={`task-checkbox-arrow ${assignOpen ? "open" : ""}`}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </span>
-                  </button>
-
-                  {assignOpen && (
-                    <div className="task-checkbox-list task-checkbox-list--open">
-                      {displayUsers.length === 0 ? (
-                        <div className="task-checkbox-empty">No users available</div>
-                      ) : (
-                        displayUsers.map((user) => (
-                          <label key={user.id} className="task-checkbox-item">
-                            <input
-                              type="checkbox"
-                              checked={form.assigned_to.includes(user.id)}
-                              onChange={() => toggleUser(user.id)}
-                            />
-                            <span>{user.name}</span>
-                          </label>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
+                <UserSelectDropdown
+                  users={displayUsers}
+                  selectedIds={form.assigned_to}
+                  onChange={handleAssignedToChange}
+                  placeholder="Click to select members"
+                  error={!!formErrors.assigned_to}
+                />
                 {formErrors.assigned_to && <span className="field-error-text">{formErrors.assigned_to}</span>}
               </div>
 
@@ -686,30 +662,29 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
 
           </div>
 
-        </form>
-
         {error && <div className="task-error-banner">{error}</div>}
 
         {/* FOOTER */}
         <div className="task-footer">
-          <div></div>
-          <div className="task-footer-btns">
-            <button
-              className="task-cancel-btn"
-              onClick={() => onClose(false)}
-              disabled={loading}
-            >
-              Cancel
-            </button>
-            <button
-              className="task-create-btn"
-              onClick={handleSubmit}
-              disabled={loading}
-            >
-              {loading ? "Creating..." : "+ Create Task"}
-            </button>
-          </div>
+          <button
+            type="button"
+            className="task-cancel-btn"
+            onClick={() => onClose(false)}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="task-create-btn"
+            onClick={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? "Creating..." : "+ Create Task"}
+          </button>
         </div>
+
+        </form>
 
       </div>
     </div>

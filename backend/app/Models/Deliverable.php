@@ -10,6 +10,7 @@ class Deliverable extends Model
 {
     protected $fillable = [
         'project_id',
+        'task_id',
         'title',
         'description',
         'status',
@@ -61,5 +62,10 @@ class Deliverable extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(Task::class);
     }
 }

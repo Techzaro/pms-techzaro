@@ -78,4 +78,9 @@ class Task extends Model
     {
         return $this->hasMany(\App\Models\Subtask::class);
     }
+
+    public function deliverables()
+    {
+        return $this->hasMany(\App\Models\Deliverable::class);
+    }
 }

@@ -1,9 +1,9 @@
 /**
  * Main React application router.
- * Defines public and protected routes for different user roles.
+ * All routes follow /:role/page-name pattern.
  */
 
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import Login from "./pages/Login";
 import Admin from "./pages/Admin";
@@ -19,12 +19,12 @@ import ManageUsers from "./pages/ManageUsers";
 import UserProfile from "./pages/UserProfile";
 import MyProfile from "./pages/MyProfile";
 import Deliveries from "./pages/Deliveries";
-import Details from "./pages/Details";
 import History from "./pages/History";
 import Reports from "./pages/Reports";
 import ManageTeam from "./pages/ManageTeam";
 
 import ProtectedRoute from "./components/ProtectedRoute";
+import RoleProtectedRoute from "./components/RoleProtectedRoute";
 import TaskDetails from "./pages/TaskDetails";
 import DeliverableDetails from "./pages/DeliverableDetails";
 import Calender from "./pages/Calender";
@@ -36,57 +36,21 @@ function App() {
       <Routes>
 
         {/* PUBLIC */}
-
         <Route path="/" element={<Login />} />
 
-        {/* ADMIN DASHBOARD */}
-
+        {/* DASHBOARD - role specific */}
         <Route
-          path="/admin/dashboard"
+          path="/:role/dashboard"
           element={
-            <ProtectedRoute>
+            <RoleProtectedRoute>
               <Admin />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* MANAGER DASHBOARD */}
-
-        <Route
-          path="/manager/dashboard"
-          element={
-            <ProtectedRoute>
-              <Manager />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* TEAM LEAD DASHBOARD */}
-
-        <Route
-          path="/teamlead/dashboard"
-          element={
-            <ProtectedRoute>
-              <TeamLead />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* MEMBER DASHBOARD */}
-
-        <Route
-          path="/member/dashboard"
-          element={
-            <ProtectedRoute>
-              <Member />
-            </ProtectedRoute>
+            </RoleProtectedRoute>
           }
         />
 
         {/* TASKS */}
-
         <Route
-          path="/tasks"
+          path="/:role/tasks"
           element={
             <ProtectedRoute>
               <Tasks />
@@ -95,32 +59,18 @@ function App() {
         />
 
         {/* TASK BY */}
-
         <Route
-          path="/taskby"
+          path="/:role/taskby"
           element={
             <ProtectedRoute>
               <Taskby />
             </ProtectedRoute>
           }
         />
-        {/* TASK Details */}
-
-        <Route
-          path="/taskdetails"
-          element={
-            <ProtectedRoute>
-              <TaskDetails />
-            </ProtectedRoute>
-          }
-        />
-
-
 
         {/* PROJECTS */}
-
         <Route
-          path="/projects"
+          path="/:role/projects"
           element={
             <ProtectedRoute>
               <Projects />
@@ -129,9 +79,8 @@ function App() {
         />
 
         {/* CREATE PROJECT */}
-
         <Route
-          path="/create-project"
+          path="/:role/create-project"
           element={
             <ProtectedRoute>
               <CreateProject />
@@ -140,9 +89,8 @@ function App() {
         />
 
         {/* PROJECT DETAILS */}
-
         <Route
-          path="/projects/:projectId"
+          path="/:role/projects/project-details/:projectId"
           element={
             <ProtectedRoute>
               <ProjectDetails />
@@ -151,38 +99,28 @@ function App() {
         />
 
         {/* DELIVERIES */}
-
         <Route
-          path="/deliveries"
+          path="/:role/deliveries"
           element={
             <ProtectedRoute>
               <Deliveries />
             </ProtectedRoute>
           }
         />
+
         {/* DELIVERABLE DETAILS */}
-
-<Route
-  path="/deliverable-details/:projectId"
-  element={
-    <ProtectedRoute>
-      <DeliverableDetails />
-    </ProtectedRoute>
-  }
-/>
-        {/* DETAILS */}
-
         <Route
-          path="/details"
+          path="/:role/deliveries/deliverable-details/:projectId"
           element={
             <ProtectedRoute>
-              <Details />
+              <DeliverableDetails />
             </ProtectedRoute>
           }
         />
 
+        {/* TASK DETAILS */}
         <Route
-          path="/details/:taskId"
+          path="/:role/tasks/task-details/:taskId"
           element={
             <ProtectedRoute>
               <TaskDetails />
@@ -191,9 +129,8 @@ function App() {
         />
 
         {/* HISTORY */}
-
         <Route
-          path="/history"
+          path="/:role/history"
           element={
             <ProtectedRoute>
               <History />
@@ -202,9 +139,8 @@ function App() {
         />
 
         {/* REPORTS */}
-
         <Route
-          path="/reports"
+          path="/:role/reports"
           element={
             <ProtectedRoute>
               <Reports />
@@ -213,31 +149,28 @@ function App() {
         />
 
         {/* MANAGE USERS */}
-
         <Route
-          path="/manage-users"
+          path="/:role/manage-users"
           element={
-            <ProtectedRoute>
+            <RoleProtectedRoute allowedRoles={["admin", "manager"]}>
               <ManageUsers />
-            </ProtectedRoute>
+            </RoleProtectedRoute>
           }
         />
 
         {/* USER PROFILE */}
-
         <Route
-          path="/user-profile/:userId"
+          path="/:role/manage-users/user-profile/:userId"
           element={
-            <ProtectedRoute>
+            <RoleProtectedRoute allowedRoles={["admin", "manager"]}>
               <UserProfile />
-            </ProtectedRoute>
+            </RoleProtectedRoute>
           }
         />
 
         {/* MY PROFILE */}
-
         <Route
-          path="/my-profile"
+          path="/:role/my-profile"
           element={
             <ProtectedRoute>
               <MyProfile />
@@ -246,33 +179,37 @@ function App() {
         />
 
         {/* MANAGE TEAM */}
-
         <Route
-          path="/manage-team"
+          path="/:role/manage-team"
           element={
-            <ProtectedRoute>
+            <RoleProtectedRoute allowedRoles={["admin", "manager"]}>
               <ManageTeam />
-            </ProtectedRoute>
+            </RoleProtectedRoute>
           }
         />
+
+        {/* CALENDAR */}
         <Route
-          path="/calender"
+          path="/:role/calender"
           element={
             <ProtectedRoute>
-              <Calender/>
+              <Calender />
             </ProtectedRoute>
           }
         />
 
         {/* USER PERFORMANCE */}
         <Route
-          path="/user-performance/:userId"
+          path="/:role/reports/user-performance/:userId"
           element={
             <ProtectedRoute>
               <UserPerformance />
             </ProtectedRoute>
           }
         />
+
+        {/* CATCH ALL */}
+        <Route path="*" element={<Navigate to="/" replace />} />
 
       </Routes>
     </BrowserRouter>

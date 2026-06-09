@@ -128,7 +128,7 @@
 }
 
 .cp-field label span {
-  color: #ef4444;
+  color: #111827;
 }
 
 .cp-field input,
@@ -179,17 +179,17 @@
 }
 
 .field-error {
-  border-color: #dc2626 !important;
-  background: #fef2f2 !important;
+  border-color: #111827 !important;
+  background: #f3f4f6 !important;
 }
 
 .field-error:focus {
-  border-color: #dc2626 !important;
+  border-color: #111827 !important;
 }
 
 .field-error-text {
   display: block;
-  color: #dc2626;
+  color: #111827;
   font-size: 12px;
   font-weight: 500;
   margin-top: 4px;
@@ -264,7 +264,7 @@
 
 .cp-goals-item-remove:hover {
   background: #fee2e2;
-  color: #dc2626;
+  color: #111827;
 }
 
 /* CUSTOM DROPDOWN */
@@ -545,7 +545,7 @@
 
 .cp-attachment-remove:hover {
   background: #fee2e2;
-  color: #dc2626;
+  color: #111827;
 }
 
 /* RIGHT */
@@ -673,7 +673,7 @@
 
 .cp-phase-item-remove:hover {
   background: #fee2e2;
-  color: #dc2626;
+  color: #111827;
 }
 
 .cp-deadline-summary {
@@ -750,6 +750,19 @@
   font-weight: 600;
 
   cursor: pointer;
+}
+
+/* ERROR BANNER */
+
+.cp-error-banner {
+  margin: 0 28px;
+  padding: 12px 16px;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 /* FOOTER */

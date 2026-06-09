@@ -32,6 +32,12 @@ class EventController extends Controller
      */
     public function show(Event $event)
     {
+        $user = request()->user();
+
+        if ($event->user_id !== $user->id && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
         $event->load('user:id,name,email');
 
         return response()->json([
@@ -76,6 +82,12 @@ class EventController extends Controller
      */
     public function update(Request $request, Event $event)
     {
+        $user = $request->user();
+
+        if ($event->user_id !== $user->id && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'description' => 'sometimes|nullable|string',
@@ -99,6 +111,12 @@ class EventController extends Controller
      */
     public function destroy(Event $event)
     {
+        $user = request()->user();
+
+        if ($event->user_id !== $user->id && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
         $event->delete();
 
         return response()->json([

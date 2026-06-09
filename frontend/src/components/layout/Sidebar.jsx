@@ -2,10 +2,10 @@
  * Sidebar component.
  */
 
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import API_URL from "../../config/api";
-import { authToken, authHeaders, getCurrentRole, getUser, setUser, clearSession } from "../../utils/auth";
+import { authToken, getCurrentRole, getUser, setUser, clearSession, getToken, rolePath, getUrlRole } from "../../utils/auth";
 
 import {
   MdDashboard,
@@ -46,11 +46,14 @@ function Sidebar() {
   });
 
   const location = useLocation();
+  const { role: urlRole } = useParams();
+  const rolePrefix = `/${urlRole}`;
+
+  const isActive = (page) => location.pathname === `${rolePrefix}/${page}`;
+  const isActiveOrStart = (page) => location.pathname === `${rolePrefix}/${page}` || location.pathname.startsWith(`${rolePrefix}/${page}/`);
 
   useEffect(() => {
-
     const token = authToken();
-
     if (!token) return;
 
     fetch(`${API_URL}/user`, {
@@ -58,26 +61,17 @@ function Sidebar() {
         Accept: "application/json",
         Authorization: `Bearer ${token}`,
       },
+      skipLoader: true,
     })
       .then((res) => res.json())
       .then((data) => {
-
         if (data && data.name) {
-
-          setUserState({
-            name: data.name,
-            email: data.email,
-            role: data.role,
-          });
-
+          setUserState({ name: data.name, email: data.email, role: data.role });
           const role = getCurrentRole();
           setUser(role, { id: data.id, name: data.name, email: data.email, role: data.role });
         }
       })
-      .catch(() => {
-        // ignore errors
-      });
-
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -86,12 +80,9 @@ function Sidebar() {
 
   useEffect(() => {
     const isTasksRoute =
-      location.pathname === "/tasks" ||
-      location.pathname === "/taskby" ||
-      location.pathname === "/taskdetails" ||
-      location.pathname === "/details" ||
-      location.pathname.startsWith("/details/") ||
-      location.pathname.startsWith("/taskdetails/");
+      isActive("tasks") ||
+      isActive("taskby") ||
+      location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`);
 
     if (isTasksRoute) {
       setTasksOpen(true);
@@ -156,21 +147,8 @@ function Sidebar() {
         <div>
 
           <Link
-            to={(() => {
-              const role = user.role;
-              if (role === "admin") return "/admin/dashboard";
-              if (role === "manager") return "/manager/dashboard";
-              if (role === "teamlead" || role === "team_lead") return "/teamlead/dashboard";
-              return "/member/dashboard";
-            })()}
-            className={`sidebar-link ${
-              location.pathname === "/admin/dashboard" ||
-              location.pathname === "/manager/dashboard" ||
-              location.pathname === "/teamlead/dashboard" ||
-              location.pathname === "/member/dashboard"
-                ? "active"
-                : ""
-            }`}
+            to={rolePath("dashboard")}
+            className={`sidebar-link ${isActive("dashboard") ? "active" : ""}`}
             onClick={(e) => e.stopPropagation()}
           >
             <MdDashboard />
@@ -178,14 +156,8 @@ function Sidebar() {
           </Link>
 
           <Link
-            to="/deliveries"
-            className={`sidebar-link ${
-              location.pathname === "/deliveries" ||
-              location.pathname.startsWith("/deliverable-details/") ||
-              location.pathname.startsWith("/deliverable/")
-                ? "active"
-                : ""
-            }`}
+            to={rolePath("deliveries")}
+            className={`sidebar-link ${isActiveOrStart("deliveries") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "active" : ""}`}
             onClick={(e) => e.stopPropagation()}
           >
             <MdAssignment />
@@ -193,13 +165,8 @@ function Sidebar() {
           </Link>
 
           <Link
-            to="/projects"
-            className={`sidebar-link ${
-              location.pathname === "/projects" ||
-              location.pathname.startsWith("/projects/")
-                ? "active"
-                : ""
-            }`}
+            to={rolePath("projects")}
+            className={`sidebar-link ${isActiveOrStart("projects") ? "active" : ""}`}
             onClick={(e) => e.stopPropagation()}
           >
             <MdOutlineDescription />
@@ -207,7 +174,7 @@ function Sidebar() {
           </Link>
 
           {/* TASKS DROPDOWN */}
-          <div className={`sidebar-link ${location.pathname === "/tasks" || location.pathname === "/taskby" || location.pathname === "/taskdetails" || location.pathname === "/details" || location.pathname.startsWith("/details/") || location.pathname.startsWith("/taskdetails/") ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+          <div className={`sidebar-link ${isActive("tasks") || isActive("taskby") || location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
             <div
               onClick={toggleTasks}
               style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
@@ -225,15 +192,15 @@ function Sidebar() {
             {tasksOpen && (
               <div className="sidebar-sub-links">
                 <Link
-                  to="/tasks"
-                  className={`sidebar-sub-link ${location.pathname === "/tasks" ? "active" : ""}`}
+                  to={rolePath("tasks")}
+                  className={`sidebar-sub-link ${isActive("tasks") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Assigned to You
                 </Link>
                 <Link
-                  to="/taskby"
-                  className={`sidebar-sub-link ${location.pathname === "/taskby" ? "active" : ""}`}
+                  to={rolePath("taskby")}
+                  className={`sidebar-sub-link ${isActive("taskby") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Assigned by You
@@ -243,13 +210,8 @@ function Sidebar() {
           </div>
 
           <Link
-            to="/calender"
-            className={`sidebar-link ${
-              location.pathname === "/calender" ||
-              location.pathname.startsWith("/calender/")
-                ? "active"
-                : ""
-            }`}
+            to={rolePath("calender")}
+            className={`sidebar-link ${isActiveOrStart("calender") ? "active" : ""}`}
           >
             <MdCalendarToday />
             Calendar
@@ -259,13 +221,8 @@ function Sidebar() {
 
           {(user.role === "admin" || user.role === "manager") && (
             <Link
-              to="/manage-users"
-              className={`sidebar-link ${
-                location.pathname === "/manage-users" ||
-                location.pathname.startsWith("/user-profile/")
-                  ? "active"
-                  : ""
-              }`}
+              to={rolePath("manage-users")}
+              className={`sidebar-link ${isActive("manage-users") || location.pathname.startsWith(`${rolePrefix}/manage-users/user-profile/`) ? "active" : ""}`}
               onClick={(e) => e.stopPropagation()}
             >
               <MdPerson />
@@ -275,12 +232,8 @@ function Sidebar() {
 
           {(user.role === "admin" || user.role === "manager") && (
             <Link
-              to="/manage-team"
-              className={`sidebar-link ${
-                location.pathname === "/manage-team"
-                  ? "active"
-                  : ""
-              }`}
+              to={rolePath("manage-team")}
+              className={`sidebar-link ${isActive("manage-team") ? "active" : ""}`}
               onClick={(e) => e.stopPropagation()}
             >
               <MdPeople />
@@ -289,12 +242,8 @@ function Sidebar() {
           )}
 
           <Link
-            to={user.role === "admin" || user.role === "manager" || user.role === "team_lead" ? "/reports" : "/user-performance/me"}
-            className={`sidebar-link ${
-              location.pathname === "/reports" || location.pathname.startsWith("/user-performance/")
-                ? "active"
-                : ""
-            }`}
+            to={user.role === "admin" || user.role === "manager" || user.role === "team_lead" || user.role === "teamlead" ? rolePath("reports") : rolePath("reports/user-performance/me")}
+            className={`sidebar-link ${isActive("reports") || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`) ? "active" : ""}`}
           >
             <MdBarChart />
             Reports
@@ -305,10 +254,8 @@ function Sidebar() {
         <div className="sidebar-bottom">
 
           <Link
-            to="/my-profile"
-            className={`sidebar-link profile-link ${
-              location.pathname === "/my-profile" ? "active" : ""
-            }`}
+            to={rolePath("my-profile")}
+            className={`sidebar-link profile-link ${isActive("my-profile") ? "active" : ""}`}
             onClick={(e) => e.stopPropagation()}
           >
             <MdPerson />
@@ -318,9 +265,27 @@ function Sidebar() {
           <Link
             to="/"
             className="sidebar-link logout-link"
-            onClick={(e) => {
+            onClick={async (e) => {
+              e.preventDefault();
               e.stopPropagation();
-              clearSession(getCurrentRole());
+              const role = getCurrentRole();
+              const token = getToken(role);
+              if (token) {
+                try {
+                  await fetch(`${API_URL}/logout`, {
+                    method: "POST",
+                    headers: {
+                      Accept: "application/json",
+                      Authorization: `Bearer ${token}`,
+                    },
+                    skipLoader: true,
+                  });
+                } catch {
+                  // ignore logout API errors
+                }
+              }
+              clearSession(role);
+              window.location.href = "/";
             }}
           >
             <MdLogout />

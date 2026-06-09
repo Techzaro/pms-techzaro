@@ -3,7 +3,7 @@ import { MdKeyboardArrowDown } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 
 import API_URL from "../../config/api";
-import { authToken, getCurrentRole, getUser, setUser } from "../../utils/auth";
+import { authToken, getCurrentRole, getUser, setUser, rolePath } from "../../utils/auth";
 import "./Header.css";
 
 import CreateTaskModal from "../CreateTaskModal";
@@ -20,20 +20,21 @@ function Header() {
   const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth <= 1200);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [searchResults, setSearchResults] = useState({ pages: [], projects: [], tasks: [], users: [] });
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
 
-  const pageLinks = [
-    { name: "Dashboard", path: "/admin/dashboard", keywords: "dashboard home" },
-    { name: "Projects", path: "/projects", keywords: "projects list" },
-    { name: "Tasks Assigned to You", path: "/tasks", keywords: "my tasks assigned" },
-    { name: "Tasks Assigned by You", path: "/taskby", keywords: "tasks created by me" },
-    { name: "Deliverables", path: "/deliveries", keywords: "deliveries deliverables" },
-    { name: "Calendar", path: "/calender", keywords: "calendar events schedule" },
-    { name: "Manage Users", path: "/manage-users", keywords: "users manage" },
-    { name: "Manage Team", path: "/manage-team", keywords: "team manage" },
-    { name: "Reports", path: "/reports", keywords: "reports analytics" },
-    { name: "History", path: "/history", keywords: "history activity log" },
+  const getPageLinks = () => [
+    { name: "Dashboard", path: rolePath("dashboard"), keywords: "dashboard home" },
+    { name: "Projects", path: rolePath("projects"), keywords: "projects list" },
+    { name: "Tasks Assigned to You", path: rolePath("tasks"), keywords: "my tasks assigned" },
+    { name: "Tasks Assigned by You", path: rolePath("taskby"), keywords: "tasks created by me" },
+    { name: "Deliverables", path: rolePath("deliveries"), keywords: "deliveries deliverables" },
+    { name: "Calendar", path: rolePath("calender"), keywords: "calendar events schedule" },
+    { name: "Manage Users", path: rolePath("manage-users"), keywords: "users manage" },
+    { name: "Manage Team", path: rolePath("manage-team"), keywords: "team manage" },
+    { name: "Reports", path: rolePath("reports"), keywords: "reports analytics" },
+    { name: "History", path: rolePath("history"), keywords: "history activity log" },
   ];
 
   useEffect(() => {
@@ -66,17 +67,29 @@ function Header() {
   const toggleProfileModal = () =>
     setIsProfileOpen((prev) => !prev);
 
-  const handleSearch = async (query) => {
-    setSearchQuery(query);
-    if (query.trim().length < 2) {
+  useEffect(() => {
+    if (searchQuery.trim().length < 2) {
+      setDebouncedQuery("");
+      return;
+    }
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (debouncedQuery.trim().length < 2) {
       setSearchResults({ pages: [], projects: [], tasks: [], users: [] });
       setShowSearchDropdown(false);
       return;
     }
+    handleSearch(debouncedQuery);
+  }, [debouncedQuery]);
+
+  const handleSearch = async (query) => {
 
     const q = query.toLowerCase();
 
-    const matchedPages = pageLinks.filter(
+    const matchedPages = getPageLinks().filter(
       (p) => p.name.toLowerCase().includes(q) || p.keywords.includes(q)
     );
 
@@ -89,9 +102,9 @@ function Header() {
       const headers = { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" };
 
       const [projRes, taskRes, userRes] = await Promise.allSettled([
-        fetch(`${API_URL}/projects`, { headers }),
-        fetch(`${API_URL}/tasks`, { headers }),
-        fetch(`${API_URL}/users`, { headers }),
+        fetch(`${API_URL}/projects`, { headers, skipLoader: true }),
+        fetch(`${API_URL}/tasks`, { headers, skipLoader: true }),
+        fetch(`${API_URL}/users`, { headers, skipLoader: true }),
       ]);
 
       if (projRes.status === "fulfilled" && projRes.value.ok) {
@@ -100,7 +113,7 @@ function Header() {
         matchedProjects = projList
           .filter((p) => p.name?.toLowerCase().includes(q))
           .slice(0, 5)
-          .map((p) => ({ id: p.id, name: p.name, path: `/projects/${p.id}` }));
+          .map((p) => ({ id: p.id, name: p.name, path: rolePath(`projects/project-details/${p.id}`) }));
       }
 
       if (taskRes.status === "fulfilled" && taskRes.value.ok) {
@@ -109,7 +122,7 @@ function Header() {
         matchedTasks = taskList
           .filter((t) => t.name?.toLowerCase().includes(q) || t.title?.toLowerCase().includes(q))
           .slice(0, 5)
-          .map((t) => ({ id: t.id, name: t.name || t.title, path: `/details/${t.id}` }));
+          .map((t) => ({ id: t.id, name: t.name || t.title, path: rolePath(`tasks/task-details/${t.id}`) }));
       }
 
       if (userRes.status === "fulfilled" && userRes.value.ok) {
@@ -118,7 +131,7 @@ function Header() {
         matchedUsers = userList
           .filter((u) => u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q))
           .slice(0, 5)
-          .map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, path: `/user-profile/${u.id}` }));
+          .map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, path: rolePath(`manage-users/user-profile/${u.id}`) }));
       }
     } catch {
       // API not available, show only page results
@@ -155,6 +168,7 @@ function Header() {
         Accept: "application/json",
         Authorization: `Bearer ${token}`,
       },
+      skipLoader: true,
     })
       .then((res) => res.json())
 
@@ -219,7 +233,7 @@ function Header() {
             className="form-control"
             placeholder="Search projects, tasks or employees..."
             value={searchQuery}
-            onChange={(e) => handleSearch(e.target.value)}
+            onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => searchQuery.length >= 2 && setShowSearchDropdown(true)}
           />
 

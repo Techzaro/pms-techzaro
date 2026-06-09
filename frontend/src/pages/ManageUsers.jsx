@@ -10,7 +10,7 @@ import { CiCirclePlus } from "react-icons/ci";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import API_URL from "../config/api";
-import { authToken, getCurrentRole, getUser, setUser } from "../utils/auth";
+import { authToken, getCurrentRole, getUser, setUser, rolePath } from "../utils/auth";
 import "./ManageUsers.css";
 
 const DEPARTMENTS = [
@@ -135,6 +135,7 @@ function ManageUsers() {
       if (!token) return;
       const res = await fetch(`${API_URL}/user`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
       });
       if (!res.ok) return;
       const data = await res.json();
@@ -327,7 +328,7 @@ function ManageUsers() {
           <div className="action-buttons">
             <button
               className="btn-view"
-              onClick={() => navigate(`/user-profile/${user.id}`)}
+              onClick={() => navigate(rolePath(`manage-users/user-profile/${user.id}`))}
               aria-label="View user profile"
             >
               <MdVisibility size={24} />

@@ -42,6 +42,14 @@ class User extends Authenticatable
     ];
 
     /**
+     * Get normalized role (teamlead → team_lead).
+     */
+    public function getNormalizedRoleAttribute(): string
+    {
+        return $this->role === 'teamlead' ? 'team_lead' : $this->role;
+    }
+
+    /**
      * Tasks assigned to this user.
      */
     public function assignedTasks(): HasMany

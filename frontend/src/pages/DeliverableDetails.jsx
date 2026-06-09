@@ -20,6 +20,7 @@ import {
   Users,
 } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import { rolePath } from "../utils/auth";
 import "./ProjectDetails.css";
 
 function statusSlug(status) {
@@ -154,7 +155,7 @@ function DeliverableDetails() {
   const handleDeleteDeliverable = async () => {
     if (!window.confirm("Delete this deliverable permanently?")) return;
     showMessage("Deliverable deleted.");
-    setTimeout(() => navigate("/deliveries"), 800);
+    setTimeout(() => navigate(rolePath("deliveries")), 800);
   };
 
   if (loading) {
@@ -414,7 +415,7 @@ function DeliverableDetails() {
         <section className="pd-card-flat">
           <div className="pd-card-flat__head">
             <h2 className="pd-block-title pd-block-title--inline">Team members</h2>
-            <Link to="/manage-team" className="pd-link-manage">
+            <Link to={rolePath("manage-team")} className="pd-link-manage">
               Manage
             </Link>
           </div>
@@ -458,7 +459,7 @@ function DeliverableDetails() {
         {message && <div className={`pd-toast pd-toast--${messageType}`}>{message}</div>}
 
         <nav className="pd-breadcrumb" aria-label="Breadcrumb">
-          <Link to="/deliveries">Deliverables</Link>
+          <Link to={rolePath("deliveries")}>Deliverables</Link>
           <ChevronRight size={14} aria-hidden />
           <span>{deliverable.title}</span>
         </nav>

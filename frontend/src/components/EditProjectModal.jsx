@@ -11,7 +11,7 @@ const PRESET_PHASES = [
   "Launch",
 ];
 
-const CreateProjectModal = ({ onClose }) => {
+const EditProjectModal = ({ project, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [formErrors, setFormErrors] = useState({});
@@ -19,21 +19,42 @@ const CreateProjectModal = ({ onClose }) => {
   const [allUsers, setAllUsers] = useState([]);
 
   const [form, setForm] = useState({
-    title: "",
-    description: "",
-    category: "",
-    team_id: "",
-    assigned_users: [],
-    priority: "Medium",
-    client_name: "",
-    budget: "",
+    title: project?.title || "",
+    description: project?.description || "",
+    category: project?.category || "",
+    team_id: project?.team_id || "",
+    assigned_users: project?.assigned_users || [],
+    priority: project?.priority || "Medium",
+    client_name: project?.client_name || "",
+    budget: project?.budget || "",
+    status: project?.status || "in_progress",
   });
 
-  const [milestones, setMilestones] = useState([]);
+  const [milestones, setMilestones] = useState(() => {
+    if (project?.milestones && project.milestones.length > 0) {
+      return project.milestones.map((m) => ({
+        title: m.title,
+        due_date: m.due_date ? m.due_date.split("T")[0] : "",
+        status: m.status || "planned",
+      }));
+    }
+    return [];
+  });
   const [phaseName, setPhaseName] = useState("");
   const [phaseDate, setPhaseDate] = useState("");
 
-  const [goalsList, setGoalsList] = useState([]);
+  const [goalsList, setGoalsList] = useState(() => {
+    if (project?.goals_checklist && project.goals_checklist.length > 0) {
+      return project.goals_checklist.map((g) => ({
+        text: g.text || g,
+        done: g.done || false,
+      }));
+    }
+    if (project?.goals) {
+      return project.goals.split("\n").filter(Boolean).map((g) => ({ text: g.trim(), done: false }));
+    }
+    return [];
+  });
   const [goalInput, setGoalInput] = useState("");
 
   const [pendingFiles, setPendingFiles] = useState([]);
@@ -52,7 +73,6 @@ const CreateProjectModal = ({ onClose }) => {
 
     fetch(`${API_URL}/teams`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      skipLoader: true,
     })
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setTeams(Array.isArray(data) ? data : []))
@@ -60,7 +80,6 @@ const CreateProjectModal = ({ onClose }) => {
 
     fetch(`${API_URL}/team-users`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      skipLoader: true,
     })
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setAllUsers(Array.isArray(data) ? data : []))
@@ -180,12 +199,12 @@ const CreateProjectModal = ({ onClose }) => {
     if (e.key === "Enter") { e.preventDefault(); handleAddLink(); }
   };
 
-  const uploadAttachments = async (projectId, token) => {
+  const uploadAttachments = async (projId, token) => {
     for (const file of pendingFiles) {
       const fd = new FormData();
       fd.append("file", file);
       try {
-        await fetch(`${API_URL}/projects/${projectId}/files`, {
+        await fetch(`${API_URL}/projects/${projId}/files`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           body: fd,
@@ -195,7 +214,7 @@ const CreateProjectModal = ({ onClose }) => {
 
     for (const link of links) {
       try {
-        await fetch(`${API_URL}/projects/${projectId}/links`, {
+        await fetch(`${API_URL}/projects/${projId}/links`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -239,14 +258,15 @@ const CreateProjectModal = ({ onClose }) => {
         team_id: form.team_id ? parseInt(form.team_id) : null,
         assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
         priority: form.priority,
+        status: form.status,
         end_date: computedEndDate,
         client_name: form.client_name || null,
         budget: form.budget ? parseFloat(form.budget) : null,
         milestones: milestones.length > 0 ? milestones : [],
       };
 
-      const response = await fetch(`${API_URL}/projects`, {
-        method: "POST",
+      const response = await fetch(`${API_URL}/projects/${project.id}`, {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
@@ -258,14 +278,13 @@ const CreateProjectModal = ({ onClose }) => {
       const data = await response.json();
 
       if (!response.ok) {
-        const msg = data.message || "Failed to create project";
+        const msg = data.message || "Failed to update project";
         const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
         throw new Error(errors || msg);
       }
 
-      const projectId = data.project?.id;
-      if (projectId && (pendingFiles.length > 0 || links.length > 0)) {
-        await uploadAttachments(projectId, token);
+      if (pendingFiles.length > 0 || links.length > 0) {
+        await uploadAttachments(project.id, token);
       }
 
       onClose(true);
@@ -285,8 +304,8 @@ const CreateProjectModal = ({ onClose }) => {
           <div className="cp-header-left">
             <div className="cp-icon-box">📁</div>
             <div>
-              <h2>Create New Project</h2>
-              <p>Add project details and assign it to team members.</p>
+              <h2>Edit Project</h2>
+              <p>Update project details and settings.</p>
             </div>
           </div>
           <button className="cp-close-btn" onClick={() => onClose(false)}>✕</button>
@@ -424,7 +443,6 @@ const CreateProjectModal = ({ onClose }) => {
                 />
               </div>
 
-              {/* Pending files */}
               {pendingFiles.length > 0 && (
                 <div className="cp-attachments-list">
                   {pendingFiles.map((file, index) => (
@@ -462,7 +480,6 @@ const CreateProjectModal = ({ onClose }) => {
                 </button>
               </div>
 
-              {/* Added links */}
               {links.length > 0 && (
                 <div className="cp-attachments-list">
                   {links.map((link, index) => (
@@ -489,6 +506,18 @@ const CreateProjectModal = ({ onClose }) => {
 
           {/* RIGHT */}
           <div className="cp-right">
+
+            {/* STATUS */}
+            <div className="cp-card">
+              <div className="cp-card-top">
+                <span>Status</span>
+              </div>
+              <select name="status" value={form.status} onChange={handleChange}>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+              </select>
+            </div>
 
             {/* PRIORITY */}
             <div className="cp-card">
@@ -517,9 +546,9 @@ const CreateProjectModal = ({ onClose }) => {
                     value={phaseName}
                     onChange={(e) => setPhaseName(e.target.value)}
                     onKeyDown={handlePhaseKeyDown}
-                    list="phase-presets"
+                    list="edit-phase-presets"
                   />
-                  <datalist id="phase-presets">
+                  <datalist id="edit-phase-presets">
                     {PRESET_PHASES.map((p) => (
                       <option key={p} value={p} />
                     ))}
@@ -593,11 +622,13 @@ const CreateProjectModal = ({ onClose }) => {
 
         </form>
 
+        {error && <div className="cp-error-banner">{error}</div>}
+
         {/* FOOTER */}
         <div className="cp-footer">
           <button className="cp-cancel-btn" onClick={() => onClose(false)} disabled={loading}>Cancel</button>
           <button className="cp-create-btn" onClick={handleSubmit} disabled={loading}>
-            {loading ? "Creating..." : "+ Create Project"}
+            {loading ? "Saving..." : "Save Changes"}
           </button>
         </div>
 
@@ -606,4 +637,4 @@ const CreateProjectModal = ({ onClose }) => {
   );
 };
 
-export default CreateProjectModal;
+export default EditProjectModal;

@@ -1,29 +1,46 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import { CiCalendar } from "react-icons/ci";
 import { IoIosArrowDown } from "react-icons/io";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
-import { IoSearchOutline } from "react-icons/io5";
+import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
 import CreateTaskModal from "../components/CreateTaskModal";
+import ConfirmCompleteModal from "../components/ConfirmCompleteModal";
 import API_URL from "../config/api";
-import { authToken } from "../utils/auth";
+import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
-  pending: "#F59E0B",
-  in_progress: "#3B82F6",
-  review: "#8B5CF6",
-  completed: "#22C55E",
-  done: "#22C55E",
-  failed: "#EF4444",
-  abandoned: "#6B7280",
+  pending: "#FEF3C7",
+  in_progress: "#DBEAFE",
+  review: "#EDE9FE",
+  completed: "#DCFCE7",
+  done: "#DCFCE7",
+  failed: "#FEE2E2",
+  abandoned: "#F3F4F6",
+};
+
+const STATUS_TEXT_COLORS = {
+  pending: "#92400E",
+  in_progress: "#1E40AF",
+  review: "#5B21B6",
+  completed: "#166534",
+  done: "#166534",
+  failed: "#991B1B",
+  abandoned: "#374151",
 };
 
 const PRIORITY_COLORS = {
-  High: "#EF4444",
-  Medium: "#F59E0B",
-  Low: "#22C55E",
+  High: "#FEE2E2",
+  Medium: "#FEF3C7",
+  Low: "#DCFCE7",
+};
+
+const PRIORITY_TEXT_COLORS = {
+  High: "#991B1B",
+  Medium: "#92400E",
+  Low: "#166534",
 };
 
 function Tasks() {
@@ -32,17 +49,25 @@ function Tasks() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [confirmTask, setConfirmTask] = useState(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const fetchTasks = () => {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
-    if (search) params.append("search", search);
+    if (debouncedSearch) params.append("search", debouncedSearch);
     if (statusFilter) params.append("status", statusFilter);
 
     fetch(`${API_URL}/my-tasks?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
     })
       .then((res) => (res.ok ? res.json() : { data: [] }))
       .then((data) => {
@@ -54,11 +79,80 @@ function Tasks() {
 
   useEffect(() => {
     fetchTasks();
-  }, [search, statusFilter]);
+  }, [debouncedSearch, statusFilter]);
 
   const handleModalClose = (refresh) => {
     setShowTaskModal(false);
     if (refresh) fetchTasks();
+  };
+
+  const handleCompleteTask = (item) => {
+    const token = authToken();
+    console.log("handleCompleteTask: item", item);
+
+    if (item._isProject) {
+      const url = `${API_URL}/projects/${item.id}/complete`;
+      console.log("handleCompleteTask: completing project", url);
+      fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        skipLoader: true,
+      })
+        .then((res) => {
+          console.log("handleCompleteTask: project response", res.status);
+          if (!res.ok) return res.json().then(d => { throw new Error(d.message || "Failed"); });
+          return res.json();
+        })
+        .then((data) => {
+          console.log("handleCompleteTask: project success", data);
+          setConfirmTask(null);
+          setItems(prev => prev.map(p =>
+            p.item_type === "project" && p.id === data.project?.id
+              ? { ...p, ...data.project, item_type: p.item_type }
+              : p
+          ));
+        })
+        .catch((err) => {
+          console.error("handleCompleteTask: project error", err);
+          alert(err.message || "Failed to complete project");
+          setConfirmTask(null);
+        });
+    } else {
+      const url = `${API_URL}/tasks/${item.id}/complete`;
+      console.log("handleCompleteTask: completing task", url);
+      fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        skipLoader: true,
+      })
+        .then((res) => {
+          console.log("handleCompleteTask: task response", res.status);
+          if (!res.ok) return res.json().then(d => { throw new Error(d.message || "Failed"); });
+          return res.json();
+        })
+        .then((data) => {
+          console.log("handleCompleteTask: task success", data);
+          setConfirmTask(null);
+          setItems(prev => prev.map(t =>
+            t.item_type !== "project" && t.id === data.task?.id
+              ? { ...t, ...data.task, item_type: t.item_type }
+              : t
+          ));
+        })
+        .catch((err) => {
+          console.error("handleCompleteTask: task error", err);
+          alert(err.message || "Failed to complete task");
+          setConfirmTask(null);
+        });
+    }
   };
 
   const getInitials = (name) => {
@@ -105,6 +199,7 @@ function Tasks() {
   };
 
   const calculateProjectStatus = (item) => {
+    if (item.status === "completed" || item.status === "done") return "Completed";
     const progress = calculateProgress(item);
     const endDate = item.end_date ? new Date(item.end_date) : null;
     const now = new Date();
@@ -137,6 +232,7 @@ function Tasks() {
             <IoIosArrowDown />
           </div>
 
+          {["admin", "manager"].includes(getCurrentRole()) && (
           <button
             className="export task-btn--mobile"
             onClick={() => setShowTaskModal(true)}
@@ -144,6 +240,7 @@ function Tasks() {
           >
             + Task
           </button>
+          )}
         </div>
       </div>
 
@@ -186,7 +283,7 @@ function Tasks() {
       <div className="container">
         <div className="table-header">
           <div>Assigned by</div>
-          <div>Name</div>
+          <div>Task Name</div>
           <div>Type</div>
           <div>Status</div>
           <div>Priority</div>
@@ -206,12 +303,12 @@ function Tasks() {
             if (isProject) {
               const projectStatus = calculateProjectStatus(item);
               return (
-                <div className="table-row" key={`project-${item.id}`}>
-                  <div className="user-box">
+                <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }} key={`project-${item.id}`}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden" }}>
                     <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                       {getInitials(item.creator?.name)}
                     </div>
-                    <div>
+                    <div style={{ overflow: "hidden", minWidth: 0 }}>
                       <div className="user-name">{item.creator?.name || "System"}</div>
                       <div className="user-role">{item.creator?.role || ""}</div>
                     </div>
@@ -225,14 +322,14 @@ function Tasks() {
                     </span>
                   </div>
                   <div>
-                    <span className="badge status-badge">
-                      <span className="dot" style={{ background: STATUS_COLORS[item.status] || "#6B7280" }}></span>
+                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                       {projectStatus}
                     </span>
                   </div>
                   <div>
-                    <span className="badge priority-badge">
-                      <span className="dot" style={{ background: PRIORITY_COLORS[item.priority] || "#F59E0B" }}></span>
+                    <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                      <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
                       {item.priority}
                     </span>
                   </div>
@@ -240,10 +337,19 @@ function Tasks() {
                     <div>{formatDate(item.start_date)}</div>
                     <div>{formatDate(item.end_date)}</div>
                   </div>
-                  <div>
-                    <button className="view-btn" onClick={() => navigate(`/projects/${item.id}`)}>
-                      View
+                  <div className="action-btns">
+                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`))}>
+                      <IoEyeOutline />
                     </button>
+                    {item.status !== "completed" && item.status !== "done" ? (
+                      <button className="action-icon-btn action-complete" title="Complete Project" onClick={() => setConfirmTask({ ...item, _isProject: true })}>
+                        <IoCheckmarkCircle />
+                      </button>
+                    ) : (
+                      <button className="action-icon-btn action-completed" title="Completed">
+                        <IoCheckmarkCircle />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -251,12 +357,12 @@ function Tasks() {
 
             const assigner = item.assigner;
             return (
-              <div className="table-row" key={`task-${item.id}`}>
-                <div className="user-box">
+              <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }} key={`task-${item.id}`}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden" }}>
                   <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                     {getInitials(assigner?.name)}
                   </div>
-                  <div>
+                  <div style={{ overflow: "hidden", minWidth: 0 }}>
                     <div className="user-name">{assigner?.name || "System"}</div>
                     <div className="user-role">{assigner?.role || ""}</div>
                   </div>
@@ -270,14 +376,14 @@ function Tasks() {
                   </span>
                 </div>
                 <div>
-                  <span className="badge status-badge">
-                    <span className="dot" style={{ background: STATUS_COLORS[item.status] || "#6B7280" }}></span>
+                  <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                    <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                     {formatStatus(item.status)}
                   </span>
                 </div>
                 <div>
-                  <span className="badge priority-badge">
-                    <span className="dot" style={{ background: PRIORITY_COLORS[item.priority] || "#F59E0B" }}></span>
+                  <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                    <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
                     {item.priority}
                   </span>
                 </div>
@@ -285,16 +391,34 @@ function Tasks() {
                   <div>{formatDate(item.start_date)}</div>
                   <div>{formatDate(item.end_date)}</div>
                 </div>
-                <div>
-                  <button className="view-btn" onClick={() => navigate(`/details/${item.id}`)}>
-                    View
+                <div className="action-btns">
+                  <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`))}>
+                    <IoEyeOutline />
                   </button>
+                  {item.status !== "completed" && item.status !== "done" ? (
+                    <button className="action-icon-btn action-complete" title="Complete Task" onClick={() => setConfirmTask(item)}>
+                      <IoCheckmarkCircle />
+                    </button>
+                  ) : (
+                    <button className="action-icon-btn action-completed" title="Completed">
+                      <IoCheckmarkCircle />
+                    </button>
+                  )}
                 </div>
               </div>
             );
           })
         )}
       </div>
+
+      {confirmTask && (
+        <ConfirmCompleteModal
+          taskTitle={confirmTask.title}
+          isProject={confirmTask._isProject}
+          onConfirm={() => handleCompleteTask(confirmTask)}
+          onCancel={() => setConfirmTask(null)}
+        />
+      )}
     </DashboardLayout>
   );
 }

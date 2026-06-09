@@ -1,6 +1,25 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import { authHeaders } from "../utils/auth";
+import {
+  createDoc,
+  getPageWidth,
+  addLogo,
+  addTitle,
+  addSubtitle,
+  addDivider,
+  addSectionTitle,
+  addStatCards,
+  addAutoTable,
+  addTimeline,
+  addFooter,
+  savePdf,
+  COLORS,
+  getStatusColor,
+} from "../utils/pdfUtils";
 import "../pages/ExportReport.css";
+
+import API_URL from "../config/api";
 
 const exportTypes = [
   {
@@ -114,12 +133,255 @@ function ExportReport({ isOpen, onClose }) {
     attachments: false,
     completed: true,
   });
+  const [loading, setLoading] = useState(false);
 
   const toggleCheck = (id) => setChecks((p) => ({ ...p, [id]: !p[id] }));
 
-  const handleExport = () => {
-    alert("Report exported successfully!");
-    onClose();
+  const getPeriodParam = () => {
+    switch (dateRange) {
+      case "Today": return "today";
+      case "This Week": return "week";
+      case "This Month": return "month";
+      default: return "all";
+    }
+  };
+
+  const fetchJson = async (url) => {
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  };
+
+  const generateSummaryPDF = async () => {
+    const period = getPeriodParam();
+    const teamData = await fetchJson(`${API_URL}/reports/team-performance?period=${period}`);
+
+    const doc = createDoc();
+    const pageWidth = getPageWidth(doc);
+    let y = 20;
+
+    y = addLogo(doc, y);
+    y = addTitle(doc, "Summary Report", y);
+    y = addSubtitle(doc, `${selectedTeams} \u2022 ${customDate}`, y);
+    y = addDivider(doc, y);
+
+    y = addSectionTitle(doc, "Overview", y);
+    y = addStatCards(doc, [
+      { label: "Total Assigned", value: teamData.summary.total_assigned, color: COLORS.primary },
+      { label: "Completed", value: teamData.summary.total_completed, color: COLORS.success },
+      { label: "Pending", value: teamData.summary.total_pending, color: COLORS.warning },
+      { label: "Completion Rate", value: `${teamData.summary.completion_rate}%`, color: COLORS.info },
+    ], y);
+
+    y = addDivider(doc, y);
+    y = addSectionTitle(doc, "Team Members", y);
+    y = addAutoTable(doc,
+      ["Name", "Role", "Assigned", "Completed", "Pending"],
+      teamData.members.map(m => [m.name, m.role, String(m.assigned), String(m.completed), String(m.pending)]),
+      y,
+      { columnStyles: { 0: { cellWidth: 45 }, 1: { cellWidth: 30 }, 2: { cellWidth: 25, halign: "center" }, 3: { cellWidth: 25, halign: "center" }, 4: { cellWidth: 25, halign: "center" } } }
+    );
+
+    y = addDivider(doc, y);
+    y = addSectionTitle(doc, "Project Involvement", y);
+    const projectRows = teamData.members.flatMap(m =>
+      (m.projects || []).map(p => [m.name, p])
+    );
+    if (projectRows.length > 0) {
+      y = addAutoTable(doc, ["Member", "Project"], projectRows, y);
+    }
+
+    addFooter(doc);
+    savePdf(doc, `Summary-Report-${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
+  const generateDetailedPDF = async () => {
+    const period = getPeriodParam();
+    const teamData = await fetchJson(`${API_URL}/reports/team-performance?period=${period}`);
+
+    const doc = createDoc();
+    const pageWidth = getPageWidth(doc);
+    let y = 20;
+
+    y = addLogo(doc, y);
+    y = addTitle(doc, "Detailed Report", y);
+    y = addSubtitle(doc, `${selectedTeams} \u2022 ${customDate}`, y);
+    y = addDivider(doc, y);
+
+    y = addSectionTitle(doc, "Performance Summary", y);
+    y = addStatCards(doc, [
+      { label: "Total Assigned", value: teamData.summary.total_assigned, color: COLORS.primary },
+      { label: "Completed", value: teamData.summary.total_completed, color: COLORS.success },
+      { label: "Pending", value: teamData.summary.total_pending, color: COLORS.warning },
+      { label: "Completion Rate", value: `${teamData.summary.completion_rate}%`, color: COLORS.info },
+    ], y);
+
+    y = addDivider(doc, y);
+    y = addSectionTitle(doc, "Member Details", y);
+    y = addAutoTable(doc,
+      ["Name", "Email", "Role", "Assigned", "Completed", "Pending"],
+      teamData.members.map(m => [m.name, m.email, m.role, String(m.assigned), String(m.completed), String(m.pending)]),
+      y,
+      { columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 40 }, 2: { cellWidth: 25 }, 3: { cellWidth: 20, halign: "center" }, 4: { cellWidth: 20, halign: "center" }, 5: { cellWidth: 20, halign: "center" } } }
+    );
+
+    if (checks.completed) {
+      y = addDivider(doc, y);
+      y = addSectionTitle(doc, "Completed Task Breakdown", y);
+      const completedRows = teamData.members
+        .filter(m => m.completed > 0)
+        .map(m => [m.name, String(m.completed), `${m.assigned > 0 ? Math.round((m.completed / m.assigned) * 100) : 0}%`]);
+      if (completedRows.length > 0) {
+        y = addAutoTable(doc, ["Member", "Completed", "Rate"], completedRows, y);
+      }
+    }
+
+    addFooter(doc);
+    savePdf(doc, `Detailed-Report-${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
+  const generatePerformancePDF = async () => {
+    const period = getPeriodParam();
+    const teamData = await fetchJson(`${API_URL}/reports/team-performance?period=${period}`);
+
+    const doc = createDoc();
+    const pageWidth = getPageWidth(doc);
+    let y = 20;
+
+    y = addLogo(doc, y);
+    y = addTitle(doc, "Team Performance Report", y);
+    y = addSubtitle(doc, `${selectedTeams} \u2022 ${customDate}`, y);
+    y = addDivider(doc, y);
+
+    y = addSectionTitle(doc, "Team Summary", y);
+    y = addStatCards(doc, [
+      { label: "Total Assigned", value: teamData.summary.total_assigned, color: COLORS.primary },
+      { label: "Completed", value: teamData.summary.total_completed, color: COLORS.success },
+      { label: "Pending", value: teamData.summary.total_pending, color: COLORS.warning },
+      { label: "Completion Rate", value: `${teamData.summary.completion_rate}%`, color: COLORS.info },
+    ], y);
+
+    y = addDivider(doc, y);
+    y = addSectionTitle(doc, "Member Performance", y);
+    y = addAutoTable(doc,
+      ["Member", "Role", "Assigned", "Completed", "Pending", "Completion %"],
+      teamData.members.map(m => [
+        m.name,
+        m.role,
+        String(m.assigned),
+        String(m.completed),
+        String(m.pending),
+        `${m.assigned > 0 ? Math.round((m.completed / m.assigned) * 100) : 0}%`,
+      ]),
+      y,
+      { columnStyles: { 0: { cellWidth: 38 }, 1: { cellWidth: 25 }, 2: { cellWidth: 22, halign: "center" }, 3: { cellWidth: 22, halign: "center" }, 4: { cellWidth: 22, halign: "center" }, 5: { cellWidth: 28, halign: "center" } } }
+    );
+
+    y = addDivider(doc, y);
+    y = addSectionTitle(doc, "Project Distribution", y);
+    const projectMap = {};
+    teamData.members.forEach(m => {
+      (m.projects || []).forEach(p => {
+        if (!projectMap[p]) projectMap[p] = [];
+        projectMap[p].push(m.name);
+      });
+    });
+    const projRows = Object.entries(projectMap).map(([project, members]) => [project, members.join(", ")]);
+    if (projRows.length > 0) {
+      y = addAutoTable(doc, ["Project", "Members"], projRows, y);
+    }
+
+    addFooter(doc);
+    savePdf(doc, `Team-Performance-${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
+  const generateProgressPDF = async () => {
+    const period = getPeriodParam();
+    const teamData = await fetchJson(`${API_URL}/reports/team-performance?period=${period}`);
+
+    const doc = createDoc();
+    const pageWidth = getPageWidth(doc);
+    let y = 20;
+
+    y = addLogo(doc, y);
+    y = addTitle(doc, "Project Progress Report", y);
+    y = addSubtitle(doc, `${selectedTeams} \u2022 ${customDate}`, y);
+    y = addDivider(doc, y);
+
+    y = addSectionTitle(doc, "Overall Progress", y);
+    y = addStatCards(doc, [
+      { label: "Total Assigned", value: teamData.summary.total_assigned, color: COLORS.primary },
+      { label: "Completed", value: teamData.summary.total_completed, color: COLORS.success },
+      { label: "Pending", value: teamData.summary.total_pending, color: COLORS.warning },
+      { label: "Completion Rate", value: `${teamData.summary.completion_rate}%`, color: COLORS.info },
+    ], y);
+
+    if (checks.activity) {
+      y = addDivider(doc, y);
+      y = addSectionTitle(doc, "Member Progress", y);
+      y = addAutoTable(doc,
+        ["Member", "Assigned", "Completed", "Pending", "Progress"],
+        teamData.members.map(m => [
+          m.name,
+          String(m.assigned),
+          String(m.completed),
+          String(m.pending),
+          `${m.assigned > 0 ? Math.round((m.completed / m.assigned) * 100) : 0}%`,
+        ]),
+        y
+      );
+    }
+
+    if (checks.completed) {
+      y = addDivider(doc, y);
+      y = addSectionTitle(doc, "Completed Work", y);
+      const completedRows = teamData.members
+        .filter(m => m.completed > 0)
+        .map(m => [m.name, String(m.completed), `${m.assigned > 0 ? Math.round((m.completed / m.assigned) * 100) : 0}%`]);
+      if (completedRows.length > 0) {
+        y = addAutoTable(doc, ["Member", "Completed Tasks", "Completion %"], completedRows, y);
+      }
+    }
+
+    y = addDivider(doc, y);
+    y = addSectionTitle(doc, "Project Overview", y);
+    const projectMap = {};
+    teamData.members.forEach(m => {
+      (m.projects || []).forEach(p => {
+        if (!projectMap[p]) projectMap[p] = new Set();
+        projectMap[p].add(m.name);
+      });
+    });
+    const projRows = Object.entries(projectMap).map(([project, members]) => [project, String(members.size)]);
+    if (projRows.length > 0) {
+      y = addAutoTable(doc, ["Project", "Team Size"], projRows, y);
+    }
+
+    addFooter(doc);
+    savePdf(doc, `Project-Progress-${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
+  const handleExport = async () => {
+    if (fileFormat !== "pdf") {
+      alert("Only PDF export is currently supported.");
+      return;
+    }
+    setLoading(true);
+    try {
+      switch (exportType) {
+        case "summary": await generateSummaryPDF(); break;
+        case "detailed": await generateDetailedPDF(); break;
+        case "performance": await generatePerformancePDF(); break;
+        case "progress": await generateProgressPDF(); break;
+        default: await generateSummaryPDF();
+      }
+      onClose();
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert("Failed to generate report. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -265,11 +527,22 @@ function ExportReport({ isOpen, onClose }) {
         {/* FOOTER */}
         <div className="er-footer">
           <button className="er-cancel-btn" onClick={onClose}>Cancel</button>
-          <button className="er-export-btn" onClick={handleExport}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
-            </svg>
-            Export Report
+          <button
+            className="er-export-btn"
+            onClick={handleExport}
+            disabled={loading || fileFormat === "excel"}
+            style={fileFormat === "excel" ? { opacity: 0.5, cursor: "not-allowed" } : {}}
+          >
+            {loading ? (
+              <span>Generating...</span>
+            ) : (
+              <>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
+                </svg>
+                Export Report
+              </>
+            )}
           </button>
         </div>
 

@@ -6,6 +6,7 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\Subtask;
 use App\Models\User;
+use App\Models\Deliverable;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
@@ -17,26 +18,22 @@ class TaskController extends Controller
     public function myTasks(Request $request)
     {
         $user = $request->user();
-        $userId = $user->id;
 
-        $tasks = Task::where(function ($q) use ($userId) {
-                $q->whereHas('assignees', fn ($sub) => $sub->where('users.id', $userId))
-                  ->orWhereHas('project', fn ($sub) => $sub->whereRaw("JSON_CONTAINS(assigned_users, ?)", [json_encode($userId)]));
-            })
-            ->with(['project:id,title,team_id,assigned_users', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
+        $tasks = Task::whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+            ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
             ->latest()
             ->filter($request->query())
             ->paginate(15);
-
-        $projectIds = Project::whereRaw("JSON_CONTAINS(assigned_users, ?)", [json_encode($userId)])
-            ->pluck('id');
 
         $tasks->getCollection()->transform(function ($task) {
             $task->item_type = 'task';
             return $task;
         });
 
-        $projects = Project::whereIn('id', $projectIds)
+        $projects = Project::where(function ($q) use ($user) {
+                $q->where('created_by', $user->id)
+                  ->orWhereRaw("JSON_CONTAINS(assigned_users, ?)", [json_encode($user->id)]);
+            })
             ->with(['creator:id,name,role', 'team:id,name'])
             ->latest()
             ->get()
@@ -69,34 +66,54 @@ class TaskController extends Controller
         $tasks = Task::where('assigned_by', $userId)
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
             ->latest()
-            ->filter($request->query())
-            ->paginate(15);
+            ->when($request->filled('search'), fn ($q) => $q->where('title', 'like', '%' . $request->input('search') . '%'))
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')))
+            ->get();
 
-        $tasks->getCollection()->transform(function ($task) {
-            $task->item_type = 'task';
-            return $task;
-        });
+        $expandedTasks = collect();
+        foreach ($tasks as $task) {
+            $assignees = $task->assignees->isEmpty() ? collect([null]) : $task->assignees;
+            foreach ($assignees as $assignee) {
+                $clone = clone $task;
+                $clone->assignees = $assignee ? collect([$assignee]) : collect();
+                $clone->item_type = 'task';
+                $expandedTasks->push($clone);
+            }
+        }
 
         $projects = Project::where('created_by', $userId)
             ->with(['creator:id,name,role', 'team:id,name'])
             ->latest()
-            ->get()
-            ->map(function ($project) {
-                $project->item_type = 'project';
-                $project->total_tasks = $project->tasks()->count();
-                $project->completed_tasks = $project->tasks()->whereIn('status', ['done', 'completed'])->count();
-                $project->assigned_users_resolved = $project->assigned_users_resolved;
-                return $project;
-            });
+            ->get();
 
-        $allItems = $tasks->getCollection()->merge($projects)->sortByDesc('created_at')->values();
+        $expandedProjects = collect();
+        foreach ($projects as $project) {
+            $project->item_type = 'project';
+            $project->total_tasks = $project->tasks()->count();
+            $project->completed_tasks = $project->tasks()->whereIn('status', ['done', 'completed'])->count();
+            $assignedIds = $project->assigned_users;
+            if (is_string($assignedIds)) {
+                $assignedIds = json_decode($assignedIds, true) ?? [];
+            }
+            $assignedUsers = collect($assignedIds);
+            if ($assignedUsers->isEmpty()) {
+                $clone = clone $project;
+                $clone->assigned_user = null;
+                $expandedProjects->push($clone);
+            } else {
+                $resolvedUsers = User::whereIn('id', $assignedUsers->toArray())->select('id', 'name', 'role')->get()->keyBy('id');
+                foreach ($assignedUsers as $id) {
+                    $clone = clone $project;
+                    $clone->assigned_user = $resolvedUsers->get($id);
+                    $expandedProjects->push($clone);
+                }
+            }
+        }
+
+        $allItems = $expandedTasks->merge($expandedProjects)->sortByDesc('created_at')->values();
 
         return response()->json([
             'data' => $allItems,
-            'current_page' => $tasks->currentPage(),
-            'last_page' => $tasks->lastPage(),
-            'per_page' => $tasks->perPage(),
-            'total' => $tasks->total() + $projects->count(),
         ]);
     }
 
@@ -151,6 +168,8 @@ class TaskController extends Controller
      */
     public function store(Request $request, Project $project)
     {
+        $user = $request->user();
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -163,34 +182,38 @@ class TaskController extends Controller
             'priority' => 'required|string|max:32',
         ]);
 
-        $task = $project->tasks()->create([
-            'title' => $validated['title'],
-            'description' => $validated['description'] ?? null,
-            'requirements' => $validated['requirements'] ?? null,
-            'start_date' => $validated['start_date'] ?? null,
-            'end_date' => $validated['end_date'] ?? null,
-            'assigned_to' => $validated['assigned_to'][0],
-            'assigned_by' => $request->user()->id,
-            'priority' => $validated['priority'],
-            'status' => 'pending',
-        ]);
+        $createdTasks = [];
+        foreach ($validated['assigned_to'] as $userId) {
+            $task = $project->tasks()->create([
+                'title' => $validated['title'],
+                'description' => $validated['description'] ?? null,
+                'requirements' => $validated['requirements'] ?? null,
+                'start_date' => $validated['start_date'] ?? now()->toDateTimeString(),
+                'end_date' => $validated['end_date'] ?? null,
+                'assigned_to' => $userId,
+                'assigned_by' => $request->user()->id,
+                'priority' => $validated['priority'],
+                'status' => 'pending',
+            ]);
+            $task->assignees()->sync([$userId]);
+            $createdTasks[] = $task;
+        }
 
-        $task->assignees()->sync($validated['assigned_to']);
+        $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');
 
         return response()->json([
-            'message' => 'Task created successfully',
-            'task' => $task->load('assignees:id,name,email,role'),
+            'message' => count($createdTasks) . ' task(s) created successfully',
+            'task' => $firstTask,
+            'tasks' => array_map(fn ($t) => ['id' => $t->id, 'assigned_to' => $t->assigned_to], $createdTasks),
         ], 201);
     }
 
     public function update(Request $request, Task $task)
     {
         $user = $request->user();
-        $isCreator = $task->assigned_by === $user->id;
-        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
 
-        if (!$isCreator && !$isAssignee) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+        if ((int) $task->assigned_by !== (int) $user->id) {
+            return response()->json(['message' => 'Unauthorized — only the task creator can edit'], 403);
         }
 
         $validated = $request->validate([
@@ -232,9 +255,50 @@ class TaskController extends Controller
         ]);
     }
 
+    /**
+     * Complete a task and move it to deliverables.
+     */
+    public function completeTask(Request $request, Task $task)
+    {
+        try {
+            $user = $request->user();
+            $isCreator = intval($task->assigned_by) === intval($user->id);
+            $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+
+            if (!$isCreator && !$isAssignee) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+
+            $task->update(['status' => 'completed']);
+
+            $deliverable = Deliverable::create([
+                'project_id' => $task->project_id,
+                'task_id' => $task->id,
+                'title' => $task->title,
+                'description' => $task->description,
+                'status' => 'deliverable',
+                'priority' => $task->priority,
+                'due_date' => $task->end_date,
+                'assigned_to' => $user->id,
+                'created_by' => $task->assigned_by,
+            ]);
+
+            return response()->json([
+                'message' => 'Task moved to deliverables',
+                'task' => $task->fresh()->load('assignees:id,name,email,role'),
+                'deliverable' => $deliverable,
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to complete task: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function storeSubtask(Request $request, Task $task)
     {
         $user = $request->user();
+
         $isCreator = $task->assigned_by === $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
 
@@ -258,7 +322,7 @@ class TaskController extends Controller
                 'task_id' => $task->id,
                 'title' => $validated['title'],
                 'description' => $validated['description'] ?? null,
-                'start_date' => $validated['start_date'] ?? null,
+                'start_date' => $validated['start_date'] ?? now()->toDateTimeString(),
                 'end_date' => $validated['end_date'] ?? null,
                 'assigned_to' => (int) $userId,
                 'assigned_by' => $request->user()->id,
@@ -275,7 +339,14 @@ class TaskController extends Controller
 
     public function destroy(Task $task)
     {
+        $user = request()->user();
+
+        if ((int) $task->assigned_by !== (int) $user->id) {
+            return response()->json(['message' => 'Unauthorized — only the task creator can delete'], 403);
+        }
+
         $task->assignees()->detach();
+        $task->deliverables()->delete();
         $task->delete();
 
         return response()->json([

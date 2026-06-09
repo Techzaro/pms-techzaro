@@ -2,7 +2,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ExportReport from "./ExportReport";
-import { getUser } from "../utils/auth";
+import { getUser, rolePath } from "../utils/auth";
 import "./Reports.css";
 
 const summaryCards = [
@@ -192,7 +192,7 @@ function Reports() {
                 <div className="action-cell">
                   <button
                     className="table-action-btn"
-                    onClick={() => navigate(`/user-performance/${idx}`)}
+                    onClick={() => navigate(rolePath(`reports/user-performance/${idx}`))}
                   >
                     Profile
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
