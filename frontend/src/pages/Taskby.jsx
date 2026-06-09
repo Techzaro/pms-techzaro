@@ -229,12 +229,12 @@ const Taskby = () => {
               const projectStatus = calculateProjectStatus(item);
               const primaryUser = item.assigned_user;
               return (
-                <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }} key={`project-${item.id}-${primaryUser?.id || 0}`}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 12px", borderBottom: "1px solid #f1f5f9" }} key={`project-${item.id}-${primaryUser?.id || 0}`}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                       {getInitials(primaryUser?.name)}
                     </div>
-                    <div style={{ overflow: "hidden", minWidth: 0 }}>
+                    <div style={{ minWidth: 0 }}>
                       <div className="user-name">{primaryUser?.name || "Unassigned"}</div>
                       <div className="user-role">{primaryUser?.role || ""}</div>
                     </div>
@@ -275,12 +275,12 @@ const Taskby = () => {
             const assignees = item.assignees || [];
             const primaryAssignee = assignees[0];
             return (
-              <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }} key={`task-${item.id}-${primaryAssignee?.id || 0}`}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 12px", borderBottom: "1px solid #f1f5f9" }} key={`task-${item.id}-${primaryAssignee?.id || 0}`}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                     {getInitials(primaryAssignee?.name)}
                   </div>
-                  <div style={{ overflow: "hidden", minWidth: 0 }}>
+                  <div style={{ minWidth: 0 }}>
                     <div className="user-name">{primaryAssignee?.name || "Unassigned"}</div>
                     <div className="user-role">{primaryAssignee?.role || ""}</div>
                   </div>
