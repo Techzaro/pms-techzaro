@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { authHeaders } from "../utils/auth";
+import { authHeaders, getUser } from "../utils/auth";
 import {
   createDoc,
   getPageWidth,
@@ -20,6 +20,13 @@ import {
 import "../pages/ExportReport.css";
 
 import API_URL from "../config/api";
+
+function formatShortDate(value) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
 
 const exportTypes = [
   {
@@ -134,6 +141,10 @@ function ExportReport({ isOpen, onClose }) {
     completed: true,
   });
   const [loading, setLoading] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewType, setPreviewType] = useState("summary");
+  const [previewData, setPreviewData] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const toggleCheck = (id) => setChecks((p) => ({ ...p, [id]: !p[id] }));
 
@@ -150,6 +161,233 @@ function ExportReport({ isOpen, onClose }) {
     const res = await fetch(url, { headers: authHeaders() });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
+  };
+
+  const fetchPreviewData = async () => {
+    setPreviewLoading(true);
+    try {
+      const summaryData = await fetchJson(`${API_URL}/reports/summary`);
+      const user = getUser();
+      const startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - 1);
+      const endDate = new Date();
+
+      setPreviewData({
+        generatedBy: user?.name || "Admin",
+        dateRange: `${startDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} – ${endDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
+        totalTeams: summaryData.total_teams || 0,
+        activeProjects: summaryData.active_projects || 0,
+        tasksCreated: summaryData.tasks_created || 0,
+        tasksCompleted: summaryData.tasks_completed || 0,
+        completionRate: summaryData.completion_rate || 0,
+        overdueTasks: summaryData.overdue_tasks || 0,
+        projects: (summaryData.projects || []).map(p => ({
+          name: p.title,
+          completion: p.completion || 0,
+          tasksCompleted: `${p.completed_tasks || 0} / ${p.total_tasks || 0}`,
+          date: p.end_date || "—",
+        })),
+      });
+      setShowPreview(true);
+    } catch (err) {
+      console.error("Failed to load preview data:", err);
+      alert("Failed to load report preview. Please try again.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleDownloadSummaryPDF = async () => {
+    setLoading(true);
+    try {
+      await generateSummaryPDF();
+      setShowPreview(false);
+      onClose();
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert("Failed to generate report. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchDetailedPreviewData = async () => {
+    setPreviewLoading(true);
+    try {
+      const data = await fetchJson(`${API_URL}/reports/detailed`);
+      const user = getUser();
+      const startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - 1);
+      const endDate = new Date();
+
+      setPreviewData({
+        generatedBy: user?.name || "Admin",
+        dateRange: `${startDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} – ${endDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
+        totalTeams: data.total_teams || 0,
+        activeProjects: data.active_projects || 0,
+        tasksCreated: data.tasks_created || 0,
+        tasksCompleted: data.tasks_completed || 0,
+        completionRate: data.completion_rate || 0,
+        overdueTasks: data.overdue_tasks || 0,
+        projects: (data.projects || []).map(p => ({
+          name: p.title,
+          completion: p.completion || 0,
+          tasksCompleted: `${p.completed_tasks || 0} / ${p.total_tasks || 0}`,
+          status: p.status || "—",
+        })),
+        teams: (data.teams || []).map(t => ({
+          name: t.name,
+          members: t.members || 0,
+          tasksCompleted: `${t.completed_tasks || 0} / ${t.total_tasks || 0}`,
+          completionRate: t.completion_rate || 0,
+        })),
+        overdueList: (data.overdue_list || []).map(t => ({
+          task: t.title,
+          project: t.project,
+          daysOverdue: t.days_overdue || 0,
+        })),
+        recentTasks: (data.recent_tasks || []).map(t => ({
+          name: t.title,
+          project: t.project,
+          assignee: t.assignee,
+          status: t.status,
+          dueDate: t.end_date,
+        })),
+      });
+      setPreviewType("detailed");
+      setShowPreview(true);
+    } catch (err) {
+      console.error("Failed to load detailed preview:", err);
+      alert("Failed to load report preview. Please try again.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleDownloadDetailedPDF = async () => {
+    setLoading(true);
+    try {
+      await generateDetailedPDF();
+      setShowPreview(false);
+      onClose();
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert("Failed to generate report. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPerformancePreviewData = async () => {
+    setPreviewLoading(true);
+    try {
+      const data = await fetchJson(`${API_URL}/reports/performance`);
+      const user = getUser();
+      const startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - 1);
+      const endDate = new Date();
+
+      setPreviewData({
+        generatedBy: user?.name || "Admin",
+        dateRange: `${startDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} – ${endDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
+        overview: data.overview || {},
+        teams: (data.teams || []).map(t => ({
+          name: t.name,
+          members: t.members || 0,
+          tasksCompleted: `${t.completed_tasks || 0} / ${t.total_tasks || 0}`,
+          completionRate: t.completion_rate || 0,
+        })),
+        members: (data.members || []).map(m => ({
+          name: m.name,
+          assigned: m.assigned || 0,
+          completed: m.completed || 0,
+          pending: m.pending || 0,
+          completionRate: m.completion_rate || 0,
+        })),
+        openTasks: (data.open_tasks || []).map(t => ({
+          title: t.title,
+          assignee: t.assignee,
+          priority: t.priority,
+          daysLate: t.days_late || 0,
+        })),
+      });
+      setPreviewType("performance");
+      setShowPreview(true);
+    } catch (err) {
+      console.error("Failed to load performance preview:", err);
+      alert("Failed to load report preview. Please try again.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleDownloadPerformancePDF = async () => {
+    setLoading(true);
+    try {
+      await generatePerformancePDF();
+      setShowPreview(false);
+      onClose();
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert("Failed to generate report. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProgressPreviewData = async () => {
+    setPreviewLoading(true);
+    try {
+      const data = await fetchJson(`${API_URL}/reports/progress`);
+      const user = getUser();
+      const startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - 1);
+      const endDate = new Date();
+
+      setPreviewData({
+        generatedBy: user?.name || "Admin",
+        dateRange: `${startDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} – ${endDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
+        overview: data.overview || {},
+        project: data.project || null,
+        members: (data.members || []).map(m => ({
+          name: m.name,
+          assigned: m.assigned || 0,
+        })),
+        milestones: (data.milestones || []).map(m => ({
+          title: m.title,
+          status: m.status,
+          targetDate: m.target_date,
+          dueDate: m.due_date,
+        })),
+        openTasks: (data.open_tasks || []).map(t => ({
+          title: t.title,
+          assignee: t.assignee,
+          priority: t.priority,
+          daysLate: t.days_late || 0,
+        })),
+      });
+      setPreviewType("progress");
+      setShowPreview(true);
+    } catch (err) {
+      console.error("Failed to load progress preview:", err);
+      alert("Failed to load report preview. Please try again.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleDownloadProgressPDF = async () => {
+    setLoading(true);
+    try {
+      await generateProgressPDF();
+      setShowPreview(false);
+      onClose();
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert("Failed to generate report. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const generateSummaryPDF = async () => {
@@ -366,10 +604,25 @@ function ExportReport({ isOpen, onClose }) {
       alert("Only PDF export is currently supported.");
       return;
     }
+    if (exportType === "summary") {
+      await fetchPreviewData();
+      return;
+    }
+    if (exportType === "detailed") {
+      await fetchDetailedPreviewData();
+      return;
+    }
+    if (exportType === "performance") {
+      await fetchPerformancePreviewData();
+      return;
+    }
+    if (exportType === "progress") {
+      await fetchProgressPreviewData();
+      return;
+    }
     setLoading(true);
     try {
       switch (exportType) {
-        case "summary": await generateSummaryPDF(); break;
         case "detailed": await generateDetailedPDF(); break;
         case "performance": await generatePerformancePDF(); break;
         case "progress": await generateProgressPDF(); break;
@@ -385,6 +638,621 @@ function ExportReport({ isOpen, onClose }) {
   };
 
   if (!isOpen) return null;
+
+  if (showPreview && previewData) {
+    const isDetailed = previewType === "detailed";
+    const isPerformance = previewType === "performance";
+    const isProgress = previewType === "progress";
+    const reportTitle = isPerformance ? "Team Performance" : isDetailed ? "Detailed Report" : isProgress ? "Project Progress" : "Summary Report";
+    const priorityColor = (p) => {
+      const pr = (p || "").toLowerCase();
+      if (pr === "high") return { bg: "#fee2e2", color: "#991b1b" };
+      if (pr === "low") return { bg: "#dbeafe", color: "#1d4ed8" };
+      return { bg: "#fef3c7", color: "#92400e" };
+    };
+    const statusColor = (s) => {
+      const st = (s || "").toLowerCase();
+      if (st === "completed" || st === "done") return { bg: "#d1fae5", color: "#047857" };
+      if (st === "in_progress" || st === "active") return { bg: "#dbeafe", color: "#1d4ed8" };
+      if (st === "planned") return { bg: "#f1f5f9", color: "#475569" };
+      if (st === "failed") return { bg: "#fee2e2", color: "#991b1b" };
+      return { bg: "#fef3c7", color: "#92400e" };
+    };
+
+    const handleDownload = isPerformance ? handleDownloadPerformancePDF : isDetailed ? handleDownloadDetailedPDF : isProgress ? handleDownloadProgressPDF : handleDownloadSummaryPDF;
+
+    return createPortal(
+      <div className="er-overlay" onClick={onClose}>
+        <div className="sr-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="sr-report">
+            {/* Header */}
+            <div className="sr-header">
+              <div className="sr-logo">
+                <div className="sr-logo-icon"></div>
+                <span>PMS</span>
+              </div>
+              <h1 className="sr-title">{reportTitle}</h1>
+              <div className="sr-avatar">
+                <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                  <circle cx="20" cy="20" r="20" fill="#e5e7eb" />
+                  <circle cx="20" cy="16" r="7" fill="#9ca3af" />
+                  <path d="M6 36c0-7.732 6.268-14 14-14s14 6.268 14 14" fill="#9ca3af" />
+                </svg>
+              </div>
+              <p className="sr-generated-label">Generated By:</p>
+              <p className="sr-generated-name">{previewData.generatedBy}</p>
+              <p className="sr-date-range">{previewData.dateRange}</p>
+            </div>
+
+            <div className={`sr-divider ${isPerformance ? "sr-divider--peach" : isProgress ? "sr-divider--pink" : ""}`}></div>
+
+            {/* ═══ PERFORMANCE: Performance Overview ═══ */}
+            {isPerformance && previewData.overview && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">Performance Overview</h2>
+                <div className="sr-overview-card">
+                  <div className="sr-overview-stats">
+                    <div className="sr-overview-stat">
+                      <span className="sr-overview-stat__label">Assigned</span>
+                      <span className="sr-overview-stat__value sr-overview-stat__value--blue">{previewData.overview.assigned}</span>
+                    </div>
+                    <div className="sr-overview-stat">
+                      <span className="sr-overview-stat__label">Completed</span>
+                      <span className="sr-overview-stat__value sr-overview-stat__value--green">{previewData.overview.completed}</span>
+                    </div>
+                    <div className="sr-overview-stat">
+                      <span className="sr-overview-stat__label">Pending</span>
+                      <span className="sr-overview-stat__value sr-overview-stat__value--amber">{previewData.overview.pending}</span>
+                    </div>
+                    <div className="sr-overview-stat">
+                      <span className="sr-overview-stat__label">Overdue</span>
+                      <span className="sr-overview-stat__value sr-overview-stat__value--red">{previewData.overview.overdue}</span>
+                    </div>
+                  </div>
+                  <div className="sr-overview-rate">
+                    <span>Completion Rate</span>
+                    <span className="sr-overview-rate__value">{previewData.overview.completion_rate}%</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ PERFORMANCE: Team Overview ═══ */}
+            {isPerformance && previewData.overview && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">Team Overview</h2>
+                <div className="sr-summary-card">
+                  <div className="sr-summary-row">
+                    <span className="sr-summary-label">Teams Name</span>
+                    <span className="sr-summary-value">All Teams</span>
+                  </div>
+                  <div className="sr-summary-row">
+                    <span className="sr-summary-label">Department</span>
+                    <span className="sr-summary-value">Engineering</span>
+                  </div>
+                  <div className="sr-summary-row">
+                    <span className="sr-summary-label">Team Lead</span>
+                    <span className="sr-summary-value">—</span>
+                  </div>
+                  <div className="sr-summary-row">
+                    <span className="sr-summary-label">Members</span>
+                    <span className="sr-summary-value">{previewData.members?.length || 0}</span>
+                  </div>
+                  <div className="sr-summary-row">
+                    <span className="sr-summary-label">Projects</span>
+                    <span className="sr-summary-value">{previewData.teams?.length || 0}</span>
+                  </div>
+                  <div className="sr-summary-row sr-summary-row--last">
+                    <span className="sr-summary-label">Report Period</span>
+                    <span className="sr-summary-value">{new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ PERFORMANCE: Team Performance table ═══ */}
+            {isPerformance && previewData.teams && previewData.teams.length > 0 && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">Team Performance</h2>
+                <div className="sr-projects-card">
+                  <div className="sr-projects-table">
+                    <div className="sr-projects-head sr-projects-head--teams">
+                      <span>Team Name</span>
+                      <span>Members</span>
+                      <span>Task Completed</span>
+                      <span>Completion Rate</span>
+                    </div>
+                    {previewData.teams.map((t, i) => (
+                      <div key={i} className="sr-projects-row sr-projects-row--teams">
+                        <span className="sr-project-name">{t.name}</span>
+                        <span>{t.members}</span>
+                        <span>{t.tasksCompleted}</span>
+                        <span>{t.completionRate}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ PERFORMANCE: Member Performance table ═══ */}
+            {isPerformance && previewData.members && previewData.members.length > 0 && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">Member Performance</h2>
+                <div className="sr-projects-card">
+                  <div className="sr-projects-table">
+                    <div className="sr-projects-head sr-projects-head--members">
+                      <span>Member</span>
+                      <span>Task Assigned</span>
+                      <span>Tasks Completed</span>
+                      <span>Pending Tasks</span>
+                      <span>Completion Rate</span>
+                    </div>
+                    {previewData.members.map((m, i) => (
+                      <div key={i} className="sr-projects-row sr-projects-row--members">
+                        <span className="sr-project-name">{m.name}</span>
+                        <span>{m.assigned}</span>
+                        <span>{m.completed}</span>
+                        <span>{m.pending}</span>
+                        <span style={{ color: m.completionRate >= 80 ? "#047857" : m.completionRate >= 50 ? "#92400e" : "#991b1b", fontWeight: 700 }}>
+                          {m.completionRate}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ PERFORMANCE: Workload Distribution ═══ */}
+            {isPerformance && previewData.members && previewData.members.length > 0 && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">Workload Distribution</h2>
+                <div className="sr-projects-card" style={{ padding: "16px 18px" }}>
+                  <p style={{ margin: "0 0 14px", fontSize: "12px", fontWeight: 700, color: "#6366f1" }}>Tasks Assigned Per Member</p>
+                  {previewData.members.map((m, i) => {
+                    const maxAssigned = Math.max(...previewData.members.map(x => x.assigned), 1);
+                    const barWidth = Math.max((m.assigned / maxAssigned) * 100, 4);
+                    return (
+                      <div key={i} className="sr-workload-row">
+                        <span className="sr-workload-name">{m.name}</span>
+                        <div className="sr-workload-bar-wrap">
+                          <div className="sr-workload-bar" style={{ width: `${barWidth}%` }} />
+                        </div>
+                        <span className="sr-workload-val">{m.assigned}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ═══ PERFORMANCE: Open Tasks & Risks ═══ */}
+            {isPerformance && previewData.openTasks && previewData.openTasks.length > 0 && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">Open Tasks & Risks</h2>
+                <div className="sr-projects-card">
+                  <div className="sr-projects-table">
+                    <div className="sr-projects-head sr-projects-head--risks">
+                      <span>Task Name</span>
+                      <span>Assignee</span>
+                      <span>Priority</span>
+                      <span>Days Late</span>
+                    </div>
+                    {previewData.openTasks.map((t, i) => (
+                      <div key={i} className="sr-projects-row sr-projects-row--risks">
+                        <span className="sr-project-name">{t.title}</span>
+                        <span>{t.assignee}</span>
+                        <span>
+                          <span className="sr-status-badge" style={{ background: priorityColor(t.priority).bg, color: priorityColor(t.priority).color }}>
+                            {t.priority}
+                          </span>
+                        </span>
+                        <span>{t.daysLate} {t.daysLate === 1 ? "Day" : "Days"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ PROGRESS: Performance Overview ═══ */}
+            {isProgress && previewData.overview && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">Performance Overview</h2>
+                <div className="sr-overview-card">
+                  <div className="sr-overview-stats">
+                    <div className="sr-overview-stat">
+                      <span className="sr-overview-stat__label">Assigned</span>
+                      <span className="sr-overview-stat__value sr-overview-stat__value--blue">{previewData.overview.assigned}</span>
+                    </div>
+                    <div className="sr-overview-stat">
+                      <span className="sr-overview-stat__label">Completed</span>
+                      <span className="sr-overview-stat__value sr-overview-stat__value--green">{previewData.overview.completed}</span>
+                    </div>
+                    <div className="sr-overview-stat">
+                      <span className="sr-overview-stat__label">Pending</span>
+                      <span className="sr-overview-stat__value sr-overview-stat__value--amber">{previewData.overview.pending}</span>
+                    </div>
+                    <div className="sr-overview-stat">
+                      <span className="sr-overview-stat__label">Overdue</span>
+                      <span className="sr-overview-stat__value sr-overview-stat__value--red">{previewData.overview.overdue}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ PROGRESS: Completion Rate (Donut) ═══ */}
+            {isProgress && previewData.overview && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">Completion Rate</h2>
+                <div className="sr-donut-card">
+                  <div className="sr-donut-wrap">
+                    <svg className="sr-donut" viewBox="0 0 120 120">
+                      {(() => {
+                        const total = previewData.overview.assigned || 1;
+                        const completed = previewData.overview.completed || 0;
+                        const pending = previewData.overview.pending || 0;
+                        const overdue = previewData.overview.overdue || 0;
+                        const pctCompleted = (completed / total) * 100;
+                        const pctPending = (pending / total) * 100;
+                        const pctOverdue = (overdue / total) * 100;
+                        const r = 45;
+                        const circ = 2 * Math.PI * r;
+                        const dashCompleted = (pctCompleted / 100) * circ;
+                        const dashPending = (pctPending / 100) * circ;
+                        const dashOverdue = (pctOverdue / 100) * circ;
+                        const offsetCompleted = 0;
+                        const offsetPending = dashCompleted;
+                        const offsetOverdue = dashCompleted + dashPending;
+                        return (
+                          <>
+                            <circle cx="60" cy="60" r={r} fill="none" stroke="#e5e7eb" strokeWidth="12" />
+                            <circle cx="60" cy="60" r={r} fill="none" stroke="#22c55e" strokeWidth="12"
+                              strokeDasharray={`${dashCompleted} ${circ}`} strokeDashoffset={-offsetCompleted}
+                              transform="rotate(-90 60 60)" strokeLinecap="round" />
+                            <circle cx="60" cy="60" r={r} fill="none" stroke="#f59e0b" strokeWidth="12"
+                              strokeDasharray={`${dashPending} ${circ}`} strokeDashoffset={-offsetPending}
+                              transform="rotate(-90 60 60)" strokeLinecap="round" />
+                            <circle cx="60" cy="60" r={r} fill="none" stroke="#ef4444" strokeWidth="12"
+                              strokeDasharray={`${dashOverdue} ${circ}`} strokeDashoffset={-offsetOverdue}
+                              transform="rotate(-90 60 60)" strokeLinecap="round" />
+                            <text x="60" y="56" textAnchor="middle" fontSize="22" fontWeight="800" fill="#111827">
+                              {Math.round(pctCompleted)}%
+                            </text>
+                            <text x="60" y="72" textAnchor="middle" fontSize="9" fill="#6b7280">
+                              Completion
+                            </text>
+                          </>
+                        );
+                      })()}
+                    </svg>
+                  </div>
+                  <div className="sr-donut-legend">
+                    <div className="sr-donut-legend__item">
+                      <span className="sr-donut-dot" style={{ background: "#22c55e" }}></span>
+                      <span>Completed</span>
+                      <span className="sr-donut-legend__val">{previewData.overview.completed} ({Math.round(((previewData.overview.completed || 0) / (previewData.overview.assigned || 1)) * 100)}%)</span>
+                    </div>
+                    <div className="sr-donut-legend__item">
+                      <span className="sr-donut-dot" style={{ background: "#f59e0b" }}></span>
+                      <span>Pending</span>
+                      <span className="sr-donut-legend__val">{previewData.overview.pending} ({Math.round(((previewData.overview.pending || 0) / (previewData.overview.assigned || 1)) * 100)}%)</span>
+                    </div>
+                    <div className="sr-donut-legend__item">
+                      <span className="sr-donut-dot" style={{ background: "#ef4444" }}></span>
+                      <span>Overdue</span>
+                      <span className="sr-donut-legend__val">{previewData.overview.overdue} ({Math.round(((previewData.overview.overdue || 0) / (previewData.overview.assigned || 1)) * 100)}%)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ PROGRESS: Project Overview ═══ */}
+            {isProgress && previewData.project && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">Project Overview</h2>
+                <div className="sr-summary-card">
+                  <div className="sr-summary-row">
+                    <span className="sr-summary-label">Project Name</span>
+                    <span className="sr-summary-value">{previewData.project.name}</span>
+                  </div>
+                  <div className="sr-summary-row">
+                    <span className="sr-summary-label">Client</span>
+                    <span className="sr-summary-value">{previewData.project.client}</span>
+                  </div>
+                  <div className="sr-summary-row">
+                    <span className="sr-summary-label">Team Lead</span>
+                    <span className="sr-summary-value">{previewData.project.team_lead}</span>
+                  </div>
+                  <div className="sr-summary-row">
+                    <span className="sr-summary-label">Members</span>
+                    <span className="sr-summary-value">{previewData.project.members}</span>
+                  </div>
+                  <div className="sr-summary-row">
+                    <span className="sr-summary-label">Start Date</span>
+                    <span className="sr-summary-value">{formatShortDate(previewData.project.start_date)}</span>
+                  </div>
+                  <div className="sr-summary-row sr-summary-row--last">
+                    <span className="sr-summary-label">Due Date</span>
+                    <span className="sr-summary-value">{formatShortDate(previewData.project.end_date)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ PROGRESS: Team Contribution (Workload) ═══ */}
+            {isProgress && previewData.members && previewData.members.length > 0 && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">Team Contribution</h2>
+                <div className="sr-projects-card" style={{ padding: "16px 18px" }}>
+                  <p style={{ margin: "0 0 14px", fontSize: "12px", fontWeight: 700, color: "#6366f1" }}>Tasks Assigned Per Member</p>
+                  {previewData.members.map((m, i) => {
+                    const maxAssigned = Math.max(...previewData.members.map(x => x.assigned), 1);
+                    const barWidth = Math.max((m.assigned / maxAssigned) * 100, 4);
+                    return (
+                      <div key={i} className="sr-workload-row">
+                        <span className="sr-workload-name">{m.name}</span>
+                        <div className="sr-workload-bar-wrap">
+                          <div className="sr-workload-bar" style={{ width: `${barWidth}%` }} />
+                        </div>
+                        <span className="sr-workload-val">{m.assigned}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ═══ PROGRESS: Milestones Tracking ═══ */}
+            {isProgress && previewData.milestones && previewData.milestones.length > 0 && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">Milestones Tracking</h2>
+                <div className="sr-projects-card">
+                  <div className="sr-projects-table">
+                    <div className="sr-projects-head sr-projects-head--milestones">
+                      <span>Milestone</span>
+                      <span>Status</span>
+                      <span>Target Date</span>
+                      <span>Due Date</span>
+                    </div>
+                    {previewData.milestones.map((m, i) => (
+                      <div key={i} className="sr-projects-row sr-projects-row--milestones">
+                        <span className="sr-project-name">{m.title}</span>
+                        <span>
+                          <span className="sr-status-badge" style={{ background: statusColor(m.status).bg, color: statusColor(m.status).color }}>
+                            {m.status === "completed" || m.status === "done" ? "Completed" : m.status === "in_progress" ? "In Progress" : m.status || "Pending"}
+                          </span>
+                        </span>
+                        <span>{formatShortDate(m.targetDate)}</span>
+                        <span>{formatShortDate(m.dueDate)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ PROGRESS: Open Tasks & Risks ═══ */}
+            {isProgress && previewData.openTasks && previewData.openTasks.length > 0 && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">Open Tasks & Risks</h2>
+                <div className="sr-projects-card">
+                  <div className="sr-projects-table">
+                    <div className="sr-projects-head sr-projects-head--risks">
+                      <span>Task Name</span>
+                      <span>Assignee</span>
+                      <span>Priority</span>
+                      <span>Days Late</span>
+                    </div>
+                    {previewData.openTasks.map((t, i) => (
+                      <div key={i} className="sr-projects-row sr-projects-row--risks">
+                        <span className="sr-project-name">{t.title}</span>
+                        <span>{t.assignee}</span>
+                        <span>
+                          <span className="sr-status-badge" style={{ background: priorityColor(t.priority).bg, color: priorityColor(t.priority).color }}>
+                            {t.priority}
+                          </span>
+                        </span>
+                        <span>{t.daysLate} {t.daysLate === 1 ? "Day" : "Days"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ SUMMARY / DETAILED: Report Overview ═══ */}
+            {!isPerformance && !isProgress && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">{isDetailed ? "Report Overview" : "Executive Summary"}</h2>
+                <div className="sr-summary-card">
+                  <div className="sr-summary-row">
+                    <span className="sr-summary-label">Total Teams</span>
+                    <span className="sr-summary-value">{String(previewData.totalTeams).padStart(2, "0")}</span>
+                  </div>
+                  <div className="sr-summary-row">
+                    <span className="sr-summary-label">Active Projects</span>
+                    <span className="sr-summary-value">{previewData.activeProjects}</span>
+                  </div>
+                  <div className="sr-summary-row">
+                    <span className="sr-summary-label">Tasks Created</span>
+                    <span className="sr-summary-value">{previewData.tasksCreated}</span>
+                  </div>
+                  <div className="sr-summary-row">
+                    <span className="sr-summary-label">Task Completed</span>
+                    <span className="sr-summary-value">{previewData.tasksCompleted}</span>
+                  </div>
+                  <div className="sr-summary-row">
+                    <span className="sr-summary-label">Completion Rate</span>
+                    <span className="sr-summary-value">{previewData.completionRate}</span>
+                  </div>
+                  <div className="sr-summary-row sr-summary-row--last">
+                    <span className="sr-summary-label">Overdue Tasks</span>
+                    <span className="sr-summary-value">{previewData.overdueTasks}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ SUMMARY / DETAILED: Projects Progress ═══ */}
+            {!isPerformance && !isProgress && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">Projects Progress</h2>
+                <div className="sr-projects-card">
+                  <div className="sr-projects-table">
+                    <div className="sr-projects-head">
+                      <span>Projects</span>
+                      <span>Completion</span>
+                      <span>Task Completed</span>
+                      <span>{isDetailed ? "Status" : "Date"}</span>
+                    </div>
+                    {previewData.projects.map((p, i) => (
+                      <div key={i} className="sr-projects-row">
+                        <span className="sr-project-name">{p.name}</span>
+                        <span className="sr-project-completion">
+                          {p.completion}%
+                          <div className="sr-progress-bar">
+                            <div
+                              className="sr-progress-fill"
+                              style={{
+                                width: `${p.completion}%`,
+                                background: p.completion >= 80 ? "#22c55e" : p.completion >= 50 ? "#f59e0b" : "#3b82f6",
+                              }}
+                            />
+                          </div>
+                        </span>
+                        <span>{p.tasksCompleted}</span>
+                        <span>
+                          {isDetailed ? (
+                            <span className="sr-status-badge" style={{ background: statusColor(p.status).bg, color: statusColor(p.status).color }}>
+                              {p.status || "—"}
+                            </span>
+                          ) : (
+                            formatShortDate(p.date)
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                    {previewData.projects.length === 0 && (
+                      <div className="sr-projects-empty">No projects found.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ DETAILED: Team Performance ═══ */}
+            {isDetailed && previewData.teams && previewData.teams.length > 0 && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">Team Performance</h2>
+                <div className="sr-projects-card">
+                  <div className="sr-projects-table">
+                    <div className="sr-projects-head sr-projects-head--teams">
+                      <span>Team Name</span>
+                      <span>Members</span>
+                      <span>Task Completed</span>
+                      <span>Completion Rate</span>
+                    </div>
+                    {previewData.teams.map((t, i) => (
+                      <div key={i} className="sr-projects-row sr-projects-row--teams">
+                        <span className="sr-project-name">{t.name}</span>
+                        <span>{t.members}</span>
+                        <span>{t.tasksCompleted}</span>
+                        <span>{t.completionRate}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ DETAILED: Attention Required ═══ */}
+            {isDetailed && previewData.overdueList && previewData.overdueList.length > 0 && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">Attention Required</h2>
+                <div className="sr-projects-card">
+                  <div className="sr-projects-table">
+                    <div className="sr-projects-head sr-projects-head--overdue">
+                      <span>Task</span>
+                      <span>Project</span>
+                      <span>Days Overdue</span>
+                    </div>
+                    {previewData.overdueList.map((t, i) => (
+                      <div key={i} className="sr-projects-row sr-projects-row--overdue">
+                        <span className="sr-project-name">{t.task}</span>
+                        <span>{t.project}</span>
+                        <span>{t.daysOverdue} Days</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ DETAILED: Task Details ═══ */}
+            {isDetailed && previewData.recentTasks && previewData.recentTasks.length > 0 && (
+              <div className="sr-section">
+                <h2 className="sr-section-title">Task Details</h2>
+                <div className="sr-projects-card">
+                  <div className="sr-projects-table">
+                    <div className="sr-projects-head sr-projects-head--tasks">
+                      <span>Task Name</span>
+                      <span>Project Name</span>
+                      <span>Assignee</span>
+                      <span>Status</span>
+                      <span>Due Date</span>
+                    </div>
+                    {previewData.recentTasks.map((t, i) => (
+                      <div key={i} className="sr-projects-row sr-projects-row--tasks">
+                        <span className="sr-project-name">{t.name}</span>
+                        <span>{t.project}</span>
+                        <span>{t.assignee}</span>
+                        <span>
+                          <span className="sr-status-badge" style={{ background: statusColor(t.status).bg, color: statusColor(t.status).color }}>
+                            {t.status === "completed" || t.status === "done" ? "Completed" : t.status === "in_progress" ? "In Progress" : t.status || "—"}
+                          </span>
+                        </span>
+                        <span>{formatShortDate(t.dueDate)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="sr-footer">
+              <span>Generated by PMS</span>
+              <span>Page 1 of 6</span>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="sr-actions">
+            <button className="sr-cancel-btn" onClick={() => setShowPreview(false)}>
+              Cancel
+            </button>
+            <button className="sr-download-btn" onClick={handleDownload} disabled={loading}>
+              {loading ? (
+                <span>Generating...</span>
+              ) : (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
+                  </svg>
+                  Download PDF
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
 
   return createPortal(
     <div className="er-overlay" onClick={onClose}>
@@ -530,10 +1398,10 @@ function ExportReport({ isOpen, onClose }) {
           <button
             className="er-export-btn"
             onClick={handleExport}
-            disabled={loading || fileFormat === "excel"}
+            disabled={loading || previewLoading || fileFormat === "excel"}
             style={fileFormat === "excel" ? { opacity: 0.5, cursor: "not-allowed" } : {}}
           >
-            {loading ? (
+            {loading || previewLoading ? (
               <span>Generating...</span>
             ) : (
               <>
