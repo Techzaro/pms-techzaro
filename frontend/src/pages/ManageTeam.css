@@ -265,6 +265,23 @@
   color: #94a3b8;
 }
 
+.mt-team-desc {
+  margin: 0;
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.6;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.mt-lead-desc-row {
+  display: flex;
+  gap: 125px;
+  
+}
+
 /* Lead Chip */
 .mt-lead-chip {
   display: inline-flex;
@@ -277,6 +294,8 @@
   font-size: 14px;
   font-weight: 600;
   color: #92400e;
+  width:170px;
+  height: 50px;
 }
 
 .mt-crown-icon {
@@ -703,6 +722,10 @@
   }
   .mt-card {
     padding: 20px;
+  }
+  .mt-lead-desc-row {
+    flex-direction: column;
+    gap: 16px;
   }
   .mt-card-footer {
     flex-direction: column;

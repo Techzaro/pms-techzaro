@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -24,15 +25,23 @@ use Illuminate\Validation\Rule;
  */
 class UserController extends Controller
 {
+    private array $documentFields = [
+        'employment_contract',
+        'offer_letter',
+        'techxaro_regulations',
+        'latest_education_cert',
+        'cv',
+        'previous_exp_letter',
+        'previous_salary_slip',
+        'other_document',
+    ];
+
     /**
      * Return a list of all users with full profile fields.
      */
     public function index()
     {
-        $users = User::select('id', 'name', 'email', 'role', 'active', 'contact_no', 'address', 'department', 'designation', 'employee_code', 'created_at')
-            ->where('active', true)
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $users = User::orderBy('created_at', 'desc')->get();
 
         return response()->json([
             'users' => $users,
@@ -40,24 +49,53 @@ class UserController extends Controller
     }
 
     /**
-     * Create a new user account with auto-generated password and send email.
+     * Return a single user by ID.
+     */
+    public function show(User $user)
+    {
+        return response()->json([
+            'user' => $user,
+        ]);
+    }
+
+    /**
+     * Create a new user account with auto-generated password and file uploads.
      */
     public function store(Request $request)
     {
+        $this->normalizeEmptyStrings($request);
+
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email',
             'role' => ['required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member'])],
-            'contact_no' => 'required|string|max:32',
-            'address' => 'required|string|max:500',
+            'father_name' => 'nullable|string|max:255',
+            'id_card_number' => 'nullable|string|max:32',
+            'phone_number' => 'nullable|string|max:32',
+            'contact_no' => 'nullable|string|max:32',
+            'present_address' => 'nullable|string|max:500',
+            'permanent_address' => 'nullable|string|max:500',
+            'address' => 'nullable|string|max:500',
+            'emergency_contact_name' => 'nullable|string|max:255',
+            'emergency_contact_relation' => 'nullable|string|max:255',
+            'emergency_contact_phone' => 'nullable|string|max:32',
+            'personal_email' => 'nullable|email|max:255',
+            'professional_email_password' => 'nullable|string|max:255',
+            'recovery_email' => 'nullable|email|max:255',
             'department' => 'required|string|max:255',
             'designation' => 'required|string|max:255',
+            'hired_for' => 'nullable|string|max:255',
             'employee_code' => 'required|string|max:64',
+            'job_started_date' => 'nullable|date',
+            'job_ended_date' => 'nullable|date|after_or_equal:job_started_date',
+            'gross_salary' => 'nullable|numeric|min:0',
+            'applied_via' => 'nullable|string|max:255',
+            'bank_name' => 'nullable|string|max:255',
+            'bank_account_number' => 'nullable|string|max:64',
+            'bank_account_title' => 'nullable|string|max:255',
         ]);
 
         $plainPassword = Str::random(10);
-
-        // Normalize role (teamlead → team_lead)
         $role = $request->input('role') === 'teamlead' ? 'team_lead' : $request->input('role');
 
         $user = User::create([
@@ -67,12 +105,46 @@ class UserController extends Controller
             'role' => $role,
             'active' => true,
             'must_change_password' => true,
-            'contact_no' => $request->input('contact_no'),
-            'address' => $request->input('address'),
+
+            // Contact
+            'contact_no' => $request->input('phone_number') ?? $request->input('contact_no'),
+            'address' => $request->input('present_address') ?? $request->input('address'),
+
+            // Extended profile
+            'father_name' => $request->input('father_name'),
+            'id_card_number' => $request->input('id_card_number'),
+            'phone_number' => $request->input('phone_number'),
+            'present_address' => $request->input('present_address'),
+            'permanent_address' => $request->input('permanent_address'),
+
+            // Emergency contact
+            'emergency_contact_name' => $request->input('emergency_contact_name'),
+            'emergency_contact_relation' => $request->input('emergency_contact_relation'),
+            'emergency_contact_phone' => $request->input('emergency_contact_phone'),
+
+            // Emails
+            'personal_email' => $request->input('personal_email'),
+            'professional_email_password' => $request->input('professional_email_password'),
+            'recovery_email' => $request->input('recovery_email'),
+
+            // Employment
             'department' => $request->input('department'),
             'designation' => $request->input('designation'),
+            'hired_for' => $request->input('hired_for'),
             'employee_code' => $request->input('employee_code'),
+            'job_started_date' => $request->input('job_started_date'),
+            'job_ended_date' => $request->input('job_ended_date'),
+
+            // Salary & bank
+            'gross_salary' => $request->input('gross_salary'),
+            'applied_via' => $request->input('applied_via'),
+            'bank_name' => $request->input('bank_name'),
+            'bank_account_number' => $request->input('bank_account_number'),
+            'bank_account_title' => $request->input('bank_account_title'),
         ]);
+
+        // Handle file uploads
+        $this->handleFileUploads($request, $user);
 
         $loginUrl = config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:5173'));
 
@@ -108,20 +180,41 @@ class UserController extends Controller
     }
 
     /**
-     * Update user details (role, active, and profile fields).
+     * Update user details and handle file uploads.
      */
     public function update(Request $request, User $user)
     {
+        $this->normalizeEmptyStrings($request);
+
         $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'email' => ['sometimes', 'required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'role' => ['sometimes', 'required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member'])],
             'active' => ['sometimes', 'boolean'],
-            'contact_no' => 'sometimes|required|string|max:32',
-            'address' => 'sometimes|required|string|max:500',
+            'father_name' => 'nullable|string|max:255',
+            'id_card_number' => 'nullable|string|max:32',
+            'phone_number' => 'nullable|string|max:32',
+            'contact_no' => 'nullable|string|max:32',
+            'present_address' => 'nullable|string|max:500',
+            'permanent_address' => 'nullable|string|max:500',
+            'address' => 'nullable|string|max:500',
+            'emergency_contact_name' => 'nullable|string|max:255',
+            'emergency_contact_relation' => 'nullable|string|max:255',
+            'emergency_contact_phone' => 'nullable|string|max:32',
+            'personal_email' => 'nullable|email|max:255',
+            'professional_email_password' => 'nullable|string|max:255',
+            'recovery_email' => 'nullable|email|max:255',
             'department' => 'sometimes|required|string|max:255',
             'designation' => 'sometimes|required|string|max:255',
+            'hired_for' => 'nullable|string|max:255',
             'employee_code' => 'sometimes|required|string|max:64',
+            'job_started_date' => 'nullable|date',
+            'job_ended_date' => 'nullable|date',
+            'gross_salary' => 'nullable|numeric|min:0',
+            'applied_via' => 'nullable|string|max:255',
+            'bank_name' => 'nullable|string|max:255',
+            'bank_account_number' => 'nullable|string|max:64',
+            'bank_account_title' => 'nullable|string|max:255',
         ]);
 
         $authUser = $request->user();
@@ -147,7 +240,17 @@ class UserController extends Controller
             ], 403);
         }
 
-        $fields = ['name', 'email', 'role', 'active', 'contact_no', 'address', 'department', 'designation', 'employee_code'];
+        $fields = [
+            'name', 'email', 'role', 'active',
+            'father_name', 'id_card_number', 'phone_number',
+            'present_address', 'permanent_address',
+            'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
+            'personal_email', 'professional_email_password', 'recovery_email',
+            'department', 'designation', 'hired_for', 'employee_code',
+            'job_started_date', 'job_ended_date',
+            'gross_salary', 'applied_via',
+            'bank_name', 'bank_account_number', 'bank_account_title',
+        ];
 
         foreach ($fields as $field) {
             if ($request->has($field)) {
@@ -155,12 +258,23 @@ class UserController extends Controller
             }
         }
 
-        // Normalize role (teamlead → team_lead)
+        // Sync legacy fields
+        if ($request->has('phone_number')) {
+            $user->contact_no = $request->input('phone_number');
+        }
+        if ($request->has('present_address')) {
+            $user->address = $request->input('present_address');
+        }
+
+        // Normalize role
         if ($user->role === 'teamlead') {
             $user->role = 'team_lead';
         }
 
         $user->save();
+
+        // Handle file uploads
+        $this->handleFileUploads($request, $user);
 
         return response()->json([
             'status' => true,
@@ -174,6 +288,9 @@ class UserController extends Controller
      */
     public function destroy(User $user)
     {
+        // Delete associated files
+        $this->deleteAllFiles($user);
+
         $user->delete();
 
         return response()->json([
@@ -190,7 +307,6 @@ class UserController extends Controller
         try {
             $authUser = $request->user();
 
-            // Cannot resign yourself
             if ($authUser->id === $user->id) {
                 return response()->json([
                     'status' => false,
@@ -198,7 +314,6 @@ class UserController extends Controller
                 ], 403);
             }
 
-            // Already resigned
             if ($user->active === false) {
                 return response()->json([
                     'status' => false,
@@ -206,7 +321,6 @@ class UserController extends Controller
                 ], 422);
             }
 
-            // Manager cannot resign admin
             if ($authUser->role === 'manager' && $user->role === 'admin') {
                 return response()->json([
                     'status' => false,
@@ -214,16 +328,13 @@ class UserController extends Controller
                 ], 403);
             }
 
-            // Set user as resigned
             $user->active = false;
             $user->save();
 
-            // Force logout - delete all user tokens
             $user->tokens()->delete();
 
             Log::info("User {$user->id} ({$user->email}) resigned by {$authUser->id} ({$authUser->email})");
 
-            // Send resignation email
             $emailSent = false;
             $emailError = null;
 
@@ -278,25 +389,18 @@ class UserController extends Controller
      */
     public function profile($id)
     {
-        $user = User::with([])->findOrFail($id);
+        $user = User::findOrFail($id);
 
-        // Total assigned tasks
         $totalAssignedTasks = Task::where('assigned_to', $user->id)->count();
-
-        // Completed tasks
         $completedTasks = Task::where('assigned_to', $user->id)
             ->where('status', 'completed')
             ->count();
-
-        // Pending tasks
         $pendingTasks = Task::where('assigned_to', $user->id)
             ->whereIn('status', ['pending', 'in_progress'])
             ->count();
 
-        // Total created projects (by this user)
         $totalProjects = Project::where('created_by', $user->id)->count();
 
-        // Projects with deliverables summary
         $projects = Project::where('created_by', $user->id)
             ->with(['tasks' => function ($query) use ($user) {
                 $query->where('assigned_to', $user->id);
@@ -315,7 +419,6 @@ class UserController extends Controller
                 ];
             });
 
-        // Login history (we only have last_login_at currently)
         $loginHistory = [];
         if ($user->last_login_at) {
             $loginHistory[] = [
@@ -324,26 +427,25 @@ class UserController extends Controller
             ];
         }
 
-        // Account status info
         $accountAge = $user->created_at->diffForHumans();
         $daysSinceCreation = $user->created_at->diffInDays(now());
 
         return response()->json([
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role,
-                'active' => $user->active,
-                'contact_no' => $user->contact_no,
-                'address' => $user->address,
-                'department' => $user->department,
-                'designation' => $user->designation,
-                'employee_code' => $user->employee_code,
-                'last_login_at' => $user->last_login_at?->toDateTimeString(),
-                'created_at' => $user->created_at->toDateTimeString(),
-                'updated_at' => $user->updated_at->toDateTimeString(),
-            ],
+            'user' => $user->only([
+                'id', 'name', 'email', 'role', 'active',
+                'father_name', 'id_card_number', 'phone_number', 'contact_no',
+                'present_address', 'permanent_address', 'address',
+                'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
+                'personal_email', 'recovery_email',
+                'department', 'designation', 'hired_for', 'employee_code',
+                'job_started_date', 'job_ended_date',
+                'gross_salary', 'applied_via',
+                'bank_name', 'bank_account_number', 'bank_account_title',
+                'employment_contract', 'offer_letter', 'techxaro_regulations',
+                'latest_education_cert', 'cv', 'previous_exp_letter',
+                'previous_salary_slip', 'other_document',
+                'last_login_at', 'created_at', 'updated_at',
+            ]),
             'stats' => [
                 'total_assigned_tasks' => $totalAssignedTasks,
                 'completed_tasks' => $completedTasks,
@@ -359,6 +461,85 @@ class UserController extends Controller
                 'last_login' => $user->last_login_at?->toDateTimeString() ?? 'Never logged in',
             ],
         ]);
+    }
+
+    /**
+     * Serve a user document file for viewing/downloading.
+     */
+    public function downloadDocument(Request $request, User $user, string $document)
+    {
+        if (!in_array($document, $this->documentFields)) {
+            return response()->json(['message' => 'Invalid document field.'], 404);
+        }
+
+        $path = $user->$document;
+
+        if (!$path) {
+            return response()->json(['message' => 'Document not found.'], 404);
+        }
+
+        $fullPath = storage_path('app/public/' . $path);
+
+        if (!file_exists($fullPath)) {
+            return response()->json(['message' => 'File not found on disk.'], 404);
+        }
+
+        $mimeType = mime_content_type($fullPath);
+        $filename = basename($path);
+
+        return response()->file($fullPath, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => ($request->query('action') === 'download')
+                ? 'attachment; filename="' . $filename . '"'
+                : 'inline; filename="' . $filename . '"',
+        ]);
+    }
+
+    /**
+     * Convert empty strings to null for proper nullable validation.
+     */
+    private function normalizeEmptyStrings(Request $request): void
+    {
+        foreach ($request->input() as $key => $value) {
+            if (is_string($value) && $value === '') {
+                $request->merge([$key => null]);
+            }
+        }
+    }
+
+    /**
+     * Handle file uploads for a user and store paths in database.
+     */
+    private function handleFileUploads(Request $request, User $user): void
+    {
+        foreach ($this->documentFields as $field) {
+            if ($request->hasFile($field)) {
+                // Delete old file if exists
+                if ($user->$field && Storage::disk('public')->exists($user->$field)) {
+                    Storage::disk('public')->delete($user->$field);
+                }
+
+                $file = $request->file($field);
+                $filename = $field . '_' . time() . '_' . $file->getClientOriginalName();
+                $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+
+                $user->$field = $path;
+            }
+        }
+
+        $user->save();
+    }
+
+    /**
+     * Delete all files associated with a user.
+     */
+    private function deleteAllFiles(User $user): void
+    {
+        foreach ($this->documentFields as $field) {
+            if ($user->$field && Storage::disk('public')->exists($user->$field)) {
+                Storage::disk('public')->delete($user->$field);
+            }
+        }
     }
 
     /**

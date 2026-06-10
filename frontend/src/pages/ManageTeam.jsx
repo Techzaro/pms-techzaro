@@ -77,6 +77,7 @@ function ManageTeam() {
   const [leaderConfirmData, setLeaderConfirmData] = useState({ teamId: null, memberId: null, memberName: "" });
   const [removeMemberConfirmOpen, setRemoveMemberConfirmOpen] = useState(false);
   const [removeMemberData, setRemoveMemberData] = useState({ teamId: null, memberId: null, memberName: "" });
+  const [editTeamId, setEditTeamId] = useState(null);
 
   const navigate = useNavigate();
 
@@ -221,6 +222,7 @@ function ManageTeam() {
 
   const openCreateTeamModal = () => {
     setAddMemberTeamId(null);
+    setEditTeamId(null);
     setTeamName("");
     setTeamDescription("");
     setSelectedMemberIds([]);
@@ -240,6 +242,7 @@ function ManageTeam() {
   const closeModal = () => {
     setIsModalOpen(false);
     setAddMemberTeamId(null);
+    setEditTeamId(null);
     setTeamName("");
     setTeamDescription("");
     setSelectedMemberIds([]);
@@ -326,6 +329,41 @@ function ManageTeam() {
     } catch (error) {
       console.error(error);
       showMessage(error.message || "Failed to add members", "error");
+    }
+  };
+
+  const openEditTeamModal = (team) => {
+    setEditTeamId(team.id);
+    setTeamName(team.name);
+    setTeamDescription(team.description || "");
+    setSelectedMemberIds(team.members.map((m) => m.id));
+    setAddMemberTeamId(null);
+    setIsMemberDropdownOpen(false);
+    setIsUserDropdownOpen(false);
+    setIsModalOpen(true);
+  };
+
+  const handleUpdateTeam = async (e) => {
+    e.preventDefault();
+    try {
+      const token = authToken();
+      const response = await fetch(`${API_URL}/teams/${editTeamId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name: teamName, description: teamDescription, member_ids: selectedMemberIds }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Failed to update team");
+      showMessage("Team updated successfully");
+      fetchTeams();
+      closeModal();
+    } catch (error) {
+      console.error(error);
+      showMessage(error.message || "Failed to update team", "error");
     }
   };
 
@@ -418,7 +456,7 @@ function ManageTeam() {
                       <h3 className="mt-team-name">{team.name}</h3>
                     </div>
                     <div className="mt-card-actions">
-                      <button className="mt-icon-btn mt-icon-edit" title="Edit Team">
+                      <button className="mt-icon-btn mt-icon-edit" title="Edit Team" onClick={() => openEditTeamModal(team)}>
                         <MdEdit size={18} />
                       </button>
                       <button
@@ -431,16 +469,24 @@ function ManageTeam() {
                     </div>
                   </div>
 
-                  {/* Team Lead */}
-                  <div className="mt-section">
-                    <span className="mt-section-label">TEAM LEAD</span>
-                    {leader ? (
-                      <div className="mt-lead-chip">
-                        <Crown size={16} className="mt-crown-icon" />
-                        <span>{leader.name}</span>
+                  {/* Team Lead & Description Row */}
+                  <div className="mt-lead-desc-row">
+                    <div className="mt-section">
+                      <span className="mt-section-label">TEAM LEAD</span>
+                      {leader ? (
+                        <div className="mt-lead-chip">
+                          <Crown size={16} className="mt-crown-icon" />
+                          <span>{leader.name}</span>
+                        </div>
+                      ) : (
+                        <p className="mt-no-data">No leader assigned</p>
+                      )}
+                    </div>
+                    {team.description && (
+                      <div className="mt-section" >
+                        <span className="mt-section-label">DESCRIPTION</span>
+                        <p className="mt-team-desc">{team.description}</p>
                       </div>
-                    ) : (
-                      <p className="mt-no-data">No leader assigned</p>
                     )}
                   </div>
 
@@ -512,9 +558,11 @@ function ManageTeam() {
             <div className="mt-modal">
               <div className="mt-modal-header">
                 <div>
-                  <h2>{addMemberTeamId ? "Add Member" : "Add New Team"}</h2>
+                  <h2>{editTeamId ? "Edit Team" : addMemberTeamId ? "Add Member" : "Add New Team"}</h2>
                   <p className="mt-modal-sub">
-                    {addMemberTeamId
+                    {editTeamId
+                      ? "Update team name, description and members"
+                      : addMemberTeamId
                       ? "Select users to add to this team"
                       : "Create a new team and add members"}
                   </p>
@@ -607,7 +655,7 @@ function ManageTeam() {
                   </div>
                 </form>
               ) : (
-                <form style={{ width: "100%" }} className="mt-modal-form" onSubmit={handleCreateTeam}>
+                <form style={{ width: "100%" }} className="mt-modal-form" onSubmit={editTeamId ? handleUpdateTeam : handleCreateTeam}>
                   <div style={{ width: "100%", marginBottom: "20px" }}>
                     <label className="mt-field-label">Team Name</label>
                     <input
@@ -726,7 +774,7 @@ function ManageTeam() {
                       Cancel
                     </button>
                     <button type="submit" className="mt-btn-primary">
-                      Create Team
+                      {editTeamId ? "Update Team" : "Create Team"}
                     </button>
                   </div>
                 </form>
