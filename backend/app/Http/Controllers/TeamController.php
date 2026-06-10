@@ -33,12 +33,14 @@ class TeamController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'description' => 'nullable|string|max:1000',
             'member_ids' => 'nullable|array',
             'member_ids.*' => 'integer|exists:users,id',
         ]);
 
         $team = Team::create([
             'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
             'leader_id' => null,
             'created_by' => $request->user()->id,
         ]);
@@ -52,6 +54,48 @@ class TeamController extends Controller
             'message' => 'Team created successfully',
             'team' => $team->load(['leader:id,name', 'members:id,name']),
         ], 201);
+    }
+
+    /**
+     * Return a single team with leader and members.
+     */
+    public function show(Team $team)
+    {
+        $team->load(['leader:id,name', 'members:id,name']);
+        return response()->json($team);
+    }
+
+    /**
+     * Update the specified team's name, description, and members.
+     */
+    public function update(Request $request, Team $team)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string|max:1000',
+            'member_ids' => 'nullable|array',
+            'member_ids.*' => 'integer|exists:users,id',
+        ]);
+
+        $team->update([
+            'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
+        ]);
+
+        if (isset($validated['member_ids'])) {
+            $uniqueIds = array_unique($validated['member_ids']);
+            $team->members()->sync($uniqueIds);
+
+            if ($team->leader_id && !$team->members()->whereKey($team->leader_id)->exists()) {
+                $team->leader_id = null;
+                $team->save();
+            }
+        }
+
+        return response()->json([
+            'message' => 'Team updated successfully',
+            'team' => $team->load(['leader:id,name', 'members:id,name']),
+        ]);
     }
 
     /**

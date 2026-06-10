@@ -61,10 +61,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
         Route::get('/users', [UserController::class, 'index']);
         Route::post('/users', [UserController::class, 'store']);
+        Route::get('/users/{user}', [UserController::class, 'show']);
         Route::put('/users/{user}', [UserController::class, 'update']);
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
         Route::put('/users/{user}/resign', [UserController::class, 'resign']);
         Route::get('/users/{id}/profile', [UserController::class, 'profile']);
+        Route::get('/users/{user}/documents/{document}', [UserController::class, 'downloadDocument']);
         Route::post('/test-email', [UserController::class, 'testEmail']);
     });
 
@@ -77,6 +79,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
         Route::get('/teams', [TeamController::class, 'index']);
         Route::post('/teams', [TeamController::class, 'store']);
+        Route::get('/teams/{team}', [TeamController::class, 'show']);
+        Route::put('/teams/{team}', [TeamController::class, 'update']);
         Route::put('/teams/{team}/leader', [TeamController::class, 'setLeader']);
         Route::post('/teams/{team}/members', [TeamController::class, 'addMember']);
         Route::delete('/teams/{team}/members/{user}', [TeamController::class, 'removeMember']);

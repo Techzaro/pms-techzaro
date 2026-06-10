@@ -16,18 +16,38 @@ function UserProfile() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editUser, setEditUser] = useState({
     name: "",
+    father_name: "",
+    id_card_number: "",
+    present_address: "",
+    permanent_address: "",
+    phone_number: "",
+    emergency_contact_name: "",
+    emergency_contact_relation: "",
+    emergency_contact_phone: "",
+    personal_email: "",
     email: "",
-    role: "member",
-    contact_no: "",
-    address: "",
+    recovery_email: "",
     department: "",
+    departmentCustom: "",
     designation: "",
+    designationCustom: "",
+    hired_for: "",
     employee_code: "",
+    job_started_date: "",
+    job_ended_date: "",
+    role: "member",
+    gross_salary: "",
+    applied_via: "",
+    bank_name: "",
+    bank_account_number: "",
+    bank_account_title: "",
   });
   const [editErrors, setEditErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
+  const [editFiles, setEditFiles] = useState({});
+  const [filePreviews, setFilePreviews] = useState({});
 
   const DEPARTMENTS = [
     "Digital Marketing",
@@ -113,17 +133,35 @@ function UserProfile() {
 
     setEditUser({
       name: u.name || "",
+      father_name: u.father_name || "",
+      id_card_number: u.id_card_number || "",
+      present_address: u.present_address || u.address || "",
+      permanent_address: u.permanent_address || "",
+      phone_number: u.phone_number || u.contact_no || "",
+      emergency_contact_name: u.emergency_contact_name || "",
+      emergency_contact_relation: u.emergency_contact_relation || "",
+      emergency_contact_phone: u.emergency_contact_phone || "",
+      personal_email: u.personal_email || "",
       email: u.email || "",
-      role: u.role || "member",
-      contact_no: u.contact_no || "",
-      address: u.address || "",
+      recovery_email: u.recovery_email || "",
       department: isCustomDept ? "__custom__" : deptVal,
       departmentCustom: isCustomDept ? deptVal : "",
       designation: isCustomDesg ? "__custom__" : desgVal,
       designationCustom: isCustomDesg ? desgVal : "",
+      hired_for: u.hired_for || "",
       employee_code: u.employee_code || "",
+      job_started_date: u.job_started_date || "",
+      job_ended_date: u.job_ended_date || "",
+      role: u.role || "member",
+      gross_salary: u.gross_salary || "",
+      applied_via: u.applied_via || "",
+      bank_name: u.bank_name || "",
+      bank_account_number: u.bank_account_number || "",
+      bank_account_title: u.bank_account_title || "",
     });
     setEditErrors({});
+    setEditFiles({});
+    setFilePreviews({});
     setIsEditModalOpen(true);
   };
 
@@ -142,13 +180,20 @@ function UserProfile() {
   const validateEditForm = () => {
     const errors = {};
     if (!editUser.name.trim()) errors.name = "Full Name is required.";
+    if (!editUser.father_name.trim()) errors.father_name = "Father Name is required.";
+    if (!editUser.id_card_number.trim()) errors.id_card_number = "ID Card Number is required.";
+    if (!editUser.present_address.trim()) errors.present_address = "Present Address is required.";
+    if (!editUser.phone_number.trim()) errors.phone_number = "Phone Number is required.";
+    if (!editUser.personal_email.trim()) {
+      errors.personal_email = "Personal Email is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editUser.personal_email.trim())) {
+      errors.personal_email = "Please enter a valid email address.";
+    }
     if (!editUser.email.trim()) {
-      errors.email = "Email Address is required.";
+      errors.email = "Professional Email is required.";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editUser.email.trim())) {
       errors.email = "Please enter a valid email address.";
     }
-    if (!editUser.contact_no.trim()) errors.contact_no = "Contact Number is required.";
-    if (!editUser.address.trim()) errors.address = "Address is required.";
     if (!editUser.department) {
       errors.department = "Department is required.";
     } else if (editUser.department === "__custom__" && !editUser.departmentCustom.trim()) {
@@ -160,6 +205,7 @@ function UserProfile() {
       errors.designationCustom = "Custom Designation is required.";
     }
     if (!editUser.employee_code.trim()) errors.employee_code = "Employee Code is required.";
+    if (!editUser.job_started_date) errors.job_started_date = "Job Start Date is required.";
     return errors;
   };
 
@@ -176,40 +222,69 @@ function UserProfile() {
 
     setSaving(true);
     try {
+      const formData = new FormData();
+      formData.append("name", editUser.name);
+      formData.append("father_name", editUser.father_name);
+      formData.append("id_card_number", editUser.id_card_number);
+      formData.append("present_address", editUser.present_address);
+      formData.append("permanent_address", editUser.permanent_address);
+      formData.append("phone_number", editUser.phone_number);
+      formData.append("emergency_contact_name", editUser.emergency_contact_name);
+      formData.append("emergency_contact_relation", editUser.emergency_contact_relation);
+      formData.append("emergency_contact_phone", editUser.emergency_contact_phone);
+      formData.append("personal_email", editUser.personal_email);
+      formData.append("email", editUser.email);
+      formData.append("recovery_email", editUser.recovery_email);
+      formData.append("department", finalDepartment || "");
+      formData.append("designation", finalDesignation || "");
+      formData.append("hired_for", editUser.hired_for);
+      formData.append("employee_code", editUser.employee_code);
+      formData.append("job_started_date", editUser.job_started_date);
+      formData.append("job_ended_date", editUser.job_ended_date);
+      formData.append("role", editUser.role);
+      formData.append("gross_salary", editUser.gross_salary);
+      formData.append("applied_via", editUser.applied_via);
+      formData.append("bank_name", editUser.bank_name);
+      formData.append("bank_account_number", editUser.bank_account_number);
+      formData.append("bank_account_title", editUser.bank_account_title);
+
+      const fileFields = [
+        "employment_contract", "offer_letter", "techxaro_regulations",
+        "latest_education_cert", "cv", "previous_exp_letter",
+        "previous_salary_slip", "other_document",
+      ];
+      fileFields.forEach((field) => {
+        if (editFiles[field]) {
+          formData.append(field, editFiles[field]);
+        }
+      });
+
+      formData.append("_method", "PUT");
       const res = await fetch(`${API_URL}/users/${userId}`, {
-        method: "PUT",
-        headers: { Accept: "application/json", ...authHeaders() },
-        body: JSON.stringify({
-          name: editUser.name,
-          email: editUser.email,
-          role: editUser.role,
-          contact_no: editUser.contact_no || null,
-          address: editUser.address || null,
-          department: finalDepartment || null,
-          designation: finalDesignation || null,
-          employee_code: editUser.employee_code || null,
-        }),
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${authToken()}`,
+        },
+        body: formData,
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Unable to update user");
 
-      setProfileData((prev) => ({
-        ...prev,
-        user: {
-          ...prev.user,
-          name: editUser.name,
-          email: editUser.email,
-          role: editUser.role,
-          contact_no: editUser.contact_no,
-          address: editUser.address,
-          department: finalDepartment,
-          designation: finalDesignation,
-          employee_code: editUser.employee_code,
-        },
-      }));
       setIsEditModalOpen(false);
+      setEditFiles({});
+      setFilePreviews({});
       showMessage("User updated successfully.");
+
+      fetch(`${API_URL}/users/${userId}/profile`, {
+        headers: { Accept: "application/json", ...authHeaders() },
+      })
+        .then((r) => r.json())
+        .then((profile) => {
+          setProfileData(profile);
+        })
+        .catch(() => {});
     } catch (err) {
       showMessage(err.message || "User update failed.", "error");
     } finally {
@@ -284,12 +359,100 @@ function UserProfile() {
                   <span className="info-value">{user.name || "---"}</span>
                 </div>
                 <div className="info-row">
+                  <span className="info-label">Father Name</span>
+                  <span className="info-value">{user.father_name || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">ID Card Number</span>
+                  <span className="info-value">{user.id_card_number || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Phone Number</span>
+                  <span className="info-value">{user.phone_number || user.contact_no || "---"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Address */}
+            <div className="profile-info-card">
+              <div className="info-card-header">
+                <h3>Address</h3>
+              </div>
+              <div className="info-card-body">
+                <div className="info-row">
+                  <span className="info-label">Present Address</span>
+                  <span className="info-value">{user.present_address || user.address || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Permanent Address</span>
+                  <span className="info-value">{user.permanent_address || "---"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Emergency Contact */}
+            <div className="profile-info-card">
+              <div className="info-card-header">
+                <h3>Emergency Contact</h3>
+              </div>
+              <div className="info-card-body">
+                <div className="info-row">
+                  <span className="info-label">Name</span>
+                  <span className="info-value">{user.emergency_contact_name || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Relation</span>
+                  <span className="info-value">{user.emergency_contact_relation || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Phone</span>
+                  <span className="info-value">{user.emergency_contact_phone || "---"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Email Accounts */}
+            <div className="profile-info-card">
+              <div className="info-card-header">
+                <h3>Email Accounts</h3>
+              </div>
+              <div className="info-card-body">
+                <div className="info-row">
+                  <span className="info-label">Personal Email</span>
+                  <span className="info-value">{user.personal_email || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Professional Email</span>
+                  <span className="info-value">{user.email || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Recovery Email</span>
+                  <span className="info-value">{user.recovery_email || "---"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Employment Details */}
+            <div className="profile-info-card">
+              <div className="info-card-header">
+                <h3>Employment Details</h3>
+              </div>
+              <div className="info-card-body">
+                <div className="info-row">
+                  <span className="info-label">Designation</span>
+                  <span className="info-value">{user.designation || "---"}</span>
+                </div>
+                <div className="info-row">
                   <span className="info-label">Department</span>
                   <span className="info-value">{user.department || "---"}</span>
                 </div>
                 <div className="info-row">
-                  <span className="info-label">Email Address</span>
-                  <span className="info-value">{user.email || "---"}</span>
+                  <span className="info-label">Hired For</span>
+                  <span className="info-value">{user.hired_for || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Employee Code</span>
+                  <span className="info-value">{user.employee_code || "---"}</span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Role</span>
@@ -300,17 +463,77 @@ function UserProfile() {
                   </span>
                 </div>
                 <div className="info-row">
-                  <span className="info-label">Employee Code</span>
-                  <span className="info-value">{user.employee_code || "---"}</span>
+                  <span className="info-label">Job Started Date</span>
+                  <span className="info-value">{user.job_started_date ? new Date(user.job_started_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "---"}</span>
                 </div>
                 <div className="info-row">
-                  <span className="info-label">Phone Number</span>
-                  <span className="info-value">{user.contact_no || "---"}</span>
+                  <span className="info-label">Job Ended Date</span>
+                  <span className="info-value">{user.job_ended_date ? new Date(user.job_ended_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "---"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Salary & Bank Details */}
+            <div className="profile-info-card">
+              <div className="info-card-header">
+                <h3>Salary & Bank Details</h3>
+              </div>
+              <div className="info-card-body">
+                <div className="info-row">
+                  <span className="info-label">Gross Salary</span>
+                  <span className="info-value">{user.gross_salary ? `USD ${Number(user.gross_salary).toLocaleString()}` : "---"}</span>
                 </div>
                 <div className="info-row">
-                  <span className="info-label">Location</span>
-                  <span className="info-value">{user.address || "---"}</span>
+                  <span className="info-label">Applied Via</span>
+                  <span className="info-value">{user.applied_via || "---"}</span>
                 </div>
+                <div className="info-row">
+                  <span className="info-label">Bank Name</span>
+                  <span className="info-value">{user.bank_name || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Bank Account Number</span>
+                  <span className="info-value">{user.bank_account_number || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Bank Account Title</span>
+                  <span className="info-value">{user.bank_account_title || "---"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Documents */}
+            <div className="profile-info-card">
+              <div className="info-card-header">
+                <h3>Documents</h3>
+              </div>
+              <div className="info-card-body">
+                {[
+                  { label: "Employment Contract", key: "employment_contract" },
+                  { label: "Offer Letter", key: "offer_letter" },
+                  { label: "Techxaro Regulations", key: "techxaro_regulations" },
+                  { label: "Latest Educational Certificate", key: "latest_education_cert" },
+                  { label: "CV", key: "cv" },
+                  { label: "Previous Job Experience Letter", key: "previous_exp_letter" },
+                  { label: "Previous Salary Slip", key: "previous_salary_slip" },
+                  { label: "Other Document", key: "other_document" },
+                ].map(({ label, key }) => (
+                  <div className="info-row" key={key}>
+                    <span className="info-label">{label}</span>
+                    <span className="info-value">
+                      {user[key] ? (
+                        <a
+                          href={`${API_URL}/users/${userId}/documents/${key}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: "#2563eb", textDecoration: "underline" }}
+                        >
+                          View File
+                        </a>
+                      ) : "---"}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -387,117 +610,93 @@ function UserProfile() {
               </div>
 
               <form className="user-form" onSubmit={handleEditSubmit}>
+                {/* ===== Personal Information ===== */}
+                <h3 className="form-section-title">Personal Information</h3>
                 <div className="user-form-grid">
                   <div className="form-row">
-                    <label htmlFor="edit-name">Full Name</label>
-                    <input
-                      type="text"
-                      id="edit-name"
-                      name="name"
-                      value={editUser.name}
-                      onChange={handleEditChange}
-                      placeholder="Enter full name"
-                      className={editErrors.name ? "field-error" : ""}
-                    />
+                    <label htmlFor="edit-name">Employee Full Name *</label>
+                    <input type="text" id="edit-name" name="name" value={editUser.name} onChange={handleEditChange} placeholder="Enter full name" className={editErrors.name ? "field-error" : ""} />
                     {editErrors.name && <span className="field-error-text">{editErrors.name}</span>}
                   </div>
                   <div className="form-row">
-                    <label htmlFor="edit-email">Email Address</label>
-                    <input
-                      type="email"
-                      id="edit-email"
-                      name="email"
-                      value={editUser.email}
-                      onChange={handleEditChange}
-                      placeholder="Enter email address"
-                      className={editErrors.email ? "field-error" : ""}
-                    />
+                    <label htmlFor="edit-father_name">Father Name *</label>
+                    <input type="text" id="edit-father_name" name="father_name" value={editUser.father_name} onChange={handleEditChange} placeholder="Enter father name" className={editErrors.father_name ? "field-error" : ""} />
+                    {editErrors.father_name && <span className="field-error-text">{editErrors.father_name}</span>}
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="edit-id_card_number">ID Card Number *</label>
+                    <input type="text" id="edit-id_card_number" name="id_card_number" value={editUser.id_card_number} onChange={handleEditChange} placeholder="Enter ID card number" className={editErrors.id_card_number ? "field-error" : ""} />
+                    {editErrors.id_card_number && <span className="field-error-text">{editErrors.id_card_number}</span>}
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="edit-phone_number">Phone Number *</label>
+                    <input type="text" id="edit-phone_number" name="phone_number" value={editUser.phone_number} onChange={handleEditChange} placeholder="Enter phone number" className={editErrors.phone_number ? "field-error" : ""} />
+                    {editErrors.phone_number && <span className="field-error-text">{editErrors.phone_number}</span>}
+                  </div>
+                </div>
+
+                {/* ===== Address ===== */}
+                <h3 className="form-section-title">Address</h3>
+                <div className="user-form-grid">
+                  <div className="form-row">
+                    <label htmlFor="edit-present_address">Present Address *</label>
+                    <input type="text" id="edit-present_address" name="present_address" value={editUser.present_address} onChange={handleEditChange} placeholder="Enter present address" className={editErrors.present_address ? "field-error" : ""} />
+                    {editErrors.present_address && <span className="field-error-text">{editErrors.present_address}</span>}
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="edit-permanent_address">Permanent Address</label>
+                    <input type="text" id="edit-permanent_address" name="permanent_address" value={editUser.permanent_address} onChange={handleEditChange} placeholder="Enter permanent address" />
+                  </div>
+                </div>
+
+                {/* ===== Emergency Contact ===== */}
+                <h3 className="form-section-title">Emergency Contact</h3>
+                <div className="user-form-grid">
+                  <div className="form-row">
+                    <label htmlFor="edit-emergency_contact_name">Name</label>
+                    <input type="text" id="edit-emergency_contact_name" name="emergency_contact_name" value={editUser.emergency_contact_name} onChange={handleEditChange} placeholder="Emergency contact name" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="edit-emergency_contact_relation">Relation</label>
+                    <input type="text" id="edit-emergency_contact_relation" name="emergency_contact_relation" value={editUser.emergency_contact_relation} onChange={handleEditChange} placeholder="e.g. Father, Mother, Spouse" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="edit-emergency_contact_phone">Phone</label>
+                    <input type="text" id="edit-emergency_contact_phone" name="emergency_contact_phone" value={editUser.emergency_contact_phone} onChange={handleEditChange} placeholder="Emergency contact phone" />
+                  </div>
+                </div>
+
+                {/* ===== Email Accounts ===== */}
+                <h3 className="form-section-title">Email Accounts</h3>
+                <div className="user-form-grid">
+                  <div className="form-row">
+                    <label htmlFor="edit-personal_email">Personal Email *</label>
+                    <input type="email" id="edit-personal_email" name="personal_email" value={editUser.personal_email} onChange={handleEditChange} placeholder="Enter personal email" className={editErrors.personal_email ? "field-error" : ""} />
+                    {editErrors.personal_email && <span className="field-error-text">{editErrors.personal_email}</span>}
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="edit-email">Professional Email *</label>
+                    <input type="email" id="edit-email" name="email" value={editUser.email} onChange={handleEditChange} placeholder="Enter professional email" className={editErrors.email ? "field-error" : ""} />
                     {editErrors.email && <span className="field-error-text">{editErrors.email}</span>}
                   </div>
                   <div className="form-row">
-                    <label htmlFor="edit-contact">Contact No</label>
-                    <input
-                      type="text"
-                      id="edit-contact"
-                      name="contact_no"
-                      value={editUser.contact_no}
-                      onChange={handleEditChange}
-                      placeholder="Enter contact number"
-                      className={editErrors.contact_no ? "field-error" : ""}
-                    />
-                    {editErrors.contact_no && <span className="field-error-text">{editErrors.contact_no}</span>}
+                    <label htmlFor="edit-recovery_email">Recovery Email</label>
+                    <input type="email" id="edit-recovery_email" name="recovery_email" value={editUser.recovery_email} onChange={handleEditChange} placeholder="Email for recovery" />
                   </div>
+                </div>
+
+                {/* ===== Employment Details ===== */}
+                <h3 className="form-section-title">Employment Details</h3>
+                <div className="user-form-grid">
                   <div className="form-row">
-                    <label htmlFor="edit-address">Address</label>
-                    <input
-                      type="text"
-                      id="edit-address"
-                      name="address"
-                      value={editUser.address}
-                      onChange={handleEditChange}
-                      placeholder="Enter address"
-                      className={editErrors.address ? "field-error" : ""}
-                    />
-                    {editErrors.address && <span className="field-error-text">{editErrors.address}</span>}
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="edit-department">Department</label>
-                    <select
-                      id="edit-department"
-                      name="department"
-                      value={editUser.department}
-                      onChange={handleEditChange}
-                      className={editErrors.department ? "field-error" : ""}
-                    >
-                      <option value="">Select Department</option>
-                      {DEPARTMENTS.map((d) =>
-                        d === "__custom__" ? (
-                          <option key="custom" value="__custom__">
-                            Custom / Type Here
-                          </option>
-                        ) : (
-                          <option key={d} value={d}>
-                            {d}
-                          </option>
-                        )
-                      )}
-                    </select>
-                    {editErrors.department && <span className="field-error-text">{editErrors.department}</span>}
-                  </div>
-                  {editUser.department === "__custom__" && (
-                    <div className="form-row">
-                      <label htmlFor="edit-departmentCustom">Custom Department</label>
-                      <input
-                        type="text"
-                        id="edit-departmentCustom"
-                        name="departmentCustom"
-                        value={editUser.departmentCustom}
-                        onChange={handleEditChange}
-                        placeholder="Enter custom department"
-                        className={editErrors.departmentCustom ? "field-error" : ""}
-                      />
-                      {editErrors.departmentCustom && <span className="field-error-text">{editErrors.departmentCustom}</span>}
-                    </div>
-                  )}
-                  <div className="form-row">
-                    <label htmlFor="edit-designation">Designation</label>
-                    <select
-                      id="edit-designation"
-                      name="designation"
-                      value={editUser.designation}
-                      onChange={handleEditChange}
-                      className={editErrors.designation ? "field-error" : ""}
-                    >
+                    <label htmlFor="edit-designation">Designation / Role *</label>
+                    <select id="edit-designation" name="designation" value={editUser.designation} onChange={handleEditChange} className={editErrors.designation ? "field-error" : ""}>
                       <option value="">Select Designation</option>
                       {DESIGNATIONS.map((d) =>
                         d === "__custom__" ? (
-                          <option key="custom" value="__custom__">
-                            Custom / Type Here
-                          </option>
+                          <option key="custom" value="__custom__">Custom / Type Here</option>
                         ) : (
-                          <option key={d} value={d}>
-                            {d}
-                          </option>
+                          <option key={d} value={d}>{d}</option>
                         )
                       )}
                     </select>
@@ -506,60 +705,131 @@ function UserProfile() {
                   {editUser.designation === "__custom__" && (
                     <div className="form-row">
                       <label htmlFor="edit-designationCustom">Custom Designation</label>
-                      <input
-                        type="text"
-                        id="edit-designationCustom"
-                        name="designationCustom"
-                        value={editUser.designationCustom}
-                        onChange={handleEditChange}
-                        placeholder="Enter custom designation"
-                        className={editErrors.designationCustom ? "field-error" : ""}
-                      />
+                      <input type="text" id="edit-designationCustom" name="designationCustom" value={editUser.designationCustom} onChange={handleEditChange} placeholder="Enter custom designation" className={editErrors.designationCustom ? "field-error" : ""} />
                       {editErrors.designationCustom && <span className="field-error-text">{editErrors.designationCustom}</span>}
                     </div>
                   )}
                   <div className="form-row">
-                    <label htmlFor="edit-employee-code">Employee Code</label>
-                    <input
-                      type="text"
-                      id="edit-employee-code"
-                      name="employee_code"
-                      value={editUser.employee_code}
-                      onChange={handleEditChange}
-                      placeholder="Enter employee code"
-                      className={editErrors.employee_code ? "field-error" : ""}
-                    />
+                    <label htmlFor="edit-department">Department *</label>
+                    <select id="edit-department" name="department" value={editUser.department} onChange={handleEditChange} className={editErrors.department ? "field-error" : ""}>
+                      <option value="">Select Department</option>
+                      {DEPARTMENTS.map((d) =>
+                        d === "__custom__" ? (
+                          <option key="custom" value="__custom__">Custom / Type Here</option>
+                        ) : (
+                          <option key={d} value={d}>{d}</option>
+                        )
+                      )}
+                    </select>
+                    {editErrors.department && <span className="field-error-text">{editErrors.department}</span>}
+                  </div>
+                  {editUser.department === "__custom__" && (
+                    <div className="form-row">
+                      <label htmlFor="edit-departmentCustom">Custom Department</label>
+                      <input type="text" id="edit-departmentCustom" name="departmentCustom" value={editUser.departmentCustom} onChange={handleEditChange} placeholder="Enter custom department" className={editErrors.departmentCustom ? "field-error" : ""} />
+                      {editErrors.departmentCustom && <span className="field-error-text">{editErrors.departmentCustom}</span>}
+                    </div>
+                  )}
+                  <div className="form-row">
+                    <label htmlFor="edit-hired_for">Hired For</label>
+                    <input type="text" id="edit-hired_for" name="hired_for" value={editUser.hired_for} onChange={handleEditChange} placeholder="e.g. Full-time, Part-time, Contract" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="edit-employee_code">Employee Code *</label>
+                    <input type="text" id="edit-employee_code" name="employee_code" value={editUser.employee_code} onChange={handleEditChange} placeholder="Enter employee code" className={editErrors.employee_code ? "field-error" : ""} />
                     {editErrors.employee_code && <span className="field-error-text">{editErrors.employee_code}</span>}
                   </div>
                   <div className="form-row">
-                    <label htmlFor="edit-role">Role</label>
-                    <select
-                      id="edit-role"
-                      name="role"
-                      value={editUser.role}
-                      onChange={handleEditChange}
-                    >
+                    <label htmlFor="edit-role">System Role</label>
+                    <select id="edit-role" name="role" value={editUser.role} onChange={handleEditChange}>
                       <option value="admin">Admin</option>
                       <option value="manager">Manager</option>
                       <option value="team_lead">Team Lead</option>
                       <option value="member">Member</option>
                     </select>
                   </div>
+                  <div className="form-row">
+                    <label htmlFor="edit-job_started_date">Job Started Date *</label>
+                    <input type="date" id="edit-job_started_date" name="job_started_date" value={editUser.job_started_date} onChange={handleEditChange} className={editErrors.job_started_date ? "field-error" : ""} />
+                    {editErrors.job_started_date && <span className="field-error-text">{editErrors.job_started_date}</span>}
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="edit-job_ended_date">Job Ended Date</label>
+                    <input type="date" id="edit-job_ended_date" name="job_ended_date" value={editUser.job_ended_date} onChange={handleEditChange} />
+                  </div>
+                </div>
+
+                {/* ===== Salary & Bank ===== */}
+                <h3 className="form-section-title">Salary & Bank Details</h3>
+                <div className="user-form-grid">
+                  <div className="form-row">
+                    <label htmlFor="edit-gross_salary">Gross Salary</label>
+                    <input type="number" id="edit-gross_salary" name="gross_salary" value={editUser.gross_salary} onChange={handleEditChange} placeholder="Enter gross salary" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="edit-applied_via">Applied Via</label>
+                    <input type="text" id="edit-applied_via" name="applied_via" value={editUser.applied_via} onChange={handleEditChange} placeholder="e.g. Website, Referral, LinkedIn" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="edit-bank_name">Bank Name</label>
+                    <input type="text" id="edit-bank_name" name="bank_name" value={editUser.bank_name} onChange={handleEditChange} placeholder="Enter bank name" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="edit-bank_account_number">Bank Account Number</label>
+                    <input type="text" id="edit-bank_account_number" name="bank_account_number" value={editUser.bank_account_number} onChange={handleEditChange} placeholder="Enter account number" />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="edit-bank_account_title">Bank Account Title</label>
+                    <input type="text" id="edit-bank_account_title" name="bank_account_title" value={editUser.bank_account_title} onChange={handleEditChange} placeholder="Enter account title" />
+                  </div>
+                </div>
+
+                {/* ===== Documents ===== */}
+                <h3 className="form-section-title">Documents</h3>
+                <div className="user-form-grid">
+                  {[
+                    { label: "Employment Contract", key: "employment_contract", accept: ".pdf,.doc,.docx" },
+                    { label: "Offer Letter", key: "offer_letter", accept: ".pdf,.doc,.docx" },
+                    { label: "Techxaro Regulations", key: "techxaro_regulations", accept: ".pdf,.doc,.docx" },
+                    { label: "Latest Educational Certificate", key: "latest_education_cert", accept: ".pdf,.doc,.docx,.jpg,.png" },
+                    { label: "CV", key: "cv", accept: ".pdf,.doc,.docx" },
+                    { label: "Previous Job Experience Letter", key: "previous_exp_letter", accept: ".pdf,.doc,.docx" },
+                    { label: "Previous Salary Slip", key: "previous_salary_slip", accept: ".pdf,.doc,.docx,.jpg,.png" },
+                    { label: "Other Document", key: "other_document", accept: ".pdf,.doc,.docx,.jpg,.png" },
+                  ].map(({ label, key, accept }) => (
+                    <div className="form-row" key={key}>
+                      <label htmlFor={`edit-${key}`}>{label}</label>
+                      {user[key] && !editFiles[key] && (
+                        <div style={{ marginBottom: 6, fontSize: 13, color: "#64748b" }}>
+                          Current: <a href={`${API_URL}/users/${userId}/documents/${key}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>View uploaded file</a>
+                        </div>
+                      )}
+                      <input
+                        type="file"
+                        id={`edit-${key}`}
+                        accept={accept}
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            setEditFiles((prev) => ({ ...prev, [key]: file }));
+                            setFilePreviews((prev) => ({ ...prev, [key]: file.name }));
+                          }
+                        }}
+                      />
+                      {filePreviews[key] && (
+                        <span style={{ fontSize: 12, color: "#16a34a", marginTop: 4 }}>
+                          Selected: {filePreviews[key]}
+                        </span>
+                      )}
+                    </div>
+                  ))}
                 </div>
 
                 <div className="user-form-actions">
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => setIsEditModalOpen(false)}
-                  >
+                  <button type="button" className="secondary-button" onClick={() => setIsEditModalOpen(false)}>
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    className="primary-button"
-                    disabled={saving}
-                  >
+                  <button type="submit" className="primary-button" disabled={saving}>
                     {saving ? "Saving..." : "Update User"}
                   </button>
                 </div>
