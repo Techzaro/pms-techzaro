@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
 import CreateTaskModal from "../components/CreateTaskModal";
 import API_URL from "../config/api";
-import { authToken, getCurrentRole, rolePath } from "../utils/auth";
+import { authToken, rolePath } from "../utils/auth";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
@@ -160,7 +160,6 @@ const Taskby = () => {
             <IoIosArrowDown />
           </div>
 
-          {["admin", "manager"].includes(getCurrentRole()) && (
           <button
             className="export task-btn--mobile"
             onClick={() => setShowTaskModal(true)}
@@ -168,7 +167,6 @@ const Taskby = () => {
           >
             + Task
           </button>
-          )}
         </div>
       </div>
 
@@ -306,7 +304,7 @@ const Taskby = () => {
                   </div>
                   <div>
                     <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>{item.deliverables_progress || 0}%</div>
-                    <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.completed_deliverables || 0}/{item.total_deliverables || 0} deliverables</div>
+                    <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.approved_deliverables || 0}/{item.total_deliverables || 0} Deliverables Approved</div>
                   </div>
                   <div>
                     <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>

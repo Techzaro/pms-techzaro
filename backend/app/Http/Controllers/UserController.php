@@ -233,10 +233,17 @@ class UserController extends Controller
             ], 403);
         }
 
-        if ($authUser->role === 'manager' && $user->role === 'admin') {
+        if ($authUser->role === 'manager' && in_array($user->role, ['admin', 'manager'])) {
             return response()->json([
                 'status' => false,
-                'message' => 'Managers cannot modify administrators.',
+                'message' => 'Managers cannot modify administrators or other managers.',
+            ], 403);
+        }
+
+        if ($authUser->role === 'manager' && $request->has('role') && in_array($request->input('role'), ['admin', 'manager'])) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Managers cannot assign admin or manager roles.',
             ], 403);
         }
 
@@ -321,10 +328,10 @@ class UserController extends Controller
                 ], 422);
             }
 
-            if ($authUser->role === 'manager' && $user->role === 'admin') {
+            if ($authUser->role === 'manager' && in_array($user->role, ['admin', 'manager'])) {
                 return response()->json([
                     'status' => false,
-                    'message' => 'Managers cannot resign administrators.',
+                    'message' => 'Managers cannot resign administrators or other managers.',
                 ], 403);
             }
 

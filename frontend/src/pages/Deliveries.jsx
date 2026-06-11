@@ -175,6 +175,7 @@ function Deliveries() {
               <div className="table-header">
                 <div>Deliverable</div>
                 <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task</div>
+                <div>Assign By</div>
                 <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
                 <div className="date-column" style={{ paddingRight: "30px" }}>Due Date</div>
                 <div>Action</div>
@@ -199,6 +200,15 @@ function Deliveries() {
                       </div>
                       <div>
                         <div className="task-title" style={{ paddingLeft: "40px" }}>{item.task?.title || "-"}</div>
+                      </div>
+                      <div className="user-box">
+                        <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                          {getInitials(item.creator?.name)}
+                        </div>
+                        <div>
+                          <div className="user-name">{item.creator?.name || "-"}</div>
+                          <div className="user-role">{item.creator?.role ? item.creator.role.replace("_", " ") : ""}</div>
+                        </div>
                       </div>
                       <div>
                         <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
@@ -256,6 +266,7 @@ function Deliveries() {
                         </div>
                         <div>
                           <div className="user-name">{item.assignee?.name || "Unassigned"}</div>
+                          <div className="user-role">{item.assignee?.role ? item.assignee.role.replace("_", " ") : ""}</div>
                         </div>
                       </div>
                       <div>

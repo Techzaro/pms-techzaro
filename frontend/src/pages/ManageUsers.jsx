@@ -359,10 +359,10 @@ function ManageUsers() {
 
   const renderUserRow = (user) => {
     const isSelf = currentUserId === user.id;
-    const isTargetAdmin = user.role === "admin";
+    const isTargetProtected = user.role === "admin" || user.role === "manager";
     const isActive = user.active !== false;
     const canModifyUser =
-      isActive && !isSelf && !(currentUserRole === "manager" && isTargetAdmin);
+      isActive && !isSelf && !(currentUserRole === "manager" && isTargetProtected);
 
     return (
       <tr key={user.id} className={!isActive ? "resigned-row" : ""}>

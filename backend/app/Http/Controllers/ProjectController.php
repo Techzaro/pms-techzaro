@@ -23,7 +23,19 @@ class ProjectController extends Controller
      */
     public function index()
     {
-        $projects = Project::with(['creator', 'team'])
+        $user = request()->user();
+
+        $projects = Project::where(function ($q) use ($user) {
+                $q->whereHas('manuallyVisibleTo', fn ($q) => $q->where('user_id', $user->id))
+                  ->orWhere(function ($q) use ($user) {
+                      $q->where(function ($q) use ($user) {
+                          $q->where('created_by', $user->id)
+                            ->orWhereRaw("JSON_CONTAINS(assigned_users, ?)", [json_encode((string) $user->id)])
+                            ->orWhereHas('tasks.assignees', fn ($q) => $q->where('users.id', $user->id));
+                      })->whereDoesntHave('visibility', fn ($q) => $q->where('user_id', $user->id)->where('is_visible', false));
+                  });
+            })
+            ->with(['creator', 'team'])
             ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
                 $q->whereIn('status', ['done', 'completed']);
             }])
@@ -62,10 +74,16 @@ class ProjectController extends Controller
             'milestones.*.title' => 'nullable|string|max:255',
             'milestones.*.due_date' => 'nullable|date',
             'milestones.*.status' => 'nullable|string|max:32',
+            'deliverables' => 'nullable|array',
+            'deliverables.*.title' => 'required_with:deliverables|string|max:255',
+            'deliverables.*.description' => 'nullable|string|max:2000',
+            'deliverables.*.due_date' => 'nullable|date',
         ]);
 
         $milestones = $validated['milestones'] ?? null;
         unset($validated['milestones']);
+        $deliverables = $validated['deliverables'] ?? null;
+        unset($validated['deliverables']);
 
         $validated['created_by'] = $request->user()->id;
         $validated['priority'] = $validated['priority'] ?? 'Medium';
@@ -85,6 +103,24 @@ class ProjectController extends Controller
 
         $project = Project::create($validated);
         $this->replaceProjectMilestones($project, $milestones);
+
+        // Create deliverables if provided
+        if (!empty($deliverables)) {
+            $assignedUsers = $validated['assigned_users'] ?? [];
+            foreach ($deliverables as $del) {
+                foreach ($assignedUsers as $userId) {
+                    $project->deliverables()->create([
+                        'title' => $del['title'],
+                        'description' => $del['description'] ?? null,
+                        'status' => 'pending',
+                        'priority' => $validated['priority'] ?? 'Medium',
+                        'due_date' => $del['due_date'] ?? null,
+                        'assigned_to' => $userId,
+                        'created_by' => $request->user()->id,
+                    ]);
+                }
+            }
+        }
 
         return response()->json([
             'message' => 'Project created successfully',
@@ -107,6 +143,7 @@ class ProjectController extends Controller
             'milestones',
             'activities' => fn ($q) => $q->with('user:id,name')->latest()->limit(30),
             'files',
+            'deliverables' => fn ($q) => $q->with('assignee:id,name,email,role', 'latestSubmission')->latest(),
         ]);
 
         $isCreator = $project->created_by === $user->id;
@@ -115,8 +152,10 @@ class ProjectController extends Controller
             $project->team->members->contains('id', $user->id) ||
             $project->team->leader_id === $user->id
         );
+        $hasTasksUnderProject = $project->tasks()->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))->exists();
+        $isManuallyVisible = $project->manuallyVisibleTo()->where('user_id', $user->id)->exists();
 
-        if (!$isCreator && !$isAssigned && !$isTeamMember && !in_array($user->role, ['admin', 'manager', 'team_lead'])) {
+        if (!$isCreator && !$isAssigned && !$isTeamMember && !$hasTasksUnderProject && !$isManuallyVisible && !in_array($user->role, ['admin', 'manager', 'team_lead'])) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -244,7 +283,7 @@ class ProjectController extends Controller
         $isCreator = $project->created_by === $user->id;
         $isAssigned = in_array($user->id, $project->assigned_users ?? []);
 
-        if (!$isCreator && !$isAssigned && !in_array($user->role, ['admin', 'manager', 'team_lead'])) {
+        if (!$isCreator && !$isAssigned && !in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -330,6 +369,75 @@ class ProjectController extends Controller
             'message' => 'Link added successfully',
             'file' => $attachment,
         ], 201);
+    }
+
+    /**
+     * Get visibility configuration for a project.
+     * Returns all active users with their current visibility status.
+     */
+    public function getVisibility(Project $project)
+    {
+        $user = request()->user();
+        if (!in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $users = User::where('active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'role']);
+
+        $visibility = $project->visibility()->get()->keyBy('user_id');
+
+        $result = $users->map(function ($u) use ($visibility) {
+            $row = $visibility->get($u->id);
+            return [
+                'id' => $u->id,
+                'name' => $u->name,
+                'role' => $u->role,
+                'is_visible' => $row ? (bool) $row->is_visible : false,
+            ];
+        });
+
+        return response()->json(['users' => $result]);
+    }
+
+    /**
+     * Save visibility configuration for a project.
+     * Accepts an array of user IDs that should be visible.
+     * All other users previously configured will be set to not visible.
+     */
+    public function setVisibility(Request $request, Project $project)
+    {
+        $user = $request->user();
+        if (!in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $validated = $request->validate([
+            'user_ids' => 'present|array',
+            'user_ids.*' => 'exists:users,id',
+        ]);
+
+        $newIds = collect($validated['user_ids']);
+        $existing = $project->visibility()->get()->keyBy('user_id');
+
+        foreach ($newIds as $uid) {
+            if ($existing->has($uid)) {
+                $existing->get($uid)->update(['is_visible' => true]);
+                $existing->forget($uid);
+            } else {
+                $project->visibility()->create([
+                    'user_id' => $uid,
+                    'is_visible' => true,
+                ]);
+            }
+        }
+
+        foreach ($existing as $row) {
+            $row->update(['is_visible' => false]);
+        }
+
+        return response()->json(['message' => 'Visibility updated successfully']);
     }
 
     /**

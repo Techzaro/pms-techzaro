@@ -263,7 +263,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   const validateForm = () => {
     const errors = {};
     if (!form.title.trim()) errors.title = "Task Name is required.";
-    if (!projectId && !form.project_id) errors.project_id = "Select a project.";
     if (!form.assigned_to || form.assigned_to.length === 0) errors.assigned_to = "Select at least one user.";
     if (!form.priority) errors.priority = "Priority is required.";
     setFormErrors(errors);
@@ -294,7 +293,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         deliverables: deliverables.length > 0 ? deliverables.map(d => ({ title: d.title, due_date: d.due_date || null })) : undefined,
       };
 
-      const url = `${API_URL}/projects/${projectId || form.project_id}/tasks`;
+      const pid = projectId || form.project_id;
+      const url = pid ? `${API_URL}/projects/${pid}/tasks` : `${API_URL}/tasks`;
       console.log("CreateTaskModal: posting to", url, body);
 
       const response = await fetch(url, {

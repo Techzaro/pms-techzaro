@@ -193,9 +193,14 @@ class DashboardController extends Controller
     private function getUserProjectIds(User $user)
     {
         return Project::where(function ($q) use ($user) {
-            $q->where('created_by', $user->id)
-              ->orWhereJsonContains('assigned_users', $user->id)
-              ->orWhereHas('team.members', fn ($m) => $m->where('users.id', $user->id));
+            $q->whereHas('manuallyVisibleTo', fn ($q) => $q->where('user_id', $user->id))
+              ->orWhere(function ($q) use ($user) {
+                  $q->where(function ($q) use ($user) {
+                      $q->where('created_by', $user->id)
+                        ->orWhereJsonContains('assigned_users', $user->id)
+                        ->orWhereHas('team.members', fn ($m) => $m->where('users.id', $user->id));
+                  })->whereDoesntHave('visibility', fn ($q) => $q->where('user_id', $user->id)->where('is_visible', false));
+              });
         })->pluck('id');
     }
 }

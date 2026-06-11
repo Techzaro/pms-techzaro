@@ -45,6 +45,8 @@ const CreateProjectModal = ({ onClose }) => {
   const [pendingFiles, setPendingFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const [linkInput, setLinkInput] = useState("");
+  const [deliverablesProj, setDeliverablesProj] = useState([]);
+  const [deliverableProjInput, setDeliverableProjInput] = useState({ title: "", due_date: "" });
   const fileInputRef = useRef(null);
   const dropRef = useRef(null);
 
@@ -196,6 +198,20 @@ const CreateProjectModal = ({ onClose }) => {
     if (e.key === "Enter") { e.preventDefault(); handleAddLink(); }
   };
 
+  const handleAddDeliverableProj = () => {
+    if (!deliverableProjInput.title.trim()) return;
+    setDeliverablesProj((prev) => [...prev, { ...deliverableProjInput, title: deliverableProjInput.title.trim() }]);
+    setDeliverableProjInput({ title: "", due_date: "" });
+  };
+
+  const handleRemoveDeliverableProj = (index) => {
+    setDeliverablesProj((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDeliverableProjKeyDown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); handleAddDeliverableProj(); }
+  };
+
   const uploadAttachments = async (projectId, token) => {
     for (const file of pendingFiles) {
       const fd = new FormData();
@@ -260,6 +276,7 @@ const CreateProjectModal = ({ onClose }) => {
         budget: form.budget ? parseFloat(form.budget) : null,
         milestones: milestones.length > 0 ? milestones : [],
         team_roles: form.team_roles,
+        deliverables: deliverablesProj.length > 0 ? deliverablesProj.map(d => ({ title: d.title, due_date: d.due_date || null })) : undefined,
       };
 
       const response = await fetch(`${API_URL}/projects`, {
@@ -616,6 +633,65 @@ const CreateProjectModal = ({ onClose }) => {
                 <div className="cp-deadline-summary">
                   <span>Final Deadline:</span>
                   <strong>{formatDateDisplay(milestones[milestones.length - 1].due_date)}</strong>
+                </div>
+              )}
+            </div>
+
+            {/* DELIVERABLES */}
+            <div className="cp-card">
+              <div className="cp-card-top">
+                <span>Deliverables (Optional)</span>
+              </div>
+
+              <div className="cp-deadline-grid">
+                <div className="cp-field">
+                  <label style={{ fontSize: "13px" }}>Deliverable Name</label>
+                  <input
+                    type="text"
+                    placeholder="Enter deliverable name"
+                    value={deliverableProjInput.title}
+                    onChange={(e) => setDeliverableProjInput((prev) => ({ ...prev, title: e.target.value }))}
+                    onKeyDown={handleDeliverableProjKeyDown}
+                  />
+                </div>
+                <div className="cp-field">
+                  <label style={{ fontSize: "13px" }}>Due Date</label>
+                  <input
+                    type="date"
+                    value={deliverableProjInput.due_date}
+                    onChange={(e) => setDeliverableProjInput((prev) => ({ ...prev, due_date: e.target.value }))}
+                    onKeyDown={handleDeliverableProjKeyDown}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="cp-add-phase-btn"
+                onClick={handleAddDeliverableProj}
+                disabled={!deliverableProjInput.title.trim()}
+              >
+                + Add Deliverable
+              </button>
+
+              {deliverablesProj.length > 0 && (
+                <div className="cp-phase-list">
+                  {deliverablesProj.map((d, index) => (
+                    <div key={index} className="cp-phase-item">
+                      <div className="cp-phase-item-dot" style={{ background: "#8b5cf6" }} />
+                      <div className="cp-phase-item-info">
+                        <div className="cp-phase-item-title">{d.title}</div>
+                        <div className="cp-phase-item-date">{d.due_date ? new Date(d.due_date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "No due date"}</div>
+                      </div>
+                      <button
+                        type="button"
+                        className="cp-phase-item-remove"
+                        onClick={() => handleRemoveDeliverableProj(index)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
