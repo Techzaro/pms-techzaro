@@ -104,6 +104,16 @@ class Project extends Model
         return $this->hasMany(Deliverable::class)->latest();
     }
 
+    public function visibility()
+    {
+        return $this->hasMany(ProjectVisibility::class);
+    }
+
+    public function manuallyVisibleTo()
+    {
+        return $this->hasMany(ProjectVisibility::class)->where('is_visible', true);
+    }
+
     /**
      * Resolve assigned_users JSON array to User models.
      */

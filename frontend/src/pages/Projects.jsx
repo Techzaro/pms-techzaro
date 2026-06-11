@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import CreateProjectModal from "../components/CreateProjectModal";
-import { IoSearchOutline } from "react-icons/io5";
+import { IoSearchOutline, IoEyeOutline, IoClose } from "react-icons/io5";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import "./Projects.css";
@@ -12,6 +12,10 @@ function Projects() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [visibilityProject, setVisibilityProject] = useState(null);
+  const [visibilityUsers, setVisibilityUsers] = useState([]);
+  const [visibilitySelected, setVisibilitySelected] = useState({});
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
 
   const navigate = useNavigate();
 
@@ -48,6 +52,60 @@ function Projects() {
       setLoading(false);
     }
   };
+
+  const openVisibility = async (project, e) => {
+    e.stopPropagation();
+    setVisibilityProject(project);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/projects/${project.id}/visibility`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load visibility");
+      const data = await res.json();
+      const users = data.users || [];
+      setVisibilityUsers(users);
+      const selected = {};
+      users.forEach((u) => { if (u.is_visible) selected[u.id] = true; });
+      setVisibilitySelected(selected);
+    } catch {
+      setVisibilityUsers([]);
+      setVisibilitySelected({});
+    }
+  };
+
+  const closeVisibility = () => {
+    setVisibilityProject(null);
+    setVisibilityUsers([]);
+    setVisibilitySelected({});
+  };
+
+  const toggleVisibilityUser = (userId) => {
+    setVisibilitySelected((prev) => ({ ...prev, [userId]: !prev[userId] }));
+  };
+
+  const saveVisibility = async () => {
+    if (!visibilityProject) return;
+    setVisibilitySaving(true);
+    try {
+      const token = authToken();
+      const userIds = Object.keys(visibilitySelected).filter((id) => visibilitySelected[id]).map(Number);
+      const res = await fetch(`${API_URL}/projects/${visibilityProject.id}/visibility`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ user_ids: userIds }),
+      });
+      if (!res.ok) throw new Error("Failed to save visibility");
+      closeVisibility();
+    } catch (err) {
+      console.error("Save visibility error:", err);
+    } finally {
+      setVisibilitySaving(false);
+    }
+  };
+
+  const role = getCurrentRole();
+  const isAdminOrManager = role === "admin" || role === "manager";
 
   const calculateProgress = (project) => {
     const total = project.total_tasks ?? 0;
@@ -128,7 +186,7 @@ function Projects() {
               </select>
             </div>
 
-            {getCurrentRole() !== "member" && (
+            {isAdminOrManager && (
               <button
                 className="create-btn"
                 onClick={() => setShowModal(true)}
@@ -219,12 +277,23 @@ function Projects() {
                       {displayStatus}
                     </span>
 
-                    <button
-                      className="view-details-btn"
-                      onClick={() => navigate(rolePath(`projects/project-details/${project.id}`))}
-                    >
-                      View →
-                    </button>
+                    <div className="project-card-actions-right">
+                      {isAdminOrManager && (
+                        <button
+                          className="show-to-btn"
+                          onClick={(e) => openVisibility(project, e)}
+                          title="Manage visibility"
+                        >
+                          <IoEyeOutline /> Show To
+                        </button>
+                      )}
+                      <button
+                        className="view-details-btn"
+                        onClick={() => navigate(rolePath(`projects/project-details/${project.id}`))}
+                      >
+                        View →
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -232,6 +301,41 @@ function Projects() {
           )}
         </div>
       </div>
+
+      {/* VISIBILITY MODAL */}
+      {visibilityProject && (
+        <div className="modal-overlay" onClick={closeVisibility}>
+          <div className="sv-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="sv-modal-header">
+              <h3>Show To — {visibilityProject.title}</h3>
+              <button className="sv-close-btn" onClick={closeVisibility}><IoClose /></button>
+            </div>
+            <div className="sv-modal-body">
+              {visibilityUsers.length === 0 ? (
+                <p className="sv-muted">Loading users...</p>
+              ) : (
+                visibilityUsers.map((u) => (
+                  <label key={u.id} className="sv-user-row">
+                    <input
+                      type="checkbox"
+                      checked={!!visibilitySelected[u.id]}
+                      onChange={() => toggleVisibilityUser(u.id)}
+                    />
+                    <span className="sv-user-name">{u.name}</span>
+                    <span className="sv-user-role">({u.role.replace("_", " ")})</span>
+                  </label>
+                ))
+              )}
+            </div>
+            <div className="sv-modal-footer">
+              <button className="sv-cancel-btn" onClick={closeVisibility}>Cancel</button>
+              <button className="sv-save-btn" onClick={saveVisibility} disabled={visibilitySaving}>
+                {visibilitySaving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="modal-overlay">

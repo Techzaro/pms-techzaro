@@ -48,6 +48,7 @@ function UserProfile() {
   const [messageType, setMessageType] = useState("");
   const [editFiles, setEditFiles] = useState({});
   const [filePreviews, setFilePreviews] = useState({});
+  const [currentUserRole] = useState(() => getCurrentRole());
 
   const DEPARTMENTS = [
     "Digital Marketing",
@@ -348,9 +349,11 @@ function UserProfile() {
             <div className="profile-info-card">
               <div className="info-card-header">
                 <h3>Personal Information</h3>
+                {(!["admin", "manager"].includes(user.role) || currentUserRole === "admin") && (
                 <button className="btn-edit" onClick={openEditModal} disabled={!user.active} style={!user.active ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
                   <MdEdit size={16} /> Edit
                 </button>
+                )}
               </div>
               <div className="info-card-body">
                 <div className="info-row">
@@ -741,8 +744,8 @@ function UserProfile() {
                   <div className="form-row">
                     <label htmlFor="edit-role">System Role</label>
                     <select id="edit-role" name="role" value={editUser.role} onChange={handleEditChange}>
-                      <option value="admin">Admin</option>
-                      <option value="manager">Manager</option>
+                      {getCurrentRole() === "admin" && <option value="admin">Admin</option>}
+                      {getCurrentRole() === "admin" && <option value="manager">Manager</option>}
                       <option value="team_lead">Team Lead</option>
                       <option value="member">Member</option>
                     </select>

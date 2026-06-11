@@ -30,12 +30,35 @@ class DeliverableController extends Controller
         ]);
 
         if ($view === 'assignee') {
-            $query->where('assigned_to', $user->id);
+            $query->where('assigned_to', $user->id)
+                  ->where('created_by', '!=', $user->id);
         } else {
             $query->where('created_by', $user->id);
         }
 
         $deliverables = $query->latest()
+            ->filter($request->query())
+            ->paginate(15);
+
+        return response()->json($deliverables);
+    }
+
+    /**
+     * Self deliverables: where user is both creator AND assignee.
+     */
+    public function mySelfDeliverables(Request $request)
+    {
+        $user = $request->user();
+
+        $deliverables = Deliverable::with([
+            'project:id,title',
+            'assignee:id,name,email,role',
+            'creator:id,name,role',
+            'task:id,title',
+        ])
+            ->where('assigned_to', $user->id)
+            ->where('created_by', $user->id)
+            ->latest()
             ->filter($request->query())
             ->paginate(15);
 
@@ -141,7 +164,7 @@ class DeliverableController extends Controller
         $user = request()->user();
         $isCreator = $deliverable->created_by === $user->id;
 
-        if (!$isCreator && !in_array($user->role, ['admin'])) {
+        if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 

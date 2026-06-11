@@ -100,9 +100,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/projects/{project}', [ProjectController::class, 'show']);
 
     /*
-    | PROJECT MANAGEMENT - WRITE (admin, manager, team_lead)
+    | PROJECT MANAGEMENT - WRITE (admin and manager only)
     */
-    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
         Route::post('/projects', [ProjectController::class, 'store']);
         Route::put('/projects/{project}', [ProjectController::class, 'update']);
         Route::patch('/projects/{project}', [ProjectController::class, 'patch']);
@@ -112,12 +112,21 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/projects/{project}/files/{file}', [ProjectController::class, 'deleteFile']);
     });
 
+    // Project visibility (admin and manager only)
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
+        Route::get('/projects/{project}/visibility', [ProjectController::class, 'getVisibility']);
+        Route::post('/projects/{project}/visibility', [ProjectController::class, 'setVisibility']);
+    });
+
     // Project completion (any assigned user can mark it complete)
     Route::post('/projects/{project}/complete', [ProjectController::class, 'completeProject']);
 
     /*
     | TASK MANAGEMENT
     */
+
+    // Standalone task creation (no project required)
+    Route::post('/tasks', [TaskController::class, 'storeStandalone']);
 
     // Tasks under a project (any authenticated user can create)
     Route::post('/projects/{project}/tasks', [TaskController::class, 'store']);
@@ -132,15 +141,17 @@ Route::middleware('auth:sanctum')->group(function () {
     // Subtask creation under a parent task
     Route::post('/tasks/{task}/subtasks', [TaskController::class, 'storeSubtask']);
 
-    // My tasks / Assigned by me
+    // My tasks / Assigned by me / Self tasks
     Route::get('/my-tasks', [TaskController::class, 'myTasks']);
     Route::get('/assigned-tasks', [TaskController::class, 'assignedByMe']);
+    Route::get('/self-tasks', [TaskController::class, 'mySelfTasks']);
 
     /*
     | DELIVERABLES
     */
     Route::get('/deliverables', [DeliverableController::class, 'index']);
     Route::get('/deliverables/{deliverable}', [DeliverableController::class, 'show']);
+    Route::get('/self-deliverables', [DeliverableController::class, 'mySelfDeliverables']);
 
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
         Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']);
@@ -182,41 +193,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reports/project/{project}', [ReportController::class, 'projectReport']);
 
     /*
-    | ROLE BASED ROUTES (Legacy - kept for backward compatibility)
+    | ROLE BASED DASHBOARD INFO (all roles)
     */
-
-    // ADMIN ROUTES
-    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin')->group(function () {
-        Route::get('/admin-dashboard', function () {
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead,member')->group(function () {
+        Route::get('/role-dashboard', function (Request $request) {
             return response()->json([
-                'message' => 'Welcome Admin'
-            ]);
-        });
-    });
-
-    // MANAGER ROUTES
-    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':manager')->group(function () {
-        Route::get('/manager-dashboard', function () {
-            return response()->json([
-                'message' => 'Welcome Manager'
-            ]);
-        });
-    });
-
-    // TEAM LEAD ROUTES
-    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':team_lead')->group(function () {
-        Route::get('/teamlead-dashboard', function () {
-            return response()->json([
-                'message' => 'Welcome Team Lead'
-            ]);
-        });
-    });
-
-    // MEMBER ROUTES
-    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':member')->group(function () {
-        Route::get('/member-dashboard', function () {
-            return response()->json([
-                'message' => 'Welcome Member'
+                'message' => 'Welcome ' . ucfirst(str_replace('_', ' ', $request->user()->role)),
+                'role' => $request->user()->role,
             ]);
         });
     });

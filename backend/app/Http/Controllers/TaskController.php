@@ -20,6 +20,7 @@ class TaskController extends Controller
         $user = $request->user();
 
         $tasks = Task::whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+            ->where('assigned_by', '!=', $user->id)
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
             ->latest()
             ->filter($request->query())
@@ -35,35 +36,88 @@ class TaskController extends Controller
             return $task;
         });
 
-        $projects = Project::where(function ($q) use ($user) {
-                $q->where('created_by', $user->id)
-                  ->orWhereRaw("JSON_CONTAINS(assigned_users, ?)", [json_encode($user->id)]);
-            })
-            ->with(['creator:id,name,role', 'team:id,name'])
-            ->latest()
-            ->get()
-            ->map(function ($project) {
-                $project->item_type = 'project';
-                $project->total_tasks = $project->tasks()->count();
-                $project->completed_tasks = $project->tasks()->whereIn('status', ['done', 'completed'])->count();
-                return $project;
-            });
+    $projects = Project::where(function ($q) use ($user) {
+            $q->whereHas('manuallyVisibleTo', fn ($q) => $q->where('user_id', $user->id))
+              ->orWhere(function ($q) use ($user) {
+                  $q->where(function ($q) use ($user) {
+                      $q->where('created_by', $user->id)
+                        ->orWhereRaw("JSON_CONTAINS(assigned_users, ?)", [json_encode((string) $user->id)])
+                        ->orWhereHas('tasks.assignees', fn ($q) => $q->where('users.id', $user->id));
+                  })->whereDoesntHave('visibility', fn ($q) => $q->where('user_id', $user->id)->where('is_visible', false));
+              });
+        })
+        ->with(['creator:id,name,role', 'team:id,name'])
+        ->latest()
+        ->get()
+        ->map(function ($project) {
+            $project->item_type = 'project';
+            $project->total_tasks = $project->tasks()->count();
+            $project->completed_tasks = $project->tasks()->whereIn('status', ['done', 'completed'])->count();
+            return $project;
+        });
 
-        $allItems = $tasks->getCollection()->merge($projects)->sortByDesc('created_at')->values();
+    $allItems = $tasks->getCollection()->merge($projects)->sortByDesc('created_at')->values();
 
-        return response()->json([
-            'data' => $allItems,
-            'current_page' => $tasks->currentPage(),
-            'last_page' => $tasks->lastPage(),
-            'per_page' => $tasks->perPage(),
-            'total' => $tasks->total() + $projects->count(),
-        ]);
-    }
+    return response()->json([
+        'data' => $allItems,
+        'current_page' => $tasks->currentPage(),
+        'last_page' => $tasks->lastPage(),
+        'per_page' => $tasks->perPage(),
+        'total' => $tasks->total() + $projects->count(),
+    ]);
+}
 
-    /**
-     * Tasks and projects assigned BY the current user (creator).
-     */
-    public function assignedByMe(Request $request)
+/**
+ * Self tasks: tasks and projects where the user is both creator AND assignee.
+ */
+public function mySelfTasks(Request $request)
+{
+    $user = $request->user();
+
+    $tasks = Task::where('assigned_by', $user->id)
+        ->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+        ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
+        ->latest()
+        ->filter($request->query())
+        ->paginate(15);
+
+    $tasks->getCollection()->transform(function ($task) {
+        $task->item_type = 'task';
+        $total = $task->deliverables()->count();
+        $completed = $task->deliverables()->whereIn('status', ['approved'])->count();
+        $task->total_deliverables = $total;
+        $task->completed_deliverables = $completed;
+        $task->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
+        return $task;
+    });
+
+    $projects = Project::where('created_by', $user->id)
+        ->whereRaw("JSON_CONTAINS(assigned_users, ?)", [json_encode((string) $user->id)])
+        ->with(['creator:id,name,role', 'team:id,name'])
+        ->latest()
+        ->get()
+        ->map(function ($project) {
+            $project->item_type = 'project';
+            $project->total_tasks = $project->tasks()->count();
+            $project->completed_tasks = $project->tasks()->whereIn('status', ['done', 'completed'])->count();
+            return $project;
+        });
+
+    $allItems = $tasks->getCollection()->merge($projects)->sortByDesc('created_at')->values();
+
+    return response()->json([
+        'data' => $allItems,
+        'current_page' => $tasks->currentPage(),
+        'last_page' => $tasks->lastPage(),
+        'per_page' => $tasks->perPage(),
+        'total' => $tasks->total() + $projects->count(),
+    ]);
+}
+
+/**
+ * Tasks and projects assigned BY the current user (creator).
+ */
+public function assignedByMe(Request $request)
     {
         $user = $request->user();
         $userId = $user->id;
@@ -91,7 +145,16 @@ class TaskController extends Controller
             }
         }
 
-        $projects = Project::where('created_by', $userId)
+        $projects = Project::where(function ($q) use ($user) {
+                $q->whereHas('manuallyVisibleTo', fn ($q) => $q->where('user_id', $user->id))
+                  ->orWhere(function ($q) use ($user) {
+                      $q->where(function ($q) use ($user) {
+                          $q->where('created_by', $user->id)
+                            ->orWhereRaw("JSON_CONTAINS(assigned_users, ?)", [json_encode((string) $user->id)])
+                            ->orWhereHas('tasks.assignees', fn ($q) => $q->where('users.id', $user->id));
+                      })->whereDoesntHave('visibility', fn ($q) => $q->where('user_id', $user->id)->where('is_visible', false));
+                  });
+            })
             ->with(['creator:id,name,role', 'team:id,name'])
             ->latest()
             ->get();
@@ -226,6 +289,69 @@ class TaskController extends Controller
                 foreach ($validated['deliverables'] as $del) {
                     $project->deliverables()->create([
                         'task_id' => $task->id,
+                        'title' => $del['title'],
+                        'description' => $del['description'] ?? null,
+                        'status' => 'pending',
+                        'priority' => $validated['priority'],
+                        'due_date' => $del['due_date'] ?? $validated['end_date'] ?? null,
+                        'assigned_to' => $userId,
+                        'created_by' => $user->id,
+                    ]);
+                }
+            }
+
+            $createdTasks[] = $task;
+        }
+
+        $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');
+        $firstTask->loadCount('deliverables');
+
+        return response()->json([
+            'message' => count($createdTasks) . ' task(s) created successfully',
+            'task' => $firstTask,
+            'tasks' => array_map(fn ($t) => ['id' => $t->id, 'assigned_to' => $t->assigned_to], $createdTasks),
+        ], 201);
+    }
+
+    public function storeStandalone(Request $request)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'requirements' => 'nullable|array',
+            'requirements.*' => 'required_with:requirements|string|max:500',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
+            'assigned_to' => 'required|array|min:1',
+            'assigned_to.*' => 'exists:users,id',
+            'priority' => 'required|string|max:32',
+            'deliverables' => 'nullable|array',
+            'deliverables.*.title' => 'required_with:deliverables|string|max:255',
+            'deliverables.*.description' => 'nullable|string|max:2000',
+            'deliverables.*.due_date' => 'nullable|date',
+        ]);
+
+        $createdTasks = [];
+        foreach ($validated['assigned_to'] as $userId) {
+            $task = Task::create([
+                'title' => $validated['title'],
+                'description' => $validated['description'] ?? null,
+                'requirements' => $validated['requirements'] ?? null,
+                'start_date' => $validated['start_date'] ?? now()->toDateTimeString(),
+                'end_date' => $validated['end_date'] ?? null,
+                'assigned_to' => $userId,
+                'assigned_by' => $user->id,
+                'priority' => $validated['priority'],
+                'status' => 'pending',
+                'project_id' => null,
+            ]);
+            $task->assignees()->sync([$userId]);
+
+            if (!empty($validated['deliverables'])) {
+                foreach ($validated['deliverables'] as $del) {
+                    $task->deliverables()->create([
                         'title' => $del['title'],
                         'description' => $del['description'] ?? null,
                         'status' => 'pending',

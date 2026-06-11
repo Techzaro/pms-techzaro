@@ -358,11 +358,9 @@ function ProjectDetails() {
 
   const tabs = [
     { id: "overview", label: "Overview", icon: ListChecks },
-    { id: "tasks", label: "Tasks", icon: Calendar },
-    { id: "team", label: "Team", icon: Users },
-    { id: "activity", label: "Activity", icon: Activity },
+    { id: "deliverables", label: "Deliverables", icon: Calendar },
     { id: "files", label: "Files", icon: FolderOpen },
-   
+    { id: "activity", label: "Activity", icon: Activity },
   ];
 
   /**
@@ -754,55 +752,49 @@ function ProjectDetails() {
               <div className="pd-shell-body">
                 {tab === "overview" && <div className="pd-tab-panel">{overviewInner}</div>}
 
-                {tab === "tasks" && (
+                {tab === "deliverables" && (
                   <div className="pd-tab-panel">
                     <section className="pd-card-flat pd-card-flat--table">
                       <div className="pd-card-flat__head">
-                        <h2 className="pd-block-title pd-block-title--inline">All tasks</h2>
-                        {["admin", "manager"].includes(getCurrentRole()) && (
-                          <button className="pd-btn-assign" onClick={() => setShowTaskModal(true)}>
-                            + Assign Task
-                          </button>
-                        )}
+                        <h2 className="pd-block-title pd-block-title--inline">Deliverables</h2>
                       </div>
                       <div className="pd-table-wrap">
                         <table className="pd-table">
                           <thead>
                             <tr>
-                              <th>Task</th>
-                              <th>Assignee</th>
+                              <th>Deliverable</th>
+                              <th>Assigned To</th>
+                              <th>Due Date</th>
                               <th>Status</th>
-                              <th>Priority</th>
-                              <th>Due</th>
-                              <th />
+                              <th>Action</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {tasks.length === 0 ? (
+                            {(project.deliverables || []).length === 0 ? (
                               <tr>
-                                <td colSpan={6} className="pd-muted pd-table-empty">
-                                  No tasks.
+                                <td colSpan={5} className="pd-muted pd-table-empty">
+                                  No deliverables.
                                 </td>
                               </tr>
                             ) : (
-                              tasks.map((t) => (
-                                <tr key={t.id}>
-                                  <td className="pd-table-strong">{t.title}</td>
-                                  <td>{t.assignees?.map((a) => a.name).join(", ") || "—"}</td>
+                              (project.deliverables || []).map((d) => (
+                                <tr key={d.id}>
+                                  <td className="pd-table-strong">{d.title}</td>
+                                  <td>{d.assignee?.name || "—"}</td>
+                                  <td>{formatShortDate(d.due_date)}</td>
                                   <td>
-                                    <span className={`pd-pill pd-pill--task-${statusSlug(taskStatusLabel(t.status))}`}>
-                                      {taskStatusLabel(t.status)}
+                                    <span className={`pd-pill pd-pill--task-${statusSlug(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status)}`}>
+                                      {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}
                                     </span>
                                   </td>
                                   <td>
-                                    <span className={`pd-pill pd-pill--pri-${(t.priority || "medium").toLowerCase()}`}>
-                                      {t.priority}
-                                    </span>
-                                  </td>
-                                  <td>{formatShortDate(t.end_date)}</td>
-                                  <td>
-                                    <button type="button" className="pd-icon-del" onClick={() => handleDeleteTask(t.id)}>
-                                      <Trash2 size={16} />
+                                    <button
+                                      type="button"
+                                      className="pd-btn-tx pd-btn-tx--outline"
+                                      style={{ padding: "4px 12px", fontSize: "12px" }}
+                                      onClick={() => navigate(rolePath(`deliveries/deliverable-details/${d.id}`))}
+                                    >
+                                      View
                                     </button>
                                   </td>
                                 </tr>
@@ -811,58 +803,6 @@ function ProjectDetails() {
                           </tbody>
                         </table>
                       </div>
-                    </section>
-
-                  </div>
-                )}
-
-                {tab === "team" && (
-                  <div className="pd-tab-panel">
-                    <section className="pd-card-flat">
-                      <h2 className="pd-block-title">Linked team</h2>
-                      {project.team ? (
-                        <div className="pd-team-block">
-                          <p>
-                            <strong>{project.team.name}</strong>
-                          </p>
-                          {project.team.leader && <p className="pd-muted">Team lead: {project.team.leader.name}</p>}
-                          {project.team.members?.length > 0 && (
-                            <ul className="pd-team-members">
-                              {project.team.members.map((m) => (
-                                <li key={m.id}>
-                                  {m.name} <span className="pd-muted">({m.role})</span>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="pd-muted">No team linked to this project.</p>
-                      )}
-                    </section>
-                  </div>
-                )}
-
-                {tab === "activity" && (
-                  <div className="pd-tab-panel">
-                    <section className="pd-card-flat">
-                      <h2 className="pd-block-title">Project activity</h2>
-                      <ul className="pd-feed pd-feed--full">
-                        {activities.length === 0 ? (
-                          <li className="pd-muted">No activity yet.</li>
-                        ) : (
-                          activities.map((a) => (
-                            <li key={a.id} className="pd-feed__row">
-                              <div className="pd-avatar pd-avatar--sm">{initials(a.user?.name || "?")}</div>
-                              <div>
-                                <span className="pd-feed__who">{a.user?.name || "System"}</span>{" "}
-                                <span className="pd-feed__text">{a.summary}</span>
-                                <div className="pd-feed__when">{timeAgo(a.created_at)}</div>
-                              </div>
-                            </li>
-                          ))
-                        )}
-                      </ul>
                     </section>
                   </div>
                 )}
@@ -893,25 +833,26 @@ function ProjectDetails() {
                   </div>
                 )}
 
-                {tab === "settings" && (
+                {tab === "activity" && (
                   <div className="pd-tab-panel">
                     <section className="pd-card-flat">
-                      <h2 className="pd-block-title">Sheets & documents</h2>
-                      {project.sheets_documents ? (
-                        <div className="pd-rich" dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.sheets_documents) }} />
-                      ) : (
-                        <p className="pd-muted">None.</p>
-                      )}
-                    </section>
-                    <section className="pd-card-flat">
-                      <h2 className="pd-block-title">Website</h2>
-                      {project.website_link ? (
-                        <a href={project.website_link} className="pd-ext-link" target="_blank" rel="noopener noreferrer">
-                          {project.website_name || project.website_link}
-                        </a>
-                      ) : (
-                        <p className="pd-muted">No website.</p>
-                      )}
+                      <h2 className="pd-block-title">Project activity</h2>
+                      <ul className="pd-feed pd-feed--full">
+                        {activities.length === 0 ? (
+                          <li className="pd-muted">No activity yet.</li>
+                        ) : (
+                          activities.map((a) => (
+                            <li key={a.id} className="pd-feed__row">
+                              <div className="pd-avatar pd-avatar--sm">{initials(a.user?.name || "?")}</div>
+                              <div>
+                                <span className="pd-feed__who">{a.user?.name || "System"}</span>{" "}
+                                <span className="pd-feed__text">{a.summary}</span>
+                                <div className="pd-feed__when">{timeAgo(a.created_at)}</div>
+                              </div>
+                            </li>
+                          ))
+                        )}
+                      </ul>
                     </section>
                   </div>
                 )}

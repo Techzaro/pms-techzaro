@@ -36,6 +36,15 @@ function Sidebar() {
     });
   };
 
+  const [deliverablesOpen, setDeliverablesOpen] = useState(() => sessionStorage.getItem("deliverablesOpen") === "true");
+  const toggleDeliverables = () => {
+    setDeliverablesOpen((prev) => {
+      const next = !prev;
+      sessionStorage.setItem("deliverablesOpen", next);
+      return next;
+    });
+  };
+
   const [user, setUserState] = useState(() => {
     const stored = getUser();
     return {
@@ -82,6 +91,7 @@ function Sidebar() {
     const isTasksRoute =
       isActive("tasks") ||
       isActive("taskby") ||
+      isActive("self-tasks") ||
       location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`);
 
     if (isTasksRoute) {
@@ -90,6 +100,19 @@ function Sidebar() {
     } else {
       setTasksOpen(false);
       sessionStorage.setItem("tasksOpen", false);
+    }
+
+    const isDeliverablesRoute =
+      isActive("deliveries") ||
+      isActive("self-deliveries") ||
+      location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`);
+
+    if (isDeliverablesRoute) {
+      setDeliverablesOpen(true);
+      sessionStorage.setItem("deliverablesOpen", true);
+    } else {
+      setDeliverablesOpen(false);
+      sessionStorage.setItem("deliverablesOpen", false);
     }
   }, [location.pathname]);
 
@@ -155,14 +178,41 @@ function Sidebar() {
             <span>Dashboard</span>
           </Link>
 
-          <Link
-            to={rolePath("deliveries")}
-            className={`sidebar-link ${isActiveOrStart("deliveries") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "active" : ""}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MdAssignment />
-            <span>Deliverables</span>
-          </Link>
+          {/* DELIVERABLES DROPDOWN */}
+          <div className={`sidebar-link ${isActive("deliveries") || isActive("self-deliveries") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+            <div
+              onClick={toggleDeliverables}
+              style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
+            >
+              <MdAssignment />
+              <span style={{ flex: 1 }}>Deliverables</span>
+              <MdKeyboardArrowDown
+                size={18}
+                style={{
+                  transition: "transform 0.2s",
+                  transform: deliverablesOpen ? "rotate(180deg)" : "rotate(0deg)",
+                }}
+              />
+            </div>
+            {deliverablesOpen && (
+              <div className="sidebar-sub-links">
+                <Link
+                  to={rolePath("deliveries")}
+                  className={`sidebar-sub-link ${isActive("deliveries") ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Deliverables
+                </Link>
+                <Link
+                  to={rolePath("self-deliveries")}
+                  className={`sidebar-sub-link ${isActive("self-deliveries") ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Self Deliverables
+                </Link>
+              </div>
+            )}
+          </div>
 
           <Link
             to={rolePath("projects")}
@@ -174,7 +224,7 @@ function Sidebar() {
           </Link>
 
           {/* TASKS DROPDOWN */}
-          <div className={`sidebar-link ${isActive("tasks") || isActive("taskby") || location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+          <div className={`sidebar-link ${isActive("tasks") || isActive("taskby") || isActive("self-tasks") || location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
             <div
               onClick={toggleTasks}
               style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
@@ -204,6 +254,13 @@ function Sidebar() {
                   onClick={(e) => e.stopPropagation()}
                 >
                   Assigned by You
+                </Link>
+                <Link
+                  to={rolePath("self-tasks")}
+                  className={`sidebar-sub-link ${isActive("self-tasks") ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Self Tasks
                 </Link>
               </div>
             )}

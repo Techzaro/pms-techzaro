@@ -127,4 +127,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(\App\Models\Notification::class)->where('is_read', false);
     }
+
+    public function visibleProjects(): HasMany
+    {
+        return $this->hasMany(\App\Models\ProjectVisibility::class);
+    }
 }

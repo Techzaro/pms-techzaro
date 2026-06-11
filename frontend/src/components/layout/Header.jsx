@@ -7,7 +7,7 @@ import { authToken, getCurrentRole, getUser, setUser, rolePath } from "../../uti
 import "./Header.css";
 
 import CreateTaskModal from "../CreateTaskModal";
-import CreateDeliverableModel from "../layout/CreateDeliverableModel";
+import CreateProjectModal from "../CreateProjectModal";
 
 function Header() {
   const navigate = useNavigate();
@@ -16,7 +16,7 @@ function Header() {
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
-  const [showDeliverableModal, setShowDeliverableModal] = useState(false);
+  const [showProjectModal, setShowProjectModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth <= 1200);
   const [notifications, setNotifications] = useState([]);
@@ -385,16 +385,18 @@ function Header() {
             + Task
           </button>
 
-          {/* DELIVERABLE BUTTON */}
+          {/* PROJECT BUTTON */}
 
+          {["admin", "manager"].includes(getCurrentRole()) && (
           <button
             className="project-btn"
             onClick={() =>
-              setShowDeliverableModal(true)
+              setShowProjectModal(true)
             }
           >
-            + Deliverables
+            + Project
           </button>
+          )}
 
           {/* NOTIFICATIONS */}
           <div className="header-notif">
@@ -497,15 +499,16 @@ function Header() {
         />
       )}
 
-      {/* DELIVERABLE MODAL */}
+      {/* PROJECT MODAL */}
 
-      {showDeliverableModal && (
-
-        <CreateDeliverableModel
-          onClose={() =>
-            setShowDeliverableModal(false)
-          }
-        />
+      {showProjectModal && (
+        <div className="modal-overlay" onClick={() => setShowProjectModal(false)}>
+          <CreateProjectModal
+            onClose={(created) => {
+              setShowProjectModal(false);
+            }}
+          />
+        </div>
       )}
 
     </>

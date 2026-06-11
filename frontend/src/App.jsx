@@ -12,6 +12,7 @@ import TeamLead from "./pages/TeamLead";
 import Member from "./pages/Member";
 import Tasks from "./pages/Tasks";
 import Taskby from "./pages/Taskby";
+import SelfTasks from "./pages/SelfTasks";
 import Projects from "./pages/Projects";
 import CreateProject from "./pages/CreateProject";
 import ProjectDetails from "./pages/ProjectDetails";
@@ -27,6 +28,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import RoleProtectedRoute from "./components/RoleProtectedRoute";
 import TaskDetails from "./pages/TaskDetails";
 import DeliverableDetails from "./pages/DeliverableDetails";
+import SelfDeliveries from "./pages/SelfDeliveries";
 import Calender from "./pages/Calender";
 import Notifications from "./pages/Notifications";
 import UserPerformance from "./pages/UserPerformance";
@@ -69,6 +71,16 @@ function App() {
           }
         />
 
+        {/* SELF TASKS */}
+        <Route
+          path="/:role/self-tasks"
+          element={
+            <ProtectedRoute>
+              <SelfTasks />
+            </ProtectedRoute>
+          }
+        />
+
         {/* PROJECTS */}
         <Route
           path="/:role/projects"
@@ -105,6 +117,16 @@ function App() {
           element={
             <ProtectedRoute>
               <Deliveries />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* SELF DELIVERIES */}
+        <Route
+          path="/:role/self-deliveries"
+          element={
+            <ProtectedRoute>
+              <SelfDeliveries />
             </ProtectedRoute>
           }
         />
