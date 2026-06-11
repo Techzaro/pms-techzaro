@@ -168,6 +168,10 @@ Route::middleware('auth:sanctum')->group(function () {
     | REPORTS
     */
     Route::get('/reports/team-performance', [ReportController::class, 'teamPerformance']);
+    Route::get('/reports/summary', [ReportController::class, 'summaryReport']);
+    Route::get('/reports/detailed', [ReportController::class, 'detailedReport']);
+    Route::get('/reports/performance', [ReportController::class, 'performanceReport']);
+    Route::get('/reports/progress', [ReportController::class, 'progressReport']);
     Route::get('/reports/user/{user}', [ReportController::class, 'userPerformance']);
     Route::get('/reports/project/{project}', [ReportController::class, 'projectReport']);
 

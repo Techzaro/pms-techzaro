@@ -254,9 +254,13 @@
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 14px;
-  padding: 28px;
+  padding: 5px;
   margin-top: 0;
 }
+.td-content-details{
+  padding: 20px;
+}
+
 
 /* SECTION TITLE */
 .td-section-title {

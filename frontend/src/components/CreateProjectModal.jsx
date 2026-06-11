@@ -11,6 +11,8 @@ const PRESET_PHASES = [
   "Completed",
 ];
 
+const TEAM_ROLES = ["Solution", "Tech", "Developer"];
+
 const CreateProjectModal = ({ onClose }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -27,7 +29,11 @@ const CreateProjectModal = ({ onClose }) => {
     priority: "Medium",
     client_name: "",
     budget: "",
+    team_roles: [],
   });
+
+  const [teamRolesOpen, setTeamRolesOpen] = useState(false);
+  const teamRolesRef = useRef(null);
 
   const [milestones, setMilestones] = useState([]);
   const [phaseName, setPhaseName] = useState("");
@@ -45,6 +51,16 @@ const CreateProjectModal = ({ onClose }) => {
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: true } }));
     return () => window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: false } }));
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (teamRolesRef.current && !teamRolesRef.current.contains(e.target)) {
+        setTeamRolesOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -243,6 +259,7 @@ const CreateProjectModal = ({ onClose }) => {
         client_name: form.client_name || null,
         budget: form.budget ? parseFloat(form.budget) : null,
         milestones: milestones.length > 0 ? milestones : [],
+        team_roles: form.team_roles,
       };
 
       const response = await fetch(`${API_URL}/projects`, {
@@ -374,12 +391,41 @@ const CreateProjectModal = ({ onClose }) => {
             <div className="cp-grid-2">
               <div className="cp-field">
                 <label>Team (Optional)</label>
-                <select name="team_id" value={form.team_id} onChange={handleChange}>
-                  <option value="">Select team</option>
-                  {teams.map((team) => (
-                    <option key={team.id} value={team.id}>{team.name}</option>
-                  ))}
-                </select>
+                <div className="cp-dropdown-wrap" ref={teamRolesRef}>
+                  <button
+                    type="button"
+                    className="cp-dropdown-trigger"
+                    onClick={() => setTeamRolesOpen((prev) => !prev)}
+                  >
+                    <span className={form.team_roles.length === 0 ? "cp-dropdown-placeholder" : ""}>
+                      {form.team_roles.length === 0
+                        ? "Select Team"
+                        : form.team_roles.join(", ")}
+                    </span>
+                    <svg className={`cp-dropdown-arrow ${teamRolesOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
+                  </button>
+                  {teamRolesOpen && (
+                    <div className="cp-dropdown-menu">
+                      {TEAM_ROLES.map((role) => (
+                        <label key={role} className="cp-dropdown-item">
+                          <input
+                            type="checkbox"
+                            checked={form.team_roles.includes(role)}
+                            onChange={() => {
+                              setForm((prev) => ({
+                                ...prev,
+                                team_roles: prev.team_roles.includes(role)
+                                  ? prev.team_roles.filter((r) => r !== role)
+                                  : [...prev.team_roles, role],
+                              }));
+                            }}
+                          />
+                          <span>{role}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="cp-field">
