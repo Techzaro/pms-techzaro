@@ -161,6 +161,33 @@ class AuthController extends Controller
                 'department' => $user->department,
                 'designation' => $user->designation,
                 'employee_code' => $user->employee_code,
+                'father_name' => $user->father_name,
+                'id_card_number' => $user->id_card_number,
+                'present_address' => $user->present_address,
+                'permanent_address' => $user->permanent_address,
+                'emergency_contact_name' => $user->emergency_contact_name,
+                'emergency_contact_relation' => $user->emergency_contact_relation,
+                'emergency_contact_phone' => $user->emergency_contact_phone,
+                'personal_email' => $user->personal_email,
+                'professional_email' => $user->professional_email,
+                'professional_email_password' => $user->professional_email_password,
+                'recovery_email' => $user->recovery_email,
+                'hired_for' => $user->hired_for,
+                'job_started_date' => $user->job_started_date,
+                'job_ended_date' => $user->job_ended_date,
+                'applied_via' => $user->applied_via,
+                'gross_salary' => $user->gross_salary,
+                'bank_name' => $user->bank_name,
+                'bank_account_number' => $user->bank_account_number,
+                'bank_account_title' => $user->bank_account_title,
+                'employment_contract' => $user->employment_contract,
+                'offer_letter' => $user->offer_letter,
+                'techxaro_regulations' => $user->techxaro_regulations,
+                'latest_education_cert' => $user->latest_education_cert,
+                'cv' => $user->cv,
+                'previous_exp_letter' => $user->previous_exp_letter,
+                'previous_salary_slip' => $user->previous_salary_slip,
+                'other_document' => $user->other_document,
                 'last_login_at' => $user->last_login_at?->toDateTimeString(),
                 'created_at' => $user->created_at->toDateTimeString(),
                 'updated_at' => $user->updated_at->toDateTimeString(),
@@ -178,6 +205,100 @@ class AuthController extends Controller
                 'status' => $user->active ? 'Active' : 'Resigned',
                 'last_login' => $user->last_login_at?->toDateTimeString() ?? 'Never logged in',
             ],
+        ]);
+    }
+
+    /**
+     * UPDATE OWN PROFILE - Any authenticated user can update their own profile.
+     */
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+
+        foreach ($request->input() as $key => $value) {
+            if (is_string($value) && $value === '') {
+                $request->merge([$key => null]);
+            }
+        }
+
+        $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'father_name' => 'nullable|string|max:255',
+            'id_card_number' => 'nullable|string|max:32',
+            'phone_number' => 'nullable|string|max:32',
+            'contact_no' => 'nullable|string|max:32',
+            'present_address' => 'nullable|string|max:500',
+            'permanent_address' => 'nullable|string|max:500',
+            'emergency_contact_name' => 'nullable|string|max:255',
+            'emergency_contact_relation' => 'nullable|string|max:255',
+            'emergency_contact_phone' => 'nullable|string|max:32',
+            'personal_email' => 'nullable|email|max:255',
+            'professional_email' => 'nullable|email|max:255',
+            'professional_email_password' => 'nullable|string|max:255',
+            'recovery_email' => 'nullable|email|max:255',
+            'department' => 'nullable|string|max:255',
+            'designation' => 'nullable|string|max:255',
+            'hired_for' => 'nullable|string|max:255',
+            'employee_code' => 'nullable|string|max:64',
+            'job_started_date' => 'nullable|date',
+            'job_ended_date' => 'nullable|date',
+            'gross_salary' => 'nullable|numeric|min:0',
+            'applied_via' => 'nullable|string|max:255',
+            'bank_name' => 'nullable|string|max:255',
+            'bank_account_number' => 'nullable|string|max:64',
+            'bank_account_title' => 'nullable|string|max:255',
+        ]);
+
+        $fields = [
+            'name', 'father_name', 'id_card_number',
+            'phone_number', 'present_address', 'permanent_address',
+            'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
+            'personal_email', 'professional_email', 'professional_email_password', 'recovery_email',
+            'department', 'designation', 'hired_for', 'employee_code',
+            'job_started_date', 'job_ended_date',
+            'gross_salary', 'applied_via',
+            'bank_name', 'bank_account_number', 'bank_account_title',
+        ];
+
+        foreach ($fields as $field) {
+            if ($request->has($field)) {
+                $user->$field = $request->input($field);
+            }
+        }
+
+        if ($request->has('phone_number')) {
+            $user->contact_no = $request->input('phone_number');
+        }
+        if ($request->has('present_address')) {
+            $user->address = $request->input('present_address');
+        }
+
+        $user->save();
+
+        $documentFields = [
+            'employment_contract', 'offer_letter', 'techxaro_regulations',
+            'latest_education_cert', 'cv', 'previous_exp_letter',
+            'previous_salary_slip', 'other_document',
+        ];
+
+        foreach ($documentFields as $field) {
+            if ($request->hasFile($field)) {
+                if ($user->$field && \Storage::disk('public')->exists($user->$field)) {
+                    \Storage::disk('public')->delete($user->$field);
+                }
+                $file = $request->file($field);
+                $filename = $field . '_' . time() . '_' . $file->getClientOriginalName();
+                $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+                $user->$field = $path;
+            }
+        }
+
+        $user->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Profile updated successfully',
+            'user' => $user,
         ]);
     }
 

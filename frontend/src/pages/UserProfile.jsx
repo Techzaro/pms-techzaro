@@ -260,8 +260,7 @@ function UserProfile() {
         }
       });
 
-      formData.append("_method", "PUT");
-      const res = await fetch(`${API_URL}/users/${userId}`, {
+      const res = await fetch(`${API_URL}/auth/update-profile`, {
         method: "POST",
         headers: {
           Accept: "application/json",

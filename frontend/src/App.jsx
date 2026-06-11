@@ -30,6 +30,7 @@ import TaskDetails from "./pages/TaskDetails";
 import DeliverableDetails from "./pages/DeliverableDetails";
 import SelfDeliveries from "./pages/SelfDeliveries";
 import Calender from "./pages/Calender";
+import Notifications from "./pages/Notifications";
 import UserPerformance from "./pages/UserPerformance";
 
 function App() {
@@ -216,6 +217,16 @@ function App() {
           element={
             <ProtectedRoute>
               <Calender />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* NOTIFICATIONS */}
+        <Route
+          path="/:role/notifications"
+          element={
+            <ProtectedRoute>
+              <Notifications />
             </ProtectedRoute>
           }
         />

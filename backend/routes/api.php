@@ -44,6 +44,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // My profile (current user)
     Route::get('/auth/my-profile', [AuthController::class, 'myProfile']);
 
+    // Update own profile (any authenticated user)
+    Route::post('/auth/update-profile', [AuthController::class, 'updateProfile']);
+
+    // Download own documents (any authenticated user)
+    Route::get('/auth/my-documents/{document}', [UserController::class, 'downloadMyDocument']);
+
     // Change password
     Route::put('/user/change-password', [AuthController::class, 'changePassword']);
 

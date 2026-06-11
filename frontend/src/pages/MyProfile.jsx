@@ -190,6 +190,7 @@ function MyProfile() {
                 <div className="profile-user-info">
                   <h2>{user.name}</h2>
                   <span className="profile-designation">{user.designation || roleDisplay}</span>
+                  {user.department && <span className="profile-dept">{user.department}</span>}
                 </div>
               </div>
             </div>
@@ -204,33 +205,132 @@ function MyProfile() {
               </div>
               <div className="info-card-body">
                 <div className="info-row">
-                  <span className="info-label">Full Name</span>
+                  <span className="info-label">Employee Full Name</span>
                   <span className="info-value">{user.name || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Father Name</span>
+                  <span className="info-value">{user.father_name || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">ID Card Number</span>
+                  <span className="info-value">{user.id_card_number || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Present Address</span>
+                  <span className="info-value">{user.present_address || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Permanent Address</span>
+                  <span className="info-value">{user.permanent_address || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Phone Number</span>
+                  <span className="info-value">{user.contact_no || "---"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Employment Details */}
+            <div className="profile-info-card">
+              <div className="info-card-header">
+                <h3>Employment Details</h3>
+              </div>
+              <div className="info-card-body">
+                <div className="info-row">
+                  <span className="info-label">Designation / Role</span>
+                  <span className="info-value">{user.designation || roleDisplay}</span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Department</span>
                   <span className="info-value">{user.department || "---"}</span>
                 </div>
                 <div className="info-row">
-                  <span className="info-label">Email Address</span>
-                  <span className="info-value">{user.email || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Role</span>
-                  <span className="info-value">{roleDisplay}</span>
+                  <span className="info-label">Hired For</span>
+                  <span className="info-value">{user.hired_for || "---"}</span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Employee Code</span>
                   <span className="info-value">{user.employee_code || "---"}</span>
                 </div>
                 <div className="info-row">
-                  <span className="info-label">Phone Number</span>
-                  <span className="info-value">{user.contact_no || "---"}</span>
+                  <span className="info-label">Job Started Date</span>
+                  <span className="info-value">
+                    {user.job_started_date
+                      ? new Date(user.job_started_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      : "---"}
+                  </span>
                 </div>
                 <div className="info-row">
-                  <span className="info-label">Location</span>
-                  <span className="info-value">{user.address || "---"}</span>
+                  <span className="info-label">Job Ended Date</span>
+                  <span className="info-value">
+                    {user.job_ended_date
+                      ? new Date(user.job_ended_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      : "---"}
+                  </span>
                 </div>
+              </div>
+            </div>
+
+            {/* Email */}
+            <div className="profile-info-card">
+              <div className="info-card-header">
+                <h3>Email</h3>
+              </div>
+              <div className="info-card-body">
+                <div className="info-row">
+                  <span className="info-label">Personal Email Address</span>
+                  <span className="info-value">{user.email || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Professional Email Address</span>
+                  <span className="info-value">{user.professional_email || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Password of Professional Email</span>
+                  <span className="info-value">{user.professional_email_password ? "••••••••" : "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Recovery Email</span>
+                  <span className="info-value">{user.recovery_email || "---"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Documents */}
+            <div className="profile-info-card">
+              <div className="info-card-header">
+                <h3>Documents</h3>
+              </div>
+              <div className="info-card-body">
+                {[
+                  { label: "Employment Contract", key: "employment_contract" },
+                  { label: "Offer Letter", key: "offer_letter" },
+                  { label: "Techxaro Regulations", key: "techxaro_regulations" },
+                  { label: "Latest Educational Certificate", key: "latest_education_cert" },
+                  { label: "CV", key: "cv" },
+                  { label: "Previous Job Experience Letter", key: "previous_exp_letter" },
+                  { label: "Previous Salary Slip", key: "previous_salary_slip" },
+                  { label: "Revised / Other Document", key: "other_document" },
+                ].map(({ label, key }) => (
+                  <div className="info-row" key={key}>
+                    <span className="info-label">{label}</span>
+                    <span className="info-value">
+                      {user[key] ? (
+                        <a
+                          href={`${API_URL}/auth/my-documents/${key}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: "#4f6ef7", textDecoration: "underline" }}
+                        >
+                          View Document
+                        </a>
+                      ) : (
+                        "---"
+                      )}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

@@ -117,6 +117,13 @@
   font-weight: 500;
 }
 
+.profile-dept {
+  font-size: 13px;
+  color: #6b7280;
+  display: block;
+  margin-top: 2px;
+}
+
 /* ==================== INFO CARD ==================== */
 
 .profile-info-card {
