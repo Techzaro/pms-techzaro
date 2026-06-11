@@ -117,4 +117,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(Deliverable::class, 'assigned_to');
     }
+
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(\App\Models\Notification::class)->latest();
+    }
+
+    public function unreadNotifications(): HasMany
+    {
+        return $this->hasMany(\App\Models\Notification::class)->where('is_read', false);
+    }
 }

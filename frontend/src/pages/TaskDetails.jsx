@@ -261,6 +261,7 @@ function TaskDetails() {
               {[
                 { id: "overview", label: "Overview", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
                 { id: "subtasks", label: "Tasks", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="M9 3v4M14 3v4"/><path d="M9 12l2 2 4-4"/></svg> },
+                { id: "deliverables", label: "Deliverables", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> },
                 { id: "team", label: "Team", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg> },
                 { id: "activity", label: "Activity", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
                 { id: "files", label: "Files", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg> },
@@ -343,6 +344,55 @@ function TaskDetails() {
                               </span>
                             </td>
                             <td className="td-date">{formatShortDate(t.end_date)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+
+              {tab === "deliverables" && (
+                <div>
+                  <div className="td-section-header">
+                    <h2 className="td-section-title">Deliverables</h2>
+                    <span className="td-section-count">{task.completed_deliverables || 0}/{task.total_deliverables || 0} Completed</span>
+                  </div>
+                  {(task.deliverables || []).length === 0 ? (
+                    <p className="td-empty">No deliverables linked to this task.</p>
+                  ) : (
+                    <table className="td-table">
+                      <thead>
+                        <tr>
+                          <th>Deliverable</th>
+                          <th>Due Date</th>
+                          <th>Status</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(task.deliverables || []).map((d) => (
+                          <tr key={d.id}>
+                            <td>
+                              <div className="td-task-name">{d.title}</div>
+                              {d.description && <div className="td-task-sub">{d.description}</div>}
+                            </td>
+                            <td className="td-date">{formatShortDate(d.due_date)}</td>
+                            <td>
+                              <span className="td-pill" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status) }}>
+                                <span className="td-pill-dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status) }} />
+                                {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}
+                              </span>
+                            </td>
+                            <td>
+                              <button
+                                className="td-btn-outline"
+                                style={{ padding: "4px 12px", fontSize: "12px" }}
+                                onClick={() => navigate(rolePath(`deliveries/deliverable-details/${d.id}`))}
+                              >
+                                View
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>

@@ -136,13 +136,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/deliverables', [DeliverableController::class, 'index']);
     Route::get('/deliverables/{deliverable}', [DeliverableController::class, 'show']);
 
-Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
-    Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']);
-    Route::put('/deliverables/{deliverable}', [DeliverableController::class, 'update']);
-    Route::delete('/deliverables/{deliverable}', [DeliverableController::class, 'destroy']);
-});
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
+        Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']);
+        Route::put('/deliverables/{deliverable}', [DeliverableController::class, 'update']);
+        Route::delete('/deliverables/{deliverable}', [DeliverableController::class, 'destroy']);
+        Route::post('/deliverables/{deliverable}/approve', [DeliverableController::class, 'approve']);
+        Route::post('/deliverables/{deliverable}/reject', [DeliverableController::class, 'reject']);
+    });
 
-Route::patch('/deliverables/{deliverable}/delivered', [DeliverableController::class, 'markDelivered']);
+    // Assignee can submit
+    Route::post('/deliverables/{deliverable}/submit', [DeliverableController::class, 'submit']);
+
+    /*
+    | NOTIFICATIONS
+    */
+    Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [\App\Http\Controllers\NotificationController::class, 'unreadCount']);
+    Route::post('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead']);
+    Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead']);
 
     /*
     | CALENDAR / EVENTS

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
 
 class Deliverable extends Model
@@ -18,10 +19,19 @@ class Deliverable extends Model
         'due_date',
         'assigned_to',
         'created_by',
+        'submitted_at',
+        'approved_at',
+        'rejected_at',
+        'rejection_comment',
+        'approved_by',
+        'rejected_by',
     ];
 
     protected $casts = [
         'due_date' => 'date',
+        'submitted_at' => 'datetime',
+        'approved_at' => 'datetime',
+        'rejected_at' => 'datetime',
     ];
 
     public function scopeFilter(Builder $query, array $filters): Builder
@@ -67,5 +77,25 @@ class Deliverable extends Model
     public function task(): BelongsTo
     {
         return $this->belongsTo(Task::class);
+    }
+
+    public function submissions(): HasMany
+    {
+        return $this->hasMany(DeliverableSubmission::class);
+    }
+
+    public function latestSubmission()
+    {
+        return $this->hasOne(DeliverableSubmission::class)->latestOfMany();
+    }
+
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function rejectedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rejected_by');
     }
 }
