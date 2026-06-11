@@ -2,20 +2,23 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import { useState, useEffect } from "react";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
-import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
-import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
-import { rolePath, authToken } from "../utils/auth";
+import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
+import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import "../pages/Deliveries.css";
 
 const STATUS_COLORS = {
-  deliverable: "#EDE9FE",
-  delivered: "#DCFCE7",
+  pending: "#FEF3C7",
+  submitted: "#DBEAFE",
+  approved: "#DCFCE7",
+  rejected: "#FEE2E2",
 };
 
 const STATUS_TEXT_COLORS = {
-  deliverable: "#5B21B6",
-  delivered: "#166534",
+  pending: "#92400E",
+  submitted: "#1E40AF",
+  approved: "#166534",
+  rejected: "#991B1B",
 };
 
 const PRIORITY_COLORS = {
@@ -32,12 +35,14 @@ const PRIORITY_TEXT_COLORS = {
 
 function Deliveries() {
   const navigate = useNavigate();
-  const [showModal, setShowModal] = useState(false);
   const [deliverables, setDeliverables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [confirmDeliverable, setConfirmDeliverable] = useState(null);
+  const [view, setView] = useState("assignee");
+
+  const currentRole = getCurrentRole();
+  const canSeeBothViews = ["admin", "manager", "team_lead"].includes(currentRole);
 
   const fetchDeliverables = () => {
     setLoading(true);
@@ -45,6 +50,7 @@ function Deliveries() {
     const params = new URLSearchParams();
     if (search) params.append("search", search);
     if (statusFilter) params.append("status", statusFilter);
+    params.append("view", view);
 
     fetch(`${API_URL}/deliverables?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -59,7 +65,7 @@ function Deliveries() {
 
   useEffect(() => {
     fetchDeliverables();
-  }, [search, statusFilter]);
+  }, [search, statusFilter, view]);
 
   const getInitials = (name) => {
     if (!name) return "??";
@@ -86,83 +92,75 @@ function Deliveries() {
 
   const formatStatus = (status) => {
     const map = {
-      deliverable: "Deliverable",
-      delivered: "Delivered",
+      pending: "Pending",
+      submitted: "Submitted",
+      approved: "Approved",
+      rejected: "Rejected",
     };
     return map[status] || status;
   };
 
-  const handleMarkDelivered = async () => {
-    if (!confirmDeliverable) return;
-    const token = authToken();
-    try {
-      const res = await fetch(`${API_URL}/deliverables/${confirmDeliverable.id}/delivered`, {
-        method: "PATCH",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (res.ok) {
-        setConfirmDeliverable(null);
-        fetchDeliverables();
-      } else {
-        const data = await res.json();
-        alert(data.message || "Failed to update status");
-      }
-    } catch {
-      alert("An error occurred");
-    }
-  };
-
-  const isDelivered = (item) => item.status === "delivered";
-
   return (
     <DashboardLayout>
-
       <div className="projects-page">
-
         <div className="projects-header">
-
           <div>
             <h1>Deliverables</h1>
             <p>Manage and track your deliverables</p>
           </div>
-
           <div className="header-actions">
-
-            <div className="all-time">
-              <select name="" id="">
-                <option value="">All Time</option>
-                <option value="">Month</option>
-                <option value="">Week</option>
-                <option value="">Day</option>
-              </select>
-
-            </div>
-
-            <button
-              className="create-btn"
-              onClick={() => setShowModal(true)}
-            >
-              + Create Deliverable
-            </button>
-
+            {canSeeBothViews && (
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  className={`task-btn--mobile`}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #e5e7eb",
+                    background: view === "assignee" ? "#6366f1" : "#fff",
+                    color: view === "assignee" ? "#fff" : "#374151",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                  }}
+                  onClick={() => setView("assignee")}
+                >
+                  My Deliverables
+                </button>
+                <button
+                  className={`task-btn--mobile`}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #e5e7eb",
+                    background: view === "assigner" ? "#6366f1" : "#fff",
+                    color: view === "assigner" ? "#fff" : "#374151",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                  }}
+                  onClick={() => setView("assigner")}
+                >
+                  Assigned Deliverables
+                </button>
+              </div>
+            )}
           </div>
-
         </div>
 
         <div className="task-progress">
           <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
-          <p className={`Deliverable ${statusFilter === "deliverable" ? "active" : ""}`} onClick={() => setStatusFilter("deliverable")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#8B5CF6" />
-            Deliverable
+          <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => setStatusFilter("pending")} style={{ cursor: "pointer" }}>
+            <GoDotFill color={STATUS_COLORS.pending} /> Pending
           </p>
-          <p className={`Delivered ${statusFilter === "delivered" ? "active" : ""}`} onClick={() => setStatusFilter("delivered")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#22C55E" />
-            Delivered
+          <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
+            <GoDotFill color={STATUS_COLORS.submitted} /> Submitted
+          </p>
+          <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
+            <GoDotFill color={STATUS_COLORS.approved} /> Approved
+          </p>
+          <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => setStatusFilter("rejected")} style={{ cursor: "pointer" }}>
+            <GoDotFill color={STATUS_COLORS.rejected} /> Rejected
           </p>
         </div>
 
@@ -172,118 +170,116 @@ function Deliveries() {
         </div>
 
         <div className="container">
+          {view === "assignee" ? (
+            <>
+              <div className="table-header">
+                <div>Deliverable</div>
+                <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task</div>
+                <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
+                <div className="date-column" style={{ paddingRight: "30px" }}>Due Date</div>
+                <div>Action</div>
+              </div>
 
-          <div className="table-header">
-            <div>Assigned by</div>
-            <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task Name</div>
-            <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
-            <div className="priority-column" style={{ paddingRight: "8px" }}>Priority</div>
-            <div className="date-column" style={{ paddingRight: "30px" }}>  Date</div>
-            <div>Action</div>
-          </div>
-
-          {loading ? (
-            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
-          ) : deliverables.length === 0 ? (
-            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
+              {loading ? (
+                <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
+              ) : deliverables.length === 0 ? (
+                <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
+              ) : (
+                deliverables.map((item) => {
+                  const colors = getRandomColors(item.id);
+                  return (
+                    <div className="table-row" key={item.id}>
+                      <div className="user-box">
+                        <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                          {getInitials(item.title)}
+                        </div>
+                        <div>
+                          <div className="user-name">{item.title}</div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="task-title" style={{ paddingLeft: "40px" }}>{item.task?.title || "-"}</div>
+                      </div>
+                      <div>
+                        <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                          <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                          {formatStatus(item.status)}
+                        </span>
+                      </div>
+                      <div className="date-box">
+                        <div>{formatDate(item.due_date)}</div>
+                      </div>
+                      <div className="action-btns">
+                        <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`))}>
+                          <IoEyeOutline />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </>
           ) : (
-            deliverables.map((item) => {
-              const colors = getRandomColors(item.id);
-              const creator = item.creator || {};
-              const delivered = isDelivered(item);
+            <>
+              <div className="table-header">
+                <div>Deliverable</div>
+                <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task</div>
+                <div>Assigned To</div>
+                <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
+                <div className="date-column" style={{ paddingRight: "30px" }}>Due Date</div>
+                <div>Action</div>
+              </div>
 
-              return (
-                <div className="table-row" key={item.id}>
-
-                  <div className="user-box">
-                    <div
-                      className="avatar"
-                      style={{
-                        background: colors.bg,
-                        color: colors.text,
-                      }}
-                    >
-                      {getInitials(creator.name)}
+              {loading ? (
+                <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
+              ) : deliverables.length === 0 ? (
+                <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
+              ) : (
+                deliverables.map((item) => {
+                  const colors = getRandomColors(item.id);
+                  return (
+                    <div className="table-row" key={item.id}>
+                      <div className="user-box">
+                        <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                          {getInitials(item.title)}
+                        </div>
+                        <div>
+                          <div className="user-name">{item.title}</div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="task-title" style={{ paddingLeft: "40px" }}>{item.task?.title || "-"}</div>
+                      </div>
+                      <div className="user-box">
+                        <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                          {getInitials(item.assignee?.name)}
+                        </div>
+                        <div>
+                          <div className="user-name">{item.assignee?.name || "Unassigned"}</div>
+                        </div>
+                      </div>
+                      <div>
+                        <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                          <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                          {formatStatus(item.status)}
+                        </span>
+                      </div>
+                      <div className="date-box">
+                        <div>{formatDate(item.due_date)}</div>
+                      </div>
+                      <div className="action-btns">
+                        <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`))}>
+                          <IoEyeOutline />
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <div className="user-name">{creator.name || "System"}</div>
-                      <div className="user-role">{creator.role || ""}</div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="task-title" style={{ paddingLeft: "40px" }}>{item.title}</div>
-                  </div>
-
-                  <div>
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
-                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                      {formatStatus(item.status)}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
-                      <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
-                      {item.priority}
-                    </span>
-                  </div>
-
-                  <div className="date-box">
-                    <div>{formatDate(item.due_date)}</div>
-                  </div>
-
-                  <div className="action-btns" >
-                    <button
-                      className="action-icon-btn action-view"
-                      title="View"
-                      onClick={() =>
-                        navigate(rolePath(`deliveries/deliverable-details/${item.id}`))
-                      }
-                    >
-                      <IoEyeOutline />
-                    </button>
-
-                    <button
-                      className={`action-icon-btn ${delivered ? 'action-completed' : 'action-complete'}`}
-                      title={delivered ? "Delivered" : "Mark as Delivered"}
-                      onClick={() => !delivered && setConfirmDeliverable(item)}
-                      disabled={delivered}
-                    >
-                      <IoCheckmarkCircle />
-                    </button>
-                  </div>
-
-                </div>
-              );
-            })
+                  );
+                })
+              )}
+            </>
           )}
-
         </div>
-
       </div>
-
-      {showModal && (
-        <CreateDeliverableModel
-          onClose={() => { setShowModal(false); fetchDeliverables(); }}
-        />
-      )}
-
-      {confirmDeliverable && (
-        <div className="modal-overlay" onClick={() => setConfirmDeliverable(null)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <h3>Mark as Delivered</h3>
-            <p style={{ marginBottom: '15px', color: '#374151' }}>
-              Are you sure you want to mark <strong>{confirmDeliverable.title}</strong> as delivered?
-            </p>
-            <div className="modal-buttons">
-              <button className="cancel-btn" onClick={() => setConfirmDeliverable(null)}>Cancel</button>
-              <button className="confirm-btn" onClick={handleMarkDelivered}>Yes, Mark Delivered</button>
-            </div>
-          </div>
-        </div>
-      )}
-
     </DashboardLayout>
   );
 }

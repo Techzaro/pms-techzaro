@@ -4,15 +4,6 @@ import { authToken, getUser } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
 import "./layout/CreateTaskModal.css";
 
-const PRESET_PHASES = [
-  "Planning",
-  "Design",
-  "Development",
-  "Testing",
-  "Review",
-  "Completion",
-];
-
 const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -29,11 +20,10 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     priority: "Medium",
   });
 
-  const [milestones, setMilestones] = useState([]);
-  const [phaseName, setPhaseName] = useState("");
-  const [phaseDate, setPhaseDate] = useState("");
   const [requirementsList, setRequirementsList] = useState([]);
   const [reqInput, setReqInput] = useState("");
+  const [deliverables, setDeliverables] = useState([]);
+  const [deliverableInput, setDeliverableInput] = useState({ title: "", due_date: "" });
 
   const [pendingFiles, setPendingFiles] = useState([]);
   const [links, setLinks] = useState([]);
@@ -163,21 +153,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     }
   };
 
-  const handleAddPhase = () => {
-    if (!phaseName.trim() || !phaseDate) return;
-    setMilestones((prev) => [...prev, { title: phaseName.trim(), due_date: phaseDate, status: "planned" }]);
-    setPhaseName("");
-    setPhaseDate("");
-  };
-
-  const handleRemovePhase = (index) => {
-    setMilestones((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handlePhaseKeyDown = (e) => {
-    if (e.key === "Enter") { e.preventDefault(); handleAddPhase(); }
-  };
-
   const handleAddRequirement = () => {
     if (!reqInput.trim()) return;
     setRequirementsList((prev) => [...prev, reqInput.trim()]);
@@ -192,10 +167,23 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     if (e.key === "Enter") { e.preventDefault(); handleAddRequirement(); }
   };
 
-  const formatDateDisplay = (dateStr) => {
+  const handleAddDeliverable = () => {
+    if (!deliverableInput.title.trim()) return;
+    setDeliverables((prev) => [...prev, { ...deliverableInput, title: deliverableInput.title.trim() }]);
+    setDeliverableInput({ title: "", due_date: "" });
+  };
+
+  const handleRemoveDeliverable = (index) => {
+    setDeliverables((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDeliverableKeyDown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); handleAddDeliverable(); }
+  };
+
+  const formatDateForInput = (dateStr) => {
     if (!dateStr) return "";
-    const d = new Date(dateStr + "T00:00:00");
-    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    return dateStr;
   };
 
   const handleFiles = (fileList) => {
@@ -297,19 +285,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
       const token = authToken();
       console.log("CreateTaskModal: token ok, building body");
 
-      const firstMilestone = milestones.length > 0 ? milestones[0] : null;
-      const lastMilestone = milestones.length > 0 ? milestones[milestones.length - 1] : null;
-      const computedStartDate = firstMilestone ? firstMilestone.due_date : null;
-      const computedEndDate = lastMilestone ? lastMilestone.due_date : null;
-
       const body = {
         title: form.title.trim(),
         description: form.description || null,
         requirements: requirementsList.length > 0 ? requirementsList : null,
-        start_date: computedStartDate,
-        end_date: computedEndDate,
         assigned_to: form.assigned_to,
         priority: form.priority,
+        deliverables: deliverables.length > 0 ? deliverables.map(d => ({ title: d.title, due_date: d.due_date || null })) : undefined,
       };
 
       const url = `${API_URL}/projects/${projectId || form.project_id}/tasks`;
@@ -550,78 +532,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
               {formErrors.priority && <span className="field-error-text">{formErrors.priority}</span>}
             </div>
 
-            {/* DEADLINES - PHASE SYSTEM */}
-            <div className="task-card">
-              <div className="task-card-top">
-                <span>Deadlines</span>
-              </div>
-
-              <div className="task-deadline-grid">
-                <div className="task-field">
-                  <label style={{ fontSize: "13px" }}>Phase</label>
-                  <input
-                    type="text"
-                    placeholder="Enter phase name"
-                    value={phaseName}
-                    onChange={(e) => setPhaseName(e.target.value)}
-                    onKeyDown={handlePhaseKeyDown}
-                    list="task-phase-presets"
-                  />
-                  <datalist id="task-phase-presets">
-                    {PRESET_PHASES.map((p) => (
-                      <option key={p} value={p} />
-                    ))}
-                  </datalist>
-                </div>
-                <div className="task-field">
-                  <label style={{ fontSize: "13px" }}>Due Date</label>
-                  <input
-                    type="date"
-                    value={phaseDate}
-                    onChange={(e) => setPhaseDate(e.target.value)}
-                    onKeyDown={handlePhaseKeyDown}
-                  />
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="task-add-phase-btn"
-                onClick={handleAddPhase}
-                disabled={!phaseName.trim() || !phaseDate}
-              >
-                + Add Phase
-              </button>
-
-
-              {milestones.length > 0 && (
-                <div className="task-phase-list">
-                  {milestones.map((m, index) => (
-                    <div key={index} className="task-phase-item">
-                      <div className="task-phase-item-dot" />
-                      <div className="task-phase-item-info">
-                        <div className="task-phase-item-title">{m.title}</div>
-                        <div className="task-phase-item-date">{formatDateDisplay(m.due_date)}</div>
-                      </div>
-                      <button
-                        type="button"
-                        className="task-phase-item-remove"
-                        onClick={() => handleRemovePhase(index)}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {milestones.length > 0 && (
-                <div className="task-deadline-summary">
-                  <span>Final Deadline:</span>
-                  <strong>{formatDateDisplay(milestones[milestones.length - 1].due_date)}</strong>
-                </div>
-              )}
-            </div>
             <div className="task-field">
               <label>Requirements</label>
               <div className="cp-goals-input-row">
@@ -651,6 +561,65 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                         type="button"
                         className="cp-goals-item-remove"
                         onClick={() => handleRemoveRequirement(index)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* DELIVERABLES */}
+            <div className="task-card">
+              <div className="task-card-top">
+                <span>Deliverables</span>
+              </div>
+
+              <div className="task-deadline-grid">
+                <div className="task-field">
+                  <label style={{ fontSize: "13px" }}>Deliverable Name</label>
+                  <input
+                    type="text"
+                    placeholder="Enter deliverable name"
+                    value={deliverableInput.title}
+                    onChange={(e) => setDeliverableInput((prev) => ({ ...prev, title: e.target.value }))}
+                    onKeyDown={handleDeliverableKeyDown}
+                  />
+                </div>
+                <div className="task-field">
+                  <label style={{ fontSize: "13px" }}>Due Date</label>
+                  <input
+                    type="date"
+                    value={deliverableInput.due_date}
+                    onChange={(e) => setDeliverableInput((prev) => ({ ...prev, due_date: e.target.value }))}
+                    onKeyDown={handleDeliverableKeyDown}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="task-add-phase-btn"
+                onClick={handleAddDeliverable}
+                disabled={!deliverableInput.title.trim()}
+              >
+                + Add Deliverable
+              </button>
+
+              {deliverables.length > 0 && (
+                <div className="task-phase-list">
+                  {deliverables.map((d, index) => (
+                    <div key={index} className="task-phase-item">
+                      <div className="task-phase-item-dot" style={{ background: "#8b5cf6" }} />
+                      <div className="task-phase-item-info">
+                        <div className="task-phase-item-title">{d.title}</div>
+                        <div className="task-phase-item-date">{d.due_date ? new Date(d.due_date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "No due date"}</div>
+                      </div>
+                      <button
+                        type="button"
+                        className="task-phase-item-remove"
+                        onClick={() => handleRemoveDeliverable(index)}
                       >
                         ✕
                       </button>

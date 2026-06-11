@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef } from "react";
-import { MdKeyboardArrowDown } from "react-icons/md";
+import { useEffect, useState, useRef, useCallback } from "react";
+import { MdKeyboardArrowDown, MdNotifications } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 
 import API_URL from "../../config/api";
@@ -12,12 +12,16 @@ import CreateDeliverableModel from "../layout/CreateDeliverableModel";
 function Header() {
   const navigate = useNavigate();
   const searchRef = useRef(null);
+  const notifRef = useRef(null);
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showDeliverableModal, setShowDeliverableModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth <= 1200);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -190,6 +194,75 @@ function Header() {
       .catch(() => {});
   }, []);
 
+  const fetchNotifications = useCallback(() => {
+    const token = authToken();
+    if (!token) return;
+    fetch(`${API_URL}/notifications/unread-count`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
+    })
+      .then((res) => (res.ok ? res.json() : { count: 0 }))
+      .then((data) => setUnreadCount(data.count || 0))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  const openNotifications = async () => {
+    const token = authToken();
+    if (!token) return;
+    setShowNotifications((prev) => {
+      if (!prev) {
+        fetch(`${API_URL}/notifications`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          skipLoader: true,
+        })
+          .then((res) => (res.ok ? res.json() : { data: [] }))
+          .then((data) => setNotifications(data?.data || data || []))
+          .catch(() => setNotifications([]));
+      }
+      return !prev;
+    });
+  };
+
+  const markAsRead = async (id) => {
+    const token = authToken();
+    if (!token) return;
+    await fetch(`${API_URL}/notifications/${id}/read`, {
+      method: "POST",
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
+    });
+    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, is_read: true } : n));
+    setUnreadCount((prev) => Math.max(0, prev - 1));
+  };
+
+  const markAllAsRead = async () => {
+    const token = authToken();
+    if (!token) return;
+    await fetch(`${API_URL}/notifications/read-all`, {
+      method: "POST",
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
+    });
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    setUnreadCount(0);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
     <>
 
@@ -322,6 +395,63 @@ function Header() {
           >
             + Deliverables
           </button>
+
+          {/* NOTIFICATIONS */}
+          <div className="header-notif" ref={notifRef} style={{ position: "relative" }}>
+            <button
+              className="notif-btn"
+              onClick={openNotifications}
+              style={{ background: "none", border: "none", cursor: "pointer", position: "relative", padding: "8px" }}
+            >
+              <MdNotifications fontSize={"22px"} color="#6b7280" />
+              {unreadCount > 0 && (
+                <span style={{
+                  position: "absolute", top: "2px", right: "2px",
+                  background: "#ef4444", color: "#fff", fontSize: "10px",
+                  fontWeight: 700, borderRadius: "50%", width: "18px", height: "18px",
+                  display: "flex", alignItems: "center", justifyContent: "center"
+                }}>
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {showNotifications && (
+              <div style={{
+                position: "absolute", top: "100%", right: 0, width: "360px",
+                background: "#fff", borderRadius: "12px", boxShadow: "0 10px 40px rgba(0,0,0,.15)",
+                zIndex: 1000, maxHeight: "400px", overflow: "auto"
+              }}>
+                <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <strong style={{ fontSize: "14px" }}>Notifications</strong>
+                  {unreadCount > 0 && (
+                    <button onClick={markAllAsRead} style={{ background: "none", border: "none", color: "#6366f1", fontSize: "12px", cursor: "pointer" }}>
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+                {notifications.length === 0 ? (
+                  <div style={{ padding: "24px 16px", textAlign: "center", color: "#9ca3af", fontSize: "13px" }}>No notifications</div>
+                ) : (
+                  notifications.map((n) => (
+                    <div
+                      key={n.id}
+                      onClick={() => { markAsRead(n.id); if (n.link) navigate(rolePath(n.link.replace(/^\//, ''))); }}
+                      style={{
+                        padding: "12px 16px", cursor: n.link ? "pointer" : "default",
+                        borderBottom: "1px solid #f8fafc",
+                        background: n.is_read ? "#fff" : "#EEF2FF",
+                        transition: "background .15s"
+                      }}
+                    >
+                      <div style={{ fontSize: "13px", color: "#374151", whiteSpace: "pre-line" }}>{n.message}</div>
+                      <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "4px" }}>{new Date(n.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
 
           <hr />
 

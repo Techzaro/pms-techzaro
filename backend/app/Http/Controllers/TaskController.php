@@ -27,6 +27,11 @@ class TaskController extends Controller
 
         $tasks->getCollection()->transform(function ($task) {
             $task->item_type = 'task';
+            $total = $task->deliverables()->count();
+            $completed = $task->deliverables()->whereIn('status', ['approved'])->count();
+            $task->total_deliverables = $total;
+            $task->completed_deliverables = $completed;
+            $task->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
             return $task;
         });
 
@@ -72,11 +77,16 @@ class TaskController extends Controller
 
         $expandedTasks = collect();
         foreach ($tasks as $task) {
+            $total = $task->deliverables()->count();
+            $completed = $task->deliverables()->whereIn('status', ['approved'])->count();
             $assignees = $task->assignees->isEmpty() ? collect([null]) : $task->assignees;
             foreach ($assignees as $assignee) {
                 $clone = clone $task;
                 $clone->assignees = $assignee ? collect([$assignee]) : collect();
                 $clone->item_type = 'task';
+                $clone->total_deliverables = $total;
+                $clone->completed_deliverables = $completed;
+                $clone->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
                 $expandedTasks->push($clone);
             }
         }
@@ -155,16 +165,26 @@ class TaskController extends Controller
             $progress = (int) round(($done / $subtasks->count()) * 100);
         }
 
+        $deliverables = $task->deliverables()->with(['assignee:id,name,email,role', 'latestSubmission'])->latest()->get();
+        $delTotal = $deliverables->count();
+        $delCompleted = $deliverables->filter(fn ($d) => $d->status === 'approved')->count();
+        $delProgress = $delTotal > 0 ? (int) round(($delCompleted / $delTotal) * 100) : 0;
+
         return response()->json([
             'task' => array_merge($task->toArray(), [
                 'subtasks' => $subtasks,
                 'progress_percent' => $progress,
+                'deliverables' => $deliverables,
+                'deliverables_progress' => $delProgress,
+                'total_deliverables' => $delTotal,
+                'completed_deliverables' => $delCompleted,
             ]),
         ]);
     }
 
     /**
      * Create a single task and attach all selected assignees.
+     * Optionally create deliverables linked to the task.
      */
     public function store(Request $request, Project $project)
     {
@@ -180,6 +200,10 @@ class TaskController extends Controller
             'assigned_to' => 'required|array|min:1',
             'assigned_to.*' => 'exists:users,id',
             'priority' => 'required|string|max:32',
+            'deliverables' => 'nullable|array',
+            'deliverables.*.title' => 'required_with:deliverables|string|max:255',
+            'deliverables.*.description' => 'nullable|string|max:2000',
+            'deliverables.*.due_date' => 'nullable|date',
         ]);
 
         $createdTasks = [];
@@ -196,10 +220,28 @@ class TaskController extends Controller
                 'status' => 'pending',
             ]);
             $task->assignees()->sync([$userId]);
+
+            // Create deliverables for this task if provided
+            if (!empty($validated['deliverables'])) {
+                foreach ($validated['deliverables'] as $del) {
+                    $project->deliverables()->create([
+                        'task_id' => $task->id,
+                        'title' => $del['title'],
+                        'description' => $del['description'] ?? null,
+                        'status' => 'pending',
+                        'priority' => $validated['priority'],
+                        'due_date' => $del['due_date'] ?? $validated['end_date'] ?? null,
+                        'assigned_to' => $userId,
+                        'created_by' => $user->id,
+                    ]);
+                }
+            }
+
             $createdTasks[] = $task;
         }
 
         $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');
+        $firstTask->loadCount('deliverables');
 
         return response()->json([
             'message' => count($createdTasks) . ' task(s) created successfully',

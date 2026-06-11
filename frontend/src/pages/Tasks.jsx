@@ -286,6 +286,7 @@ function Tasks() {
           <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task Name</div>
           <div>Type</div>
           <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
+          <div>Progress</div>
           <div className="priority-column" style={{ paddingRight: "10px" }}>Priority</div>
           <div className="date-column" style={{ paddingRight: "50px" }}>  Date</div>
           <div>Action</div>
@@ -303,7 +304,7 @@ function Tasks() {
             if (isProject) {
               const projectStatus = calculateProjectStatus(item);
               return (
-                <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 12px", borderBottom: "1px solid #f1f5f9" }} key={`project-${item.id}`}>
+                <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 70px 110px 90px 90px 100px 80px", alignItems: "center", padding: "12px 12px", borderBottom: "1px solid #f1f5f9" }} key={`project-${item.id}`}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                       {getInitials(item.creator?.name)}
@@ -326,6 +327,10 @@ function Tasks() {
                       <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                       {projectStatus}
                     </span>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>{calculateProgress(item)}%</div>
+                    <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.completed_tasks || 0}/{item.total_tasks || 0} tasks</div>
                   </div>
                   <div>
                     <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
@@ -357,7 +362,7 @@ function Tasks() {
 
             const assigner = item.assigner;
             return (
-              <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 70px 110px 90px 100px 80px", alignItems: "center", padding: "12px 12px", borderBottom: "1px solid #f1f5f9" }} key={`task-${item.id}`}>
+              <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 70px 110px 90px 90px 100px 80px", alignItems: "center", padding: "12px 12px", borderBottom: "1px solid #f1f5f9" }} key={`task-${item.id}`}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                     {getInitials(assigner?.name)}
@@ -375,19 +380,23 @@ function Tasks() {
                     Task
                   </span>
                 </div>
-                <div>
-                  <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
-                    <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                    {formatStatus(item.status)}
-                  </span>
-                </div>
-                <div>
-                  <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
-                    <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
-                    {item.priority}
-                  </span>
-                </div>
-                <div className="date-box">
+                  <div>
+                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                      {formatStatus(item.status)}
+                    </span>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>{item.deliverables_progress || 0}%</div>
+                    <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.completed_deliverables || 0}/{item.total_deliverables || 0} deliverables</div>
+                  </div>
+                  <div>
+                    <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                      <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
+                      {item.priority}
+                    </span>
+                  </div>
+                  <div className="date-box">
                   <div>{formatDate(item.start_date)}</div>
                   <div>{formatDate(item.end_date)}</div>
                 </div>

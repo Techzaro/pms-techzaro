@@ -1,35 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import {
-  Activity,
-  Building2,
-  Calendar,
-  CalendarDays,
-  ChevronRight,
-  ClipboardList,
-  DollarSign,
-  FolderOpen,
-  ListChecks,
-  Monitor,
-  Pencil,
-  Percent,
-  Settings,
-  Tag,
-  Trash2,
-  UserRound,
-  Users,
-} from "lucide-react";
+import { ChevronRight, Download, Eye } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
-import ConfirmModal from "../components/ConfirmModal";
-import { rolePath } from "../utils/auth";
-import "./ProjectDetails.css";
-
-function statusSlug(status) {
-  return (status || "")
-    .toLowerCase()
-    .replace(/\s+/g, "_")
-    .replace(/[^a-z0-9_]/g, "");
-}
+import API_URL from "../config/api";
+import { authToken, getUser, rolePath } from "../utils/auth";
+import "./DeliverableDetails.css";
 
 function formatShortDate(value) {
   if (!value) return "—";
@@ -48,12 +23,12 @@ function timeAgo(iso) {
   return `${Math.floor(sec / 86400)} days ago`;
 }
 
-function taskStatusLabel(status) {
+function statusStyle(status) {
   const s = (status || "").toLowerCase();
-  if (s === "completed" || s === "done") return "Completed";
-  if (s === "in_progress") return "In Progress";
-  if (s === "pending") return "Pending";
-  return status || "Pending";
+  if (s === "approved") return { bg: "#DCFCE7", text: "#166534" };
+  if (s === "submitted") return { bg: "#DBEAFE", text: "#1E40AF" };
+  if (s === "rejected") return { bg: "#FEE2E2", text: "#991B1B" };
+  return { bg: "#FEF3C7", text: "#92400E" };
 }
 
 function initials(name) {
@@ -64,732 +39,400 @@ function initials(name) {
   return (a + b).toUpperCase() || a.toUpperCase();
 }
 
-const DEMO_DELIVERABLE = {
-  id: 1,
-  title: "Ecommerce Homepage Design",
-  description: "Design and implement the new ecommerce homepage with a modern UI/UX approach.",
-  status: "In Progress",
-  priority: "High",
-  category: "Design",
-  budget: 5000,
-  start_date: "2026-04-22",
-  end_date: "2026-04-28",
-  client_name: "TechXaro Solutions",
-  creator: { id: 1, name: "Muhammad Sufyan", role: "Project Manager" },
-  members: [
-    { id: 2, name: "Leyla Nazir", role: "Team Lead" },
-    { id: 3, name: "Ahmed Raza", role: "Developer" },
-  ],
-  tasks: [
-    { id: 1, title: "Wireframe design", status: "completed", priority: "High", end_date: "2026-04-24", assignee: { name: "Leyla Nazir" } },
-    { id: 2, title: "UI mockup", status: "in_progress", priority: "High", end_date: "2026-04-26", assignee: { name: "Ahmed Raza" } },
-    { id: 3, title: "Frontend implementation", status: "pending", priority: "Medium", end_date: "2026-04-28", assignee: null },
-  ],
-  milestones: [
-    { id: 1, title: "Design approval", status: "completed", due_date: "2026-04-24" },
-    { id: 2, title: "Development phase", status: "in_progress", due_date: "2026-04-28" },
-  ],
-  activities: [
-    { id: 1, user: { name: "Muhammad Sufyan" }, summary: "created the deliverable", created_at: new Date(Date.now() - 7200000).toISOString() },
-    { id: 2, user: { name: "Leyla Nazir" }, summary: "updated the status to In Progress", created_at: new Date(Date.now() - 3600000).toISOString() },
-  ],
-  files: [
-    { id: 1, name: "homepage_mockup.fig" },
-    { id: 2, name: "design_guide.pdf" },
-  ],
-  progress_percent: 45,
-  goals_checklist: [
-    { text: "Responsive design for all screen sizes", done: true },
-    { text: "Accessibility compliance (WCAG 2.1)", done: false },
-    { text: "Performance optimization (Lighthouse > 90)", done: false },
-  ],
-  team: { name: "Design Team", leader: { name: "Leyla Nazir" }, members: [{ id: 3, name: "Ahmed Raza", role: "Developer" }] },
-  sheets_documents: '<a href="#">Design Spec Sheet</a>',
-  website_link: null,
-};
-
 function DeliverableDetails() {
-  const { id, taskId } = useParams();
+  const { projectId } = useParams();
   const navigate = useNavigate();
-  const deliverableId = id || taskId;
+  const deliverableId = projectId;
 
-  const [deliverable, setDeliverable] = useState(DEMO_DELIVERABLE);
-  const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState("overview");
-  const [notesDraft, setNotesDraft] = useState("");
-  const [notesSaving, setNotesSaving] = useState(false);
+  const [deliverable, setDeliverable] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showSubmitForm, setShowSubmitForm] = useState(false);
+  const [submitComment, setSubmitComment] = useState("");
+  const [submitFile, setSubmitFile] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [rejectComment, setRejectComment] = useState("");
+  const [showRejectForm, setShowRejectForm] = useState(false);
   const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("");
-  const [taskForm, setTaskForm] = useState({
-    title: "",
-    description: "",
-    start_date: "",
-    end_date: "",
-    assigned_to: "",
-    priority: "Medium",
-    status: "pending",
-  });
-  const [deleteDeliverableConfirmOpen, setDeleteDeliverableConfirmOpen] = useState(false);
+  const [messageType, setMessageType] = useState("success");
+  const fileInputRef = useRef(null);
 
-  const memberCount = useMemo(() => {
-    if (!deliverable) return 0;
-    const ids = new Set();
-    if (deliverable.creator?.id) ids.add(deliverable.creator.id);
-    (deliverable.members || []).forEach((m) => ids.add(m.id));
-    return ids.size;
-  }, [deliverable]);
+  const fetchDeliverable = useCallback(() => {
+    setLoading(true);
+    const token = authToken();
+    fetch(`${API_URL}/deliverables/${deliverableId}`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setDeliverable(data?.deliverable || null))
+      .catch(() => setDeliverable(null))
+      .finally(() => setLoading(false));
+  }, [deliverableId]);
 
-  const showMessage = useCallback((text, type = "success") => {
+  useEffect(() => { fetchDeliverable(); }, [fetchDeliverable]);
+
+  const showToast = useCallback((text, type = "success") => {
     setMessage(text);
     setMessageType(type);
     window.scrollTo({ top: 0, behavior: "smooth" });
-    setTimeout(() => {
-      setMessage("");
-      setMessageType("");
-    }, 4000);
+    setTimeout(() => { setMessage(""); setMessageType(""); }, 4000);
   }, []);
 
-  const handleTaskFormChange = (e) => {
-    const { name, value } = e.target;
-    setTaskForm((prev) => ({ ...prev, [name]: value }));
+  const handleSubmit = async () => {
+    if (!submitComment.trim() && !submitFile) {
+      showToast("Please add a comment or attach a file.", "error");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const token = authToken();
+      const formData = new FormData();
+      if (submitComment.trim()) formData.append("comment", submitComment.trim());
+      if (submitFile) formData.append("file", submitFile);
+
+      const res = await fetch(`${API_URL}/deliverables/${deliverableId}/submit`, {
+        method: "POST",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        showToast("Deliverable submitted successfully!");
+        setShowSubmitForm(false);
+        setSubmitComment("");
+        setSubmitFile(null);
+        fetchDeliverable();
+      } else {
+        showToast(data.message || "Failed to submit", "error");
+      }
+    } catch {
+      showToast("An error occurred", "error");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleDeleteDeliverable = async () => {
-    setDeleteDeliverableConfirmOpen(true);
+  const handleApprove = async () => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${deliverableId}/approve`, {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast("Deliverable approved!");
+        fetchDeliverable();
+      } else {
+        showToast(data.message || "Failed to approve", "error");
+      }
+    } catch {
+      showToast("An error occurred", "error");
+    }
   };
 
-  const confirmDeleteDeliverable = async () => {
-    setDeleteDeliverableConfirmOpen(false);
-    showMessage("Deliverable deleted.");
-    setTimeout(() => navigate(rolePath("deliveries")), 800);
+  const handleReject = async () => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${deliverableId}/reject`, {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ comment: rejectComment }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast("Deliverable rejected");
+        setShowRejectForm(false);
+        setRejectComment("");
+        fetchDeliverable();
+      } else {
+        showToast(data.message || "Failed to reject", "error");
+      }
+    } catch {
+      showToast("An error occurred", "error");
+    }
   };
+
+  const currentUser = getUser();
+  const isCreator = deliverable && currentUser && parseInt(deliverable.created_by, 10) === parseInt(currentUser.id, 10);
+  const isAdminManager = currentUser && ["admin", "manager"].includes(currentUser.role);
+  const canApproveReject = isCreator || isAdminManager;
 
   if (loading) {
     return (
-      <DashboardLayout hideRightSidebar={true}>
-        <div className="pd-loading">Loading deliverable…</div>
+      <DashboardLayout hideRightSidebar>
+        <div className="td-loading">Loading deliverable...</div>
       </DashboardLayout>
     );
   }
 
   if (!deliverable) {
     return (
-      <DashboardLayout hideRightSidebar={true}>
-        <div className="pd-loading pd-error">Deliverable not found.</div>
+      <DashboardLayout hideRightSidebar>
+        <div className="td-loading td-error">Deliverable not found.</div>
       </DashboardLayout>
     );
   }
 
-  const tasks = deliverable.tasks || [];
-  const members = deliverable.members || [];
-  const milestones = deliverable.milestones || [];
-  const activities = deliverable.activities || [];
-  const files = deliverable.files || [];
-  const checklist = Array.isArray(deliverable.goals_checklist) ? deliverable.goals_checklist : [];
-  const progress = typeof deliverable.progress_percent === "number" ? deliverable.progress_percent : 0;
-  const recentTasks = [...tasks].slice(0, 6);
-
-  const tabs = [
-    { id: "overview", label: "Overview", icon: ListChecks },
-    { id: "tasks", label: "Tasks", icon: Calendar },
-    { id: "team", label: "Team", icon: Users },
-    { id: "activity", label: "Activity", icon: Activity },
-    { id: "files", label: "Files", icon: FolderOpen },
-    { id: "settings", label: "Settings", icon: Settings },
-  ];
-
-  const renderRail = () => (
-    <div className="pd-rail">
-      <section className="pd-rail-card">
-        <h3 className="pd-rail-card__title">Deadlines</h3>
-        <ul className="pd-milestones">
-          {milestones.length === 0 ? (
-            <li className="pd-muted">No milestones.</li>
-          ) : (
-            milestones.map((m) => (
-              <li key={m.id} className="pd-milestones__item">
-                <span className={`pd-dot pd-dot--${statusSlug(m.status)}`} />
-                <div>
-                  <div className="pd-milestones__title">{m.title}</div>
-                  <div className="pd-milestones__date">{formatShortDate(m.due_date)}</div>
-                </div>
-              </li>
-            ))
-          )}
-        </ul>
-      </section>
-
-      <section className="pd-rail-card">
-        <h3 className="pd-rail-card__title">Tasks</h3>
-        {tasks.length === 0 ? (
-          <p className="pd-muted" style={{ margin: 0 }}>
-            No tasks yet.
-          </p>
-        ) : (
-          <ul className="pd-rail-tasks">
-            {tasks.slice(0, 6).map((t) => (
-              <li key={t.id} className="pd-rail-tasks__row">
-                <span className="pd-rail-tasks__name">{t.title}</span>
-                <span className={`pd-pill pd-pill--task-${statusSlug(taskStatusLabel(t.status))}`} style={{ fontSize: 10 }}>
-                  {taskStatusLabel(t.status)}
-                </span>
-                <span className="pd-rail-tasks__due">{formatShortDate(t.end_date)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="pd-rail-card">
-        <h3 className="pd-rail-card__title">Notes</h3>
-        <textarea
-          className="pd-notes"
-          rows={5}
-          value={notesDraft}
-          onChange={(e) => setNotesDraft(e.target.value)}
-          placeholder="Client notes or internal reminders…"
-        />
-        <button type="button" className="pd-btn" disabled={notesSaving} onClick={() => showMessage("Notes saved.")}>
-          {notesSaving ? "Saving…" : "Save notes"}
-        </button>
-      </section>
-
-      <section className="pd-rail-card">
-        <h3 className="pd-rail-card__title">Activity feed</h3>
-        <ul className="pd-feed">
-          {activities.length === 0 ? (
-            <li className="pd-muted">No activity yet.</li>
-          ) : (
-            activities.slice(0, 8).map((a) => (
-              <li key={a.id} className="pd-feed__row">
-                <div className="pd-avatar pd-avatar--sm">{initials(a.user?.name || "?")}</div>
-                <div>
-                  <span className="pd-feed__who">{a.user?.name || "System"}</span>{" "}
-                  <span className="pd-feed__text">{a.summary}</span>
-                  <div className="pd-feed__when">{timeAgo(a.created_at)}</div>
-                </div>
-              </li>
-            ))
-          )}
-        </ul>
-      </section>
-    </div>
-  );
-
-  const overviewInner = (
-    <>
-      <div className="pd-shell-split">
-        <div className="pd-shell-left">
-          <h2 className="pd-block-title">Deliverable Description</h2>
-          {deliverable.description ? (
-            <div className="pd-rich">{deliverable.description}</div>
-          ) : (
-            <p className="pd-muted">No description.</p>
-          )}
-
-          <h2 className="pd-block-title pd-block-title--gap">Deliverable Goals</h2>
-          {checklist.length > 0 ? (
-            <ul className="pd-goals">
-              {checklist.map((item, idx) => (
-                <li key={idx} className="pd-goal-row">
-                  <button
-                    type="button"
-                    className={`pd-goal-check ${item.done ? "pd-goal-check--on" : "pd-goal-check--off"}`}
-                    aria-pressed={!!item.done}
-                  >
-                    {item.done ? "✓" : ""}
-                  </button>
-                  <span className={item.done ? "pd-goal-done" : ""}>{item.text}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="pd-muted">No goals recorded.</p>
-          )}
-        </div>
-
-        <aside className="pd-shell-right">
-          <h2 className="pd-block-title">Deliverable details</h2>
-          <ul className="pd-meta-rows">
-            <li>
-              <span className="pd-meta-rows__ic">
-                <UserRound size={18} />
-              </span>
-              <div>
-                <span className="pd-meta-rows__label">Assigned by</span>
-                <span className="pd-meta-rows__value">{deliverable.creator?.name || "—"}</span>
-              </div>
-            </li>
-            <li>
-              <span className="pd-meta-rows__ic">
-                <Building2 size={18} />
-              </span>
-              <div>
-                <span className="pd-meta-rows__label">Client</span>
-                <span className="pd-meta-rows__value">{deliverable.client_name || "—"}</span>
-              </div>
-            </li>
-            <li>
-              <span className="pd-meta-rows__ic">
-                <CalendarDays size={18} />
-              </span>
-              <div>
-                <span className="pd-meta-rows__label">Start date</span>
-                <span className="pd-meta-rows__value">{formatShortDate(deliverable.start_date)}</span>
-              </div>
-            </li>
-            <li>
-              <span className="pd-meta-rows__ic">
-                <Tag size={18} />
-              </span>
-              <div>
-                <span className="pd-meta-rows__label">Priority</span>
-                <span className="pd-meta-rows__value">
-                  <span className={`pd-pill pd-pill--priority-${(deliverable.priority || "medium").toLowerCase()}`}>
-                    {deliverable.priority || "—"}
-                  </span>
-                </span>
-              </div>
-            </li>
-            <li>
-              <span className="pd-meta-rows__ic">
-                <FolderOpen size={18} />
-              </span>
-              <div>
-                <span className="pd-meta-rows__label">Category</span>
-                <span className="pd-meta-rows__value">{deliverable.category || "—"}</span>
-              </div>
-            </li>
-            <li>
-              <span className="pd-meta-rows__ic">
-                <DollarSign size={18} />
-              </span>
-              <div>
-                <span className="pd-meta-rows__label">Budget</span>
-                <span className="pd-meta-rows__value">
-                  {deliverable.budget != null && deliverable.budget !== "" ? `USD ${Number(deliverable.budget).toLocaleString()}` : "—"}
-                </span>
-              </div>
-            </li>
-          </ul>
-        </aside>
-      </div>
-
-      <div className="pd-bottom-grid">
-        <section className="pd-card-flat pd-card-flat--table">
-          <div className="pd-card-flat__head">
-            <h2 className="pd-block-title pd-block-title--inline">Recent Tasks</h2>
-          </div>
-          <div className="pd-table-wrap">
-            <table className="pd-table">
-              <thead>
-                <tr>
-                  <th>Task name</th>
-                  <th>Status</th>
-                  <th>Priority</th>
-                  <th>Due date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentTasks.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="pd-muted pd-table-empty">
-                      No tasks yet.
-                    </td>
-                  </tr>
-                ) : (
-                  recentTasks.map((t) => (
-                    <tr key={t.id}>
-                      <td className="pd-table-strong">{t.title}</td>
-                      <td>
-                        <span className={`pd-pill pd-pill--task-${statusSlug(taskStatusLabel(t.status))}`}>
-                          {taskStatusLabel(t.status)}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`pd-pill pd-pill--pri-${(t.priority || "medium").toLowerCase()}`}>{t.priority}</span>
-                      </td>
-                      <td>{formatShortDate(t.end_date)}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="pd-card-flat">
-          <div className="pd-card-flat__head">
-            <h2 className="pd-block-title pd-block-title--inline">Team members</h2>
-            <Link to={rolePath("manage-team")} className="pd-link-manage">
-              Manage
-            </Link>
-          </div>
-          <ul className="pd-member-list">
-            {deliverable.creator && (
-              <li className="pd-member">
-                <div className="pd-avatar" aria-hidden>
-                  {initials(deliverable.creator.name)}
-                </div>
-                <div>
-                  <div className="pd-member-name">{deliverable.creator.name}</div>
-                  <div className="pd-member-role">Creator · {deliverable.creator.role || "—"}</div>
-                </div>
-                <span className="pd-badge-owner">Creator</span>
-              </li>
-            )}
-            {members
-              .filter((m) => m.id !== deliverable.creator?.id)
-              .map((m) => (
-                <li key={m.id} className="pd-member">
-                  <div className="pd-avatar" aria-hidden>
-                    {initials(m.name)}
-                  </div>
-                  <div>
-                    <div className="pd-member-name">{m.name}</div>
-                    <div className="pd-member-role">{m.role || "Member"}</div>
-                  </div>
-                  <span className="pd-badge-member">Member</span>
-                </li>
-              ))}
-          </ul>
-        </section>
-      </div>
-    </>
-  );
+  const ss = statusStyle(deliverable.status);
+  const submissions = deliverable.submissions || [];
+  const latestSubmission = deliverable.latest_submission;
 
   return (
-    <>
-    <DashboardLayout hideRightSidebar={true}>
-      <div className="pd-main-layout">
-      <div className="pd-page pd-page--tx">
-        {message && <div className={`pd-toast pd-toast--${messageType}`}>{message}</div>}
+    <DashboardLayout hideRightSidebar>
+      <div className="td-page">
+        {message && <div className={`td-toast td-toast--${messageType}`}>{message}</div>}
 
-        <nav className="pd-breadcrumb" aria-label="Breadcrumb">
-          <Link to={rolePath("deliveries")}>Deliverables</Link>
-          <ChevronRight size={14} aria-hidden />
-          <span>{deliverable.title}</span>
-        </nav>
+        <div className="td-layout">
+          <div className="td-main">
+            <nav className="td-breadcrumb">
+              <Link to={rolePath("deliveries")}>Deliverables</Link>
+              <ChevronRight size={14} />
+              <span>{deliverable.title}</span>
+            </nav>
 
-        <header className="pd-hero-tx">
-          <div className="pd-hero-tx__main">
-            <div className="pd-title-row">
-              <div className="pd-title-icon" aria-hidden>
-                <Monitor size={28} strokeWidth={1.75} />
-              </div>
-              <h1 className="pd-title-tx">{deliverable.title}</h1>
+            <div className="td-title-row">
+              <h1 className="td-title">{deliverable.title}</h1>
             </div>
+
+            <div className="td-badges">
+              <span className="td-badge" style={{ background: ss.bg, color: ss.text }}>
+                <span className="td-badge-dot" style={{ background: ss.text }} />
+                {(deliverable.status || "").charAt(0).toUpperCase() + (deliverable.status || "").slice(1)}
+              </span>
+            </div>
+
+            {/* Info Cards */}
+            <div className="td-stats" style={{ marginTop: "20px" }}>
+              <div className="td-stat td-stat--trio" style={{ width: "100%" }}>
+                <div className="td-trio-item">
+                  <div>
+                    <span className="td-stat-label">Related Task</span>
+                    <span className="td-stat-big td-stat-big--sm" style={{ display: "block" }}>{deliverable.task?.title || "—"}</span>
+                  </div>
+                </div>
+                <div className="td-trio-item">
+                  <div>
+                    <span className="td-stat-label">Assigned To</span>
+                    <span className="td-stat-big td-stat-big--sm" style={{ display: "block" }}>{deliverable.assignee?.name || "—"}</span>
+                  </div>
+                </div>
+                <div className="td-trio-item">
+                  <div>
+                    <span className="td-stat-label">Due Date</span>
+                    <span className="td-stat-big td-stat-big--sm" style={{ display: "block" }}>{formatShortDate(deliverable.due_date)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Description */}
             {deliverable.description && (
-              <div className="pd-desc-tx">{deliverable.description}</div>
+              <div style={{ marginTop: "20px" }}>
+                <h2 className="td-section-title">Description</h2>
+                <p style={{ color: "#6b7280", lineHeight: 1.6 }}>{deliverable.description}</p>
+              </div>
             )}
-            <div className="pd-hero-actions">
-              <span className={`pd-pill-status pd-pill-status--${statusSlug(deliverable.status)}`}>{deliverable.status}</span>
-              <button type="button" className="pd-btn-tx pd-btn-tx--outline">
-                <Pencil size={16} />
-                Edit Deliverable
-              </button>
-              <button type="button" className="pd-btn-tx pd-btn-tx--danger" onClick={handleDeleteDeliverable}>
-                <Trash2 size={16} />
-                Delete
-              </button>
-            </div>
-          </div>
-        </header>
 
-        <div className="pd-stat-strip">
-          <div className="pd-mini-stat">
-            <div className="pd-mini-stat__ic pd-mini-stat__ic--blue">
-              <Percent size={20} />
-            </div>
-            <div className="pd-mini-stat__text">
-              <span className="pd-mini-stat__label">Overall Progress</span>
-              <div className="pd-mini-stat__bar">
-                <span style={{ width: `${progress}%` }} />
-              </div>
-              <span className="pd-mini-stat__val">{progress}%</span>
-            </div>
-          </div>
-          <div className="pd-mini-stat1">
-            <div className="pd-mini-stat__ic pd-mini-stat__ic--orange">
-              <ClipboardList size={20} />
-            </div>
-            <div className="pd-mini-stat__text">
-              <span className="pd-mini-stat__label">Tasks</span>
-              <span className="pd-mini-stat__num">{tasks.length}</span>
-            </div>
-            <div className="pd-mini-stat2">
-              <div className="pd-mini-stat__ic pd-mini-stat__ic--indigo">
-                <Users size={20} />
-              </div>
-              <div className="pd-mini-stat__text">
-                <span className="pd-mini-stat__label">Members</span>
-                <span className="pd-mini-stat__num">{memberCount}</span>
-              </div>
-            </div>
-            <div className="pd-mini-stat3">
-              <div className="pd-mini-stat__ic pd-mini-stat__ic--green">
-                <CalendarDays size={20} />
-              </div>
-              <div className="pd-mini-stat__text">
-                <span className="pd-mini-stat__label">Deadline</span>
-                <span className="pd-mini-stat__num pd-mini-stat__num--sm">{formatShortDate(deliverable.end_date)}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="pd-focus">
-          <div className="pd-focus__main">
-            <div className="pd-shell">
-              <div className="pd-tabs-tx" role="tablist">
-                {tabs.map(({ id, label, icon: Icon }) => (
+            {/* Submit Form */}
+            {deliverable.status === "pending" && (
+              <div style={{ marginTop: "24px" }}>
+                {!showSubmitForm ? (
                   <button
-                    key={id}
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === id}
-                    className={`pd-tab-tx ${tab === id ? "pd-tab-tx--on" : ""}`}
-                    onClick={() => setTab(id)}
+                    className="td-btn-primary"
+                    onClick={() => setShowSubmitForm(true)}
                   >
-                    <Icon size={17} strokeWidth={2} />
-                    {label}
+                    Submit Deliverable
                   </button>
+                ) : (
+                  <div className="td-card" style={{ padding: "20px" }}>
+                    <h3 className="td-card-title">Submit Deliverable</h3>
+                    <div style={{ marginTop: "12px" }}>
+                      <label style={{ display: "block", marginBottom: "6px", fontSize: "13px", fontWeight: 500, color: "#374151" }}>Comment</label>
+                      <textarea
+                        className="td-notes"
+                        style={{ width: "100%", minHeight: "80px", padding: "10px", border: "1px solid #e5e7eb", borderRadius: "8px", fontSize: "14px" }}
+                        placeholder="Add a comment about your submission..."
+                        value={submitComment}
+                        onChange={(e) => setSubmitComment(e.target.value)}
+                      />
+                    </div>
+                    <div style={{ marginTop: "12px" }}>
+                      <label style={{ display: "block", marginBottom: "6px", fontSize: "13px", fontWeight: 500, color: "#374151" }}>File Attachment</label>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={(e) => setSubmitFile(e.target.files[0])}
+                        style={{ fontSize: "14px" }}
+                      />
+                      {submitFile && (
+                        <div style={{ marginTop: "6px", fontSize: "13px", color: "#6366f1" }}>
+                          Selected: {submitFile.name}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ marginTop: "16px", display: "flex", gap: "10px" }}>
+                      <button
+                        className="td-btn-primary"
+                        onClick={handleSubmit}
+                        disabled={submitting}
+                      >
+                        {submitting ? "Submitting..." : "Submit"}
+                      </button>
+                      <button
+                        className="td-btn-outline"
+                        onClick={() => { setShowSubmitForm(false); setSubmitComment(""); setSubmitFile(null); }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Approve/Reject for assigner */}
+            {deliverable.status === "submitted" && canApproveReject && (
+              <div style={{ marginTop: "24px", display: "flex", gap: "10px", alignItems: "flex-start", flexDirection: "column" }}>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button className="td-btn-primary" style={{ background: "#166534" }} onClick={handleApprove}>
+                    Approve
+                  </button>
+                  <button className="td-btn-danger" onClick={() => setShowRejectForm(true)}>
+                    Reject
+                  </button>
+                </div>
+                {showRejectForm && (
+                  <div className="td-card" style={{ padding: "16px", width: "100%", maxWidth: "400px" }}>
+                    <label style={{ display: "block", marginBottom: "6px", fontSize: "13px", fontWeight: 500, color: "#374151" }}>Rejection Comment (optional)</label>
+                    <textarea
+                      style={{ width: "100%", minHeight: "60px", padding: "8px", border: "1px solid #e5e7eb", borderRadius: "8px", fontSize: "14px" }}
+                      placeholder="Reason for rejection..."
+                      value={rejectComment}
+                      onChange={(e) => setRejectComment(e.target.value)}
+                    />
+                    <div style={{ marginTop: "10px", display: "flex", gap: "8px" }}>
+                      <button className="td-btn-danger" onClick={handleReject}>Confirm Reject</button>
+                      <button className="td-btn-outline" onClick={() => { setShowRejectForm(false); setRejectComment(""); }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Rejection info */}
+            {deliverable.status === "rejected" && deliverable.rejection_comment && (
+              <div style={{ marginTop: "20px", padding: "16px", background: "#FEE2E2", borderRadius: "8px", border: "1px solid #FECACA" }}>
+                <h3 className="td-card-title" style={{ color: "#991B1B" }}>Rejection Reason</h3>
+                <p style={{ color: "#7F1D1D", marginTop: "6px" }}>{deliverable.rejection_comment}</p>
+                {deliverable.rejected_by && <p style={{ color: "#7F1D1D", fontSize: "12px", marginTop: "4px" }}>By: {deliverable.rejected_by.name}</p>}
+                {deliverable.status === "rejected" && (
+                  <button
+                    className="td-btn-primary"
+                    style={{ marginTop: "12px" }}
+                    onClick={() => setShowSubmitForm(true)}
+                  >
+                    Resubmit
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Approved info */}
+            {deliverable.status === "approved" && (
+              <div style={{ marginTop: "20px", padding: "16px", background: "#DCFCE7", borderRadius: "8px", border: "1px solid #BBF7D0" }}>
+                <h3 className="td-card-title" style={{ color: "#166534" }}>Approved</h3>
+                {deliverable.approved_by && <p style={{ color: "#166534", marginTop: "4px", fontSize: "13px" }}>Approved by: {deliverable.approved_by.name}</p>}
+              </div>
+            )}
+
+            {/* Submission History */}
+            {submissions.length > 0 && (
+              <div style={{ marginTop: "24px" }}>
+                <h2 className="td-section-title">Submission History</h2>
+                {submissions.map((sub) => (
+                  <div key={sub.id} className="td-card" style={{ marginTop: "10px", padding: "16px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: "14px" }}>{sub.submitted_by?.name || "Unknown"}</div>
+                        <div style={{ fontSize: "12px", color: "#9ca3af", marginTop: "2px" }}>{timeAgo(sub.created_at)}</div>
+                      </div>
+                    </div>
+                    {sub.comment && <p style={{ marginTop: "8px", color: "#374151", fontSize: "14px" }}>{sub.comment}</p>}
+                    {sub.file_path && (
+                      <div style={{ marginTop: "8px" }}>
+                        <a
+                          href={`${API_URL.replace("/api", "")}/storage/${sub.file_path}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "#6366f1", fontSize: "13px", textDecoration: "none" }}
+                        >
+                          <Download size={14} />
+                          {sub.file_name || "Download File"}
+                        </a>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
+            )}
 
-              <div className="pd-shell-body">
-                {tab === "overview" && <div className="pd-tab-panel">{overviewInner}</div>}
-
-                {tab === "tasks" && (
-                  <div className="pd-tab-panel">
-                    <section className="pd-card-flat pd-card-flat--table">
-                      <h2 className="pd-block-title">All tasks</h2>
-                      <div className="pd-table-wrap">
-                        <table className="pd-table">
-                          <thead>
-                            <tr>
-                              <th>Task</th>
-                              <th>Assignee</th>
-                              <th>Status</th>
-                              <th>Priority</th>
-                              <th>Due</th>
-                              <th />
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {tasks.length === 0 ? (
-                              <tr>
-                                <td colSpan={6} className="pd-muted pd-table-empty">
-                                  No tasks.
-                                </td>
-                              </tr>
-                            ) : (
-                              tasks.map((t) => (
-                                <tr key={t.id}>
-                                  <td className="pd-table-strong">{t.title}</td>
-                                  <td>{t.assignees?.map((a) => a.name).join(", ") || "—"}</td>
-                                  <td>
-                                    <span className={`pd-pill pd-pill--task-${statusSlug(taskStatusLabel(t.status))}`}>
-                                      {taskStatusLabel(t.status)}
-                                    </span>
-                                  </td>
-                                  <td>
-                                    <span className={`pd-pill pd-pill--pri-${(t.priority || "medium").toLowerCase()}`}>
-                                      {t.priority}
-                                    </span>
-                                  </td>
-                                  <td>{formatShortDate(t.end_date)}</td>
-                                  <td>
-                                    <button type="button" className="pd-icon-del" onClick={() => showMessage("Task deleted.")}>
-                                      <Trash2 size={16} />
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </section>
-                    <section className="pd-card-flat">
-                      <h2 className="pd-block-title">Add task</h2>
-                      <form className="pd-task-form" onSubmit={(e) => { e.preventDefault(); showMessage("Task added."); }}>
-                        <div className="pd-form-grid">
-                          <label className="pd-field">
-                            <span>Title</span>
-                            <input name="title" value={taskForm.title} onChange={handleTaskFormChange} required />
-                          </label>
-                          <label className="pd-field">
-                            <span>Priority</span>
-                            <select name="priority" value={taskForm.priority} onChange={handleTaskFormChange}>
-                              <option>Low</option>
-                              <option>Medium</option>
-                              <option>High</option>
-                            </select>
-                          </label>
-                          <label className="pd-field">
-                            <span>Status</span>
-                            <select name="status" value={taskForm.status} onChange={handleTaskFormChange}>
-                              <option value="pending">Pending</option>
-                              <option value="in_progress">In Progress</option>
-                              <option value="completed">Completed</option>
-                            </select>
-                          </label>
-                          <label className="pd-field">
-                            <span>Assign to</span>
-                            <select name="assigned_to" value={taskForm.assigned_to} onChange={handleTaskFormChange}>
-                              <option value="">Unassigned</option>
-                              {members.map((u) => (
-                                <option key={u.id} value={u.id}>
-                                  {u.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="pd-field">
-                            <span>Start</span>
-                            <input type="date" name="start_date" value={taskForm.start_date} onChange={handleTaskFormChange} />
-                          </label>
-                          <label className="pd-field">
-                            <span>Due</span>
-                            <input type="date" name="end_date" value={taskForm.end_date} onChange={handleTaskFormChange} />
-                          </label>
-                        </div>
-                        <label className="pd-field pd-field--full">
-                          <span>Description</span>
-                          <textarea name="description" rows={3} value={taskForm.description} onChange={handleTaskFormChange} />
-                        </label>
-                        <button type="submit" className="pd-btn pd-btn--primary">
-                          Add task
-                        </button>
-                      </form>
-                    </section>
-                  </div>
-                )}
-
-                {tab === "team" && (
-                  <div className="pd-tab-panel">
-                    <section className="pd-card-flat">
-                      <h2 className="pd-block-title">Linked team</h2>
-                      {deliverable.team ? (
-                        <div className="pd-team-block">
-                          <p>
-                            <strong>{deliverable.team.name}</strong>
-                          </p>
-                          {deliverable.team.leader && <p className="pd-muted">Team lead: {deliverable.team.leader.name}</p>}
-                          {deliverable.team.members?.length > 0 && (
-                            <ul className="pd-team-members">
-                              {deliverable.team.members.map((m) => (
-                                <li key={m.id}>
-                                  {m.name} <span className="pd-muted">({m.role})</span>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="pd-muted">No team linked to this deliverable.</p>
-                      )}
-                    </section>
-                  </div>
-                )}
-
-                {tab === "activity" && (
-                  <div className="pd-tab-panel">
-                    <section className="pd-card-flat">
-                      <h2 className="pd-block-title">Deliverable activity</h2>
-                      <ul className="pd-feed pd-feed--full">
-                        {activities.length === 0 ? (
-                          <li className="pd-muted">No activity yet.</li>
-                        ) : (
-                          activities.map((a) => (
-                            <li key={a.id} className="pd-feed__row">
-                              <div className="pd-avatar pd-avatar--sm">{initials(a.user?.name || "?")}</div>
-                              <div>
-                                <span className="pd-feed__who">{a.user?.name || "System"}</span>{" "}
-                                <span className="pd-feed__text">{a.summary}</span>
-                                <div className="pd-feed__when">{timeAgo(a.created_at)}</div>
-                              </div>
-                            </li>
-                          ))
-                        )}
-                      </ul>
-                    </section>
-                  </div>
-                )}
-
-                {tab === "files" && (
-                  <div className="pd-tab-panel">
-                    <section className="pd-card-flat">
-                      <h2 className="pd-block-title">Files & links</h2>
-                      {files.length === 0 ? (
-                        <p className="pd-muted">No files attached.</p>
-                      ) : (
-                        <ul className="pd-file-list">
-                          {files.map((f) => (
-                            <li key={f.id}>
-                              <FolderOpen size={18} />
-                              {f.url ? (
-                                <a href={f.url} target="_blank" rel="noopener noreferrer">
-                                  {f.name}
-                                </a>
-                              ) : (
-                                <span>{f.name}</span>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </section>
-                  </div>
-                )}
-
-                {tab === "settings" && (
-                  <div className="pd-tab-panel">
-                    <section className="pd-card-flat">
-                      <h2 className="pd-block-title">Sheets & documents</h2>
-                      {deliverable.sheets_documents ? (
-                        <div className="pd-rich">{deliverable.sheets_documents}</div>
-                      ) : (
-                        <p className="pd-muted">None.</p>
-                      )}
-                    </section>
-                    <section className="pd-card-flat">
-                      <h2 className="pd-block-title">Website</h2>
-                      {deliverable.website_link ? (
-                        <a href={deliverable.website_link} className="pd-ext-link" target="_blank" rel="noopener noreferrer">
-                          {deliverable.website_name || deliverable.website_link}
-                        </a>
-                      ) : (
-                        <p className="pd-muted">No website.</p>
-                      )}
-                    </section>
-                  </div>
-                )}
+            {/* Resubmit button for rejected */}
+            {deliverable.status === "rejected" && !showSubmitForm && (
+              <div style={{ marginTop: "16px" }}>
+                <button className="td-btn-primary" onClick={() => setShowSubmitForm(true)}>
+                  Resubmit Deliverable
+                </button>
               </div>
-            </div>
+            )}
           </div>
 
-          </div>
-      </div>
-      
-      <div>
-                {renderRail()}
-      </div>
+          {/* Right Sidebar */}
+          <aside className="td-sidebar">
+            <div className="td-card">
+              <h3 className="td-card-title">Deliverable Info</h3>
+              <ul className="td-info">
+                <li>
+                  <span className="td-dot" style={{ background: "#3b82f6" }} />
+                  <div>
+                    <span className="td-info-label">Task</span>
+                    <span className="td-info-val">{deliverable.task?.title || "—"}</span>
+                  </div>
+                </li>
+                <li>
+                  <span className="td-dot" style={{ background: "#f59e0b" }} />
+                  <div>
+                    <span className="td-info-label">Assigned To</span>
+                    <span className="td-info-val">{deliverable.assignee?.name || "—"}</span>
+                  </div>
+                </li>
+                <li>
+                  <span className="td-dot" style={{ background: "#8b5cf6" }} />
+                  <div>
+                    <span className="td-info-label">Created By</span>
+                    <span className="td-info-val">{deliverable.creator?.name || "—"}</span>
+                  </div>
+                </li>
+                <li>
+                  <span className="td-dot" style={{ background: "#22c55e" }} />
+                  <div>
+                    <span className="td-info-label">Due Date</span>
+                    <span className="td-info-val">{formatShortDate(deliverable.due_date)}</span>
+                  </div>
+                </li>
+                <li>
+                  <span className="td-dot" style={{ background: "#ef4444" }} />
+                  <div>
+                    <span className="td-info-label">Status</span>
+                    <span className="td-info-val">{(deliverable.status || "").charAt(0).toUpperCase() + (deliverable.status || "").slice(1)}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </aside>
+        </div>
       </div>
     </DashboardLayout>
-
-    <ConfirmModal
-      isOpen={deleteDeliverableConfirmOpen}
-      onClose={() => setDeleteDeliverableConfirmOpen(false)}
-      onConfirm={confirmDeleteDeliverable}
-      title="Confirm Deletion"
-      message="Are you sure you want to delete this deliverable? This action cannot be undone."
-      confirmText="Delete"
-      cancelText="Cancel"
-      danger
-    />
-    </>
   );
 }
 
