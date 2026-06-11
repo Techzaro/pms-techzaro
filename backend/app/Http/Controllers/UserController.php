@@ -543,6 +543,40 @@ class UserController extends Controller
     }
 
     /**
+     * Download a document for the authenticated user (self-access).
+     */
+    public function downloadMyDocument(Request $request, string $document)
+    {
+        $user = $request->user();
+
+        if (!in_array($document, $this->documentFields)) {
+            return response()->json(['message' => 'Invalid document field.'], 404);
+        }
+
+        $path = $user->$document;
+
+        if (!$path) {
+            return response()->json(['message' => 'Document not found.'], 404);
+        }
+
+        $fullPath = storage_path('app/public/' . $path);
+
+        if (!file_exists($fullPath)) {
+            return response()->json(['message' => 'File not found on disk.'], 404);
+        }
+
+        $mimeType = mime_content_type($fullPath);
+        $filename = basename($path);
+
+        return response()->file($fullPath, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => ($request->query('action') === 'download')
+                ? 'attachment; filename="' . $filename . '"'
+                : 'inline; filename="' . $filename . '"',
+        ]);
+    }
+
+    /**
      * Test email sending functionality.
      */
     public function testEmail(Request $request)
