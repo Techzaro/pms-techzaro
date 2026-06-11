@@ -206,12 +206,12 @@ const Taskby = () => {
       <div className="container">
            <div className="table-header">
           <div>Assigned by</div>
-          <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task Name</div>
+          <div className="task-name-column" >Task Name</div>
           <div>Type</div>
-          <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
+          <div className="status-column" >Status</div>
           <div>Progress</div>
-          <div className="priority-column" style={{ paddingRight: "10px" }}>Priority</div>
-          <div className="date-column" style={{ paddingRight: "50px" }}>  Date</div>
+          <div className="priority-column" >Priority</div>
+          <div className="date-column" >  Date</div>
           <div>Action</div>
         </div>
 

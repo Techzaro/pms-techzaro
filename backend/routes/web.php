@@ -2,7 +2,7 @@
 
 /**
  * Web route definitions for the PMS backend.
- * This file currently serves the default welcome page.
+ * This file serves web pages for the PMS application.
  */
 use Illuminate\Support\Facades\Route;
 
