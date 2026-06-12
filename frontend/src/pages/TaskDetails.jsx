@@ -97,6 +97,12 @@ function TaskDetails() {
   const navigate = useNavigate();
   const location = useLocation();
   const taskIds = location.state?.taskIds || [];
+  const sourcePages = {
+    tasks: { label: "My Tasks", path: rolePath("tasks") },
+    taskby: { label: "Tasks Assigned By You", path: rolePath("taskby") },
+    "self-tasks": { label: "Self Tasks", path: rolePath("self-tasks") },
+  };
+  const source = sourcePages[location.state?.from] || null;
   const currentIdx = taskIds.findIndex((id) => String(id) === String(taskId));
   const prevTaskId = currentIdx > 0 ? taskIds[currentIdx - 1] : null;
   const nextTaskId = currentIdx >= 0 && currentIdx < taskIds.length - 1 ? taskIds[currentIdx + 1] : null;

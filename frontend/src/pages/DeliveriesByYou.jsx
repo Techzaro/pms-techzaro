@@ -28,6 +28,7 @@ function DeliveriesByYou() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [timeFilter, setTimeFilter] = useState("");
 
   const fetchDeliverables = () => {
     setLoading(true);
@@ -35,6 +36,7 @@ function DeliveriesByYou() {
     const params = new URLSearchParams();
     if (search) params.append("search", search);
     if (statusFilter) params.append("status", statusFilter);
+    if (timeFilter) params.append("time_filter", timeFilter);
 
     fetch(`${API_URL}/deliverables/assigned-by-me?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -49,7 +51,7 @@ function DeliveriesByYou() {
 
   useEffect(() => {
     fetchDeliverables();
-  }, [search, statusFilter]);
+  }, [search, statusFilter, timeFilter]);
 
   const getInitials = (name) => {
     if (!name) return "??";
@@ -92,21 +94,29 @@ function DeliveriesByYou() {
             <h1>Deliverables Assigned By You</h1>
             <p>Deliverables assigned to others from tasks and projects you created</p>
           </div>
+          <div className="header-actions">
+            <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="reports-filter">
+              <option value="">All Time</option>
+              <option value="7">Last 7 Days</option>
+              <option value="30">Last 30 Days</option>
+              <option value="180">Last 6 Months</option>
+            </select>
+          </div>
         </div>
 
         <div className="task-progress">
           <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
           <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => setStatusFilter("pending")} style={{ cursor: "pointer" }}>
-            <GoDotFill color={STATUS_COLORS.pending} /> Pending
+            <GoDotFill /> Pending
           </p>
           <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
-            <GoDotFill color={STATUS_COLORS.submitted} /> Submitted
+            <GoDotFill /> Submitted
           </p>
           <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
-            <GoDotFill color={STATUS_COLORS.approved} /> Approved
+            <GoDotFill /> Approved
           </p>
           <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => setStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-            <GoDotFill color={STATUS_COLORS.rejected} /> Rejected
+            <GoDotFill /> Rejected
           </p>
         </div>
 
@@ -116,12 +126,12 @@ function DeliveriesByYou() {
         </div>
 
         <div className="container">
-          <div className="table-header">
+          <div className="deliveries-table-header">
             <div>Deliverable</div>
-            <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task</div>
+            <div className="task-name-column">Task</div>
             <div>Assigned To</div>
-            <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
-            <div className="date-column" style={{ paddingRight: "30px" }}>Due Date</div>
+            <div className="status-column">Status</div>
+            <div className="date-column">Due Date</div>
             <div>Action</div>
           </div>
 
@@ -133,7 +143,7 @@ function DeliveriesByYou() {
             deliverables.map((item) => {
               const colors = getRandomColors(item.id);
               return (
-                <div className="table-row" key={item.id}>
+                <div className="deliveries-table-row" key={item.id}>
                   <div className="user-box">
                     <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                       {getInitials(item.title)}
@@ -143,7 +153,7 @@ function DeliveriesByYou() {
                     </div>
                   </div>
                   <div>
-                    <div className="task-title" style={{ paddingLeft: "40px" }}>{item.task?.title || "-"}</div>
+                    <div className="task-title">{item.task?.title || "-"}</div>
                   </div>
                   <div className="user-box">
                     <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
