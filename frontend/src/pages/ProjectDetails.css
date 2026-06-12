@@ -1160,6 +1160,25 @@
   margin-top: 16px;
 }
 
+/* ── Nav Buttons (prev/next) ── */
+.td-nav-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.td-nav-btn:hover { background: #f9fafb; border-color: #d1d5db; }
+.td-nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.td-nav-btn:disabled:hover { background: #fff; border-color: #e5e7eb; }
+
 /* ── Comprehensive Responsive ── */
 
 @media (max-width: 992px) {

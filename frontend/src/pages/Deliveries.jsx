@@ -40,6 +40,7 @@ function Deliveries() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [view, setView] = useState("assignee");
+  const [timeFilter, setTimeFilter] = useState("");
 
   const currentRole = getCurrentRole();
   const canSeeBothViews = ["admin", "manager", "team_lead"].includes(currentRole);
@@ -109,6 +110,12 @@ function Deliveries() {
             <p>Manage and track your deliverables</p>
           </div>
           <div className="header-actions">
+            <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="reports-filter">
+              <option>All Time</option>
+              <option>Last 7 Days</option>
+              <option>Last 30 Days</option>
+              <option>Last 6 Months</option>
+            </select>
             {canSeeBothViews && (
               <div style={{ display: "flex", gap: "8px" }}>
                 <button

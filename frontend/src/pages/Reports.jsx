@@ -113,7 +113,7 @@ function Reports() {
               <option>All Time</option>
               <option>Last 7 Days</option>
               <option>Last 30 Days</option>
-              <option>This Month</option>
+              <option>Last 6 Months</option>
             </select>
             <button
               className="reports-export-btn"

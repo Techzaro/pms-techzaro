@@ -50,6 +50,7 @@ const SelfTasks = () => {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [timeFilter, setTimeFilter] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -62,6 +63,7 @@ const SelfTasks = () => {
     const params = new URLSearchParams();
     if (debouncedSearch) params.append("search", debouncedSearch);
     if (statusFilter) params.append("status", statusFilter);
+    if (timeFilter) params.append("time_filter", timeFilter);
 
     fetch(`${API_URL}/self-tasks?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -77,7 +79,7 @@ const SelfTasks = () => {
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch, statusFilter]);
+  }, [debouncedSearch, statusFilter, timeFilter]);
 
   const handleModalClose = (refresh) => {
     setShowTaskModal(false);
@@ -128,6 +130,8 @@ const SelfTasks = () => {
       })
     : items;
 
+  const taskIdList = filteredItems.filter((i) => i.item_type !== "project").map((i) => i.id);
+
   return (
     <DashboardLayout>
       <div className="Task">
@@ -137,10 +141,13 @@ const SelfTasks = () => {
         </div>
 
         <div className="task-btns">
-          <div className="all-time">
-            <CiCalendar />
-            <span>All Time</span>
-            <IoIosArrowDown />
+               <div className="all-time">
+            <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
+              <option value="">All Time</option>
+              <option value="7">Last 7 Days</option>
+              <option value="30">Last 30 Days</option>
+              <option value="180">Last 6 Months</option>
+            </select>
           </div>
 
           <button
@@ -187,13 +194,13 @@ const SelfTasks = () => {
       </div>
 
       <div className="container">
-        <div className="table-header">
-          <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task Name</div>
+        <div className="table-header-compact">
+          <div>Task Name</div>
           <div>Type</div>
-          <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
+          <div>Status</div>
           <div>Progress</div>
-          <div className="priority-column" style={{ paddingRight: "10px" }}>Priority</div>
-          <div className="date-column" style={{ paddingRight: "50px" }}>  Date</div>
+          <div>Priority</div>
+          <div>Date</div>
           <div>Action</div>
         </div>
 
@@ -204,32 +211,34 @@ const SelfTasks = () => {
         ) : (
           filteredItems.map((item) => {
             const isProject = item.item_type === "project";
-            const gridCols = "1fr 70px 110px 90px 90px 100px 80px";
 
             if (isProject) {
               const projectStatus = calculateProjectStatus(item);
               return (
-                <div style={{ display: "grid", gridTemplateColumns: gridCols, alignItems: "center", padding: "12px 12px", borderBottom: "1px solid #f1f5f9" }} key={`project-${item.id}`}>
+                <div className="taskby-row-compact" key={`project-${item.id}`}>
                   <div>
-                    <div className="task-title"style={{paddingLeft:"50px"}}>{item.title}</div>
+                    <div className="task-title">{item.title}</div>
                   </div>
                   <div>
-                    <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                    <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5" }}>
                       Project
                     </span>
                   </div>
                   <div>
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
                       <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                       {projectStatus}
                     </span>
                   </div>
                   <div>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>{calculateProgress(item)}%</div>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{calculateProgress(item)}%</div>
+                    <div className="progress-bar-track">
+                      <div className="progress-bar-fill" style={{ width: `${calculateProgress(item)}%` }}></div>
+                    </div>
                     <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.completed_tasks || 0}/{item.total_tasks || 0} tasks</div>
                   </div>
                   <div>
-                    <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                    <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
                       <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
                       {item.priority}
                     </span>
@@ -248,27 +257,30 @@ const SelfTasks = () => {
             }
 
             return (
-              <div style={{ display: "grid", gridTemplateColumns: gridCols, alignItems: "center", padding: "12px 12px", borderBottom: "1px solid #f1f5f9" }} key={`task-${item.id}`}>
+              <div className="taskby-row-compact" key={`task-${item.id}`}>
                 <div>
-                  <div className="task-title"style={{paddingLeft:"50px"}}>{item.title}</div>
+                  <div className="task-title">{item.title}</div>
                 </div>
                 <div>
-                  <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                  <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a" }}>
                     Task
                   </span>
                 </div>
                 <div>
-                  <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                  <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
                     <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                     {formatStatus(item.status)}
                   </span>
                 </div>
                 <div>
-                  <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>{item.deliverables_progress || 0}%</div>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{item.deliverables_progress || 0}%</div>
+                  <div className="progress-bar-track">
+                    <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
+                  </div>
                   <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.approved_deliverables || 0}/{item.total_deliverables || 0} Deliverables Approved</div>
                 </div>
                 <div>
-                  <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                  <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
                     <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
                     {item.priority}
                   </span>
@@ -278,7 +290,7 @@ const SelfTasks = () => {
                   <div>{formatDate(item.end_date)}</div>
                 </div>
                 <div className="action-btns">
-                  <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`))}>
+                  <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList } })}>
                     <IoEyeOutline />
                   </button>
                 </div>

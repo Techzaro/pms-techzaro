@@ -11,6 +11,7 @@ import {
   Building2,
   Calendar,
   CalendarDays,
+  ChevronLeft,
   ChevronRight,
   ClipboardList,
   DollarSign,
@@ -138,6 +139,20 @@ function sanitizeHtml(html) {
 function ProjectDetails() {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const [projectIds, setProjectIds] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('projectIds') || '[]'); } catch { return []; }
+  });
+  const currentIdx = projectIds.findIndex((id) => String(id) === String(projectId));
+  const prevProjectId = currentIdx > 0 ? projectIds[currentIdx - 1] : null;
+  const nextProjectId = currentIdx >= 0 && currentIdx < projectIds.length - 1 ? projectIds[currentIdx + 1] : null;
+
+  const goToProject = (id) => {
+    if (id) {
+      sessionStorage.setItem('projectIds', JSON.stringify(projectIds));
+      navigate(rolePath(`projects/project-details/${id}`), { replace: true });
+    }
+  };
+
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("overview");
@@ -667,6 +682,8 @@ function ProjectDetails() {
               <div className="pd-desc-tx pd-rich" dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.description) }} />
             )}
             <div className="pd-hero-actions">
+              <button className="td-nav-btn" onClick={() => goToProject(prevProjectId)} disabled={!prevProjectId} title="Previous project"><ChevronLeft size={18} /></button>
+              <button className="td-nav-btn" onClick={() => goToProject(nextProjectId)} disabled={!nextProjectId} title="Next project"><ChevronRight size={18} /></button>
               <span className={`pd-pill-status pd-pill-status--${statusSlug(project.status)}`}>{project.status}</span>
               {["admin", "manager"].includes(getCurrentRole()) && (
                 <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => setShowEditModal(true)}>

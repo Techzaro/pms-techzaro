@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Calendar,
   CheckCircle2,
@@ -95,6 +95,15 @@ function initials(name) {
 function TaskDetails() {
   const { taskId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const taskIds = location.state?.taskIds || [];
+  const currentIdx = taskIds.findIndex((id) => String(id) === String(taskId));
+  const prevTaskId = currentIdx > 0 ? taskIds[currentIdx - 1] : null;
+  const nextTaskId = currentIdx >= 0 && currentIdx < taskIds.length - 1 ? taskIds[currentIdx + 1] : null;
+
+  const goToTask = (id) => {
+    if (id) navigate(rolePath(`tasks/task-details/${id}`), { replace: true, state: { taskIds } });
+  };
 
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -187,8 +196,8 @@ function TaskDetails() {
             <div className="td-title-row">
               <h1 className="td-title">{task.title}</h1>
               <div className="td-title-actions">
-                <button className="td-nav-btn"><ChevronLeft size={18} /></button>
-                <button className="td-nav-btn"><ChevronRight size={18} /></button>
+                <button className="td-nav-btn" onClick={() => goToTask(prevTaskId)} disabled={!prevTaskId}><ChevronLeft size={18} /></button>
+                <button className="td-nav-btn" onClick={() => goToTask(nextTaskId)} disabled={!nextTaskId}><ChevronRight size={18} /></button>
                 {isCreator && (
                   <>
                     <button className="td-btn-outline" onClick={() => setShowEditModal(true)}>

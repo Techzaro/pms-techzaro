@@ -50,6 +50,7 @@ const Taskby = () => {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [timeFilter, setTimeFilter] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -62,6 +63,7 @@ const Taskby = () => {
     const params = new URLSearchParams();
     if (debouncedSearch) params.append("search", debouncedSearch);
     if (statusFilter) params.append("status", statusFilter);
+    if (timeFilter) params.append("time_filter", timeFilter);
 
     fetch(`${API_URL}/assigned-tasks?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -77,7 +79,7 @@ const Taskby = () => {
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch, statusFilter]);
+  }, [debouncedSearch, statusFilter, timeFilter]);
 
   const handleModalClose = (refresh) => {
     setShowTaskModal(false);
@@ -145,6 +147,8 @@ const Taskby = () => {
       })
     : items;
 
+  const taskIdList = filteredItems.filter((i) => i.item_type !== "project").map((i) => i.id);
+
   return (
     <DashboardLayout>
       <div className="Task">
@@ -154,10 +158,13 @@ const Taskby = () => {
         </div>
 
         <div className="task-btns">
-          <div className="all-time">
-            <CiCalendar />
-            <span>All Time</span>
-            <IoIosArrowDown />
+            <div className="all-time">
+            <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
+              <option value="">All Time</option>
+              <option value="7">Last 7 Days</option>
+              <option value="30">Last 30 Days</option>
+              <option value="180">Last 6 Months</option>
+            </select>
           </div>
 
           <button
@@ -204,15 +211,15 @@ const Taskby = () => {
       </div>
 
       <div className="container">
-           <div className="table-header">
+           <div className="table-header1">
           <div>Assigned by</div>
           <div className="task-name-column" >Task Name</div>
           <div>Type</div>
           <div className="status-column" >Status</div>
           <div>Progress</div>
           <div className="priority-column" >Priority</div>
-          <div className="date-column" >  Date</div>
-          <div>Action</div>
+           <div>Date</div>
+           <div>Action</div>
         </div>
 
         {loading ? (
@@ -228,7 +235,7 @@ const Taskby = () => {
               const projectStatus = calculateProjectStatus(item);
               const primaryUser = item.assigned_user;
               return (
-                <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 70px 110px 90px 90px 100px 80px", alignItems: "center", padding: "12px 12px", borderBottom: "1px solid #f1f5f9" }} key={`project-${item.id}-${primaryUser?.id || 0}`}>
+                <div className="taskby-row" key={`project-${item.id}-${primaryUser?.id || 0}`}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                       {getInitials(primaryUser?.name)}
@@ -239,25 +246,28 @@ const Taskby = () => {
                     </div>
                   </div>
                   <div>
-                    <div className="task-title"style={{paddingLeft:"50px"}}>{item.title}</div>
+                    <div className="task-title">{item.title}</div>
                   </div>
                   <div>
-                    <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                    <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5" }}>
                       Project
                     </span>
                   </div>
                   <div>
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
                       <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                       {projectStatus}
                     </span>
                   </div>
                   <div>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>{calculateProgress(item)}%</div>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{calculateProgress(item)}%</div>
+                    <div className="progress-bar-track">
+                      <div className="progress-bar-fill" style={{ width: `${calculateProgress(item)}%` }}></div>
+                    </div>
                     <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.completed_tasks || 0}/{item.total_tasks || 0} tasks</div>
                   </div>
                   <div>
-                    <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                    <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
                       <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
                       {item.priority}
                     </span>
@@ -278,7 +288,7 @@ const Taskby = () => {
             const assignees = item.assignees || [];
             const primaryAssignee = assignees[0];
             return (
-              <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 70px 110px 90px 90px 100px 80px", alignItems: "center", padding: "12px 12px", borderBottom: "1px solid #f1f5f9" }} key={`task-${item.id}-${primaryAssignee?.id || 0}`}>
+              <div className="taskby-row" key={`task-${item.id}-${primaryAssignee?.id || 0}`}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                     {getInitials(primaryAssignee?.name)}
@@ -289,25 +299,28 @@ const Taskby = () => {
                   </div>
                 </div>
                 <div>
-                  <div className="task-title"style={{paddingLeft:"50px"}}>{item.title}</div>
+                  <div className="task-title">{item.title}</div>
                 </div>
                 <div>
-                  <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                  <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a" }}>
                     Task
                   </span>
                 </div>
                   <div>
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
                       <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                       {formatStatus(item.status)}
                     </span>
                   </div>
                   <div>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>{item.deliverables_progress || 0}%</div>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{item.deliverables_progress || 0}%</div>
+                    <div className="progress-bar-track">
+                      <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
+                    </div>
                     <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.approved_deliverables || 0}/{item.total_deliverables || 0} Deliverables Approved</div>
                   </div>
                   <div>
-                    <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                    <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
                       <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
                       {item.priority}
                     </span>
@@ -317,7 +330,7 @@ const Taskby = () => {
                   <div>{formatDate(item.end_date)}</div>
                 </div>
                 <div className="action-btns">
-                  <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`))}>
+                  <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList } })}>
                     <IoEyeOutline />
                   </button>
                 </div>
