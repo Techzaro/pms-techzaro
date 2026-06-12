@@ -311,8 +311,12 @@ const CreateProjectModal = ({ onClose }) => {
   };
 
   return (
-    <div className="cp-overlay">
-      <div className="cp-modal">
+    <div className="cp-overlay" onClick={(e) => {
+      if (e.target === e.currentTarget) {
+        onClose(false);
+      }
+    }}>
+      <div className="cp-modal" onClick={(e) => e.stopPropagation()}>
 
         {/* HEADER */}
         <div className="cp-header">

@@ -188,17 +188,25 @@ class DashboardController extends Controller
 
     /**
      * Get project IDs accessible to a user.
-     * Members/Team Leads see projects they're assigned to or that belong to their team.
+     * Admin and Manager see all projects.
+     * Team Leads and Members see projects they created, team membership, or manually visible.
+     * IMPORTANT: Assigned projects do NOT appear on dashboard - only in /my-tasks endpoint
      */
     private function getUserProjectIds(User $user)
     {
+        // Admin and Manager see all projects
+        if (in_array($user->role, ['admin', 'manager'])) {
+            return Project::pluck('id');
+        }
+
+        // Team Leads and Members see restricted projects
         return Project::where(function ($q) use ($user) {
             $q->whereHas('manuallyVisibleTo', fn ($q) => $q->where('user_id', $user->id))
               ->orWhere(function ($q) use ($user) {
                   $q->where(function ($q) use ($user) {
                       $q->where('created_by', $user->id)
-                        ->orWhereJsonContains('assigned_users', $user->id)
-                        ->orWhereHas('team.members', fn ($m) => $m->where('users.id', $user->id));
+                        ->orWhereHas('team.members', fn ($m) => $m->where('users.id', $user->id))
+                        ->orWhereHas('team', fn ($t) => $t->where('leader_id', $user->id));
                   })->whereDoesntHave('visibility', fn ($q) => $q->where('user_id', $user->id)->where('is_visible', false));
               });
         })->pluck('id');

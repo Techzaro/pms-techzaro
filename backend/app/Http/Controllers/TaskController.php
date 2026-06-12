@@ -14,6 +14,8 @@ class TaskController extends Controller
 {
     /**
      * Tasks and projects assigned TO the current user.
+     * Admin and Manager see all projects.
+     * Others see only projects they're associated with.
      */
     public function myTasks(Request $request)
     {
@@ -36,15 +38,66 @@ class TaskController extends Controller
             return $task;
         });
 
-    $projects = Project::where(function ($q) use ($user) {
-            $q->whereHas('manuallyVisibleTo', fn ($q) => $q->where('user_id', $user->id))
-              ->orWhere(function ($q) use ($user) {
-                  $q->where(function ($q) use ($user) {
-                      $q->where('created_by', $user->id)
-                        ->orWhereRaw("JSON_CONTAINS(assigned_users, ?)", [json_encode((string) $user->id)])
-                        ->orWhereHas('tasks.assignees', fn ($q) => $q->where('users.id', $user->id));
-                  })->whereDoesntHave('visibility', fn ($q) => $q->where('user_id', $user->id)->where('is_visible', false));
-              });
+        // Tasks Assigned To You: Show ONLY projects assigned TO user by OTHERS
+        // Exclude projects where user created them (self-assigned go to Self Tasks)
+        $projects = Project::whereJsonContains('assigned_users', $user->id)
+        ->where('created_by', '!=', $user->id)
+        ->where(function ($q) {
+            $q->whereNotNull('assigned_users')
+              ->whereRaw('JSON_LENGTH(assigned_users) > 0');
+        })
+        ->with(['creator:id,name,role', 'team:id,name'])
+        ->latest()
+        ->get();
+
+        $projects = $projects->map(function ($project) {
+            $project->item_type = 'project';
+            $project->total_tasks = $project->tasks()->count();
+            $project->completed_tasks = $project->tasks()->whereIn('status', ['done', 'completed'])->count();
+            return $project;
+        });
+
+        $allItems = $tasks->getCollection()->merge($projects)->sortByDesc('created_at')->values();
+
+        return response()->json([
+            'data' => $allItems,
+            'current_page' => $tasks->currentPage(),
+            'last_page' => $tasks->lastPage(),
+            'per_page' => $tasks->perPage(),
+            'total' => $tasks->total() + $projects->count(),
+    ]);
+}
+
+    /**
+     * Self tasks: tasks and projects where the user is both creator AND assignee.
+     */
+    public function mySelfTasks(Request $request)
+    {
+        $user = $request->user();
+
+        $tasks = Task::where('assigned_by', $user->id)
+            ->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+            ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
+            ->latest()
+            ->filter($request->query())
+            ->paginate(15);
+
+        $tasks->getCollection()->transform(function ($task) {
+            $task->item_type = 'task';
+            $total = $task->deliverables()->count();
+            $completed = $task->deliverables()->whereIn('status', ['approved'])->count();
+            $task->total_deliverables = $total;
+            $task->completed_deliverables = $completed;
+            $task->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
+            return $task;
+        });
+
+        // Self tasks: only include projects where user is BOTH creator AND assigned
+        $projects = Project::where('created_by', $user->id)
+        ->whereJsonContains('assigned_users', $user->id)
+        ->where(function ($q) {
+            $q->whereNotNull('assigned_users')
+              ->whereRaw('JSON_LENGTH(assigned_users) > 0');
         })
         ->with(['creator:id,name,role', 'team:id,name'])
         ->latest()
@@ -67,57 +120,12 @@ class TaskController extends Controller
     ]);
 }
 
-/**
- * Self tasks: tasks and projects where the user is both creator AND assignee.
- */
-public function mySelfTasks(Request $request)
-{
-    $user = $request->user();
-
-    $tasks = Task::where('assigned_by', $user->id)
-        ->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
-        ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
-        ->latest()
-        ->filter($request->query())
-        ->paginate(15);
-
-    $tasks->getCollection()->transform(function ($task) {
-        $task->item_type = 'task';
-        $total = $task->deliverables()->count();
-        $completed = $task->deliverables()->whereIn('status', ['approved'])->count();
-        $task->total_deliverables = $total;
-        $task->completed_deliverables = $completed;
-        $task->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
-        return $task;
-    });
-
-    $projects = Project::where('created_by', $user->id)
-        ->whereRaw("JSON_CONTAINS(assigned_users, ?)", [json_encode((string) $user->id)])
-        ->with(['creator:id,name,role', 'team:id,name'])
-        ->latest()
-        ->get()
-        ->map(function ($project) {
-            $project->item_type = 'project';
-            $project->total_tasks = $project->tasks()->count();
-            $project->completed_tasks = $project->tasks()->whereIn('status', ['done', 'completed'])->count();
-            return $project;
-        });
-
-    $allItems = $tasks->getCollection()->merge($projects)->sortByDesc('created_at')->values();
-
-    return response()->json([
-        'data' => $allItems,
-        'current_page' => $tasks->currentPage(),
-        'last_page' => $tasks->lastPage(),
-        'per_page' => $tasks->perPage(),
-        'total' => $tasks->total() + $projects->count(),
-    ]);
-}
-
-/**
- * Tasks and projects assigned BY the current user (creator).
- */
-public function assignedByMe(Request $request)
+    /**
+     * Tasks and projects assigned BY the current user (creator).
+     * Admin and Manager see all projects.
+     * Others see only projects they're associated with.
+     */
+    public function assignedByMe(Request $request)
     {
         $user = $request->user();
         $userId = $user->id;
@@ -145,16 +153,16 @@ public function assignedByMe(Request $request)
             }
         }
 
-        $projects = Project::where(function ($q) use ($user) {
-                $q->whereHas('manuallyVisibleTo', fn ($q) => $q->where('user_id', $user->id))
-                  ->orWhere(function ($q) use ($user) {
-                      $q->where(function ($q) use ($user) {
-                          $q->where('created_by', $user->id)
-                            ->orWhereRaw("JSON_CONTAINS(assigned_users, ?)", [json_encode((string) $user->id)])
-                            ->orWhereHas('tasks.assignees', fn ($q) => $q->where('users.id', $user->id));
-                      })->whereDoesntHave('visibility', fn ($q) => $q->where('user_id', $user->id)->where('is_visible', false));
-                  });
-            })
+        // Tasks Assigned By You: Show projects user created and assigned to OTHERS
+        // Exclude projects where user is also assigned (self-assigned go to Self Tasks)
+        $projects = Project::where('created_by', $user->id)
+        ->where(function ($q) {
+            $q->whereNotNull('assigned_users')
+              ->whereRaw('JSON_LENGTH(assigned_users) > 0');
+        })
+        ->where(function ($q) use ($user) {
+            $q->whereRaw('NOT JSON_CONTAINS(assigned_users, \'"' . $user->id . '"\')');
+        })
             ->with(['creator:id,name,role', 'team:id,name'])
             ->latest()
             ->get();

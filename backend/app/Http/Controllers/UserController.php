@@ -98,6 +98,15 @@ class UserController extends Controller
         $plainPassword = Str::random(10);
         $role = $request->input('role') === 'teamlead' ? 'team_lead' : $request->input('role');
 
+        $authUser = $request->user();
+
+        if ($authUser->role === 'manager' && in_array($role, ['admin', 'manager'])) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Managers cannot create administrators or other managers.',
+            ], 403);
+        }
+
         $user = User::create([
             'name' => $request->input('name'),
             'email' => $request->input('email'),
@@ -295,6 +304,16 @@ class UserController extends Controller
      */
     public function destroy(User $user)
     {
+        $authUser = request()->user();
+
+        if ($authUser->id === $user->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($authUser->role === 'manager' && in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
         // Delete associated files
         $this->deleteAllFiles($user);
 

@@ -20,20 +20,36 @@ class ProjectController extends Controller
 {
     /**
      * Get all projects with creator, team, and task counts for progress calculation.
+     * Admin and Manager see ALL projects.
+     * Team Leads and Members see only projects they're associated with.
      */
     public function index()
     {
         $user = request()->user();
 
-        $projects = Project::where(function ($q) use ($user) {
+        // Admin and Manager see ALL projects
+        if (in_array($user->role, ['admin', 'manager'])) {
+            $projects = Project::with(['creator', 'team'])
+                ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
+                    $q->whereIn('status', ['done', 'completed']);
+                }])
+                ->latest()
+                ->get();
+        } else {
+            // Projects List: Show only if created by, manually visible, team member, or team leader
+            // Projects assigned to user appear in /my-tasks pages, not here
+            // Auto-visibility from task assignment does NOT apply to Projects List
+            // IMPORTANT: Do NOT include project-task assignees here - those appear in /my-tasks
+            $projects = Project::where(function ($q) use ($user) {
                 $q->whereHas('manuallyVisibleTo', fn ($q) => $q->where('user_id', $user->id))
                   ->orWhere(function ($q) use ($user) {
                       $q->where(function ($q) use ($user) {
                           $q->where('created_by', $user->id)
-                            ->orWhereRaw("JSON_CONTAINS(assigned_users, ?)", [json_encode((string) $user->id)])
-                            ->orWhereHas('tasks.assignees', fn ($q) => $q->where('users.id', $user->id));
+                            ->orWhereHas('team.members', fn ($q) => $q->where('users.id', $user->id))
+                            ->orWhereHas('team', fn ($q) => $q->where('leader_id', $user->id));
                       })->whereDoesntHave('visibility', fn ($q) => $q->where('user_id', $user->id)->where('is_visible', false));
-                  });
+                  })
+                  ->orWhereJsonContains('assigned_users', $user->id);
             })
             ->with(['creator', 'team'])
             ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
@@ -41,6 +57,7 @@ class ProjectController extends Controller
             }])
             ->latest()
             ->get();
+        }
 
         return response()->json($projects);
     }
@@ -104,20 +121,22 @@ class ProjectController extends Controller
         $project = Project::create($validated);
         $this->replaceProjectMilestones($project, $milestones);
 
-        // Create deliverables if provided
+        // Create deliverables if provided and there are assigned users
         if (!empty($deliverables)) {
             $assignedUsers = $validated['assigned_users'] ?? [];
-            foreach ($deliverables as $del) {
-                foreach ($assignedUsers as $userId) {
-                    $project->deliverables()->create([
-                        'title' => $del['title'],
-                        'description' => $del['description'] ?? null,
-                        'status' => 'pending',
-                        'priority' => $validated['priority'] ?? 'Medium',
-                        'due_date' => $del['due_date'] ?? null,
-                        'assigned_to' => $userId,
-                        'created_by' => $request->user()->id,
-                    ]);
+            if (!empty($assignedUsers)) {
+                foreach ($deliverables as $del) {
+                    foreach ($assignedUsers as $userId) {
+                        $project->deliverables()->create([
+                            'title' => $del['title'],
+                            'description' => $del['description'] ?? null,
+                            'status' => 'pending',
+                            'priority' => $validated['priority'] ?? 'Medium',
+                            'due_date' => $del['due_date'] ?? null,
+                            'assigned_to' => $userId,
+                            'created_by' => $request->user()->id,
+                        ]);
+                    }
                 }
             }
         }
@@ -130,10 +149,29 @@ class ProjectController extends Controller
 
     /**
      * Get a specific project (full detail payload for project details page)
+     * Admin and Manager have unrestricted access to all projects.
+     * Others need to be creator, assigned, team member, have tasks, or be manually visible.
      */
     public function show(Project $project)
     {
         $user = request()->user();
+
+        // Admin and Manager have unrestricted access
+        if (!in_array($user->role, ['admin', 'manager'])) {
+            $isCreator = $project->created_by === $user->id;
+            $isAssigned = in_array($user->id, $project->assigned_users ?? []);
+            $isTeamMember = $project->team_id && $project->team && (
+                $project->team->members->contains('id', $user->id) ||
+                $project->team->leader_id === $user->id
+            );
+            $hasTasksUnderProject = $project->tasks()->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))->exists();
+            $isManuallyVisible = $project->manuallyVisibleTo()->where('user_id', $user->id)->exists();
+            $isTeamLead = $user->role === 'team_lead';
+
+            if (!$isCreator && !$isAssigned && !$isTeamMember && !$hasTasksUnderProject && !$isManuallyVisible && !$isTeamLead) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+        }
 
         $project->load([
             'creator:id,name,email,role',
@@ -145,19 +183,6 @@ class ProjectController extends Controller
             'files',
             'deliverables' => fn ($q) => $q->with('assignee:id,name,email,role', 'latestSubmission')->latest(),
         ]);
-
-        $isCreator = $project->created_by === $user->id;
-        $isAssigned = in_array($user->id, $project->assigned_users ?? []);
-        $isTeamMember = $project->team_id && $project->team && (
-            $project->team->members->contains('id', $user->id) ||
-            $project->team->leader_id === $user->id
-        );
-        $hasTasksUnderProject = $project->tasks()->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))->exists();
-        $isManuallyVisible = $project->manuallyVisibleTo()->where('user_id', $user->id)->exists();
-
-        if (!$isCreator && !$isAssigned && !$isTeamMember && !$hasTasksUnderProject && !$isManuallyVisible && !in_array($user->role, ['admin', 'manager', 'team_lead'])) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
 
         if ($project->team && $project->team->leader) {
             $leaderInMembers = $project->team->members->contains('id', $project->team->leader_id);
@@ -229,15 +254,41 @@ class ProjectController extends Controller
             'milestones.*.title' => 'nullable|string|max:255',
             'milestones.*.due_date' => 'nullable|date',
             'milestones.*.status' => 'nullable|string|max:32',
+            'deliverables' => 'nullable|array',
+            'deliverables.*.title' => 'required_with:deliverables|string|max:255',
+            'deliverables.*.description' => 'nullable|string|max:2000',
+            'deliverables.*.due_date' => 'nullable|date',
         ]);
 
         $milestones = $validated['milestones'] ?? null;
         unset($validated['milestones']);
+        $deliverables = $validated['deliverables'] ?? null;
+        unset($validated['deliverables']);
 
         $project->update($validated);
 
         if ($request->has('milestones')) {
             $this->replaceProjectMilestones($project, $milestones);
+        }
+
+        // Create deliverables if provided and there are assigned users
+        if (!empty($deliverables)) {
+            $assignedUsers = $project->assigned_users ?? [];
+            if (!empty($assignedUsers)) {
+                foreach ($deliverables as $del) {
+                    foreach ($assignedUsers as $userId) {
+                        $project->deliverables()->create([
+                            'title' => $del['title'],
+                            'description' => $del['description'] ?? null,
+                            'status' => 'pending',
+                            'priority' => $project->priority ?? 'Medium',
+                            'due_date' => $del['due_date'] ?? null,
+                            'assigned_to' => $userId,
+                            'created_by' => $request->user()->id,
+                        ]);
+                    }
+                }
+            }
         }
 
         return response()->json([

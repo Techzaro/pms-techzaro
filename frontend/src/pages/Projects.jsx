@@ -338,7 +338,11 @@ function Projects() {
       )}
 
       {showModal && (
-        <div className="modal-overlay">
+        <div className="modal-overlay" onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setShowModal(false);
+          }
+        }}>
           <CreateProjectModal
             onClose={(created) => {
               setShowModal(false);
