@@ -279,15 +279,15 @@ function Tasks() {
 
       {/* TABLE */}
       <div className="container">
-        <div className="table-header">
+        <div className="table-header1">
           <div>Assigned by</div>
-          <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task Name</div>
+          <div className="task-name-column" >Task Name</div>
           <div>Type</div>
-          <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
+          <div className="status-column" >Status</div>
           <div>Progress</div>
-          <div className="priority-column" style={{ paddingRight: "10px" }}>Priority</div>
-          <div className="date-column" style={{ paddingRight: "50px" }}>  Date</div>
-          <div>Action</div>
+          <div className="priority-column" >Priority</div>
+          <div className="date-column">  Date</div>
+          <div className="action-column" style={{paddingLeft: "20px"}}>Action</div>
         </div>
 
         {loading ? (
@@ -327,7 +327,10 @@ function Tasks() {
                     </span>
                   </div>
                   <div>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>{calculateProgress(item)}%</div>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{calculateProgress(item)}%</div>
+                    <div style={{ width: "100%", height: "6px", backgroundColor: "#e5e7eb", borderRadius: "3px", overflow: "hidden", marginBottom: "4px" }}>
+                      <div style={{ height: "100%", width: `${calculateProgress(item)}%`, backgroundColor: "#3b82f6", transition: "width 0.3s" }}></div>
+                    </div>
                     <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.completed_tasks || 0}/{item.total_tasks || 0} tasks</div>
                   </div>
                   <div>
@@ -385,7 +388,10 @@ function Tasks() {
                     </span>
                   </div>
                   <div>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>{item.deliverables_progress || 0}%</div>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{item.deliverables_progress || 0}%</div>
+                    <div style={{ width: "100%", height: "6px", backgroundColor: "#e5e7eb", borderRadius: "3px", overflow: "hidden", marginBottom: "4px" }}>
+                      <div style={{ height: "100%", width: `${item.deliverables_progress || 0}%`, backgroundColor: "#3b82f6", transition: "width 0.3s" }}></div>
+                    </div>
                     <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.approved_deliverables || 0}/{item.total_deliverables || 0} Deliverables Approved</div>
                   </div>
                   <div>
