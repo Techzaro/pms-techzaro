@@ -20,6 +20,7 @@ import ManageUsers from "./pages/ManageUsers";
 import UserProfile from "./pages/UserProfile";
 import MyProfile from "./pages/MyProfile";
 import Deliveries from "./pages/Deliveries";
+import DeliveriesByYou from "./pages/DeliveriesByYou";
 import History from "./pages/History";
 import Reports from "./pages/Reports";
 import ManageTeam from "./pages/ManageTeam";
@@ -111,12 +112,22 @@ function App() {
           }
         />
 
-        {/* DELIVERIES */}
+        {/* DELIVERIES ASSIGNED TO YOU */}
         <Route
           path="/:role/deliveries"
           element={
             <ProtectedRoute>
               <Deliveries />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* DELIVERIES ASSIGNED BY YOU */}
+        <Route
+          path="/:role/deliveries-by-you"
+          element={
+            <ProtectedRoute>
+              <DeliveriesByYou />
             </ProtectedRoute>
           }
         />

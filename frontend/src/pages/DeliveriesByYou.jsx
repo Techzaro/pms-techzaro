@@ -6,6 +6,7 @@ import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import "../pages/Deliveries.css";
+import "../pages/Task.css";
 
 const STATUS_COLORS = {
   pending: "#FEF3C7",
@@ -21,19 +22,7 @@ const STATUS_TEXT_COLORS = {
   rejected: "#991B1B",
 };
 
-const PRIORITY_COLORS = {
-  High: "#FEE2E2",
-  Medium: "#FEF3C7",
-  Low: "#DCFCE7",
-};
-
-const PRIORITY_TEXT_COLORS = {
-  High: "#991B1B",
-  Medium: "#92400E",
-  Low: "#166534",
-};
-
-function Deliveries() {
+function DeliveriesByYou() {
   const navigate = useNavigate();
   const [deliverables, setDeliverables] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -46,9 +35,8 @@ function Deliveries() {
     const params = new URLSearchParams();
     if (search) params.append("search", search);
     if (statusFilter) params.append("status", statusFilter);
-    params.append("view", "assignee");
 
-    fetch(`${API_URL}/deliverables?${params.toString()}`, {
+    fetch(`${API_URL}/deliverables/assigned-by-me?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
     })
       .then((res) => (res.ok ? res.json() : { data: [] }))
@@ -101,8 +89,8 @@ function Deliveries() {
       <div className="projects-page">
         <div className="projects-header">
           <div>
-            <h1>Deliverables Assigned To You</h1>
-            <p>Deliverables from tasks and projects assigned to you</p>
+            <h1>Deliverables Assigned By You</h1>
+            <p>Deliverables assigned to others from tasks and projects you created</p>
           </div>
         </div>
 
@@ -131,7 +119,7 @@ function Deliveries() {
           <div className="table-header">
             <div>Deliverable</div>
             <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task</div>
-            <div>Assign By</div>
+            <div>Assigned To</div>
             <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
             <div className="date-column" style={{ paddingRight: "30px" }}>Due Date</div>
             <div>Action</div>
@@ -159,11 +147,11 @@ function Deliveries() {
                   </div>
                   <div className="user-box">
                     <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                      {getInitials(item.creator?.name)}
+                      {getInitials(item.assignee?.name)}
                     </div>
                     <div>
-                      <div className="user-name">{item.creator?.name || "-"}</div>
-                      <div className="user-role">{item.creator?.role ? item.creator.role.replace("_", " ") : ""}</div>
+                      <div className="user-name">{item.assignee?.name || "Unassigned"}</div>
+                      <div className="user-role">{item.assignee?.role ? item.assignee.role.replace("_", " ") : ""}</div>
                     </div>
                   </div>
                   <div>
@@ -176,7 +164,7 @@ function Deliveries() {
                     <div>{formatDate(item.due_date)}</div>
                   </div>
                   <div className="action-btns">
-                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: 'deliveries' } })}>
+                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: 'deliveries-by-you' } })}>
                       <IoEyeOutline />
                     </button>
                   </div>
@@ -190,4 +178,4 @@ function Deliveries() {
   );
 }
 
-export default Deliveries;
+export default DeliveriesByYou;

@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { PiLineVerticalLight } from "react-icons/pi";
 import {
   Activity,
@@ -138,6 +138,15 @@ function sanitizeHtml(html) {
 function ProjectDetails() {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const projectSourcePages = {
+    tasks: { label: "Task Assigned To You", path: rolePath("tasks") },
+    taskby: { label: "Task Assigned By You", path: rolePath("taskby") },
+    "self-tasks": { label: "Self Tasks", path: rolePath("self-tasks") },
+  };
+  const projectSource = projectSourcePages[location.state?.from] || null;
+
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("overview");
@@ -651,6 +660,12 @@ function ProjectDetails() {
 
         <nav className="pd-breadcrumb" aria-label="Breadcrumb">
           <Link to={rolePath("projects")}>Projects</Link>
+          {projectSource && (
+            <>
+              <ChevronRight size={14} aria-hidden />
+              <Link to={projectSource.path}>{projectSource.label}</Link>
+            </>
+          )}
           <ChevronRight size={14} aria-hidden />
           <span>{project.title}</span>
         </nav>

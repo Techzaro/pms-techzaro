@@ -150,6 +150,7 @@ Route::middleware('auth:sanctum')->group(function () {
     | DELIVERABLES
     */
     Route::get('/deliverables', [DeliverableController::class, 'index']);
+    Route::get('/deliverables/assigned-by-me', [DeliverableController::class, 'assignedByMe']);
     Route::get('/deliverables/{deliverable}', [DeliverableController::class, 'show']);
     Route::get('/self-deliverables', [DeliverableController::class, 'mySelfDeliverables']);
 

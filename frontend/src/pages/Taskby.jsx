@@ -51,6 +51,7 @@ const Taskby = () => {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
+
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
@@ -205,7 +206,7 @@ const Taskby = () => {
 
       <div className="container">
            <div className="table-header">
-          <div>Assigned by</div>
+          <div>Assigned To</div>
           <div className="task-name-column" >Task Name</div>
           <div>Type</div>
           <div className="status-column" >Status</div>
@@ -267,7 +268,7 @@ const Taskby = () => {
                     <div>{formatDate(item.end_date)}</div>
                   </div>
                   <div className="action-btns">
-                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`))}>
+                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'taskby' } })}>
                       <IoEyeOutline />
                     </button>
                   </div>
@@ -317,7 +318,7 @@ const Taskby = () => {
                   <div>{formatDate(item.end_date)}</div>
                 </div>
                 <div className="action-btns">
-                  <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`))}>
+                  <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { from: 'taskby' } })}>
                     <IoEyeOutline />
                   </button>
                 </div>

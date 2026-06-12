@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import {
   Calendar,
   CheckCircle2,
@@ -95,6 +95,14 @@ function initials(name) {
 function TaskDetails() {
   const { taskId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const sourcePages = {
+    tasks: { label: "Task Assigned To You", path: rolePath("tasks") },
+    taskby: { label: "Task Assigned By You", path: rolePath("taskby") },
+    "self-tasks": { label: "Self Tasks", path: rolePath("self-tasks") },
+  };
+  const source = sourcePages[location.state?.from] || null;
 
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -181,6 +189,12 @@ function TaskDetails() {
             <nav className="td-breadcrumb">
               <Link to={rolePath("tasks")}>Tasks</Link>
               <ChevronRight size={14} />
+              {source && (
+                <>
+                  <Link to={source.path}>{source.label}</Link>
+                  <ChevronRight size={14} />
+                </>
+              )}
               <span>{task.title}</span>
             </nav>
 

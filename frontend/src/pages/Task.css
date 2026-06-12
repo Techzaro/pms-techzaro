@@ -349,6 +349,8 @@
   cursor: default;
 }
 
+
+
 @media (max-width: 992px) {
   .tasks-search-bar {
     max-width: 100%;
