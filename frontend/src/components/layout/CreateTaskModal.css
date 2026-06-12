@@ -927,6 +927,46 @@
   }
 }
 
+@media (max-width: 360px) {
+  .task-overlay {
+    padding: 8px;
+  }
+
+  .task-modal {
+    border-radius: 12px;
+  }
+
+  .task-header {
+    padding: 12px 14px;
+  }
+
+  .task-header h2 {
+    font-size: 18px;
+  }
+
+  .task-body {
+    padding: 12px;
+    gap: 16px;
+  }
+
+  .task-field input,
+  .task-field select,
+  .task-field textarea {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .task-footer {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .task-footer-btns button {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+}
+
 /* REQUIREMENTS / GOALS LIST */
 
 .cp-goals-input-row {

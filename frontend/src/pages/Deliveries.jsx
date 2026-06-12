@@ -39,6 +39,11 @@ function Deliveries() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [view, setView] = useState("assignee");
+  const [timeFilter, setTimeFilter] = useState("");
+
+  const currentRole = getCurrentRole();
+  const canSeeBothViews = ["admin", "manager", "team_lead"].includes(currentRole);
 
   const fetchDeliverables = () => {
     setLoading(true);
@@ -101,8 +106,52 @@ function Deliveries() {
       <div className="projects-page">
         <div className="projects-header">
           <div>
-            <h1>Deliverables Assigned To You</h1>
-            <p>Deliverables from tasks and projects assigned to you</p>
+            <h1>Deliverables</h1>
+            <p>Manage and track your deliverables</p>
+          </div>
+          <div className="header-actions">
+            <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="reports-filter">
+              <option>All Time</option>
+              <option>Last 7 Days</option>
+              <option>Last 30 Days</option>
+              <option>Last 6 Months</option>
+            </select>
+            {canSeeBothViews && (
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  className={`task-btn--mobile`}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #e5e7eb",
+                    background: view === "assignee" ? "#6366f1" : "#fff",
+                    color: view === "assignee" ? "#fff" : "#374151",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                  }}
+                  onClick={() => setView("assignee")}
+                >
+                  My Deliverables
+                </button>
+                <button
+                  className={`task-btn--mobile`}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #e5e7eb",
+                    background: view === "assigner" ? "#6366f1" : "#fff",
+                    color: view === "assigner" ? "#fff" : "#374151",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                  }}
+                  onClick={() => setView("assigner")}
+                >
+                  Assigned Deliverables
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

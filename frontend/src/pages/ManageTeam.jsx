@@ -57,6 +57,7 @@ function ManageTeam() {
   const [messageType, setMessageType] = useState("");
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [timeFilter, setTimeFilter] = useState("");
   const [sortOption, setSortOption] = useState("newest");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -419,6 +420,12 @@ function ManageTeam() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
+          <select className="reports-filter" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
+            <option value="">All Time</option>
+            <option value="7">Last 7 Days</option>
+            <option value="30">Last 30 Days</option>
+            <option value="180">Last 6 Months</option>
+          </select>
           <div className="mt-sort-box">
             <span>Sort by</span>
             <MdExpandMore size={18} />

@@ -84,6 +84,16 @@
   font-size: 14px;
 }
 
+.reports-filter {
+  padding: 10px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 14px;
+  color: #374151;
+  background: #fff;
+  cursor: pointer;
+}
+
 .task-progress {
   display: flex;
   gap: 10px;
@@ -503,5 +513,49 @@
     padding: 8px 12px;
     height: 36px;
     font-size: 13px;
+  }
+  .projects-header h1 {
+    font-size: 24px;
+  }
+  .projects-header p {
+    font-size: 13px;
+  }
+  .action-icon-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 360px) {
+  .container {
+    border-radius: 10px;
+  }
+  .table-header,
+  .table-row {
+    min-width: 500px;
+  }
+  .projects-header h1 {
+    font-size: 20px;
+  }
+  .user-name {
+    font-size: 13px;
+  }
+  .task-title {
+    font-size: 14px;
+  }
+  .action-icon-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+  }
+  .All,
+  .Pending,
+  .Progress,
+  .Completed,
+  .Failed,
+  .Aban {
+    padding: 4px 6px;
+    font-size: 10px;
   }
 }

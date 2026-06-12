@@ -85,6 +85,7 @@ function ManageUsers() {
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [sortOrder, setSortOrder] = useState("");
+  const [timeFilter, setTimeFilter] = useState("");
   const [resignConfirmOpen, setResignConfirmOpen] = useState(false);
   const [resignUserId, setResignUserId] = useState(null);
 
@@ -518,6 +519,12 @@ function ManageUsers() {
             <IoSearchOutline fontSize={"25px"} />
             <input type="text" placeholder="Search users by name or email....." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
+          <select className="reports-filter" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
+            <option value="">All Time</option>
+            <option value="7">Last 7 Days</option>
+            <option value="30">Last 30 Days</option>
+            <option value="180">Last 6 Months</option>
+          </select>
           <select className="bar-role" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
             <option value="">Role</option>
             <option value="admin">Admin</option>

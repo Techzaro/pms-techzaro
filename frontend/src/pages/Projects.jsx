@@ -12,6 +12,7 @@ function Projects() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [timeFilter, setTimeFilter] = useState("");
   const [visibilityProject, setVisibilityProject] = useState(null);
   const [visibilityUsers, setVisibilityUsers] = useState([]);
   const [visibilitySelected, setVisibilitySelected] = useState({});
@@ -178,11 +179,11 @@ function Projects() {
 
           <div className="header-actions">
             <div className="all-time">
-              <select name="" id="">
+              <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
                 <option value="">All Time</option>
-                <option value="">Month</option>
-                <option value="">Week</option>
-                <option value="">Day</option>
+                <option value="7">Last 7 Days</option>
+                <option value="30">Last 30 Days</option>
+                <option value="180">Last 6 Months</option>
               </select>
             </div>
 
@@ -289,7 +290,7 @@ function Projects() {
                       )}
                       <button
                         className="view-details-btn"
-                        onClick={() => navigate(rolePath(`projects/project-details/${project.id}`))}
+                        onClick={() => { sessionStorage.setItem('projectIds', JSON.stringify(filteredProjects.map(p => p.id))); navigate(rolePath(`projects/project-details/${project.id}`)); }}
                       >
                         View →
                       </button>
