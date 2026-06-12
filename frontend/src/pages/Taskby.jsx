@@ -52,6 +52,7 @@ const Taskby = () => {
   const [statusFilter, setStatusFilter] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
 
+
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
@@ -277,7 +278,7 @@ const Taskby = () => {
                     <div>{formatDate(item.end_date)}</div>
                   </div>
                   <div className="action-btns">
-                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`))}>
+                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'taskby' } })}>
                       <IoEyeOutline />
                     </button>
                   </div>

@@ -350,7 +350,7 @@ function Tasks() {
                     <div>{formatDate(item.end_date)}</div>
                   </div>
                   <div className="action-btns">
-                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`))}>
+                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'tasks' } })}>
                       <IoEyeOutline />
                     </button>
                     {item.status !== "completed" && item.status !== "done" ? (

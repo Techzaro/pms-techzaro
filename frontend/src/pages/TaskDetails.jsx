@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import {
   Calendar,
   CheckCircle2,
@@ -190,6 +190,12 @@ function TaskDetails() {
             <nav className="td-breadcrumb">
               <Link to={rolePath("tasks")}>Tasks</Link>
               <ChevronRight size={14} />
+              {source && (
+                <>
+                  <Link to={source.path}>{source.label}</Link>
+                  <ChevronRight size={14} />
+                </>
+              )}
               <span>{task.title}</span>
             </nav>
 

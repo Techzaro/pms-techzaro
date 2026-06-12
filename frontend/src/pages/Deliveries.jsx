@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import { authToken, getCurrentRole, rolePath } from "../utils/auth";
+import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import "../pages/Deliveries.css";
 
@@ -51,7 +51,7 @@ function Deliveries() {
     const params = new URLSearchParams();
     if (search) params.append("search", search);
     if (statusFilter) params.append("status", statusFilter);
-    params.append("view", view);
+    params.append("view", "assignee");
 
     fetch(`${API_URL}/deliverables?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -66,7 +66,7 @@ function Deliveries() {
 
   useEffect(() => {
     fetchDeliverables();
-  }, [search, statusFilter, view]);
+  }, [search, statusFilter]);
 
   const getInitials = (name) => {
     if (!name) return "??";
@@ -177,124 +177,61 @@ function Deliveries() {
         </div>
 
         <div className="container">
-          {view === "assignee" ? (
-            <>
-              <div className="table-header">
-                <div>Deliverable</div>
-                <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task</div>
-                <div>Assign By</div>
-                <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
-                <div className="date-column" style={{ paddingRight: "30px" }}>Due Date</div>
-                <div>Action</div>
-              </div>
+          <div className="table-header">
+            <div>Deliverable</div>
+            <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task</div>
+            <div>Assign By</div>
+            <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
+            <div className="date-column" style={{ paddingRight: "30px" }}>Due Date</div>
+            <div>Action</div>
+          </div>
 
-              {loading ? (
-                <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
-              ) : deliverables.length === 0 ? (
-                <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
-              ) : (
-                deliverables.map((item) => {
-                  const colors = getRandomColors(item.id);
-                  return (
-                    <div className="table-row" key={item.id}>
-                      <div className="user-box">
-                        <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                          {getInitials(item.title)}
-                        </div>
-                        <div>
-                          <div className="user-name">{item.title}</div>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="task-title" style={{ paddingLeft: "40px" }}>{item.task?.title || "-"}</div>
-                      </div>
-                      <div className="user-box">
-                        <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                          {getInitials(item.creator?.name)}
-                        </div>
-                        <div>
-                          <div className="user-name">{item.creator?.name || "-"}</div>
-                          <div className="user-role">{item.creator?.role ? item.creator.role.replace("_", " ") : ""}</div>
-                        </div>
-                      </div>
-                      <div>
-                        <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
-                          <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                          {formatStatus(item.status)}
-                        </span>
-                      </div>
-                      <div className="date-box">
-                        <div>{formatDate(item.due_date)}</div>
-                      </div>
-                      <div className="action-btns">
-                        <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`))}>
-                          <IoEyeOutline />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </>
+          {loading ? (
+            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
+          ) : deliverables.length === 0 ? (
+            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
           ) : (
-            <>
-              <div className="table-header">
-                <div>Deliverable</div>
-                <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task</div>
-                <div>Assigned To</div>
-                <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
-                <div className="date-column" style={{ paddingRight: "30px" }}>Due Date</div>
-                <div>Action</div>
-              </div>
-
-              {loading ? (
-                <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
-              ) : deliverables.length === 0 ? (
-                <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
-              ) : (
-                deliverables.map((item) => {
-                  const colors = getRandomColors(item.id);
-                  return (
-                    <div className="table-row" key={item.id}>
-                      <div className="user-box">
-                        <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                          {getInitials(item.title)}
-                        </div>
-                        <div>
-                          <div className="user-name">{item.title}</div>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="task-title" style={{ paddingLeft: "40px" }}>{item.task?.title || "-"}</div>
-                      </div>
-                      <div className="user-box">
-                        <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                          {getInitials(item.assignee?.name)}
-                        </div>
-                        <div>
-                          <div className="user-name">{item.assignee?.name || "Unassigned"}</div>
-                          <div className="user-role">{item.assignee?.role ? item.assignee.role.replace("_", " ") : ""}</div>
-                        </div>
-                      </div>
-                      <div>
-                        <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
-                          <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                          {formatStatus(item.status)}
-                        </span>
-                      </div>
-                      <div className="date-box">
-                        <div>{formatDate(item.due_date)}</div>
-                      </div>
-                      <div className="action-btns">
-                        <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`))}>
-                          <IoEyeOutline />
-                        </button>
-                      </div>
+            deliverables.map((item) => {
+              const colors = getRandomColors(item.id);
+              return (
+                <div className="table-row" key={item.id}>
+                  <div className="user-box">
+                    <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                      {getInitials(item.title)}
                     </div>
-                  );
-                })
-              )}
-            </>
+                    <div>
+                      <div className="user-name">{item.title}</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="task-title" style={{ paddingLeft: "40px" }}>{item.task?.title || "-"}</div>
+                  </div>
+                  <div className="user-box">
+                    <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                      {getInitials(item.creator?.name)}
+                    </div>
+                    <div>
+                      <div className="user-name">{item.creator?.name || "-"}</div>
+                      <div className="user-role">{item.creator?.role ? item.creator.role.replace("_", " ") : ""}</div>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                      {formatStatus(item.status)}
+                    </span>
+                  </div>
+                  <div className="date-box">
+                    <div>{formatDate(item.due_date)}</div>
+                  </div>
+                  <div className="action-btns">
+                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: 'deliveries' } })}>
+                      <IoEyeOutline />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       </div>

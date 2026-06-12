@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import { authToken, getCurrentRole, rolePath } from "../utils/auth";
+import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
@@ -22,7 +22,7 @@ const STATUS_TEXT_COLORS = {
   rejected: "#991B1B",
 };
 
-function SelfDeliveries() {
+function DeliveriesByYou() {
   const navigate = useNavigate();
   const [deliverables, setDeliverables] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,7 +36,7 @@ function SelfDeliveries() {
     if (search) params.append("search", search);
     if (statusFilter) params.append("status", statusFilter);
 
-    fetch(`${API_URL}/self-deliverables?${params.toString()}`, {
+    fetch(`${API_URL}/deliverables/assigned-by-me?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
     })
       .then((res) => (res.ok ? res.json() : { data: [] }))
@@ -89,8 +89,8 @@ function SelfDeliveries() {
       <div className="projects-page">
         <div className="projects-header">
           <div>
-            <h1>Self Deliverables</h1>
-            <p>Deliverables assigned to yourself</p>
+            <h1>Deliverables Assigned By You</h1>
+            <p>Deliverables assigned to others from tasks and projects you created</p>
           </div>
         </div>
 
@@ -118,7 +118,8 @@ function SelfDeliveries() {
         <div className="container">
           <div className="table-header">
             <div>Deliverable</div>
-            <div className="task-name-column" style={{ paddingLeft: "40px" }}>Related Task/Project</div>
+            <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task</div>
+            <div>Assigned To</div>
             <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
             <div className="date-column" style={{ paddingRight: "30px" }}>Due Date</div>
             <div>Action</div>
@@ -142,7 +143,16 @@ function SelfDeliveries() {
                     </div>
                   </div>
                   <div>
-                    <div className="task-title" style={{ paddingLeft: "40px" }}>{item.task?.title || item.project?.title || "-"}</div>
+                    <div className="task-title" style={{ paddingLeft: "40px" }}>{item.task?.title || "-"}</div>
+                  </div>
+                  <div className="user-box">
+                    <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                      {getInitials(item.assignee?.name)}
+                    </div>
+                    <div>
+                      <div className="user-name">{item.assignee?.name || "Unassigned"}</div>
+                      <div className="user-role">{item.assignee?.role ? item.assignee.role.replace("_", " ") : ""}</div>
+                    </div>
                   </div>
                   <div>
                     <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
@@ -154,7 +164,7 @@ function SelfDeliveries() {
                     <div>{formatDate(item.due_date)}</div>
                   </div>
                   <div className="action-btns">
-                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: 'self-deliveries' } })}>
+                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: 'deliveries-by-you' } })}>
                       <IoEyeOutline />
                     </button>
                   </div>
@@ -168,4 +178,4 @@ function SelfDeliveries() {
   );
 }
 
-export default SelfDeliveries;
+export default DeliveriesByYou;

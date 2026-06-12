@@ -428,28 +428,7 @@
   cursor: default;
 }
 
-@media (max-width: 1100px) {
-  .table-header1 {
-    grid-template-columns: 180px 1fr 65px 95px 85px 80px 90px 70px !important;
-  }
 
-  .taskby-row {
-    grid-template-columns: 180px 1fr 65px 95px 85px 80px 90px 70px;
-  }
-
-  .table-header-compact {
-    grid-template-columns: 1fr 65px 95px 85px 80px 90px 70px !important;
-  }
-
-  .taskby-row-compact {
-    grid-template-columns: 1fr 65px 95px 85px 80px 90px 70px;
-  }
-
-  .table-header,
-  .table-row {
-    min-width: 710px;
-  }
-}
 
 @media (max-width: 992px) {
   .tasks-search-bar {

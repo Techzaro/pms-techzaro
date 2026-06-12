@@ -7,6 +7,7 @@ use App\Models\DeliverableSubmission;
 use App\Models\Notification;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -35,6 +36,40 @@ class DeliverableController extends Controller
         } else {
             $query->where('created_by', $user->id);
         }
+
+        $deliverables = $query->latest()
+            ->filter($request->query())
+            ->paginate(15);
+
+        return response()->json($deliverables);
+    }
+
+    /**
+     * Deliverables assigned by the current user to others.
+     * Admin/Manager share visibility of each other's assignments.
+     * Self-assigned deliverables are excluded (go to Self Deliverables).
+     */
+    public function assignedByMe(Request $request)
+    {
+        $user = $request->user();
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
+
+        $query = Deliverable::with([
+            'project:id,title',
+            'assignee:id,name,email,role',
+            'creator:id,name,role',
+            'task:id,title',
+        ]);
+
+        if ($isAdminOrManager) {
+            $adminManagerIds = User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray();
+            $query->whereIn('created_by', $adminManagerIds);
+        } else {
+            $query->where('created_by', $user->id);
+        }
+
+        // Exclude self-assigned deliverables (created_by === assigned_to)
+        $query->whereColumn('created_by', '!=', 'assigned_to');
 
         $deliverables = $query->latest()
             ->filter($request->query())

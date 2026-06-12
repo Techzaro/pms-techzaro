@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { ChevronRight, Download, Eye } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import API_URL from "../config/api";
@@ -42,7 +42,15 @@ function initials(name) {
 function DeliverableDetails() {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const deliverableId = projectId;
+
+  const deliverableSourcePages = {
+    deliveries: { label: "Deliverables Assigned To You", path: rolePath("deliveries") },
+    "deliveries-by-you": { label: "Deliverables Assigned By You", path: rolePath("deliveries-by-you") },
+    "self-deliveries": { label: "Self Deliverables", path: rolePath("self-deliveries") },
+  };
+  const deliverableSource = deliverableSourcePages[location.state?.from] || null;
 
   const [deliverable, setDeliverable] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -187,6 +195,12 @@ function DeliverableDetails() {
           <div className="td-main">
             <nav className="td-breadcrumb">
               <Link to={rolePath("deliveries")}>Deliverables</Link>
+              {deliverableSource && (
+                <>
+                  <ChevronRight size={14} />
+                  <Link to={deliverableSource.path}>{deliverableSource.label}</Link>
+                </>
+              )}
               <ChevronRight size={14} />
               <span>{deliverable.title}</span>
             </nav>

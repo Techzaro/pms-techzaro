@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { PiLineVerticalLight } from "react-icons/pi";
 import {
   Activity,
@@ -666,6 +666,12 @@ function ProjectDetails() {
 
         <nav className="pd-breadcrumb" aria-label="Breadcrumb">
           <Link to={rolePath("projects")}>Projects</Link>
+          {projectSource && (
+            <>
+              <ChevronRight size={14} aria-hidden />
+              <Link to={projectSource.path}>{projectSource.label}</Link>
+            </>
+          )}
           <ChevronRight size={14} aria-hidden />
           <span>{project.title}</span>
         </nav>

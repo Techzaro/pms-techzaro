@@ -130,9 +130,23 @@ class TaskController extends Controller
         $user = $request->user();
         $userId = $user->id;
 
-        $tasks = Task::where('assigned_by', $userId)
-            ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
-            ->latest()
+        // Admin and Manager share visibility of assignments made to other users
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
+
+        if ($isAdminOrManager) {
+            $adminManagerIds = User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray();
+        }
+
+        // ── Tasks ──
+        $tasksQuery = Task::with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role']);
+
+        if ($isAdminOrManager) {
+            $tasksQuery->whereIn('assigned_by', $adminManagerIds);
+        } else {
+            $tasksQuery->where('assigned_by', $userId);
+        }
+
+        $tasks = $tasksQuery->latest()
             ->when($request->filled('search'), fn ($q) => $q->where('title', 'like', '%' . $request->input('search') . '%'))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')))
             ->get();
@@ -143,6 +157,15 @@ class TaskController extends Controller
             $completed = $task->deliverables()->whereIn('status', ['approved'])->count();
             $assignees = $task->assignees->isEmpty() ? collect([null]) : $task->assignees;
             foreach ($assignees as $assignee) {
+                // Skip self-assigned entries — creator assigned to themselves
+                // Always check against the creator, not the viewing user
+                if ($assignee) {
+                    if ((int)$assignee->id === (int)$task->assigned_by) {
+                        continue;
+                    }
+                } elseif ((int)$task->assigned_to === (int)$task->assigned_by) {
+                    continue;
+                }
                 $clone = clone $task;
                 $clone->assignees = $assignee ? collect([$assignee]) : collect();
                 $clone->item_type = 'task';
@@ -153,16 +176,19 @@ class TaskController extends Controller
             }
         }
 
-        // Tasks Assigned By You: Show projects user created and assigned to OTHERS
-        // Exclude projects where user is also assigned (self-assigned go to Self Tasks)
-        $projects = Project::where('created_by', $user->id)
-        ->where(function ($q) {
+        // ── Projects ──
+        $projectsQuery = Project::where(function ($q) {
             $q->whereNotNull('assigned_users')
               ->whereRaw('JSON_LENGTH(assigned_users) > 0');
-        })
-        ->where(function ($q) use ($user) {
-            $q->whereRaw('NOT JSON_CONTAINS(assigned_users, \'"' . $user->id . '"\')');
-        })
+        });
+
+        if ($isAdminOrManager) {
+            $projectsQuery->whereIn('created_by', $adminManagerIds);
+        } else {
+            $projectsQuery->where('created_by', $user->id);
+        }
+
+        $projects = $projectsQuery
             ->with(['creator:id,name,role', 'team:id,name'])
             ->latest()
             ->get();
@@ -184,6 +210,10 @@ class TaskController extends Controller
             } else {
                 $resolvedUsers = User::whereIn('id', $assignedUsers->toArray())->select('id', 'name', 'role')->get()->keyBy('id');
                 foreach ($assignedUsers as $id) {
+                    // Skip self-assigned entries — creator assigned to themselves
+                    if ((int)$id === (int)$project->created_by) {
+                        continue;
+                    }
                     $clone = clone $project;
                     $clone->assigned_user = $resolvedUsers->get($id);
                     $expandedProjects->push($clone);
@@ -399,9 +429,35 @@ class TaskController extends Controller
             'end_date' => 'sometimes|nullable|date',
             'priority' => 'sometimes|string|max:32',
             'status' => 'sometimes|string|max:64',
+            'assigned_to' => 'nullable|array',
+            'assigned_to.*' => 'integer|exists:users,id',
+            'deliverables' => 'nullable|array',
+            'deliverables.*.title' => 'required_with:deliverables|string|max:255',
+            'deliverables.*.description' => 'nullable|string|max:2000',
+            'deliverables.*.due_date' => 'nullable|date',
         ]);
 
+        $assigneeIds = $validated['assigned_to'] ?? null;
+        unset($validated['assigned_to']);
+
         $task->update($validated);
+
+        if (!empty($assigneeIds)) {
+            $task->assignees()->sync($assigneeIds);
+            $task->update(['assigned_to' => $assigneeIds[0]]);
+        }
+
+        if (!empty($validated['deliverables'])) {
+            foreach ($validated['deliverables'] as $del) {
+                $task->deliverables()->create([
+                    'title' => $del['title'],
+                    'description' => $del['description'] ?? null,
+                    'due_date' => $del['due_date'] ?? null,
+                    'assigned_to' => $task->assigned_to,
+                    'created_by' => $user->id,
+                ]);
+            }
+        }
 
         return response()->json([
             'message' => 'Task updated successfully',

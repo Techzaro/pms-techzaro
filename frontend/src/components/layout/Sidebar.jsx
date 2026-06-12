@@ -60,6 +60,7 @@ function Sidebar() {
 
   const isActive = (page) => location.pathname === `${rolePrefix}/${page}`;
   const isActiveOrStart = (page) => location.pathname === `${rolePrefix}/${page}` || location.pathname.startsWith(`${rolePrefix}/${page}/`);
+  const isTaskDetailPage = location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`);
 
   useEffect(() => {
     const token = authToken();
@@ -104,6 +105,7 @@ function Sidebar() {
 
     const isDeliverablesRoute =
       isActive("deliveries") ||
+      isActive("deliveries-by-you") ||
       isActive("self-deliveries") ||
       location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`);
 
@@ -179,7 +181,7 @@ function Sidebar() {
           </Link>
 
           {/* DELIVERABLES DROPDOWN */}
-          <div className={`sidebar-link ${isActive("deliveries") || isActive("self-deliveries") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+          <div className={`sidebar-link ${isActive("deliveries") || isActive("deliveries-by-you") || isActive("self-deliveries") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
             <div
               onClick={toggleDeliverables}
               style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
@@ -198,14 +200,21 @@ function Sidebar() {
               <div className="sidebar-sub-links">
                 <Link
                   to={rolePath("deliveries")}
-                  className={`sidebar-sub-link ${isActive("deliveries") ? "active" : ""}`}
+                  className={`sidebar-sub-link ${isActive("deliveries") || (location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) && location.state?.from === "deliveries") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Deliverables
+                  Assigned To You
+                </Link>
+                <Link
+                  to={rolePath("deliveries-by-you")}
+                  className={`sidebar-sub-link ${isActive("deliveries-by-you") || (location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) && location.state?.from === "deliveries-by-you") ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Assigned By You
                 </Link>
                 <Link
                   to={rolePath("self-deliveries")}
-                  className={`sidebar-sub-link ${isActive("self-deliveries") ? "active" : ""}`}
+                  className={`sidebar-sub-link ${isActive("self-deliveries") || (location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) && location.state?.from === "self-deliveries") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Self Deliverables
@@ -243,21 +252,21 @@ function Sidebar() {
               <div className="sidebar-sub-links">
                 <Link
                   to={rolePath("tasks")}
-                  className={`sidebar-sub-link ${isActive("tasks") ? "active" : ""}`}
+                  className={`sidebar-sub-link ${isActive("tasks") || (isTaskDetailPage && location.state?.from === "tasks") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Assigned to You
                 </Link>
                 <Link
                   to={rolePath("taskby")}
-                  className={`sidebar-sub-link ${isActive("taskby") ? "active" : ""}`}
+                  className={`sidebar-sub-link ${isActive("taskby") || (isTaskDetailPage && location.state?.from === "taskby") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Assigned by You
                 </Link>
                 <Link
                   to={rolePath("self-tasks")}
-                  className={`sidebar-sub-link ${isActive("self-tasks") ? "active" : ""}`}
+                  className={`sidebar-sub-link ${isActive("self-tasks") || (isTaskDetailPage && location.state?.from === "self-tasks") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Self Tasks

@@ -82,6 +82,25 @@
   font-weight: 700;
 
   color: #111827;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.task-self-badge {
+  font-size: 12px;
+  font-weight: 600;
+
+  padding: 3px 10px;
+
+  border-radius: 20px;
+
+  background: #e0e7ff;
+
+  color: #4338ca;
+
+  white-space: nowrap;
 }
 
 .task-header p {

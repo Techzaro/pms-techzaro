@@ -1,29 +1,77 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import API_URL from "../config/api";
-import { authToken } from "../utils/auth";
+import { authToken, getUser } from "../utils/auth";
+import UserSelectDropdown from "./UserSelectDropdown";
 import "./layout/CreateTaskModal.css";
 
 export default function EditTaskModal({ task, onClose }) {
+  const currentUser = getUser();
+
   const [form, setForm] = useState({
     title: task.title || "",
     description: task.description || "",
     priority: task.priority || "Medium",
-    status: task.status || "pending",
     start_date: task.start_date ? task.start_date.slice(0, 10) : "",
     end_date: task.end_date ? task.end_date.slice(0, 10) : "",
   });
+  const [allUsers, setAllUsers] = useState([]);
+  const [displayUsers, setDisplayUsers] = useState([]);
+  const [selectedAssigneeIds, setSelectedAssigneeIds] = useState(
+    task.assignees?.map((a) => a.id) || []
+  );
+  const [deliverables, setDeliverables] = useState([]);
+  const [deliverableInput, setDeliverableInput] = useState({ title: "", due_date: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const isSelfTask = currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10) && selectedAssigneeIds.length === 1 && selectedAssigneeIds[0] === parseInt(currentUser.id, 10);
+
+  useEffect(() => {
+    const token = authToken();
+    fetch(`${API_URL}/team-users`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        const users = Array.isArray(data) ? data : [];
+        setAllUsers(users);
+        setDisplayUsers(users);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
+  const handleAssignedToChange = (ids) => {
+    setSelectedAssigneeIds(ids);
+  };
+
+  const handleAddDeliverable = () => {
+    if (!deliverableInput.title.trim()) return;
+    setDeliverables((prev) => [...prev, { ...deliverableInput, title: deliverableInput.title.trim() }]);
+    setDeliverableInput({ title: "", due_date: "" });
+  };
+
+  const handleRemoveDeliverable = (index) => {
+    setDeliverables((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDeliverableKeyDown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); handleAddDeliverable(); }
+  };
+
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e?.preventDefault) e.preventDefault();
     setError("");
     setLoading(true);
     try {
+      const body = { ...form, assigned_to: selectedAssigneeIds };
+      if (deliverables.length > 0) {
+        body.deliverables = deliverables.map((d) => ({ title: d.title, due_date: d.due_date || null }));
+      }
       const res = await fetch(`${API_URL}/tasks/${task.id}`, {
         method: "PUT",
         headers: {
@@ -31,7 +79,7 @@ export default function EditTaskModal({ task, onClose }) {
           Accept: "application/json",
           Authorization: `Bearer ${authToken()}`,
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to update task");
@@ -51,7 +99,7 @@ export default function EditTaskModal({ task, onClose }) {
           <div className="task-header-left">
             <div className="task-icon">✎</div>
             <div>
-              <h2>Edit Task</h2>
+              <h2>{isSelfTask ? "Edit Self Task" : "Edit Task"}</h2>
               <p>Update task details</p>
             </div>
           </div>
@@ -70,10 +118,19 @@ export default function EditTaskModal({ task, onClose }) {
                 <div className="task-project-name">{task.project?.title || "—"}</div>
               </div>
               <div className="task-field">
-                <label>Assigned To</label>
-                <div className="task-project-name">
-                  {task.assignees?.map((a) => a.name).join(", ") || "—"}
-                </div>
+                <label>Assign To {!isSelfTask && <span>*</span>}</label>
+                {isSelfTask ? (
+                  <div className="task-project-name">
+                    {task.assignees?.map((a) => a.name).join(", ") || "—"}
+                  </div>
+                ) : (
+                  <UserSelectDropdown
+                    users={displayUsers}
+                    selectedIds={selectedAssigneeIds}
+                    onChange={handleAssignedToChange}
+                    placeholder="Click to select members"
+                  />
+                )}
               </div>
             </div>
 
@@ -126,19 +183,6 @@ export default function EditTaskModal({ task, onClose }) {
             </div>
 
             <div className="task-card">
-              <label>Status</label>
-              <select name="status" value={form.status} onChange={handleChange}>
-                <option value="pending">Pending</option>
-                <option value="in_progress">In Progress</option>
-                <option value="review">Review</option>
-                <option value="completed">Completed</option>
-                <option value="done">Done</option>
-                <option value="failed">Failed</option>
-                <option value="abandoned">Abandoned</option>
-              </select>
-            </div>
-
-            <div className="task-card">
               <div className="task-card-top"><span>Dates</span></div>
               <div className="task-deadline-grid">
                 <div>
@@ -152,19 +196,69 @@ export default function EditTaskModal({ task, onClose }) {
               </div>
             </div>
 
+            {/* DELIVERABLES */}
+            <div className="task-card">
+              <div className="task-card-top">
+                <span>Deliverables</span>
+              </div>
+              <div className="task-deadline-grid">
+                <div className="task-field">
+                  <label style={{ fontSize: "13px" }}>Deliverable Name</label>
+                  <input
+                    type="text"
+                    placeholder="Enter deliverable name"
+                    value={deliverableInput.title}
+                    onChange={(e) => setDeliverableInput((prev) => ({ ...prev, title: e.target.value }))}
+                    onKeyDown={handleDeliverableKeyDown}
+                  />
+                </div>
+                <div className="task-field">
+                  <label style={{ fontSize: "13px" }}>Due Date</label>
+                  <input
+                    type="date"
+                    value={deliverableInput.due_date}
+                    onChange={(e) => setDeliverableInput((prev) => ({ ...prev, due_date: e.target.value }))}
+                    onKeyDown={handleDeliverableKeyDown}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                className="task-add-phase-btn"
+                onClick={handleAddDeliverable}
+                disabled={!deliverableInput.title.trim()}
+              >
+                + Add Deliverable
+              </button>
+              {deliverables.length > 0 && (
+                <div className="task-phase-list">
+                  {deliverables.map((d, index) => (
+                    <div key={index} className="task-phase-item">
+                      <div className="task-phase-item-dot" style={{ background: "#8b5cf6" }} />
+                      <div className="task-phase-item-info">
+                        <div className="task-phase-item-title">{d.title}</div>
+                        <div className="task-phase-item-date">{d.due_date ? new Date(d.due_date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "No due date"}</div>
+                      </div>
+                      <button type="button" className="task-phase-item-remove" onClick={() => handleRemoveDeliverable(index)}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
           </div>
 
           {error && <div className="task-error-banner" style={{ margin: "0 28px" }}>{error}</div>}
 
-          {/* FOOTER */}
-          <div className="task-footer">
-            <button type="button" className="task-cancel-btn" onClick={() => onClose(false)} disabled={loading}>Cancel</button>
-            <button type="submit" className="task-create-btn" disabled={loading}>
-              {loading ? "Saving..." : "Save Changes"}
-            </button>
-          </div>
-
         </form>
+
+        {/* FOOTER */}
+        <div className="task-footer">
+          <button type="button" className="task-cancel-btn" onClick={() => onClose(false)} disabled={loading}>Cancel</button>
+          <button type="submit" className="task-create-btn" onClick={handleSubmit} disabled={loading}>
+            {loading ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
       </div>
     </div>
   );
