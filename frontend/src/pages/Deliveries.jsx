@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import { authToken, rolePath } from "../utils/auth";
+import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import "../pages/Deliveries.css";
 

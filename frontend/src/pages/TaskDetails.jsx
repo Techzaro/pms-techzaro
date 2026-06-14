@@ -128,6 +128,12 @@ function TaskDetails() {
 
   useEffect(() => { fetchTask(true); }, [fetchTask]);
 
+  const taskSourcePages = {
+    taskby: { label: "Tasks By You", path: rolePath("taskby") },
+    "self-tasks": { label: "Self Tasks", path: rolePath("self-tasks") },
+  };
+  const source = taskSourcePages[location.state?.from] || null;
+
   const currentUser = getUser();
   const isCreator = task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10);
   const assignees = task?.assignees || [];
