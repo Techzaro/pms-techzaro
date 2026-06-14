@@ -94,29 +94,56 @@
   cursor: pointer;
 }
 
+
 .task-progress {
   display: flex;
   gap: 10px;
-  margin-bottom: 30px;
+  margin-top: 8px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
 }
 
-.All,
-.Pending,
-.Progress,
-.Completed,
-.Failed,
-.Aban {
-  border: 1px solid lightgrey;
-  padding: 10px 15px;
-  display: flex;
-  justify-content: center;
+.task-progress p {
+  border: 1px solid #9CA3AF;
+  padding: 8px 14px;
+  display: inline-flex;
   align-items: center;
-  border-radius: 10px;
-  gap: 5px;
+  gap: 8px;
+  border-radius: 12px;
   cursor: pointer;
   white-space: nowrap;
+  font-size: 14px;
+  color: #374151;
+  background: transparent;
+  transition: 0.15s ease;
 }
+
+.task-progress p.active {
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  border-color: #9CA3AF;
+  font-weight: 600;
+}
+
+.task-progress p svg {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  fill: currentColor;
+}
+
+.task-progress .All svg { display: none; }
+
+/* color pills by parent so dot matches label */
+.task-progress .All { color: #6B7280; }
+.task-progress .Pending { color: #F59E0B; }
+.task-progress .Progress { color: #3B82F6; }
+.task-progress .Submitted { color: #3B82F6; }
+.task-progress .Completed { color: #22C55E; }
+.task-progress .Approved { color: #22C55E; }
+.task-progress .Failed { color: #EF4444; }
+.task-progress .Rejected { color: #EF4444; }
+.task-progress .Aban { color: #6B7280; }
 
 .delivery-serach-bar {
   border: 1px solid lightgray;
@@ -141,8 +168,8 @@
 
 .Pending { color: #F59E0B; }
 .Progress { color: #3B82F6; }
-.Completed { color: #22C55E; }
-.Failed { color: #EF4444; }
+.Completed, .Approved { color: #22C55E; }
+.Failed, .Rejected { color: #EF4444; }
 .Aban { color: #6B7280; }
 
 .container {
@@ -156,10 +183,10 @@
 
 .table-header {
   display: grid;
-  grid-template-columns: 1fr 7.5fr 0.4fr 0.4fr 0.3fr 0.3fr;
+  grid-template-columns: 2.2fr 2.4fr 1fr 0.9fr 0.8fr 0.4fr;
   align-items: center;
-  gap: 6px;
-  padding: 14px 12px;
+  gap: 12px;
+  padding: 14px 16px;
   border-bottom: 1px solid #e5e7eb;
 }
 
@@ -172,23 +199,23 @@
 }
 
 .table-header > div:nth-child(1),
-.table-header > div:nth-child(2) {
+.table-header > div:nth-child(2),
+.table-header > div:nth-child(3) {
   text-align: left;
 }
 
-.table-header > div:nth-child(3),
 .table-header > div:nth-child(4),
 .table-header > div:nth-child(5),
 .table-header > div:nth-child(6) {
-  text-align: right;
+  text-align: center;
 }
 
 .table-row {
   display: grid;
-  grid-template-columns: 1fr 7.5fr 0.4fr 0.4fr 0.3fr 0.3fr;
+  grid-template-columns: 2.2fr 2.4fr 1fr 0.9fr 0.8fr 0.4fr;
   align-items: center;
-  gap: 6px;
-  padding: 12px 12px;
+  gap: 12px;
+  padding: 12px 16px;
   border-bottom: 1px solid #f1f5f9;
   transition: 0.3s;
 }
@@ -197,19 +224,76 @@
   min-width: 0;
 }
 
-.table-row > div:nth-child(1) {
+.table-row > div:nth-child(1),
+.table-row > div:nth-child(2),
+.table-row > div:nth-child(3) {
   text-align: left;
 }
 
-.table-row > div:nth-child(2) {
-  text-align: left;
-}
-
-.table-row > div:nth-child(3),
 .table-row > div:nth-child(4),
 .table-row > div:nth-child(5),
 .table-row > div:nth-child(6) {
-  text-align: right;
+  text-align: center;
+}
+
+.deliveries-table-header {
+  display: grid;
+  grid-template-columns: 2.2fr 2.4fr 1fr 0.9fr 0.8fr 0.4fr;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.deliveries-table-header > div {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  min-width: 0;
+}
+
+.deliveries-table-header > div:nth-child(1),
+.deliveries-table-header > div:nth-child(2),
+.deliveries-table-header > div:nth-child(3) {
+  text-align: left;
+}
+
+.deliveries-table-header > div:nth-child(4),
+.deliveries-table-header > div:nth-child(5),
+.deliveries-table-header > div:nth-child(6) {
+  text-align: center;
+}
+
+.deliveries-table-row {
+  display: grid;
+  grid-template-columns: 2.2fr 2.4fr 1fr 0.9fr 0.8fr 0.4fr;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  transition: 0.3s;
+}
+
+.deliveries-table-row > div {
+  min-width: 0;
+}
+
+.deliveries-table-row > div:nth-child(1),
+.deliveries-table-row > div:nth-child(2),
+.deliveries-table-row > div:nth-child(3) {
+  text-align: left;
+}
+
+.deliveries-table-row > div:nth-child(4),
+.deliveries-table-row > div:nth-child(5),
+.deliveries-table-row > div:nth-child(6) {
+  text-align: center;
+}
+
+/* add right padding for status column header and cells */
+.deliveries-table-header > div:nth-child(3),
+.deliveries-table-row > div:nth-child(3) {
+  padding-right: 16px;
 }
 
 .table-row:hover {
