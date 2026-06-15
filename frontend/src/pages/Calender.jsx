@@ -10,6 +10,7 @@ import {
 
 import Header from "../components/layout/Header";
 import Sidebar from "../components/layout/Sidebar";
+import Breadcrumb from "../components/Breadcrumb";
 import "../components/layout/DashboardLayout.css";
 import Event from "../components/Event";
 
@@ -84,6 +85,7 @@ const Calender = () => {
         <Sidebar />
 
         <div className="dashboard-content">
+          <Breadcrumb items={[{ label: "Calendar" }]} />
           <div className="calender-layout">
 
             {/* LEFT SIDE */}

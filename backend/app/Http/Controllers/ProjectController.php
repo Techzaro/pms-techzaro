@@ -345,7 +345,7 @@ class ProjectController extends Controller
             'task_id' => null,
             'title' => $project->title,
             'description' => $project->description,
-            'status' => 'deliverable',
+            'status' => 'pending',
             'priority' => $project->priority ?? 'Medium',
             'due_date' => $project->end_date,
             'assigned_to' => $user->id,

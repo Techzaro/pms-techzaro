@@ -14,9 +14,7 @@ use Illuminate\Support\Facades\Storage;
 class DeliverableController extends Controller
 {
     /**
-     * List deliverables based on user role.
-     * - Assignees see deliverables assigned to them
-     * - Creators/admins see deliverables under their tasks/projects
+     * List deliverables assigned to the current user.
      */
     public function index(Request $request)
     {
@@ -28,6 +26,7 @@ class DeliverableController extends Controller
             'assignee:id,name,email,role',
             'creator:id,name,role',
             'task:id,title',
+            'latestSubmission',
         ]);
 
         if ($view === 'assignee') {
@@ -41,13 +40,23 @@ class DeliverableController extends Controller
             ->filter($request->query())
             ->paginate(15);
 
+        // Add has_submitted flag per user
+        $deliverableIds = $deliverables->pluck('id')->toArray();
+        $submittedIds = DeliverableSubmission::where('submitted_by', $user->id)
+            ->whereIn('deliverable_id', $deliverableIds)
+            ->pluck('deliverable_id')
+            ->toArray();
+
+        $deliverables->getCollection()->transform(function ($deliverable) use ($submittedIds) {
+            $deliverable->has_submitted = in_array($deliverable->id, $submittedIds);
+            return $deliverable;
+        });
+
         return response()->json($deliverables);
     }
 
     /**
      * Deliverables assigned by the current user to others.
-     * Admin/Manager share visibility of each other's assignments.
-     * Self-assigned deliverables are excluded (go to Self Deliverables).
      */
     public function assignedByMe(Request $request)
     {
@@ -59,6 +68,9 @@ class DeliverableController extends Controller
             'assignee:id,name,email,role',
             'creator:id,name,role',
             'task:id,title',
+            'latestSubmission',
+            'latestSubmission.submittedBy:id,name,email',
+            'reopenedBy:id,name',
         ]);
 
         if ($isAdminOrManager) {
@@ -68,7 +80,6 @@ class DeliverableController extends Controller
             $query->where('created_by', $user->id);
         }
 
-        // Exclude self-assigned deliverables (created_by === assigned_to)
         $query->whereColumn('created_by', '!=', 'assigned_to');
 
         $deliverables = $query->latest()
@@ -101,7 +112,7 @@ class DeliverableController extends Controller
     }
 
     /**
-     * Show a single deliverable with submission history.
+     * Show a single deliverable with full submission history.
      */
     public function show(Deliverable $deliverable)
     {
@@ -120,9 +131,10 @@ class DeliverableController extends Controller
             'task:id,title,assigned_by',
             'task.assigner:id,name,email',
             'submissions' => fn($q) => $q->with('submittedBy:id,name,email')->latest(),
-            'latestSubmission',
+            'latestSubmission' => fn($q) => $q->with('submittedBy:id,name,email'),
             'approvedBy:id,name',
             'rejectedBy:id,name',
+            'reopenedBy:id,name',
         ]);
 
         return response()->json([
@@ -212,6 +224,7 @@ class DeliverableController extends Controller
 
     /**
      * Submit a deliverable (Assignee action).
+     * Works for: pending → submitted, rejected → submitted, reopened → submitted
      */
     public function submit(Request $request, Deliverable $deliverable)
     {
@@ -221,8 +234,8 @@ class DeliverableController extends Controller
             return response()->json(['message' => 'Only the assignee can submit this deliverable'], 403);
         }
 
-        if ($deliverable->status !== 'pending') {
-            return response()->json(['message' => 'This deliverable has already been submitted'], 422);
+        if (!in_array($deliverable->status, ['pending', 'rejected', 'reopened'])) {
+            return response()->json(['message' => 'This deliverable cannot be submitted in its current status'], 422);
         }
 
         $validated = $request->validate([
@@ -247,12 +260,25 @@ class DeliverableController extends Controller
             'file_name' => $fileName,
         ]);
 
-        $deliverable->update([
+        $updateData = [
             'status' => 'submitted',
             'submitted_at' => now(),
-        ]);
+        ];
 
-        // Notify the creator (assigner)
+        // Clear rejection/reopen fields when resubmitting
+        if (in_array($deliverable->status, ['rejected', 'reopened'])) {
+            $updateData['rejected_at'] = null;
+            $updateData['rejected_by'] = null;
+            $updateData['rejection_comment'] = null;
+            $updateData['reopened_at'] = null;
+            $updateData['reopened_by'] = null;
+            $updateData['reopen_comment'] = null;
+            $updateData['reopen_instructions'] = null;
+            $updateData['reopen_new_deadline'] = null;
+        }
+
+        $deliverable->update($updateData);
+
         $creatorId = $deliverable->created_by;
         if ($creatorId && $creatorId !== $user->id) {
             Notification::create([
@@ -269,6 +295,7 @@ class DeliverableController extends Controller
                 'assignee:id,name,email,role',
                 'creator:id,name',
                 'submissions' => fn($q) => $q->with('submittedBy:id,name,email')->latest(),
+                'latestSubmission' => fn($q) => $q->with('submittedBy:id,name,email'),
             ]),
         ]);
     }
@@ -295,7 +322,6 @@ class DeliverableController extends Controller
             'approved_by' => $user->id,
         ]);
 
-        // Notify the assignee
         if ($deliverable->assigned_to) {
             Notification::create([
                 'user_id' => $deliverable->assigned_to,
@@ -316,7 +342,8 @@ class DeliverableController extends Controller
     }
 
     /**
-     * Reject a deliverable (Assigner action).
+     * Reject a deliverable permanently (Assigner action).
+     * No further submission allowed.
      */
     public function reject(Request $request, Deliverable $deliverable)
     {
@@ -342,13 +369,11 @@ class DeliverableController extends Controller
             'rejection_comment' => $validated['comment'] ?? null,
         ]);
 
-        // Notify the assignee
         if ($deliverable->assigned_to) {
             $msg = 'Your deliverable "' . $deliverable->title . '" has been rejected.';
             if (!empty($validated['comment'])) {
                 $msg .= "\nReason: " . $validated['comment'];
             }
-            $msg .= "\nPlease review and resubmit.";
 
             Notification::create([
                 'user_id' => $deliverable->assigned_to,
@@ -365,6 +390,103 @@ class DeliverableController extends Controller
                 'creator:id,name',
                 'rejectedBy:id,name',
             ]),
+        ]);
+    }
+
+    /**
+     * Reject & Reopen a deliverable (Assigner action).
+     * Allows assignee to resubmit with new information.
+     */
+    public function reopen(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+        $isCreator = $deliverable->created_by === $user->id;
+
+        if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($deliverable->status !== 'submitted') {
+            return response()->json(['message' => 'Can only reopen submitted deliverables'], 422);
+        }
+
+        $validated = $request->validate([
+            'comment' => 'nullable|string|max:2000',
+            'instructions' => 'nullable|string|max:2000',
+            'new_deadline' => 'nullable|date',
+            'file' => 'nullable|file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif|max:51200',
+        ]);
+
+        $filePath = null;
+        $fileName = null;
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $fileName = $file->getClientOriginalName();
+            $filePath = $file->store('deliverable-reopen/' . $deliverable->id, 'public');
+        }
+
+        $updateData = [
+            'status' => 'reopened',
+            'reopened_at' => now(),
+            'reopened_by' => $user->id,
+            'reopen_comment' => $validated['comment'] ?? null,
+            'reopen_instructions' => $validated['instructions'] ?? null,
+        ];
+
+        if (!empty($validated['new_deadline'])) {
+            $updateData['reopen_new_deadline'] = $validated['new_deadline'];
+        }
+
+        if (!empty($filePath)) {
+            $updateData['reopen_file_path'] = $filePath;
+            $updateData['reopen_file_name'] = $fileName;
+        }
+
+        $deliverable->update($updateData);
+
+        if ($deliverable->assigned_to) {
+            $msg = 'Your deliverable "' . $deliverable->title . '" has been reopened for revision.';
+            if (!empty($validated['comment'])) {
+                $msg .= "\nComment: " . $validated['comment'];
+            }
+            if (!empty($validated['instructions'])) {
+                $msg .= "\nInstructions: " . $validated['instructions'];
+            }
+
+            Notification::create([
+                'user_id' => $deliverable->assigned_to,
+                'type' => 'deliverable_reopened',
+                'message' => $msg,
+                'link' => '/deliveries/deliverable-details/' . $deliverable->id,
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Deliverable reopened successfully',
+            'deliverable' => $deliverable->fresh()->load([
+                'assignee:id,name,email,role',
+                'creator:id,name',
+                'reopenedBy:id,name',
+            ]),
+        ]);
+    }
+
+    /**
+     * Get the latest submission for a specific deliverable.
+     * Used by assigner to view submission details in popup.
+     */
+    public function latestSubmission(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+
+        $submission = DeliverableSubmission::where('deliverable_id', $deliverable->id)
+            ->with('submittedBy:id,name,email')
+            ->latest()
+            ->first();
+
+        return response()->json([
+            'submission' => $submission,
         ]);
     }
 }

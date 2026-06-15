@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import Header from "../components/layout/Header";
 import Sidebar from "../components/layout/Sidebar";
+import Breadcrumb from "../components/Breadcrumb";
 import MemberExportReport from "./MemberExportReport";
 import "../components/layout/DashboardLayout.css";
 import "../pages/UserPerformance.css";
@@ -114,6 +115,10 @@ function UserPerformance() {
         <Sidebar />
 
         <div className="dashboard-content">
+          <Breadcrumb items={[
+            { label: "Reports", path: "/reports" },
+            { label: "User Performance" },
+          ]} />
           <div className="up-layout">
 
             {/* LEFT SIDE - MAIN CONTENT */}

@@ -1,4 +1,5 @@
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ExportReport from "./ExportReport";
@@ -91,8 +92,13 @@ function Reports() {
   const userRole = stored?.role || "Member";
   const navigate = useNavigate();
 
+  const breadcrumbs = [
+    { label: "Reports" },
+  ];
+
   return (
     <DashboardLayout>
+      <Breadcrumb items={breadcrumbs} />
       <div className="reports-page">
 
         {/* WELCOME HEADER */}

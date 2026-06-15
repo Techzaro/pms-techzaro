@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
-import { ChevronRight, Download, Eye } from "lucide-react";
+import { useParams, useLocation } from "react-router-dom";
+import { Download } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import "./TaskDetails.css";
 import "./DeliverableDetails.css";
 
 function formatShortDate(value) {
-  if (!value) return "—";
+  if (!value) return "\u2014";
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "\u2014";
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -32,19 +33,10 @@ function statusStyle(status) {
   return { bg: "#FEF3C7", text: "#92400E" };
 }
 
-function initials(name) {
-  if (!name) return "?";
-  const parts = name.trim().split(/\s+/);
-  const a = parts[0]?.[0] || "";
-  const b = parts[1]?.[0] || "";
-  return (a + b).toUpperCase() || a.toUpperCase();
-}
-
 function DeliverableDetails() {
-  const { projectId } = useParams();
-  const navigate = useNavigate();
+  const params = useParams();
   const location = useLocation();
-  const deliverableId = projectId;
+  const deliverableId = params.deliverable;
 
   const deliverableSourcePages = {
     deliveries: { label: "Deliverables Assigned To You", path: rolePath("deliveries") },
@@ -65,6 +57,13 @@ function DeliverableDetails() {
   const [messageType, setMessageType] = useState("success");
   const fileInputRef = useRef(null);
 
+  const showToast = useCallback((text, type = "success") => {
+    setMessage(text);
+    setMessageType(type);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setTimeout(() => { setMessage(""); setMessageType(""); }, 4000);
+  }, []);
+
   const fetchDeliverable = useCallback(() => {
     setLoading(true);
     const token = authToken();
@@ -72,19 +71,22 @@ function DeliverableDetails() {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
     })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setDeliverable(data?.deliverable || null))
+      .then((data) => {
+        setDeliverable(data?.deliverable || null);
+        setShowSubmitForm(false);
+        setShowRejectForm(false);
+      })
       .catch(() => setDeliverable(null))
       .finally(() => setLoading(false));
   }, [deliverableId]);
 
   useEffect(() => { fetchDeliverable(); }, [fetchDeliverable]);
 
-  const showToast = useCallback((text, type = "success") => {
-    setMessage(text);
-    setMessageType(type);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    setTimeout(() => { setMessage(""); setMessageType(""); }, 4000);
-  }, []);
+  const currentUser = getUser();
+  const isCreator = deliverable && currentUser && parseInt(deliverable.created_by, 10) === parseInt(currentUser.id, 10);
+  const isAdminManager = currentUser && ["admin", "manager"].includes(currentUser.role);
+  const isAssignee = deliverable && currentUser && deliverable.assigned_to && parseInt(deliverable.assigned_to, 10) === parseInt(currentUser.id, 10);
+  const canApproveReject = isCreator || isAdminManager;
 
   const handleSubmit = async () => {
     if (!submitComment.trim() && !submitFile) {
@@ -162,11 +164,6 @@ function DeliverableDetails() {
     }
   };
 
-  const currentUser = getUser();
-  const isCreator = deliverable && currentUser && parseInt(deliverable.created_by, 10) === parseInt(currentUser.id, 10);
-  const isAdminManager = currentUser && ["admin", "manager"].includes(currentUser.role);
-  const canApproveReject = isCreator || isAdminManager;
-
   if (loading) {
     return (
       <DashboardLayout hideRightSidebar>
@@ -185,7 +182,10 @@ function DeliverableDetails() {
 
   const ss = statusStyle(deliverable.status);
   const submissions = deliverable.submissions || [];
-  const latestSubmission = deliverable.latest_submission;
+  const canSubmit = isAssignee && (deliverable.status === "pending" || deliverable.status === "rejected");
+  const isApproved = deliverable.status === "approved";
+  const isSubmitted = deliverable.status === "submitted";
+  const isRejected = deliverable.status === "rejected";
 
   return (
     <DashboardLayout hideRightSidebar>
@@ -194,17 +194,11 @@ function DeliverableDetails() {
 
         <div className="td-layout">
           <div className="td-main">
-            <nav className="td-breadcrumb">
-              <Link to={rolePath("deliveries")}>Deliverables</Link>
-              {deliverableSource && (
-                <>
-                  <ChevronRight size={14} />
-                  <Link to={deliverableSource.path}>{deliverableSource.label}</Link>
-                </>
-              )}
-              <ChevronRight size={14} />
-              <span>{deliverable.title}</span>
-            </nav>
+            <Breadcrumb items={[
+              { label: "Deliverables", path: rolePath("deliveries") },
+              ...(deliverableSource ? [{ label: deliverableSource.label, path: deliverableSource.path }] : []),
+              { label: deliverable.title },
+            ]} />
 
             <div className="td-title-row">
               <h1 className="td-title">{deliverable.title}</h1>
@@ -223,13 +217,13 @@ function DeliverableDetails() {
                 <div className="td-trio-item">
                   <div>
                     <span className="td-stat-label">Related Task</span>
-                    <span className="td-stat-big td-stat-big--sm" style={{ display: "block" }}>{deliverable.task?.title || "—"}</span>
+                    <span className="td-stat-big td-stat-big--sm" style={{ display: "block" }}>{deliverable.task?.title || "\u2014"}</span>
                   </div>
                 </div>
                 <div className="td-trio-item">
                   <div>
                     <span className="td-stat-label">Assigned To</span>
-                    <span className="td-stat-big td-stat-big--sm" style={{ display: "block" }}>{deliverable.assignee?.name || "—"}</span>
+                    <span className="td-stat-big td-stat-big--sm" style={{ display: "block" }}>{deliverable.assignee?.name || "\u2014"}</span>
                   </div>
                 </div>
                 <div className="td-trio-item">
@@ -249,19 +243,17 @@ function DeliverableDetails() {
               </div>
             )}
 
-            {/* Submit Form */}
-            {deliverable.status === "pending" && (
+            {/* Submit Form - Assignee: show Submit button for pending, Resubmit button for rejected */}
+            {canSubmit && (
               <div style={{ marginTop: "24px" }}>
-                {!showSubmitForm ? (
-                  <button
-                    className="td-btn-primary"
-                    onClick={() => setShowSubmitForm(true)}
-                  >
-                    Submit Deliverable
+                {!showSubmitForm && (
+                  <button className="td-btn-primary" onClick={() => setShowSubmitForm(true)}>
+                    {isRejected ? "Resubmit Deliverable" : "Submit Deliverable"}
                   </button>
-                ) : (
+                )}
+                {showSubmitForm && (
                   <div className="td-card" style={{ padding: "20px" }}>
-                    <h3 className="td-card-title">Submit Deliverable</h3>
+                    <h3 className="td-card-title">{isRejected ? "Resubmit Deliverable" : "Submit Deliverable"}</h3>
                     <div style={{ marginTop: "12px" }}>
                       <label style={{ display: "block", marginBottom: "6px", fontSize: "13px", fontWeight: 500, color: "#374151" }}>Comment</label>
                       <textarea
@@ -287,17 +279,10 @@ function DeliverableDetails() {
                       )}
                     </div>
                     <div style={{ marginTop: "16px", display: "flex", gap: "10px" }}>
-                      <button
-                        className="td-btn-primary"
-                        onClick={handleSubmit}
-                        disabled={submitting}
-                      >
+                      <button className="td-btn-primary" onClick={handleSubmit} disabled={submitting}>
                         {submitting ? "Submitting..." : "Submit"}
                       </button>
-                      <button
-                        className="td-btn-outline"
-                        onClick={() => { setShowSubmitForm(false); setSubmitComment(""); setSubmitFile(null); }}
-                      >
+                      <button className="td-btn-outline" onClick={() => { setShowSubmitForm(false); setSubmitComment(""); setSubmitFile(null); }}>
                         Cancel
                       </button>
                     </div>
@@ -306,8 +291,8 @@ function DeliverableDetails() {
               </div>
             )}
 
-            {/* Approve/Reject for assigner */}
-            {deliverable.status === "submitted" && canApproveReject && (
+            {/* Review Deliverable - Assigner: show Approve/Reject buttons when submitted */}
+            {isSubmitted && canApproveReject && (
               <div style={{ marginTop: "24px", display: "flex", gap: "10px", alignItems: "flex-start", flexDirection: "column" }}>
                 <div style={{ display: "flex", gap: "10px" }}>
                   <button className="td-btn-primary" style={{ background: "#166534" }} onClick={handleApprove}>
@@ -335,26 +320,17 @@ function DeliverableDetails() {
               </div>
             )}
 
-            {/* Rejection info */}
-            {deliverable.status === "rejected" && deliverable.rejection_comment && (
+            {/* Rejection info - shown when rejected */}
+            {isRejected && deliverable.rejection_comment && (
               <div style={{ marginTop: "20px", padding: "16px", background: "#FEE2E2", borderRadius: "8px", border: "1px solid #FECACA" }}>
                 <h3 className="td-card-title" style={{ color: "#991B1B" }}>Rejection Reason</h3>
                 <p style={{ color: "#7F1D1D", marginTop: "6px" }}>{deliverable.rejection_comment}</p>
                 {deliverable.rejected_by && <p style={{ color: "#7F1D1D", fontSize: "12px", marginTop: "4px" }}>By: {deliverable.rejected_by.name}</p>}
-                {deliverable.status === "rejected" && (
-                  <button
-                    className="td-btn-primary"
-                    style={{ marginTop: "12px" }}
-                    onClick={() => setShowSubmitForm(true)}
-                  >
-                    Resubmit
-                  </button>
-                )}
               </div>
             )}
 
             {/* Approved info */}
-            {deliverable.status === "approved" && (
+            {isApproved && (
               <div style={{ marginTop: "20px", padding: "16px", background: "#DCFCE7", borderRadius: "8px", border: "1px solid #BBF7D0" }}>
                 <h3 className="td-card-title" style={{ color: "#166534" }}>Approved</h3>
                 {deliverable.approved_by && <p style={{ color: "#166534", marginTop: "4px", fontSize: "13px" }}>Approved by: {deliverable.approved_by.name}</p>}
@@ -391,15 +367,6 @@ function DeliverableDetails() {
                 ))}
               </div>
             )}
-
-            {/* Resubmit button for rejected */}
-            {deliverable.status === "rejected" && !showSubmitForm && (
-              <div style={{ marginTop: "16px" }}>
-                <button className="td-btn-primary" onClick={() => setShowSubmitForm(true)}>
-                  Resubmit Deliverable
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Right Sidebar */}
@@ -411,21 +378,21 @@ function DeliverableDetails() {
                   <span className="td-dot" style={{ background: "#3b82f6" }} />
                   <div>
                     <span className="td-info-label">Task</span>
-                    <span className="td-info-val">{deliverable.task?.title || "—"}</span>
+                    <span className="td-info-val">{deliverable.task?.title || "\u2014"}</span>
                   </div>
                 </li>
                 <li>
                   <span className="td-dot" style={{ background: "#f59e0b" }} />
                   <div>
                     <span className="td-info-label">Assigned To</span>
-                    <span className="td-info-val">{deliverable.assignee?.name || "—"}</span>
+                    <span className="td-info-val">{deliverable.assignee?.name || "\u2014"}</span>
                   </div>
                 </li>
                 <li>
                   <span className="td-dot" style={{ background: "#8b5cf6" }} />
                   <div>
                     <span className="td-info-label">Created By</span>
-                    <span className="td-info-val">{deliverable.creator?.name || "—"}</span>
+                    <span className="td-info-val">{deliverable.creator?.name || "\u2014"}</span>
                   </div>
                 </li>
                 <li>

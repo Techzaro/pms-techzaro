@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { MdEdit, MdArrowBack } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import "./UserProfile.css";
@@ -319,8 +320,14 @@ function UserProfile() {
 
   const { user, account } = profileData;
 
+  const breadcrumbs = [
+    { label: "Users", path: rolePath("manage-users") },
+    { label: user?.name || "User Profile" },
+  ];
+
   return (
     <DashboardLayout hideRightSidebar={true}>
+      <Breadcrumb items={breadcrumbs} />
 <div className="flex">
       <div className="user-profile-page">
         <div className="profile-header">

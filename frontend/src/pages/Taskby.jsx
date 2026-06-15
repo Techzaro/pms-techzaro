@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import { CiCalendar } from "react-icons/ci";
 import { IoIosArrowDown } from "react-icons/io";
 import { GoDotFill } from "react-icons/go";
@@ -150,8 +151,14 @@ const Taskby = () => {
 
   const taskIdList = filteredItems.filter((i) => i.item_type !== "project").map((i) => i.id);
 
+  const breadcrumbs = [
+    { label: "Tasks", path: rolePath("tasks") },
+    { label: "Assigned By You" },
+  ];
+
   return (
     <DashboardLayout>
+      <Breadcrumb items={breadcrumbs} />
       <div className="Task">
         <div className="task-text">
           <h3>Tasks Assigned By You</h3>
@@ -331,7 +338,7 @@ const Taskby = () => {
                   <div>{formatDate(item.end_date)}</div>
                 </div>
                 <div className="action-btns">
-                  <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList } })}>
+                  <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}>
                     <IoEyeOutline />
                   </button>
                 </div>

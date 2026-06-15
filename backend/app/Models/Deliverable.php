@@ -25,6 +25,13 @@ class Deliverable extends Model
         'rejection_comment',
         'approved_by',
         'rejected_by',
+        'reopened_at',
+        'reopened_by',
+        'reopen_comment',
+        'reopen_instructions',
+        'reopen_new_deadline',
+        'reopen_file_path',
+        'reopen_file_name',
     ];
 
     protected $casts = [
@@ -32,6 +39,8 @@ class Deliverable extends Model
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
         'rejected_at' => 'datetime',
+        'reopened_at' => 'datetime',
+        'reopen_new_deadline' => 'date',
     ];
 
     public function scopeFilter(Builder $query, array $filters): Builder
@@ -97,5 +106,10 @@ class Deliverable extends Model
     public function rejectedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'rejected_by');
+    }
+
+    public function reopenedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reopened_by');
     }
 }

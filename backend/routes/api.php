@@ -160,10 +160,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/deliverables/{deliverable}', [DeliverableController::class, 'destroy']);
         Route::post('/deliverables/{deliverable}/approve', [DeliverableController::class, 'approve']);
         Route::post('/deliverables/{deliverable}/reject', [DeliverableController::class, 'reject']);
+        Route::post('/deliverables/{deliverable}/reopen', [DeliverableController::class, 'reopen']);
     });
 
     // Assignee can submit
     Route::post('/deliverables/{deliverable}/submit', [DeliverableController::class, 'submit']);
+    // Get latest submission for a deliverable (assigner view)
+    Route::get('/deliverables/{deliverable}/latest-submission', [DeliverableController::class, 'latestSubmission']);
 
     /*
     | NOTIFICATIONS

@@ -9,6 +9,7 @@ import { IoSearchOutline } from "react-icons/io5";
 import { CiCirclePlus } from "react-icons/ci";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, getUser, setUser, rolePath } from "../utils/auth";
@@ -500,9 +501,14 @@ function ManageUsers() {
     }
   };
 
+  const breadcrumbs = [
+    { label: "Users" },
+  ];
+
   return (
     <>
     <DashboardLayout>
+      <Breadcrumb items={breadcrumbs} />
       <div className="manage-users-page">
         <div className="manage-users-header">
           <div>

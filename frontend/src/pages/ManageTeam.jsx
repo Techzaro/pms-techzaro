@@ -13,6 +13,7 @@ import {
   MdCreateNewFolder,
 } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
@@ -386,9 +387,14 @@ function ManageTeam() {
       return 0;
     });
 
+  const breadcrumbs = [
+    { label: "Teams" },
+  ];
+
   return (
     <>
     <DashboardLayout>
+      <Breadcrumb items={breadcrumbs} />
       <div className="mt-page">
         {/* HEADER */}
         <div className="mt-header">

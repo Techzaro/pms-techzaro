@@ -1,4 +1,5 @@
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect } from "react";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
@@ -9,14 +10,14 @@ import "../pages/Deliveries.css";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
-  pending: "#da4b12",
+  pending: "#FEF3C7",
   submitted: "#DBEAFE",
   approved: "#DCFCE7",
   rejected: "#FEE2E2",
 };
 
 const STATUS_TEXT_COLORS = {
-  pending: "#e76514",
+  pending: "#92400E",
   submitted: "#1E40AF",
   approved: "#166534",
   rejected: "#991B1B",
@@ -86,8 +87,14 @@ function SelfDeliveries() {
     return map[status] || status;
   };
 
+  const breadcrumbs = [
+    { label: "Deliverables", path: rolePath("deliveries") },
+    { label: "Self Deliverables" },
+  ];
+
   return (
     <DashboardLayout>
+      <Breadcrumb items={breadcrumbs} />
       <div className="projects-page">
         <div className="projects-header">
           <div>
