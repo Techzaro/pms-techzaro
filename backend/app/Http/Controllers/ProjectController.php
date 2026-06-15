@@ -181,7 +181,10 @@ class ProjectController extends Controller
             'milestones',
             'activities' => fn ($q) => $q->with('user:id,name')->latest()->limit(30),
             'files',
-            'deliverables' => fn ($q) => $q->with('assignee:id,name,email,role', 'latestSubmission')->latest(),
+            'deliverables' => fn ($q) => $q->where(function ($qq) use ($user) {
+                $qq->where('assigned_to', $user->id)
+                   ->orWhere('created_by', $user->id);
+            })->with('assignee:id,name,email,role', 'latestSubmission')->latest(),
         ]);
 
         if ($project->team && $project->team->leader) {

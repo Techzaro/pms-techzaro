@@ -137,7 +137,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
         <div className="sd-footer">
           <button className="sd-cancel-btn" onClick={onClose} disabled={submitting}>Cancel</button>
           <button className="sd-submit-btn" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Submitting..." : "Create Deliverable"}
+            {submitting ? "Submitting..." : "Submit Deliverable"}
           </button>
         </div>
       </div>

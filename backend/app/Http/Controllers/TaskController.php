@@ -266,7 +266,28 @@ class TaskController extends Controller
             $progress = (int) round(($done / $subtasks->count()) * 100);
         }
 
-        $deliverables = $task->deliverables()->with(['assignee:id,name,email,role', 'latestSubmission'])->latest()->get();
+        $deliverables = $task->deliverables()->where(function ($q) use ($user) {
+            $q->where('assigned_to', $user->id)
+              ->orWhere('created_by', $user->id);
+        })->with([
+            'assignee:id,name,email,role',
+            'creator:id,name,role',
+            'latestSubmission',
+            'latestSubmission.submittedBy:id,name,email',
+            'reopenedBy:id,name',
+        ])->latest()->get();
+
+        // Add has_submitted flag per user
+        $deliverableIds = $deliverables->pluck('id')->toArray();
+        $submittedIds = \App\Models\DeliverableSubmission::where('submitted_by', $user->id)
+            ->whereIn('deliverable_id', $deliverableIds)
+            ->pluck('deliverable_id')
+            ->toArray();
+
+        $deliverables->each(function ($deliverable) use ($submittedIds) {
+            $deliverable->has_submitted = in_array($deliverable->id, $submittedIds);
+        });
+
         $delTotal = $deliverables->count();
         $delCompleted = $deliverables->filter(fn ($d) => $d->status === 'approved')->count();
         $delProgress = $delTotal > 0 ? (int) round(($delCompleted / $delTotal) * 100) : 0;

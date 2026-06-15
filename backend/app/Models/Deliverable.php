@@ -32,6 +32,11 @@ class Deliverable extends Model
         'reopen_new_deadline',
         'reopen_file_path',
         'reopen_file_name',
+        'rework_comment',
+        'rework_instructions',
+        'rework_new_deadline',
+        'rework_file_path',
+        'rework_file_name',
     ];
 
     protected $casts = [
@@ -41,6 +46,7 @@ class Deliverable extends Model
         'rejected_at' => 'datetime',
         'reopened_at' => 'datetime',
         'reopen_new_deadline' => 'date',
+        'rework_new_deadline' => 'date',
     ];
 
     public function scopeFilter(Builder $query, array $filters): Builder

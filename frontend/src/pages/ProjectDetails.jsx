@@ -15,12 +15,14 @@ import {
   ChevronRight,
   ClipboardList,
   DollarSign,
+  Eye,
   FolderOpen,
   ListChecks,
   Monitor,
   Pencil,
   Percent,
   Settings,
+  Send,
   Tag,
   Trash2,
   UserRound,
@@ -30,6 +32,9 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CreateTaskModal from "../components/CreateTaskModal";
 import EditProjectModal from "../components/EditProjectModal";
+import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
+import ViewDeliverableModal from "../components/ViewDeliverableModal";
+import AssignerViewModal from "../components/AssignerViewModal";
 import ConfirmModal from "../components/ConfirmModal";
 import "./ProjectDetails.css";
 
@@ -166,6 +171,9 @@ function ProjectDetails() {
   const [deleteProjectConfirmOpen, setDeleteProjectConfirmOpen] = useState(false);
   const [deleteTaskConfirmOpen, setDeleteTaskConfirmOpen] = useState(false);
   const [deleteTaskId, setDeleteTaskId] = useState(null);
+  const [submitModal, setSubmitModal] = useState({ open: false, deliverable: null });
+  const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
+  const [assignerModal, setAssignerModal] = useState({ open: false, deliverable: null });
 
   const memberCount = useMemo(() => {
     if (!project) return 0;
@@ -184,6 +192,23 @@ function ProjectDetails() {
       setMessageType("");
     }, 4000);
   }, []);
+
+  const handleDeliverableActionSuccess = (updatedDeliverable) => {
+    setProject((prev) => {
+      const updatedDeliverables = (prev.deliverables || []).map((d) =>
+        d.id === updatedDeliverable.id ? { ...d, ...updatedDeliverable } : d
+      );
+      const delTotal = updatedDeliverables.length;
+      const delCompleted = updatedDeliverables.filter((d) => d.status === "approved").length;
+      return {
+        ...prev,
+        deliverables: updatedDeliverables,
+        total_deliverables: delTotal,
+        completed_deliverables: delCompleted,
+        progress_percent: delTotal > 0 ? Math.round((delCompleted / delTotal) * 100) : 0,
+      };
+    });
+  };
 
   const loadProject = useCallback(async () => {
     const token = authToken();
@@ -805,14 +830,33 @@ function ProjectDetails() {
                                     </span>
                                   </td>
                                   <td>
-                                    <button
-                                      type="button"
-                                      className="pd-btn-tx pd-btn-tx--outline"
-                                      style={{ padding: "4px 12px", fontSize: "12px" }}
-                                      onClick={() => navigate(rolePath(`deliveries/deliverable-details/${d.id}`))}
-                                    >
-                                      View
-                                    </button>
+                                         <div style={{ display: "flex", gap: "6px" }}>
+                                          {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
+                                            <button
+                                              type="button"
+                                              className="pd-btn-tx pd-btn-tx--outline"
+                                              style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
+                                              onClick={() => setSubmitModal({ open: true, deliverable: d })}
+                                            >
+                                              <Send size={12} /> Submit
+                                            </button>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              className="pd-btn-tx pd-btn-tx--outline"
+                                              style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
+                                              onClick={() => {
+                                                if (getCurrentRole() === 'admin' || getCurrentRole() === 'manager' || (project.creator?.id && project.creator.id === authToken())) {
+                                                  setAssignerModal({ open: true, deliverable: d });
+                                                } else {
+                                                  setViewModal({ open: true, deliverable: d });
+                                                }
+                                              }}
+                                            >
+                                              <Eye size={12} /> View
+                                            </button>
+                                          )}
+                                        </div>
                                   </td>
                                 </tr>
                               ))
@@ -885,6 +929,30 @@ function ProjectDetails() {
       </div>
       </div>
     </DashboardLayout>
+
+    <SubmitDeliverableModal
+      key={`pd-submit-${submitModal.deliverable?.id || "none"}`}
+      isOpen={submitModal.open}
+      onClose={() => setSubmitModal({ open: false, deliverable: null })}
+      deliverable={submitModal.deliverable}
+      onSubmitSuccess={handleDeliverableActionSuccess}
+    />
+
+    <ViewDeliverableModal
+      key={`pd-view-${viewModal.deliverable?.id || "none"}`}
+      isOpen={viewModal.open}
+      onClose={() => setViewModal({ open: false, deliverable: null })}
+      deliverable={viewModal.deliverable}
+      onSubmitSuccess={handleDeliverableActionSuccess}
+    />
+
+    <AssignerViewModal
+      key={`pd-assigner-${assignerModal.deliverable?.id || "none"}`}
+      isOpen={assignerModal.open}
+      onClose={() => setAssignerModal({ open: false, deliverable: null })}
+      deliverable={assignerModal.deliverable}
+      onActionSuccess={handleDeliverableActionSuccess}
+    />
 
     {showTaskModal && (
       <CreateTaskModal

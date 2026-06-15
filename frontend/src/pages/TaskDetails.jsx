@@ -10,11 +10,16 @@ import {
   Plus,
   Users,
 } from "lucide-react";
+import { IoEyeOutline } from "react-icons/io5";
+import { LuSend } from "react-icons/lu";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CreateSubtaskModal from "../components/CreateSubtaskModal";
 import EditTaskModal from "../components/EditTaskModal";
 import ConfirmModal from "../components/ConfirmModal";
+import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
+import ViewDeliverableModal from "../components/ViewDeliverableModal";
+import AssignerViewModal from "../components/AssignerViewModal";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import "./TaskDetails.css";
@@ -112,6 +117,9 @@ const [task, setTask] = useState(null);
   const [showSubtaskModal, setShowSubtaskModal] = useState(false);
   const [deleteTaskConfirmOpen, setDeleteTaskConfirmOpen] = useState(false);
   const [tab, setTab] = useState("details");
+  const [submitModal, setSubmitModal] = useState({ open: false, deliverable: null });
+  const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
+  const [assignerModal, setAssignerModal] = useState({ open: false, deliverable: null });
 
 const source = sourcePages[location.state?.from] || null;
 
@@ -180,6 +188,24 @@ const isCreator =
     window.scrollTo({ top: 0, behavior: "smooth" });
     setTimeout(() => { setMessage(""); setMessageType(""); }, 4000);
   }, []);
+
+  const handleDeliverableActionSuccess = (updatedDeliverable) => {
+    setTask((prev) => {
+      if (!prev) return prev;
+      const deliverables = (prev.deliverables || []).map((d) =>
+        d.id === updatedDeliverable.id ? { ...d, ...updatedDeliverable } : d
+      );
+      const delTotal = deliverables.length;
+      const delCompleted = deliverables.filter((d) => d.status === "approved").length;
+      return {
+        ...prev,
+        deliverables,
+        total_deliverables: delTotal,
+        completed_deliverables: delCompleted,
+        deliverables_progress: delTotal > 0 ? Math.round((delCompleted / delTotal) * 100) : 0,
+      };
+    });
+  };
 
   const handleDeleteTask = async () => {
     setDeleteTaskConfirmOpen(true);
@@ -423,19 +449,37 @@ const isCreator =
                             </td>
                             <td className="td-date">{formatShortDate(d.due_date)}</td>
                             <td>
-                              <span className="td-pill" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status) }}>
-                                <span className="td-pill-dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status) }} />
+                              <span className="td-pill" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }}>
+                                <span className="td-pill-dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }} />
                                 {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}
                               </span>
                             </td>
                             <td>
-                              <button
-                                className="td-btn-outline"
-                                style={{ padding: "4px 12px", fontSize: "12px" }}
-                                onClick={() => navigate(rolePath(`deliveries/deliverable-details/${d.id}`))}
-                              >
-                                View
-                              </button>
+                              <div style={{ display: "flex", gap: "6px" }}>
+                                {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
+                                  <button
+                                    className="td-btn-outline"
+                                    style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
+                                    onClick={() => setSubmitModal({ open: true, deliverable: d })}
+                                  >
+                                    <LuSend size={12} /> Submit
+                                  </button>
+                                ) : (
+                                  <button
+                                    className="td-btn-outline"
+                                    style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
+                                    onClick={() => {
+                                      if (isCreator) {
+                                        setAssignerModal({ open: true, deliverable: d });
+                                      } else {
+                                        setViewModal({ open: true, deliverable: d });
+                                      }
+                                    }}
+                                  >
+                                    <IoEyeOutline size={12} /> View
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -540,6 +584,77 @@ const isCreator =
                     )}
                   </tbody>
                 </table>
+
+                {(task.deliverables || []).length > 0 && (
+                  <>
+                    <div className="td-section-header" style={{ marginTop: "24px" }}>
+                      <h2 className="td-section-title">Deliverables</h2>
+                      <span className="td-section-count">{task.completed_deliverables || 0}/{task.total_deliverables || 0} Completed</span>
+                    </div>
+                    <table className="td-table">
+                      <thead>
+                        <tr>
+                          <th>Deliverable</th>
+                          <th>Assigned To</th>
+                          <th>Status</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(task.deliverables || []).map((d) => (
+                          <tr key={d.id}>
+                            <td>
+                              <div className="td-task-name">{d.title}</div>
+                              {d.description && <div className="td-task-sub">{d.description}</div>}
+                            </td>
+                            <td>
+                              <div className="td-assignee">
+                                <div className="td-avatar">{initials(d.assignee?.name)}</div>
+                                <div>
+                                  <div className="td-assignee-name">{d.assignee?.name || "—"}</div>
+                                  <div className="td-assignee-role">{d.assignee?.role ? d.assignee.role.replace("_", " ") : ""}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <span className="td-pill" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }}>
+                                <span className="td-pill-dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }} />
+                                {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}
+                              </span>
+                            </td>
+                            <td>
+                              <div style={{ display: "flex", gap: "6px" }}>
+                                {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
+                                  <button
+                                    className="td-btn-outline"
+                                    style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
+                                    onClick={() => setSubmitModal({ open: true, deliverable: d })}
+                                  >
+                                    <LuSend size={12} /> Submit
+                                  </button>
+                                ) : (
+                                  <button
+                                    className="td-btn-outline"
+                                    style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
+                                    onClick={() => {
+                                      if (isCreator) {
+                                        setAssignerModal({ open: true, deliverable: d });
+                                      } else {
+                                        setViewModal({ open: true, deliverable: d });
+                                      }
+                                    }}
+                                  >
+                                    <IoEyeOutline size={12} /> View
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </>
+                )}
               </div>
             )}
             </div>
@@ -605,6 +720,30 @@ const isCreator =
         />
       )}
     </DashboardLayout>
+
+    <SubmitDeliverableModal
+      key={`td-submit-${submitModal.deliverable?.id || "none"}`}
+      isOpen={submitModal.open}
+      onClose={() => setSubmitModal({ open: false, deliverable: null })}
+      deliverable={submitModal.deliverable}
+      onSubmitSuccess={handleDeliverableActionSuccess}
+    />
+
+    <ViewDeliverableModal
+      key={`td-view-${viewModal.deliverable?.id || "none"}`}
+      isOpen={viewModal.open}
+      onClose={() => setViewModal({ open: false, deliverable: null })}
+      deliverable={viewModal.deliverable}
+      onSubmitSuccess={handleDeliverableActionSuccess}
+    />
+
+    <AssignerViewModal
+      key={`td-assigner-${assignerModal.deliverable?.id || "none"}`}
+      isOpen={assignerModal.open}
+      onClose={() => setAssignerModal({ open: false, deliverable: null })}
+      deliverable={assignerModal.deliverable}
+      onActionSuccess={handleDeliverableActionSuccess}
+    />
 
     <ConfirmModal
       isOpen={deleteTaskConfirmOpen}

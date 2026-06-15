@@ -101,6 +101,8 @@ class DeliverableController extends Controller
             'assignee:id,name,email,role',
             'creator:id,name,role',
             'task:id,title',
+            'latestSubmission',
+            'latestSubmission.submittedBy:id,name,email',
         ])
             ->where('assigned_to', $user->id)
             ->where('created_by', $user->id)
@@ -468,6 +470,96 @@ class DeliverableController extends Controller
                 'assignee:id,name,email,role',
                 'creator:id,name',
                 'reopenedBy:id,name',
+            ]),
+        ]);
+    }
+
+    /**
+     * Self-approve a deliverable (Self Deliverable workflow).
+     * User marks their own deliverable as approved.
+     */
+    public function selfApprove(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+
+        if ($deliverable->created_by !== $user->id || $deliverable->assigned_to !== $user->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($deliverable->status !== 'submitted') {
+            return response()->json(['message' => 'Can only approve submitted deliverables'], 422);
+        }
+
+        $deliverable->update([
+            'status' => 'approved',
+            'approved_at' => now(),
+            'approved_by' => $user->id,
+        ]);
+
+        return response()->json([
+            'message' => 'Deliverable approved successfully',
+            'deliverable' => $deliverable->fresh()->load([
+                'assignee:id,name,email,role',
+                'creator:id,name',
+                'approvedBy:id,name',
+            ]),
+        ]);
+    }
+
+    /**
+     * Self-rework a deliverable (Self Deliverable workflow).
+     * User marks their own deliverable as needing rework.
+     */
+    public function selfRework(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+
+        if ($deliverable->created_by !== $user->id || $deliverable->assigned_to !== $user->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($deliverable->status !== 'submitted') {
+            return response()->json(['message' => 'Can only rework submitted deliverables'], 422);
+        }
+
+        $validated = $request->validate([
+            'comment' => 'nullable|string|max:2000',
+            'instructions' => 'nullable|string|max:2000',
+            'new_deadline' => 'nullable|date',
+            'file' => 'nullable|file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif|max:51200',
+        ]);
+
+        $filePath = null;
+        $fileName = null;
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $fileName = $file->getClientOriginalName();
+            $filePath = $file->store('deliverable-rework/' . $deliverable->id, 'public');
+        }
+
+        $updateData = [
+            'status' => 'rework_required',
+            'rework_comment' => $validated['comment'] ?? null,
+            'rework_instructions' => $validated['instructions'] ?? null,
+        ];
+
+        if (!empty($validated['new_deadline'])) {
+            $updateData['rework_new_deadline'] = $validated['new_deadline'];
+        }
+
+        if (!empty($filePath)) {
+            $updateData['rework_file_path'] = $filePath;
+            $updateData['rework_file_name'] = $fileName;
+        }
+
+        $deliverable->update($updateData);
+
+        return response()->json([
+            'message' => 'Deliverable marked for rework',
+            'deliverable' => $deliverable->fresh()->load([
+                'assignee:id,name,email,role',
+                'creator:id,name',
             ]),
         ]);
     }

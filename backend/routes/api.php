@@ -167,6 +167,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/deliverables/{deliverable}/submit', [DeliverableController::class, 'submit']);
     // Get latest submission for a deliverable (assigner view)
     Route::get('/deliverables/{deliverable}/latest-submission', [DeliverableController::class, 'latestSubmission']);
+    // Self-deliverable review actions
+    Route::post('/deliverables/{deliverable}/self-approve', [DeliverableController::class, 'selfApprove']);
+    Route::post('/deliverables/{deliverable}/self-rework', [DeliverableController::class, 'selfRework']);
 
     /*
     | NOTIFICATIONS
