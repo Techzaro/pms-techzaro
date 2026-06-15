@@ -55,7 +55,7 @@ function Deliveries() {
 
   useEffect(() => {
     fetchDeliverables();
-  }, [search, statusFilter]);
+  }, [search, statusFilter, timeFilter]);
 
   const getInitials = (name) => {
     if (!name) return "??";
@@ -117,10 +117,10 @@ function Deliveries() {
           </div>
           <div className="header-actions">
             <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="reports-filter">
-              <option>All Time</option>
-              <option>Last 7 Days</option>
-              <option>Last 30 Days</option>
-              <option>Last 6 Months</option>
+              <option value="">All Time</option>
+              <option value="7">Last 7 Days</option>
+              <option value="30">Last 30 Days</option>
+              <option value="180">Last 6 Months</option>
             </select>
           </div>
         </div>
@@ -150,12 +150,12 @@ function Deliveries() {
         </div>
 
         <div className="container">
-          <div className="table-header">
+          <div className="deliveries-table-header">
             <div>Deliverable</div>
-            <div className="task-name-column" style={{ paddingLeft: "40px" }}>Task</div>
-            <div>Assign By</div>
-            <div className="status-column" style={{ paddingRight: "25px" }}>Status</div>
-            <div className="date-column" style={{ paddingRight: "30px" }}>Due Date</div>
+            <div>Task</div>
+            <div>Assigned By</div>
+            <div>Status</div>
+            <div>Due Date</div>
             <div>Action</div>
           </div>
 
@@ -167,7 +167,7 @@ function Deliveries() {
             deliverables.map((item) => {
               const colors = getRandomColors(item.id);
               return (
-                <div className="table-row" key={item.id}>
+                <div className="deliveries-table-row" key={item.id}>
                   <div className="user-box">
                     <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                       {getInitials(item.title)}

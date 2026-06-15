@@ -5,6 +5,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
+import "./TaskDetails.css";
 import "./DeliverableDetails.css";
 
 function formatShortDate(value) {

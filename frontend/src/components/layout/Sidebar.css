@@ -255,7 +255,7 @@
   display: none;
 }
 
-@media (max-width: 1200px) and (min-width: 769px) {
+@media (max-width: 1023px) and (min-width: 769px) {
   .sidebar {
     position: sticky;
     top: 75px;
