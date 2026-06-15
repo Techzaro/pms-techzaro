@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import CreateProjectModal from "../components/CreateProjectModal";
 import { IoSearchOutline, IoEyeOutline, IoClose } from "react-icons/io5";
 import API_URL from "../config/api";
@@ -166,8 +167,13 @@ function Projects() {
     project.title?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const breadcrumbs = [
+    { label: "Projects" },
+  ];
+
   return (
     <DashboardLayout>
+      <Breadcrumb items={breadcrumbs} />
       <div className="projects-page">
 
         {/* HEADER */}

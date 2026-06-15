@@ -144,7 +144,7 @@ function App() {
 
         {/* DELIVERABLE DETAILS */}
         <Route
-          path="/:role/deliveries/deliverable-details/:projectId"
+          path="/:role/deliveries/deliverable-details/:deliverable"
           element={
             <ProtectedRoute>
               <DeliverableDetails />

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { MdEdit } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole } from "../utils/auth";
 import "./UserProfile.css";
@@ -168,8 +169,13 @@ function MyProfile() {
     ? "Team Lead"
     : user.role.charAt(0).toUpperCase() + user.role.slice(1);
 
+  const breadcrumbs = [
+    { label: "Profile" },
+  ];
+
   return (
     <DashboardLayout hideRightSidebar={true}>
+      <Breadcrumb items={breadcrumbs} />
       <div className="user-profile-page">
         <div className="profile-header">
           <h1>My Profile</h1>

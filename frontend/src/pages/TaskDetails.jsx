@@ -11,6 +11,7 @@ import {
   Users,
 } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import CreateSubtaskModal from "../components/CreateSubtaskModal";
 import EditTaskModal from "../components/EditTaskModal";
 import ConfirmModal from "../components/ConfirmModal";
@@ -98,50 +99,72 @@ function TaskDetails() {
   const location = useLocation();
   const taskIds = location.state?.taskIds || [];
   const sourcePages = {
-    tasks: { label: "My Tasks", path: rolePath("tasks") },
-    taskby: { label: "Tasks Assigned By You", path: rolePath("taskby") },
-    "self-tasks": { label: "Self Tasks", path: rolePath("self-tasks") },
-  };
-  const source = sourcePages[location.state?.from] || null;
-  const currentIdx = taskIds.findIndex((id) => String(id) === String(taskId));
-  const prevTaskId = currentIdx > 0 ? taskIds[currentIdx - 1] : null;
-  const nextTaskId = currentIdx >= 0 && currentIdx < taskIds.length - 1 ? taskIds[currentIdx + 1] : null;
-
-  const goToTask = (id) => {
-    if (id) navigate(rolePath(`tasks/task-details/${id}`), { replace: true, state: { taskIds } });
+   tasks: { label: "My Tasks", path: rolePath("tasks") },
+   taskby: { label: "Tasks Assigned By You", path: rolePath("taskby") },
+   "self-tasks": { label: "Self Tasks", path: rolePath("self-tasks") },
   };
 
-  const [task, setTask] = useState(null);
+const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("overview");
-  const [showSubtaskModal, setShowSubtaskModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [deleteTaskConfirmOpen, setDeleteTaskConfirmOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showSubtaskModal, setShowSubtaskModal] = useState(false);
+  const [deleteTaskConfirmOpen, setDeleteTaskConfirmOpen] = useState(false);
+  const [tab, setTab] = useState("details");
 
-  const fetchTask = useCallback((showLoader = true) => {
-    if (showLoader) setLoading(true);
+const source = sourcePages[location.state?.from] || null;
+
+const fetchTask = useCallback(async (refresh = false) => {
+  if (!taskId) return;
+
+  try {
+    setLoading(true);
     const token = authToken();
-    fetch(`${API_URL}/tasks/${taskId}`, {
+    const res = await fetch(`${API_URL}/tasks/${taskId}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setTask(data?.task || null))
-      .catch(() => setTask(null))
-      .finally(() => setLoading(false));
-  }, [taskId]);
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setTask(data.task);
+    } else {
+      setTask(null);
+    }
+  } catch (err) {
+    console.error("Failed to fetch task", err);
+    setTask(null);
+  } finally {
+    setLoading(false);
+  }
+}, [taskId]);
 
-  useEffect(() => { fetchTask(true); }, [fetchTask]);
+useEffect(() => {
+  if (taskId) fetchTask(true);
+}, [taskId]);
 
-  const taskSourcePages = {
-    taskby: { label: "Tasks By You", path: rolePath("taskby") },
-    "self-tasks": { label: "Self Tasks", path: rolePath("self-tasks") },
-  };
-  const source = taskSourcePages[location.state?.from] || null;
+const currentIdx = taskIds.findIndex(
+  (id) => String(id) === String(taskId)
+);
 
-  const currentUser = getUser();
-  const isCreator = task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10);
+const prevTaskId =
+  currentIdx > 0 ? taskIds[currentIdx - 1] : null;
+
+const nextTaskId =
+  currentIdx >= 0 && currentIdx < taskIds.length - 1
+    ? taskIds[currentIdx + 1]
+    : null;
+
+useEffect(() => {
+  fetchTask(true);
+}, [fetchTask]);
+
+// YAHAN taskSourcePages aur second source declaration NAHI hona chahiye
+
+const currentUser = getUser();
+const isCreator =
+  task &&
+  currentUser &&
+  parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10);
   const assignees = task?.assignees || [];
   const assigner = task?.assigner;
   const subtasks = task?.subtasks || [];
@@ -199,17 +222,11 @@ function TaskDetails() {
         <div className="td-layout">
           {/* ===== LEFT ===== */}
           <div className="td-main">
-            <nav className="td-breadcrumb">
-              <Link to={rolePath("tasks")}>Tasks</Link>
-              <ChevronRight size={14} />
-              {source && (
-                <>
-                  <Link to={source.path}>{source.label}</Link>
-                  <ChevronRight size={14} />
-                </>
-              )}
-              <span>{task.title}</span>
-            </nav>
+            <Breadcrumb items={[
+              { label: "Tasks", path: rolePath("tasks") },
+              ...(source ? [{ label: source.label, path: source.path }] : []),
+              { label: task.title },
+            ]} />
 
             <div className="td-title-row">
               <h1 className="td-title">{task.title}</h1>

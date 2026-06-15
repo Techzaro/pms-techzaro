@@ -1,13 +1,10 @@
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect } from "react";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-<<<<<<< HEAD
-import { authToken, getCurrentRole, rolePath } from "../utils/auth";
-=======
-import { authToken, rolePath, getCurrentRole } from "../utils/auth";
->>>>>>> 3febcb36bfd8adcfa90fd0c93647a70895a64ddf
+import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import "../pages/Deliveries.css";
 
@@ -43,11 +40,7 @@ function Deliveries() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [view, setView] = useState("assignee");
   const [timeFilter, setTimeFilter] = useState("");
-
-  const currentRole = getCurrentRole();
-  const canSeeBothViews = ["admin", "manager", "team_lead"].includes(currentRole);
 
   const fetchDeliverables = () => {
     setLoading(true);
@@ -55,7 +48,6 @@ function Deliveries() {
     const params = new URLSearchParams();
     if (search) params.append("search", search);
     if (statusFilter) params.append("status", statusFilter);
-    params.append("view", "assignee");
 
     fetch(`${API_URL}/deliverables?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -105,8 +97,14 @@ function Deliveries() {
     return map[status] || status;
   };
 
+  const breadcrumbs = [
+    { label: "Deliverables", path: rolePath("deliveries") },
+    { label: "Assigned To You" },
+  ];
+
   return (
     <DashboardLayout>
+      <Breadcrumb items={breadcrumbs} />
       <div className="projects-page">
         <div className="projects-header">
           <div>
@@ -120,42 +118,6 @@ function Deliveries() {
               <option>Last 30 Days</option>
               <option>Last 6 Months</option>
             </select>
-            {canSeeBothViews && (
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button
-                  className={`task-btn--mobile`}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "8px",
-                    border: "1px solid #e5e7eb",
-                    background: view === "assignee" ? "#6366f1" : "#fff",
-                    color: view === "assignee" ? "#fff" : "#374151",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    fontWeight: 500,
-                  }}
-                  onClick={() => setView("assignee")}
-                >
-                  My Deliverables
-                </button>
-                <button
-                  className={`task-btn--mobile`}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "8px",
-                    border: "1px solid #e5e7eb",
-                    background: view === "assigner" ? "#6366f1" : "#fff",
-                    color: view === "assigner" ? "#fff" : "#374151",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    fontWeight: 500,
-                  }}
-                  onClick={() => setView("assigner")}
-                >
-                  Assigned Deliverables
-                </button>
-              </div>
-            )}
           </div>
         </div>
 
@@ -207,9 +169,9 @@ function Deliveries() {
                       <div className="user-name">{item.title}</div>
                     </div>
                   </div>
-                  <div>
-                    <div className="task-title" style={{ paddingLeft: "40px" }}>{item.task?.title || "-"}</div>
-                  </div>
+                   <div>
+                     <div className="task-title" style={{ paddingLeft: "40px" }}>{item.task?.title || item.project?.title || "-"}</div>
+                   </div>
                   <div className="user-box">
                     <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                       {getInitials(item.creator?.name)}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { ChevronRight, Download, Eye } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import "./DeliverableDetails.css";
@@ -40,10 +41,10 @@ function initials(name) {
 }
 
 function DeliverableDetails() {
-  const { projectId } = useParams();
+  const params = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const deliverableId = projectId;
+  const deliverableId = params.deliverable;
 
   const deliverableSourcePages = {
     deliveries: { label: "Deliverables Assigned To You", path: rolePath("deliveries") },
@@ -58,6 +59,7 @@ function DeliverableDetails() {
   const [submitComment, setSubmitComment] = useState("");
   const [submitFile, setSubmitFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submissionLocked, setSubmissionLocked] = useState(false);
   const [rejectComment, setRejectComment] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [message, setMessage] = useState("");
@@ -71,7 +73,22 @@ function DeliverableDetails() {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
     })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setDeliverable(data?.deliverable || null))
+      .then((data) => {
+        setDeliverable(data?.deliverable || null);
+        // Update submission locked state based on deliverable status
+        if (data?.deliverable?.status === 'approved') {
+          setSubmissionLocked(true);
+        } else if (data?.deliverable?.status === 'rejected' && !isAssignee) {
+          // Assignee can resubmit after rejection, others cannot
+          setSubmissionLocked(false);
+        } else if (data?.deliverable?.status === 'submitted' && isAssignee) {
+          // Assignee cannot submit again after submission unless rejected
+          setSubmissionLocked(true);
+        } else if (data?.deliverable?.status === 'pending' && isAssignee) {
+          // Reset submission lock for pending
+          setSubmissionLocked(false);
+        }
+      })
       .catch(() => setDeliverable(null))
       .finally(() => setLoading(false));
   }, [deliverableId]);
@@ -88,6 +105,10 @@ function DeliverableDetails() {
   const handleSubmit = async () => {
     if (!submitComment.trim() && !submitFile) {
       showToast("Please add a comment or attach a file.", "error");
+      return;
+    }
+    if (submissionLocked) {
+      showToast("Submission is locked after approval. Contact the assigner for assistance.", "error");
       return;
     }
     setSubmitting(true);
@@ -109,6 +130,7 @@ function DeliverableDetails() {
         setShowSubmitForm(false);
         setSubmitComment("");
         setSubmitFile(null);
+        setSubmissionLocked(true);
         fetchDeliverable();
       } else {
         showToast(data.message || "Failed to submit", "error");
@@ -130,6 +152,7 @@ function DeliverableDetails() {
       const data = await res.json();
       if (res.ok) {
         showToast("Deliverable approved!");
+        setSubmissionLocked(true);
         fetchDeliverable();
       } else {
         showToast(data.message || "Failed to approve", "error");
@@ -164,6 +187,7 @@ function DeliverableDetails() {
   const currentUser = getUser();
   const isCreator = deliverable && currentUser && parseInt(deliverable.created_by, 10) === parseInt(currentUser.id, 10);
   const isAdminManager = currentUser && ["admin", "manager"].includes(currentUser.role);
+  const isAssignee = deliverable && currentUser && parseInt(deliverable.assigned_to, 10) === parseInt(currentUser.id, 10);
   const canApproveReject = isCreator || isAdminManager;
 
   if (loading) {
@@ -193,17 +217,11 @@ function DeliverableDetails() {
 
         <div className="td-layout">
           <div className="td-main">
-            <nav className="td-breadcrumb">
-              <Link to={rolePath("deliveries")}>Deliverables</Link>
-              {deliverableSource && (
-                <>
-                  <ChevronRight size={14} />
-                  <Link to={deliverableSource.path}>{deliverableSource.label}</Link>
-                </>
-              )}
-              <ChevronRight size={14} />
-              <span>{deliverable.title}</span>
-            </nav>
+            <Breadcrumb items={[
+              { label: "Deliverables", path: rolePath("deliveries") },
+              ...(deliverableSource ? [{ label: deliverableSource.label, path: deliverableSource.path }] : []),
+              { label: deliverable.title },
+            ]} />
 
             <div className="td-title-row">
               <h1 className="td-title">{deliverable.title}</h1>
@@ -248,17 +266,19 @@ function DeliverableDetails() {
               </div>
             )}
 
-            {/* Submit Form */}
-            {deliverable.status === "pending" && (
+            {/* Submit Form - Only shown to assignee when status is pending or rejected (if assignee) */}
+            {(deliverable.status === "pending" || (deliverable.status === "rejected" && isAssignee)) && isAssignee && (
               <div style={{ marginTop: "24px" }}>
-                {!showSubmitForm ? (
+                {(deliverable.status === "pending" || !submissionLocked) && !showSubmitForm && (
                   <button
                     className="td-btn-primary"
                     onClick={() => setShowSubmitForm(true)}
+                    disabled={submissionLocked && deliverable.status !== "rejected"}
                   >
                     Submit Deliverable
                   </button>
-                ) : (
+                )}
+                {(showSubmitForm || (deliverable.status === "rejected" && isAssignee)) && (
                   <div className="td-card" style={{ padding: "20px" }}>
                     <h3 className="td-card-title">Submit Deliverable</h3>
                     <div style={{ marginTop: "12px" }}>
@@ -289,7 +309,7 @@ function DeliverableDetails() {
                       <button
                         className="td-btn-primary"
                         onClick={handleSubmit}
-                        disabled={submitting}
+                        disabled={submitting || submissionLocked}
                       >
                         {submitting ? "Submitting..." : "Submit"}
                       </button>
@@ -305,7 +325,7 @@ function DeliverableDetails() {
               </div>
             )}
 
-            {/* Approve/Reject for assigner */}
+            {/* Approve/Reject for creator/admin/manager when submitted */}
             {deliverable.status === "submitted" && canApproveReject && (
               <div style={{ marginTop: "24px", display: "flex", gap: "10px", alignItems: "flex-start", flexDirection: "column" }}>
                 <div style={{ display: "flex", gap: "10px" }}>
@@ -334,21 +354,12 @@ function DeliverableDetails() {
               </div>
             )}
 
-            {/* Rejection info */}
-            {deliverable.status === "rejected" && deliverable.rejection_comment && (
+            {/* Rejection info - shown to assignee when deliverable is rejected */}
+            {deliverable.status === "rejected" && isAssignee && deliverable.rejection_comment && (
               <div style={{ marginTop: "20px", padding: "16px", background: "#FEE2E2", borderRadius: "8px", border: "1px solid #FECACA" }}>
                 <h3 className="td-card-title" style={{ color: "#991B1B" }}>Rejection Reason</h3>
                 <p style={{ color: "#7F1D1D", marginTop: "6px" }}>{deliverable.rejection_comment}</p>
                 {deliverable.rejected_by && <p style={{ color: "#7F1D1D", fontSize: "12px", marginTop: "4px" }}>By: {deliverable.rejected_by.name}</p>}
-                {deliverable.status === "rejected" && (
-                  <button
-                    className="td-btn-primary"
-                    style={{ marginTop: "12px" }}
-                    onClick={() => setShowSubmitForm(true)}
-                  >
-                    Resubmit
-                  </button>
-                )}
               </div>
             )}
 
@@ -391,8 +402,8 @@ function DeliverableDetails() {
               </div>
             )}
 
-            {/* Resubmit button for rejected */}
-            {deliverable.status === "rejected" && !showSubmitForm && (
+            {/* Resubmit button for rejected - shown to assignee when deliverable is rejected */}
+            {deliverable.status === "rejected" && isAssignee && !showSubmitForm && (
               <div style={{ marginTop: "16px" }}>
                 <button className="td-btn-primary" onClick={() => setShowSubmitForm(true)}>
                   Resubmit Deliverable

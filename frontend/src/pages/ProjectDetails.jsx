@@ -27,6 +27,7 @@ import {
   Users,
 } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import CreateTaskModal from "../components/CreateTaskModal";
 import EditProjectModal from "../components/EditProjectModal";
 import ConfirmModal from "../components/ConfirmModal";
@@ -664,17 +665,10 @@ function ProjectDetails() {
       <div className="pd-page pd-page--tx">
         {message && <div className={`pd-toast pd-toast--${messageType}`}>{message}</div>}
 
-        <nav className="pd-breadcrumb" aria-label="Breadcrumb">
-          <Link to={rolePath("projects")}>Projects</Link>
-          {projectSource && (
-            <>
-              <ChevronRight size={14} aria-hidden />
-              <Link to={projectSource.path}>{projectSource.label}</Link>
-            </>
-          )}
-          <ChevronRight size={14} aria-hidden />
-          <span>{project.title}</span>
-        </nav>
+        <Breadcrumb items={[
+          { label: "Projects", path: rolePath("projects") },
+          { label: project.title },
+        ]} />
 
         <header className="pd-hero-tx">
           <div className="pd-hero-tx__main">

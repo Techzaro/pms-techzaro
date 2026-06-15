@@ -1,4 +1,5 @@
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect } from "react";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
@@ -86,8 +87,14 @@ function SelfDeliveries() {
     return map[status] || status;
   };
 
+  const breadcrumbs = [
+    { label: "Deliverables", path: rolePath("deliveries") },
+    { label: "Self Deliverables" },
+  ];
+
   return (
     <DashboardLayout>
+      <Breadcrumb items={breadcrumbs} />
       <div className="projects-page">
         <div className="projects-header">
           <div>

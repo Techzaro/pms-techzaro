@@ -1,4 +1,5 @@
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect } from "react";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
@@ -86,8 +87,14 @@ function DeliveriesByYou() {
     return map[status] || status;
   };
 
+  const breadcrumbs = [
+    { label: "Deliverables", path: rolePath("deliveries") },
+    { label: "Assigned By You" },
+  ];
+
   return (
     <DashboardLayout>
+      <Breadcrumb items={breadcrumbs} />
       <div className="projects-page">
         <div className="projects-header">
           <div>
@@ -152,9 +159,9 @@ function DeliveriesByYou() {
                       <div className="user-name">{item.title}</div>
                     </div>
                   </div>
-                  <div>
-                    <div className="task-title">{item.task?.title || "-"}</div>
-                  </div>
+                   <div>
+                     <div className="task-title">{item.task?.title || item.project?.title || "-"}</div>
+                   </div>
                   <div className="user-box">
                     <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                       {getInitials(item.assignee?.name)}
