@@ -392,7 +392,7 @@
   transform: scale(1.05);
 }
 
-@media (max-width: 1200px) and (min-width: 769px) {
+@media (max-width: 1023px) and (min-width: 769px) {
   .right-toggle {
     display: flex;
   }

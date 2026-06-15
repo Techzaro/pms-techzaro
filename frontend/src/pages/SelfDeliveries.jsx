@@ -126,11 +126,11 @@ function SelfDeliveries() {
         </div>
 
         <div className="container">
-          <div className="deliveries-table-header">
+          <div className="deliveries-table-header self-deliveries-grid">
             <div>Deliverable</div>
-            <div className="task-name-column">Related Task/Project</div>
-            <div className="status-column">Status</div>
-            <div className="date-column">Due Date</div>
+            <div>Related Task/Project</div>
+            <div>Status</div>
+            <div>Due Date</div>
             <div>Action</div>
           </div>
 
@@ -142,7 +142,7 @@ function SelfDeliveries() {
             deliverables.map((item) => {
               const colors = getRandomColors(item.id);
               return (
-                <div className="deliveries-table-row" key={item.id}>
+                <div className="deliveries-table-row self-deliveries-grid" key={item.id}>
                   <div className="user-box">
                     <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                       {getInitials(item.title)}

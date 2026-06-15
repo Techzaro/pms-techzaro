@@ -176,97 +176,133 @@
   width: 100%;
   background: #fff;
   border-radius: 16px;
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid #E5E7EB;
   margin-top: 20px;
 }
 
-.table-header {
+.table-header,
+.table-row,
+.deliveries-table-header,
+.deliveries-table-row {
   display: grid;
-  grid-template-columns: 2.2fr 2.4fr 1fr 0.9fr 0.8fr 0.4fr;
-  align-items: center;
+  grid-template-columns: minmax(0, 1.8fr) minmax(0, 1.2fr) minmax(0, 2.5fr) minmax(0, 0.8fr) minmax(0, 0.9fr) minmax(0, 0.4fr);
   gap: 12px;
+}
+
+.table-header,
+.deliveries-table-header {
+  align-items: center;
   padding: 14px 16px;
   border-bottom: 1px solid #e5e7eb;
 }
 
-.table-header > div {
-  font-size: 16px;
+.table-header > div,
+.deliveries-table-header > div {
+  font-size: 14px;
   font-weight: 700;
   color: #111827;
   text-transform: none;
   min-width: 0;
-}
-
-.table-header > div:nth-child(1),
-.table-header > div:nth-child(2),
-.table-header > div:nth-child(3) {
+  white-space: nowrap;
   text-align: left;
 }
 
-.table-header > div:nth-child(4),
-.table-header > div:nth-child(5),
-.table-header > div:nth-child(6) {
-  text-align: center;
-}
-
-.table-row {
-  display: grid;
-  grid-template-columns: 2.2fr 2.4fr 1fr 0.9fr 0.8fr 0.4fr;
+.table-row,
+.deliveries-table-row {
   align-items: center;
-  gap: 12px;
   padding: 12px 16px;
   border-bottom: 1px solid #f1f5f9;
   transition: 0.3s;
 }
 
-.table-row > div {
+.table-row > div,
+.deliveries-table-row > div {
   min-width: 0;
-}
-
-.table-row > div:nth-child(1),
-.table-row > div:nth-child(2),
-.table-row > div:nth-child(3) {
   text-align: left;
 }
 
-.table-row > div:nth-child(4),
-.table-row > div:nth-child(5),
-.table-row > div:nth-child(6) {
-  text-align: center;
+@media (max-width: 1100px) {
+  .table-header,
+  .table-row,
+  .deliveries-table-header,
+  .deliveries-table-row {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1.1fr) minmax(0, 2.3fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 0.45fr);
+  }
 }
 
-.deliveries-table-header {
-  display: grid;
-  grid-template-columns: 2.2fr 2.4fr 1fr 0.9fr 0.8fr 0.4fr;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border-bottom: 1px solid #e5e7eb;
+@media (max-width: 992px) {
+  .table-header,
+  .table-row,
+  .deliveries-table-header,
+  .deliveries-table-row {
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.1fr) minmax(0, 2.1fr) minmax(0, 0.8fr) minmax(0, 0.7fr) minmax(0, 0.45fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .table-header,
+  .table-row,
+  .deliveries-table-header,
+  .deliveries-table-row {
+    grid-template-columns: minmax(0, 1.8fr) minmax(0, 1.3fr) minmax(0, 2.0fr) minmax(0, 0.8fr) minmax(0, 0.6fr) minmax(0, 0.4fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .table-header,
+  .table-row,
+  .deliveries-table-header,
+  .deliveries-table-row {
+    grid-template-columns: minmax(0, 1.8fr) minmax(0, 1.3fr) minmax(0, 2.0fr) minmax(0, 0.8fr);
+  }
+
+  .table-header > div:nth-child(5),
+  .table-row > div:nth-child(5),
+  .deliveries-table-header > div:nth-child(5),
+  .deliveries-table-row > div:nth-child(5) {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .table-header,
+  .table-row,
+  .deliveries-table-header,
+  .deliveries-table-row {
+    grid-template-columns: minmax(0, 1.8fr) minmax(0, 1.4fr) minmax(0, 1.8fr) minmax(0, 0.8fr);
+  }
+
+  .table-header > div:nth-child(6),
+  .table-row > div:nth-child(6),
+  .deliveries-table-header > div:nth-child(6),
+  .deliveries-table-row > div:nth-child(6) {
+    display: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .table-header,
+  .table-row,
+  .deliveries-table-header,
+  .deliveries-table-row {
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.4fr) minmax(0, 1.6fr) minmax(0, 0.8fr);
+  }
 }
 
 .deliveries-table-header > div {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
   color: #111827;
   min-width: 0;
-}
-
-.deliveries-table-header > div:nth-child(1),
-.deliveries-table-header > div:nth-child(2),
-.deliveries-table-header > div:nth-child(3) {
+  white-space: nowrap;
   text-align: left;
-}
-
-.deliveries-table-header > div:nth-child(4),
-.deliveries-table-header > div:nth-child(5),
-.deliveries-table-header > div:nth-child(6) {
-  text-align: center;
 }
 
 .deliveries-table-row {
   display: grid;
-  grid-template-columns: 2.2fr 2.4fr 1fr 0.9fr 0.8fr 0.4fr;
+  grid-template-columns: 1.8fr 1.2fr 2.5fr 0.8fr 0.9fr 0.4fr;
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
@@ -276,27 +312,18 @@
 
 .deliveries-table-row > div {
   min-width: 0;
-}
-
-.deliveries-table-row > div:nth-child(1),
-.deliveries-table-row > div:nth-child(2),
-.deliveries-table-row > div:nth-child(3) {
   text-align: left;
 }
 
-.deliveries-table-row > div:nth-child(4),
-.deliveries-table-row > div:nth-child(5),
-.deliveries-table-row > div:nth-child(6) {
-  text-align: center;
-}
-
-/* add right padding for status column header and cells */
-.deliveries-table-header > div:nth-child(3),
-.deliveries-table-row > div:nth-child(3) {
-  padding-right: 16px;
+.self-deliveries-grid {
+  grid-template-columns: 2.2fr 2fr 1fr 1fr 0.4fr;
 }
 
 .table-row:hover {
+  background: #F9FAFB;
+}
+
+.deliveries-table-row:hover {
   background: #F9FAFB;
 }
 
@@ -305,6 +332,7 @@
   align-items: center;
   gap: 12px;
   justify-content: flex-start;
+  min-width: 0;
 }
 
 .avatar {
@@ -320,22 +348,30 @@
 }
 
 .user-name {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .user-role {
-  font-size: 13px;
+  font-size: 12px;
   color: #9CA3AF;
-  margin-top: 4px;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
   color: #111827;
-  margin-bottom: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-description {
@@ -353,6 +389,7 @@
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .status-badge {
@@ -373,10 +410,12 @@
 }
 
 .date-box {
-  font-size: 14px;
+  font-size: 13px;
   color: #6B7280;
-  line-height: 2;
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .view-btn {
@@ -398,7 +437,7 @@
 .action-btns {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
 }
 
@@ -515,50 +554,109 @@
   background: #16A34A;
 }
 
-@media (max-width: 992px) {
+@media (max-width: 1100px) {
   .delivery-serach-bar {
     max-width: 100%;
   }
-  .container {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+  .avatar {
+    width: 42px;
+    height: 42px;
+    font-size: 15px;
   }
+  .user-name {
+    font-size: 13px;
+  }
+  .task-title {
+    font-size: 13px;
+  }
+  .date-box {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 992px) {
   .table-header,
-  .table-row {
-    min-width: 750px;
-  }
-  .table-row .user-box {
-    flex-direction: row;
-  }
-  .task-description {
-    max-width: 100%;
-  }
-  .projects-header {
-    flex-direction: column;
+  .table-row,
+  .deliveries-table-header,
+  .deliveries-table-row {
+    min-width: 800px;
   }
   .header-actions {
-    width: auto;
-    flex-direction: row;
     flex-wrap: wrap;
     gap: 8px;
   }
-  .header-actions button,
-  .header-actions .all-time {
-    flex: none;
-    width: auto;
+  .header-actions .reports-filter {
+    min-width: 150px;
+  }
+  .projects-header {
+    flex-direction: column;
+    gap: 16px;
   }
 }
 
 @media (max-width: 768px) {
+  .projects-header {
+    gap: 14px;
+    margin-bottom: 24px;
+  }
   .projects-header h1 {
     font-size: 24px;
+  }
+  .header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .header-actions .reports-filter {
+    flex: 1 1 140px;
+    min-width: 120px;
   }
   .task-progress {
     gap: 6px;
   }
-  .All, .Pending, .Progress, .Completed, .Failed, .Aban {
+  .task-progress p {
     padding: 6px 10px;
     font-size: 12px;
+  }
+  .delivery-serach-bar {
+    max-width: 100%;
+  }
+  .avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 13px;
+  }
+  .user-box {
+    gap: 6px;
+  }
+  .user-name {
+    font-size: 12px;
+  }
+  .user-role {
+    font-size: 11px;
+  }
+  .task-title {
+    font-size: 12px;
+  }
+  .badge {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  .date-box {
+    font-size: 11px;
+  }
+  .action-icon-btn {
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+  }
+  .table-header,
+  .deliveries-table-header {
+    padding: 10px 12px;
+  }
+  .table-row,
+  .deliveries-table-row {
+    padding: 10px 12px;
   }
 }
 
@@ -567,30 +665,15 @@
     border-radius: 12px;
   }
   .table-header,
-  .table-row {
-    min-width: 600px;
+  .table-row,
+  .deliveries-table-header,
+  .deliveries-table-row {
+    min-width: 700px;
   }
-  .user-name {
-    font-size: 14px;
+  .projects-header h1 {
+    font-size: 22px;
   }
-  .task-title {
-    font-size: 15px;
-  }
-  .badge {
-    padding: 8px 12px;
-    font-size: 12px;
-  }
-  .delivery-serach-bar {
-    padding: 8px;
-    min-width: 140px;
-  }
-  .avatar {
-    width: 44px;
-    height: 44px;
-    font-size: 15px;
-  }
-  .create-btn {
-    padding: 8px 14px;
+  .projects-header p {
     font-size: 13px;
   }
   .header-actions .all-time {
@@ -598,11 +681,33 @@
     height: 36px;
     font-size: 13px;
   }
-  .projects-header h1 {
-    font-size: 24px;
-  }
-  .projects-header p {
+  .header-actions .reports-filter {
+    padding: 8px 12px;
     font-size: 13px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .delivery-serach-bar {
+    padding: 8px;
+    min-width: 0;
+  }
+  .user-box {
+    gap: 8px;
+  }
+  .user-name {
+    font-size: 14px;
+  }
+  .avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 14px;
+  }
+  .task-title {
+    font-size: 14px;
+  }
+  .badge {
+    padding: 6px 10px;
+    font-size: 11px;
   }
   .action-icon-btn {
     width: 32px;
@@ -616,30 +721,52 @@
     border-radius: 10px;
   }
   .table-header,
-  .table-row {
-    min-width: 500px;
+  .table-row,
+  .deliveries-table-header,
+  .deliveries-table-row {
+    min-width: 600px;
+  }
+  .projects-header {
+    gap: 10px;
+    margin-bottom: 16px;
   }
   .projects-header h1 {
-    font-size: 20px;
+    font-size: 18px;
+  }
+  .projects-header p {
+    font-size: 12px;
+  }
+  .header-actions {
+    gap: 6px;
+  }
+  .user-box {
+    gap: 6px;
   }
   .user-name {
-    font-size: 13px;
+    font-size: 12px;
+  }
+  .avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
   }
   .task-title {
-    font-size: 14px;
+    font-size: 13px;
   }
   .action-icon-btn {
     width: 28px;
     height: 28px;
     font-size: 13px;
   }
-  .All,
-  .Pending,
-  .Progress,
-  .Completed,
-  .Failed,
-  .Aban {
-    padding: 4px 6px;
+  .delivery-serach-bar {
+    padding: 6px;
+    font-size: 13px;
+  }
+  .delivery-serach-bar input {
+    font-size: 13px;
+  }
+  .task-progress p {
+    padding: 4px 8px;
     font-size: 10px;
   }
 }

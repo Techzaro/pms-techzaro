@@ -128,10 +128,10 @@ function DeliveriesByYou() {
         <div className="container">
           <div className="deliveries-table-header">
             <div>Deliverable</div>
-            <div className="task-name-column">Task</div>
+            <div>Task</div>
             <div>Assigned To</div>
-            <div className="status-column">Status</div>
-            <div className="date-column">Due Date</div>
+            <div>Status</div>
+            <div>Due Date</div>
             <div>Action</div>
           </div>
 
