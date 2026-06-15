@@ -186,6 +186,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/events/{event}', [EventController::class, 'destroy']);
 
     /*
+    | UNIFIED CALENDAR - TASKS, PROJECTS, DELIVERABLES & EVENTS
+    */
+    Route::get('/unified-calendar', [EventController::class, 'unifiedCalendar']);
+
+    /*
     | REPORTS
     */
     Route::get('/reports/team-performance', [ReportController::class, 'teamPerformance']);

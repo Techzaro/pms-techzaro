@@ -178,6 +178,22 @@
     color: #374151;
 }
 
+.today-box {
+    background: #f0f0ff !important;
+}
+
+.today-number {
+    background: #6366f1;
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+}
+
 .event-subtitle {
     font-size: 14px;
     color: #6b7280;
@@ -500,6 +516,9 @@
 
     .calender-sidebar {
         width: 100%;
+        max-width: none;
+        border-radius: 18px;
+        border: 1px solid #e5e7eb;
     }
 
 }
@@ -534,6 +553,11 @@
 
     .calendar-grid {
         overflow-x: auto;
+        min-width: 700px;
+    }
+
+    .calendar-card {
+        overflow-x: auto;
     }
 
     .agenda-top {
@@ -544,4 +568,35 @@
         flex-direction: row;
     }
 
+    .calendar-date-box {
+        min-height: 100px;
+        padding: 6px;
+    }
+
+}
+
+@media (max-width: 480px) {
+    .calendar-header h1 {
+        font-size: 24px;
+    }
+
+    .today-btn,
+    .add-event-btn {
+        padding: 8px 14px;
+        font-size: 13px;
+    }
+
+    .calendar-card {
+        padding: 16px;
+        border-radius: 16px;
+    }
+
+    .calendar-month h2 {
+        font-size: 20px;
+    }
+
+    .calendar-date-box {
+        min-height: 80px;
+        padding: 4px;
+    }
 }
