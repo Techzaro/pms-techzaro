@@ -2,34 +2,37 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect } from "react";
 import { GoDotFill } from "react-icons/go";
-import { useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import { authToken, getCurrentRole, rolePath } from "../utils/auth";
+import { LuSend } from "react-icons/lu";
+import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
+import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
+import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
-  pending: "#FEF3C7",
+  pending: "#F3F4F6",
   submitted: "#DBEAFE",
   approved: "#DCFCE7",
-  rejected: "#FEE2E2",
+  rework_required: "#FEF3C7",
 };
 
 const STATUS_TEXT_COLORS = {
-  pending: "#92400E",
+  pending: "#374151",
   submitted: "#1E40AF",
   approved: "#166534",
-  rejected: "#991B1B",
+  rework_required: "#92400E",
 };
 
 function SelfDeliveries() {
-  const navigate = useNavigate();
   const [deliverables, setDeliverables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
+  const [submitModal, setSubmitModal] = useState({ open: false, deliverable: null });
+  const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
 
   const fetchDeliverables = () => {
     setLoading(true);
@@ -79,12 +82,20 @@ function SelfDeliveries() {
 
   const formatStatus = (status) => {
     const map = {
-      pending: "Pending",
+      pending: "Draft",
       submitted: "Submitted",
       approved: "Approved",
-      rejected: "Rejected",
+      rework_required: "Rework Required",
     };
     return map[status] || status;
+  };
+
+  const handleDeliverableUpdate = (updatedDeliverable) => {
+    setDeliverables((prev) =>
+      prev.map((d) =>
+        d.id === updatedDeliverable.id ? { ...d, ...updatedDeliverable } : d
+      )
+    );
   };
 
   const breadcrumbs = [
@@ -114,16 +125,16 @@ function SelfDeliveries() {
         <div className="task-progress">
           <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
           <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => setStatusFilter("pending")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Pending
+            <GoDotFill /> Draft
           </p>
           <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Submitted
           </p>
+          <p className={`Reopened ${statusFilter === "rework_required" ? "active" : ""}`} onClick={() => setStatusFilter("rework_required")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Rework Required
+          </p>
           <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Approved
-          </p>
-          <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => setStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Rejected
           </p>
         </div>
 
@@ -148,6 +159,8 @@ function SelfDeliveries() {
           ) : (
             deliverables.map((item) => {
               const colors = getRandomColors(item.id);
+              const canSubmit = item.status === "pending";
+              const canView = item.status === "submitted" || item.status === "approved" || item.status === "rework_required";
               return (
                 <div className="deliveries-table-row self-deliveries-grid" key={item.id}>
                   <div className="user-box">
@@ -171,9 +184,23 @@ function SelfDeliveries() {
                     <div>{formatDate(item.due_date)}</div>
                   </div>
                   <div className="action-btns">
-                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: 'self-deliveries' } })}>
-                      <IoEyeOutline />
-                    </button>
+                    {canSubmit ? (
+                      <button
+                        className="action-icon-btn action-submit"
+                        title="Submit Deliverable"
+                        onClick={() => setSubmitModal({ open: true, deliverable: item })}
+                      >
+                        <LuSend />
+                      </button>
+                    ) : canView ? (
+                      <button
+                        className="action-icon-btn action-view"
+                        title="View Deliverable"
+                        onClick={() => setViewModal({ open: true, deliverable: item })}
+                      >
+                        <IoEyeOutline />
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               );
@@ -181,6 +208,23 @@ function SelfDeliveries() {
           )}
         </div>
       </div>
+
+      <SubmitDeliverableModal
+        key={`submit-${submitModal.deliverable?.id || "none"}`}
+        isOpen={submitModal.open}
+        onClose={() => setSubmitModal({ open: false, deliverable: null })}
+        deliverable={submitModal.deliverable}
+        onSubmitSuccess={handleDeliverableUpdate}
+      />
+
+      <SelfDeliverableViewModal
+        key={`view-${viewModal.deliverable?.id || "none"}`}
+        isOpen={viewModal.open}
+        onClose={() => setViewModal({ open: false, deliverable: null })}
+        deliverable={viewModal.deliverable}
+        onActionSuccess={handleDeliverableUpdate}
+        onResubmit={(deliverable) => setSubmitModal({ open: true, deliverable })}
+      />
     </DashboardLayout>
   );
 }

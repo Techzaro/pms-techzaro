@@ -138,6 +138,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/complete', [TaskController::class, 'completeTask']);
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
 
+    // Task submission workflow
+    Route::post('/tasks/{task}/submit', [TaskController::class, 'submit']);
+    Route::get('/tasks/{task}/latest-submission', [TaskController::class, 'latestSubmission']);
+    Route::get('/tasks/submission-file/{submission}', [TaskController::class, 'downloadSubmissionFile']);
+    Route::post('/tasks/{task}/approve', [TaskController::class, 'approve']);
+    Route::post('/tasks/{task}/reject', [TaskController::class, 'reject']);
+    Route::post('/tasks/{task}/reopen', [TaskController::class, 'reopen']);
+
     // Subtask creation under a parent task
     Route::post('/tasks/{task}/subtasks', [TaskController::class, 'storeSubtask']);
 
@@ -151,6 +159,7 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::get('/deliverables', [DeliverableController::class, 'index']);
     Route::get('/deliverables/assigned-by-me', [DeliverableController::class, 'assignedByMe']);
+    Route::get('/deliverables/submission-file/{submission}', [DeliverableController::class, 'downloadSubmissionFile']);
     Route::get('/deliverables/{deliverable}', [DeliverableController::class, 'show']);
     Route::get('/self-deliverables', [DeliverableController::class, 'mySelfDeliverables']);
 

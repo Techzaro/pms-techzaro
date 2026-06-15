@@ -13,6 +13,10 @@ import "../pages/Task.css";
 
 const STATUS_COLORS = {
   pending: "#FEF3C7",
+  submitted: "#DBEAFE",
+  reopened: "#FEF3C7",
+  approved: "#DCFCE7",
+  rejected: "#FEE2E2",
   in_progress: "#DBEAFE",
   review: "#EDE9FE",
   completed: "#DCFCE7",
@@ -23,6 +27,10 @@ const STATUS_COLORS = {
 
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
+  submitted: "#1E40AF",
+  reopened: "#92400E",
+  approved: "#166534",
+  rejected: "#991B1B",
   in_progress: "#1E40AF",
   review: "#5B21B6",
   completed: "#166534",
@@ -114,6 +122,10 @@ const Taskby = () => {
   const formatStatus = (status) => {
     const map = {
       pending: "Pending",
+      submitted: "Submitted",
+      reopened: "Reopened",
+      approved: "Approved",
+      rejected: "Rejected",
       in_progress: "In Progress",
       review: "Review",
       completed: "Completed",
@@ -194,17 +206,17 @@ const Taskby = () => {
         <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => setStatusFilter("pending")} style={{ cursor: "pointer" }}>
           <GoDotFill color={STATUS_COLORS.pending} /> Pending
         </p>
-        <p className={`Progress ${statusFilter === "in_progress" ? "active" : ""}`} onClick={() => setStatusFilter("in_progress")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.in_progress} /> In Progress
+        <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
+          <GoDotFill color={STATUS_COLORS.submitted} /> Submitted
         </p>
-        <p className={`Completed ${statusFilter === "completed" ? "active" : ""}`} onClick={() => setStatusFilter("completed")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.completed} /> Completed
+        <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => setStatusFilter("reopened")} style={{ cursor: "pointer" }}>
+          <GoDotFill color={STATUS_COLORS.reopened} /> Reopened
         </p>
-        <p className={`Failed ${statusFilter === "failed" ? "active" : ""}`} onClick={() => setStatusFilter("failed")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.failed} /> Failed
+        <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
+          <GoDotFill color={STATUS_COLORS.approved} /> Approved
         </p>
-        <p className={`Aban ${statusFilter === "abandoned" ? "active" : ""}`} onClick={() => setStatusFilter("abandoned")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.abandoned} /> Abandoned
+        <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => setStatusFilter("rejected")} style={{ cursor: "pointer" }}>
+          <GoDotFill color={STATUS_COLORS.rejected} /> Rejected
         </p>
       </div>
 

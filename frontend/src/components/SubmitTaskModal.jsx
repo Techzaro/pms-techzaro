@@ -11,7 +11,7 @@ function formatShortDate(value) {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess }) {
+function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
   const [comment, setComment] = useState("");
   const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -21,6 +21,9 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
+      setComment("");
+      setFile(null);
+      setError("");
     } else {
       document.body.style.overflow = "";
     }
@@ -40,7 +43,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
       if (comment.trim()) formData.append("comment", comment.trim());
       if (file) formData.append("file", file);
 
-      const res = await fetch(`${API_URL}/deliverables/${deliverable.id}/submit`, {
+      const res = await fetch(`${API_URL}/tasks/${task.id}/submit`, {
         method: "POST",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         body: formData,
@@ -48,10 +51,10 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
 
       const data = await res.json();
       if (res.ok) {
-        onSubmitSuccess(data.deliverable);
+        onSubmitSuccess(data.task);
         onClose();
       } else {
-        setError(data.message || "Failed to submit deliverable.");
+        setError(data.message || "Failed to submit task.");
       }
     } catch {
       setError("An error occurred. Please try again.");
@@ -60,30 +63,31 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
     }
   };
 
-  if (!isOpen || !deliverable) return null;
+  if (!isOpen || !task) return null;
 
-  const statusLabel = (deliverable.status || "pending").charAt(0).toUpperCase() + (deliverable.status || "pending").slice(1);
+  const statusLabel = (task.status || "pending").charAt(0).toUpperCase() + (task.status || "pending").slice(1);
+  const isResubmit = task.status === "reopened";
 
   return createPortal(
     <div className="sd-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="sd-modal" role="dialog" aria-modal="true">
         <div className="sd-header">
           <div>
-            <h2 className="sd-title">{deliverable.title}</h2>
+            <h2 className="sd-title">{task.title}</h2>
             <div className="sd-meta">
-              <span className={`sd-status-badge sd-status-${deliverable.status || "pending"}`}>{statusLabel}</span>
-              {deliverable.due_date && (
-                <span className="sd-due-date">Due Date {formatShortDate(deliverable.due_date)}</span>
+              <span className={`sd-status-badge sd-status-${task.status || "pending"}`}>{statusLabel}</span>
+              {task.end_date && (
+                <span className="sd-due-date">Due Date {formatShortDate(task.end_date)}</span>
               )}
             </div>
           </div>
         </div>
 
         <div className="sd-body">
-          <h3 className="sd-section-title">Submit Deliverable</h3>
+          <h3 className="sd-section-title">{isResubmit ? "Resubmit Task" : "Submit Task"}</h3>
 
           <div className="sd-field">
-            <label className="sd-label">Comment <span className="sd-required">*</span></label>
+            <label className="sd-label">Submission Notes <span className="sd-required">*</span></label>
             <textarea
               className="sd-textarea"
               placeholder="Describe your submission..."
@@ -137,7 +141,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
         <div className="sd-footer">
           <button className="sd-cancel-btn" onClick={onClose} disabled={submitting}>Cancel</button>
           <button className="sd-submit-btn" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Submitting..." : deliverable.status === "rework_required" ? "Resubmit Deliverable" : "Submit Deliverable"}
+            {submitting ? "Submitting..." : isResubmit ? "Resubmit Task" : "Submit Task"}
           </button>
         </div>
       </div>
@@ -146,4 +150,4 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
   );
 }
 
-export default SubmitDeliverableModal;
+export default SubmitTaskModal;

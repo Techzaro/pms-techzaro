@@ -6,14 +6,20 @@ import { IoIosArrowDown } from "react-icons/io";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
+import { LuSend } from "react-icons/lu";
 import CreateTaskModal from "../components/CreateTaskModal";
 import ConfirmCompleteModal from "../components/ConfirmCompleteModal";
+import SubmitTaskModal from "../components/SubmitTaskModal";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
   pending: "#FEF3C7",
+  submitted: "#DBEAFE",
+  reopened: "#FEF3C7",
+  approved: "#DCFCE7",
+  rejected: "#FEE2E2",
   in_progress: "#DBEAFE",
   review: "#EDE9FE",
   completed: "#DCFCE7",
@@ -24,6 +30,10 @@ const STATUS_COLORS = {
 
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
+  submitted: "#1E40AF",
+  reopened: "#92400E",
+  approved: "#166534",
+  rejected: "#991B1B",
   in_progress: "#1E40AF",
   review: "#5B21B6",
   completed: "#166534",
@@ -54,6 +64,7 @@ function Tasks() {
   const [statusFilter, setStatusFilter] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
   const [confirmTask, setConfirmTask] = useState(null);
+  const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -183,6 +194,10 @@ function Tasks() {
   const formatStatus = (status) => {
     const map = {
       pending: "Pending",
+      submitted: "Submitted",
+      reopened: "Reopened",
+      approved: "Approved",
+      rejected: "Rejected",
       in_progress: "In Progress",
       review: "Review",
       completed: "Completed",
@@ -191,6 +206,16 @@ function Tasks() {
       abandoned: "Abandoned",
     };
     return map[status] || status;
+  };
+
+  const handleTaskSubmitSuccess = (updatedTask) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.item_type !== "project" && item.id === updatedTask.id
+          ? { ...item, ...updatedTask, item_type: item.item_type }
+          : item
+      )
+    );
   };
 
   const calculateProgress = (item) => {
@@ -265,17 +290,17 @@ function Tasks() {
         <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => setStatusFilter("pending")} style={{ cursor: "pointer" }}>
           <GoDotFill color={STATUS_COLORS.pending} /> Pending
         </p>
-        <p className={`Progress ${statusFilter === "in_progress" ? "active" : ""}`} onClick={() => setStatusFilter("in_progress")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.in_progress} /> In Progress
+        <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
+          <GoDotFill color={STATUS_COLORS.submitted} /> Submitted
         </p>
-        <p className={`Completed ${statusFilter === "completed" ? "active" : ""}`} onClick={() => setStatusFilter("completed")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.completed} /> Completed
+        <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => setStatusFilter("reopened")} style={{ cursor: "pointer" }}>
+          <GoDotFill color={STATUS_COLORS.reopened} /> Reopened
         </p>
-        <p className={`Failed ${statusFilter === "failed" ? "active" : ""}`} onClick={() => setStatusFilter("failed")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.failed} /> Failed
+        <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
+          <GoDotFill color={STATUS_COLORS.approved} /> Approved
         </p>
-        <p className={`Aban ${statusFilter === "abandoned" ? "active" : ""}`} onClick={() => setStatusFilter("abandoned")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.abandoned} /> Abandoned
+        <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => setStatusFilter("rejected")} style={{ cursor: "pointer" }}>
+          <GoDotFill color={STATUS_COLORS.rejected} /> Rejected
         </p>
       </div>
 
@@ -421,6 +446,11 @@ function Tasks() {
                   <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}>
                     <IoEyeOutline />
                   </button>
+                  {(item.status === "pending" || item.status === "reopened") && (
+                    <button className="action-icon-btn action-submit" title="Submit Task" onClick={() => setSubmitTaskModal({ open: true, task: item })}>
+                      <LuSend />
+                    </button>
+                  )}
                   {item.status !== "completed" && item.status !== "done" ? (
                     <button className="action-icon-btn action-complete" title="Complete Task" onClick={() => setConfirmTask(item)}>
                       <IoCheckmarkCircle />
@@ -445,6 +475,14 @@ function Tasks() {
           onCancel={() => setConfirmTask(null)}
         />
       )}
+
+      <SubmitTaskModal
+        key={`tasks-submit-${submitTaskModal.task?.id || "none"}`}
+        isOpen={submitTaskModal.open}
+        onClose={() => setSubmitTaskModal({ open: false, task: null })}
+        task={submitTaskModal.task}
+        onSubmitSuccess={handleTaskSubmitSuccess}
+      />
     </DashboardLayout>
   );
 }

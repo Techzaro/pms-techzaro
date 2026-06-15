@@ -20,6 +20,8 @@ import ConfirmModal from "../components/ConfirmModal";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
 import ViewDeliverableModal from "../components/ViewDeliverableModal";
 import AssignerViewModal from "../components/AssignerViewModal";
+import SubmitTaskModal from "../components/SubmitTaskModal";
+import TaskSubmissionPanel from "../components/TaskSubmissionPanel";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import "./TaskDetails.css";
@@ -47,6 +49,10 @@ function statusLabel(status) {
   if (s === "in_progress") return "In Progress";
   if (s === "pending") return "Pending";
   if (s === "review") return "Review";
+  if (s === "submitted") return "Submitted";
+  if (s === "reopened") return "Reopened";
+  if (s === "approved") return "Approved";
+  if (s === "rejected") return "Rejected";
   if (s === "failed") return "Failed";
   if (s === "abandoned") return "Abandoned";
   return status || "Pending";
@@ -54,22 +60,24 @@ function statusLabel(status) {
 
 function statusColor(status) {
   const s = (status || "").toLowerCase();
-  if (s === "completed" || s === "done") return "#166534";
+  if (s === "completed" || s === "done" || s === "approved") return "#166534";
   if (s === "in_progress") return "#1E40AF";
   if (s === "pending") return "#92400E";
-  if (s === "review") return "#5B21B6";
-  if (s === "failed") return "#991B1B";
+  if (s === "review" || s === "submitted") return "#1E40AF";
+  if (s === "reopened") return "#92400E";
+  if (s === "rejected" || s === "failed") return "#991B1B";
   if (s === "abandoned") return "#374151";
   return "#374151";
 }
 
 function statusBgColor(status) {
   const s = (status || "").toLowerCase();
-  if (s === "completed" || s === "done") return "#DCFCE7";
+  if (s === "completed" || s === "done" || s === "approved") return "#DCFCE7";
   if (s === "in_progress") return "#DBEAFE";
   if (s === "pending") return "#FEF3C7";
-  if (s === "review") return "#EDE9FE";
-  if (s === "failed") return "#FEE2E2";
+  if (s === "review" || s === "submitted") return "#DBEAFE";
+  if (s === "reopened") return "#FEF3C7";
+  if (s === "rejected" || s === "failed") return "#FEE2E2";
   if (s === "abandoned") return "#F3F4F6";
   return "#F3F4F6";
 }
@@ -120,6 +128,10 @@ const [task, setTask] = useState(null);
   const [submitModal, setSubmitModal] = useState({ open: false, deliverable: null });
   const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
   const [assignerModal, setAssignerModal] = useState({ open: false, deliverable: null });
+  const [taskSubmitModalOpen, setTaskSubmitModalOpen] = useState(false);
+  const [taskConfirmDialog, setTaskConfirmDialog] = useState({ open: false, type: null });
+  const [taskReopenDialog, setTaskReopenDialog] = useState(false);
+  const [taskActing, setTaskActing] = useState(false);
 
 const source = sourcePages[location.state?.from] || null;
 
@@ -173,6 +185,19 @@ const isCreator =
   task &&
   currentUser &&
   parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10);
+const isAssignee =
+  task &&
+  currentUser &&
+  (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10));
+
+const canSubmitTask = isAssignee && ["pending", "reopened"].includes(task?.status);
+
+const goToTask = (id) => {
+  if (!id) return;
+  navigate(rolePath(`tasks/task-details/${id}`), {
+    state: { taskIds, from: location.state?.from },
+  });
+};
   const assignees = task?.assignees || [];
   const assigner = task?.assigner;
   const subtasks = task?.subtasks || [];
@@ -205,6 +230,11 @@ const isCreator =
         deliverables_progress: delTotal > 0 ? Math.round((delCompleted / delTotal) * 100) : 0,
       };
     });
+  };
+
+  const handleTaskActionSuccess = (updatedTask) => {
+    setTask((prev) => ({ ...prev, ...updatedTask }));
+    showMessage("Task updated successfully.");
   };
 
   const handleDeleteTask = async () => {
@@ -274,6 +304,12 @@ const isCreator =
                   <Plus size={16} strokeWidth={2.5} />
                   Add Subtask
                 </button>
+                {canSubmitTask && (
+                  <button className="td-btn-primary" onClick={() => setTaskSubmitModalOpen(true)}>
+                    <LuSend size={15} />
+                    {task.status === "reopened" ? "Resubmit Task" : "Submit Task"}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -322,7 +358,22 @@ const isCreator =
               </div>
             </div>
 
-          
+            {/* Task Submission Workflow */}
+            {(isAssignee || isCreator) && (
+              <TaskSubmissionPanel
+                task={task}
+                isCreator={isCreator}
+                isAssignee={isAssignee}
+                onTaskUpdate={handleTaskActionSuccess}
+                onSubmitClick={() => setTaskSubmitModalOpen(true)}
+                confirmDialog={taskConfirmDialog}
+                setConfirmDialog={setTaskConfirmDialog}
+                reopenDialog={taskReopenDialog}
+                setReopenDialog={setTaskReopenDialog}
+                acting={taskActing}
+                setActing={setTaskActing}
+              />
+            )}
 
             {/* TAB CONTENT */}
             <div className="td-content">
@@ -743,6 +794,14 @@ const isCreator =
       onClose={() => setAssignerModal({ open: false, deliverable: null })}
       deliverable={assignerModal.deliverable}
       onActionSuccess={handleDeliverableActionSuccess}
+    />
+
+    <SubmitTaskModal
+      key={`td-task-submit-${task?.id || "none"}`}
+      isOpen={taskSubmitModalOpen}
+      onClose={() => setTaskSubmitModalOpen(false)}
+      task={task}
+      onSubmitSuccess={handleTaskActionSuccess}
     />
 
     <ConfirmModal

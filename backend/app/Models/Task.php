@@ -20,12 +20,30 @@ class Task extends Model
         'end_date',
         'assigned_to',
         'assigned_by',
+        'submitted_at',
+        'approved_at',
+        'rejected_at',
+        'rejection_comment',
+        'approved_by',
+        'rejected_by',
+        'reopened_at',
+        'reopened_by',
+        'reopen_comment',
+        'reopen_instructions',
+        'reopen_new_deadline',
+        'reopen_file_path',
+        'reopen_file_name',
     ];
 
     protected $casts = [
         'requirements' => 'array',
         'start_date' => 'datetime',
         'end_date' => 'datetime',
+        'submitted_at' => 'datetime',
+        'approved_at' => 'datetime',
+        'rejected_at' => 'datetime',
+        'reopened_at' => 'datetime',
+        'reopen_new_deadline' => 'date',
     ];
 
     public function scopeFilter(Builder $query, array $filters): Builder
@@ -82,5 +100,35 @@ class Task extends Model
     public function deliverables()
     {
         return $this->hasMany(\App\Models\Deliverable::class);
+    }
+
+    public function submissions()
+    {
+        return $this->hasMany(TaskSubmission::class);
+    }
+
+    public function latestSubmission()
+    {
+        return $this->hasOne(TaskSubmission::class)->latestOfMany();
+    }
+
+    public function workflowEvents()
+    {
+        return $this->hasMany(TaskWorkflowEvent::class)->latest();
+    }
+
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function rejectedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rejected_by');
+    }
+
+    public function reopenedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reopened_by');
     }
 }

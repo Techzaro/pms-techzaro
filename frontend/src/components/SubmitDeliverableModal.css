@@ -70,6 +70,11 @@
   color: #991B1B;
 }
 
+.sd-status-reopened {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
 .sd-due-date {
   font-size: 13px;
   color: #6B7280;

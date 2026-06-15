@@ -7,8 +7,12 @@ use App\Models\Task;
 use App\Models\Subtask;
 use App\Models\User;
 use App\Models\Deliverable;
+use App\Models\TaskSubmission;
+use App\Models\TaskWorkflowEvent;
+use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Storage;
 
 class TaskController extends Controller
 {
@@ -253,6 +257,12 @@ class TaskController extends Controller
             'project.files:id,project_id,name,url',
             'assignees:id,name,email,role',
             'assigner:id,name,email,role',
+            'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
+            'latestSubmission' => fn ($q) => $q->with('submittedBy:id,name,email'),
+            'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
+            'approvedBy:id,name',
+            'rejectedBy:id,name',
+            'reopenedBy:id,name',
         ]);
 
         $subtasks = Subtask::where('task_id', $task->id)
@@ -588,6 +598,347 @@ class TaskController extends Controller
             'message' => count($subtasks) . ' subtask(s) created successfully',
             'subtasks' => $subtasks,
         ], 201);
+    }
+
+    /**
+     * Submit a task (Assignee action).
+     */
+    public function submit(Request $request, Task $task)
+    {
+        $user = $request->user();
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+
+        if (!$isAssignee) {
+            return response()->json(['message' => 'Only the assignee can submit this task'], 403);
+        }
+
+        if (!in_array($task->status, ['pending', 'reopened'])) {
+            return response()->json(['message' => 'This task cannot be submitted in its current status'], 422);
+        }
+
+        $validated = $request->validate([
+            'comment' => 'nullable|string|max:2000',
+            'file' => 'nullable|file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif|max:51200',
+        ]);
+
+        $filePath = null;
+        $fileName = null;
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $fileName = $file->getClientOriginalName();
+            $filePath = $file->store('task-submissions/' . $task->id, 'public');
+        }
+
+        TaskSubmission::create([
+            'task_id' => $task->id,
+            'submitted_by' => $user->id,
+            'comment' => $validated['comment'] ?? null,
+            'file_path' => $filePath,
+            'file_name' => $fileName,
+        ]);
+
+        $isResubmit = $task->status === 'reopened';
+
+        TaskWorkflowEvent::create([
+            'task_id' => $task->id,
+            'user_id' => $user->id,
+            'action' => $isResubmit ? 'resubmitted' : 'submitted',
+            'comment' => $validated['comment'] ?? null,
+            'file_path' => $filePath,
+            'file_name' => $fileName,
+        ]);
+
+        $updateData = [
+            'status' => 'submitted',
+            'submitted_at' => now(),
+        ];
+
+        if ($task->status === 'reopened') {
+            $updateData['rejected_at'] = null;
+            $updateData['rejected_by'] = null;
+            $updateData['rejection_comment'] = null;
+            $updateData['reopened_at'] = null;
+            $updateData['reopened_by'] = null;
+            $updateData['reopen_comment'] = null;
+            $updateData['reopen_instructions'] = null;
+            $updateData['reopen_new_deadline'] = null;
+            $updateData['reopen_file_path'] = null;
+            $updateData['reopen_file_name'] = null;
+        }
+
+        $task->update($updateData);
+
+        $assignerId = $task->assigned_by;
+        if ($assignerId && $assignerId !== $user->id) {
+            Notification::create([
+                'user_id' => $assignerId,
+                'type' => 'task_submitted',
+                'message' => $user->name . ' submitted task: ' . $task->title,
+                'link' => '/tasks/task-details/' . $task->id,
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Task submitted successfully',
+            'task' => $task->fresh()->load([
+                'assignees:id,name,email,role',
+                'assigner:id,name',
+                'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
+                'latestSubmission' => fn ($q) => $q->with('submittedBy:id,name,email'),
+                'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
+                'approvedBy:id,name',
+                'rejectedBy:id,name',
+                'reopenedBy:id,name',
+            ]),
+        ]);
+    }
+
+    /**
+     * Approve a submitted task (Assigner action).
+     */
+    public function approve(Request $request, Task $task)
+    {
+        $user = $request->user();
+        $isCreator = $task->assigned_by === $user->id;
+
+        if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($task->status !== 'submitted') {
+            return response()->json(['message' => 'Can only approve submitted tasks'], 422);
+        }
+
+        $task->update([
+            'status' => 'approved',
+            'approved_at' => now(),
+            'approved_by' => $user->id,
+        ]);
+
+        TaskWorkflowEvent::create([
+            'task_id' => $task->id,
+            'user_id' => $user->id,
+            'action' => 'approved',
+        ]);
+
+        $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+        foreach ($assigneeIds as $assigneeId) {
+            if ((int) $assigneeId !== (int) $user->id) {
+                Notification::create([
+                    'user_id' => $assigneeId,
+                    'type' => 'task_approved',
+                    'message' => 'Your task "' . $task->title . '" has been approved.',
+                    'link' => '/tasks/task-details/' . $task->id,
+                ]);
+            }
+        }
+
+        return response()->json([
+            'message' => 'Task approved successfully',
+            'task' => $task->fresh()->load([
+                'assignees:id,name,email,role',
+                'assigner:id,name',
+                'approvedBy:id,name',
+                'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
+                'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
+            ]),
+        ]);
+    }
+
+    /**
+     * Reject a submitted task permanently (Assigner action).
+     */
+    public function reject(Request $request, Task $task)
+    {
+        $user = $request->user();
+        $isCreator = $task->assigned_by === $user->id;
+
+        if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($task->status !== 'submitted') {
+            return response()->json(['message' => 'Can only reject submitted tasks'], 422);
+        }
+
+        $validated = $request->validate([
+            'comment' => 'nullable|string|max:2000',
+        ]);
+
+        $task->update([
+            'status' => 'rejected',
+            'rejected_at' => now(),
+            'rejected_by' => $user->id,
+            'rejection_comment' => $validated['comment'] ?? null,
+        ]);
+
+        TaskWorkflowEvent::create([
+            'task_id' => $task->id,
+            'user_id' => $user->id,
+            'action' => 'rejected',
+            'comment' => $validated['comment'] ?? null,
+        ]);
+
+        $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+        foreach ($assigneeIds as $assigneeId) {
+            $msg = 'Your task "' . $task->title . '" has been rejected.';
+            if (!empty($validated['comment'])) {
+                $msg .= "\nReason: " . $validated['comment'];
+            }
+            Notification::create([
+                'user_id' => $assigneeId,
+                'type' => 'task_rejected',
+                'message' => $msg,
+                'link' => '/tasks/task-details/' . $task->id,
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Task rejected',
+            'task' => $task->fresh()->load([
+                'assignees:id,name,email,role',
+                'assigner:id,name',
+                'rejectedBy:id,name',
+                'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
+                'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
+            ]),
+        ]);
+    }
+
+    /**
+     * Reject & reopen a submitted task for revision (Assigner action).
+     */
+    public function reopen(Request $request, Task $task)
+    {
+        $user = $request->user();
+        $isCreator = $task->assigned_by === $user->id;
+
+        if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($task->status !== 'submitted') {
+            return response()->json(['message' => 'Can only reopen submitted tasks'], 422);
+        }
+
+        $validated = $request->validate([
+            'comment' => 'nullable|string|max:2000',
+            'instructions' => 'nullable|string|max:2000',
+            'new_deadline' => 'nullable|date',
+            'file' => 'nullable|file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif|max:51200',
+        ]);
+
+        $filePath = null;
+        $fileName = null;
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $fileName = $file->getClientOriginalName();
+            $filePath = $file->store('task-reopen/' . $task->id, 'public');
+        }
+
+        $updateData = [
+            'status' => 'reopened',
+            'reopened_at' => now(),
+            'reopened_by' => $user->id,
+            'reopen_comment' => $validated['comment'] ?? null,
+            'reopen_instructions' => $validated['instructions'] ?? null,
+        ];
+
+        if (!empty($validated['new_deadline'])) {
+            $updateData['reopen_new_deadline'] = $validated['new_deadline'];
+            $updateData['end_date'] = $validated['new_deadline'];
+        }
+
+        if (!empty($filePath)) {
+            $updateData['reopen_file_path'] = $filePath;
+            $updateData['reopen_file_name'] = $fileName;
+        }
+
+        $task->update($updateData);
+
+        TaskWorkflowEvent::create([
+            'task_id' => $task->id,
+            'user_id' => $user->id,
+            'action' => 'reopened',
+            'comment' => $validated['comment'] ?? null,
+            'instructions' => $validated['instructions'] ?? null,
+            'new_deadline' => $validated['new_deadline'] ?? null,
+            'file_path' => $filePath,
+            'file_name' => $fileName,
+        ]);
+
+        $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+        foreach ($assigneeIds as $assigneeId) {
+            $msg = 'Your task "' . $task->title . '" has been reopened for revision.';
+            if (!empty($validated['comment'])) {
+                $msg .= "\nComment: " . $validated['comment'];
+            }
+            if (!empty($validated['instructions'])) {
+                $msg .= "\nInstructions: " . $validated['instructions'];
+            }
+            Notification::create([
+                'user_id' => $assigneeId,
+                'type' => 'task_reopened',
+                'message' => $msg,
+                'link' => '/tasks/task-details/' . $task->id,
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Task reopened successfully',
+            'task' => $task->fresh()->load([
+                'assignees:id,name,email,role',
+                'assigner:id,name',
+                'reopenedBy:id,name',
+                'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
+                'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
+            ]),
+        ]);
+    }
+
+    /**
+     * Get the latest submission for a task.
+     */
+    public function latestSubmission(Request $request, Task $task)
+    {
+        $user = $request->user();
+        $isCreator = $task->assigned_by === $user->id;
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+
+        if (!$isCreator && !$isAssignee && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $submission = TaskSubmission::where('task_id', $task->id)
+            ->with('submittedBy:id,name,email')
+            ->latest()
+            ->first();
+
+        return response()->json(['submission' => $submission]);
+    }
+
+    /**
+     * Download a task submission file.
+     */
+    public function downloadSubmissionFile(TaskSubmission $submission)
+    {
+        $user = request()->user();
+        $task = $submission->task;
+
+        $isCreator = $task->assigned_by === $user->id;
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+
+        if (!$isCreator && !$isAssignee && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if (!$submission->file_path || !Storage::disk('public')->exists($submission->file_path)) {
+            return response()->json(['message' => 'File not found'], 404);
+        }
+
+        return Storage::disk('public')->download($submission->file_path, $submission->file_name);
     }
 
     public function destroy(Task $task)

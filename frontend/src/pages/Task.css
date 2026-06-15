@@ -108,6 +108,10 @@
 .All,
 .Pending,
 .Progress,
+.Submitted,
+.Reopened,
+.Approved,
+.Rejected,
 .Completed,
 .Failed,
 .Aban {
@@ -128,6 +132,22 @@
 
 .Progress {
   color: #3B82F6;
+}
+
+.Submitted {
+  color: #3B82F6;
+}
+
+.Reopened {
+  color: #F59E0B;
+}
+
+.Approved {
+  color: #22C55E;
+}
+
+.Rejected {
+  color: #EF4444;
 }
 
 .Completed {
@@ -419,6 +439,16 @@
 
 .action-icon-btn.action-complete:hover {
   background: #EF4444;
+  color: white;
+}
+
+.action-icon-btn.action-submit {
+  background: #EEF2FF;
+  color: #4F46E5;
+}
+
+.action-icon-btn.action-submit:hover {
+  background: #4F46E5;
   color: white;
 }
 

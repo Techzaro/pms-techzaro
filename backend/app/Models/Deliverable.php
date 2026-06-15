@@ -118,4 +118,9 @@ class Deliverable extends Model
     {
         return $this->belongsTo(User::class, 'reopened_by');
     }
+
+    public function workflowEvents(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(DeliverableWorkflowEvent::class)->latest();
+    }
 }

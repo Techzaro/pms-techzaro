@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Deliverable;
 use App\Models\DeliverableSubmission;
+use App\Models\DeliverableWorkflowEvent;
 use App\Models\Notification;
 use App\Models\Project;
 use App\Models\Task;
@@ -134,6 +135,7 @@ class DeliverableController extends Controller
             'task.assigner:id,name,email',
             'submissions' => fn($q) => $q->with('submittedBy:id,name,email')->latest(),
             'latestSubmission' => fn($q) => $q->with('submittedBy:id,name,email'),
+            'workflowEvents' => fn($q) => $q->with('user:id,name,email'),
             'approvedBy:id,name',
             'rejectedBy:id,name',
             'reopenedBy:id,name',
@@ -236,7 +238,7 @@ class DeliverableController extends Controller
             return response()->json(['message' => 'Only the assignee can submit this deliverable'], 403);
         }
 
-        if (!in_array($deliverable->status, ['pending', 'rejected', 'reopened'])) {
+        if (!in_array($deliverable->status, ['pending', 'rejected', 'reopened', 'rework_required'])) {
             return response()->json(['message' => 'This deliverable cannot be submitted in its current status'], 422);
         }
 
@@ -277,6 +279,15 @@ class DeliverableController extends Controller
             $updateData['reopen_comment'] = null;
             $updateData['reopen_instructions'] = null;
             $updateData['reopen_new_deadline'] = null;
+        }
+
+        // Clear rework fields when resubmitting after self-rework
+        if ($deliverable->status === 'rework_required') {
+            $updateData['rework_comment'] = null;
+            $updateData['rework_instructions'] = null;
+            $updateData['rework_new_deadline'] = null;
+            $updateData['rework_file_path'] = null;
+            $updateData['rework_file_name'] = null;
         }
 
         $deliverable->update($updateData);
@@ -496,6 +507,12 @@ class DeliverableController extends Controller
             'approved_by' => $user->id,
         ]);
 
+        DeliverableWorkflowEvent::create([
+            'deliverable_id' => $deliverable->id,
+            'event_type' => 'approval',
+            'user_id' => $user->id,
+        ]);
+
         return response()->json([
             'message' => 'Deliverable approved successfully',
             'deliverable' => $deliverable->fresh()->load([
@@ -555,6 +572,17 @@ class DeliverableController extends Controller
 
         $deliverable->update($updateData);
 
+        DeliverableWorkflowEvent::create([
+            'deliverable_id' => $deliverable->id,
+            'event_type' => 'rework',
+            'user_id' => $user->id,
+            'comment' => $validated['comment'] ?? null,
+            'instructions' => $validated['instructions'] ?? null,
+            'new_deadline' => $validated['new_deadline'] ?? null,
+            'file_path' => $filePath,
+            'file_name' => $fileName,
+        ]);
+
         return response()->json([
             'message' => 'Deliverable marked for rework',
             'deliverable' => $deliverable->fresh()->load([
@@ -562,6 +590,28 @@ class DeliverableController extends Controller
                 'creator:id,name',
             ]),
         ]);
+    }
+
+    /**
+     * Download a submission file.
+     */
+    public function downloadSubmissionFile(DeliverableSubmission $submission)
+    {
+        $user = request()->user();
+        $deliverable = $submission->deliverable;
+
+        $isCreator = $deliverable->created_by === $user->id;
+        $isAssignee = $deliverable->assigned_to === $user->id;
+
+        if (!$isCreator && !$isAssignee && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if (!$submission->file_path || !Storage::disk('public')->exists($submission->file_path)) {
+            return response()->json(['message' => 'File not found'], 404);
+        }
+
+        return Storage::disk('public')->download($submission->file_path, $submission->file_name);
     }
 
     /**
