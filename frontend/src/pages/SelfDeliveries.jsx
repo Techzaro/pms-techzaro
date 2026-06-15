@@ -10,14 +10,14 @@ import "../pages/Deliveries.css";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
-  pending: "#da4b12",
+  pending: "#FEF3C7",
   submitted: "#DBEAFE",
   approved: "#DCFCE7",
   rejected: "#FEE2E2",
 };
 
 const STATUS_TEXT_COLORS = {
-  pending: "#e76514",
+  pending: "#92400E",
   submitted: "#1E40AF",
   approved: "#166534",
   rejected: "#991B1B",

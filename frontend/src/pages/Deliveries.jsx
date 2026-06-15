@@ -2,10 +2,12 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect } from "react";
 import { GoDotFill } from "react-icons/go";
-import { useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
+import { LuSend } from "react-icons/lu";
 import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
+import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
+import ViewDeliverableModal from "../components/ViewDeliverableModal";
 import "../pages/Deliveries.css";
 
 const STATUS_COLORS = {
@@ -13,6 +15,7 @@ const STATUS_COLORS = {
   submitted: "#DBEAFE",
   approved: "#DCFCE7",
   rejected: "#FEE2E2",
+  reopened: "#FEF3C7",
 };
 
 const STATUS_TEXT_COLORS = {
@@ -20,27 +23,17 @@ const STATUS_TEXT_COLORS = {
   submitted: "#1E40AF",
   approved: "#166534",
   rejected: "#991B1B",
-};
-
-const PRIORITY_COLORS = {
-  High: "#FEE2E2",
-  Medium: "#FEF3C7",
-  Low: "#DCFCE7",
-};
-
-const PRIORITY_TEXT_COLORS = {
-  High: "#991B1B",
-  Medium: "#92400E",
-  Low: "#166534",
+  reopened: "#92400E",
 };
 
 function Deliveries() {
-  const navigate = useNavigate();
   const [deliverables, setDeliverables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
+  const [submitModal, setSubmitModal] = useState({ open: false, deliverable: null });
+  const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
 
   const fetchDeliverables = () => {
     setLoading(true);
@@ -93,8 +86,19 @@ function Deliveries() {
       submitted: "Submitted",
       approved: "Approved",
       rejected: "Rejected",
+      reopened: "Reopened",
     };
     return map[status] || status;
+  };
+
+  const handleSubmissionSuccess = (updatedDeliverable) => {
+    setDeliverables((prev) =>
+      prev.map((d) =>
+        d.id === updatedDeliverable.id
+          ? { ...d, status: "submitted", has_submitted: true }
+          : d
+      )
+    );
   };
 
   const breadcrumbs = [
@@ -128,6 +132,9 @@ function Deliveries() {
           </p>
           <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Submitted
+          </p>
+          <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => setStatusFilter("reopened")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Reopened
           </p>
           <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Approved
@@ -191,9 +198,15 @@ function Deliveries() {
                     <div>{formatDate(item.due_date)}</div>
                   </div>
                   <div className="action-btns">
-                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: 'deliveries' } })}>
-                      <IoEyeOutline />
-                    </button>
+                    {(item.status === "pending" || item.status === "rejected" || item.status === "reopened") ? (
+                      <button className="action-icon-btn action-submit" title="Submit Deliverable" onClick={() => setSubmitModal({ open: true, deliverable: item })}>
+                        <LuSend />
+                      </button>
+                    ) : (
+                      <button className="action-icon-btn action-view" title="View Submission" onClick={() => setViewModal({ open: true, deliverable: item })}>
+                        <IoEyeOutline />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -201,6 +214,22 @@ function Deliveries() {
           )}
         </div>
       </div>
+
+      <SubmitDeliverableModal
+        key={`submit-${submitModal.deliverable?.id || "none"}`}
+        isOpen={submitModal.open}
+        onClose={() => setSubmitModal({ open: false, deliverable: null })}
+        deliverable={submitModal.deliverable}
+        onSubmitSuccess={handleSubmissionSuccess}
+      />
+
+      <ViewDeliverableModal
+        key={`view-${viewModal.deliverable?.id || "none"}`}
+        isOpen={viewModal.open}
+        onClose={() => setViewModal({ open: false, deliverable: null })}
+        deliverable={viewModal.deliverable}
+        onSubmitSuccess={handleSubmissionSuccess}
+      />
     </DashboardLayout>
   );
 }

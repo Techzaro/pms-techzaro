@@ -2,10 +2,10 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect } from "react";
 import { GoDotFill } from "react-icons/go";
-import { useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
+import AssignerViewModal from "../components/AssignerViewModal";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
 
@@ -14,6 +14,7 @@ const STATUS_COLORS = {
   submitted: "#DBEAFE",
   approved: "#DCFCE7",
   rejected: "#FEE2E2",
+  reopened: "#FEF3C7",
 };
 
 const STATUS_TEXT_COLORS = {
@@ -21,15 +22,16 @@ const STATUS_TEXT_COLORS = {
   submitted: "#1E40AF",
   approved: "#166534",
   rejected: "#991B1B",
+  reopened: "#92400E",
 };
 
 function DeliveriesByYou() {
-  const navigate = useNavigate();
   const [deliverables, setDeliverables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
+  const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
 
   const fetchDeliverables = () => {
     setLoading(true);
@@ -83,8 +85,15 @@ function DeliveriesByYou() {
       submitted: "Submitted",
       approved: "Approved",
       rejected: "Rejected",
+      reopened: "Reopened",
     };
     return map[status] || status;
+  };
+
+  const handleActionSuccess = (updatedDeliverable) => {
+    setDeliverables((prev) =>
+      prev.map((d) => (d.id === updatedDeliverable.id ? { ...d, ...updatedDeliverable } : d))
+    );
   };
 
   const breadcrumbs = [
@@ -118,6 +127,9 @@ function DeliveriesByYou() {
           </p>
           <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Submitted
+          </p>
+          <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => setStatusFilter("reopened")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Reopened
           </p>
           <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Approved
@@ -181,7 +193,7 @@ function DeliveriesByYou() {
                     <div>{formatDate(item.due_date)}</div>
                   </div>
                   <div className="action-btns">
-                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: 'deliveries-by-you' } })}>
+                    <button className="action-icon-btn action-view" title="View" onClick={() => setViewModal({ open: true, deliverable: item })}>
                       <IoEyeOutline />
                     </button>
                   </div>
@@ -191,6 +203,14 @@ function DeliveriesByYou() {
           )}
         </div>
       </div>
+
+      <AssignerViewModal
+        key={`avm-${viewModal.deliverable?.id || "none"}`}
+        isOpen={viewModal.open}
+        onClose={() => setViewModal({ open: false, deliverable: null })}
+        deliverable={viewModal.deliverable}
+        onActionSuccess={handleActionSuccess}
+      />
     </DashboardLayout>
   );
 }

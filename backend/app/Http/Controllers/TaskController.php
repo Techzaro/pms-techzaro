@@ -508,7 +508,7 @@ class TaskController extends Controller
                 'task_id' => $task->id,
                 'title' => $task->title,
                 'description' => $task->description,
-                'status' => 'deliverable',
+                'status' => 'pending',
                 'priority' => $task->priority,
                 'due_date' => $task->end_date,
                 'assigned_to' => $user->id,

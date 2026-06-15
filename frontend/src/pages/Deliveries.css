@@ -428,6 +428,16 @@
   color: white;
 }
 
+.action-icon-btn.action-submit {
+  background: #EEF2FF;
+  color: #4F46E5;
+}
+
+.action-icon-btn.action-submit:hover {
+  background: #4F46E5;
+  color: white;
+}
+
 .action-icon-btn.action-complete {
   background: #FEE2E2;
   color: #EF4444;
