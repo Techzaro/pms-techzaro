@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import "../pages/Calender.css";
 import "../components/Event.css";
 import { ChevronLeft, ChevronRight, Search, Plus, Trash2, Edit3 } from "lucide-react";
@@ -6,25 +7,30 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Event from "../components/Event";
 import { authToken, getCurrentRole, getUser } from "../utils/auth";
 import API_URL from "../config/api";
+import { useUnifiedSummary } from "../hooks/useUnifiedSummary";
 
-const TYPE_COLORS = {
+export const TYPE_COLORS = {
   meeting: { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" },
   task: { bg: "#eff6ff", text: "#3b82f6", dot: "#3b82f6" },
   other: { bg: "#fff7ed", text: "#f59e0b", dot: "#f59e0b" },
   deadline: { bg: "#fef2f2", text: "#ef4444", dot: "#ef4444" },
   personal: { bg: "#ecfdf5", text: "#22c55e", dot: "#22c55e" },
+  project: { bg: "#f5f3ff", text: "#8b5cf6", dot: "#8b5cf6" },
+  deliverable: { bg: "#f0fdf4", text: "#16a34a", dot: "#16a34a" },
 };
 
-const TYPE_LABELS = {
+export const TYPE_LABELS = {
   meeting: "Meeting",
   task: "Task",
   other: "Review",
   deadline: "Deadline",
   personal: "Personal",
+  project: "Project",
+  deliverable: "Deliverable",
 };
 
 function formatDate(d) {
-  return d.toISOString().split("T")[0];
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
 function formatDisplayDate(d) {
@@ -75,6 +81,7 @@ function Calender() {
   const [deleteLoading, setDeleteLoading] = useState(null);
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+  const [searchParams] = useSearchParams();
   const currentRole = getCurrentRole();
   const currentUser = getUser(currentRole);
   const canManageEvents = ["admin", "manager"].includes(currentRole);
@@ -121,6 +128,19 @@ function Calender() {
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
+
+  // Deep linking: auto-open day popup when ?date=YYYY-MM-DD is in URL
+  useEffect(() => {
+    const dateParam = searchParams.get("date");
+    if (!dateParam) return;
+    const parts = dateParam.split("-");
+    if (parts.length !== 3) return;
+    const parsed = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+    if (isNaN(parsed.getTime())) return;
+    setCurrentDate(parsed);
+    setSelectedDay(parsed);
+    setShowDayPopup(true);
+  }, [searchParams]);
 
   const handlePrev = () => {
     const d = new Date(currentDate);
@@ -220,20 +240,11 @@ function Calender() {
     return [new Date(currentDate)];
   }, [currentDate, viewMode]);
 
-  const todayEvents = useMemo(() => {
-    return getEventsForDate(new Date());
-  }, [events]);
-
+  const { today: unifiedToday, upcoming: unifiedUpcoming } = useUnifiedSummary();
+  const todayEvents = unifiedToday;
   const upcomingEvents = useMemo(() => {
-    const today = formatDate(new Date());
-    return events
-      .filter((ev) => {
-        const start = ev.start_date?.split("T")[0];
-        return start > today;
-      })
-      .sort((a, b) => a.start_date.localeCompare(b.start_date))
-      .slice(0, 5);
-  }, [events]);
+    return unifiedUpcoming.slice(0, 5);
+  }, [unifiedUpcoming]);
 
   return (
     <DashboardLayout hideRightSidebar={true}>
@@ -329,7 +340,15 @@ function Calender() {
                             key={ev.id}
                             className="calendar-event"
                             style={{ background: colors.bg, marginBottom: 4, cursor: "pointer" }}
-                            onClick={(e) => { e.stopPropagation(); handleEdit(ev); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (ev.source === "manual" && canManageEvents) {
+                                handleEdit(ev);
+                              } else {
+                                setSelectedDay(date);
+                                setShowDayPopup(true);
+                              }
+                            }}
                           >
                             <p style={{ color: colors.text, fontSize: 11, margin: 0 }}>
                               {ev.title}
@@ -365,7 +384,7 @@ function Calender() {
             <h3>
               Today <span className="today-date">• {formatDisplayDate(new Date())}</span>
             </h3>
-            <div className="agenda-list">
+             <div className="agenda-list">
               {todayEvents.length === 0 ? (
                 <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
                   No events today
@@ -373,7 +392,8 @@ function Calender() {
               ) : (
                 todayEvents.map((ev) => {
                   const colors = TYPE_COLORS[ev.type] || TYPE_COLORS.meeting;
-                  const time = ev.all_day ? "All Day" : new Date(ev.start_date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+                  const dateTimeStr = ev.start_date || ev.date || "";
+                  const time = ev.all_day ? "All Day" : new Date(dateTimeStr).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
                   return (
                     <div className="agenda-item" key={ev.id}>
                       <span className="agenda-dot" style={{ background: colors.dot }} />
@@ -391,9 +411,9 @@ function Calender() {
             </div>
           </div>
 
-          <br />
-
-          <div className="task-card">
+                  <br />
+ 
+           <div className="task-card">
             <p style={{ fontWeight: "bold", fontSize: "20px", margin: 0 }}>Upcoming Events</p>
             <div className="deadline-list">
               {upcomingEvents.length === 0 ? (
@@ -403,7 +423,9 @@ function Calender() {
               ) : (
                 upcomingEvents.map((ev) => {
                   const colors = TYPE_COLORS[ev.type] || TYPE_COLORS.meeting;
-                  const evDate = new Date(ev.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                  const dateStr = (ev.start_date || ev.date || "").split("T")[0].split(" ")[0];
+                  const [year, month, day] = dateStr.split("-").map(Number);
+                  const evDate = new Date(year, month - 1, day).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
                   return (
                     <div className="deadline-item" key={ev.id}>
                       <div>

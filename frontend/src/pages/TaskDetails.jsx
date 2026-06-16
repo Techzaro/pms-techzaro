@@ -139,6 +139,9 @@ const fetchTask = useCallback(async (refresh = false) => {
     if (res.ok) {
       const data = await res.json();
       setTask(data.task);
+    } else if (res.status === 404) {
+      setTask(null);
+      showMessage("Task not found", "error");
     } else {
       setTask(null);
     }
@@ -152,7 +155,7 @@ const fetchTask = useCallback(async (refresh = false) => {
 
 useEffect(() => {
   if (taskId) fetchTask(true);
-}, [taskId]);
+}, [taskId, fetchTask]);
 
 const currentIdx = taskIds.findIndex(
   (id) => String(id) === String(taskId)
@@ -165,12 +168,6 @@ const nextTaskId =
   currentIdx >= 0 && currentIdx < taskIds.length - 1
     ? taskIds[currentIdx + 1]
     : null;
-
-useEffect(() => {
-  fetchTask(true);
-}, [fetchTask]);
-
-// YAHAN taskSourcePages aur second source declaration NAHI hona chahiye
 
 const currentUser = getUser();
 const isCreator =

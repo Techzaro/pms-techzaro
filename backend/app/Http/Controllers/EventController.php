@@ -248,6 +248,218 @@ class EventController extends Controller
         ]);
     }
 
+    /**
+     * Unified summary that returns Today's Events and Upcoming Deadlines.
+     */
+    public function unifiedSummary(Request $request)
+    {
+        $user = $request->user();
+        $today = $request->input('local_date', date('Y-m-d'));
+
+        // TASKS
+        $tasks = Task::query()
+            ->where(function ($q) use ($user) {
+                $q->where('assigned_to', $user->id)
+                  ->orWhereHas('assignees', function ($aq) use ($user) {
+                      $aq->where('user_id', $user->id);
+                  })->orWhereHas('project', function ($pq) use ($user) {
+                      $pq->whereJsonContains('assigned_users', $user->id);
+                  });
+            })
+            ->where(function ($q) use ($today) {
+                $q->whereDate('start_date', '>=', $today)
+                  ->orWhereDate('end_date', '>=', $today);
+            })
+            ->select([
+                'id','title','description','start_date','end_date','assigned_to','assigned_by','project_id','status','priority','created_at','updated_at'
+            ])
+            ->with(['project:id,title','assignee:id,name','assigner:id,name'])
+            ->get();
+
+        // PROJECTS
+        $projects = Project::query()
+            ->whereJsonContains('assigned_users', $user->id)
+            ->where(function ($q) use ($today) {
+                $q->whereDate('start_date', '>=', $today)
+                  ->orWhereDate('end_date', '>=', $today);
+            })
+            ->select(['id','title','description','start_date','end_date','assigned_users','status','priority','created_by'])
+            ->with(['creator:id,name'])
+            ->get();
+
+        // DELIVERABLES
+        $deliverables = Deliverable::query()
+            ->where('assigned_to', $user->id)
+            ->whereDate('due_date', '>=', $today)
+            ->select(['id','title','description','due_date','assigned_to','created_by','project_id','task_id','status','priority','submitted_at','approved_at','rejected_at'])
+            ->with(['project:id,title','assignee:id,name','creator:id,name'])
+            ->get();
+
+        // MANUAL EVENTS
+        $manualEvents = Event::with(['user:id,name','assignedUsers:id'])
+            ->where(function ($q) use ($user) {
+                $q->where('is_global', true)
+                  ->orWhereHas('assignedUsers', function ($aq) use ($user) {
+                      $aq->where('user_id', $user->id);
+                  });
+            })
+            ->where(function ($q) use ($today) {
+                $q->whereDate('start_date', '>=', $today)
+                  ->orWhereDate('end_date', '>=', $today);
+            })
+            ->get();
+
+        $events = collect();
+
+        // Transform tasks into calendar events
+        foreach ($tasks as $task) {
+            $events->push([
+                'id' => 'task-' . $task->id,
+                'source' => 'task',
+                'type' => 'task',
+                'title' => $task->title,
+                'description' => $task->description,
+                'date' => $task->start_date ?? $task->end_date,
+                'start_date' => $task->start_date,
+                'end_date' => $task->end_date,
+                'status' => $task->status,
+                'priority' => $task->priority,
+                'assigned_to' => $task->assigned_to,
+                'assigned_by' => $task->assigned_by,
+                'project_id' => $task->project_id,
+                'assignee_name' => $task->assignee ? $task->assignee->name : null,
+                'assigner_name' => $task->assigner ? $task->assigner->name : null,
+                'project_title' => $task->project ? $task->project->title : null,
+                'created_at' => $task->created_at,
+                'updated_at' => $task->updated_at,
+            ]);
+        }
+
+        // Transform projects into calendar events
+        foreach ($projects as $project) {
+            $events->push([
+                'id' => 'project-' . $project->id,
+                'source' => 'project',
+                'type' => 'project',
+                'title' => $project->title,
+                'description' => $project->description,
+                'date' => $project->start_date ?? $project->end_date,
+                'start_date' => $project->start_date,
+                'end_date' => $project->end_date,
+                'status' => $project->status,
+                'priority' => $project->priority,
+                'assigned_users' => $project->assigned_users,
+                'created_by' => $project->created_by,
+                'creator_name' => $project->creator ? $project->creator->name : null,
+                'created_at' => $project->created_at,
+                'updated_at' => $project->updated_at,
+            ]);
+        }
+
+        // Transform deliverables into calendar events
+        foreach ($deliverables as $deliverable) {
+            $events->push([
+                'id' => 'deliverable-' . $deliverable->id,
+                'source' => 'deliverable',
+                'type' => 'deliverable',
+                'title' => $deliverable->title,
+                'description' => $deliverable->description,
+                'date' => $deliverable->due_date,
+                'start_date' => $deliverable->due_date,
+                'end_date' => $deliverable->due_date,
+                'status' => $deliverable->status,
+                'priority' => $deliverable->priority,
+                'assigned_to' => $deliverable->assigned_to,
+                'created_by' => $deliverable->created_by,
+                'assigned_by_name' => $deliverable->assignee ? $deliverable->assignee->name : null,
+                'created_by_name' => $deliverable->creator ? $deliverable->creator->name : null,
+                'project_id' => $deliverable->project_id,
+                'task_id' => $deliverable->task_id,
+                'project_title' => $deliverable->project ? $deliverable->project->title : null,
+                'submitted_at' => $deliverable->submitted_at,
+                'approved_at' => $deliverable->approved_at,
+                'rejected_at' => $deliverable->rejected_at,
+                'created_at' => $deliverable->created_at,
+                'updated_at' => $deliverable->updated_at,
+            ]);
+        }
+
+        // Transform manual events into calendar events
+        foreach ($manualEvents as $event) {
+            $events->push([
+                'id' => $event->id,
+                'source' => 'manual',
+                'type' => $event->type,
+                'title' => $event->title,
+                'user_id' => $event->user_id,
+                'created_by' => $event->user_id,
+                'description' => $event->description,
+                'date' => $event->start_date,
+                'start_date' => $event->start_date,
+                'end_date' => $event->end_date,
+                'status' => $event->type,
+                'priority' => null,
+                'assigned_to' => $event->is_global ? null : $event->assignedUsers->pluck('id')->toArray(),
+                'user_name' => $event->user ? $event->user->name : null,
+                'type_name' => $this->getEventTypeLabel($event->type),
+                'created_at' => $event->created_at,
+                'updated_at' => $event->updated_at,
+                'all_day' => $event->all_day,
+                'color' => $event->color,
+                'is_global' => (bool) $event->is_global,
+                'assigned_user_ids' => $event->assignedUsers->pluck('id')->toArray(),
+            ]);
+        }
+
+        $todayEvents = collect();
+        $upcomingEvents = collect();
+
+        foreach ($events as $ev) {
+            $startStr = null;
+            if ($ev['start_date']) {
+                $startStr = is_string($ev['start_date'])
+                    ? explode('T', $ev['start_date'])[0]
+                    : $ev['start_date']->format('Y-m-d');
+            }
+            if (!$startStr && $ev['date']) {
+                $startStr = is_string($ev['date'])
+                    ? explode('T', $ev['date'])[0]
+                    : $ev['date']->format('Y-m-d');
+            }
+
+            $endStr = null;
+            if ($ev['end_date']) {
+                $endStr = is_string($ev['end_date'])
+                    ? explode('T', $ev['end_date'])[0]
+                    : $ev['end_date']->format('Y-m-d');
+            }
+            if (!$endStr) {
+                $endStr = $startStr;
+            }
+
+            // Check if today falls in [startStr, endStr]
+            if ($startStr && $endStr && $today >= $startStr && $today <= $endStr) {
+                $todayEvents->push($ev);
+            } elseif ($startStr && $startStr > $today) {
+                $upcomingEvents->push($ev);
+            }
+        }
+
+        // Sort both collections chronologically
+        $todayEventsSorted = $todayEvents->sortBy(function ($ev) {
+            return $ev['start_date'] ?? $ev['date'] ?? '';
+        })->values()->all();
+
+        $upcomingEventsSorted = $upcomingEvents->sortBy(function ($ev) {
+            return $ev['start_date'] ?? $ev['date'] ?? '';
+        })->values()->all();
+
+        return response()->json([
+            'today' => $todayEventsSorted,
+            'upcoming' => $upcomingEventsSorted,
+        ]);
+    }
+
     private function getEventTypeLabel(string $type): string
     {
         $labels = [
