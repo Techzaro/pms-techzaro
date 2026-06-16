@@ -1,0 +1,367 @@
+.user-profile-page {
+  width: 100%;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.user-profile-page * {
+  box-sizing: border-box;
+}
+
+.profile-header {
+  margin-bottom: 28px;
+}
+
+.profile-header h1 {
+  margin: 0 0 8px;
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+}
+
+.profile-header p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.profile-message {
+  padding: 12px 16px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.profile-message.success {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.profile-message.error {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.profile-layout {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 24px;
+  align-items: start;
+}
+
+.profile-left {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.profile-right {
+  position: sticky;
+  top: 20px;
+}
+
+/* ==================== USER CARD ==================== */
+
+.profile-user-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.profile-user-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.profile-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #d1d5db;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.profile-user-info h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.3;
+}
+
+.profile-designation {
+  font-size: 15px;
+  color: #16a34a;
+  font-weight: 500;
+}
+
+.profile-dept {
+  font-size: 13px;
+  color: #6b7280;
+  display: block;
+  margin-top: 2px;
+}
+
+/* ==================== INFO CARD ==================== */
+
+.profile-info-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.info-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.info-card-header h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.btn-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #4f46e5;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.btn-edit:hover {
+  background: #4338ca;
+}
+
+.info-card-body {
+  padding: 4px 0;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  padding: 14px 24px;
+  border-bottom: 1px solid #f9fafb;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-row .info-label {
+  font-size: 15px;
+  color: #6b7280;
+  font-weight: 500;
+  width: 160px;
+  flex-shrink: 0;
+  text-align: left;
+}
+
+.info-row .info-value {
+  font-size: 15px;
+  color: #111827;
+  font-weight: 500;
+  text-align: left;
+  flex: 1;
+}
+
+/* ==================== ACCOUNT STATUS CARD ==================== */
+
+.account-status-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.account-status-card h3 {
+  margin: 0 0 16px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.status-item:last-child {
+  border-bottom: none;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-active {
+  background: #22c55e;
+}
+
+.dot-inactive {
+  background: #dc2626;
+}
+
+.status-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: #22c55e;
+}
+
+.status-icon {
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.status-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.status-label {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.status-value {
+  font-size: 15px;
+  color: #111827;
+  font-weight: 600;
+}
+
+/* ==================== BADGES ==================== */
+
+.role-badge {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.role-admin {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.role-manager {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.role-team_lead {
+  background: #faf5ff;
+  color: #7c3aed;
+}
+
+.role-member {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+/* ==================== LOADING / ERROR ==================== */
+
+.profile-loading,
+.profile-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 16px;
+}
+
+.profile-error p {
+  margin-bottom: 16px;
+  color: #dc2626;
+}
+
+/* ==================== RESPONSIVE ==================== */
+
+@media (max-width: 900px) {
+  .profile-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-right {
+    position: static;
+  }
+}
+
+@media (max-width: 600px) {
+  .profile-user-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .profile-user-left {
+    justify-content: center;
+  }
+
+  .info-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .info-row .info-label {
+    width: auto;
+  }
+
+  .info-row .info-value {
+    text-align: left;
+  }
+}

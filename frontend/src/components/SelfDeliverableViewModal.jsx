@@ -1,0 +1,333 @@
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { FileText } from "lucide-react";
+import API_URL from "../config/api";
+import { authToken } from "../utils/auth";
+import ConfirmationDialog from "./ConfirmationDialog";
+import SelfReworkDialog from "./SelfReworkDialog";
+import "./SelfDeliverableViewModal.css";
+
+function formatDateTime(value) {
+  if (!value) return "\u2014";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "\u2014";
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function fileUrl(path) {
+  if (!path) return null;
+  return `${API_URL.replace("/api", "")}/storage/${path}`;
+}
+
+function buildHistoryTimeline(deliverable) {
+  if (!deliverable) return [];
+
+  const items = [];
+
+  (deliverable.submissions || [])
+    .slice()
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .forEach((sub, index) => {
+    items.push({
+      id: `submission-${sub.id}`,
+      type: index === 0 ? "submission" : "resubmission",
+      label: index === 0 ? "Original Submission" : "Resubmission",
+      date: sub.created_at,
+      user: sub.submitted_by?.name || sub.submittedBy?.name || "You",
+      comment: sub.comment,
+      file_path: sub.file_path,
+      file_name: sub.file_name,
+    });
+  });
+
+  (deliverable.workflow_events || deliverable.workflowEvents || []).forEach((event) => {
+    items.push({
+      id: `event-${event.id}`,
+      type: event.event_type,
+      label: event.event_type === "rework" ? "Rework Required" : "Approved",
+      date: event.created_at,
+      user: event.user?.name || "You",
+      comment: event.comment,
+      instructions: event.instructions,
+      new_deadline: event.new_deadline,
+      file_path: event.file_path,
+      file_name: event.file_name,
+    });
+  });
+
+  return items.sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
+function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliverable, onActionSuccess, onResubmit }) {
+  const [deliverable, setDeliverable] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [confirmApprove, setConfirmApprove] = useState(false);
+  const [reworkDialog, setReworkDialog] = useState(false);
+  const [acting, setActing] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !initialDeliverable) return;
+    document.body.style.overflow = "hidden";
+    setLoading(true);
+
+    const token = authToken();
+    fetch(`${API_URL}/deliverables/${initialDeliverable.id}`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        setDeliverable(data?.deliverable || initialDeliverable);
+        setLoading(false);
+      })
+      .catch(() => {
+        setDeliverable(initialDeliverable);
+        setLoading(false);
+      });
+
+    return () => { document.body.style.overflow = ""; };
+  }, [isOpen, initialDeliverable]);
+
+  const handleSelfApprove = async () => {
+    setActing(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${deliverable.id}/self-approve`, {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onActionSuccess(data.deliverable);
+        onClose();
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleReworkSuccess = (updated) => {
+    onActionSuccess(updated);
+    onClose();
+  };
+
+  const historyTimeline = useMemo(() => buildHistoryTimeline(deliverable), [deliverable]);
+
+  if (!isOpen || !initialDeliverable) return null;
+
+  const status = deliverable?.status || initialDeliverable.status || "pending";
+  const statusLabel = status === "pending" ? "Draft" : status === "rework_required" ? "Rework Required" : status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, " ");
+  const latestSubmission = deliverable?.latest_submission || deliverable?.latestSubmission;
+  const isSubmitted = status === "submitted";
+  const isReworkRequired = status === "rework_required";
+  const isApproved = status === "approved";
+
+  return createPortal(
+    <div className="sdvm-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="sdvm-modal" role="dialog" aria-modal="true">
+        <div className="sdvm-header">
+          <div className="sdvm-header-top">
+            <h2 className="sdvm-title">{deliverable?.title || initialDeliverable.title}</h2>
+            <span className={`sdvm-status-badge sdvm-status-${status}`}>{statusLabel}</span>
+          </div>
+          {(deliverable?.due_date || initialDeliverable.due_date) && (
+            <div className="sdvm-due">Due Date & Time {formatDateTime(deliverable?.due_date || initialDeliverable.due_date)}</div>
+          )}
+        </div>
+
+        <div className="sdvm-body">
+          {loading ? (
+            <div className="sdvm-loading">Loading details...</div>
+          ) : (
+            <>
+              <div className="sdvm-section">
+                <h3 className="sdvm-section-title">Deliverable Details</h3>
+                <div className="sdvm-details-grid">
+                  <div className="sdvm-detail-item">
+                    <span className="sdvm-detail-label">Task / Project</span>
+                    <span className="sdvm-detail-value">{deliverable?.task?.title || deliverable?.project?.title || "\u2014"}</span>
+                  </div>
+                  <div className="sdvm-detail-item">
+                    <span className="sdvm-detail-label">Priority</span>
+                    <span className="sdvm-detail-value">{deliverable?.priority || "Medium"}</span>
+                  </div>
+                </div>
+                {deliverable?.description && (
+                  <div className="sdvm-description">
+                    <span className="sdvm-detail-label">Description</span>
+                    <p className="sdvm-description-text">{deliverable.description}</p>
+                  </div>
+                )}
+              </div>
+
+              {isReworkRequired && (
+                <div className="sdvm-section sdvm-rework-section">
+                  <h3 className="sdvm-section-title">Rework Instructions</h3>
+                  {deliverable.rework_comment && (
+                    <div className="sdvm-detail-item">
+                      <span className="sdvm-detail-label">Rework Notes</span>
+                      <p className="sdvm-description-text">{deliverable.rework_comment}</p>
+                    </div>
+                  )}
+                  {deliverable.rework_instructions && (
+                    <div className="sdvm-detail-item" style={{ marginTop: "12px" }}>
+                      <span className="sdvm-detail-label">Improvement Instructions</span>
+                      <p className="sdvm-description-text">{deliverable.rework_instructions}</p>
+                    </div>
+                  )}
+                  {deliverable.rework_new_deadline && (
+                    <div className="sdvm-detail-item" style={{ marginTop: "12px" }}>
+                      <span className="sdvm-detail-label">New Target Date</span>
+                      <span className="sdvm-detail-value">{formatDateTime(deliverable.rework_new_deadline)}</span>
+                    </div>
+                  )}
+                  {deliverable.rework_file_name && (
+                    <div className="sdvm-detail-item" style={{ marginTop: "12px" }}>
+                      <span className="sdvm-detail-label">Attached File</span>
+                      <a
+                        className="sdvm-file-link"
+                        href={fileUrl(deliverable.rework_file_path)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <FileText size={16} />
+                        <span>{deliverable.rework_file_name}</span>
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {latestSubmission && (
+                <div className="sdvm-section">
+                  <h3 className="sdvm-section-title">Submission Details</h3>
+                  <div className="sdvm-submission">
+                    <div className="sdvm-submission-grid">
+                      <div className="sdvm-detail-item">
+                        <span className="sdvm-detail-label">Submitted By</span>
+                        <span className="sdvm-detail-value">{latestSubmission.submitted_by?.name || latestSubmission.submittedBy?.name || "You"}</span>
+                      </div>
+                      <div className="sdvm-detail-item">
+                        <span className="sdvm-detail-label">Submission Date</span>
+                        <span className="sdvm-detail-value">{formatDateTime(latestSubmission.created_at || deliverable?.submitted_at)}</span>
+                      </div>
+                    </div>
+                    {latestSubmission.comment && (
+                      <div className="sdvm-detail-item" style={{ marginTop: "12px" }}>
+                        <span className="sdvm-detail-label">Notes</span>
+                        <p className="sdvm-description-text">{latestSubmission.comment}</p>
+                      </div>
+                    )}
+                    {latestSubmission.file_name && (
+                      <div className="sdvm-detail-item" style={{ marginTop: "12px" }}>
+                        <span className="sdvm-detail-label">Attached File</span>
+                        <a
+                          className="sdvm-file-link"
+                          href={fileUrl(latestSubmission.file_path)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <FileText size={16} />
+                          <span>{latestSubmission.file_name}</span>
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {isApproved && deliverable?.approved_at && (
+                <div className="sdvm-section sdvm-approved-section">
+                  <h3 className="sdvm-section-title">Approval</h3>
+                  <div className="sdvm-detail-item">
+                    <span className="sdvm-detail-label">Approved On</span>
+                    <span className="sdvm-detail-value">{formatDateTime(deliverable.approved_at)}</span>
+                  </div>
+                </div>
+              )}
+
+              {historyTimeline.length > 0 && (
+                <div className="sdvm-section">
+                  <h3 className="sdvm-section-title">Submission History</h3>
+                  <div className="sdvm-history">
+                    {historyTimeline.map((item) => (
+                      <div key={item.id} className={`sdvm-history-item sdvm-history-${item.type}`}>
+                        <div className="sdvm-history-header">
+                          <span className="sdvm-history-label">{item.label}</span>
+                          <span className="sdvm-history-date">{formatDateTime(item.date)}</span>
+                        </div>
+                        <div className="sdvm-history-user">By {item.user}</div>
+                        {item.comment && <p className="sdvm-history-text">{item.comment}</p>}
+                        {item.instructions && (
+                          <p className="sdvm-history-text"><strong>Instructions:</strong> {item.instructions}</p>
+                        )}
+                        {item.new_deadline && (
+                            <p className="sdvm-history-text"><strong>Target Date:</strong> {formatDateTime(item.new_deadline)}</p>
+                        )}
+                        {item.file_name && (
+                          <a className="sdvm-file-link" href={fileUrl(item.file_path)} target="_blank" rel="noopener noreferrer">
+                            <FileText size={14} />
+                            <span>{item.file_name}</span>
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!latestSubmission && !isReworkRequired && status === "pending" && (
+                <div className="sdvm-empty">
+                  <p>No submission yet. Submit your deliverable to begin review.</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="sdvm-footer">
+          <button className="sdvm-close-btn" onClick={onClose}>Close</button>
+          {isReworkRequired && onResubmit && (
+            <button className="sdvm-resubmit-btn" onClick={() => { onResubmit(deliverable || initialDeliverable); onClose(); }}>
+              Resubmit Deliverable
+            </button>
+          )}
+          {isSubmitted && (
+            <div className="sdvm-action-btns">
+              <button className="sdvm-action-btn sdvm-approve-btn" disabled={acting} onClick={() => setConfirmApprove(true)}>
+                Mark as Approved
+              </button>
+              <button className="sdvm-action-btn sdvm-rework-btn" disabled={acting} onClick={() => setReworkDialog(true)}>
+                Rework Required
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <ConfirmationDialog
+        isOpen={confirmApprove}
+        onClose={() => setConfirmApprove(false)}
+        onConfirm={() => {
+          setConfirmApprove(false);
+          handleSelfApprove();
+        }}
+        title="Mark as Approved"
+        message="Are you sure you want to mark this deliverable as completed and approved?"
+        confirmText="Mark as Approved"
+        confirmColor="#16A34A"
+      />
+
+      <SelfReworkDialog
+        isOpen={reworkDialog}
+        onClose={() => setReworkDialog(false)}
+        deliverable={deliverable || initialDeliverable}
+        onReworkSuccess={handleReworkSuccess}
+      />
+    </div>,
+    document.body
+  );
+}
+
+export default SelfDeliverableViewModal;
