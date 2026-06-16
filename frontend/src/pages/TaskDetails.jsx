@@ -27,13 +27,11 @@ import SubmitTaskModal from "../components/SubmitTaskModal";
 import TaskSubmissionPanel from "../components/TaskSubmissionPanel";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
+import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
 import "./TaskDetails.css";
 
 function formatShortDate(value) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return formatDateTimeShort(value);
 }
 
 function timeAgo(iso) {
@@ -124,6 +122,8 @@ const [task, setTask] = useState(null);
   const [taskConfirmDialog, setTaskConfirmDialog] = useState({ open: false, type: null });
   const [taskReopenDialog, setTaskReopenDialog] = useState(false);
   const [taskActing, setTaskActing] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
 
 const source = sourcePages[location.state?.from] || null;
 
@@ -183,6 +183,8 @@ const isAssignee =
   (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10));
 
 const canSubmitTask = isAssignee && ["pending", "reopened"].includes(task?.status);
+const isApproved = task?.status?.toLowerCase() === "approved";
+const canEdit = isCreator && !isApproved;
 
 const goToTask = (id) => {
   if (!id) return;
@@ -194,7 +196,6 @@ const goToTask = (id) => {
   const assigner = task?.assigner;
   const subtasks = task?.subtasks || [];
   const project = task?.project;
-  const activities = project?.activities || [];
   const files = task?.files || [];
   const progress = typeof task?.progress_percent === "number" ? task.progress_percent : 0;
   const completedCount = subtasks.filter((t) => ["completed", "done"].includes((t.status || "").toLowerCase())).length;
@@ -205,6 +206,34 @@ const goToTask = (id) => {
     window.scrollTo({ top: 0, behavior: "smooth" });
     setTimeout(() => { setMessage(""); setMessageType(""); }, 4000);
   }, []);
+
+  useEffect(() => {
+    if (!task?.id) return;
+    const token = authToken();
+    fetch(`${API_URL}/tasks/${task.id}/my-note`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.ok ? res.json() : { note: "" })
+      .then((data) => setNoteText(data.note || ""))
+      .catch(() => {});
+  }, [task?.id]);
+
+  const saveNote = async () => {
+    if (!task?.id) return;
+    setNoteSaving(true);
+    const token = authToken();
+    try {
+      const res = await fetch(`${API_URL}/tasks/${task.id}/my-note`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ note: noteText }),
+      });
+      if (res.ok) showMessage("Note saved.");
+    } catch {
+      showMessage("Could not save note.", "error");
+    }
+    setNoteSaving(false);
+  };
 
   const handleDeliverableActionSuccess = (updatedDeliverable) => {
     setTask((prev) => {
@@ -281,7 +310,7 @@ const goToTask = (id) => {
               <div className="td-title-actions">
                 <button className="td-nav-btn" onClick={() => goToTask(prevTaskId)} disabled={!prevTaskId}><ChevronLeft size={18} /></button>
                 <button className="td-nav-btn" onClick={() => goToTask(nextTaskId)} disabled={!nextTaskId}><ChevronRight size={18} /></button>
-                {isCreator && (
+                {canEdit && (
                   <>
                     <button className="td-btn-outline" onClick={() => setShowEditModal(true)}>
                       <Pencil size={15} strokeWidth={2.5} />
@@ -292,10 +321,12 @@ const goToTask = (id) => {
                     </button>
                   </>
                 )}
-                <button className="td-btn-primary" onClick={() => setShowSubtaskModal(true)}>
-                  <Plus size={16} strokeWidth={2.5} />
-                  Add Subtask
-                </button>
+                {!isApproved && (
+                  <button className="td-btn-primary" onClick={() => setShowSubtaskModal(true)}>
+                    <Plus size={16} strokeWidth={2.5} />
+                    Add Subtask
+                  </button>
+                )}
                 {canSubmitTask && (
                   <button className="td-btn-primary" onClick={() => setTaskSubmitModalOpen(true)}>
                     <LuSend size={15} />
@@ -530,27 +561,8 @@ const goToTask = (id) => {
                 </div>
               )}
 
-              {tab === "files" && <FileUploadSection taskId={task.id} files={files} isCreator={isCreator} isAssignee={isAssignee} onFileChange={() => fetchTask(false)} />}
+              {tab === "files" && <FileUploadSection taskId={task.id} files={files} isCreator={isCreator} isAssignee={isAssignee} isApproved={isApproved} onFileChange={() => fetchTask(false)} />}
 
-              {tab === "activity" && (
-                <div>
-                  <h2 className="td-section-title">Activity</h2>
-                  {activities.length === 0 ? <p className="td-empty">No activity yet.</p> : (
-                    <ul className="td-feed">
-                      {activities.map((a) => (
-                        <li key={a.id} className="td-feed-row">
-                          <div className="td-avatar">{initials(a.user?.name)}</div>
-                          <div className="td-feed-info">
-                            <span className="td-feed-name">{a.user?.name || "System"}</span>{" "}
-                            <span className="td-feed-text">{a.summary}</span>
-                            <div className="td-feed-time">{timeAgo(a.created_at)}</div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
             </div>
           </div>
 
@@ -570,31 +582,19 @@ const goToTask = (id) => {
             <div className="td-card">
               <div className="td-card-head">
                 <h3 className="td-card-title">Notes</h3>
-                <button className="td-card-action"><Pencil size={12} /> Edit</button>
               </div>
-              <p className="td-notes">{project?.sidebar_notes || "No notes added yet."}</p>
+              <textarea
+                className="td-notes-textarea"
+                rows={4}
+                placeholder="Write your personal note here..."
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+              />
+              <button type="button" className="td-save-notes-btn" disabled={noteSaving} onClick={saveNote}>
+                {noteSaving ? "Saving…" : "Save Notes"}
+              </button>
             </div>
 
-            <div className="td-card">
-              <div className="td-card-head">
-                <h3 className="td-card-title">Activity Feed</h3>
-                <button className="td-card-action" onClick={() => setTab("activity")}>View all</button>
-              </div>
-              <ul className="td-mini-feed">
-                {activities.length === 0 ? <li className="td-empty" style={{ padding: 0 }}>No activity yet.</li> : (
-                  activities.slice(0, 3).map((a) => (
-                    <li key={a.id} className="td-mini-feed-row">
-                      <div className="td-avatar-xs">{initials(a.user?.name)}</div>
-                      <div>
-                        <span className="td-feed-name">{a.user?.name || "System"}</span>{" "}
-                        <span className="td-feed-text">{a.summary}</span>
-                        <div className="td-feed-time">{timeAgo(a.created_at)}</div>
-                      </div>
-                    </li>
-                  ))
-                )}
-              </ul>
-            </div>
           </aside>
         </div>
       </div>
@@ -663,7 +663,7 @@ const goToTask = (id) => {
 }
 
 /* ── File Upload Section Component ── */
-function FileUploadSection({ taskId, files, isCreator, isAssignee, onFileChange }) {
+function FileUploadSection({ taskId, files, isCreator, isAssignee, isApproved, onFileChange }) {
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [addingLink, setAddingLink] = useState(false);
@@ -671,7 +671,7 @@ function FileUploadSection({ taskId, files, isCreator, isAssignee, onFileChange 
   const [linkName, setLinkName] = useState("");
   const [message, setMessage] = useState("");
 
-  const canManage = isCreator || isAssignee;
+  const canManage = (isCreator || isAssignee) && !isApproved;
 
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];

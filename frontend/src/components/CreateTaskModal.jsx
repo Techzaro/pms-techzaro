@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
+import { formatDateTime, toDatetimeLocal } from "../utils/formatDateTime";
 import "./layout/CreateTaskModal.css";
 
 const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
@@ -18,12 +19,14 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     title: "",
     description: "",
     priority: "Medium",
+    start_date: "",
+    end_date: "",
   });
 
   const [requirementsList, setRequirementsList] = useState([]);
   const [reqInput, setReqInput] = useState("");
   const [deliverables, setDeliverables] = useState([]);
-  const [deliverableInput, setDeliverableInput] = useState({ title: "", due_date: "" });
+  const [deliverableInput, setDeliverableInput] = useState({ title: "", due_datetime: "" });
 
   const [pendingFiles, setPendingFiles] = useState([]);
   const [links, setLinks] = useState([]);
@@ -169,8 +172,10 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
 
   const handleAddDeliverable = () => {
     if (!deliverableInput.title.trim()) return;
-    setDeliverables((prev) => [...prev, { ...deliverableInput, title: deliverableInput.title.trim() }]);
-    setDeliverableInput({ title: "", due_date: "" });
+    const dt = deliverableInput.due_datetime;
+    const dueDate = dt ? dt.replace("T", " ") + ":00" : null;
+    setDeliverables((prev) => [...prev, { title: deliverableInput.title.trim(), due_date: dueDate }]);
+    setDeliverableInput({ title: "", due_datetime: "" });
   };
 
   const handleRemoveDeliverable = (index) => {
@@ -181,10 +186,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     if (e.key === "Enter") { e.preventDefault(); handleAddDeliverable(); }
   };
 
-  const formatDateForInput = (dateStr) => {
-    if (!dateStr) return "";
-    return dateStr;
-  };
 
   const handleFiles = (fileList) => {
     const newFiles = Array.from(fileList);
@@ -288,6 +289,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         title: form.title.trim(),
         description: form.description || null,
         requirements: requirementsList.length > 0 ? requirementsList : null,
+        start_date: form.start_date || null,
+        end_date: form.end_date || null,
         assigned_to: form.assigned_to,
         priority: form.priority,
         deliverables: deliverables.length > 0 ? deliverables.map(d => ({ title: d.title, due_date: d.due_date || null })) : undefined,
@@ -532,6 +535,20 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
               {formErrors.priority && <span className="field-error-text">{formErrors.priority}</span>}
             </div>
 
+            <div className="task-card">
+              <div className="task-card-top"><span>Due Date & Time</span></div>
+              <div className="task-deadline-grid">
+                <div>
+                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
+                  <input type="datetime-local" name="start_date" value={form.start_date} onChange={handleChange} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
+                  <input type="datetime-local" name="end_date" value={form.end_date} onChange={handleChange} />
+                </div>
+              </div>
+            </div>
+
             <div className="task-field">
               <label>Requirements</label>
               <div className="cp-goals-input-row">
@@ -588,11 +605,11 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                   />
                 </div>
                 <div className="task-field">
-                  <label style={{ fontSize: "13px" }}>Due Date</label>
+                  <label style={{ fontSize: "13px" }}>Due Date & Time</label>
                   <input
-                    type="date"
-                    value={deliverableInput.due_date}
-                    onChange={(e) => setDeliverableInput((prev) => ({ ...prev, due_date: e.target.value }))}
+                    type="datetime-local"
+                    value={deliverableInput.due_datetime}
+                    onChange={(e) => setDeliverableInput((prev) => ({ ...prev, due_datetime: e.target.value }))}
                     onKeyDown={handleDeliverableKeyDown}
                   />
                 </div>
@@ -614,7 +631,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                       <div className="task-phase-item-dot" style={{ background: "#8b5cf6" }} />
                       <div className="task-phase-item-info">
                         <div className="task-phase-item-title">{d.title}</div>
-                        <div className="task-phase-item-date">{d.due_date ? new Date(d.due_date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "No due date"}</div>
+                        <div className="task-phase-item-date">{d.due_date ? formatDateTime(d.due_date).replace("\n", " ") : "No due date"}</div>
                       </div>
                       <button
                         type="button"

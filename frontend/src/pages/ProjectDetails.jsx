@@ -38,6 +38,7 @@ import AssignerViewModal from "../components/AssignerViewModal";
 import ConfirmModal from "../components/ConfirmModal";
 import SubmitProjectModal from "../components/SubmitProjectModal";
 import ProjectSubmissionPanel from "../components/ProjectSubmissionPanel";
+import { formatDateTimeShort } from "../utils/formatDateTime";
 import "./ProjectDetails.css";
 
 import { authToken, getCurrentRole, getUser, rolePath } from "../utils/auth";
@@ -66,10 +67,7 @@ function statusSlug(status) {
  * Handle format short date.
  */
 function formatShortDate(value) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return formatDateTimeShort(value);
 }
 
 /**
@@ -161,8 +159,6 @@ function ProjectDetails() {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("overview");
-  const [notesDraft, setNotesDraft] = useState("");
-  const [notesSaving, setNotesSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -232,7 +228,6 @@ function ProjectDetails() {
     const p = data.project;
     if (!p) throw new Error("Invalid response");
     setProject(p);
-    setNotesDraft(p.sidebar_notes || "");
     return p;
   }, [projectId]);
 
@@ -282,38 +277,6 @@ function ProjectDetails() {
     } catch (err) {
       console.error(err);
       showMessage("Failed to delete task.", "error");
-    }
-  };
-
-  /**
-   * Perform the handle save notes.
-   */
-
-  /**
-   * Handle handle save notes.
-   */
-  const handleSaveNotes = async () => {
-    setNotesSaving(true);
-    try {
-      const token = authToken();
-      const res = await fetch(`${API}/projects/${projectId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ sidebar_notes: notesDraft }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Save failed");
-      setProject((prev) => ({ ...prev, ...data.project }));
-      showMessage("Notes saved.");
-    } catch (err) {
-      console.error(err);
-      showMessage(err.message || "Could not save notes.", "error");
-    } finally {
-      setNotesSaving(false);
     }
   };
 
@@ -466,20 +429,6 @@ function ProjectDetails() {
             ))}
           </ul>
         )}
-      </section>
-
-      <section className="pd-rail-card">
-        <h3 className="pd-rail-card__title">Notes</h3>
-        <textarea
-          className="pd-notes"
-          rows={5}
-          value={notesDraft}
-          onChange={(e) => setNotesDraft(e.target.value)}
-          placeholder="Client notes or internal reminders…"
-        />
-        <button type="button" className="pd-btn" disabled={notesSaving} onClick={handleSaveNotes}>
-          {notesSaving ? "Saving…" : "Save notes"}
-        </button>
       </section>
 
       <section className="pd-rail-card">

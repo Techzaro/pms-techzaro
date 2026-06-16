@@ -8,6 +8,7 @@ import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
 import ViewDeliverableModal from "../components/ViewDeliverableModal";
+import { formatDateTime } from "../utils/formatDateTime";
 import "../pages/Deliveries.css";
 
 const STATUS_COLORS = {
@@ -75,9 +76,7 @@ function Deliveries() {
   };
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return "-";
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+    return formatDateTime(dateStr);
   };
 
   const formatStatus = (status) => {
@@ -195,7 +194,7 @@ function Deliveries() {
                     </span>
                   </div>
                   <div className="date-box">
-                    <div>{formatDate(item.due_date)}</div>
+                    <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.due_date)}</div>
                   </div>
                   <div className="action-btns">
                     {(item.status === "pending" || item.status === "rejected" || item.status === "reopened") ? (

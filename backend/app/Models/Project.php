@@ -61,7 +61,7 @@ class Project extends Model
         'approved_at' => 'datetime',
         'rejected_at' => 'datetime',
         'reopened_at' => 'datetime',
-        'reopen_new_deadline' => 'date',
+        'reopen_new_deadline' => 'datetime',
     ];
 
     /**

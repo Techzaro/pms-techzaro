@@ -40,13 +40,13 @@ class Deliverable extends Model
     ];
 
     protected $casts = [
-        'due_date' => 'date',
+        'due_date' => 'datetime',
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
         'rejected_at' => 'datetime',
         'reopened_at' => 'datetime',
-        'reopen_new_deadline' => 'date',
-        'rework_new_deadline' => 'date',
+        'reopen_new_deadline' => 'datetime',
+        'rework_new_deadline' => 'datetime',
     ];
 
     public function scopeFilter(Builder $query, array $filters): Builder

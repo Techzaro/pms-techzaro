@@ -9,6 +9,7 @@ import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import CreateTaskModal from "../components/CreateTaskModal";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
+import { formatDateOnly } from "../utils/formatDateTime";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
@@ -84,9 +85,7 @@ const SelfTasks = () => {
   };
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return "-";
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+    return formatDateOnly(dateStr);
   };
 
   const formatStatus = (status) => {
@@ -195,7 +194,7 @@ const SelfTasks = () => {
           <div>Status</div>
           <div>Progress</div>
           <div>Priority</div>
-          <div>Date</div>
+          <div>Due Date</div>
           <div>Action</div>
         </div>
 
@@ -239,7 +238,7 @@ const SelfTasks = () => {
                   </div>
                   <div className="date-box">
                     <div>{formatDate(item.start_date)}</div>
-                    <div>{formatDate(item.end_date)}</div>
+                    <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
                   </div>
                   <div className="action-btns">
                     <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'self-tasks' } })}>
@@ -281,7 +280,7 @@ const SelfTasks = () => {
                 </div>
                 <div className="date-box">
                   <div>{formatDate(item.start_date)}</div>
-                  <div>{formatDate(item.end_date)}</div>
+                  <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
                 </div>
                 <div className="action-btns">
                   <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}>

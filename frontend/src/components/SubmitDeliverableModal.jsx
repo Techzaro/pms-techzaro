@@ -8,7 +8,9 @@ function formatShortDate(value) {
   if (!value) return "\u2014";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "\u2014";
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const date = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  const time = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+  return `${date} ${time}`;
 }
 
 function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess }) {

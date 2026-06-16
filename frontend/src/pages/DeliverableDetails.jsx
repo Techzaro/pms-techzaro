@@ -6,13 +6,11 @@ import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import "./TaskDetails.css";
+import { formatDateTimeShort } from "../utils/formatDateTime";
 import "./DeliverableDetails.css";
 
 function formatShortDate(value) {
-  if (!value) return "\u2014";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "\u2014";
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return formatDateTimeShort(value);
 }
 
 function timeAgo(iso) {

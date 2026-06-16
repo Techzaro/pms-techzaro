@@ -8,6 +8,7 @@ import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
 import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal";
+import { formatDateTime } from "../utils/formatDateTime";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
 
@@ -75,9 +76,7 @@ function SelfDeliveries() {
   };
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return "-";
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+    return formatDateTime(dateStr);
   };
 
   const formatStatus = (status) => {
@@ -181,7 +180,7 @@ function SelfDeliveries() {
                     </span>
                   </div>
                   <div className="date-box">
-                    <div>{formatDate(item.due_date)}</div>
+                    <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.due_date)}</div>
                   </div>
                   <div className="action-btns">
                     {canSubmit ? (

@@ -162,6 +162,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/links', [TaskController::class, 'addLink']);
     Route::delete('/tasks/{task}/files/{file}', [TaskController::class, 'deleteFile']);
 
+    // Personal user notes on tasks (private per user)
+    Route::get('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'show']);
+    Route::post('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'store']);
+
     // My tasks / Assigned by me / Self tasks
     Route::get('/my-tasks', [TaskController::class, 'myTasks']);
     Route::get('/assigned-tasks', [TaskController::class, 'assignedByMe']);

@@ -5,6 +5,8 @@ import { authToken, getUser } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
 import "./layout/CreateTaskModal.css";
 
+const padNum = (n) => String(n).padStart(2, "0");
+
 const CreateSubtaskModal = ({ parentId, projectId, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -367,9 +369,9 @@ const CreateSubtaskModal = ({ parentId, projectId, onClose }) => {
                   />
                 </div>
                 <div>
-                  <span>Due Date</span>
+                  <span>Due Date & Time</span>
                   <input
-                    type="date"
+                    type="datetime-local"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
                   />

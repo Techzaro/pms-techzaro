@@ -463,6 +463,12 @@ class TaskController extends Controller
             return response()->json(['message' => 'Unauthorized — only the task creator can edit'], 403);
         }
 
+        if (strtolower((string) $task->status) === 'approved') {
+            return response()->json([
+                'message' => 'Approved tasks cannot be edited.'
+            ], 403);
+        }
+
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'description' => 'sometimes|nullable|string',
@@ -500,6 +506,9 @@ class TaskController extends Controller
             }
         }
 
+        // Notify assignees about the update
+        $this->sendTaskUpdateNotification($task, $user);
+
         return response()->json([
             'message' => 'Task updated successfully',
             'task' => $task->fresh()->load('assignees:id,name,email,role'),
@@ -514,6 +523,12 @@ class TaskController extends Controller
 
         if (!$isCreator && !$isAssignee) {
             return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if (strtolower((string) $task->status) === 'approved') {
+            return response()->json([
+                'message' => 'Approved tasks cannot be modified.'
+            ], 403);
         }
 
         $validated = $request->validate([
@@ -593,6 +608,12 @@ class TaskController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
+        if (strtolower((string) $task->status) === 'approved') {
+            return response()->json([
+                'message' => 'Approved tasks cannot be modified.'
+            ], 403);
+        }
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -642,7 +663,11 @@ class TaskController extends Controller
 
         $validated = $request->validate([
             'comment' => 'nullable|string|max:2000',
-            'file' => 'nullable|file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif|max:51200',
+            'file' => 'nullable|file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,webp,ppt,pptx,txt|max:51200',
+            'files' => 'nullable|array',
+            'files.*' => 'file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,webp,ppt,pptx,txt|max:51200',
+            'links' => 'nullable|array',
+            'links.*' => 'url|max:2048',
         ]);
 
         $filePath = null;
@@ -654,13 +679,47 @@ class TaskController extends Controller
             $filePath = $file->store('task-submissions/' . $task->id, 'public');
         }
 
-        TaskSubmission::create([
+        $submission = TaskSubmission::create([
             'task_id' => $task->id,
             'submitted_by' => $user->id,
             'comment' => $validated['comment'] ?? null,
             'file_path' => $filePath,
             'file_name' => $fileName,
         ]);
+
+        // Handle multiple files
+        if ($request->hasFile('files')) {
+            foreach ($request->file('files') as $file) {
+                $originalName = $file->getClientOriginalName();
+                $mimeType = $file->getMimeType();
+                $path = $file->store('task-submissions/' . $task->id, 'public');
+                $isImage = str_starts_with($mimeType, 'image/');
+
+                $submission->attachments()->create([
+                    'submission_type' => 'task',
+                    'file_name' => basename($path),
+                    'original_name' => $originalName,
+                    'file_path' => $path,
+                    'file_type' => $mimeType,
+                    'file_size' => $file->getSize(),
+                    'attachment_type' => $isImage ? 'image' : 'file',
+                    'url' => '/storage/' . $path,
+                ]);
+            }
+        }
+
+        // Handle links
+        if (!empty($validated['links'])) {
+            foreach ($validated['links'] as $linkUrl) {
+                $submission->attachments()->create([
+                    'submission_type' => 'task',
+                    'file_name' => $linkUrl,
+                    'original_name' => $linkUrl,
+                    'attachment_type' => 'link',
+                    'url' => $linkUrl,
+                ]);
+            }
+        }
 
         $isResubmit = $task->status === 'reopened';
 
@@ -712,8 +771,8 @@ class TaskController extends Controller
             'task' => $task->fresh()->load([
                 'assignees:id,name,email,role',
                 'assigner:id,name',
-                'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
-                'latestSubmission' => fn ($q) => $q->with('submittedBy:id,name,email'),
+                'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
+                'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
                 'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
                 'approvedBy:id,name',
                 'rejectedBy:id,name',
@@ -1008,6 +1067,26 @@ class TaskController extends Controller
         }
     }
 
+    private function sendTaskUpdateNotification(\App\Models\Task $task, \App\Models\User $updater): void
+    {
+        $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+        foreach ($assigneeIds as $assigneeId) {
+            if ((int) $assigneeId === (int) $updater->id) {
+                continue;
+            }
+            Notification::create([
+                'user_id' => $assigneeId,
+                'sender_user_id' => $updater->id,
+                'type' => 'task_updated',
+                'related_module' => 'task',
+                'related_id' => $task->id,
+                'title' => 'Task Updated',
+                'message' => 'The task "' . $task->title . '" has been updated by ' . $updater->name . '. Please review the latest details.',
+                'link' => '/tasks/task-details/' . $task->id,
+            ]);
+        }
+    }
+
     public function destroy(Task $task)
     {
         $user = request()->user();
@@ -1037,6 +1116,12 @@ class TaskController extends Controller
 
         if (!$isCreator && !$isAssignee) {
             return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if (strtolower((string) $task->status) === 'approved') {
+            return response()->json([
+                'message' => 'Approved tasks cannot be modified.'
+            ], 403);
         }
 
         $validated = $request->validate([
@@ -1070,6 +1155,12 @@ class TaskController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
+        if (strtolower((string) $task->status) === 'approved') {
+            return response()->json([
+                'message' => 'Approved tasks cannot be modified.'
+            ], 403);
+        }
+
         $validated = $request->validate([
             'url' => 'required|url|max:2048',
             'name' => 'nullable|string|max:255',
@@ -1097,6 +1188,12 @@ class TaskController extends Controller
 
         if (!$isCreator && !$isAssignee) {
             return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if (strtolower((string) $task->status) === 'approved') {
+            return response()->json([
+                'message' => 'Approved tasks cannot be modified.'
+            ], 403);
         }
 
         if ($file->url && str_starts_with($file->url, '/storage/')) {

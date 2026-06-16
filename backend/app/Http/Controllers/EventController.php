@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Event;
+use App\Models\Notification;
 use App\Models\Task;
 use App\Models\Project;
 use App\Models\Deliverable;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -17,7 +19,6 @@ class EventController extends Controller
             ->latest('start_date')
             ->filter($request->query());
 
-        // Support non-paginated response for calendar views
         if ($request->boolean('all')) {
             $events = $query->get();
             return response()->json(['data' => $events]);
@@ -27,10 +28,6 @@ class EventController extends Controller
         return response()->json($events);
     }
 
-    /**
-     * Unified calendar that returns tasks, projects, deliverables and manual events
-     * filtered strictly by assignment or global flag.
-     */
     public function unifiedCalendar(Request $request)
     {
         $user = $request->user();
@@ -40,7 +37,6 @@ class EventController extends Controller
         
         $events = collect();
 
-        // TASKS: only tasks assigned to the user or where user is in project assigned_users or task_user pivot
         $taskQuery = Task::query()
             ->where(function ($q) use ($user) {
                 $q->where('assigned_to', $user->id)
@@ -71,7 +67,6 @@ class EventController extends Controller
 
         $tasks = $taskQuery->get();
 
-        // PROJECTS: only projects where assigned_users JSON contains user id
         $projectQuery = Project::query()
             ->whereJsonContains('assigned_users', $user->id)
             ->select(['id','title','description','start_date','end_date','assigned_users','status','priority','created_by'])
@@ -94,7 +89,6 @@ class EventController extends Controller
 
         $projects = $projectQuery->get();
 
-        // DELIVERABLES: only deliverables assigned to the user
         $deliverableQuery = Deliverable::query()
             ->where('assigned_to', $user->id)
             ->select(['id','title','description','due_date','assigned_to','created_by','project_id','task_id','status','priority','submitted_at','approved_at','rejected_at'])
@@ -110,7 +104,6 @@ class EventController extends Controller
 
         $deliverables = $deliverableQuery->get();
 
-        // Transform tasks into calendar events
         foreach ($tasks as $task) {
             $events->push([
                 'id' => 'task-' . $task->id,
@@ -134,7 +127,6 @@ class EventController extends Controller
             ]);
         }
 
-        // Transform projects into calendar events
         foreach ($projects as $project) {
             $events->push([
                 'id' => 'project-' . $project->id,
@@ -155,7 +147,6 @@ class EventController extends Controller
             ]);
         }
 
-        // Transform deliverables into calendar events
         foreach ($deliverables as $deliverable) {
             $events->push([
                 'id' => 'deliverable-' . $deliverable->id,
@@ -183,7 +174,6 @@ class EventController extends Controller
             ]);
         }
 
-        // MANUAL EVENTS: only events assigned to the user or global events
         $manualEventsQuery = Event::with(['user:id,name','assignedUsers:id']);
         $manualEventsQuery->where(function ($q) use ($user) {
             $q->where('is_global', true)
@@ -205,7 +195,6 @@ class EventController extends Controller
 
         $manualEvents = $manualEventsQuery->get();
 
-        // Transform manual events into calendar events
         foreach ($manualEvents as $event) {
             $events->push([
                 'id' => $event->id,
@@ -233,7 +222,6 @@ class EventController extends Controller
             ]);
         }
 
-        // Sort all events by date
         $allEvents = $events->sortBy('date')->values()->toArray();
 
         return response()->json([
@@ -265,7 +253,6 @@ class EventController extends Controller
     {
         $user = request()->user();
 
-        // Allow view only if global or assigned to the user
         $event->load('assignedUsers');
         if (! $event->is_global && ! $event->assignedUsers->contains('id', $user->id)) {
             return response()->json(['message' => 'Unauthorized'], 403);
@@ -310,6 +297,9 @@ class EventController extends Controller
         if (! ($validated['is_global'] ?? false) && !empty($validated['assigned_user_ids'])) {
             $event->assignedUsers()->sync($validated['assigned_user_ids']);
         }
+
+        // Send assignment notification
+        $this->sendEventNotification($event, $user, 'event_created', 'Event Assigned');
 
         return response()->json([
             'message' => 'Event created successfully',
@@ -356,6 +346,9 @@ class EventController extends Controller
             }
         }
 
+        // Send update notification
+        $this->sendEventNotification($event, $user, 'event_updated', 'Event Updated');
+
         return response()->json([
             'message' => 'Event updated successfully',
             'event' => $event->fresh()->load('user:id,name','assignedUsers:id,name'),
@@ -369,10 +362,78 @@ class EventController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
+        // Send cancellation notification before deleting
+        $this->sendEventNotification($event, $user, 'event_cancelled', 'Event Cancelled');
+
         $event->delete();
 
         return response()->json([
             'message' => 'Event deleted successfully',
         ]);
+    }
+
+    private function sendEventNotification(Event $event, User $sender, string $type, string $title): void
+    {
+        $recipientIds = $this->getEventRecipientIds($event);
+
+        foreach ($recipientIds as $recipientId) {
+            if ((int) $recipientId === (int) $sender->id) {
+                continue;
+            }
+
+            $message = $this->buildEventMessage($event, $sender, $type);
+
+            // Prevent duplicate notifications for same event and type
+            $exists = Notification::where('user_id', $recipientId)
+                ->where('type', $type)
+                ->where('related_module', 'event')
+                ->where('related_id', $event->id)
+                ->where('created_at', '>=', now()->subMinutes(5))
+                ->exists();
+
+            if ($exists) {
+                continue;
+            }
+
+            Notification::create([
+                'user_id' => $recipientId,
+                'sender_user_id' => $sender->id,
+                'type' => $type,
+                'related_module' => 'event',
+                'related_id' => $event->id,
+                'title' => $title,
+                'message' => $message,
+                'link' => '/calender',
+            ]);
+        }
+    }
+
+    private function getEventRecipientIds(Event $event): array
+    {
+        if ($event->is_global) {
+            return User::where('active', true)->pluck('id')->toArray();
+        }
+
+        $assignedIds = $event->assignedUsers()->pluck('user_id')->toArray();
+
+        if (!empty($assignedIds)) {
+            return $assignedIds;
+        }
+
+        // Fall back to creator if no assigned users
+        return [$event->user_id];
+    }
+
+    private function buildEventMessage(Event $event, User $sender, string $type): string
+    {
+        $eventTitle = $event->title;
+
+        return match ($type) {
+            'event_created' => "A new event '{$eventTitle}' has been assigned to you by {$sender->name}.",
+            'event_updated' => "The event '{$eventTitle}' has been updated. Please review the latest details.",
+            'event_cancelled' => "The event '{$eventTitle}' has been cancelled.",
+            'event_reminder' => "Reminder: '{$eventTitle}' starts soon.",
+            default => "Event notification: '{$eventTitle}'.",
+        };
     }
 }

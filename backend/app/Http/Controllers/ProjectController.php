@@ -190,8 +190,8 @@ class ProjectController extends Controller
                 $qq->where('assigned_to', $user->id)
                    ->orWhere('created_by', $user->id);
             })->with('assignee:id,name,email,role', 'latestSubmission')->latest(),
-            'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
-            'latestSubmission' => fn ($q) => $q->with('submittedBy:id,name,email'),
+            'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
+            'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
             'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
             'approvedBy:id,name',
             'rejectedBy:id,name',
@@ -304,6 +304,9 @@ class ProjectController extends Controller
                 }
             }
         }
+
+        // Notify assigned users about the update
+        $this->sendProjectUpdateNotification($project, $user);
 
         return response()->json([
             'message' => 'Project updated successfully',
@@ -543,7 +546,11 @@ class ProjectController extends Controller
 
         $validated = $request->validate([
             'comment' => 'nullable|string|max:2000',
-            'file' => 'nullable|file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif|max:51200',
+            'file' => 'nullable|file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,webp,ppt,pptx,txt|max:51200',
+            'files' => 'nullable|array',
+            'files.*' => 'file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,webp,ppt,pptx,txt|max:51200',
+            'links' => 'nullable|array',
+            'links.*' => 'url|max:2048',
         ]);
 
         $filePath = null;
@@ -555,13 +562,47 @@ class ProjectController extends Controller
             $filePath = $file->store('project-submissions/' . $project->id, 'public');
         }
 
-        ProjectSubmission::create([
+        $submission = ProjectSubmission::create([
             'project_id' => $project->id,
             'submitted_by' => $user->id,
             'comment' => $validated['comment'] ?? null,
             'file_path' => $filePath,
             'file_name' => $fileName,
         ]);
+
+        // Handle multiple files
+        if ($request->hasFile('files')) {
+            foreach ($request->file('files') as $file) {
+                $originalName = $file->getClientOriginalName();
+                $mimeType = $file->getMimeType();
+                $path = $file->store('project-submissions/' . $project->id, 'public');
+                $isImage = str_starts_with($mimeType, 'image/');
+
+                $submission->attachments()->create([
+                    'submission_type' => 'project',
+                    'file_name' => basename($path),
+                    'original_name' => $originalName,
+                    'file_path' => $path,
+                    'file_type' => $mimeType,
+                    'file_size' => $file->getSize(),
+                    'attachment_type' => $isImage ? 'image' : 'file',
+                    'url' => '/storage/' . $path,
+                ]);
+            }
+        }
+
+        // Handle links
+        if (!empty($validated['links'])) {
+            foreach ($validated['links'] as $linkUrl) {
+                $submission->attachments()->create([
+                    'submission_type' => 'project',
+                    'file_name' => $linkUrl,
+                    'original_name' => $linkUrl,
+                    'attachment_type' => 'link',
+                    'url' => $linkUrl,
+                ]);
+            }
+        }
 
         $isResubmit = $project->status === 'reopened';
 
@@ -912,6 +953,29 @@ class ProjectController extends Controller
                 'due_date' => !empty($row['due_date']) ? $row['due_date'] : null,
                 'status' => $row['status'] ?? 'planned',
                 'sort_order' => $index,
+            ]);
+        }
+    }
+
+    private function sendProjectUpdateNotification(Project $project, User $updater): void
+    {
+        $assignedUserIds = $project->assigned_users ?? [];
+        if (is_string($assignedUserIds)) {
+            $assignedUserIds = json_decode($assignedUserIds, true) ?? [];
+        }
+        foreach ($assignedUserIds as $assignedId) {
+            if ((int) $assignedId === (int) $updater->id) {
+                continue;
+            }
+            Notification::create([
+                'user_id' => $assignedId,
+                'sender_user_id' => $updater->id,
+                'type' => 'project_updated',
+                'related_module' => 'project',
+                'related_id' => $project->id,
+                'title' => 'Project Updated',
+                'message' => 'The project "' . $project->title . '" has been updated by ' . $updater->name . '. Please review the latest details.',
+                'link' => '/projects/project-details/' . $project->id,
             ]);
         }
     }

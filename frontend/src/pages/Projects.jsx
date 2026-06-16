@@ -10,6 +10,7 @@ import { GoDotFill } from "react-icons/go";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import "./Projects.css";
+import { formatDateTime } from "../utils/formatDateTime";
 import "../pages/Task.css";
 
 function Projects() {
@@ -324,7 +325,7 @@ function Projects() {
                       <span className="date-icon">📅</span>
                       {project.end_date ? (
                         <span>
-                          {new Date(project.end_date).toLocaleDateString()}
+                          {formatDateTime(project.end_date).replace("\n", " ")}
                         </span>
                       ) : (
                         <span>No deadline set</span>

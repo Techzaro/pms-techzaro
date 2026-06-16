@@ -71,6 +71,7 @@ class DeliverableController extends Controller
             'task:id,title',
             'latestSubmission',
             'latestSubmission.submittedBy:id,name,email',
+            'latestSubmission.attachments',
             'reopenedBy:id,name',
         ]);
 
@@ -104,6 +105,7 @@ class DeliverableController extends Controller
             'task:id,title',
             'latestSubmission',
             'latestSubmission.submittedBy:id,name,email',
+            'latestSubmission.attachments',
         ])
             ->where('assigned_to', $user->id)
             ->where('created_by', $user->id)
@@ -133,8 +135,8 @@ class DeliverableController extends Controller
             'creator:id,name,email',
             'task:id,title,assigned_by',
             'task.assigner:id,name,email',
-            'submissions' => fn($q) => $q->with('submittedBy:id,name,email')->latest(),
-            'latestSubmission' => fn($q) => $q->with('submittedBy:id,name,email'),
+            'submissions' => fn($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
+            'latestSubmission' => fn($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
             'workflowEvents' => fn($q) => $q->with('user:id,name,email'),
             'approvedBy:id,name',
             'rejectedBy:id,name',
@@ -217,6 +219,20 @@ class DeliverableController extends Controller
 
         $deliverable->update($validated);
 
+        // Notify assignee about the update
+        if ($deliverable->assigned_to && $deliverable->assigned_to !== $user->id) {
+            Notification::create([
+                'user_id' => $deliverable->assigned_to,
+                'sender_user_id' => $user->id,
+                'type' => 'deliverable_updated',
+                'related_module' => 'deliverable',
+                'related_id' => $deliverable->id,
+                'title' => 'Deliverable Updated',
+                'message' => 'The deliverable "' . $deliverable->title . '" has been updated by ' . $user->name . '. Please review the latest details.',
+                'link' => '/deliveries/deliverable-details/' . $deliverable->id,
+            ]);
+        }
+
         return response()->json([
             'message' => 'Deliverable updated successfully',
             'deliverable' => $deliverable->fresh()->load(['assignee:id,name,email,role', 'creator:id,name']),
@@ -260,7 +276,11 @@ class DeliverableController extends Controller
 
         $validated = $request->validate([
             'comment' => 'nullable|string|max:2000',
-            'file' => 'nullable|file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif|max:51200',
+            'file' => 'nullable|file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,webp,ppt,pptx,txt|max:51200',
+            'files' => 'nullable|array',
+            'files.*' => 'file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,webp,ppt,pptx,txt|max:51200',
+            'links' => 'nullable|array',
+            'links.*' => 'url|max:2048',
         ]);
 
         $filePath = null;
@@ -272,13 +292,47 @@ class DeliverableController extends Controller
             $filePath = $file->store('deliverable-submissions/' . $deliverable->id, 'public');
         }
 
-        DeliverableSubmission::create([
+        $submission = DeliverableSubmission::create([
             'deliverable_id' => $deliverable->id,
             'submitted_by' => $user->id,
             'comment' => $validated['comment'] ?? null,
             'file_path' => $filePath,
             'file_name' => $fileName,
         ]);
+
+        // Handle multiple files
+        if ($request->hasFile('files')) {
+            foreach ($request->file('files') as $file) {
+                $originalName = $file->getClientOriginalName();
+                $mimeType = $file->getMimeType();
+                $path = $file->store('deliverable-submissions/' . $deliverable->id, 'public');
+                $isImage = str_starts_with($mimeType, 'image/');
+
+                $submission->attachments()->create([
+                    'submission_type' => 'deliverable',
+                    'file_name' => basename($path),
+                    'original_name' => $originalName,
+                    'file_path' => $path,
+                    'file_type' => $mimeType,
+                    'file_size' => $file->getSize(),
+                    'attachment_type' => $isImage ? 'image' : 'file',
+                    'url' => '/storage/' . $path,
+                ]);
+            }
+        }
+
+        // Handle links
+        if (!empty($validated['links'])) {
+            foreach ($validated['links'] as $linkUrl) {
+                $submission->attachments()->create([
+                    'submission_type' => 'deliverable',
+                    'file_name' => $linkUrl,
+                    'original_name' => $linkUrl,
+                    'attachment_type' => 'link',
+                    'url' => $linkUrl,
+                ]);
+            }
+        }
 
         $updateData = [
             'status' => 'submitted',
@@ -327,8 +381,8 @@ class DeliverableController extends Controller
             'deliverable' => $deliverable->fresh()->load([
                 'assignee:id,name,email,role',
                 'creator:id,name',
-                'submissions' => fn($q) => $q->with('submittedBy:id,name,email')->latest(),
-                'latestSubmission' => fn($q) => $q->with('submittedBy:id,name,email'),
+                'submissions' => fn($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
+                'latestSubmission' => fn($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
             ]),
         ]);
     }

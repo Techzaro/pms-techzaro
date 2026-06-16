@@ -12,10 +12,7 @@ function formatDateTime(value) {
 }
 
 function formatDateShort(value) {
-  if (!value) return "\u2014";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "\u2014";
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return formatDateTime(value);
 }
 
 function actionLabel(action) {

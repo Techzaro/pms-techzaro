@@ -7,13 +7,6 @@ import ConfirmationDialog from "./ConfirmationDialog";
 import ReopenDialog from "./ReopenDialog";
 import "./AssignerViewModal.css";
 
-function formatDate(value) {
-  if (!value) return "\u2014";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "\u2014";
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
 function formatDateTime(value) {
   if (!value) return "\u2014";
   const d = new Date(value);
@@ -104,7 +97,7 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
             <span className={`avm-status-badge avm-status-${deliverable.status}`}>{statusLabel}</span>
           </div>
           {deliverable.due_date && (
-            <div className="avm-due">Due Date {formatDate(deliverable.due_date)}</div>
+            <div className="avm-due">Due Date & Time {formatDateTime(deliverable.due_date)}</div>
           )}
         </div>
 
@@ -216,7 +209,7 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
               {deliverable.reopen_new_deadline && (
                 <div className="avm-detail-item" style={{ marginTop: "12px" }}>
                   <span className="avm-detail-label">New Deadline</span>
-                  <span className="avm-detail-value">{formatDate(deliverable.reopen_new_deadline)}</span>
+                  <span className="avm-detail-value">{formatDateTime(deliverable.reopen_new_deadline)}</span>
                 </div>
               )}
             </div>

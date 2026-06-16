@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
+import { formatDateTime, toDatetimeLocal } from "../utils/formatDateTime";
 import "./layout/CreateProjectModal.css";
 
 const PRESET_PHASES = [
@@ -34,7 +35,7 @@ const EditProjectModal = ({ project, onClose }) => {
     if (project?.milestones && project.milestones.length > 0) {
       return project.milestones.map((m) => ({
         title: m.title,
-        due_date: m.due_date ? m.due_date.split("T")[0] : "",
+        due_date: m.due_date ? toDatetimeLocal(m.due_date) : "",
         status: m.status || "planned",
       }));
     }
@@ -61,7 +62,7 @@ const EditProjectModal = ({ project, onClose }) => {
   const [links, setLinks] = useState([]);
   const [linkInput, setLinkInput] = useState("");
   const [deliverablesProj, setDeliverablesProj] = useState([]);
-  const [deliverableProjInput, setDeliverableProjInput] = useState({ title: "", due_date: "" });
+  const [deliverableProjInput, setDeliverableProjInput] = useState({ title: "", due_datetime: "" });
   const fileInputRef = useRef(null);
   const dropRef = useRef(null);
 
@@ -122,7 +123,10 @@ const EditProjectModal = ({ project, onClose }) => {
 
   const handleAddPhase = () => {
     if (!phaseName.trim() || !phaseDate) return;
-    setMilestones((prev) => [...prev, { title: phaseName.trim(), due_date: phaseDate, status: "planned" }]);
+    const dt = new Date(phaseDate);
+    const pad = (n) => String(n).padStart(2, "0");
+    const formattedDt = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}:00`;
+    setMilestones((prev) => [...prev, { title: phaseName.trim(), due_date: formattedDt, status: "planned" }]);
     setPhaseName("");
     setPhaseDate("");
   };
@@ -151,8 +155,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
   const formatDateDisplay = (dateStr) => {
     if (!dateStr) return "";
-    const d = new Date(dateStr + "T00:00:00");
-    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    return formatDateTime(dateStr).replace("\n", " ");
   };
 
   const handleFiles = (fileList) => {
@@ -203,8 +206,10 @@ const EditProjectModal = ({ project, onClose }) => {
 
   const handleAddDeliverableProj = () => {
     if (!deliverableProjInput.title.trim()) return;
-    setDeliverablesProj((prev) => [...prev, { ...deliverableProjInput, title: deliverableProjInput.title.trim() }]);
-    setDeliverableProjInput({ title: "", due_date: "" });
+    const dt = deliverableProjInput.due_datetime;
+    const dueDate = dt ? dt.replace("T", " ") + ":00" : null;
+    setDeliverablesProj((prev) => [...prev, { title: deliverableProjInput.title.trim(), due_date: dueDate }]);
+    setDeliverableProjInput({ title: "", due_datetime: "" });
   };
 
   const handleRemoveDeliverableProj = (index) => {
@@ -572,9 +577,9 @@ const EditProjectModal = ({ project, onClose }) => {
                   </datalist>
                 </div>
                 <div className="cp-field">
-                  <label style={{ fontSize: "13px" }}>Due Date</label>
+                  <label style={{ fontSize: "13px" }}>Due Date & Time</label>
                   <input
-                    type="date"
+                    type="datetime-local"
                     value={phaseDate}
                     onChange={(e) => setPhaseDate(e.target.value)}
                     onKeyDown={handlePhaseKeyDown}
@@ -638,11 +643,11 @@ const EditProjectModal = ({ project, onClose }) => {
                   />
                 </div>
                 <div className="cp-field">
-                  <label style={{ fontSize: "13px" }}>Due Date</label>
+                  <label style={{ fontSize: "13px" }}>Due Date & Time</label>
                   <input
-                    type="date"
-                    value={deliverableProjInput.due_date}
-                    onChange={(e) => setDeliverableProjInput((prev) => ({ ...prev, due_date: e.target.value }))}
+                    type="datetime-local"
+                    value={deliverableProjInput.due_datetime}
+                    onChange={(e) => setDeliverableProjInput((prev) => ({ ...prev, due_datetime: e.target.value }))}
                     onKeyDown={handleDeliverableProjKeyDown}
                   />
                 </div>
@@ -664,7 +669,7 @@ const EditProjectModal = ({ project, onClose }) => {
                       <div className="cp-phase-item-dot" style={{ background: "#8b5cf6" }} />
                       <div className="cp-phase-item-info">
                         <div className="cp-phase-item-title">{d.title}</div>
-                        <div className="cp-phase-item-date">{d.due_date ? new Date(d.due_date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "No due date"}</div>
+                        <div className="cp-phase-item-date">{d.due_date ? formatDateTime(d.due_date).replace("\n", " ") : "No due date"}</div>
                       </div>
                       <button
                         type="button"

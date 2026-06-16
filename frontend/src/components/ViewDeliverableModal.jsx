@@ -12,13 +12,6 @@ function formatDateTime(value) {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function formatDateShort(value) {
-  if (!value) return "\u2014";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "\u2014";
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
 function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess }) {
   const [submission, setSubmission] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -89,7 +82,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
             <div className="vd-meta">
               <span className={`vd-status-badge vd-status-${deliverable.status || "pending"}`}>{statusLabel}</span>
               {deliverable.due_date && (
-                <span className="vd-due-date">Due Date {formatDateShort(deliverable.due_date)}</span>
+                <span className="vd-due-date">Due Date & Time {formatDateTime(deliverable.due_date)}</span>
               )}
             </div>
           </div>
@@ -129,7 +122,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
                   {deliverable.reopen_new_deadline && (
                     <div className="vd-detail-item" style={{ marginTop: "12px" }}>
                       <span className="vd-detail-label">New Deadline</span>
-                      <span className="vd-detail-value">{formatDateShort(deliverable.reopen_new_deadline)}</span>
+                      <span className="vd-detail-value">{formatDateTime(deliverable.reopen_new_deadline)}</span>
                     </div>
                   )}
                 </div>

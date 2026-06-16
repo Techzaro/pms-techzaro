@@ -23,21 +23,28 @@ function formatTime(dateStr) {
 
 const TYPE_ICONS = {
   project_assigned: { icon: "folder", bg: "#ede9fe", color: "#7c3aed" },
+  project_updated: { icon: "edit", bg: "#dbeafe", color: "#2563eb" },
   project_submitted: { icon: "upload", bg: "#dbeafe", color: "#2563eb" },
   project_approved: { icon: "check", bg: "#d1fae5", color: "#059669" },
   project_rejected: { icon: "x", bg: "#fee2e2", color: "#dc2626" },
   project_reopened: { icon: "refresh", bg: "#fef3c7", color: "#d97706" },
   task_assigned: { icon: "task", bg: "#ede9fe", color: "#7c3aed" },
+  task_updated: { icon: "edit", bg: "#dbeafe", color: "#2563eb" },
   task_submitted: { icon: "upload", bg: "#dbeafe", color: "#2563eb" },
   task_completed: { icon: "done", bg: "#d1fae5", color: "#059669" },
   task_approved: { icon: "check", bg: "#d1fae5", color: "#059669" },
   task_rejected: { icon: "x", bg: "#fee2e2", color: "#dc2626" },
   task_reopened: { icon: "refresh", bg: "#fef3c7", color: "#d97706" },
   deliverable_assigned: { icon: "deliverable", bg: "#ede9fe", color: "#7c3aed" },
+  deliverable_updated: { icon: "edit", bg: "#dbeafe", color: "#2563eb" },
   deliverable_submitted: { icon: "upload", bg: "#dbeafe", color: "#2563eb" },
   deliverable_approved: { icon: "check", bg: "#d1fae5", color: "#059669" },
   deliverable_rejected: { icon: "x", bg: "#fee2e2", color: "#dc2626" },
   deliverable_reopened: { icon: "refresh", bg: "#fef3c7", color: "#d97706" },
+  event_created: { icon: "calendar", bg: "#ede9fe", color: "#7c3aed" },
+  event_updated: { icon: "calendar", bg: "#dbeafe", color: "#2563eb" },
+  event_cancelled: { icon: "calendar", bg: "#fee2e2", color: "#dc2626" },
+  event_reminder: { icon: "alarm", bg: "#fef3c7", color: "#d97706" },
 };
 
 function TypeIcon({ type }) {
@@ -100,6 +107,28 @@ function TypeIcon({ type }) {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+      )}
+      {cfg.icon === "calendar" && (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+      )}
+      {cfg.icon === "alarm" && (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="13" r="8" />
+          <polyline points="12 9 12 13 15 15" />
+          <line x1="3" y1="3" x2="6" y2="6" />
+          <line x1="21" y1="3" x2="18" y2="6" />
+        </svg>
+      )}
+      {cfg.icon === "edit" && (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
         </svg>
       )}
     </div>
