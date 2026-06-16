@@ -13,22 +13,18 @@ import "../pages/Task.css";
 
 const STATUS_COLORS = {
   pending: "#FEF3C7",
-  in_progress: "#DBEAFE",
-  review: "#EDE9FE",
-  completed: "#DCFCE7",
-  done: "#DCFCE7",
-  failed: "#FEE2E2",
-  abandoned: "#F3F4F6",
+  submitted: "#DBEAFE",
+  reopened: "#EDE9FE",
+  approved: "#DCFCE7",
+  rejected: "#FEE2E2",
 };
 
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
-  in_progress: "#1E40AF",
-  review: "#5B21B6",
-  completed: "#166534",
-  done: "#166534",
-  failed: "#991B1B",
-  abandoned: "#374151",
+  submitted: "#1E40AF",
+  reopened: "#5B21B6",
+  approved: "#166534",
+  rejected: "#991B1B",
 };
 
 const PRIORITY_COLORS = {
@@ -96,12 +92,10 @@ const SelfTasks = () => {
   const formatStatus = (status) => {
     const map = {
       pending: "Pending",
-      in_progress: "In Progress",
-      review: "Review",
-      completed: "Completed",
-      done: "Done",
-      failed: "Failed",
-      abandoned: "Abandoned",
+      submitted: "Submitted",
+      reopened: "Reopened",
+      approved: "Approved",
+      rejected: "Rejected",
     };
     return map[status] || status;
   };
@@ -113,19 +107,13 @@ const SelfTasks = () => {
     return Math.round((completed / total) * 100);
   };
 
-  const calculateProjectStatus = (item) => {
-    const progress = calculateProgress(item);
-    const endDate = item.end_date ? new Date(item.end_date) : null;
-    const now = new Date();
-    if (progress === 100) return "Completed";
-    if (endDate && now > endDate) return "Failed";
-    return "In Progress";
-  };
 
   const filteredItems = statusFilter
     ? items.filter((item) => {
         if (item.item_type === "project") {
-          return calculateProjectStatus(item).toLowerCase().replace(/\s+/g, "_") === statusFilter;
+          const workflowStatuses = ["submitted","approved","rejected","reopened"];
+          const displayStatus = workflowStatuses.includes(item.status) ? item.status : "pending";
+          return displayStatus === statusFilter;
         }
         return item.status === statusFilter;
       })
@@ -176,17 +164,17 @@ const SelfTasks = () => {
         <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => setStatusFilter("pending")} style={{ cursor: "pointer" }}>
           <GoDotFill color={STATUS_COLORS.pending} /> Pending
         </p>
-        <p className={`Progress ${statusFilter === "in_progress" ? "active" : ""}`} onClick={() => setStatusFilter("in_progress")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.in_progress} /> In Progress
+        <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
+          <GoDotFill color={STATUS_COLORS.submitted} /> Submitted
         </p>
-        <p className={`Completed ${statusFilter === "completed" ? "active" : ""}`} onClick={() => setStatusFilter("completed")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.completed} /> Completed
+        <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => setStatusFilter("reopened")} style={{ cursor: "pointer" }}>
+          <GoDotFill color={STATUS_COLORS.reopened} /> Reopened
         </p>
-        <p className={`Failed ${statusFilter === "failed" ? "active" : ""}`} onClick={() => setStatusFilter("failed")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.failed} /> Failed
+        <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
+          <GoDotFill color={STATUS_COLORS.approved} /> Approved
         </p>
-        <p className={`Aban ${statusFilter === "abandoned" ? "active" : ""}`} onClick={() => setStatusFilter("abandoned")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.abandoned} /> Abandoned
+        <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => setStatusFilter("rejected")} style={{ cursor: "pointer" }}>
+          <GoDotFill color={STATUS_COLORS.rejected} /> Rejected
         </p>
       </div>
 
@@ -220,7 +208,6 @@ const SelfTasks = () => {
             const isProject = item.item_type === "project";
 
             if (isProject) {
-              const projectStatus = calculateProjectStatus(item);
               return (
                 <div className="taskby-row-compact" key={`project-${item.id}`}>
                   <div>
@@ -232,9 +219,9 @@ const SelfTasks = () => {
                     </span>
                   </div>
                   <div>
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
-                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                      {projectStatus}
+                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || (item.status !== "Planned" && item.status !== "in_progress" ? "#F3F4F6" : "#FEF3C7"), color: STATUS_TEXT_COLORS[item.status] || (item.status !== "Planned" && item.status !== "in_progress" ? "#374151" : "#92400E") }}>
+                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || (item.status !== "Planned" && item.status !== "in_progress" ? "#374151" : "#92400E") }}></span>
+                      {["submitted","approved","rejected","reopened"].includes(item.status) ? formatStatus(item.status) : "Pending"}
                     </span>
                   </div>
                   <div>

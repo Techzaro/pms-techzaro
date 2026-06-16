@@ -400,10 +400,13 @@ function Header() {
 
           {/* NOTIFICATIONS */}
           <div className="header-notif">
-            <Link to={rolePath("notifications")}>
-            <button>
-              <MdNotifications fontSize={"22px"} color="#6b7280" />
-            </button>
+            <Link to={rolePath("notifications")} className="header-notif-link">
+              <div className="header-notif-icon-wrap">
+                <MdNotifications fontSize={"22px"} color="#6b7280" />
+                {unreadCount > 0 && (
+                  <span className="header-notif-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
+                )}
+              </div>
             </Link>
           </div>
 

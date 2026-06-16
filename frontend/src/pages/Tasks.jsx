@@ -1,14 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
-import { CiCalendar } from "react-icons/ci";
-import { IoIosArrowDown } from "react-icons/io";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
-import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
+import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import CreateTaskModal from "../components/CreateTaskModal";
-import ConfirmCompleteModal from "../components/ConfirmCompleteModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
@@ -17,29 +14,17 @@ import "../pages/Task.css";
 const STATUS_COLORS = {
   pending: "#FEF3C7",
   submitted: "#DBEAFE",
-  reopened: "#FEF3C7",
+  reopened: "#EDE9FE",
   approved: "#DCFCE7",
   rejected: "#FEE2E2",
-  in_progress: "#DBEAFE",
-  review: "#EDE9FE",
-  completed: "#DCFCE7",
-  done: "#DCFCE7",
-  failed: "#FEE2E2",
-  abandoned: "#F3F4F6",
 };
 
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
   submitted: "#1E40AF",
-  reopened: "#92400E",
+  reopened: "#5B21B6",
   approved: "#166534",
   rejected: "#991B1B",
-  in_progress: "#1E40AF",
-  review: "#5B21B6",
-  completed: "#166534",
-  done: "#166534",
-  failed: "#991B1B",
-  abandoned: "#374151",
 };
 
 const PRIORITY_COLORS = {
@@ -63,7 +48,6 @@ function Tasks() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
-  const [confirmTask, setConfirmTask] = useState(null);
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
 
   useEffect(() => {
@@ -99,75 +83,6 @@ function Tasks() {
     if (refresh) fetchTasks();
   };
 
-  const handleCompleteTask = (item) => {
-    const token = authToken();
-    console.log("handleCompleteTask: item", item);
-
-    if (item._isProject) {
-      const url = `${API_URL}/projects/${item.id}/complete`;
-      console.log("handleCompleteTask: completing project", url);
-      fetch(url, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        skipLoader: true,
-      })
-        .then((res) => {
-          console.log("handleCompleteTask: project response", res.status);
-          if (!res.ok) return res.json().then(d => { throw new Error(d.message || "Failed"); });
-          return res.json();
-        })
-        .then((data) => {
-          console.log("handleCompleteTask: project success", data);
-          setConfirmTask(null);
-          setItems(prev => prev.map(p =>
-            p.item_type === "project" && p.id === data.project?.id
-              ? { ...p, ...data.project, item_type: p.item_type }
-              : p
-          ));
-        })
-        .catch((err) => {
-          console.error("handleCompleteTask: project error", err);
-          alert(err.message || "Failed to complete project");
-          setConfirmTask(null);
-        });
-    } else {
-      const url = `${API_URL}/tasks/${item.id}/complete`;
-      console.log("handleCompleteTask: completing task", url);
-      fetch(url, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        skipLoader: true,
-      })
-        .then((res) => {
-          console.log("handleCompleteTask: task response", res.status);
-          if (!res.ok) return res.json().then(d => { throw new Error(d.message || "Failed"); });
-          return res.json();
-        })
-        .then((data) => {
-          console.log("handleCompleteTask: task success", data);
-          setConfirmTask(null);
-          setItems(prev => prev.map(t =>
-            t.item_type !== "project" && t.id === data.task?.id
-              ? { ...t, ...data.task, item_type: t.item_type }
-              : t
-          ));
-        })
-        .catch((err) => {
-          console.error("handleCompleteTask: task error", err);
-          alert(err.message || "Failed to complete task");
-          setConfirmTask(null);
-        });
-    }
-  };
-
   const getInitials = (name) => {
     if (!name) return "??";
     return name.split(" ").map((w) => w[0]).join("").substring(0, 2).toUpperCase();
@@ -198,12 +113,6 @@ function Tasks() {
       reopened: "Reopened",
       approved: "Approved",
       rejected: "Rejected",
-      in_progress: "In Progress",
-      review: "Review",
-      completed: "Completed",
-      done: "Done",
-      failed: "Failed",
-      abandoned: "Abandoned",
     };
     return map[status] || status;
   };
@@ -225,20 +134,12 @@ function Tasks() {
     return Math.round((completed / total) * 100);
   };
 
-  const calculateProjectStatus = (item) => {
-    if (item.status === "completed" || item.status === "done") return "Completed";
-    const progress = calculateProgress(item);
-    const endDate = item.end_date ? new Date(item.end_date) : null;
-    const now = new Date();
-    if (progress === 100) return "Completed";
-    if (endDate && now > endDate) return "Failed";
-    return "In Progress";
-  };
-
   const filteredItems = statusFilter
     ? items.filter((item) => {
         if (item.item_type === "project") {
-          return calculateProjectStatus(item).toLowerCase().replace(/\s+/g, "_") === statusFilter;
+          const workflowStatuses = ["submitted","approved","rejected","reopened"];
+          const displayStatus = workflowStatuses.includes(item.status) ? item.status : "pending";
+          return displayStatus === statusFilter;
         }
         return item.status === statusFilter;
       })
@@ -338,7 +239,6 @@ function Tasks() {
             const colors = getRandomColors(item.id);
 
             if (isProject) {
-              const projectStatus = calculateProjectStatus(item);
               return (
                 <div className="taskby-row" key={`project-${item.id}`}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -359,9 +259,9 @@ function Tasks() {
                     </span>
                   </div>
                   <div>
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
-                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                      {projectStatus}
+                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || (item.status !== "Planned" && item.status !== "in_progress" ? "#F3F4F6" : "#FEF3C7"), color: STATUS_TEXT_COLORS[item.status] || (item.status !== "Planned" && item.status !== "in_progress" ? "#374151" : "#92400E") }}>
+                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || (item.status !== "Planned" && item.status !== "in_progress" ? "#374151" : "#92400E") }}></span>
+                      {["submitted","approved","rejected","reopened"].includes(item.status) ? formatStatus(item.status) : "Pending"}
                     </span>
                   </div>
                   <div>
@@ -385,15 +285,6 @@ function Tasks() {
                     <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'tasks' } })}>
                       <IoEyeOutline />
                     </button>
-                    {item.status !== "completed" && item.status !== "done" ? (
-                      <button className="action-icon-btn action-complete" title="Complete Project" onClick={() => setConfirmTask({ ...item, _isProject: true })}>
-                        <IoCheckmarkCircle />
-                      </button>
-                    ) : (
-                      <button className="action-icon-btn action-completed" title="Completed">
-                        <IoCheckmarkCircle />
-                      </button>
-                    )}
                   </div>
                 </div>
               );
@@ -451,30 +342,12 @@ function Tasks() {
                       <LuSend />
                     </button>
                   )}
-                  {item.status !== "completed" && item.status !== "done" ? (
-                    <button className="action-icon-btn action-complete" title="Complete Task" onClick={() => setConfirmTask(item)}>
-                      <IoCheckmarkCircle />
-                    </button>
-                  ) : (
-                    <button className="action-icon-btn action-completed" title="Completed">
-                      <IoCheckmarkCircle />
-                    </button>
-                  )}
                 </div>
               </div>
             );
           })
         )}
       </div>
-
-      {confirmTask && (
-        <ConfirmCompleteModal
-          taskTitle={confirmTask.title}
-          isProject={confirmTask._isProject}
-          onConfirm={() => handleCompleteTask(confirmTask)}
-          onCancel={() => setConfirmTask(null)}
-        />
-      )}
 
       <SubmitTaskModal
         key={`tasks-submit-${submitTaskModal.task?.id || "none"}`}

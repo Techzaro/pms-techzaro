@@ -36,6 +36,19 @@ class Project extends Model
         'start_date',
         'end_date',
         'created_by',
+        'submitted_at',
+        'approved_at',
+        'rejected_at',
+        'rejection_comment',
+        'approved_by',
+        'rejected_by',
+        'reopened_at',
+        'reopened_by',
+        'reopen_comment',
+        'reopen_instructions',
+        'reopen_new_deadline',
+        'reopen_file_path',
+        'reopen_file_name',
     ];
 
     protected $casts = [
@@ -44,6 +57,11 @@ class Project extends Model
         'start_date' => 'datetime',
         'end_date' => 'datetime',
         'budget' => 'decimal:2',
+        'submitted_at' => 'datetime',
+        'approved_at' => 'datetime',
+        'rejected_at' => 'datetime',
+        'reopened_at' => 'datetime',
+        'reopen_new_deadline' => 'date',
     ];
 
     /**
@@ -112,6 +130,45 @@ class Project extends Model
     public function manuallyVisibleTo()
     {
         return $this->hasMany(ProjectVisibility::class)->where('is_visible', true);
+    }
+
+    /**
+     * Project submissions (workflow).
+     */
+    public function submissions()
+    {
+        return $this->hasMany(ProjectSubmission::class);
+    }
+
+    /**
+     * Latest submission for the project.
+     */
+    public function latestSubmission()
+    {
+        return $this->hasOne(ProjectSubmission::class)->latestOfMany();
+    }
+
+    /**
+     * Workflow events (submit, approve, reject, reopen).
+     */
+    public function workflowEvents()
+    {
+        return $this->hasMany(ProjectWorkflowEvent::class)->latest();
+    }
+
+    public function approvedBy()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function rejectedBy()
+    {
+        return $this->belongsTo(User::class, 'rejected_by');
+    }
+
+    public function reopenedBy()
+    {
+        return $this->belongsTo(User::class, 'reopened_by');
     }
 
     /**

@@ -476,6 +476,10 @@
   .All,
   .Pending,
   .Progress,
+  .Submitted,
+  .Reopened,
+  .Approved,
+  .Rejected,
   .Completed,
   .Failed,
   .Aban {
@@ -548,6 +552,10 @@
   .All,
   .Pending,
   .Progress,
+  .Submitted,
+  .Reopened,
+  .Approved,
+  .Rejected,
   .Completed,
   .Failed,
   .Aban {
@@ -593,6 +601,10 @@
   .All,
   .Pending,
   .Progress,
+  .Submitted,
+  .Reopened,
+  .Approved,
+  .Rejected,
   .Completed,
   .Failed,
   .Aban {
@@ -686,6 +698,10 @@
   .All,
   .Pending,
   .Progress,
+  .Submitted,
+  .Reopened,
+  .Approved,
+  .Rejected,
   .Completed,
   .Failed,
   .Aban {

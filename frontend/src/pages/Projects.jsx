@@ -3,10 +3,14 @@ import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CreateProjectModal from "../components/CreateProjectModal";
+import SubmitProjectModal from "../components/SubmitProjectModal";
 import { IoSearchOutline, IoEyeOutline, IoClose } from "react-icons/io5";
+import { LuSend } from "react-icons/lu";
+import { GoDotFill } from "react-icons/go";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import "./Projects.css";
+import "../pages/Task.css";
 
 function Projects() {
   const [projects, setProjects] = useState([]);
@@ -14,10 +18,12 @@ function Projects() {
   const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [visibilityProject, setVisibilityProject] = useState(null);
   const [visibilityUsers, setVisibilityUsers] = useState([]);
   const [visibilitySelected, setVisibilitySelected] = useState({});
   const [visibilitySaving, setVisibilitySaving] = useState(false);
+  const [submitProjectModal, setSubmitProjectModal] = useState({ open: false, project: null });
 
   const navigate = useNavigate();
 
@@ -163,9 +169,42 @@ function Projects() {
     }
   };
 
-  const filteredProjects = projects.filter((project) =>
-    project.title?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const formatStatus = (status) => {
+    const map = {
+      pending: "Pending",
+      submitted: "Submitted",
+      reopened: "Reopened",
+      approved: "Approved",
+      rejected: "Rejected",
+    };
+    return map[status] || status;
+  };
+
+  const canSubmitProject = (project) => {
+    return project.status === "pending" || project.status === "reopened" || project.status === "Planned" || project.status === "in_progress";
+  };
+
+  const handleProjectSubmitSuccess = (updatedProject) => {
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === updatedProject.id ? { ...p, ...updatedProject } : p
+      )
+    );
+  };
+
+  const filteredProjects = projects.filter((project) => {
+    if (searchQuery && !project.title?.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+    if (statusFilter) {
+      if (statusFilter === "pending" && project.status !== "pending" && project.status !== "Planned" && project.status !== "in_progress") return false;
+      if (statusFilter === "submitted" && project.status !== "submitted") return false;
+      if (statusFilter === "reopened" && project.status !== "reopened") return false;
+      if (statusFilter === "approved" && project.status !== "approved") return false;
+      if (statusFilter === "rejected" && project.status !== "rejected") return false;
+    }
+    return true;
+  });
 
   const breadcrumbs = [
     { label: "Projects" },
@@ -212,6 +251,26 @@ function Projects() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
+        </div>
+
+        {/* STATUS FILTERS */}
+        <div className="task-progress">
+          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
+          <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => setStatusFilter("pending")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Pending
+          </p>
+          <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Submitted
+          </p>
+          <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => setStatusFilter("reopened")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Reopened
+          </p>
+          <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Approved
+          </p>
+          <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => setStatusFilter("rejected")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Rejected
+          </p>
         </div>
 
         {/* PROJECTS */}
@@ -278,10 +337,10 @@ function Projects() {
                     <span
                       className="status-badge"
                       style={{
-                        backgroundColor: getStatusBadgeColor(displayStatus),
+                        backgroundColor: project.status && ["submitted","approved","rejected","reopened"].includes(project.status) ? "#FEF3C7" : (project.status === "Planned" || project.status === "in_progress" ? "#FEF3C7" : getStatusBadgeColor(displayStatus)),
                       }}
                     >
-                      {displayStatus}
+                      {project.status && ["submitted","approved","rejected","reopened"].includes(project.status) ? formatStatus(project.status) : (project.status === "Planned" || project.status === "in_progress" ? "Pending" : displayStatus)}
                     </span>
 
                     <div className="project-card-actions-right">
@@ -292,6 +351,15 @@ function Projects() {
                           title="Manage visibility"
                         >
                           <IoEyeOutline /> Show To
+                        </button>
+                      )}
+                      {canSubmitProject(project) && (
+                        <button
+                          className="action-icon-btn action-submit"
+                          title="Submit Project"
+                          onClick={() => setSubmitProjectModal({ open: true, project })}
+                        >
+                          <LuSend />
                         </button>
                       )}
                       <button
@@ -358,6 +426,14 @@ function Projects() {
           />
         </div>
       )}
+
+      <SubmitProjectModal
+        key={`project-submit-${submitProjectModal.project?.id || "none"}`}
+        isOpen={submitProjectModal.open}
+        onClose={() => setSubmitProjectModal({ open: false, project: null })}
+        project={submitProjectModal.project}
+        onSubmitSuccess={handleProjectSubmitSuccess}
+      />
     </DashboardLayout>
   );
 }

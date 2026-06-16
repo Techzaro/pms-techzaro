@@ -542,3 +542,110 @@
   .td-review-btn { width: 100%; text-align: center; }
 }
 
+/* ── Overview tab stats card ── */
+.td-stats-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.td-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.td-stat-row .td-stat-label {
+  min-width: 100px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.td-progress-sm {
+  flex: 1;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.td-progress-sm span {
+  display: block;
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 999px;
+  transition: width 0.3s;
+}
+
+.td-stats-trio {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.td-stats-trio .td-trio-item {
+  flex: 1;
+  min-width: 120px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.td-stats-trio .td-stat-big {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.td-stats-trio .td-stat-big--sm {
+  font-size: 13px;
+}
+
+.td-stats-trio .td-stat-label {
+  display: block;
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+/* ── Files tab upload area ── */
+.td-files li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.td-files li:last-child {
+  border-bottom: none;
+}
+
+.td-files li a {
+  color: #3b82f6;
+  text-decoration: none;
+  flex: 1;
+}
+
+.td-files li a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 600px) {
+  .td-stats-card { padding: 12px; }
+  .td-stat-row { flex-wrap: wrap; }
+  .td-stat-row .td-stat-label { min-width: 80px; }
+  .td-stats-trio .td-trio-item { min-width: 100%; }
+}
+

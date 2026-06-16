@@ -102,6 +102,11 @@ class Task extends Model
         return $this->hasMany(\App\Models\Deliverable::class);
     }
 
+    public function files()
+    {
+        return $this->hasMany(\App\Models\TaskFile::class)->latest();
+    }
+
     public function submissions()
     {
         return $this->hasMany(TaskSubmission::class);

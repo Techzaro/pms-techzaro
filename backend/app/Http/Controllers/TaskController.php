@@ -7,6 +7,7 @@ use App\Models\Task;
 use App\Models\Subtask;
 use App\Models\User;
 use App\Models\Deliverable;
+use App\Models\TaskFile;
 use App\Models\TaskSubmission;
 use App\Models\TaskWorkflowEvent;
 use App\Models\Notification;
@@ -255,6 +256,7 @@ class TaskController extends Controller
             'project.activities:id,project_id,user_id,summary,created_at',
             'project.activities.user:id,name',
             'project.files:id,project_id,name,url',
+            'files:id,task_id,name,url',
             'assignees:id,name,email,role',
             'assigner:id,name,email,role',
             'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
@@ -276,9 +278,11 @@ class TaskController extends Controller
             $progress = (int) round(($done / $subtasks->count()) * 100);
         }
 
-        $deliverables = $task->deliverables()->where(function ($q) use ($user) {
-            $q->where('assigned_to', $user->id)
-              ->orWhere('created_by', $user->id);
+        $deliverables = $task->deliverables()->when(!$isCreator, function ($q) use ($user) {
+            $q->where(function ($qq) use ($user) {
+                $qq->where('assigned_to', $user->id)
+                   ->orWhere('created_by', $user->id);
+            });
         })->with([
             'assignee:id,name,email,role',
             'creator:id,name,role',
@@ -372,6 +376,9 @@ class TaskController extends Controller
             $createdTasks[] = $task;
         }
 
+        // Send assignment notifications
+        $this->sendTaskAssignmentNotifications($createdTasks, $request->user());
+
         $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');
         $firstTask->loadCount('deliverables');
 
@@ -434,6 +441,9 @@ class TaskController extends Controller
 
             $createdTasks[] = $task;
         }
+
+        // Send assignment notifications
+        $this->sendTaskAssignmentNotifications($createdTasks, $request->user());
 
         $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');
         $firstTask->loadCount('deliverables');
@@ -545,6 +555,20 @@ class TaskController extends Controller
                 'assigned_to' => $user->id,
                 'created_by' => $task->assigned_by,
             ]);
+
+            // Notify assigner that task was completed
+            if ($task->assigned_by && $task->assigned_by !== $user->id) {
+                Notification::create([
+                    'user_id' => $task->assigned_by,
+                    'sender_user_id' => $user->id,
+                    'type' => 'task_completed',
+                    'related_module' => 'task',
+                    'related_id' => $task->id,
+                    'title' => 'Task Completed',
+                    'message' => $user->name . ' has marked the task "' . $task->title . '" as completed.',
+                    'link' => '/tasks/task-details/' . $task->id,
+                ]);
+            }
 
             return response()->json([
                 'message' => 'Task moved to deliverables',
@@ -673,8 +697,12 @@ class TaskController extends Controller
         if ($assignerId && $assignerId !== $user->id) {
             Notification::create([
                 'user_id' => $assignerId,
+                'sender_user_id' => $user->id,
                 'type' => 'task_submitted',
-                'message' => $user->name . ' submitted task: ' . $task->title,
+                'related_module' => 'task',
+                'related_id' => $task->id,
+                'title' => 'Task Submitted',
+                'message' => $user->name . ' has completed the task "' . $task->title . '" and submitted it for review.',
                 'link' => '/tasks/task-details/' . $task->id,
             ]);
         }
@@ -727,7 +755,11 @@ class TaskController extends Controller
             if ((int) $assigneeId !== (int) $user->id) {
                 Notification::create([
                     'user_id' => $assigneeId,
+                    'sender_user_id' => $user->id,
                     'type' => 'task_approved',
+                    'related_module' => 'task',
+                    'related_id' => $task->id,
+                    'title' => 'Task Approved',
                     'message' => 'Your task "' . $task->title . '" has been approved.',
                     'link' => '/tasks/task-details/' . $task->id,
                 ]);
@@ -782,13 +814,17 @@ class TaskController extends Controller
 
         $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
         foreach ($assigneeIds as $assigneeId) {
-            $msg = 'Your task "' . $task->title . '" has been rejected.';
+            $msg = 'Your task "' . $task->title . '" has been rejected. Please make the required changes.';
             if (!empty($validated['comment'])) {
-                $msg .= "\nReason: " . $validated['comment'];
+                $msg .= ' Reason: ' . $validated['comment'];
             }
             Notification::create([
                 'user_id' => $assigneeId,
+                'sender_user_id' => $user->id,
                 'type' => 'task_rejected',
+                'related_module' => 'task',
+                'related_id' => $task->id,
+                'title' => 'Task Rejected',
                 'message' => $msg,
                 'link' => '/tasks/task-details/' . $task->id,
             ]);
@@ -873,14 +909,18 @@ class TaskController extends Controller
         foreach ($assigneeIds as $assigneeId) {
             $msg = 'Your task "' . $task->title . '" has been reopened for revision.';
             if (!empty($validated['comment'])) {
-                $msg .= "\nComment: " . $validated['comment'];
+                $msg .= ' Comment: ' . $validated['comment'];
             }
             if (!empty($validated['instructions'])) {
-                $msg .= "\nInstructions: " . $validated['instructions'];
+                $msg .= ' Instructions: ' . $validated['instructions'];
             }
             Notification::create([
                 'user_id' => $assigneeId,
+                'sender_user_id' => $user->id,
                 'type' => 'task_reopened',
+                'related_module' => 'task',
+                'related_id' => $task->id,
+                'title' => 'Task Reopened',
                 'message' => $msg,
                 'link' => '/tasks/task-details/' . $task->id,
             ]);
@@ -941,6 +981,33 @@ class TaskController extends Controller
         return Storage::disk('public')->download($submission->file_path, $submission->file_name);
     }
 
+    private function sendTaskAssignmentNotifications(array $tasks, \App\Models\User $sender): void
+    {
+        $sent = [];
+        foreach ($tasks as $task) {
+            $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+            foreach ($assigneeIds as $assigneeId) {
+                if ((int) $assigneeId === (int) $sender->id) {
+                    continue;
+                }
+                if (in_array($assigneeId, $sent)) {
+                    continue;
+                }
+                $sent[] = $assigneeId;
+                Notification::create([
+                    'user_id' => $assigneeId,
+                    'sender_user_id' => $sender->id,
+                    'type' => 'task_assigned',
+                    'related_module' => 'task',
+                    'related_id' => $task->id,
+                    'title' => 'Task Assigned',
+                    'message' => 'A new task "' . $task->title . '" has been assigned to you by ' . $sender->name . '.',
+                    'link' => '/tasks/task-details/' . $task->id,
+                ]);
+            }
+        }
+    }
+
     public function destroy(Task $task)
     {
         $user = request()->user();
@@ -951,10 +1018,99 @@ class TaskController extends Controller
 
         $task->assignees()->detach();
         $task->deliverables()->delete();
+        $task->files()->delete();
         $task->delete();
 
         return response()->json([
             'message' => 'Task deleted successfully',
+        ]);
+    }
+
+    /**
+     * Upload a file attachment to a task.
+     */
+    public function uploadFile(Request $request, Task $task)
+    {
+        $user = $request->user();
+        $isCreator = $task->assigned_by === $user->id;
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+
+        if (!$isCreator && !$isAssignee) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate([
+            'file' => 'required|file|max:10240',
+        ]);
+
+        $file = $request->file('file');
+        $path = $file->store('task-files/' . $task->id, 'public');
+
+        $attachment = $task->files()->create([
+            'name' => $file->getClientOriginalName(),
+            'url' => '/storage/' . $path,
+        ]);
+
+        return response()->json([
+            'message' => 'File uploaded successfully',
+            'file' => $attachment,
+        ], 201);
+    }
+
+    /**
+     * Add a link attachment to a task.
+     */
+    public function addLink(Request $request, Task $task)
+    {
+        $user = $request->user();
+        $isCreator = $task->assigned_by === $user->id;
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+
+        if (!$isCreator && !$isAssignee) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate([
+            'url' => 'required|url|max:2048',
+            'name' => 'nullable|string|max:255',
+        ]);
+
+        $attachment = $task->files()->create([
+            'name' => $validated['name'] ?? $validated['url'],
+            'url' => $validated['url'],
+        ]);
+
+        return response()->json([
+            'message' => 'Link added successfully',
+            'file' => $attachment,
+        ], 201);
+    }
+
+    /**
+     * Delete a file attachment from a task.
+     */
+    public function deleteFile(Task $task, TaskFile $file)
+    {
+        $user = request()->user();
+        $isCreator = $task->assigned_by === $user->id;
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+
+        if (!$isCreator && !$isAssignee) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($file->url && str_starts_with($file->url, '/storage/')) {
+            $relativePath = str_replace('/storage/', '', $file->url);
+            $fullPath = storage_path('app/public/' . $relativePath);
+            if (file_exists($fullPath)) {
+                unlink($fullPath);
+            }
+        }
+
+        $file->delete();
+
+        return response()->json([
+            'message' => 'File deleted successfully',
         ]);
     }
 }

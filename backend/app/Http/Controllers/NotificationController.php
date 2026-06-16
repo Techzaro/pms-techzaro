@@ -10,7 +10,29 @@ class NotificationController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $notifications = $user->notifications()->paginate(20);
+
+        $query = $user->notifications()->with('sender:id,name,email');
+
+        // Filter by read/unread
+        if ($request->filled('filter')) {
+            if ($request->input('filter') === 'unread') {
+                $query->where('is_read', false);
+            } elseif ($request->input('filter') === 'read') {
+                $query->where('is_read', true);
+            }
+        }
+
+        // Search
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhere('message', 'like', "%{$search}%");
+            });
+        }
+
+        $notifications = $query->paginate(20);
+
         return response()->json($notifications);
     }
 

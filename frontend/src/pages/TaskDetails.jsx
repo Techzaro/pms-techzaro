@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import {
   Calendar,
@@ -8,6 +8,9 @@ import {
   FolderOpen,
   Pencil,
   Plus,
+  Trash2,
+  Upload,
+  Link as LinkIcon,
   Users,
 } from "lucide-react";
 import { IoEyeOutline } from "react-icons/io5";
@@ -45,40 +48,29 @@ function timeAgo(iso) {
 
 function statusLabel(status) {
   const s = (status || "").toLowerCase();
-  if (s === "completed" || s === "done") return "Completed";
-  if (s === "in_progress") return "In Progress";
   if (s === "pending") return "Pending";
-  if (s === "review") return "Review";
   if (s === "submitted") return "Submitted";
   if (s === "reopened") return "Reopened";
   if (s === "approved") return "Approved";
   if (s === "rejected") return "Rejected";
-  if (s === "failed") return "Failed";
-  if (s === "abandoned") return "Abandoned";
   return status || "Pending";
 }
 
 function statusColor(status) {
   const s = (status || "").toLowerCase();
-  if (s === "completed" || s === "done" || s === "approved") return "#166534";
-  if (s === "in_progress") return "#1E40AF";
-  if (s === "pending") return "#92400E";
-  if (s === "review" || s === "submitted") return "#1E40AF";
-  if (s === "reopened") return "#92400E";
-  if (s === "rejected" || s === "failed") return "#991B1B";
-  if (s === "abandoned") return "#374151";
+  if (s === "approved") return "#166534";
+  if (s === "pending" || s === "reopened") return "#92400E";
+  if (s === "submitted") return "#1E40AF";
+  if (s === "rejected") return "#991B1B";
   return "#374151";
 }
 
 function statusBgColor(status) {
   const s = (status || "").toLowerCase();
-  if (s === "completed" || s === "done" || s === "approved") return "#DCFCE7";
-  if (s === "in_progress") return "#DBEAFE";
-  if (s === "pending") return "#FEF3C7";
-  if (s === "review" || s === "submitted") return "#DBEAFE";
-  if (s === "reopened") return "#FEF3C7";
-  if (s === "rejected" || s === "failed") return "#FEE2E2";
-  if (s === "abandoned") return "#F3F4F6";
+  if (s === "approved") return "#DCFCE7";
+  if (s === "pending" || s === "reopened") return "#FEF3C7";
+  if (s === "submitted") return "#DBEAFE";
+  if (s === "rejected") return "#FEE2E2";
   return "#F3F4F6";
 }
 
@@ -124,7 +116,7 @@ const [task, setTask] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showSubtaskModal, setShowSubtaskModal] = useState(false);
   const [deleteTaskConfirmOpen, setDeleteTaskConfirmOpen] = useState(false);
-  const [tab, setTab] = useState("details");
+  const [tab, setTab] = useState("deliverables");
   const [submitModal, setSubmitModal] = useState({ open: false, deliverable: null });
   const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
   const [assignerModal, setAssignerModal] = useState({ open: false, deliverable: null });
@@ -203,7 +195,7 @@ const goToTask = (id) => {
   const subtasks = task?.subtasks || [];
   const project = task?.project;
   const activities = project?.activities || [];
-  const files = project?.files || [];
+  const files = task?.files || [];
   const progress = typeof task?.progress_percent === "number" ? task.progress_percent : 0;
   const completedCount = subtasks.filter((t) => ["completed", "done"].includes((t.status || "").toLowerCase())).length;
 
@@ -380,11 +372,9 @@ const goToTask = (id) => {
                 {/* TABS */}
             <div className="td-tabs">
               {[
-                { id: "overview", label: "Overview", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
-                { id: "subtasks", label: "Tasks", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="M9 3v4M14 3v4"/><path d="M9 12l2 2 4-4"/></svg> },
                 { id: "deliverables", label: "Deliverables", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> },
-                { id: "team", label: "Team", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg> },
-                { id: "activity", label: "Activity", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
+                { id: "overview", label: "Overview", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
+                { id: "subtasks", label: "Subtasks", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="M9 3v4M14 3v4"/><path d="M9 12l2 2 4-4"/></svg> },
                 { id: "files", label: "Files", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg> },
               ].map(({ id, label, icon }) => (
                 <button key={id} className={`td-tab ${tab === id ? "td-tab--on" : ""}`} onClick={() => setTab(id)}>
@@ -397,7 +387,7 @@ const goToTask = (id) => {
 
               {tab === "overview" && (
                 <div className="td-overview">
-                  <h2 className="td-section-title">Project Description</h2>
+                  <h2 className="td-section-title">Task Details</h2>
                   <div className="td-overview-grid">
                     <div className="td-overview-left">
                       <p>{task.description || "No description provided for this task."}</p>
@@ -540,12 +530,7 @@ const goToTask = (id) => {
                 </div>
               )}
 
-              {tab === "team" && (
-                <div>
-                  <h2 className="td-section-title">Team Members</h2>
-                  <p className="td-empty" style={{ textAlign: "left", padding: "0" }}>Team information is managed at the project level.</p>
-                </div>
-              )}
+              {tab === "files" && <FileUploadSection taskId={task.id} files={files} isCreator={isCreator} isAssignee={isAssignee} onFileChange={() => fetchTask(false)} />}
 
               {tab === "activity" && (
                 <div>
@@ -566,148 +551,6 @@ const goToTask = (id) => {
                   )}
                 </div>
               )}
-
-              {tab === "files" && (
-                <div>
-                  <h2 className="td-section-title">Files & Attachments</h2>
-                  {files.length === 0 ? <p className="td-empty">No files attached.</p> : (
-                    <ul className="td-files">
-                      {files.map((f) => (
-                        <li key={f.id}>
-                          <FolderOpen size={18} />
-                          {f.url ? <a href={f.url} target="_blank" rel="noopener noreferrer">{f.name}</a> : <span>{f.name}</span>}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* SUBTASKS TABLE - SEPARATE CARD BELOW */}
-            {tab === "overview" && (
-              <div className="td-subtasks-card">
-                <div className="td-section-header">
-                  <h2 className="td-section-title">Subtasks</h2>
-                  <span className="td-section-count">{completedCount}/{subtasks.length} Completed</span>
-                </div>
-                <table className="td-table">
-                  <thead>
-                    <tr>
-                      <th>Deliverables</th>
-                      <th>Assigned By</th>
-                      <th>Status</th>
-                      <th>Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {subtasks.length === 0 ? (
-                      <tr>
-                        <td colSpan={4}>
-                          <p className="td-empty" style={{ padding: "20px 0", margin: 0 }}>No subtasks yet. Click "Add Subtask" to create one.</p>
-                        </td>
-                      </tr>
-                    ) : (
-                      subtasks.map((t) => (
-                        <tr key={t.id}>
-                          <td>
-                            <div className="td-task-name">{t.title}</div>
-                            {t.description && <div className="td-task-sub">{t.description}</div>}
-                          </td>
-                          <td>
-                            <div className="td-assignee">
-                              <div className="td-avatar">{initials(t.assignee?.name)}</div>
-                              <div>
-                                <div className="td-assignee-name">{t.assignee?.name || "—"}</div>
-                                <div className="td-assignee-role">Member</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <span className="td-pill" style={{ background: statusBgColor(t.status), color: statusColor(t.status) }}>
-                              <span className="td-pill-dot" style={{ background: statusColor(t.status) }} />
-                              {statusLabel(t.status)}
-                            </span>
-                          </td>
-                          <td className="td-date">{formatShortDate(t.end_date)}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-
-                {(task.deliverables || []).length > 0 && (
-                  <>
-                    <div className="td-section-header" style={{ marginTop: "24px" }}>
-                      <h2 className="td-section-title">Deliverables</h2>
-                      <span className="td-section-count">{task.completed_deliverables || 0}/{task.total_deliverables || 0} Completed</span>
-                    </div>
-                    <table className="td-table">
-                      <thead>
-                        <tr>
-                          <th>Deliverable</th>
-                          <th>Assigned To</th>
-                          <th>Status</th>
-                          <th>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(task.deliverables || []).map((d) => (
-                          <tr key={d.id}>
-                            <td>
-                              <div className="td-task-name">{d.title}</div>
-                              {d.description && <div className="td-task-sub">{d.description}</div>}
-                            </td>
-                            <td>
-                              <div className="td-assignee">
-                                <div className="td-avatar">{initials(d.assignee?.name)}</div>
-                                <div>
-                                  <div className="td-assignee-name">{d.assignee?.name || "—"}</div>
-                                  <div className="td-assignee-role">{d.assignee?.role ? d.assignee.role.replace("_", " ") : ""}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td>
-                              <span className="td-pill" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }}>
-                                <span className="td-pill-dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }} />
-                                {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}
-                              </span>
-                            </td>
-                            <td>
-                              <div style={{ display: "flex", gap: "6px" }}>
-                                {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
-                                  <button
-                                    className="td-btn-outline"
-                                    style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
-                                    onClick={() => setSubmitModal({ open: true, deliverable: d })}
-                                  >
-                                    <LuSend size={12} /> Submit
-                                  </button>
-                                ) : (
-                                  <button
-                                    className="td-btn-outline"
-                                    style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
-                                    onClick={() => {
-                                      if (isCreator) {
-                                        setAssignerModal({ open: true, deliverable: d });
-                                      } else {
-                                        setViewModal({ open: true, deliverable: d });
-                                      }
-                                    }}
-                                  >
-                                    <IoEyeOutline size={12} /> View
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </>
-                )}
-              </div>
-            )}
             </div>
           </div>
 
@@ -755,8 +598,9 @@ const goToTask = (id) => {
           </aside>
         </div>
       </div>
+    </div>
 
-      {showEditModal && (
+    {showEditModal && (
         <EditTaskModal
           task={task}
           onClose={(refresh) => { setShowEditModal(false); if (refresh) fetchTask(false); }}
@@ -815,6 +659,131 @@ const goToTask = (id) => {
       danger
     />
     </>
+  );
+}
+
+/* ── File Upload Section Component ── */
+function FileUploadSection({ taskId, files, isCreator, isAssignee, onFileChange }) {
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [addingLink, setAddingLink] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkName, setLinkName] = useState("");
+  const [message, setMessage] = useState("");
+
+  const canManage = isCreator || isAssignee;
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setMessage("");
+    try {
+      const token = authToken();
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`${API_URL}/tasks/${taskId}/files`, {
+        method: "POST",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      if (res.ok) {
+        setMessage("File uploaded.");
+        onFileChange();
+      } else {
+        const d = await res.json();
+        setMessage(d.message || "Upload failed.");
+      }
+    } catch {
+      setMessage("Upload failed.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const handleAddLink = async () => {
+    if (!linkUrl) return;
+    setAddingLink(true);
+    setMessage("");
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/links`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ url: linkUrl, name: linkName || undefined }),
+      });
+      if (res.ok) {
+        setMessage("Link added.");
+        setLinkUrl("");
+        setLinkName("");
+        onFileChange();
+      } else {
+        const d = await res.json();
+        setMessage(d.message || "Failed to add link.");
+      }
+    } catch {
+      setMessage("Failed to add link.");
+    } finally {
+      setAddingLink(false);
+    }
+  };
+
+  const handleDelete = async (fileId) => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/files/${fileId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setMessage("File deleted.");
+        onFileChange();
+      }
+    } catch {
+      setMessage("Failed to delete file.");
+    }
+  };
+
+  return (
+    <div>
+      <div className="td-section-header">
+        <h2 className="td-section-title">Files & Attachments</h2>
+      </div>
+      {message && <p style={{ fontSize: "13px", margin: "0 0 12px", color: message.includes("failed") || message.includes("Failed") ? "#dc2626" : "#16a34a" }}>{message}</p>}
+      {canManage && (
+        <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
+          <button className="td-btn-outline" style={{ display: "flex", alignItems: "center", gap: "6px" }} disabled={uploading} onClick={() => fileRef.current?.click()}>
+            <Upload size={14} /> {uploading ? "Uploading..." : "Upload File"}
+          </button>
+          <input ref={fileRef} type="file" style={{ display: "none" }} onChange={handleFileUpload} />
+          <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+            <input type="url" placeholder="Link URL" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} style={{ padding: "6px 10px", fontSize: "13px", border: "1px solid #d1d5db", borderRadius: "6px", width: "200px", maxWidth: "100%" }} />
+            <input type="text" placeholder="Name (optional)" value={linkName} onChange={(e) => setLinkName(e.target.value)} style={{ padding: "6px 10px", fontSize: "13px", border: "1px solid #d1d5db", borderRadius: "6px", width: "140px", maxWidth: "100%" }} />
+            <button className="td-btn-outline" style={{ display: "flex", alignItems: "center", gap: "6px" }} disabled={addingLink || !linkUrl} onClick={handleAddLink}>
+              <LinkIcon size={14} /> {addingLink ? "Adding..." : "Add Link"}
+            </button>
+          </div>
+        </div>
+      )}
+      {files.length === 0 ? (
+        <p className="td-empty">No files attached to this task.</p>
+      ) : (
+        <ul className="td-files">
+          {files.map((f) => (
+            <li key={f.id}>
+              <FolderOpen size={18} />
+              {f.url ? <a href={f.url} target="_blank" rel="noopener noreferrer">{f.name}</a> : <span>{f.name}</span>}
+              {canManage && (
+                <button className="td-btn-danger" style={{ marginLeft: "auto", padding: "2px 8px", fontSize: "12px" }} onClick={() => handleDelete(f.id)}>
+                  <Trash2 size={12} />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

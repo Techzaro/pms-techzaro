@@ -161,6 +161,8 @@ class DeliverableController extends Controller
             'task_id' => 'nullable|exists:tasks,id',
         ]);
 
+        $user = $request->user();
+
         $deliverable = $project->deliverables()->create([
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
@@ -169,8 +171,22 @@ class DeliverableController extends Controller
             'due_date' => $validated['due_date'] ?? null,
             'assigned_to' => $validated['assigned_to'] ?? null,
             'task_id' => $validated['task_id'] ?? null,
-            'created_by' => $request->user()->id,
+            'created_by' => $user->id,
         ]);
+
+        // Send assignment notification
+        if ($deliverable->assigned_to && $deliverable->assigned_to !== $user->id) {
+            Notification::create([
+                'user_id' => $deliverable->assigned_to,
+                'sender_user_id' => $user->id,
+                'type' => 'deliverable_assigned',
+                'related_module' => 'deliverable',
+                'related_id' => $deliverable->id,
+                'title' => 'Deliverable Assigned',
+                'message' => 'A new deliverable "' . $deliverable->title . '" has been assigned to you by ' . $user->name . '.',
+                'link' => '/deliveries/deliverable-details/' . $deliverable->id,
+            ]);
+        }
 
         return response()->json([
             'message' => 'Deliverable created successfully',
@@ -296,8 +312,12 @@ class DeliverableController extends Controller
         if ($creatorId && $creatorId !== $user->id) {
             Notification::create([
                 'user_id' => $creatorId,
+                'sender_user_id' => $user->id,
                 'type' => 'deliverable_submitted',
-                'message' => $user->name . ' submitted deliverable: ' . $deliverable->title . "\n\nTask: " . ($deliverable->task?->title ?? 'N/A'),
+                'related_module' => 'deliverable',
+                'related_id' => $deliverable->id,
+                'title' => 'Deliverable Submitted',
+                'message' => $user->name . ' has submitted the deliverable "' . $deliverable->title . '" for your review.',
                 'link' => '/deliveries/deliverable-details/' . $deliverable->id,
             ]);
         }
@@ -338,7 +358,11 @@ class DeliverableController extends Controller
         if ($deliverable->assigned_to) {
             Notification::create([
                 'user_id' => $deliverable->assigned_to,
+                'sender_user_id' => $user->id,
                 'type' => 'deliverable_approved',
+                'related_module' => 'deliverable',
+                'related_id' => $deliverable->id,
+                'title' => 'Deliverable Approved',
                 'message' => 'Your deliverable "' . $deliverable->title . '" has been approved.',
                 'link' => '/deliveries/deliverable-details/' . $deliverable->id,
             ]);
@@ -383,14 +407,18 @@ class DeliverableController extends Controller
         ]);
 
         if ($deliverable->assigned_to) {
-            $msg = 'Your deliverable "' . $deliverable->title . '" has been rejected.';
+            $msg = 'Your deliverable "' . $deliverable->title . '" has been rejected. Please review and resubmit.';
             if (!empty($validated['comment'])) {
-                $msg .= "\nReason: " . $validated['comment'];
+                $msg .= ' Reason: ' . $validated['comment'];
             }
 
             Notification::create([
                 'user_id' => $deliverable->assigned_to,
+                'sender_user_id' => $user->id,
                 'type' => 'deliverable_rejected',
+                'related_module' => 'deliverable',
+                'related_id' => $deliverable->id,
+                'title' => 'Deliverable Rejected',
                 'message' => $msg,
                 'link' => '/deliveries/deliverable-details/' . $deliverable->id,
             ]);
@@ -461,15 +489,19 @@ class DeliverableController extends Controller
         if ($deliverable->assigned_to) {
             $msg = 'Your deliverable "' . $deliverable->title . '" has been reopened for revision.';
             if (!empty($validated['comment'])) {
-                $msg .= "\nComment: " . $validated['comment'];
+                $msg .= ' Comment: ' . $validated['comment'];
             }
             if (!empty($validated['instructions'])) {
-                $msg .= "\nInstructions: " . $validated['instructions'];
+                $msg .= ' Instructions: ' . $validated['instructions'];
             }
 
             Notification::create([
                 'user_id' => $deliverable->assigned_to,
+                'sender_user_id' => $user->id,
                 'type' => 'deliverable_reopened',
+                'related_module' => 'deliverable',
+                'related_id' => $deliverable->id,
+                'title' => 'Deliverable Reopened',
                 'message' => $msg,
                 'link' => '/deliveries/deliverable-details/' . $deliverable->id,
             ]);

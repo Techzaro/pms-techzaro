@@ -146,8 +146,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/reject', [TaskController::class, 'reject']);
     Route::post('/tasks/{task}/reopen', [TaskController::class, 'reopen']);
 
+    // Project submission workflow
+    Route::post('/projects/{project}/submit', [ProjectController::class, 'submit']);
+    Route::get('/projects/{project}/latest-submission', [ProjectController::class, 'latestSubmission']);
+    Route::get('/projects/submission-file/{submission}', [ProjectController::class, 'downloadSubmissionFile']);
+    Route::post('/projects/{project}/approve', [ProjectController::class, 'approve']);
+    Route::post('/projects/{project}/reject', [ProjectController::class, 'reject']);
+    Route::post('/projects/{project}/reopen', [ProjectController::class, 'reopen']);
+
     // Subtask creation under a parent task
     Route::post('/tasks/{task}/subtasks', [TaskController::class, 'storeSubtask']);
+
+    // Task file attachments
+    Route::post('/tasks/{task}/files', [TaskController::class, 'uploadFile']);
+    Route::post('/tasks/{task}/links', [TaskController::class, 'addLink']);
+    Route::delete('/tasks/{task}/files/{file}', [TaskController::class, 'deleteFile']);
 
     // My tasks / Assigned by me / Self tasks
     Route::get('/my-tasks', [TaskController::class, 'myTasks']);
