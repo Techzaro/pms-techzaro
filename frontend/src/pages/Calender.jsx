@@ -1,377 +1,431 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import "../pages/Calender.css";
 import "../components/Event.css";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Search,
-  Plus,
-} from "lucide-react";
-
-import Header from "../components/layout/Header";
-import Sidebar from "../components/layout/Sidebar";
-import Breadcrumb from "../components/Breadcrumb";
-import "../components/layout/DashboardLayout.css";
+import { ChevronLeft, ChevronRight, Search, Plus, Trash2, Edit3 } from "lucide-react";
+import DashboardLayout from "../components/layout/DashboardLayout";
 import Event from "../components/Event";
+import { authToken, getCurrentRole, getUser } from "../utils/auth";
+import API_URL from "../config/api";
 
-const calendarData = [
-  {
-    day: 1,
-    events: [
-      {
-  
-        title: "Design Review",
-        time: "9:30 AM",
-        className: "event-purple",
-         
-      },
-    ],
-  },
-  {
-    day: 2,
-    events: [
-      {
-      
-        title: "Client Call",
-        time: "9:30 AM",
-        className: "event-green",
-      },
-    ],
-  },
-  {
-    day: 3,
-    events: [
-      {
-        
-        title: "Project Sync",
-        time: "9:30 AM",
-        className: "event-purple",
-      },
-    ],
-  },
-  {
-    day: 5,
-    events: [
-      {
-        
-        title: "UI Workshop",
-        time: "9:30 AM",
-        className: "event-orange",
-      },
-    ],
-  },
-];
+const TYPE_COLORS = {
+  meeting: { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" },
+  task: { bg: "#eff6ff", text: "#3b82f6", dot: "#3b82f6" },
+  other: { bg: "#fff7ed", text: "#f59e0b", dot: "#f59e0b" },
+  deadline: { bg: "#fef2f2", text: "#ef4444", dot: "#ef4444" },
+  personal: { bg: "#ecfdf5", text: "#22c55e", dot: "#22c55e" },
+};
 
-const Calender = () => {
+const TYPE_LABELS = {
+  meeting: "Meeting",
+  task: "Task",
+  other: "Review",
+  deadline: "Deadline",
+  personal: "Personal",
+};
+
+function formatDate(d) {
+  return d.toISOString().split("T")[0];
+}
+
+function formatDisplayDate(d) {
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+}
+
+function getMonthStart(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function getMonthEnd(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+function getWeekStart(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  d.setDate(d.getDate() - day);
+  return d;
+}
+
+function getWeekEnd(date) {
+  const d = getWeekStart(date);
+  d.setDate(d.getDate() + 6);
+  return d;
+}
+
+function isSameDay(d1, d2) {
+  return d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
+}
+
+function isToday(d) {
+  return isSameDay(d, new Date());
+}
+
+function Calender() {
   const [viewMode, setViewMode] = useState("Month");
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showEventModal, setShowEventModal] = useState(false);
+  const [editEvent, setEditEvent] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
   const [showDayPopup, setShowDayPopup] = useState(false);
+  const [search, setSearch] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(null);
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-  const getTotalBoxes = () => {
-    if (viewMode === "Day") return 1;
-    if (viewMode === "Week") return 7;
-    return 35;
+  const currentRole = getCurrentRole();
+  const currentUser = getUser(currentRole);
+  const canManageEvents = ["admin", "manager"].includes(currentRole);
+
+  const getDateRange = useCallback(() => {
+    if (viewMode === "Month") {
+      const start = getMonthStart(currentDate);
+      const end = getMonthEnd(currentDate);
+      return { from: formatDate(start), to: formatDate(end) };
+    }
+    if (viewMode === "Week") {
+      const start = getWeekStart(currentDate);
+      const end = getWeekEnd(currentDate);
+      return { from: formatDate(start), to: formatDate(end) };
+    }
+    const d = formatDate(currentDate);
+    return { from: d, to: d };
+  }, [currentDate, viewMode]);
+
+  const fetchEvents = useCallback(async () => {
+    setLoading(true);
+    try {
+      const token = authToken();
+      const { from, to } = getDateRange();
+      const params = new URLSearchParams();
+      params.append("from", from);
+      params.append("to", to);
+      params.append("all", "1");
+      if (search) params.append("search", search);
+
+      const res = await fetch(`${API_URL}/unified-calendar?${params.toString()}`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      });
+      const data = await res.json();
+      setEvents(data?.data || []);
+    } catch {
+      setEvents([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [getDateRange, search]);
+
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents]);
+
+  const handlePrev = () => {
+    const d = new Date(currentDate);
+    if (viewMode === "Month") d.setMonth(d.getMonth() - 1);
+    else if (viewMode === "Week") d.setDate(d.getDate() - 7);
+    else d.setDate(d.getDate() - 1);
+    setCurrentDate(d);
   };
 
-  const totalBoxes = getTotalBoxes();
+  const handleNext = () => {
+    const d = new Date(currentDate);
+    if (viewMode === "Month") d.setMonth(d.getMonth() + 1);
+    else if (viewMode === "Week") d.setDate(d.getDate() + 7);
+    else d.setDate(d.getDate() + 1);
+    setCurrentDate(d);
+  };
+
+  const handleToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  const handleEventCreated = () => {
+    fetchEvents();
+  };
+
+  const handleDelete = async (eventId) => {
+    if (!window.confirm("Are you sure you want to delete this event?")) return;
+    setDeleteLoading(eventId);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/events/${eventId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setEvents((prev) => prev.filter((e) => e.id !== eventId));
+        setShowDayPopup(false);
+        setSelectedDay(null);
+      }
+    } catch {
+      // silent
+    } finally {
+      setDeleteLoading(null);
+    }
+  };
+
+  const handleEdit = (event) => {
+    setEditEvent(event);
+    setShowDayPopup(false);
+    setShowEventModal(true);
+  };
+
+  const getEventsForDate = (date) => {
+    const dateStr = formatDate(date);
+    return events.filter((ev) => {
+      const start = ev.start_date?.split("T")[0];
+      const end = ev.end_date?.split("T")[0] || start;
+      return dateStr >= start && dateStr <= end;
+    });
+  };
+
+  const getHeaderTitle = () => {
+    if (viewMode === "Month") {
+      return currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    }
+    if (viewMode === "Week") {
+      const start = getWeekStart(currentDate);
+      const end = getWeekEnd(currentDate);
+      return `${formatDisplayDate(start)} - ${formatDisplayDate(end)}`;
+    }
+    return formatDisplayDate(currentDate);
+  };
+
+  const calendarDays = useMemo(() => {
+    if (viewMode === "Month") {
+      const start = getMonthStart(currentDate);
+      const startDay = start.getDay();
+      const totalDays = getMonthEnd(currentDate).getDate();
+      const cells = [];
+      for (let i = 0; i < startDay; i++) cells.push(null);
+      for (let d = 1; d <= totalDays; d++) {
+        cells.push(new Date(currentDate.getFullYear(), currentDate.getMonth(), d));
+      }
+      while (cells.length % 7 !== 0) cells.push(null);
+      return cells;
+    }
+    if (viewMode === "Week") {
+      const start = getWeekStart(currentDate);
+      const cells = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(start);
+        d.setDate(d.getDate() + i);
+        cells.push(d);
+      }
+      return cells;
+    }
+    return [new Date(currentDate)];
+  }, [currentDate, viewMode]);
+
+  const todayEvents = useMemo(() => {
+    return getEventsForDate(new Date());
+  }, [events]);
+
+  const upcomingEvents = useMemo(() => {
+    const today = formatDate(new Date());
+    return events
+      .filter((ev) => {
+        const start = ev.start_date?.split("T")[0];
+        return start > today;
+      })
+      .sort((a, b) => a.start_date.localeCompare(b.start_date))
+      .slice(0, 5);
+  }, [events]);
 
   return (
-    <div className="dashboard-page">
-      <Header />
+    <DashboardLayout hideRightSidebar={true}>
+      <div className="calender-layout">
 
-      <div className="main-layout">
-        <Sidebar />
+        <div className="calendar-main">
 
-        <div className="dashboard-content">
-          <Breadcrumb items={[{ label: "Calendar" }]} />
-          <div className="calender-layout">
-
-            {/* LEFT SIDE */}
-            <div className="calendar-main">
-
-          {/* HEADER */}
           <div className="calendar-header">
-
             <div>
               <h1>Calendar</h1>
-
-              <p>
-                Manage schedules, deadlines and upcoming tasks.
-              </p>
+              <p>Manage schedules, deadlines and upcoming tasks.</p>
             </div>
-
             <div className="calendar-header-actions">
-
-              <button className="today-btn">
-                Today
-              </button>
-
-              <button className="add-event-btn" onClick={() => setShowEventModal(true)}>
-                <Plus size={18} />
-                Add Event
-              </button>
-
+              <button className="today-btn" onClick={handleToday}>Today</button>
+              {canManageEvents && (
+                <button className="add-event-btn" onClick={() => { setEditEvent(null); setShowEventModal(true); }}>
+                  <Plus size={18} />
+                  Add Event
+                </button>
+              )}
             </div>
-
           </div>
 
-          {/* CARD */}
           <div className="calendar-card">
 
-            {/* TOPBAR */}
             <div className="calendar-topbar">
-
-              {/* MONTH */}
               <div className="calendar-month">
-
-                <ChevronLeft size={20} color="#6B7280" />
-
-                <h2>May 2026</h2>
-
-                <ChevronRight size={20} color="#6B7280" />
-
+                <button onClick={handlePrev} style={{ border: "none", background: "none", cursor: "pointer", padding: 4 }}>
+                  <ChevronLeft size={20} color="#6B7280" />
+                </button>
+                <h2>{getHeaderTitle()}</h2>
+                <button onClick={handleNext} style={{ border: "none", background: "none", cursor: "pointer", padding: 4 }}>
+                  <ChevronRight size={20} color="#6B7280" />
+                </button>
               </div>
-
-              {/* ACTIONS */}
               <div className="calendar-top-actions">
-
-                {/* TABS */}
                 <div className="calendar-tabs">
-
-                  {["Month", "Week", "Day"].map((item, index) => (
+                  {["Month", "Week", "Day"].map((item) => (
                     <button
-                      key={index}
+                      key={item}
                       className={item === viewMode ? "active-tab" : ""}
                       onClick={() => setViewMode(item)}
                     >
                       {item}
                     </button>
                   ))}
-
                 </div>
-
-                {/* SEARCH */}
                 <div className="calendar-search">
-
                   <Search size={18} color="#9CA3AF" />
-
                   <input
                     type="text"
                     placeholder="Search events..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
                   />
-
                 </div>
-
               </div>
-
             </div>
 
-            {/* GRID */}
-            <div className="calendar-grid">
+            {loading ? (
+              <div style={{ padding: "60px 20px", textAlign: "center", color: "#9ca3af" }}>
+                Loading events...
+              </div>
+            ) : (
+              <div className="calendar-grid">
+                {days.map((day) => (
+                  <div key={day} className="calendar-day-name">{day}</div>
+                ))}
 
-              {/* DAYS */}
-              {days.map((day, index) => (
-                <div
-                  key={index}
-                  className="calendar-day-name"
-                >
-                  {day}
+                {calendarDays.map((date, index) => {
+                  if (!date) return <div key={`empty-${index}`} className="calendar-date-box" style={{ background: "#fafafa" }} />;
+
+                  const dayEvents = getEventsForDate(date);
+                  const today = isToday(date);
+
+                  return (
+                    <div
+                      key={index}
+                      className={`calendar-date-box ${today ? "today-box" : ""}`}
+                      onClick={() => {
+                        setSelectedDay(date);
+                        setShowDayPopup(true);
+                      }}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <p className={`date-number ${today ? "today-number" : ""}`}>
+                        {date.getDate()}
+                      </p>
+                      {dayEvents.slice(0, 2).map((ev) => {
+                        const colors = TYPE_COLORS[ev.type] || TYPE_COLORS.meeting;
+                        return (
+                          <div
+                            key={ev.id}
+                            className="calendar-event"
+                            style={{ background: colors.bg, marginBottom: 4, cursor: "pointer" }}
+                            onClick={(e) => { e.stopPropagation(); handleEdit(ev); }}
+                          >
+                            <p style={{ color: colors.text, fontSize: 11, margin: 0 }}>
+                              {ev.title}
+                            </p>
+                          </div>
+                        );
+                      })}
+                      {dayEvents.length > 2 && (
+                        <p style={{ margin: 0, fontSize: 11, color: "#6B7280" }}>
+                          +{dayEvents.length - 2} more
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="calendar-footer">
+              {Object.entries(TYPE_LABELS).map(([key, label]) => (
+                <div key={key}>
+                  <span className="dot" style={{ background: TYPE_COLORS[key]?.dot || "#9ca3af" }} />
+                  {label}
                 </div>
               ))}
-
-              {/* DATES */}
-              {Array.from({ length: totalBoxes }).map((_, index) => {
-
-                const currentDay = index + 1;
-
-                const dayData = calendarData.find(
-                  (item) => item.day === currentDay
-                );
-
-                return (
-                  <div
-                    key={index}
-                    className="calendar-date-box"
-                    onClick={() => {
-                      if (currentDay <= 31) {
-                        setSelectedDay(currentDay);
-                        setShowDayPopup(true);
-                      }
-                    }}
-                    style={{ cursor: currentDay <= 31 ? "pointer" : "default" }}
-                  >
-
-                    <p className="date-number">
-                      {currentDay <= 31 ? currentDay : ""}
-                    </p>
-
-                    {dayData?.events.map((event, i) => (
-                      <div
-                        key={i}
-                        className={`calendar-event ${event.className}`}
-                      >
-
-                        <p>{event.title}</p>
-
-                        <span>{event.time}</span>
-
-                      </div>
-                    ))}
-
-                    {dayData && (
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: "12px",
-                          color: "#6B7280",
-                        }}
-                      >
-                        +1 more
-                      </p>
-                    )}
-
-                  </div>
-                );
-              })}
-
-            </div>
-
-            {/* FOOTER */}
-            <div className="calendar-footer">
-
-              <div>
-                <span className="dot purple-dot"></span>
-                Meeting
-              </div>
-
-              <div>
-                <span className="dot red-dot"></span>
-                Deadline
-              </div>
-
-              <div>
-                <span className="dot blue-dot"></span>
-                Task
-              </div>
-
-              <div>
-                <span className="dot green-dot"></span>
-                Personal
-              </div>
-
-              <div>
-                <span className="dot orange-dot"></span>
-                Other
-              </div>
-
             </div>
 
           </div>
-
         </div>
 
-        </div>
-
-        </div>
-
-        {/* RIGHT SIDEBAR */}
         <div className="calender-sidebar">
-
-          {/* TODAY AGENDA */}
           <div className="task-card">
             <h3>
-              Today <span className="today-date">• June 17, 2026</span>
+              Today <span className="today-date">• {formatDisplayDate(new Date())}</span>
             </h3>
-
             <div className="agenda-list">
-              <div className="agenda-item">
-                <span className="agenda-dot" />
-                <div className="agenda-content">
-                  <div className="agenda-top">
-                    <h4>10:00 AM</h4>
-                    <span>30 min</span>
-                  </div>
-                  <p>Design Sync</p>
-                </div>
-              </div>
-
-              <div className="agenda-item">
-                <span className="agenda-dot" />
-                <div className="agenda-content">
-                  <div className="agenda-top">
-                    <h4>01:00 PM</h4>
-                    <span>1 hr</span>
-                  </div>
-                  <p>Client Meeting</p>
-                </div>
-              </div>
-
-              <div className="agenda-item">
-                <span className="agenda-dot" />
-                <div className="agenda-content">
-                  <div className="agenda-top">
-                    <h4>03:30 PM</h4>
-                    <span>1 hr</span>
-                  </div>
-                  <p>Project Review</p>
-                </div>
-              </div>
+              {todayEvents.length === 0 ? (
+                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
+                  No events today
+                </p>
+              ) : (
+                todayEvents.map((ev) => {
+                  const colors = TYPE_COLORS[ev.type] || TYPE_COLORS.meeting;
+                  const time = ev.all_day ? "All Day" : new Date(ev.start_date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+                  return (
+                    <div className="agenda-item" key={ev.id}>
+                      <span className="agenda-dot" style={{ background: colors.dot }} />
+                      <div className="agenda-content">
+                        <div className="agenda-top">
+                          <h4>{time}</h4>
+                          <span>{TYPE_LABELS[ev.type] || ev.type}</span>
+                        </div>
+                        <p>{ev.title}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
-
-            <div className="card-link">View Today’s Agenda</div>
           </div>
-<br/>
 
-          {/* UPCOMING DEADLINES */}
+          <br />
+
           <div className="task-card">
-            <p style={{fontWeight:"bold",fontSize:"20px"}}>Upcoming Deadlines</p>
-
+            <p style={{ fontWeight: "bold", fontSize: "20px", margin: 0 }}>Upcoming Events</p>
             <div className="deadline-list">
-              <div className="deadline-item">
-                <div>
-                  <h4>API Integration Review</h4>
-                  <div className="dealine-date" style={{display:"flex",alignItems:"center",gap:"70px"}}>
-                  <p>CRM System</p>
-                <span className="deadline-date red-text">May 19, 2026</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="deadline-item">
-                <div>
-                  <h4>Homepage Final Design</h4>
-                  <div  className="dealine-date" style={{display:"flex",alignItems:"center",gap:"40px"}}>
-                  <p>Website Redesign</p>
-                <span className="deadline-date orange-text">May 24, 2026</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="deadline-item">
-                <div>
-                  <h4>Mobile App Testing</h4>
-                  <div  className="dealine-date" style={{display:"flex",alignItems:"center",gap:"80px"}}>
-                  <p>Mobile App</p>
-                <span className="deadline-date orange-text">May 18, 2026</span>
-                  </div>
-                </div>
-              </div>
+              {upcomingEvents.length === 0 ? (
+                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
+                  No upcoming events
+                </p>
+              ) : (
+                upcomingEvents.map((ev) => {
+                  const colors = TYPE_COLORS[ev.type] || TYPE_COLORS.meeting;
+                  const evDate = new Date(ev.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                  return (
+                    <div className="deadline-item" key={ev.id}>
+                      <div>
+                        <h4>{ev.title}</h4>
+                        <div className="dealine-date" style={{ display: "flex", alignItems: "center", gap: 40 }}>
+                          <p>{TYPE_LABELS[ev.type] || ev.type}</p>
+                          <span className="deadline-date" style={{ color: colors.dot }}>{evDate}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
-
-            <div className="card-link">View All Deadlines</div>
           </div>
-
         </div>
-
       </div>
 
-      {/* DAY POPUP */}
       {showDayPopup && selectedDay && (
         <div
           className="event-overlay"
-          onClick={() => setShowDayPopup(false)}
+          onClick={() => { setShowDayPopup(false); setSelectedDay(null); }}
           style={{ zIndex: 10001 }}
         >
           <div
@@ -379,93 +433,121 @@ const Calender = () => {
             style={{ maxWidth: 520 }}
             onClick={(e) => e.stopPropagation()}
           >
-            {(() => {
-              const dayData = calendarData.find((d) => d.day === selectedDay);
-              const event = dayData?.events?.[0];
-              return (
-                <>
-                  <div className="event-header">
-                    <div>
-                      <p className="event-label" style={{ marginBottom: 8 }}>
-                        {event ? event.type || "Meeting" : "Daily event"}
-                      </p>
-                      <h2 style={{ margin: 0, fontSize: 24 }}>
-                        {event ? event.title : `No event on May ${selectedDay}`}
-                      </h2>
-                      {event && (
-                        <p className="event-subtitle" style={{ marginTop: 8, color: "#6b7280", fontSize: 14 }}>
-                          Today • {event.time} • {event.type || "Meeting"}
-                        </p>
-                      )}
+            <div className="event-header">
+              <div>
+                <p className="event-label" style={{ marginBottom: 8 }}>
+                  {selectedDay.toLocaleDateString("en-US", { weekday: "long" })}
+                </p>
+                <h2 style={{ margin: 0, fontSize: 24 }}>
+                  {selectedDay.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                </h2>
+              </div>
+              <button className="event-close" onClick={() => { setShowDayPopup(false); setSelectedDay(null); }}>×</button>
+            </div>
+
+            <div className="event-step">
+              {(() => {
+                const dayEvents = getEventsForDate(selectedDay);
+                if (dayEvents.length === 0) {
+                  return (
+                    <div style={{ textAlign: "center", padding: "20px 0" }}>
+                      <p style={{ color: "#9ca3af", marginBottom: 16 }}>No events for this day</p>
+                      <button
+                        className="btn-primary"
+                        onClick={() => { setShowDayPopup(false); setSelectedDay(null); setEditEvent(null); setShowEventModal(true); }}
+                      >
+                        Create Event
+                      </button>
                     </div>
-                    <button className="event-close" onClick={() => setShowDayPopup(false)}>
-                      ×
-                    </button>
-                  </div>
-
-                  <div className="event-step">
-                    {event ? (
-                      <>
-                        <div className="popup-action-row" style={{ gap: 12, marginBottom: 20 }}>
-                          <button className="btn-primary" style={{ flex: 1 }}>
-                            Join Google Meet
-                          </button>
-                        </div>
-
-                        <div className="popup-info-row" style={{ marginBottom: 20 }}>
-                          <div>
-                            <p className="event-label" style={{ marginBottom: 8 }}>Attendees</p>
-                            <div className="attendee-list">
-                              <span className="attendee-avatar">A</span>
-                              <span className="attendee-avatar">B</span>
-                              <span className="attendee-avatar">C</span>
-                              <span className="attendee-more">+4</span>
+                  );
+                }
+                return (
+                  <>
+                    {dayEvents.map((ev) => {
+                      const colors = TYPE_COLORS[ev.type] || TYPE_COLORS.meeting;
+                      const time = ev.all_day ? "All Day" :
+                        `${new Date(ev.start_date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} - ${ev.end_date ? new Date(ev.end_date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""}`;
+                      return (
+                        <div key={ev.id} style={{
+                          padding: "14px 16px",
+                          borderRadius: 12,
+                          background: colors.bg,
+                          marginBottom: 10,
+                        }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div style={{ flex: 1 }}>
+                              <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: colors.text }}>
+                                {ev.title}
+                              </p>
+                              <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>
+                                {time} • {TYPE_LABELS[ev.type] || ev.type}
+                              </p>
+                              {ev.description && (
+                                <p style={{ margin: "8px 0 0", fontSize: 13, color: "#4b5563", lineHeight: 1.5 }}>
+                                  {ev.description}
+                                </p>
+                              )}
+                            </div>
+                            <div style={{ display: "flex", gap: 6, flexShrink: 0, marginLeft: 8 }}>
+                              {canManageEvents && ev.source === "manual" && (
+                                <button
+                                  onClick={() => handleEdit(ev)}
+                                  style={{
+                                    border: "none", background: "white", borderRadius: 8,
+                                    padding: "6px 8px", cursor: "pointer", color: colors.text,
+                                    display: "flex", alignItems: "center",
+                                  }}
+                                  title="Edit"
+                                >
+                                  <Edit3 size={14} />
+                                </button>
+                              )}
+                              {canManageEvents && ev.source === "manual" && (
+                                <button
+                                  onClick={() => handleDelete(ev.id)}
+                                  disabled={deleteLoading === ev.id}
+                                  style={{
+                                    border: "none", background: "white", borderRadius: 8,
+                                    padding: "6px 8px", cursor: "pointer", color: "#ef4444",
+                                    display: "flex", alignItems: "center", opacity: deleteLoading === ev.id ? 0.5 : 1,
+                                  }}
+                                  title="Delete"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
-
-                        <div className="popup-divider" />
-
-                        <div className="popup-section">
-                          <div className="popup-section-heading">Description</div>
-                          <p style={{ color: "#4b5563", lineHeight: 1.7, marginTop: 8 }}>
-                            Review sprint blockers and align priorities for deployment.
-                          </p>
-                        </div>
-
-                        <div className="popup-section" style={{ marginTop: 16 }}>
-                          <div className="popup-section-heading">Files</div>
-                          <div className="popup-file-row">
-                            <span>Meeting notes</span>
-                            <span style={{ color: "#6366f1" }}>View</span>
-                          </div>
-                        </div>
-
-                        <div className="event-footer" style={{ marginTop: 24 }}>
-                          <button className="btn-cancel" onClick={() => setShowDayPopup(false)}>
-                            Delete
-                          </button>
-                          <button className="btn-primary" onClick={() => setShowDayPopup(false)}>
-                            Edit Event
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <p style={{ color: "#9ca3af", textAlign: "center", padding: "20px 0" }}>
-                        No events for this day.
-                      </p>
+                      );
+                    })}
+                    {canManageEvents && (
+                      <div style={{ marginTop: 12, textAlign: "center" }}>
+                        <button
+                          className="btn-primary"
+                          onClick={() => { setShowDayPopup(false); setSelectedDay(null); setEditEvent(null); setShowEventModal(true); }}
+                          style={{ padding: "8px 20px", fontSize: 13 }}
+                        >
+                          Add Another Event
+                        </button>
+                      </div>
                     )}
-                  </div>
-                </>
-              );
-            })()}
+                  </>
+                );
+              })()}
+            </div>
           </div>
         </div>
       )}
 
-      <Event isOpen={showEventModal} onClose={() => setShowEventModal(false)} />
-    </div>
+      <Event
+        isOpen={showEventModal}
+        onClose={() => { setShowEventModal(false); setEditEvent(null); }}
+        onEventCreated={handleEventCreated}
+        editEvent={editEvent}
+      />
+    </DashboardLayout>
   );
-};
+}
 
 export default Calender;
