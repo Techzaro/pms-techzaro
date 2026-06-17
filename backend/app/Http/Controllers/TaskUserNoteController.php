@@ -10,29 +10,47 @@ class TaskUserNoteController extends Controller
 {
     public function show(Task $task)
     {
-        $note = TaskUserNote::where('task_id', $task->id)
+        $notes = TaskUserNote::where('task_id', $task->id)
             ->where('user_id', auth()->id())
-            ->first();
+            ->orderBy('created_at', 'desc')
+            ->get(['id', 'note', 'created_at']);
 
-        return response()->json([
-            'note' => $note?->note ?? '',
-        ]);
+        return response()->json(['notes' => $notes]);
     }
 
     public function store(Request $request, Task $task)
     {
         $validated = $request->validate([
-            'note' => 'nullable|string|max:5000',
+            'note' => 'required|string|max:5000',
         ]);
 
-        $note = TaskUserNote::updateOrCreate(
-            ['task_id' => $task->id, 'user_id' => auth()->id()],
-            ['note' => $validated['note'] ?? ''],
-        );
-
-        return response()->json([
-            'message' => 'Note saved.',
-            'note' => $note->note,
+        $note = TaskUserNote::create([
+            'task_id' => $task->id,
+            'user_id' => auth()->id(),
+            'note' => $validated['note'],
         ]);
+
+        $notes = TaskUserNote::where('task_id', $task->id)
+            ->where('user_id', auth()->id())
+            ->orderBy('created_at', 'desc')
+            ->get(['id', 'note', 'created_at']);
+
+        return response()->json(['notes' => $notes]);
+    }
+
+    public function destroy(Task $task, TaskUserNote $note)
+    {
+        if ((int) $note->user_id !== (int) auth()->id()) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        $note->delete();
+
+        $notes = TaskUserNote::where('task_id', $task->id)
+            ->where('user_id', auth()->id())
+            ->orderBy('created_at', 'desc')
+            ->get(['id', 'note', 'created_at']);
+
+        return response()->json(['notes' => $notes]);
     }
 }

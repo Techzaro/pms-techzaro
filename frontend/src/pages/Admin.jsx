@@ -2,18 +2,13 @@
  * Admin / Dashboard page component.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Header from "../components/layout/Header";
 import Sidebar from "../components/layout/Sidebar";
 import "../components/layout/DashboardLayout.css";
-import { getUser, getCurrentRole } from "../utils/auth";
-import { useUnifiedSummary } from "../hooks/useUnifiedSummary";
-import { useCallback, useEffect, useState } from "react";
-import Header from "../components/layout/Header";
-import Sidebar from "../components/layout/Sidebar";
-import "../components/layout/DashboardLayout.css";
 import { authToken, getUser, getCurrentRole } from "../utils/auth";
+import { useUnifiedSummary } from "../hooks/useUnifiedSummary";
 import API_URL from "../config/api";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import "./Admin.css";
@@ -92,6 +87,12 @@ function Admin() {
     title: w.title,
     member: w.assignees?.map((a) => a.name).join(', ') || '—',
     status: w.priority ? w.priority + ' Priority' : '—',
+  }));
+
+  const completedToday = (dashboard?.completedToday || []).map((c) => ({
+    title: c.title,
+    project: c.project || '—',
+    time: c.completed_at || '—',
   }));
 
   const activeProjects = (dashboard?.activeProjects || []).map((p) => ({
@@ -217,15 +218,18 @@ function Admin() {
             ))}
           </div>
 <br />
-          {/* TODAY WORKLOAD */}
+          {/* TODAY'S TASKS */}
           <div className="workload-card">
             <div className="workload-card-header">
-              <h3>Today's Workload</h3>
+              <h3>Today's Tasks</h3>
               <button className="workload-view-btn">View All Tasks</button>
             </div>
 
             <div className="workload-list">
-              {todayWorkload.map((item, index) => (
+              {todayWorkload.length === 0 ? (
+                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No tasks due today</p>
+              ) : (
+                todayWorkload.map((item, index) => (
                 <div key={index} className="workload-item">
                   <div className="workload-item-left">
                     <span className="workload-time">{item.time}</span>
@@ -242,7 +246,7 @@ function Admin() {
                     {item.status}
                   </span>
                 </div>
-              ))}
+              )))}
             </div>
           </div>
 
@@ -494,131 +498,32 @@ function Admin() {
             </div>
           </div>
 
-          {/* RECENT ACTIVITY */}
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: "20px",
-              padding: "24px",
-              boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-            }}
-          >
-            {/* HEADER */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: "20px",
-                  fontWeight: "600",
-                }}
-              >
-                Today's Workload
-              </h3>
-
-              <span
-                style={{
-                  fontSize: "14px",
-                  color: "#6366F1",
-                  fontWeight: "500",
-                  cursor: "pointer",
-                }}
-              >
-                View All Tasks
-              </span>
+          {/* COMPLETED TODAY */}
+          <div style={{ background: "#fff", borderRadius: "20px", padding: "24px", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", marginBottom: "30px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "600" }}>Completed Today</h3>
             </div>
-
-            {recentActivities.map((activity, index) => (
-              <div
-                key={index}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "16px 0",
-                  borderBottom:
-                    index !== recentActivities.length - 1
-                      ? "1px solid #F3F4F6"
-                      : "none",
-                }}
-              >
-                {/* LEFT SIDE */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                  }}
-                >
-                  {/* ICON */}
-                  <div
-                    style={{
-                      width: "42px",
-                      height: "42px",
-                      borderRadius: "12px",
-                      background:
-                        activity.type === "completed"
-                          ? "#EEF2FF"
-                          : activity.type === "upload"
-                            ? "#ECFDF3"
-                            : activity.type === "review"
-                              ? "#FFF7ED"
-                              : "#EFF6FF",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <img
-                      src={
-                        activity.type === "completed"
-                          ? "/blue-tick.svg"
-                          : activity.type === "upload"
-                            ? "/arrowup.svg"
-                            : activity.type === "review"
-                              ? "/orange-eye.svg"
-                              : "/plus.svg"
-                      }
-                      alt="icon"
-                      style={{
-                        width: "20px",
-                        height: "20px",
-                      }}
-                    />
+            {completedToday.length === 0 ? (
+              <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No tasks completed today</p>
+            ) : (
+              completedToday.map((item, index) => (
+                <div key={index} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 0", borderBottom: index !== completedToday.length - 1 ? "1px solid #F3F4F6" : "none" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                    <div style={{ width: "42px", height: "42px", borderRadius: "12px", background: "#ECFDF3", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ fontSize: "18px" }}>✓</span>
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontSize: "15px", color: "#374151", fontWeight: "500" }}>{item.title}</p>
+                      <span style={{ fontSize: "12px", color: "#9ca3af" }}>{item.project}</span>
+                    </div>
                   </div>
-
-                  {/* TEXT */}
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: "15px",
-                      color: "#374151",
-                      fontWeight: "500",
-                    }}
-                  >
-                    {activity.title}
-                  </p>
+                  <span style={{ color: "#9CA3AF", fontSize: "13px", whiteSpace: "nowrap" }}>{item.time}</span>
                 </div>
-
-                {/* TIME */}
-                <span
-                  style={{
-                    color: "#9CA3AF",
-                    fontSize: "13px",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {activity.time}
-                </span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
+
+         
         </div>
 
          <div className="calender-sidebar">

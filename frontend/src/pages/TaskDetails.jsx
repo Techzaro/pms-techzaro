@@ -103,12 +103,12 @@ function TaskDetails() {
   const location = useLocation();
   const taskIds = location.state?.taskIds || [];
   const sourcePages = {
-   tasks: { label: "My Tasks", path: rolePath("tasks") },
-   taskby: { label: "Tasks Assigned By You", path: rolePath("taskby") },
-   "self-tasks": { label: "Self Tasks", path: rolePath("self-tasks") },
+    tasks: { label: "My Tasks", path: rolePath("tasks") },
+    taskby: { label: "Tasks Assigned By You", path: rolePath("taskby") },
+    "self-tasks": { label: "Self Tasks", path: rolePath("self-tasks") },
   };
 
-const [task, setTask] = useState(null);
+  const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
@@ -123,68 +123,69 @@ const [task, setTask] = useState(null);
   const [taskConfirmDialog, setTaskConfirmDialog] = useState({ open: false, type: null });
   const [taskReopenDialog, setTaskReopenDialog] = useState(false);
   const [taskActing, setTaskActing] = useState(false);
-  const [noteText, setNoteText] = useState("");
+  const [noteInput, setNoteInput] = useState("");
+  const [notes, setNotes] = useState([]);
   const [noteSaving, setNoteSaving] = useState(false);
 
-const source = sourcePages[location.state?.from] || null;
+  const source = sourcePages[location.state?.from] || null;
 
-const fetchTask = useCallback(async (refresh = false) => {
-  if (!taskId) return;
+  const fetchTask = useCallback(async (refresh = false) => {
+    if (!taskId) return;
 
-  try {
-    setLoading(true);
-    const token = authToken();
-    const res = await fetch(`${API_URL}/tasks/${taskId}`, {
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setTask(data.task);
-    } else if (res.status === 404) {
+    try {
+      setLoading(true);
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTask(data.task);
+      } else if (res.status === 404) {
+        setTask(null);
+        showMessage("Task not found", "error");
+      } else {
+        setTask(null);
+      }
+    } catch (err) {
+      console.error("Failed to fetch task", err);
       setTask(null);
-      showMessage("Task not found", "error");
-    } else {
-      setTask(null);
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error("Failed to fetch task", err);
-    setTask(null);
-  } finally {
-    setLoading(false);
-  }
-}, [taskId]);
+  }, [taskId]);
 
-useEffect(() => {
-  if (taskId) fetchTask(true);
-}, [taskId, fetchTask]);
+  useEffect(() => {
+    if (taskId) fetchTask(true);
+  }, [taskId, fetchTask]);
 
-const currentIdx = taskIds.findIndex(
-  (id) => String(id) === String(taskId)
-);
+  const currentIdx = taskIds.findIndex(
+    (id) => String(id) === String(taskId)
+  );
 
-const prevTaskId =
-  currentIdx > 0 ? taskIds[currentIdx - 1] : null;
+  const prevTaskId =
+    currentIdx > 0 ? taskIds[currentIdx - 1] : null;
 
-const nextTaskId =
-  currentIdx >= 0 && currentIdx < taskIds.length - 1
-    ? taskIds[currentIdx + 1]
-    : null;
+  const nextTaskId =
+    currentIdx >= 0 && currentIdx < taskIds.length - 1
+      ? taskIds[currentIdx + 1]
+      : null;
 
-// YAHAN taskSourcePages aur second source declaration NAHI hona chahiye
+  // YAHAN taskSourcePages aur second source declaration NAHI hona chahiye
 
-const currentUser = getUser();
-const canEdit = task?.can_edit ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10) && task?.status?.toLowerCase() !== "approved");
-const canSubmitTask = task?.can_submit ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)) && ["pending", "reopened"].includes(task?.status));
-const isCreator = task?.is_creator ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10));
-const isAssignee = task?.is_assignee ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)));
-const isApproved = task?.status?.toLowerCase() === "approved";
+  const currentUser = getUser();
+  const canEdit = task?.can_edit ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10) && task?.status?.toLowerCase() !== "approved");
+  const canSubmitTask = task?.can_submit ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)) && ["pending", "reopened"].includes(task?.status));
+  const isCreator = task?.is_creator ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10));
+  const isAssignee = task?.is_assignee ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)));
+  const isApproved = task?.status?.toLowerCase() === "approved";
 
-const goToTask = (id) => {
-  if (!id) return;
-  navigate(rolePath(`tasks/task-details/${id}`), {
-    state: { taskIds, from: location.state?.from },
-  });
-};
+  const goToTask = (id) => {
+    if (!id) return;
+    navigate(rolePath(`tasks/task-details/${id}`), {
+      state: { taskIds, from: location.state?.from },
+    });
+  };
   const assignees = task?.assignees || [];
   const assigner = task?.assigner;
   const subtasks = task?.subtasks || [];
@@ -206,9 +207,9 @@ const goToTask = (id) => {
     fetch(`${API_URL}/tasks/${task.id}/my-note`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
     })
-      .then((res) => res.ok ? res.json() : { note: "" })
-      .then((data) => setNoteText(data.note || ""))
-      .catch(() => {});
+      .then((res) => res.ok ? res.json() : { notes: [] })
+      .then((data) => { setNotes(data.notes || []); setNoteInput(""); })
+      .catch(() => { });
   }, [task?.id]);
 
   useEffect(() => {
@@ -217,24 +218,45 @@ const goToTask = (id) => {
     fetch(`${API_URL}/tasks/${task.id}/changes/mark-read`, {
       method: "POST",
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-    }).catch(() => {});
+    }).catch(() => { });
   }, [task?.id, task?.unviewed_changes_count]);
 
   const saveNote = async () => {
-    if (!task?.id) return;
+    if (!task?.id || !noteInput.trim()) return;
     setNoteSaving(true);
     const token = authToken();
     try {
       const res = await fetch(`${API_URL}/tasks/${task.id}/my-note`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ note: noteText }),
+        body: JSON.stringify({ note: noteInput }),
       });
-      if (res.ok) showMessage("Note saved.");
+      if (res.ok) {
+        const data = await res.json();
+        setNotes(data.notes || []);
+        setNoteInput("");
+      }
     } catch {
       showMessage("Could not save note.", "error");
     }
     setNoteSaving(false);
+  };
+
+  const deleteNote = async (noteId) => {
+    if (!task?.id) return;
+    const token = authToken();
+    try {
+      const res = await fetch(`${API_URL}/tasks/${task.id}/my-note/${noteId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setNotes(data.notes || []);
+      }
+    } catch {
+      showMessage("Could not delete note.", "error");
+    }
   };
 
   const handleDeliverableActionSuccess = (updatedDeliverable) => {
@@ -296,396 +318,406 @@ const goToTask = (id) => {
 
   return (
     <>
-    <DashboardLayout hideRightSidebar>
-      <div className="td-page">
-        {message && <div className={`td-toast td-toast--${messageType}`}>{message}</div>}
+      <DashboardLayout hideRightSidebar>
+        <div className="td-page">
+          {message && <div className={`td-toast td-toast--${messageType}`}>{message}</div>}
 
-        <div className="td-layout">
-          {/* ===== LEFT ===== */}
-          <div className="td-main">
-            <Breadcrumb items={[
-              { label: "Tasks", path: rolePath("tasks") },
-              ...(source ? [{ label: source.label, path: source.path }] : []),
-              { label: task.title },
-            ]} />
+          <div className="td-layout">
+            {/* ===== LEFT ===== */}
+            <div className="td-main">
+              <Breadcrumb items={[
+                { label: "Tasks", path: rolePath("tasks") },
+                ...(source ? [{ label: source.label, path: source.path }] : []),
+                { label: task.title },
+              ]} />
 
-            {isAssignee && task?.unviewed_changes?.length > 0 && (
-              <div className="td-changes-panel">
-                <div className="td-changes-header">
-                  <span className="td-changes-icon">&#9654;</span>
-                  <span className="td-changes-title">Recent Changes</span>
-                  <span className="td-changes-count">{task.unviewed_changes.length} update(s)</span>
+              {isAssignee && task?.unviewed_changes?.length > 0 && (
+                <div className="td-changes-panel">
+                  <div className="td-changes-header">
+                    <span className="td-changes-icon">&#9654;</span>
+                    <span className="td-changes-title">Recent Changes</span>
+                    <span className="td-changes-count">{task.unviewed_changes.length} update(s)</span>
+                  </div>
+                  <ul className="td-changes-list">
+                    {task.unviewed_changes.map((c, i) => (
+                      <li key={c.id || i}>
+                        <strong>{c.modified_by}</strong> changed <strong>{c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+                        {c.old_value ? <span className="td-change-detail"> — {c.old_value} → {c.new_value}</span> : <span className="td-change-detail"> — {c.new_value}</span>}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <ul className="td-changes-list">
-                  {task.unviewed_changes.map((c, i) => (
-                    <li key={c.id || i}>
-                      <strong>{c.modified_by}</strong> changed <strong>{c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
-                      {c.old_value ? <span className="td-change-detail"> — {c.old_value} → {c.new_value}</span> : <span className="td-change-detail"> — {c.new_value}</span>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+              )}
 
-            <div className="td-title-row">
-              <h1 className="td-title">
-                {task.title}
-              </h1>
-              <div className="td-title-actions">
-                <button className="td-nav-btn" onClick={() => goToTask(prevTaskId)} disabled={!prevTaskId}><ChevronLeft size={18} /></button>
-                <button className="td-nav-btn" onClick={() => goToTask(nextTaskId)} disabled={!nextTaskId}><ChevronRight size={18} /></button>
-                {canEdit && (
-                  <>
-                    <button className="td-btn-outline" onClick={() => setShowEditModal(true)}>
-                      <Pencil size={15} strokeWidth={2.5} />
-                      Edit
+              <div className="td-title-row">
+                <h1 className="td-title">
+                  {task.title}
+                </h1>
+                <div className="td-title-actions">
+                  <button className="td-nav-btn" onClick={() => goToTask(prevTaskId)} disabled={!prevTaskId}><ChevronLeft size={18} /></button>
+                  <button className="td-nav-btn" onClick={() => goToTask(nextTaskId)} disabled={!nextTaskId}><ChevronRight size={18} /></button>
+                  {canEdit && (
+                    <>
+                      <button className="td-btn-outline" onClick={() => setShowEditModal(true)}>
+                        <Pencil size={15} strokeWidth={2.5} />
+                        Edit
+                      </button>
+                      <button className="td-btn-danger" onClick={handleDeleteTask}>
+                        Delete
+                      </button>
+                    </>
+                  )}
+                  {!isApproved && (
+                    <button className="td-btn-primary" onClick={() => setShowSubtaskModal(true)}>
+                      <Plus size={16} strokeWidth={2.5} />
+                      Add Subtask
                     </button>
-                    <button className="td-btn-danger" onClick={handleDeleteTask}>
-                      Delete
+                  )}
+                  {canSubmitTask && (
+                    <button className="td-btn-primary" onClick={() => setTaskSubmitModalOpen(true)}>
+                      <LuSend size={15} />
+                      {task.status === "reopened" ? "Resubmit Task" : "Submit Task"}
                     </button>
-                  </>
-                )}
-                {!isApproved && (
-                  <button className="td-btn-primary" onClick={() => setShowSubtaskModal(true)}>
-                    <Plus size={16} strokeWidth={2.5} />
-                    Add Subtask
-                  </button>
-                )}
-                {canSubmitTask && (
-                  <button className="td-btn-primary" onClick={() => setTaskSubmitModalOpen(true)}>
-                    <LuSend size={15} />
-                    {task.status === "reopened" ? "Resubmit Task" : "Submit Task"}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {task.description && (
-              <div>
-                <p className="td-desc">{task.description}</p>
-              </div>
-            )}
-
-            <div className="td-badges">
-              <span className="td-badge" style={{ background: statusBgColor(task.status), color: statusColor(task.status) }}>
-                <span className="td-badge-dot" style={{ background: statusColor(task.status) }} />
-                {statusLabel(task.status)}
-              </span>
-              <span className="td-badge" style={{ background: priorityBgColor(task.priority), color: priorityColor(task.priority) }}>
-                <span className="td-badge-dot" style={{ background: priorityColor(task.priority) }} />
-                {task.priority} Priority
-              </span>
-            </div>
-
-            {/* STATS */}
-            <div className="td-stats">
-              <div className="td-stat td-stat--progress">
-                <span className="td-stat-label">Overall Progress</span>
-                <div className="td-progress"><span style={{ width: `${progress}%` }} /></div>
-                <span className="td-stat-big">{progress}%</span>
-              </div>
-              <div className="td-stat td-stat--trio">
-                <div className="td-trio-item">
-                  <div className="td-stat-ic td-stat-ic--blue"><Users size={18} /></div>
-                  <div>
-                    <span className="td-stat-big">{subtasks.length}</span>
-                    <span className="td-stat-label">Subtasks</span>
-                  </div>
+                  )}
                 </div>
-                <div className="td-trio-item">
-                  <div className="td-stat-ic td-stat-ic--orange"><FolderOpen size={18} /></div>
-                  <div>
-                    <span className="td-stat-big">{files.length}</span>
-                    <span className="td-stat-label">Attachments</span>
-                  </div>
+              </div>
+
+              {task.description && (
+                <div>
+                  <p className="td-desc">{task.description}</p>
                 </div>
-                <div className="td-trio-item">
-                  <div className="td-stat-ic td-stat-ic--green"><Calendar size={18} /></div>
-                  <div>
-                    <span className="td-stat-big td-stat-big--sm">{formatShortDate(task.end_date)}</span>
-                    <span className="td-stat-label">Deadline</span>
+              )}
+
+              <div className="td-badges">
+                <span className="td-badge" style={{ background: statusBgColor(task.status), color: statusColor(task.status) }}>
+                  <span className="td-badge-dot" style={{ background: statusColor(task.status) }} />
+                  {statusLabel(task.status)}
+                </span>
+                <span className="td-badge" style={{ background: priorityBgColor(task.priority), color: priorityColor(task.priority) }}>
+                  <span className="td-badge-dot" style={{ background: priorityColor(task.priority) }} />
+                  {task.priority} Priority
+                </span>
+              </div>
+
+              {/* STATS */}
+              <div className="td-stats">
+                <div className="td-stat td-stat--progress">
+                  <span className="td-stat-label">Overall Progress</span>
+                  <div className="td-progress"><span style={{ width: `${progress}%` }} /></div>
+                  <span className="td-stat-big">{progress}%</span>
+                </div>
+                <div className="td-stat td-stat--trio">
+                  <div className="td-trio-item">
+                    <div className="td-stat-ic td-stat-ic--blue"><Users size={18} /></div>
+                    <div>
+                      <span className="td-stat-big">{subtasks.length}</span>
+                      <span className="td-stat-label">Subtasks</span>
+                    </div>
+                  </div>
+                  <div className="td-trio-item">
+                    <div className="td-stat-ic td-stat-ic--orange"><FolderOpen size={18} /></div>
+                    <div>
+                      <span className="td-stat-big">{files.length}</span>
+                      <span className="td-stat-label">Attachments</span>
+                    </div>
+                  </div>
+                  <div className="td-trio-item">
+                    <div className="td-stat-ic td-stat-ic--green"><Calendar size={18} /></div>
+                    <div>
+                      <span className="td-stat-big td-stat-big--sm">{formatShortDate(task.end_date)}</span>
+                      <span className="td-stat-label">Deadline</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Task Submission Workflow */}
-            {(isAssignee || isCreator) && (
-              <TaskSubmissionPanel
-                task={task}
-                isCreator={isCreator}
-                isAssignee={isAssignee}
-                onTaskUpdate={handleTaskActionSuccess}
-                onSubmitClick={() => setTaskSubmitModalOpen(true)}
-                confirmDialog={taskConfirmDialog}
-                setConfirmDialog={setTaskConfirmDialog}
-                reopenDialog={taskReopenDialog}
-                setReopenDialog={setTaskReopenDialog}
-                acting={taskActing}
-                setActing={setTaskActing}
-              />
-            )}
+              {/* Task Submission Workflow */}
+              {(isAssignee || isCreator) && (
+                <TaskSubmissionPanel
+                  task={task}
+                  isCreator={isCreator}
+                  isAssignee={isAssignee}
+                  onTaskUpdate={handleTaskActionSuccess}
+                  onSubmitClick={() => setTaskSubmitModalOpen(true)}
+                  confirmDialog={taskConfirmDialog}
+                  setConfirmDialog={setTaskConfirmDialog}
+                  reopenDialog={taskReopenDialog}
+                  setReopenDialog={setTaskReopenDialog}
+                  acting={taskActing}
+                  setActing={setTaskActing}
+                />
+              )}
 
-            {/* TAB CONTENT */}
-            <div className="td-content">
+              {/* TAB CONTENT */}
+              <div className="td-content">
                 {/* TABS */}
-            <div className="td-tabs">
-              {[
-                { id: "deliverables", label: "Deliverables", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> },
-                { id: "overview", label: "Overview", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
-                { id: "subtasks", label: "Subtasks", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="M9 3v4M14 3v4"/><path d="M9 12l2 2 4-4"/></svg> },
-                { id: "files", label: "Files", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg> },
-              ].map(({ id, label, icon }) => (
-                <button key={id} className={`td-tab ${tab === id ? "td-tab--on" : ""}`} onClick={() => setTab(id)}>
-                  {icon}
-                  {label}
-                </button>
-              ))}
-            </div>
-            <div className="td-content-details">
+                <div className="td-tabs">
+                  {[
+                    { id: "deliverables", label: "Deliverables", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg> },
+                    { id: "overview", label: "Overview", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
+                    { id: "subtasks", label: "Subtasks", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="14" height="14" rx="2" /><path d="M9 3v4M14 3v4" /><path d="M9 12l2 2 4-4" /></svg> },
+                    { id: "files", label: "Files", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg> },
+                  ].map(({ id, label, icon }) => (
+                    <button key={id} className={`td-tab ${tab === id ? "td-tab--on" : ""}`} onClick={() => setTab(id)}>
+                      {icon}
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="td-content-details">
 
-              {tab === "overview" && (
-                <div className="td-overview">
-                  <h2 className="td-section-title">Task Details</h2>
-                  <div className="td-overview-grid">
-                    <div className="td-overview-left">
-                      <p>{task.description || "No description provided for this task."}</p>
-                      <div className="td-reqs">
-                        <h3>Requirements</h3>
-                        {Array.isArray(task.requirements) && task.requirements.length > 0 ? (
-                          <ul>
-                            {task.requirements.map((req, idx) => (
-                              <li key={idx}><CheckCircle2 size={16} /> {req}</li>
+                  {tab === "overview" && (
+                    <div className="td-overview">
+                      <h2 className="td-section-title">Task Details</h2>
+                      <div className="td-overview-grid">
+                        <div className="td-overview-left">
+                          <p>{task.description || "No description provided for this task."}</p>
+                          <div className="td-reqs">
+                            <h3>Requirements</h3>
+                            {Array.isArray(task.requirements) && task.requirements.length > 0 ? (
+                              <ul>
+                                {task.requirements.map((req, idx) => (
+                                  <li key={idx}><CheckCircle2 size={16} /> {req}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p style={{ color: "#6b7280", fontSize: "14px" }}>No requirements added.</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="td-overview-right">
+                          <div className="td-img-placeholder">
+                            <FolderOpen size={48} strokeWidth={1} />
+                            <span>Task Preview</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {tab === "subtasks" && (
+                    <div>
+                      <div className="td-section-header">
+                        <h2 className="td-section-title">Subtasks</h2>
+                        <span className="td-section-count">{completedCount}/{subtasks.length} Completed</span>
+                      </div>
+                      {subtasks.length === 0 ? (
+                        <p className="td-empty">No subtasks yet. Click "Add Subtask" to create one.</p>
+                      ) : (
+                        <table className="td-table">
+                          <thead>
+                            <tr>
+                              <th>Deliverables</th>
+                              <th>Assigned By</th>
+                              <th>Status</th>
+                              <th>Date</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {subtasks.map((t) => (
+                              <tr key={t.id}>
+                                <td>
+                                  <div className="td-task-name">{t.title}</div>
+                                  {t.description && <div className="td-task-sub">{t.description}</div>}
+                                </td>
+                                <td>
+                                  <div className="td-assignee">
+                                    <div className="td-avatar">{initials(t.assignee?.name)}</div>
+                                    <div>
+                                      <div className="td-assignee-name">{t.assignee?.name || "—"}</div>
+                                      <div className="td-assignee-role">Member</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>
+                                  <span className="td-pill" style={{ background: statusBgColor(t.status), color: statusColor(t.status) }}>
+                                    <span className="td-pill-dot" style={{ background: statusColor(t.status) }} />
+                                    {statusLabel(t.status)}
+                                  </span>
+                                </td>
+                                <td className="td-date">{formatShortDate(t.end_date)}</td>
+                              </tr>
                             ))}
-                          </ul>
-                        ) : (
-                          <p style={{ color: "#6b7280", fontSize: "14px" }}>No requirements added.</p>
-                        )}
-                      </div>
+                          </tbody>
+                        </table>
+                      )}
                     </div>
-                    <div className="td-overview-right">
-                      <div className="td-img-placeholder">
-                        <FolderOpen size={48} strokeWidth={1} />
-                        <span>Task Preview</span>
+                  )}
+
+                  {tab === "deliverables" && (
+                    <div>
+                      <div className="td-section-header">
+                        <h2 className="td-section-title">Deliverables</h2>
+                        <span className="td-section-count">{task.completed_deliverables || 0}/{task.total_deliverables || 0} Completed</span>
                       </div>
+                      {(task.deliverables || []).length === 0 ? (
+                        <p className="td-empty">No deliverables linked to this task.</p>
+                      ) : (
+                        <table className="td-table">
+                          <thead>
+                            <tr>
+                              <th>Deliverable</th>
+                              <th>Due Date</th>
+                              <th>Status</th>
+                              <th>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(task.deliverables || []).map((d) => (
+                              <tr key={d.id}>
+                                <td>
+                                  <div className="td-task-name">{d.title}</div>
+                                  {d.description && <div className="td-task-sub">{d.description}</div>}
+                                </td>
+                                <td className="td-date">{formatShortDate(d.due_date)}</td>
+                                <td>
+                                  <span className="td-pill" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }}>
+                                    <span className="td-pill-dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }} />
+                                    {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}
+                                  </span>
+                                </td>
+                                <td>
+                                  <div style={{ display: "flex", gap: "6px" }}>
+                                    {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
+                                      <button
+                                        className="td-btn-outline"
+                                        style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
+                                        onClick={() => setSubmitModal({ open: true, deliverable: d })}
+                                      >
+                                        <LuSend size={12} /> Submit
+                                      </button>
+                                    ) : (
+                                      <button
+                                        className="td-btn-outline"
+                                        style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
+                                        onClick={() => {
+                                          if (isCreator) {
+                                            setAssignerModal({ open: true, deliverable: d });
+                                          } else {
+                                            setViewModal({ open: true, deliverable: d });
+                                          }
+                                        }}
+                                      >
+                                        <IoEyeOutline size={12} /> View
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {tab === "subtasks" && (
-                <div>
-                  <div className="td-section-header">
-                    <h2 className="td-section-title">Subtasks</h2>
-                    <span className="td-section-count">{completedCount}/{subtasks.length} Completed</span>
-                  </div>
-                  {subtasks.length === 0 ? (
-                    <p className="td-empty">No subtasks yet. Click "Add Subtask" to create one.</p>
-                  ) : (
-                    <table className="td-table">
-                      <thead>
-                        <tr>
-                          <th>Deliverables</th>
-                          <th>Assigned By</th>
-                          <th>Status</th>
-                          <th>Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {subtasks.map((t) => (
-                          <tr key={t.id}>
-                            <td>
-                              <div className="td-task-name">{t.title}</div>
-                              {t.description && <div className="td-task-sub">{t.description}</div>}
-                            </td>
-                            <td>
-                              <div className="td-assignee">
-                                <div className="td-avatar">{initials(t.assignee?.name)}</div>
-                                <div>
-                                  <div className="td-assignee-name">{t.assignee?.name || "—"}</div>
-                                  <div className="td-assignee-role">Member</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td>
-                              <span className="td-pill" style={{ background: statusBgColor(t.status), color: statusColor(t.status) }}>
-                                <span className="td-pill-dot" style={{ background: statusColor(t.status) }} />
-                                {statusLabel(t.status)}
-                              </span>
-                            </td>
-                            <td className="td-date">{formatShortDate(t.end_date)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
                   )}
+
+                  {tab === "files" && <FileUploadSection taskId={task.id} files={files} isCreator={isCreator} isAssignee={isAssignee} isApproved={isApproved} onFileChange={() => fetchTask(false)} />}
+
                 </div>
-              )}
-
-              {tab === "deliverables" && (
-                <div>
-                  <div className="td-section-header">
-                    <h2 className="td-section-title">Deliverables</h2>
-                    <span className="td-section-count">{task.completed_deliverables || 0}/{task.total_deliverables || 0} Completed</span>
-                  </div>
-                  {(task.deliverables || []).length === 0 ? (
-                    <p className="td-empty">No deliverables linked to this task.</p>
-                  ) : (
-                    <table className="td-table">
-                      <thead>
-                        <tr>
-                          <th>Deliverable</th>
-                          <th>Due Date</th>
-                          <th>Status</th>
-                          <th>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(task.deliverables || []).map((d) => (
-                          <tr key={d.id}>
-                            <td>
-                              <div className="td-task-name">{d.title}</div>
-                              {d.description && <div className="td-task-sub">{d.description}</div>}
-                            </td>
-                            <td className="td-date">{formatShortDate(d.due_date)}</td>
-                            <td>
-                              <span className="td-pill" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }}>
-                                <span className="td-pill-dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }} />
-                                {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}
-                              </span>
-                            </td>
-                            <td>
-                              <div style={{ display: "flex", gap: "6px" }}>
-                                {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
-                                  <button
-                                    className="td-btn-outline"
-                                    style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
-                                    onClick={() => setSubmitModal({ open: true, deliverable: d })}
-                                  >
-                                    <LuSend size={12} /> Submit
-                                  </button>
-                                ) : (
-                                  <button
-                                    className="td-btn-outline"
-                                    style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
-                                    onClick={() => {
-                                      if (isCreator) {
-                                        setAssignerModal({ open: true, deliverable: d });
-                                      } else {
-                                        setViewModal({ open: true, deliverable: d });
-                                      }
-                                    }}
-                                  >
-                                    <IoEyeOutline size={12} /> View
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              )}
-
-              {tab === "files" && <FileUploadSection taskId={task.id} files={files} isCreator={isCreator} isAssignee={isAssignee} isApproved={isApproved} onFileChange={() => fetchTask(false)} />}
-
+              </div>
             </div>
           </div>
+        
+        {/* ===== RIGHT SIDEBAR ===== */}
+        <aside className="td-sidebar">
+          <div className="td-card">
+            <h3 className="td-card-title">Task Information</h3>
+            <ul className="td-info">
+              <li><span className="td-dot" style={{ background: "#3b82f6" }} /><div><span className="td-info-label">Project</span><span className="td-info-val">{project?.title || "—"}</span></div></li>
+              <li><span className="td-dot" style={{ background: "#f59e0b" }} /><div><span className="td-info-label">Created By</span><span className="td-info-val">{assigner?.name || "—"}</span></div></li>
+              <li><span className="td-dot" style={{ background: "#8b5cf6" }} /><div><span className="td-info-label">Assigned To</span><span className="td-info-val">{assignees.map((a) => a.name).join(", ") || "—"}</span></div></li>
+              <li><span className="td-dot" style={{ background: "#22c55e" }} /><div><span className="td-info-label">Last Updated</span><span className="td-info-val">{task.updated_at ? timeAgo(task.updated_at) : "—"}</span></div></li>
+              <li><span className="td-dot" style={{ background: "#ef4444" }} /><div><span className="td-info-label">Estimated Time</span><span className="td-info-val">{task.end_date ? formatShortDate(task.end_date) : "—"}</span></div></li>
+            </ul>
+          </div>
 
-          {/* ===== RIGHT SIDEBAR ===== */}
-          <aside className="td-sidebar">
-            <div className="td-card">
-              <h3 className="td-card-title">Task Information</h3>
-              <ul className="td-info">
-                <li><span className="td-dot" style={{ background: "#3b82f6" }} /><div><span className="td-info-label">Project</span><span className="td-info-val">{project?.title || "—"}</span></div></li>
-                <li><span className="td-dot" style={{ background: "#f59e0b" }} /><div><span className="td-info-label">Created By</span><span className="td-info-val">{assigner?.name || "—"}</span></div></li>
-                <li><span className="td-dot" style={{ background: "#8b5cf6" }} /><div><span className="td-info-label">Assigned To</span><span className="td-info-val">{assignees.map((a) => a.name).join(", ") || "—"}</span></div></li>
-                <li><span className="td-dot" style={{ background: "#22c55e" }} /><div><span className="td-info-label">Last Updated</span><span className="td-info-val">{task.updated_at ? timeAgo(task.updated_at) : "—"}</span></div></li>
-                <li><span className="td-dot" style={{ background: "#ef4444" }} /><div><span className="td-info-label">Estimated Time</span><span className="td-info-val">{task.end_date ? formatShortDate(task.end_date) : "—"}</span></div></li>
-              </ul>
+          <div className="td-card">
+            <div className="td-card-head">
+              <h3 className="td-card-title">Notes</h3>
             </div>
-
-            <div className="td-card">
-              <div className="td-card-head">
-                <h3 className="td-card-title">Notes</h3>
+            <textarea
+              className="td-notes-textarea"
+              rows={3}
+              placeholder="Write a note..."
+              value={noteInput}
+              onChange={(e) => setNoteInput(e.target.value)}
+            />
+            <button type="button" className="td-save-notes-btn" disabled={noteSaving || !noteInput.trim()} onClick={saveNote}>
+              {noteSaving ? "Saving…" : "Add Note"}
+            </button>
+            {notes.length > 0 && (
+              <div className="td-notes-list">
+                {notes.map((n) => (
+                  <div key={n.id} className="td-saved-note">
+                    <button type="button" className="td-note-delete" onClick={() => deleteNote(n.id)} title="Delete note">&times;</button>
+                    <p className="td-notes">{n.note}</p>
+                  </div>
+                ))}
               </div>
-              <textarea
-                className="td-notes-textarea"
-                rows={4}
-                placeholder="Write your personal note here..."
-                value={noteText}
-                onChange={(e) => setNoteText(e.target.value)}
-              />
-              <button type="button" className="td-save-notes-btn" disabled={noteSaving} onClick={saveNote}>
-                {noteSaving ? "Saving…" : "Save Notes"}
-              </button>
-            </div>
+            )}
+          </div>
 
-          </aside>
-        </div>
+        </aside>
       </div>
-    </div>
 
-    {showEditModal && (
-        <EditTaskModal
-          task={task}
-          onClose={(refresh) => { setShowEditModal(false); if (refresh) fetchTask(false); }}
-        />
-      )}
+        {showEditModal && (
+          <EditTaskModal
+            task={task}
+            onClose={(refresh) => { setShowEditModal(false); if (refresh) fetchTask(false); }}
+          />
+        )}
 
-      {showSubtaskModal && (
-        <CreateSubtaskModal
-          parentId={task.id}
-          projectId={task.project_id}
-          onClose={(refresh) => { setShowSubtaskModal(false); if (refresh) fetchTask(false); }}
-        />
-      )}
-    </DashboardLayout>
+        {showSubtaskModal && (
+          <CreateSubtaskModal
+            parentId={task.id}
+            projectId={task.project_id}
+            onClose={(refresh) => { setShowSubtaskModal(false); if (refresh) fetchTask(false); }}
+          />
+        )}
+      </DashboardLayout>
 
-    <SubmitDeliverableModal
-      key={`td-submit-${submitModal.deliverable?.id || "none"}`}
-      isOpen={submitModal.open}
-      onClose={() => setSubmitModal({ open: false, deliverable: null })}
-      deliverable={submitModal.deliverable}
-      onSubmitSuccess={handleDeliverableActionSuccess}
-    />
+      <SubmitDeliverableModal
+        key={`td-submit-${submitModal.deliverable?.id || "none"}`}
+        isOpen={submitModal.open}
+        onClose={() => setSubmitModal({ open: false, deliverable: null })}
+        deliverable={submitModal.deliverable}
+        onSubmitSuccess={handleDeliverableActionSuccess}
+      />
 
-    <ViewDeliverableModal
-      key={`td-view-${viewModal.deliverable?.id || "none"}`}
-      isOpen={viewModal.open}
-      onClose={() => setViewModal({ open: false, deliverable: null })}
-      deliverable={viewModal.deliverable}
-      onSubmitSuccess={handleDeliverableActionSuccess}
-    />
+      <ViewDeliverableModal
+        key={`td-view-${viewModal.deliverable?.id || "none"}`}
+        isOpen={viewModal.open}
+        onClose={() => setViewModal({ open: false, deliverable: null })}
+        deliverable={viewModal.deliverable}
+        onSubmitSuccess={handleDeliverableActionSuccess}
+      />
 
-    <AssignerViewModal
-      key={`td-assigner-${assignerModal.deliverable?.id || "none"}`}
-      isOpen={assignerModal.open}
-      onClose={() => setAssignerModal({ open: false, deliverable: null })}
-      deliverable={assignerModal.deliverable}
-      onActionSuccess={handleDeliverableActionSuccess}
-    />
+      <AssignerViewModal
+        key={`td-assigner-${assignerModal.deliverable?.id || "none"}`}
+        isOpen={assignerModal.open}
+        onClose={() => setAssignerModal({ open: false, deliverable: null })}
+        deliverable={assignerModal.deliverable}
+        onActionSuccess={handleDeliverableActionSuccess}
+      />
 
-    <SubmitTaskModal
-      key={`td-task-submit-${task?.id || "none"}`}
-      isOpen={taskSubmitModalOpen}
-      onClose={() => setTaskSubmitModalOpen(false)}
-      task={task}
-      onSubmitSuccess={handleTaskActionSuccess}
-    />
+      <SubmitTaskModal
+        key={`td-task-submit-${task?.id || "none"}`}
+        isOpen={taskSubmitModalOpen}
+        onClose={() => setTaskSubmitModalOpen(false)}
+        task={task}
+        onSubmitSuccess={handleTaskActionSuccess}
+      />
 
-    <ConfirmModal
-      isOpen={deleteTaskConfirmOpen}
-      onClose={() => setDeleteTaskConfirmOpen(false)}
-      onConfirm={confirmDeleteTask}
-      title="Confirm Deletion"
-      message="Are you sure you want to delete this task? This action cannot be undone."
-      confirmText="Delete"
-      cancelText="Cancel"
-      danger
-    />
+      <ConfirmModal
+        isOpen={deleteTaskConfirmOpen}
+        onClose={() => setDeleteTaskConfirmOpen(false)}
+        onConfirm={confirmDeleteTask}
+        title="Confirm Deletion"
+        message="Are you sure you want to delete this task? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger
+      />
     </>
   );
 }

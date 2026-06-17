@@ -29,12 +29,6 @@ function Projects() {
 
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchProjects();
-  }, []);
-
-  useRefreshOnEvent(['project:created', 'project:updated', 'project:deleted'], fetchProjects);
-
   const fetchProjects = async () => {
     try {
       const token = authToken();
@@ -64,6 +58,12 @@ function Projects() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  useRefreshOnEvent(['project:created', 'project:updated', 'project:deleted'], fetchProjects);
 
   const openVisibility = async (project, e) => {
     e.stopPropagation();
