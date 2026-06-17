@@ -140,6 +140,9 @@ const fetchTask = useCallback(async (refresh = false) => {
     if (res.ok) {
       const data = await res.json();
       setTask(data.task);
+    } else if (res.status === 404) {
+      setTask(null);
+      showMessage("Task not found", "error");
     } else {
       setTask(null);
     }

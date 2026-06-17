@@ -1,13 +1,38 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import Header from "../components/layout/Header";
 import Sidebar from "../components/layout/Sidebar";
 import Breadcrumb from "../components/Breadcrumb";
 import MemberExportReport from "./MemberExportReport";
 import "../components/layout/DashboardLayout.css";
 import "../pages/UserPerformance.css";
-import { getUser } from "../utils/auth";
+import { getUser, getCurrentRole } from "../utils/auth";
+import { useUnifiedSummary } from "../hooks/useUnifiedSummary";
 import "../pages/Calender.css";
+
+const TYPE_COLORS = {
+  meeting: { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" },
+  task: { bg: "#eff6ff", text: "#3b82f6", dot: "#3b82f6" },
+  other: { bg: "#fff7ed", text: "#f59e0b", dot: "#f59e0b" },
+  deadline: { bg: "#fef2f2", text: "#ef4444", dot: "#ef4444" },
+  personal: { bg: "#ecfdf5", text: "#22c55e", dot: "#22c55e" },
+  project: { bg: "#f5f3ff", text: "#8b5cf6", dot: "#8b5cf6" },
+  deliverable: { bg: "#f0fdf4", text: "#16a34a", dot: "#16a34a" },
+};
+
+const TYPE_LABELS = {
+  meeting: "Meeting",
+  task: "Task",
+  other: "Review",
+  deadline: "Deadline",
+  personal: "Personal",
+  project: "Project",
+  deliverable: "Deliverable",
+};
+
+const formatDisplayDate = (d) => {
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+};
 
 const summaryCards = [
   {
@@ -92,6 +117,8 @@ function UserPerformance() {
   const [activeFilter, setActiveFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [showExportModal, setShowExportModal] = useState(false);
+  const currentRole = getCurrentRole() || "member";
+  const { today: todayEvents, upcoming: upcomingEvents } = useUnifiedSummary();
 
   const stored = getUser();
   const userName = stored?.name || "Umar Naseer";
@@ -368,85 +395,73 @@ function UserPerformance() {
           {/* TODAY'S EVENTS */}
           <div className="task-card">
             <h3>
-              Today <span className="today-date">• June 17, 2026</span>
+              Today <span className="today-date">• {formatDisplayDate(new Date())}</span>
             </h3>
 
             <div className="agenda-list">
-              <div className="agenda-item">
-                <span className="agenda-dot" />
-                <div className="agenda-content">
-                  <div className="agenda-top">
-                    <h4>10:00 AM</h4>
-                    <span>30 min</span>
-                  </div>
-                  <p>Design Sync</p>
-                </div>
-              </div>
-
-              <div className="agenda-item">
-                <span className="agenda-dot" />
-                <div className="agenda-content">
-                  <div className="agenda-top">
-                    <h4>01:00 PM</h4>
-                    <span>1 hr</span>
-                  </div>
-                  <p>Client Meeting</p>
-                </div>
-              </div>
-
-              <div className="agenda-item">
-                <span className="agenda-dot" />
-                <div className="agenda-content">
-                  <div className="agenda-top">
-                    <h4>03:30 PM</h4>
-                    <span>1 hr</span>
-                  </div>
-                  <p>Project Review</p>
-                </div>
-              </div>
+              {todayEvents.length === 0 ? (
+                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
+                  No events today
+                </p>
+              ) : (
+                todayEvents.map((ev) => {
+                  const colors = TYPE_COLORS[ev.type] || TYPE_COLORS.meeting;
+                  const time = ev.all_day ? "All Day" : new Date(ev.start_date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+                  return (
+                    <div className="agenda-item" key={ev.id}>
+                      <span className="agenda-dot" style={{ background: colors.dot }} />
+                      <div className="agenda-content">
+                        <div className="agenda-top">
+                          <h4>{time}</h4>
+                          <span>{TYPE_LABELS[ev.type] || ev.type}</span>
+                        </div>
+                        <p>{ev.title}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
 
-            <div className="card-link">View Today's Agenda</div>
+            <Link to={`/${currentRole}/calender`} className="card-link" style={{ textDecoration: "none" }}>
+              View Today's Agenda
+            </Link>
           </div>
 <br/>
 
           {/* UPCOMING DEADLINES */}
           <div className="task-card">
-            <p style={{fontWeight:"bold",fontSize:"20px"}}>Upcoming Deadlines</p>
+            <p style={{fontWeight:"bold",fontSize:"20px", margin: 0}}>Upcoming Deadlines</p>
+            <br />
 
             <div className="deadline-list">
-              <div className="deadline-item">
-                <div>
-                  <h4>API Integration Review</h4>
-                  <div className="dealine-date" style={{display:"flex",alignItems:"center",gap:"70px"}}>
-                  <p>CRM System</p>
-                <span className="deadline-date red-text">May 19, 2026</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="deadline-item">
-                <div>
-                  <h4>Homepage Final Design</h4>
-                  <div  className="dealine-date" style={{display:"flex",alignItems:"center",gap:"40px"}}>
-                  <p>Website Redesign</p>
-                <span className="deadline-date orange-text">May 24, 2026</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="deadline-item">
-                <div>
-                  <h4>Mobile App Testing</h4>
-                  <div  className="dealine-date" style={{display:"flex",alignItems:"center",gap:"80px"}}>
-                  <p>Mobile App</p>
-                <span className="deadline-date orange-text">May 18, 2026</span>
-                  </div>
-                </div>
-              </div>
+              {upcomingEvents.length === 0 ? (
+                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
+                  No upcoming events
+                </p>
+              ) : (
+                upcomingEvents.slice(0, 5).map((ev) => {
+                  const colors = TYPE_COLORS[ev.type] || TYPE_COLORS.meeting;
+                  const parts = (ev.start_date || ev.date || "").split("T")[0].split(" ")[0].split("-");
+                  const evDate = new Date(+parts[0], +parts[1] - 1, +parts[2]).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                  return (
+                    <div className="deadline-item" key={ev.id}>
+                      <div>
+                        <h4>{ev.title}</h4>
+                        <div className="dealine-date" style={{ display: "flex", alignItems: "center", gap: 40 }}>
+                          <p>{TYPE_LABELS[ev.type] || ev.type}</p>
+                          <span className="deadline-date" style={{ color: colors.dot }}>{evDate}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
 
-            <div className="card-link">View All Deadlines</div>
+            <Link to={`/${currentRole}/calender`} className="card-link" style={{ textDecoration: "none" }}>
+              View All Deadlines
+            </Link>
           </div>
 
         </div>
