@@ -3,17 +3,45 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import Header from "../components/layout/Header";
 import Sidebar from "../components/layout/Sidebar";
 import "../components/layout/DashboardLayout.css";
 import { authToken, getUser, getCurrentRole } from "../utils/auth";
+import { useUnifiedSummary } from "../hooks/useUnifiedSummary";
 import API_URL from "../config/api";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import "./Admin.css";
 
+const TYPE_COLORS = {
+  meeting: { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" },
+  task: { bg: "#eff6ff", text: "#3b82f6", dot: "#3b82f6" },
+  other: { bg: "#fff7ed", text: "#f59e0b", dot: "#f59e0b" },
+  deadline: { bg: "#fef2f2", text: "#ef4444", dot: "#ef4444" },
+  personal: { bg: "#ecfdf5", text: "#22c55e", dot: "#22c55e" },
+  project: { bg: "#f5f3ff", text: "#8b5cf6", dot: "#8b5cf6" },
+  deliverable: { bg: "#f0fdf4", text: "#16a34a", dot: "#16a34a" },
+};
+
+const TYPE_LABELS = {
+  meeting: "Meeting",
+  task: "Task",
+  other: "Review",
+  deadline: "Deadline",
+  personal: "Personal",
+  project: "Project",
+  deliverable: "Deliverable",
+};
+
+const formatDisplayDate = (d) => {
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+};
+
 function Admin() {
   const [greeting, setGreeting] = useState("Welcome");
   const [modalOpen, setModalOpen] = useState(false);
+  const currentRole = getCurrentRole() || "member";
+  const { today: todayEvents, upcoming: upcomingEvents } = useUnifiedSummary();
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -59,6 +87,12 @@ function Admin() {
     title: w.title,
     member: w.assignees?.map((a) => a.name).join(', ') || '—',
     status: w.priority ? w.priority + ' Priority' : '—',
+  }));
+
+  const completedToday = (dashboard?.completedToday || []).map((c) => ({
+    title: c.title,
+    project: c.project || '—',
+    time: c.completed_at || '—',
   }));
 
   const activeProjects = (dashboard?.activeProjects || []).map((p) => ({
@@ -184,15 +218,18 @@ function Admin() {
             ))}
           </div>
 <br />
-          {/* TODAY WORKLOAD */}
+          {/* TODAY'S TASKS */}
           <div className="workload-card">
             <div className="workload-card-header">
-              <h3>Today's Workload</h3>
+              <h3>Today's Tasks</h3>
               <button className="workload-view-btn">View All Tasks</button>
             </div>
 
             <div className="workload-list">
-              {todayWorkload.map((item, index) => (
+              {todayWorkload.length === 0 ? (
+                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No tasks due today</p>
+              ) : (
+                todayWorkload.map((item, index) => (
                 <div key={index} className="workload-item">
                   <div className="workload-item-left">
                     <span className="workload-time">{item.time}</span>
@@ -209,7 +246,7 @@ function Admin() {
                     {item.status}
                   </span>
                 </div>
-              ))}
+              )))}
             </div>
           </div>
 
@@ -461,131 +498,32 @@ function Admin() {
             </div>
           </div>
 
-          {/* RECENT ACTIVITY */}
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: "20px",
-              padding: "24px",
-              boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-            }}
-          >
-            {/* HEADER */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: "20px",
-                  fontWeight: "600",
-                }}
-              >
-                Today's Workload
-              </h3>
-
-              <span
-                style={{
-                  fontSize: "14px",
-                  color: "#6366F1",
-                  fontWeight: "500",
-                  cursor: "pointer",
-                }}
-              >
-                View All Tasks
-              </span>
+          {/* COMPLETED TODAY */}
+          <div style={{ background: "#fff", borderRadius: "20px", padding: "24px", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", marginBottom: "30px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "600" }}>Completed Today</h3>
             </div>
-
-            {recentActivities.map((activity, index) => (
-              <div
-                key={index}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "16px 0",
-                  borderBottom:
-                    index !== recentActivities.length - 1
-                      ? "1px solid #F3F4F6"
-                      : "none",
-                }}
-              >
-                {/* LEFT SIDE */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                  }}
-                >
-                  {/* ICON */}
-                  <div
-                    style={{
-                      width: "42px",
-                      height: "42px",
-                      borderRadius: "12px",
-                      background:
-                        activity.type === "completed"
-                          ? "#EEF2FF"
-                          : activity.type === "upload"
-                            ? "#ECFDF3"
-                            : activity.type === "review"
-                              ? "#FFF7ED"
-                              : "#EFF6FF",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <img
-                      src={
-                        activity.type === "completed"
-                          ? "/blue-tick.svg"
-                          : activity.type === "upload"
-                            ? "/arrowup.svg"
-                            : activity.type === "review"
-                              ? "/orange-eye.svg"
-                              : "/plus.svg"
-                      }
-                      alt="icon"
-                      style={{
-                        width: "20px",
-                        height: "20px",
-                      }}
-                    />
+            {completedToday.length === 0 ? (
+              <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No tasks completed today</p>
+            ) : (
+              completedToday.map((item, index) => (
+                <div key={index} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 0", borderBottom: index !== completedToday.length - 1 ? "1px solid #F3F4F6" : "none" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                    <div style={{ width: "42px", height: "42px", borderRadius: "12px", background: "#ECFDF3", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ fontSize: "18px" }}>✓</span>
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontSize: "15px", color: "#374151", fontWeight: "500" }}>{item.title}</p>
+                      <span style={{ fontSize: "12px", color: "#9ca3af" }}>{item.project}</span>
+                    </div>
                   </div>
-
-                  {/* TEXT */}
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: "15px",
-                      color: "#374151",
-                      fontWeight: "500",
-                    }}
-                  >
-                    {activity.title}
-                  </p>
+                  <span style={{ color: "#9CA3AF", fontSize: "13px", whiteSpace: "nowrap" }}>{item.time}</span>
                 </div>
-
-                {/* TIME */}
-                <span
-                  style={{
-                    color: "#9CA3AF",
-                    fontSize: "13px",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {activity.time}
-                </span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
+
+         
         </div>
 
          <div className="calender-sidebar">
@@ -593,85 +531,68 @@ function Admin() {
           {/* TODAY AGENDA */}
           <div className="task-card">
             <h3>
-              Today <span className="today-date">• June 17, 2026</span>
+              Today <span className="today-date">• {formatDisplayDate(new Date())}</span>
             </h3>
 
             <div className="agenda-list">
-              <div className="agenda-item">
-                <span className="agenda-dot" />
-                <div className="agenda-content">
-                  <div className="agenda-top">
-                    <h4>10:00 AM</h4>
-                    <span>30 min</span>
-                  </div>
-                  <p>Design Sync</p>
-                </div>
-              </div>
-
-              <div className="agenda-item">
-                <span className="agenda-dot" />
-                <div className="agenda-content">
-                  <div className="agenda-top">
-                    <h4>01:00 PM</h4>
-                    <span>1 hr</span>
-                  </div>
-                  <p>Client Meeting</p>
-                </div>
-              </div>
-
-              <div className="agenda-item">
-                <span className="agenda-dot" />
-                <div className="agenda-content">
-                  <div className="agenda-top">
-                    <h4>03:30 PM</h4>
-                    <span>1 hr</span>
-                  </div>
-                  <p>Project Review</p>
-                </div>
-              </div>
+              {todayEvents.length === 0 ? (
+                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
+                  No events today
+                </p>
+              ) : (
+                todayEvents.map((ev) => {
+                  const colors = TYPE_COLORS[ev.type] || TYPE_COLORS.meeting;
+                  const time = ev.all_day ? "All Day" : new Date(ev.start_date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+                  return (
+                    <div className="agenda-item" key={ev.id}>
+                      <span className="agenda-dot" style={{ background: colors.dot }} />
+                      <div className="agenda-content">
+                        <div className="agenda-top">
+                          <h4>{time}</h4>
+                          <span>{TYPE_LABELS[ev.type] || ev.type}</span>
+                        </div>
+                        <p>{ev.title}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
 
-            <div className="card-link">View Today’s Agenda</div>
           </div>
 <br/>
 
           {/* UPCOMING DEADLINES */}
           <div className="task-card">
-            <p style={{fontWeight:"bold",fontSize:"20px"}}>Upcoming Deadlines</p>
+            <p style={{fontWeight:"bold",fontSize:"20px", margin: 0}}>Upcoming Deadlines</p>
+            <br />
 
             <div className="deadline-list">
-              <div className="deadline-item">
-                <div>
-                  <h4>API Integration Review</h4>
-                  <div className="dealine-date" style={{display:"flex",alignItems:"center",gap:"70px"}}>
-                  <p>CRM System</p>
-                <span className="deadline-date red-text">May 19, 2026</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="deadline-item">
-                <div>
-                  <h4>Homepage Final Design</h4>
-                  <div  className="dealine-date" style={{display:"flex",alignItems:"center",gap:"40px"}}>
-                  <p>Website Redesign</p>
-                <span className="deadline-date orange-text">May 24, 2026</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="deadline-item">
-                <div>
-                  <h4>Mobile App Testing</h4>
-                  <div  className="dealine-date" style={{display:"flex",alignItems:"center",gap:"80px"}}>
-                  <p>Mobile App</p>
-                <span className="deadline-date orange-text">May 18, 2026</span>
-                  </div>
-                </div>
-              </div>
+              {upcomingEvents.length === 0 ? (
+                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
+                  No upcoming events
+                </p>
+              ) : (
+                upcomingEvents.slice(0, 5).map((ev) => {
+                  const colors = TYPE_COLORS[ev.type] || TYPE_COLORS.meeting;
+                  const parts = (ev.start_date || ev.date || "").split("T")[0].split(" ")[0].split("-");
+                  const evDate = new Date(+parts[0], +parts[1] - 1, +parts[2]).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                  return (
+                    <div className="deadline-item" key={ev.id}>
+                      <div>
+                        <h4>{ev.title}</h4>
+                        <div className="dealine-date" style={{ display: "flex", alignItems: "center", gap: 40 }}>
+                          <p>{TYPE_LABELS[ev.type] || ev.type}</p>
+                          <span className="deadline-date" style={{ color: colors.dot }}>{evDate}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
 
-            <div className="card-link">View All Deadlines</div>
+          
           </div>
 
         </div>

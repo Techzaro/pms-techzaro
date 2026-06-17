@@ -28,16 +28,7 @@ function Projects() {
   const [visibilitySaving, setVisibilitySaving] = useState(false);
   const [submitProjectModal, setSubmitProjectModal] = useState({ open: false, project: null });
 
-  const role = getCurrentRole();
-  const isAdminOrManager = role === "admin" || role === "manager";
-  const currentUser = getUser(role);
-
-  const calculateProgress = (project) => {
-    const total = project.total_tasks ?? 0;
-    const completed = project.completed_tasks ?? 0;
-    if (total === 0) return 0;
-    return Math.round((completed / total) * 100);
-  };
+  const navigate = useNavigate();
 
   const fetchProjects = async () => {
     try {

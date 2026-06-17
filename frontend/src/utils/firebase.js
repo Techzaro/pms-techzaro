@@ -5,8 +5,8 @@ let messaging = null;
 
 export async function initFirebase() {
   try {
-    const { getMessaging, getToken, onMessage } = await import("firebase/messaging");
     const { initializeApp } = await import("firebase/app");
+    const { getMessaging, getToken, onMessage } = await import("firebase/messaging");
 
     const firebaseConfig = {
       apiKey: import.meta.env.VITE_FIREBASE_API_KEY,

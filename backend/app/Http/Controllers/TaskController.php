@@ -1403,5 +1403,7 @@ class TaskController extends Controller
         return response()->json([
             'message' => 'File deleted successfully',
         ]);
+        
     }
+    
 }

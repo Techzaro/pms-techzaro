@@ -138,7 +138,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/tasks/{task}/status', [TaskController::class, 'updateStatus']);
     Route::post('/tasks/{task}/complete', [TaskController::class, 'completeTask']);
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
-
     // Task submission workflow
     Route::post('/tasks/{task}/submit', [TaskController::class, 'submit']);
     Route::get('/tasks/{task}/latest-submission', [TaskController::class, 'latestSubmission']);
@@ -169,6 +168,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Personal user notes on tasks (private per user)
     Route::get('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'show']);
     Route::post('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'store']);
+    Route::delete('/tasks/{task}/my-note/{note}', [\App\Http\Controllers\TaskUserNoteController::class, 'destroy']);
 
     // My tasks / Assigned by me / Self tasks
     Route::get('/my-tasks', [TaskController::class, 'myTasks']);
@@ -227,6 +227,7 @@ Route::middleware('auth:sanctum')->group(function () {
     | UNIFIED CALENDAR - TASKS, PROJECTS, DELIVERABLES & EVENTS
     */
     Route::get('/unified-calendar', [EventController::class, 'unifiedCalendar']);
+    Route::get('/unified-summary', [EventController::class, 'unifiedSummary']);
 
     /*
     | REPORTS

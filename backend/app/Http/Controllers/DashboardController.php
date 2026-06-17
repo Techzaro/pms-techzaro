@@ -28,10 +28,11 @@ class DashboardController extends Controller
 
         return response()->json([
             'summary' => $this->getSummary($user, $role),
-            'todayWorkload' => $this->getTodayWorkload($user, $role),
+            'todayWorkload' => $this->getTodayWorkload($user),
             'activeProjects' => $this->getActiveProjects($user, $role),
             'recentActivity' => $this->getRecentActivity($user, $role),
             'upcomingDeadlines' => $this->getUpcomingDeadlines($user, $role),
+            'completedToday' => $this->getCompletedToday($user),
         ]);
     }
 
@@ -81,28 +82,18 @@ class DashboardController extends Controller
     }
 
     /**
-     * Today's workload: tasks due today or in progress.
+     * Today's tasks: tasks due today assigned to the logged-in user.
      */
-    private function getTodayWorkload(User $user, string $role): array
+    private function getTodayWorkload(User $user): array
     {
-        $query = Task::with(['project:id,title', 'assignees:id,name'])
-            ->where(function ($q) {
-                $q->whereDate('end_date', today())
-                  ->orWhere('status', 'in_progress');
-            })
+        return Task::with(['project:id,title', 'assignees:id,name'])
+            ->whereDate('end_date', today())
             ->whereNotIn('status', ['completed', 'done', 'abandoned'])
+            ->whereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
             ->latest()
-            ->limit(10);
-
-        if ($role === 'team_lead' || $role === 'member') {
-            $query->whereIn('project_id', $this->getUserProjectIds($user))
-                  ->where(function ($q) use ($user) {
-                      $q->where('assigned_by', $user->id)
-                        ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
-                  });
-        }
-
-        return $query->get()->toArray();
+            ->limit(10)
+            ->get()
+            ->toArray();
     }
 
     /**
@@ -110,16 +101,12 @@ class DashboardController extends Controller
      */
     private function getActiveProjects(User $user, string $role): array
     {
-        $query = Project::with(['creator:id,name', 'team:id,name'])
+        $projects = Project::with(['creator:id,name', 'team:id,name'])
             ->whereIn('status', ['In Progress', 'Active', 'planned'])
+            ->whereIn('id', $this->getUserProjectIds($user))
             ->latest()
-            ->limit(6);
-
-        if ($role === 'team_lead' || $role === 'member') {
-            $query->whereIn('id', $this->getUserProjectIds($user));
-        }
-
-        $projects = $query->get();
+            ->limit(6)
+            ->get();
 
         return $projects->map(function ($project) {
             $tasks = $project->tasks;
@@ -184,6 +171,27 @@ class DashboardController extends Controller
             'project' => $task->project?->title,
             'end_date' => $task->end_date?->format('M d, Y h:i A'),
         ])->toArray();
+    }
+
+    /**
+     * Completed today: tasks completed/submitted today by the logged-in user.
+     */
+    private function getCompletedToday(User $user): array
+    {
+        return Task::with(['project:id,title'])
+            ->whereIn('status', ['completed', 'done'])
+            ->whereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
+            ->whereDate('updated_at', today())
+            ->latest()
+            ->limit(10)
+            ->get()
+            ->map(fn ($task) => [
+                'id' => $task->id,
+                'title' => $task->title,
+                'project' => $task->project?->title,
+                'completed_at' => $task->updated_at?->format('M d, Y h:i A'),
+            ])
+            ->toArray();
     }
 
     /**

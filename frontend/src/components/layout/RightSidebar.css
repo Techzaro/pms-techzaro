@@ -8,10 +8,11 @@
     padding: 15px;
     border: 1px solid #e5e7eb;
     box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
-    position: sticky;
+    position: relative;
     top: 75px;
     align-self: flex-start;
     box-sizing: border-box;
+    overflow: visible;
 }
 
 .right-card {
@@ -321,4 +322,179 @@
     .event-time {
         font-size: 11px;
     }
+}
+
+/* =========================
+   HOVER POPUP
+========================= */
+.hover-popup {
+    position: absolute;
+    z-index: 9999;
+    background: #fff;
+    border-radius: 14px;
+    padding: 14px;
+    min-width: 220px;
+    max-width: 260px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+    border: 1px solid #e5e7eb;
+    pointer-events: auto;
+}
+
+.hover-popup-arrow {
+    display: none;
+}
+
+.hover-popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.hover-popup-date {
+    font-weight: 700;
+    font-size: 14px;
+    color: #0f172a;
+}
+
+.hover-popup-count {
+    font-size: 12px;
+    color: #6b7280;
+    background: #f3f4f6;
+    padding: 2px 10px;
+    border-radius: 20px;
+}
+
+.hover-popup-events {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.hover-popup-event {
+    padding: 8px 10px;
+    border-radius: 10px;
+    border-left: 3px solid;
+    background: #f9fafb;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.hover-popup-event:hover {
+    background: #f3f4f6;
+}
+
+.hover-popup-event-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: #111827;
+    margin-bottom: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hover-popup-event-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+}
+
+.hover-popup-event-type {
+    font-weight: 600;
+}
+
+.hover-popup-event-time {
+    color: #6b7280;
+}
+
+.hover-popup-more {
+    text-align: center;
+    font-size: 12px;
+    color: #6b7280;
+    padding: 6px 0;
+}
+
+.hover-popup-view-all {
+    width: 100%;
+    margin-top: 10px;
+    padding: 8px;
+    border: none;
+    border-radius: 10px;
+    background: #2563eb;
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.hover-popup-view-all:hover {
+    opacity: 0.9;
+}
+
+
+/* ==========================
+   TASKS CARD
+========================== */
+
+.tasks-card {
+  padding: 18px;
+}
+
+.task-label {
+  font-size: 12px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.task-btn {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.task-btn:hover {
+  opacity: 0.9;
+}
+
+.tasks-list {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-item {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 14px;
+  transition: all 0.2s ease;
+}
+
+.task-item:hover {
+  transform: translateY(-2px);
+}
+
+.task-item h4 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.task-item p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #6b7280;
 }
