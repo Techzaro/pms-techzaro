@@ -71,6 +71,7 @@ class DeliverableController extends Controller
             'task:id,title',
             'latestSubmission',
             'latestSubmission.submittedBy:id,name,email',
+            'latestSubmission.attachments',
             'reopenedBy:id,name',
         ]);
 
@@ -104,6 +105,7 @@ class DeliverableController extends Controller
             'task:id,title',
             'latestSubmission',
             'latestSubmission.submittedBy:id,name,email',
+            'latestSubmission.attachments',
         ])
             ->where('assigned_to', $user->id)
             ->where('created_by', $user->id)
@@ -133,16 +135,21 @@ class DeliverableController extends Controller
             'creator:id,name,email',
             'task:id,title,assigned_by',
             'task.assigner:id,name,email',
-            'submissions' => fn($q) => $q->with('submittedBy:id,name,email')->latest(),
-            'latestSubmission' => fn($q) => $q->with('submittedBy:id,name,email'),
+            'submissions' => fn($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
+            'latestSubmission' => fn($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
             'workflowEvents' => fn($q) => $q->with('user:id,name,email'),
             'approvedBy:id,name',
             'rejectedBy:id,name',
             'reopenedBy:id,name',
+            'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
         ]);
 
+        $payload = $deliverable->toArray();
+        $payload['unviewed_changes'] = $deliverable->unviewedChanges;
+        $payload['unviewed_changes_count'] = $deliverable->unviewedChanges->count();
+
         return response()->json([
-            'deliverable' => $deliverable,
+            'deliverable' => $payload,
         ]);
     }
 
@@ -176,6 +183,18 @@ class DeliverableController extends Controller
 
         // Send assignment notification
         if ($deliverable->assigned_to && $deliverable->assigned_to !== $user->id) {
+            $deliverable->loadMissing('task:id,title');
+            $taskTitle = $deliverable->task->title ?? '';
+            $dueDate = $deliverable->due_date ? $deliverable->due_date->format('d-M-Y') : '';
+
+            $message = 'You have been assigned a new deliverable: "' . $deliverable->title . '"';
+            if ($taskTitle) {
+                $message .= "\n\nTask: " . $taskTitle;
+            }
+            if ($dueDate) {
+                $message .= "\n\nDue Date: " . $dueDate;
+            }
+
             Notification::create([
                 'user_id' => $deliverable->assigned_to,
                 'sender_user_id' => $user->id,
@@ -183,8 +202,8 @@ class DeliverableController extends Controller
                 'related_module' => 'deliverable',
                 'related_id' => $deliverable->id,
                 'title' => 'Deliverable Assigned',
-                'message' => 'A new deliverable "' . $deliverable->title . '" has been assigned to you by ' . $user->name . '.',
-                'link' => '/deliveries/deliverable-details/' . $deliverable->id,
+                'message' => $message,
+                'link' => '/deliveries?selectedDeliverable=' . $deliverable->id,
             ]);
         }
 
@@ -215,11 +234,120 @@ class DeliverableController extends Controller
             'assigned_to' => 'sometimes|nullable|exists:users,id',
         ]);
 
+        // Snapshot old values before update
+        $oldValues = [];
+        $fieldLabels = [
+            'title' => 'Title',
+            'description' => 'Description',
+            'priority' => 'Priority',
+            'due_date' => 'Due Date',
+            'status' => 'Status',
+        ];
+        foreach (array_keys($fieldLabels) as $f) {
+            if (array_key_exists($f, $validated)) {
+                $oldValues[$f] = $deliverable->{$f};
+            }
+        }
+
+        $oldAssignedTo = $deliverable->assigned_to;
         $deliverable->update($validated);
 
+        // Track field changes
+        $changes = [];
+        foreach ($oldValues as $f => $oldVal) {
+            $newVal = $deliverable->{$f};
+            $oldStr = is_object($oldVal) && method_exists($oldVal, 'format') ? $oldVal->format('Y-m-d H:i') : (string) $oldVal;
+            $newStr = is_object($newVal) && method_exists($newVal, 'format') ? $newVal->format('Y-m-d H:i') : (string) $newVal;
+            if ($oldStr !== $newStr) {
+                $changes[] = [
+                    'field_name' => $f,
+                    'label' => $fieldLabels[$f],
+                    'old_value' => $oldStr,
+                    'new_value' => $newStr,
+                ];
+            }
+        }
+
+        // Track assignee changes
+        if (array_key_exists('assigned_to', $validated) && (int) $validated['assigned_to'] !== (int) $oldAssignedTo) {
+            $oldName = $oldAssignedTo ? User::find($oldAssignedTo)?->name : 'None';
+            $newName = $validated['assigned_to'] ? User::find($validated['assigned_to'])?->name : 'None';
+            $changes[] = [
+                'field_name' => 'assigned_to',
+                'label' => 'Assignee',
+                'old_value' => $oldName ?? 'None',
+                'new_value' => $newName ?? 'None',
+            ];
+        }
+
+        // If reassigned to a different user, send assignment notification
+        if (isset($validated['assigned_to']) && (int) $validated['assigned_to'] !== (int) $oldAssignedTo && (int) $deliverable->assigned_to !== (int) $user->id) {
+            $deliverable->loadMissing('task:id,title');
+            $taskTitle = $deliverable->task->title ?? '';
+            $dueDate = $deliverable->due_date ? $deliverable->due_date->format('d-M-Y') : '';
+
+            $message = 'You have been assigned a new deliverable: "' . $deliverable->title . '"';
+            if ($taskTitle) {
+                $message .= "\n\nTask: " . $taskTitle;
+            }
+            if ($dueDate) {
+                $message .= "\n\nDue Date: " . $dueDate;
+            }
+
+            Notification::create([
+                'user_id' => $deliverable->assigned_to,
+                'sender_user_id' => $user->id,
+                'type' => 'deliverable_assigned',
+                'related_module' => 'deliverable',
+                'related_id' => $deliverable->id,
+                'title' => 'Deliverable Assigned',
+                'message' => $message,
+                'link' => '/deliveries?selectedDeliverable=' . $deliverable->id,
+            ]);
+        } elseif ($deliverable->assigned_to && $deliverable->assigned_to !== $user->id) {
+            $changeMsg = 'The deliverable "' . $deliverable->title . '" has been updated by ' . $user->name . '.';
+            $changeCount = count($changes);
+            if ($changeCount > 0) {
+                $changeMsg .= ' ' . $changeCount . ' change(s) were made. Click to review changes.';
+            }
+
+            Notification::create([
+                'user_id' => $deliverable->assigned_to,
+                'sender_user_id' => $user->id,
+                'type' => 'deliverable_updated',
+                'related_module' => 'deliverable',
+                'related_id' => $deliverable->id,
+                'title' => 'Deliverable Updated',
+                'message' => $changeMsg,
+                'link' => '/deliveries?selectedDeliverable=' . $deliverable->id,
+            ]);
+        }
+
+        // Create DeliverableChange records and workflow events
+        foreach ($changes as $c) {
+            $deliverable->changes()->create([
+                'field_name' => $c['field_name'],
+                'old_value' => $c['old_value'],
+                'new_value' => $c['new_value'],
+                'modified_by' => $user->id,
+                'is_viewed' => false,
+            ]);
+            DeliverableWorkflowEvent::create([
+                'deliverable_id' => $deliverable->id,
+                'event_type' => 'field_changed',
+                'user_id' => $user->id,
+                'comment' => $c['label'] . ': ' . $c['old_value'] . ' → ' . $c['new_value'],
+            ]);
+        }
+
+        $changeCount = count($changes);
+
         return response()->json([
-            'message' => 'Deliverable updated successfully',
+            'message' => $changeCount > 0
+                ? 'Deliverable updated — ' . $changeCount . ' change(s) made'
+                : 'Deliverable updated successfully',
             'deliverable' => $deliverable->fresh()->load(['assignee:id,name,email,role', 'creator:id,name']),
+            'changes_count' => $changeCount,
         ]);
     }
 
@@ -260,7 +388,11 @@ class DeliverableController extends Controller
 
         $validated = $request->validate([
             'comment' => 'nullable|string|max:2000',
-            'file' => 'nullable|file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif|max:51200',
+            'file' => 'nullable|file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,webp,ppt,pptx,txt|max:51200',
+            'files' => 'nullable|array',
+            'files.*' => 'file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,webp,ppt,pptx,txt|max:51200',
+            'links' => 'nullable|array',
+            'links.*' => 'string|max:2048',
         ]);
 
         $filePath = null;
@@ -272,13 +404,47 @@ class DeliverableController extends Controller
             $filePath = $file->store('deliverable-submissions/' . $deliverable->id, 'public');
         }
 
-        DeliverableSubmission::create([
+        $submission = DeliverableSubmission::create([
             'deliverable_id' => $deliverable->id,
             'submitted_by' => $user->id,
             'comment' => $validated['comment'] ?? null,
             'file_path' => $filePath,
             'file_name' => $fileName,
         ]);
+
+        // Handle multiple files
+        if ($request->hasFile('files')) {
+            foreach ($request->file('files') as $file) {
+                $originalName = $file->getClientOriginalName();
+                $mimeType = $file->getMimeType();
+                $path = $file->store('deliverable-submissions/' . $deliverable->id, 'public');
+                $isImage = str_starts_with($mimeType, 'image/');
+
+                $submission->attachments()->create([
+                    'submission_type' => 'deliverable',
+                    'file_name' => basename($path),
+                    'original_name' => $originalName,
+                    'file_path' => $path,
+                    'file_type' => $mimeType,
+                    'file_size' => $file->getSize(),
+                    'attachment_type' => $isImage ? 'image' : 'file',
+                    'url' => '/storage/' . $path,
+                ]);
+            }
+        }
+
+        // Handle links
+        if (!empty($validated['links'])) {
+            foreach ($validated['links'] as $linkUrl) {
+                $submission->attachments()->create([
+                    'submission_type' => 'deliverable',
+                    'file_name' => $linkUrl,
+                    'original_name' => $linkUrl,
+                    'attachment_type' => 'link',
+                    'url' => $linkUrl,
+                ]);
+            }
+        }
 
         $updateData = [
             'status' => 'submitted',
@@ -318,7 +484,7 @@ class DeliverableController extends Controller
                 'related_id' => $deliverable->id,
                 'title' => 'Deliverable Submitted',
                 'message' => $user->name . ' has submitted the deliverable "' . $deliverable->title . '" for your review.',
-                'link' => '/deliveries/deliverable-details/' . $deliverable->id,
+                'link' => '/deliveries-by-you?selectedDeliverable=' . $deliverable->id,
             ]);
         }
 
@@ -327,8 +493,8 @@ class DeliverableController extends Controller
             'deliverable' => $deliverable->fresh()->load([
                 'assignee:id,name,email,role',
                 'creator:id,name',
-                'submissions' => fn($q) => $q->with('submittedBy:id,name,email')->latest(),
-                'latestSubmission' => fn($q) => $q->with('submittedBy:id,name,email'),
+                'submissions' => fn($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
+                'latestSubmission' => fn($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
             ]),
         ]);
     }
@@ -364,7 +530,7 @@ class DeliverableController extends Controller
                 'related_id' => $deliverable->id,
                 'title' => 'Deliverable Approved',
                 'message' => 'Your deliverable "' . $deliverable->title . '" has been approved.',
-                'link' => '/deliveries/deliverable-details/' . $deliverable->id,
+                'link' => '/deliveries?selectedDeliverable=' . $deliverable->id,
             ]);
         }
 
@@ -420,7 +586,7 @@ class DeliverableController extends Controller
                 'related_id' => $deliverable->id,
                 'title' => 'Deliverable Rejected',
                 'message' => $msg,
-                'link' => '/deliveries/deliverable-details/' . $deliverable->id,
+                'link' => '/deliveries?selectedDeliverable=' . $deliverable->id,
             ]);
         }
 
@@ -503,7 +669,7 @@ class DeliverableController extends Controller
                 'related_id' => $deliverable->id,
                 'title' => 'Deliverable Reopened',
                 'message' => $msg,
-                'link' => '/deliveries/deliverable-details/' . $deliverable->id,
+                'link' => '/deliveries?selectedDeliverable=' . $deliverable->id,
             ]);
         }
 
@@ -662,5 +828,12 @@ class DeliverableController extends Controller
         return response()->json([
             'submission' => $submission,
         ]);
+    }
+
+    public function markChangesRead(Deliverable $deliverable)
+    {
+        $user = request()->user();
+        $deliverable->changes()->where('is_viewed', false)->update(['is_viewed' => true]);
+        return response()->json(['message' => 'Changes marked as read']);
     }
 }

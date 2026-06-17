@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -10,6 +11,7 @@ import { GoDotFill } from "react-icons/go";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import "./Projects.css";
+import { formatDateTime } from "../utils/formatDateTime";
 import "../pages/Task.css";
 
 function Projects() {
@@ -30,6 +32,8 @@ function Projects() {
   useEffect(() => {
     fetchProjects();
   }, []);
+
+  useRefreshOnEvent(['project:created', 'project:updated', 'project:deleted'], fetchProjects);
 
   const fetchProjects = async () => {
     try {
@@ -324,7 +328,7 @@ function Projects() {
                       <span className="date-icon">📅</span>
                       {project.end_date ? (
                         <span>
-                          {new Date(project.end_date).toLocaleDateString()}
+                          {formatDateTime(project.end_date).replace("\n", " ")}
                         </span>
                       ) : (
                         <span>No deadline set</span>

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import "./ReopenDialog.css";
+import { toDatetimeLocal } from "../utils/formatDateTime";
 
 function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
   const [comment, setComment] = useState("");
@@ -91,9 +92,9 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
           </div>
 
           <div className="rd-field">
-            <label className="rd-label">New Target Date (optional)</label>
+            <label className="rd-label">New Target Date & Time (optional)</label>
             <input
-              type="date"
+              type="datetime-local"
               className="rd-input"
               value={newDeadline}
               onChange={(e) => setNewDeadline(e.target.value)}

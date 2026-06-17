@@ -27,13 +27,12 @@ import SubmitTaskModal from "../components/SubmitTaskModal";
 import TaskSubmissionPanel from "../components/TaskSubmissionPanel";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
+import { publish } from "../utils/eventBus";
+import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
 import "./TaskDetails.css";
 
 function formatShortDate(value) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return formatDateTimeShort(value);
 }
 
 function timeAgo(iso) {
@@ -124,6 +123,8 @@ const [task, setTask] = useState(null);
   const [taskConfirmDialog, setTaskConfirmDialog] = useState({ open: false, type: null });
   const [taskReopenDialog, setTaskReopenDialog] = useState(false);
   const [taskActing, setTaskActing] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
 
 const source = sourcePages[location.state?.from] || null;
 
@@ -169,17 +170,14 @@ const nextTaskId =
     ? taskIds[currentIdx + 1]
     : null;
 
-const currentUser = getUser();
-const isCreator =
-  task &&
-  currentUser &&
-  parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10);
-const isAssignee =
-  task &&
-  currentUser &&
-  (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10));
+// YAHAN taskSourcePages aur second source declaration NAHI hona chahiye
 
-const canSubmitTask = isAssignee && ["pending", "reopened"].includes(task?.status);
+const currentUser = getUser();
+const canEdit = task?.can_edit ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10) && task?.status?.toLowerCase() !== "approved");
+const canSubmitTask = task?.can_submit ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)) && ["pending", "reopened"].includes(task?.status));
+const isCreator = task?.is_creator ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10));
+const isAssignee = task?.is_assignee ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)));
+const isApproved = task?.status?.toLowerCase() === "approved";
 
 const goToTask = (id) => {
   if (!id) return;
@@ -191,7 +189,6 @@ const goToTask = (id) => {
   const assigner = task?.assigner;
   const subtasks = task?.subtasks || [];
   const project = task?.project;
-  const activities = project?.activities || [];
   const files = task?.files || [];
   const progress = typeof task?.progress_percent === "number" ? task.progress_percent : 0;
   const completedCount = subtasks.filter((t) => ["completed", "done"].includes((t.status || "").toLowerCase())).length;
@@ -202,6 +199,43 @@ const goToTask = (id) => {
     window.scrollTo({ top: 0, behavior: "smooth" });
     setTimeout(() => { setMessage(""); setMessageType(""); }, 4000);
   }, []);
+
+  useEffect(() => {
+    if (!task?.id) return;
+    const token = authToken();
+    fetch(`${API_URL}/tasks/${task.id}/my-note`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.ok ? res.json() : { note: "" })
+      .then((data) => setNoteText(data.note || ""))
+      .catch(() => {});
+  }, [task?.id]);
+
+  useEffect(() => {
+    if (!task?.id || !task?.unviewed_changes_count) return;
+    const token = authToken();
+    fetch(`${API_URL}/tasks/${task.id}/changes/mark-read`, {
+      method: "POST",
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    }).catch(() => {});
+  }, [task?.id, task?.unviewed_changes_count]);
+
+  const saveNote = async () => {
+    if (!task?.id) return;
+    setNoteSaving(true);
+    const token = authToken();
+    try {
+      const res = await fetch(`${API_URL}/tasks/${task.id}/my-note`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ note: noteText }),
+      });
+      if (res.ok) showMessage("Note saved.");
+    } catch {
+      showMessage("Could not save note.", "error");
+    }
+    setNoteSaving(false);
+  };
 
   const handleDeliverableActionSuccess = (updatedDeliverable) => {
     setTask((prev) => {
@@ -224,6 +258,8 @@ const goToTask = (id) => {
   const handleTaskActionSuccess = (updatedTask) => {
     setTask((prev) => ({ ...prev, ...updatedTask }));
     showMessage("Task updated successfully.");
+    publish('task:updated', updatedTask);
+    publish('data:changed', { type: 'task', action: 'updated' });
   };
 
   const handleDeleteTask = async () => {
@@ -238,7 +274,7 @@ const goToTask = (id) => {
         method: "DELETE",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       });
-      if (res.ok) { showMessage("Task deleted."); setTimeout(() => navigate(rolePath("tasks")), 800); }
+      if (res.ok) { publish('task:deleted', { id: taskId }); publish('data:changed', { type: 'task', action: 'deleted' }); showMessage("Task deleted."); setTimeout(() => navigate(rolePath("tasks")), 800); }
       else showMessage("Failed to delete task.", "error");
     } catch { showMessage("Failed to delete task.", "error"); }
   };
@@ -251,7 +287,7 @@ const goToTask = (id) => {
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (res.ok) { setTask((p) => p ? { ...p, status: newStatus } : p); showMessage("Status updated."); }
+      if (res.ok) { publish('task:updated', { id: taskId, status: newStatus }); publish('data:changed', { type: 'task', action: 'updated' }); setTask((p) => p ? { ...p, status: newStatus } : p); showMessage("Status updated."); }
     } catch { showMessage("Failed to update status.", "error"); }
   };
 
@@ -273,12 +309,32 @@ const goToTask = (id) => {
               { label: task.title },
             ]} />
 
+            {isAssignee && task?.unviewed_changes?.length > 0 && (
+              <div className="td-changes-panel">
+                <div className="td-changes-header">
+                  <span className="td-changes-icon">&#9654;</span>
+                  <span className="td-changes-title">Recent Changes</span>
+                  <span className="td-changes-count">{task.unviewed_changes.length} update(s)</span>
+                </div>
+                <ul className="td-changes-list">
+                  {task.unviewed_changes.map((c, i) => (
+                    <li key={c.id || i}>
+                      <strong>{c.modified_by}</strong> changed <strong>{c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+                      {c.old_value ? <span className="td-change-detail"> — {c.old_value} → {c.new_value}</span> : <span className="td-change-detail"> — {c.new_value}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="td-title-row">
-              <h1 className="td-title">{task.title}</h1>
+              <h1 className="td-title">
+                {task.title}
+              </h1>
               <div className="td-title-actions">
                 <button className="td-nav-btn" onClick={() => goToTask(prevTaskId)} disabled={!prevTaskId}><ChevronLeft size={18} /></button>
                 <button className="td-nav-btn" onClick={() => goToTask(nextTaskId)} disabled={!nextTaskId}><ChevronRight size={18} /></button>
-                {isCreator && (
+                {canEdit && (
                   <>
                     <button className="td-btn-outline" onClick={() => setShowEditModal(true)}>
                       <Pencil size={15} strokeWidth={2.5} />
@@ -289,10 +345,12 @@ const goToTask = (id) => {
                     </button>
                   </>
                 )}
-                <button className="td-btn-primary" onClick={() => setShowSubtaskModal(true)}>
-                  <Plus size={16} strokeWidth={2.5} />
-                  Add Subtask
-                </button>
+                {!isApproved && (
+                  <button className="td-btn-primary" onClick={() => setShowSubtaskModal(true)}>
+                    <Plus size={16} strokeWidth={2.5} />
+                    Add Subtask
+                  </button>
+                )}
                 {canSubmitTask && (
                   <button className="td-btn-primary" onClick={() => setTaskSubmitModalOpen(true)}>
                     <LuSend size={15} />
@@ -302,7 +360,11 @@ const goToTask = (id) => {
               </div>
             </div>
 
-            {task.description && <p className="td-desc">{task.description}</p>}
+            {task.description && (
+              <div>
+                <p className="td-desc">{task.description}</p>
+              </div>
+            )}
 
             <div className="td-badges">
               <span className="td-badge" style={{ background: statusBgColor(task.status), color: statusColor(task.status) }}>
@@ -527,27 +589,8 @@ const goToTask = (id) => {
                 </div>
               )}
 
-              {tab === "files" && <FileUploadSection taskId={task.id} files={files} isCreator={isCreator} isAssignee={isAssignee} onFileChange={() => fetchTask(false)} />}
+              {tab === "files" && <FileUploadSection taskId={task.id} files={files} isCreator={isCreator} isAssignee={isAssignee} isApproved={isApproved} onFileChange={() => fetchTask(false)} />}
 
-              {tab === "activity" && (
-                <div>
-                  <h2 className="td-section-title">Activity</h2>
-                  {activities.length === 0 ? <p className="td-empty">No activity yet.</p> : (
-                    <ul className="td-feed">
-                      {activities.map((a) => (
-                        <li key={a.id} className="td-feed-row">
-                          <div className="td-avatar">{initials(a.user?.name)}</div>
-                          <div className="td-feed-info">
-                            <span className="td-feed-name">{a.user?.name || "System"}</span>{" "}
-                            <span className="td-feed-text">{a.summary}</span>
-                            <div className="td-feed-time">{timeAgo(a.created_at)}</div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
             </div>
           </div>
 
@@ -567,31 +610,19 @@ const goToTask = (id) => {
             <div className="td-card">
               <div className="td-card-head">
                 <h3 className="td-card-title">Notes</h3>
-                <button className="td-card-action"><Pencil size={12} /> Edit</button>
               </div>
-              <p className="td-notes">{project?.sidebar_notes || "No notes added yet."}</p>
+              <textarea
+                className="td-notes-textarea"
+                rows={4}
+                placeholder="Write your personal note here..."
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+              />
+              <button type="button" className="td-save-notes-btn" disabled={noteSaving} onClick={saveNote}>
+                {noteSaving ? "Saving…" : "Save Notes"}
+              </button>
             </div>
 
-            <div className="td-card">
-              <div className="td-card-head">
-                <h3 className="td-card-title">Activity Feed</h3>
-                <button className="td-card-action" onClick={() => setTab("activity")}>View all</button>
-              </div>
-              <ul className="td-mini-feed">
-                {activities.length === 0 ? <li className="td-empty" style={{ padding: 0 }}>No activity yet.</li> : (
-                  activities.slice(0, 3).map((a) => (
-                    <li key={a.id} className="td-mini-feed-row">
-                      <div className="td-avatar-xs">{initials(a.user?.name)}</div>
-                      <div>
-                        <span className="td-feed-name">{a.user?.name || "System"}</span>{" "}
-                        <span className="td-feed-text">{a.summary}</span>
-                        <div className="td-feed-time">{timeAgo(a.created_at)}</div>
-                      </div>
-                    </li>
-                  ))
-                )}
-              </ul>
-            </div>
           </aside>
         </div>
       </div>
@@ -660,7 +691,7 @@ const goToTask = (id) => {
 }
 
 /* ── File Upload Section Component ── */
-function FileUploadSection({ taskId, files, isCreator, isAssignee, onFileChange }) {
+function FileUploadSection({ taskId, files, isCreator, isAssignee, isApproved, onFileChange }) {
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [addingLink, setAddingLink] = useState(false);
@@ -668,7 +699,7 @@ function FileUploadSection({ taskId, files, isCreator, isAssignee, onFileChange 
   const [linkName, setLinkName] = useState("");
   const [message, setMessage] = useState("");
 
-  const canManage = isCreator || isAssignee;
+  const canManage = (isCreator || isAssignee) && !isApproved;
 
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];

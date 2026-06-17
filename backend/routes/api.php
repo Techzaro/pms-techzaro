@@ -98,6 +98,7 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::get('/projects', [ProjectController::class, 'index']);
     Route::get('/projects/{project}', [ProjectController::class, 'show']);
+    Route::post('/projects/{project}/changes/mark-read', [ProjectController::class, 'markChangesRead']);
 
     /*
     | PROJECT MANAGEMENT - WRITE (admin and manager only)
@@ -156,10 +157,17 @@ Route::middleware('auth:sanctum')->group(function () {
     // Subtask creation under a parent task
     Route::post('/tasks/{task}/subtasks', [TaskController::class, 'storeSubtask']);
 
+    // Mark task changes as read
+    Route::post('/tasks/{task}/changes/mark-read', [TaskController::class, 'markChangesRead']);
+
     // Task file attachments
     Route::post('/tasks/{task}/files', [TaskController::class, 'uploadFile']);
     Route::post('/tasks/{task}/links', [TaskController::class, 'addLink']);
     Route::delete('/tasks/{task}/files/{file}', [TaskController::class, 'deleteFile']);
+
+    // Personal user notes on tasks (private per user)
+    Route::get('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'show']);
+    Route::post('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'store']);
 
     // My tasks / Assigned by me / Self tasks
     Route::get('/my-tasks', [TaskController::class, 'myTasks']);
@@ -173,6 +181,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/deliverables/assigned-by-me', [DeliverableController::class, 'assignedByMe']);
     Route::get('/deliverables/submission-file/{submission}', [DeliverableController::class, 'downloadSubmissionFile']);
     Route::get('/deliverables/{deliverable}', [DeliverableController::class, 'show']);
+    Route::post('/deliverables/{deliverable}/changes/mark-read', [DeliverableController::class, 'markChangesRead']);
     Route::get('/self-deliverables', [DeliverableController::class, 'mySelfDeliverables']);
 
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
@@ -193,12 +202,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/deliverables/{deliverable}/self-rework', [DeliverableController::class, 'selfRework']);
 
     /*
-    | NOTIFICATIONS
+    | NOTIFICATIONS + DEVICE TOKENS
     */
     Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index']);
     Route::get('/notifications/unread-count', [\App\Http\Controllers\NotificationController::class, 'unreadCount']);
     Route::post('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead']);
     Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead']);
+
+    // Device tokens for push notifications (all authenticated users)
+    Route::post('/device-tokens', [\App\Http\Controllers\DeviceTokenController::class, 'store']);
+    Route::delete('/device-tokens', [\App\Http\Controllers\DeviceTokenController::class, 'destroy']);
 
     /*
     | CALENDAR / EVENTS

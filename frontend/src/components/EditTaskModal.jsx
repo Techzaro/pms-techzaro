@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
+import { formatDateTime, toDatetimeLocal } from "../utils/formatDateTime";
+import { publish } from "../utils/eventBus";
 import "./layout/CreateTaskModal.css";
 
 export default function EditTaskModal({ task, onClose }) {
@@ -11,8 +13,8 @@ export default function EditTaskModal({ task, onClose }) {
     title: task.title || "",
     description: task.description || "",
     priority: task.priority || "Medium",
-    start_date: task.start_date ? task.start_date.slice(0, 10) : "",
-    end_date: task.end_date ? task.end_date.slice(0, 10) : "",
+    start_date: task.start_date ? toDatetimeLocal(task.start_date) : "",
+    end_date: task.end_date ? toDatetimeLocal(task.end_date) : "",
   });
   const [allUsers, setAllUsers] = useState([]);
   const [displayUsers, setDisplayUsers] = useState([]);
@@ -20,7 +22,7 @@ export default function EditTaskModal({ task, onClose }) {
     task.assignees?.map((a) => a.id) || []
   );
   const [deliverables, setDeliverables] = useState([]);
-  const [deliverableInput, setDeliverableInput] = useState({ title: "", due_date: "" });
+  const [deliverableInput, setDeliverableInput] = useState({ title: "", due_datetime: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -51,8 +53,10 @@ export default function EditTaskModal({ task, onClose }) {
 
   const handleAddDeliverable = () => {
     if (!deliverableInput.title.trim()) return;
-    setDeliverables((prev) => [...prev, { ...deliverableInput, title: deliverableInput.title.trim() }]);
-    setDeliverableInput({ title: "", due_date: "" });
+    const dt = deliverableInput.due_datetime;
+    const dueDate = dt ? dt.replace("T", " ") + ":00" : null;
+    setDeliverables((prev) => [...prev, { title: deliverableInput.title.trim(), due_date: dueDate }]);
+    setDeliverableInput({ title: "", due_datetime: "" });
   };
 
   const handleRemoveDeliverable = (index) => {
@@ -83,6 +87,8 @@ export default function EditTaskModal({ task, onClose }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to update task");
+      publish('task:updated', data.task || data);
+      publish('data:changed', { type: 'task', action: 'updated' });
       onClose(true);
     } catch (err) {
       setError(err.message);
@@ -187,11 +193,11 @@ export default function EditTaskModal({ task, onClose }) {
               <div className="task-deadline-grid">
                 <div>
                   <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
-                  <input type="date" name="start_date" value={form.start_date} onChange={handleChange} />
+                  <input type="datetime-local" name="start_date" value={form.start_date} onChange={handleChange} />
                 </div>
                 <div>
                   <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
-                  <input type="date" name="end_date" value={form.end_date} onChange={handleChange} />
+                  <input type="datetime-local" name="end_date" value={form.end_date} onChange={handleChange} />
                 </div>
               </div>
             </div>
@@ -213,11 +219,11 @@ export default function EditTaskModal({ task, onClose }) {
                   />
                 </div>
                 <div className="task-field">
-                  <label style={{ fontSize: "13px" }}>Due Date</label>
+                  <label style={{ fontSize: "13px" }}>Due Date & Time</label>
                   <input
-                    type="date"
-                    value={deliverableInput.due_date}
-                    onChange={(e) => setDeliverableInput((prev) => ({ ...prev, due_date: e.target.value }))}
+                    type="datetime-local"
+                    value={deliverableInput.due_datetime}
+                    onChange={(e) => setDeliverableInput((prev) => ({ ...prev, due_datetime: e.target.value }))}
                     onKeyDown={handleDeliverableKeyDown}
                   />
                 </div>
@@ -237,7 +243,7 @@ export default function EditTaskModal({ task, onClose }) {
                       <div className="task-phase-item-dot" style={{ background: "#8b5cf6" }} />
                       <div className="task-phase-item-info">
                         <div className="task-phase-item-title">{d.title}</div>
-                        <div className="task-phase-item-date">{d.due_date ? new Date(d.due_date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "No due date"}</div>
+                        <div className="task-phase-item-date">{d.due_date ? formatDateTime(d.due_date).replace("\n", " ") : "No due date"}</div>
                       </div>
                       <button type="button" className="task-phase-item-remove" onClick={() => handleRemoveDeliverable(index)}>✕</button>
                     </div>

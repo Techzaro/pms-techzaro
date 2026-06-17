@@ -40,13 +40,13 @@ class Deliverable extends Model
     ];
 
     protected $casts = [
-        'due_date' => 'date',
+        'due_date' => 'datetime',
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
         'rejected_at' => 'datetime',
         'reopened_at' => 'datetime',
-        'reopen_new_deadline' => 'date',
-        'rework_new_deadline' => 'date',
+        'reopen_new_deadline' => 'datetime',
+        'rework_new_deadline' => 'datetime',
     ];
 
     public function scopeFilter(Builder $query, array $filters): Builder
@@ -122,5 +122,15 @@ class Deliverable extends Model
     public function workflowEvents(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(DeliverableWorkflowEvent::class)->latest();
+    }
+
+    public function changes()
+    {
+        return $this->hasMany(DeliverableChange::class)->latest();
+    }
+
+    public function unviewedChanges()
+    {
+        return $this->hasMany(DeliverableChange::class)->where('is_viewed', false);
     }
 }

@@ -190,12 +190,13 @@ class ProjectController extends Controller
                 $qq->where('assigned_to', $user->id)
                    ->orWhere('created_by', $user->id);
             })->with('assignee:id,name,email,role', 'latestSubmission')->latest(),
-            'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
-            'latestSubmission' => fn ($q) => $q->with('submittedBy:id,name,email'),
+            'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
+            'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
             'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
             'approvedBy:id,name',
             'rejectedBy:id,name',
             'reopenedBy:id,name',
+            'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
         ]);
 
         if ($project->team && $project->team->leader) {
@@ -208,9 +209,22 @@ class ProjectController extends Controller
         $memberIds = $project->assigned_users ?? [];
         $members = User::whereIn('id', $memberIds)->where('active', true)->orderBy('name')->get(['id', 'name', 'email', 'role']);
 
+        $isCreator = $project->created_by === $user->id;
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
+        $isAssigned = in_array($user->id, $project->assigned_users ?? []);
+        $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
+
         $payload = $project->toArray();
         $payload['members'] = $members;
         $payload['progress_percent'] = $this->computeProgressPercent($project);
+        $payload['is_creator'] = $isCreator;
+        $payload['is_assigned'] = $isAssigned;
+        $payload['is_admin_or_manager'] = $isAdminOrManager;
+        $payload['can_edit'] = $isAdminOrManager;
+        $payload['can_submit'] = in_array($project->status, $submittableStatuses) && ($isAssigned || $isCreator);
+        $payload['can_review'] = $project->status === 'submitted' && ($isCreator || $isAdminOrManager);
+        $payload['unviewed_changes'] = $project->unviewedChanges;
+        $payload['unviewed_changes_count'] = $project->unviewedChanges->count();
 
         return response()->json([
             'project' => $payload,
@@ -279,13 +293,71 @@ class ProjectController extends Controller
         $deliverables = $validated['deliverables'] ?? null;
         unset($validated['deliverables']);
 
+        // Snapshot old values before update
+        $oldValues = [];
+        $fieldLabels = [
+            'title' => 'Title',
+            'description' => 'Description',
+            'start_date' => 'Start Date',
+            'end_date' => 'End Date',
+            'priority' => 'Priority',
+            'status' => 'Status',
+            'budget' => 'Budget',
+            'category' => 'Category',
+            'client_name' => 'Client Name',
+            'website_name' => 'Website Name',
+            'website_link' => 'Website Link',
+            'goals' => 'Goals',
+        ];
+        foreach (array_keys($fieldLabels) as $f) {
+            if (array_key_exists($f, $validated)) {
+                $oldValues[$f] = $project->{$f};
+            }
+        }
+
+        $oldAssignedUsers = $project->assigned_users ?? [];
+
         $project->update($validated);
+
+        // Track field changes
+        $changes = [];
+        foreach ($oldValues as $f => $oldVal) {
+            $newVal = $project->{$f};
+            $oldStr = is_object($oldVal) && method_exists($oldVal, 'format') ? $oldVal->format('Y-m-d H:i') : (string) $oldVal;
+            $newStr = is_object($newVal) && method_exists($newVal, 'format') ? $newVal->format('Y-m-d H:i') : (string) $newVal;
+            if ($oldStr !== $newStr) {
+                $changes[] = [
+                    'field_name' => $f,
+                    'label' => $fieldLabels[$f],
+                    'old_value' => $oldStr,
+                    'new_value' => $newStr,
+                ];
+            }
+        }
+
+        // Track assigned_users changes
+        if (array_key_exists('assigned_users', $validated)) {
+            $newAssignedUsers = $validated['assigned_users'] ?? [];
+            sort($oldAssignedUsers);
+            sort($newAssignedUsers);
+            if ($oldAssignedUsers !== $newAssignedUsers) {
+                $oldNames = User::whereIn('id', $oldAssignedUsers)->pluck('name')->implode(', ');
+                $newNames = User::whereIn('id', $newAssignedUsers)->pluck('name')->implode(', ');
+                $changes[] = [
+                    'field_name' => 'assigned_users',
+                    'label' => 'Assigned Users',
+                    'old_value' => $oldNames ?: 'None',
+                    'new_value' => $newNames ?: 'None',
+                ];
+            }
+        }
 
         if ($request->has('milestones')) {
             $this->replaceProjectMilestones($project, $milestones);
         }
 
-        // Create deliverables if provided and there are assigned users
+        // Track new deliverables
+        $addedDeliverables = [];
         if (!empty($deliverables)) {
             $assignedUsers = $project->assigned_users ?? [];
             if (!empty($assignedUsers)) {
@@ -301,13 +373,47 @@ class ProjectController extends Controller
                             'created_by' => $request->user()->id,
                         ]);
                     }
+                    $addedDeliverables[] = $del['title'];
                 }
             }
         }
+        if (!empty($addedDeliverables)) {
+            $changes[] = [
+                'field_name' => 'deliverables',
+                'label' => 'Deliverable Added',
+                'old_value' => '',
+                'new_value' => implode(', ', $addedDeliverables),
+            ];
+        }
+
+        // Create ProjectChange records and workflow events
+        foreach ($changes as $c) {
+            $project->changes()->create([
+                'field_name' => $c['field_name'],
+                'old_value' => $c['old_value'],
+                'new_value' => $c['new_value'],
+                'modified_by' => $user->id,
+                'is_viewed' => false,
+            ]);
+            \App\Models\ProjectWorkflowEvent::create([
+                'project_id' => $project->id,
+                'user_id' => $user->id,
+                'action' => 'field_changed',
+                'comment' => $c['label'] . ': ' . $c['old_value'] . ' → ' . $c['new_value'],
+            ]);
+        }
+
+        $changeCount = count($changes);
+
+        // Notify assigned users about the update
+        $this->sendProjectUpdateNotification($project, $user, $changeCount);
 
         return response()->json([
-            'message' => 'Project updated successfully',
+            'message' => $changeCount > 0
+                ? 'Project updated — ' . $changeCount . ' change(s) made'
+                : 'Project updated successfully',
             'project' => $project->fresh(),
+            'changes_count' => $changeCount,
         ]);
     }
 
@@ -543,7 +649,11 @@ class ProjectController extends Controller
 
         $validated = $request->validate([
             'comment' => 'nullable|string|max:2000',
-            'file' => 'nullable|file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif|max:51200',
+            'file' => 'nullable|file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,webp,ppt,pptx,txt|max:51200',
+            'files' => 'nullable|array',
+            'files.*' => 'file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,webp,ppt,pptx,txt|max:51200',
+            'links' => 'nullable|array',
+            'links.*' => 'string|max:2048',
         ]);
 
         $filePath = null;
@@ -555,13 +665,47 @@ class ProjectController extends Controller
             $filePath = $file->store('project-submissions/' . $project->id, 'public');
         }
 
-        ProjectSubmission::create([
+        $submission = ProjectSubmission::create([
             'project_id' => $project->id,
             'submitted_by' => $user->id,
             'comment' => $validated['comment'] ?? null,
             'file_path' => $filePath,
             'file_name' => $fileName,
         ]);
+
+        // Handle multiple files
+        if ($request->hasFile('files')) {
+            foreach ($request->file('files') as $file) {
+                $originalName = $file->getClientOriginalName();
+                $mimeType = $file->getMimeType();
+                $path = $file->store('project-submissions/' . $project->id, 'public');
+                $isImage = str_starts_with($mimeType, 'image/');
+
+                $submission->attachments()->create([
+                    'submission_type' => 'project',
+                    'file_name' => basename($path),
+                    'original_name' => $originalName,
+                    'file_path' => $path,
+                    'file_type' => $mimeType,
+                    'file_size' => $file->getSize(),
+                    'attachment_type' => $isImage ? 'image' : 'file',
+                    'url' => '/storage/' . $path,
+                ]);
+            }
+        }
+
+        // Handle links
+        if (!empty($validated['links'])) {
+            foreach ($validated['links'] as $linkUrl) {
+                $submission->attachments()->create([
+                    'submission_type' => 'project',
+                    'file_name' => $linkUrl,
+                    'original_name' => $linkUrl,
+                    'attachment_type' => 'link',
+                    'url' => $linkUrl,
+                ]);
+            }
+        }
 
         $isResubmit = $project->status === 'reopened';
 
@@ -914,6 +1058,40 @@ class ProjectController extends Controller
                 'sort_order' => $index,
             ]);
         }
+    }
+
+    private function sendProjectUpdateNotification(Project $project, User $updater, int $changeCount = 0): void
+    {
+        $assignedUserIds = $project->assigned_users ?? [];
+        if (is_string($assignedUserIds)) {
+            $assignedUserIds = json_decode($assignedUserIds, true) ?? [];
+        }
+        foreach ($assignedUserIds as $assignedId) {
+            if ((int) $assignedId === (int) $updater->id) {
+                continue;
+            }
+            $message = 'The project "' . $project->title . '" has been updated by ' . $updater->name . '.';
+            if ($changeCount > 0) {
+                $message .= ' ' . $changeCount . ' change(s) were made. Click to review changes.';
+            }
+            Notification::create([
+                'user_id' => $assignedId,
+                'sender_user_id' => $updater->id,
+                'type' => 'project_updated',
+                'related_module' => 'project',
+                'related_id' => $project->id,
+                'title' => 'Project Updated',
+                'message' => $message,
+                'link' => '/projects/project-details/' . $project->id,
+            ]);
+        }
+    }
+
+    public function markChangesRead(Project $project)
+    {
+        $user = request()->user();
+        $project->changes()->where('is_viewed', false)->update(['is_viewed' => true]);
+        return response()->json(['message' => 'Changes marked as read']);
     }
 
     private function sendProjectAssignmentNotification(Project $project, User $sender): void

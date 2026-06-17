@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import "./ReopenDialog.css";
+import { toDatetimeLocal } from "../utils/formatDateTime";
 
 function ProjectReopenDialog({ isOpen, onClose, project, onReopenSuccess }) {
   const [comment, setComment] = useState("");
@@ -18,7 +19,7 @@ function ProjectReopenDialog({ isOpen, onClose, project, onReopenSuccess }) {
       document.body.style.overflow = "hidden";
       setComment("");
       setInstructions("");
-      setNewDeadline("");
+      setNewDeadline(project?.end_date ? toDatetimeLocal(project.end_date) : "");
       setFile(null);
       setError("");
     } else {
@@ -98,7 +99,7 @@ function ProjectReopenDialog({ isOpen, onClose, project, onReopenSuccess }) {
           <div className="rd-field">
             <label className="rd-label">New Deadline</label>
             <input
-              type="date"
+              type="datetime-local"
               className="rd-input"
               value={newDeadline}
               onChange={(e) => setNewDeadline(e.target.value)}

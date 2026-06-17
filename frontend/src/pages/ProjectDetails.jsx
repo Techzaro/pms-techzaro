@@ -38,10 +38,13 @@ import AssignerViewModal from "../components/AssignerViewModal";
 import ConfirmModal from "../components/ConfirmModal";
 import SubmitProjectModal from "../components/SubmitProjectModal";
 import ProjectSubmissionPanel from "../components/ProjectSubmissionPanel";
+import { formatDateTimeShort } from "../utils/formatDateTime";
 import "./ProjectDetails.css";
+import "./TaskDetails.css";
 
-import { authToken, getCurrentRole, getUser, rolePath } from "../utils/auth";
+import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
+import { publish } from "../utils/eventBus";
 const API = API_URL;
 
 /**
@@ -66,10 +69,7 @@ function statusSlug(status) {
  * Handle format short date.
  */
 function formatShortDate(value) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return formatDateTimeShort(value);
 }
 
 /**
@@ -161,8 +161,6 @@ function ProjectDetails() {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("overview");
-  const [notesDraft, setNotesDraft] = useState("");
-  const [notesSaving, setNotesSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -211,10 +209,14 @@ function ProjectDetails() {
         progress_percent: delTotal > 0 ? Math.round((delCompleted / delTotal) * 100) : 0,
       };
     });
+    publish('deliverable:updated', updatedDeliverable);
+    publish('data:changed', { type: 'deliverable', action: 'updated' });
   };
 
   const handleProjectActionSuccess = (updatedProject) => {
     setProject((prev) => ({ ...prev, ...updatedProject }));
+    publish('project:updated', updatedProject);
+    publish('data:changed', { type: 'project', action: 'updated' });
   };
 
   const loadProject = useCallback(async () => {
@@ -232,7 +234,6 @@ function ProjectDetails() {
     const p = data.project;
     if (!p) throw new Error("Invalid response");
     setProject(p);
-    setNotesDraft(p.sidebar_notes || "");
     return p;
   }, [projectId]);
 
@@ -256,6 +257,16 @@ function ProjectDetails() {
       cancelled = true;
     };
   }, [loadProject, navigate, showMessage]);
+
+  // Auto-mark project changes as read
+  useEffect(() => {
+    if (!project?.id || !project?.unviewed_changes_count) return;
+    const token = authToken();
+    fetch(`${API}/projects/${project.id}/changes/mark-read`, {
+      method: "POST",
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    }).catch(() => {});
+  }, [project?.id, project?.unviewed_changes_count]);
 
 
   const handleDeleteTask = async (taskId) => {
@@ -282,38 +293,6 @@ function ProjectDetails() {
     } catch (err) {
       console.error(err);
       showMessage("Failed to delete task.", "error");
-    }
-  };
-
-  /**
-   * Perform the handle save notes.
-   */
-
-  /**
-   * Handle handle save notes.
-   */
-  const handleSaveNotes = async () => {
-    setNotesSaving(true);
-    try {
-      const token = authToken();
-      const res = await fetch(`${API}/projects/${projectId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ sidebar_notes: notesDraft }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Save failed");
-      setProject((prev) => ({ ...prev, ...data.project }));
-      showMessage("Notes saved.");
-    } catch (err) {
-      console.error(err);
-      showMessage(err.message || "Could not save notes.", "error");
-    } finally {
-      setNotesSaving(false);
     }
   };
 
@@ -371,6 +350,8 @@ function ProjectDetails() {
         },
       });
       if (!res.ok) throw new Error("Delete failed");
+      publish('project:deleted', { id: projectId });
+      publish('data:changed', { type: 'project', action: 'deleted' });
       showMessage("Project deleted.");
       setTimeout(() => navigate(rolePath("projects")), 800);
     } catch (err) {
@@ -403,14 +384,11 @@ function ProjectDetails() {
   const checklist = Array.isArray(project.goals_checklist) ? project.goals_checklist : [];
   const progress = typeof project.progress_percent === "number" ? project.progress_percent : 0;
 
-  const currentUser = getUser();
-  const currentUserId = currentUser ? parseInt(currentUser.id, 10) : null;
-  const role = getCurrentRole();
-  const isCreator = project.creator?.id === currentUserId;
-  const isAssigned = currentUserId && (project.assigned_users || []).includes(currentUserId);
-  const isAdminOrManager = role === "admin" || role === "manager";
-  const canSubmitProject = (project.status === "pending" || project.status === "reopened" || project.status === "Planned" || project.status === "in_progress" || project.status === "In Progress") && (isAssigned || isCreator);
-  const canReviewProject = project.status === "submitted" && (isCreator || isAdminOrManager);
+  const isCreator = project.is_creator;
+  const isAssigned = project.is_assigned;
+  const isAdminOrManager = project.is_admin_or_manager;
+  const canSubmitProject = project.can_submit;
+  const canEdit = project.can_edit;
 
   const tabs = [
     { id: "overview", label: "Overview", icon: ListChecks },
@@ -466,20 +444,6 @@ function ProjectDetails() {
             ))}
           </ul>
         )}
-      </section>
-
-      <section className="pd-rail-card">
-        <h3 className="pd-rail-card__title">Notes</h3>
-        <textarea
-          className="pd-notes"
-          rows={5}
-          value={notesDraft}
-          onChange={(e) => setNotesDraft(e.target.value)}
-          placeholder="Client notes or internal reminders…"
-        />
-        <button type="button" className="pd-btn" disabled={notesSaving} onClick={handleSaveNotes}>
-          {notesSaving ? "Saving…" : "Save notes"}
-        </button>
       </section>
 
       <section className="pd-rail-card">
@@ -598,7 +562,7 @@ function ProjectDetails() {
                 <span className="pd-meta-rows__value">{project.category || "—"}</span>
               </div>
             </li>
-            {["admin", "manager"].includes(getCurrentRole()) && (
+            {isAdminOrManager && (
             <li>
               <span className="pd-meta-rows__ic">
                 <DollarSign size={18} />
@@ -668,6 +632,30 @@ function ProjectDetails() {
           { label: project.title },
         ]} />
 
+        {/* Recent Changes Summary — assignee only */}
+        {isAssigned && project?.unviewed_changes?.length > 0 && (
+          <div className="td-changes-panel" style={{ marginTop: "6px", marginBottom: "12px" }}>
+            <div className="td-changes-header">
+              <span className="td-changes-icon">&#9654;</span>
+              <span className="td-changes-title">Recent Changes</span>
+              <span className="td-changes-count">{project.unviewed_changes.length} update(s)</span>
+            </div>
+            <ul className="td-changes-list">
+              {project.unviewed_changes.map((c, i) => (
+                <li key={c.id || i}>
+                  <strong>{c.modified_by?.name || "Someone"}</strong> changed{' '}
+                  <strong>{c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+                  {c.old_value ? (
+                    <span className="td-change-detail"> — {c.old_value} &rarr; {c.new_value}</span>
+                  ) : (
+                    <span className="td-change-detail"> — {c.new_value}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <header className="pd-hero-tx">
           <div className="pd-hero-tx__main">
             <div className="pd-title-row">
@@ -683,7 +671,7 @@ function ProjectDetails() {
               <button className="td-nav-btn" onClick={() => goToProject(prevProjectId)} disabled={!prevProjectId} title="Previous project"><ChevronLeft size={18} /></button>
               <button className="td-nav-btn" onClick={() => goToProject(nextProjectId)} disabled={!nextProjectId} title="Next project"><ChevronRight size={18} /></button>
               <span className={`pd-pill-status pd-pill-status--${statusSlug(project.status)}`}>{project.status}</span>
-              {["admin", "manager"].includes(getCurrentRole()) && (
+              {canEdit && (
                 <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => setShowEditModal(true)}>
                   <Pencil size={16} />
                   Edit Project
@@ -695,7 +683,7 @@ function ProjectDetails() {
                   {project.status === "reopened" ? "Resubmit Project" : "Submit Project"}
                 </button>
               )}
-              {["admin", "manager"].includes(getCurrentRole()) && (
+              {canEdit && (
                 <button type="button" className="pd-btn-tx pd-btn-tx--danger" onClick={handleDeleteProject}>
                   <Trash2 size={16} />
                   Delete
@@ -903,7 +891,7 @@ function ProjectDetails() {
                                               className="pd-btn-tx pd-btn-tx--outline"
                                               style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
                                               onClick={() => {
-                                                if (getCurrentRole() === 'admin' || getCurrentRole() === 'manager' || (project.creator?.id && project.creator.id === authToken())) {
+                                                  if (isAdminOrManager || isCreator) {
                                                   setAssignerModal({ open: true, deliverable: d });
                                                 } else {
                                                   setViewModal({ open: true, deliverable: d });

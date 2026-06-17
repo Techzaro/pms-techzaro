@@ -1,6 +1,7 @@
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect } from "react";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
@@ -8,6 +9,7 @@ import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
 import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal";
+import { formatDateTime } from "../utils/formatDateTime";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
 
@@ -57,6 +59,8 @@ function SelfDeliveries() {
     fetchDeliverables();
   }, [search, statusFilter, timeFilter]);
 
+  useRefreshOnEvent(['deliverable:updated', 'deliverable:created', 'deliverable:deleted'], fetchDeliverables);
+
   const getInitials = (name) => {
     if (!name) return "??";
     return name.split(" ").map((w) => w[0]).join("").substring(0, 2).toUpperCase();
@@ -75,9 +79,7 @@ function SelfDeliveries() {
   };
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return "-";
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+    return formatDateTime(dateStr);
   };
 
   const formatStatus = (status) => {
@@ -181,7 +183,7 @@ function SelfDeliveries() {
                     </span>
                   </div>
                   <div className="date-box">
-                    <div>{formatDate(item.due_date)}</div>
+                    <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.due_date)}</div>
                   </div>
                   <div className="action-btns">
                     {canSubmit ? (

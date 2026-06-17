@@ -7,13 +7,6 @@ import ConfirmationDialog from "./ConfirmationDialog";
 import SelfReworkDialog from "./SelfReworkDialog";
 import "./SelfDeliverableViewModal.css";
 
-function formatDate(value) {
-  if (!value) return "\u2014";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "\u2014";
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
 function formatDateTime(value) {
   if (!value) return "\u2014";
   const d = new Date(value);
@@ -139,7 +132,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
             <span className={`sdvm-status-badge sdvm-status-${status}`}>{statusLabel}</span>
           </div>
           {(deliverable?.due_date || initialDeliverable.due_date) && (
-            <div className="sdvm-due">Due Date {formatDate(deliverable?.due_date || initialDeliverable.due_date)}</div>
+            <div className="sdvm-due">Due Date & Time {formatDateTime(deliverable?.due_date || initialDeliverable.due_date)}</div>
           )}
         </div>
 
@@ -186,7 +179,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
                   {deliverable.rework_new_deadline && (
                     <div className="sdvm-detail-item" style={{ marginTop: "12px" }}>
                       <span className="sdvm-detail-label">New Target Date</span>
-                      <span className="sdvm-detail-value">{formatDate(deliverable.rework_new_deadline)}</span>
+                      <span className="sdvm-detail-value">{formatDateTime(deliverable.rework_new_deadline)}</span>
                     </div>
                   )}
                   {deliverable.rework_file_name && (
@@ -270,7 +263,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
                           <p className="sdvm-history-text"><strong>Instructions:</strong> {item.instructions}</p>
                         )}
                         {item.new_deadline && (
-                          <p className="sdvm-history-text"><strong>Target Date:</strong> {formatDate(item.new_deadline)}</p>
+                            <p className="sdvm-history-text"><strong>Target Date:</strong> {formatDateTime(item.new_deadline)}</p>
                         )}
                         {item.file_name && (
                           <a className="sdvm-file-link" href={fileUrl(item.file_path)} target="_blank" rel="noopener noreferrer">

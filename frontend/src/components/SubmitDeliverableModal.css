@@ -158,6 +158,70 @@
   cursor: pointer;
 }
 
+.sd-dropzone-hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #9CA3AF;
+}
+
+.sd-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.sd-link-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.sd-link-input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.sd-link-input:focus {
+  border-color: #6366F1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.sd-link-add,
+.sd-link-remove {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #E5E7EB;
+  background: white;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #6B7280;
+  transition: background 0.2s, color 0.2s;
+}
+
+.sd-link-add:hover {
+  background: #DCFCE7;
+  color: #16A34A;
+  border-color: #16A34A;
+}
+
+.sd-link-remove:hover {
+  background: #FEE2E2;
+  color: #EF4444;
+  border-color: #EF4444;
+}
+
 .sd-file-preview {
   display: flex;
   align-items: center;

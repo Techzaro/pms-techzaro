@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class User extends Authenticatable
@@ -78,7 +79,7 @@ class User extends Authenticatable
     ];
 
     protected $casts = [
-        'email_verified_at' => 'datetime',
+        // 'email_verified_at' => 'datetime',
         'password' => 'hashed',
         'active' => 'boolean',
         'must_change_password' => 'boolean',
@@ -131,5 +132,15 @@ class User extends Authenticatable
     public function visibleProjects(): HasMany
     {
         return $this->hasMany(\App\Models\ProjectVisibility::class);
+    }
+
+    public function emailPreference(): HasOne
+    {
+        return $this->hasOne(\App\Models\UserEmailPreference::class);
+    }
+
+    public function deviceTokens(): HasMany
+    {
+        return $this->hasMany(\App\Models\UserDeviceToken::class);
     }
 }

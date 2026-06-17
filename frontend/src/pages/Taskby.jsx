@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { CiCalendar } from "react-icons/ci";
@@ -9,6 +10,7 @@ import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io
 import CreateTaskModal from "../components/CreateTaskModal";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
+import { formatDateOnly } from "../utils/formatDateTime";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
@@ -79,6 +81,8 @@ const Taskby = () => {
     fetchTasks();
   }, [debouncedSearch, statusFilter, timeFilter]);
 
+  useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted'], fetchTasks);
+
   const handleModalClose = (refresh) => {
     setShowTaskModal(false);
     if (refresh) fetchTasks();
@@ -102,9 +106,7 @@ const Taskby = () => {
   };
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return "-";
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+    return formatDateOnly(dateStr);
   };
 
   const formatStatus = (status) => {
@@ -213,7 +215,7 @@ const Taskby = () => {
           <div className="status-column" >Status</div>
           <div>Progress</div>
           <div className="priority-column" >Priority</div>
-           <div>Date</div>
+           <div>Due Date</div>
            <div>Action</div>
         </div>
 
@@ -268,7 +270,7 @@ const Taskby = () => {
                   </div>
                   <div className="date-box">
                     <div>{formatDate(item.start_date)}</div>
-                    <div>{formatDate(item.end_date)}</div>
+                    <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
                   </div>
                   <div className="action-btns">
                     <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'taskby' } })}>
@@ -321,7 +323,7 @@ const Taskby = () => {
                   </div>
                   <div className="date-box">
                   <div>{formatDate(item.start_date)}</div>
-                  <div>{formatDate(item.end_date)}</div>
+                  <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
                 </div>
                 <div className="action-btns">
                   <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}>

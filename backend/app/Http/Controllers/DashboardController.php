@@ -132,7 +132,7 @@ class DashboardController extends Controller
                 'name' => $project->title,
                 'client' => $project->client_name,
                 'progress' => $progress,
-                'deadline' => $project->end_date?->format('M d, Y'),
+                'deadline' => $project->end_date?->format('M d, Y h:i A'),
                 'team' => $project->team?->name,
             ];
         })->toArray();
@@ -182,7 +182,7 @@ class DashboardController extends Controller
             'id' => $task->id,
             'title' => $task->title,
             'project' => $task->project?->title,
-            'end_date' => $task->end_date?->format('M d, Y'),
+            'end_date' => $task->end_date?->format('M d, Y h:i A'),
         ])->toArray();
     }
 

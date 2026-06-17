@@ -61,7 +61,7 @@ class Project extends Model
         'approved_at' => 'datetime',
         'rejected_at' => 'datetime',
         'reopened_at' => 'datetime',
-        'reopen_new_deadline' => 'date',
+        'reopen_new_deadline' => 'datetime',
     ];
 
     /**
@@ -169,6 +169,16 @@ class Project extends Model
     public function reopenedBy()
     {
         return $this->belongsTo(User::class, 'reopened_by');
+    }
+
+    public function changes()
+    {
+        return $this->hasMany(ProjectChange::class)->latest();
+    }
+
+    public function unviewedChanges()
+    {
+        return $this->hasMany(ProjectChange::class)->where('is_viewed', false);
     }
 
     /**

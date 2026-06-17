@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import "./ReopenDialog.css";
+import { toDatetimeLocal } from "../utils/formatDateTime";
 
 function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
   const [comment, setComment] = useState("");
@@ -18,7 +19,7 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
       document.body.style.overflow = "hidden";
       setComment("");
       setInstructions("");
-      setNewDeadline("");
+      setNewDeadline(task?.end_date ? toDatetimeLocal(task.end_date) : "");
       setFile(null);
       setError("");
     } else {
@@ -98,7 +99,7 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
           <div className="rd-field">
             <label className="rd-label">New Deadline</label>
             <input
-              type="date"
+              type="datetime-local"
               className="rd-input"
               value={newDeadline}
               onChange={(e) => setNewDeadline(e.target.value)}

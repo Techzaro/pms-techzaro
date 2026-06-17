@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import "../pages/Calender.css";
 import "../components/Event.css";
 import { ChevronLeft, ChevronRight, Search, Plus, Trash2, Edit3 } from "lucide-react";
@@ -7,7 +7,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Event from "../components/Event";
 import { authToken, getCurrentRole, getUser } from "../utils/auth";
 import API_URL from "../config/api";
-import { useUnifiedSummary } from "../hooks/useUnifiedSummary";
+import { publish } from "../utils/eventBus";
 
 export const TYPE_COLORS = {
   meeting: { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" },
@@ -141,6 +141,7 @@ function Calender() {
     setSelectedDay(parsed);
     setShowDayPopup(true);
   }, [searchParams]);
+  useRefreshOnEvent(['event:created', 'event:updated', 'event:deleted'], fetchEvents);
 
   const handlePrev = () => {
     const d = new Date(currentDate);
@@ -162,8 +163,9 @@ function Calender() {
     setCurrentDate(new Date());
   };
 
-  const handleEventCreated = () => {
+  const handleEventCreated = (event) => {
     fetchEvents();
+    publish('data:changed', { type: 'event', action: event?.id ? 'updated' : 'created' });
   };
 
   const handleDelete = async (eventId) => {
@@ -177,6 +179,8 @@ function Calender() {
       });
       if (res.ok) {
         setEvents((prev) => prev.filter((e) => e.id !== eventId));
+        publish('event:deleted', { id: eventId });
+        publish('data:changed', { type: 'event', action: 'deleted' });
         setShowDayPopup(false);
         setSelectedDay(null);
       }
