@@ -27,6 +27,7 @@ import SubmitTaskModal from "../components/SubmitTaskModal";
 import TaskSubmissionPanel from "../components/TaskSubmissionPanel";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
+import { publish } from "../utils/eventBus";
 import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
 import "./TaskDetails.css";
 
@@ -152,7 +153,7 @@ const fetchTask = useCallback(async (refresh = false) => {
 
 useEffect(() => {
   if (taskId) fetchTask(true);
-}, [taskId]);
+}, [taskId, fetchTask]);
 
 const currentIdx = taskIds.findIndex(
   (id) => String(id) === String(taskId)
@@ -166,25 +167,14 @@ const nextTaskId =
     ? taskIds[currentIdx + 1]
     : null;
 
-useEffect(() => {
-  fetchTask(true);
-}, [fetchTask]);
-
 // YAHAN taskSourcePages aur second source declaration NAHI hona chahiye
 
 const currentUser = getUser();
-const isCreator =
-  task &&
-  currentUser &&
-  parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10);
-const isAssignee =
-  task &&
-  currentUser &&
-  (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10));
-
-const canSubmitTask = isAssignee && ["pending", "reopened"].includes(task?.status);
+const canEdit = task?.can_edit ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10) && task?.status?.toLowerCase() !== "approved");
+const canSubmitTask = task?.can_submit ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)) && ["pending", "reopened"].includes(task?.status));
+const isCreator = task?.is_creator ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10));
+const isAssignee = task?.is_assignee ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)));
 const isApproved = task?.status?.toLowerCase() === "approved";
-const canEdit = isCreator && !isApproved;
 
 const goToTask = (id) => {
   if (!id) return;
@@ -217,6 +207,15 @@ const goToTask = (id) => {
       .then((data) => setNoteText(data.note || ""))
       .catch(() => {});
   }, [task?.id]);
+
+  useEffect(() => {
+    if (!task?.id || !task?.unviewed_changes_count) return;
+    const token = authToken();
+    fetch(`${API_URL}/tasks/${task.id}/changes/mark-read`, {
+      method: "POST",
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    }).catch(() => {});
+  }, [task?.id, task?.unviewed_changes_count]);
 
   const saveNote = async () => {
     if (!task?.id) return;
@@ -256,6 +255,8 @@ const goToTask = (id) => {
   const handleTaskActionSuccess = (updatedTask) => {
     setTask((prev) => ({ ...prev, ...updatedTask }));
     showMessage("Task updated successfully.");
+    publish('task:updated', updatedTask);
+    publish('data:changed', { type: 'task', action: 'updated' });
   };
 
   const handleDeleteTask = async () => {
@@ -270,7 +271,7 @@ const goToTask = (id) => {
         method: "DELETE",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       });
-      if (res.ok) { showMessage("Task deleted."); setTimeout(() => navigate(rolePath("tasks")), 800); }
+      if (res.ok) { publish('task:deleted', { id: taskId }); publish('data:changed', { type: 'task', action: 'deleted' }); showMessage("Task deleted."); setTimeout(() => navigate(rolePath("tasks")), 800); }
       else showMessage("Failed to delete task.", "error");
     } catch { showMessage("Failed to delete task.", "error"); }
   };
@@ -283,7 +284,7 @@ const goToTask = (id) => {
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (res.ok) { setTask((p) => p ? { ...p, status: newStatus } : p); showMessage("Status updated."); }
+      if (res.ok) { publish('task:updated', { id: taskId, status: newStatus }); publish('data:changed', { type: 'task', action: 'updated' }); setTask((p) => p ? { ...p, status: newStatus } : p); showMessage("Status updated."); }
     } catch { showMessage("Failed to update status.", "error"); }
   };
 
@@ -305,8 +306,28 @@ const goToTask = (id) => {
               { label: task.title },
             ]} />
 
+            {isAssignee && task?.unviewed_changes?.length > 0 && (
+              <div className="td-changes-panel">
+                <div className="td-changes-header">
+                  <span className="td-changes-icon">&#9654;</span>
+                  <span className="td-changes-title">Recent Changes</span>
+                  <span className="td-changes-count">{task.unviewed_changes.length} update(s)</span>
+                </div>
+                <ul className="td-changes-list">
+                  {task.unviewed_changes.map((c, i) => (
+                    <li key={c.id || i}>
+                      <strong>{c.modified_by}</strong> changed <strong>{c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+                      {c.old_value ? <span className="td-change-detail"> — {c.old_value} → {c.new_value}</span> : <span className="td-change-detail"> — {c.new_value}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="td-title-row">
-              <h1 className="td-title">{task.title}</h1>
+              <h1 className="td-title">
+                {task.title}
+              </h1>
               <div className="td-title-actions">
                 <button className="td-nav-btn" onClick={() => goToTask(prevTaskId)} disabled={!prevTaskId}><ChevronLeft size={18} /></button>
                 <button className="td-nav-btn" onClick={() => goToTask(nextTaskId)} disabled={!nextTaskId}><ChevronRight size={18} /></button>
@@ -336,7 +357,11 @@ const goToTask = (id) => {
               </div>
             </div>
 
-            {task.description && <p className="td-desc">{task.description}</p>}
+            {task.description && (
+              <div>
+                <p className="td-desc">{task.description}</p>
+              </div>
+            )}
 
             <div className="td-badges">
               <span className="td-badge" style={{ background: statusBgColor(task.status), color: statusColor(task.status) }}>

@@ -4,6 +4,9 @@ import { Link, useNavigate } from "react-router-dom";
 
 import API_URL from "../../config/api";
 import { authToken, getCurrentRole, getUser, setUser, rolePath } from "../../utils/auth";
+import { subscribe } from "../../utils/eventBus";
+import { requestNotificationPermission, showBrowserNotification } from "../../utils/browserNotification";
+import { initFirebase } from "../../utils/firebase";
 import "./Header.css";
 
 import CreateTaskModal from "../CreateTaskModal";
@@ -21,7 +24,13 @@ function Header() {
   const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth <= 1200);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const prevCountRef = useRef(0);
   const [showNotifications, setShowNotifications] = useState(false);
+
+  useEffect(() => {
+    requestNotificationPermission();
+    initFirebase();
+  }, []);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -202,14 +211,26 @@ function Header() {
       skipLoader: true,
     })
       .then((res) => (res.ok ? res.json() : { count: 0 }))
-      .then((data) => setUnreadCount(data.count || 0))
+      .then((data) => {
+        const newCount = data.count || 0;
+        setUnreadCount((prev) => {
+          if (newCount > prev && prev > 0) {
+            showBrowserNotification('New PMS Notification', {
+              body: `You have ${newCount} unread notification${newCount > 1 ? 's' : ''}`,
+              url: window.location.href,
+            });
+          }
+          return newCount;
+        });
+      })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchNotifications, 10000);
+    const unsub = subscribe('data:changed', fetchNotifications);
+    return () => { clearInterval(interval); unsub(); };
   }, [fetchNotifications]);
 
   const openNotifications = async () => {

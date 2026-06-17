@@ -123,4 +123,14 @@ class Deliverable extends Model
     {
         return $this->hasMany(DeliverableWorkflowEvent::class)->latest();
     }
+
+    public function changes()
+    {
+        return $this->hasMany(DeliverableChange::class)->latest();
+    }
+
+    public function unviewedChanges()
+    {
+        return $this->hasMany(DeliverableChange::class)->where('is_viewed', false);
+    }
 }

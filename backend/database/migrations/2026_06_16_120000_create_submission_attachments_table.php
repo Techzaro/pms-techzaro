@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('submission_attachments', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('submission_id')->constrained()->cascadeOnDelete();
+            $table->unsignedBigInteger('submission_id');
             $table->string('submission_type', 32)->comment('task, project, or deliverable');
             $table->string('file_name')->nullable();
             $table->string('original_name')->nullable();

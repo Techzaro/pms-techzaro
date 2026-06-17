@@ -171,6 +171,16 @@ class Project extends Model
         return $this->belongsTo(User::class, 'reopened_by');
     }
 
+    public function changes()
+    {
+        return $this->hasMany(ProjectChange::class)->latest();
+    }
+
+    public function unviewedChanges()
+    {
+        return $this->hasMany(ProjectChange::class)->where('is_viewed', false);
+    }
+
     /**
      * Resolve assigned_users JSON array to User models.
      */

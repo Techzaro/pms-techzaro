@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { GoDotFill } from "react-icons/go";
@@ -78,6 +79,8 @@ function Tasks() {
   useEffect(() => {
     fetchTasks();
   }, [debouncedSearch, statusFilter]);
+
+  useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted'], fetchTasks);
 
   const handleModalClose = (refresh) => {
     setShowTaskModal(false);

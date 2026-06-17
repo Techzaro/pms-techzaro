@@ -135,6 +135,66 @@
   background: #EDE9FE;
 }
 
+.vd-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vd-file-size {
+  font-size: 11px;
+  color: #9CA3AF;
+  flex-shrink: 0;
+}
+
+.vd-image-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vd-image-thumb {
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid #E5E7EB;
+  transition: border-color 0.2s;
+}
+
+.vd-image-thumb:hover {
+  border-color: #6366F1;
+}
+
+.vd-image-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vd-image-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  cursor: pointer;
+  padding: 40px;
+}
+
+.vd-image-full {
+  max-width: 90%;
+  max-height: 90%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
 .vd-details-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

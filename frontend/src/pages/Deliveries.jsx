@@ -1,6 +1,8 @@
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect } from "react";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
@@ -35,6 +37,7 @@ function Deliveries() {
   const [timeFilter, setTimeFilter] = useState("");
   const [submitModal, setSubmitModal] = useState({ open: false, deliverable: null });
   const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const fetchDeliverables = () => {
     setLoading(true);
@@ -57,6 +60,36 @@ function Deliveries() {
   useEffect(() => {
     fetchDeliverables();
   }, [search, statusFilter, timeFilter]);
+
+  useRefreshOnEvent(['deliverable:updated', 'deliverable:created', 'deliverable:deleted'], fetchDeliverables);
+
+  useEffect(() => {
+    const selectedId = searchParams.get("selectedDeliverable");
+    if (!selectedId) return;
+
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("selectedDeliverable");
+      return next;
+    }, { replace: true });
+
+    const token = authToken();
+    fetch(`${API_URL}/deliverables/${selectedId}`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.deliverable) {
+          const d = data.deliverable;
+          if (d.status === "pending" || d.status === "rejected" || d.status === "reopened") {
+            setSubmitModal({ open: true, deliverable: d });
+          } else {
+            setViewModal({ open: true, deliverable: d });
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const getInitials = (name) => {
     if (!name) return "??";

@@ -1,17 +1,21 @@
 /**
- * Admin page component.
+ * Admin / Dashboard page component.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Header from "../components/layout/Header";
 import Sidebar from "../components/layout/Sidebar";
 import "../components/layout/DashboardLayout.css";
-import { getUser, getCurrentRole } from "../utils/auth";
+import { authToken, getUser, getCurrentRole } from "../utils/auth";
+import API_URL from "../config/api";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import "./Admin.css";
 
 function Admin() {
   const [greeting, setGreeting] = useState("Welcome");
   const [modalOpen, setModalOpen] = useState(false);
+  const [dashboard, setDashboard] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const handler = (e) => setModalOpen(e.detail.open);
@@ -22,137 +26,53 @@ function Admin() {
   useEffect(() => {
     const stored = getUser();
     const name = stored?.name || "User";
-    const hasVisited = localStorage.getItem("adminVisited");
+    setGreeting(`Welcome, ${name}`);
+  }, []);
 
-    if (!hasVisited) {
-      setGreeting(`Welcome, ${name}`);
-      localStorage.setItem("adminVisited", "true");
-    } else {
-      setGreeting(`Welcome, ${name}`);
+  const fetchDashboard = useCallback(async () => {
+    const token = authToken();
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/dashboard`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setDashboard(await res.json());
+    } catch (e) {
+      console.error("Dashboard fetch error", e);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  /* SUMMARY CARDS */
-  const summaryCards = [
-    {
-      title: "Active Projects",
-      value: "24",
-      label: "12% from last week",
-      icon: "/Vector-5.svg",
-      valueColor: "#2563EB",
-      trendColor: "#22C55E",
-      bgColor: "#EEF2FF",
-    },
-    {
-      title: "Tasks Due",
-      value: "12",
-      label: "8% from yesterday",
-      icon: "/Vector-1%20(3).svg",
-      valueColor: "#EF4444",
-      trendColor: "#22C55E",
-      bgColor: "#FEF2F2",
-    },
-    {
-      title: "Completed",
-      value: "86",
-      label: "15% from yesterday",
-      icon: "/Vector-2.svg",
-      valueColor: "#22C55E",
-      trendColor: "#22C55E",
-      bgColor: "#ECFDF5",
-    },
-    {
-      title: "Pending",
-      value: "5",
-      label: "3% from last week",
-      icon: "/Vector-3.svg",
-      valueColor: "#F59E0B",
-      trendColor: "#EF4444",
-      bgColor: "#FEF3C7",
-    },
-  ];
+  useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+  useRefreshOnEvent(['data:changed'], fetchDashboard);
 
-  /* TODAY WORKLOAD */
-  const todayWorkload = [
-    {
-      time: "10:00 AM",
-      title: "Lorem ipsum",
-      member: "Member",
-      status: "High Priority",
-      avatars: 4,
-    },
-    {
-      time: "10:30 AM",
-      title: "Lorem ipsum",
-      member: "Member",
-      status: "Medium Priority",
-      avatars: 4,
-    },
-    {
-      time: "10:00 AM",
-      title: "Lorem ipsum",
-      member: "Member",
-      status: "Low Priority",
-      avatars: 2,
-    },
-    {
-      time: "10:00 AM",
-      title: "Lorem ipsum",
-      member: "Member",
-      status: "Medium Priority",
-      avatars: 4,
-    },
-  ];
+  const summaryCards = dashboard?.summary ? [
+    { title: "Active Projects", value: String(dashboard.summary.active_projects ?? 0), icon: "/Vector-5.svg", valueColor: "#2563EB", bgColor: "#EEF2FF" },
+    { title: "Tasks Due Today", value: String(dashboard.summary.tasks_due_today ?? 0), icon: "/Vector-1%20(3).svg", valueColor: "#EF4444", bgColor: "#FEF2F2" },
+    { title: "Completed Tasks", value: String(dashboard.summary.completed_tasks ?? 0), icon: "/Vector-2.svg", valueColor: "#22C55E", bgColor: "#ECFDF5" },
+    { title: "Pending Tasks", value: String(dashboard.summary.pending_tasks ?? 0), icon: "/Vector-3.svg", valueColor: "#F59E0B", bgColor: "#FEF3C7" },
+  ] : [];
 
-  /* ACTIVE PROJECTS */
-  const activeProjects = [
-    {
-      name: "Car System",
-      client: "Do Drive",
-      progress: 65,
-      deadline: "30 Oct 2026",
-    },
-    {
-      name: "CRM Dashboard",
-      client: "Tech Corp",
-      progress: 80,
-      deadline: "15 Nov 2026",
-    },
-    {
-      name: "Mobile App",
-      client: "Appify",
-      progress: 45,
-      deadline: "20 Dec 2026",
-    },
-  ];
+  const todayWorkload = (dashboard?.todayWorkload || []).map((w) => ({
+    time: w.end_date ? new Date(w.end_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—',
+    title: w.title,
+    member: w.assignees?.map((a) => a.name).join(', ') || '—',
+    status: w.priority ? w.priority + ' Priority' : '—',
+  }));
 
-  /* RECENT ACTIVITY */
-  const recentActivities = [
-    {
-      type: "completed",
-      title:
-        'Ahmad completed the task "Navbar Design" in Website Redesign',
-      time: "2m ago",
-    },
-    {
-      type: "upload",
-      title:
-        "Sarah uploaded 5 new files to CRM System",
-      time: "15m ago",
-    },
-    {
-      type: "review",
-      title:
-        "API Integration moved to Review by Abdullah",
-      time: "1h ago",
-    },
-    {
-      type: "create",
-      title:
-        'You created a new task "Database Optimization"',
-      time: "2h ago",
-    },
-  ];
+  const activeProjects = (dashboard?.activeProjects || []).map((p) => ({
+    name: p.name,
+    client: p.client || '—',
+    progress: p.progress || 0,
+    deadline: p.deadline || '—',
+  }));
+
+  const recentActivities = (dashboard?.recentActivity || []).map((a) => ({
+    type: 'activity',
+    title: a.summary || a.user_name + ' in ' + a.project_title || '',
+    time: a.created_at ? new Date(a.created_at).toLocaleString() : '—',
+  }));
 
   return (
     <div className="dashboard-page">
@@ -259,16 +179,7 @@ function Admin() {
                 </div>
 
                 {/* BOTTOM */}
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "14px",
-                    color: card.trendColor,
-                    fontWeight: "500",
-                  }}
-                >
-                  ↑ {card.label}
-                </p>
+                <div style={{ height: "4px" }} />
               </div>
             ))}
           </div>

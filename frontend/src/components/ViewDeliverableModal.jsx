@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { FileText } from "lucide-react";
+import { FileText, Download, ExternalLink } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import "./ViewDeliverableModal.css";
@@ -12,13 +12,24 @@ function formatDateTime(value) {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+function formatFileSize(bytes) {
+  if (!bytes) return "";
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1) return mb.toFixed(1) + " MB";
+  const kb = bytes / 1024;
+  if (kb >= 1) return kb.toFixed(0) + " KB";
+  return bytes + " B";
+}
+
 function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess }) {
   const [submission, setSubmission] = useState(null);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState("");
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
+  const [links, setLinks] = useState([""]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [imagePreview, setImagePreview] = useState(null);
 
   useEffect(() => {
     if (!isOpen || !deliverable) return;
@@ -35,9 +46,16 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
     return () => { document.body.style.overflow = ""; };
   }, [isOpen, deliverable]);
 
+  const normalizeUrl = (url) => {
+    url = url.trim();
+    if (url && !/^https?:\/\//i.test(url)) return "https://" + url;
+    return url;
+  };
+
   const handleResubmit = async () => {
-    if (!comment.trim() && !file) {
-      setError("Please add a comment or attach a file.");
+    const validLinks = links.filter((l) => l.trim()).map(normalizeUrl);
+    if (!comment.trim() && files.length === 0 && validLinks.length === 0) {
+      setError("Please add a comment, attach files, or add links.");
       return;
     }
     setSubmitting(true);
@@ -46,7 +64,8 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
       const token = authToken();
       const formData = new FormData();
       if (comment.trim()) formData.append("comment", comment.trim());
-      if (file) formData.append("file", file);
+      files.forEach((f) => formData.append("files[]", f));
+      validLinks.forEach((l) => formData.append("links[]", l));
 
       const res = await fetch(`${API_URL}/deliverables/${deliverable.id}/submit`, {
         method: "POST",
@@ -72,6 +91,10 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
 
   const statusLabel = (deliverable.status || "pending").charAt(0).toUpperCase() + (deliverable.status || "pending").slice(1);
   const isReopened = deliverable.status === "reopened";
+  const attachments = submission?.attachments || [];
+  const viewFiles = attachments.filter((a) => a.attachment_type === "file");
+  const viewImages = attachments.filter((a) => a.attachment_type === "image");
+  const viewLinks = attachments.filter((a) => a.attachment_type === "link");
 
   return createPortal(
     <div className="vd-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -136,7 +159,54 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
                     <p className="vd-text">{submission.comment || "\u2014"}</p>
                   </div>
 
-                  {submission.file_name && (
+                  {/* Files */}
+                  {viewFiles.length > 0 && (
+                    <div className="vd-section">
+                      <h3 className="vd-section-title">Files ({viewFiles.length})</h3>
+                      <div className="vd-file-list">
+                        {viewFiles.map((att) => (
+                          <a key={att.id} className="vd-file-link" href={att.full_url} target="_blank" rel="noopener noreferrer" download>
+                            <FileText size={16} />
+                            <span className="vd-file-name">{att.original_name || att.file_name}</span>
+                            {att.file_size && <span className="vd-file-size">{formatFileSize(att.file_size)}</span>}
+                            <Download size={14} />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Images */}
+                  {viewImages.length > 0 && (
+                    <div className="vd-section">
+                      <h3 className="vd-section-title">Images ({viewImages.length})</h3>
+                      <div className="vd-image-grid">
+                        {viewImages.map((att) => (
+                          <div key={att.id} className="vd-image-thumb" onClick={() => setImagePreview(att.full_url)}>
+                            <img src={att.full_url} alt={att.original_name || att.file_name} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Links */}
+                  {viewLinks.length > 0 && (
+                    <div className="vd-section">
+                      <h3 className="vd-section-title">Links ({viewLinks.length})</h3>
+                      <div className="vd-file-list">
+                        {viewLinks.map((att) => (
+                          <a key={att.id} className="vd-file-link" href={att.url} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink size={16} />
+                            <span className="vd-file-name">{att.original_name || att.url}</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Old single file fallback */}
+                  {submission.file_name && attachments.length === 0 && (
                     <div className="vd-section">
                       <h3 className="vd-section-title">Attached File</h3>
                       <a
@@ -187,23 +257,34 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
                       className="vd-dropzone"
                       onClick={() => document.getElementById(`vd-file-${deliverable.id}`)?.click()}
                       onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]); }}
+                      onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) setFiles(Array.from(e.dataTransfer.files)); }}
                     >
-                      {file ? (
-                        <div className="vd-file-preview">
-                          <span className="vd-file-name">{file.name}</span>
-                          <button className="vd-file-remove" onClick={(e) => { e.stopPropagation(); setFile(null); }}>Remove</button>
-                        </div>
-                      ) : (
-                        <p className="vd-dropzone-text">Drag & drop a file or <span className="vd-browse">browse</span></p>
-                      )}
+                      <p className="vd-dropzone-text">Drag & drop files or <span className="vd-browse">browse</span></p>
                     </div>
                     <input
                       type="file"
+                      multiple
                       id={`vd-file-${deliverable.id}`}
                       style={{ display: "none" }}
-                      onChange={(e) => { if (e.target.files.length) setFile(e.target.files[0]); }}
+                      onChange={(e) => setFiles(Array.from(e.target.files || []))}
                     />
+                    <div className="vd-field">
+                      <label className="vd-label">Links</label>
+                      {links.map((link, i) => (
+                        <div key={i} style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
+                          <input
+                            type="url"
+                            style={{ flex: 1, padding: "8px 10px", border: "1px solid #E5E7EB", borderRadius: "8px", fontSize: "13px" }}
+                            placeholder="https://example.com"
+                            value={link}
+                            onChange={(e) => setLinks(links.map((l, j) => (j === i ? e.target.value : l)))}
+                          />
+                          {i === links.length - 1 && (
+                            <button type="button" style={{ padding: "4px 10px", background: "#DCFCE7", border: "1px solid #16A34A", borderRadius: "6px", color: "#16A34A", cursor: "pointer" }} onClick={() => setLinks([...links, ""])}>+</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                   {error && <div className="vd-error">{error}</div>}
                 </div>
@@ -217,6 +298,13 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
             </>
           )}
         </div>
+
+        {/* Image Preview Modal */}
+        {imagePreview && (
+          <div className="vd-image-overlay" onClick={() => setImagePreview(null)}>
+            <img src={imagePreview} alt="Preview" className="vd-image-full" />
+          </div>
+        )}
 
         <div className="vd-footer">
           <button className="vd-close-btn" onClick={onClose}>Close</button>

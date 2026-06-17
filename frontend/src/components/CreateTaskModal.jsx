@@ -3,6 +3,7 @@ import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
 import { formatDateTime, toDatetimeLocal } from "../utils/formatDateTime";
+import { publish } from "../utils/eventBus";
 import "./layout/CreateTaskModal.css";
 
 const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
@@ -325,6 +326,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         await Promise.all(taskIds.map(id => uploadAttachments(id, token)));
       }
 
+      publish('task:created', data.task || data);
+      publish('data:changed', { type: 'task', action: 'created' });
       onClose(true);
     } catch (err) {
       console.error("CreateTaskModal: error", err);

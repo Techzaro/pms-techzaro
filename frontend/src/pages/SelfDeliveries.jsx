@@ -1,6 +1,7 @@
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect } from "react";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
@@ -57,6 +58,8 @@ function SelfDeliveries() {
   useEffect(() => {
     fetchDeliverables();
   }, [search, statusFilter, timeFilter]);
+
+  useRefreshOnEvent(['deliverable:updated', 'deliverable:created', 'deliverable:deleted'], fetchDeliverables);
 
   const getInitials = (name) => {
     if (!name) return "??";

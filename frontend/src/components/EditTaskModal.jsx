@@ -3,6 +3,7 @@ import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
 import { formatDateTime, toDatetimeLocal } from "../utils/formatDateTime";
+import { publish } from "../utils/eventBus";
 import "./layout/CreateTaskModal.css";
 
 export default function EditTaskModal({ task, onClose }) {
@@ -86,6 +87,8 @@ export default function EditTaskModal({ task, onClose }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to update task");
+      publish('task:updated', data.task || data);
+      publish('data:changed', { type: 'task', action: 'updated' });
       onClose(true);
     } catch (err) {
       setError(err.message);

@@ -61,6 +61,15 @@ function Sidebar() {
   const isActive = (page) => location.pathname === `${rolePrefix}/${page}`;
   const isActiveOrStart = (page) => location.pathname === `${rolePrefix}/${page}` || location.pathname.startsWith(`${rolePrefix}/${page}/`);
   const isTaskDetailPage = location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`);
+  const getTaskFrom = () => {
+    if (location.state?.from) return location.state.from;
+    return new URLSearchParams(location.search).get("from");
+  };
+  const isDeliverableDetailPage = location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`);
+  const getDeliverableFrom = () => {
+    if (location.state?.from) return location.state.from;
+    return new URLSearchParams(location.search).get("from");
+  };
 
   useEffect(() => {
     const token = authToken();
@@ -200,21 +209,21 @@ function Sidebar() {
               <div className="sidebar-sub-links">
                 <Link
                   to={rolePath("deliveries")}
-                  className={`sidebar-sub-link ${isActive("deliveries") || (location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) && location.state?.from === "deliveries") ? "active" : ""}`}
+                  className={`sidebar-sub-link ${isActive("deliveries") || (isDeliverableDetailPage && getDeliverableFrom() === "deliveries") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Assigned To You
                 </Link>
                 <Link
                   to={rolePath("deliveries-by-you")}
-                  className={`sidebar-sub-link ${isActive("deliveries-by-you") || (location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) && location.state?.from === "deliveries-by-you") ? "active" : ""}`}
+                  className={`sidebar-sub-link ${isActive("deliveries-by-you") || (isDeliverableDetailPage && getDeliverableFrom() === "deliveries-by-you") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Assigned By You
                 </Link>
                 <Link
                   to={rolePath("self-deliveries")}
-                  className={`sidebar-sub-link ${isActive("self-deliveries") || (location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) && location.state?.from === "self-deliveries") ? "active" : ""}`}
+                  className={`sidebar-sub-link ${isActive("self-deliveries") || (isDeliverableDetailPage && getDeliverableFrom() === "self-deliveries") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Self Deliverables
@@ -252,21 +261,21 @@ function Sidebar() {
               <div className="sidebar-sub-links">
                 <Link
                   to={rolePath("tasks")}
-                  className={`sidebar-sub-link ${isActive("tasks") || (isTaskDetailPage && location.state?.from === "tasks") ? "active" : ""}`}
+                  className={`sidebar-sub-link ${isActive("tasks") || (isTaskDetailPage && getTaskFrom() === "tasks") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Assigned to You
                 </Link>
                 <Link
                   to={rolePath("taskby")}
-                  className={`sidebar-sub-link ${isActive("taskby") || (isTaskDetailPage && location.state?.from === "taskby") ? "active" : ""}`}
+                  className={`sidebar-sub-link ${isActive("taskby") || (isTaskDetailPage && getTaskFrom() === "taskby") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Assigned by You
                 </Link>
                 <Link
                   to={rolePath("self-tasks")}
-                  className={`sidebar-sub-link ${isActive("self-tasks") || (isTaskDetailPage && location.state?.from === "self-tasks") ? "active" : ""}`}
+                  className={`sidebar-sub-link ${isActive("self-tasks") || (isTaskDetailPage && getTaskFrom() === "self-tasks") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Self Tasks

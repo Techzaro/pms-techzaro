@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -31,6 +32,8 @@ function Projects() {
   useEffect(() => {
     fetchProjects();
   }, []);
+
+  useRefreshOnEvent(['project:created', 'project:updated', 'project:deleted'], fetchProjects);
 
   const fetchProjects = async () => {
     try {

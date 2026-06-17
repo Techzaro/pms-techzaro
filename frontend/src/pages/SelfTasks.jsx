@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { CiCalendar } from "react-icons/ci";
@@ -78,6 +79,8 @@ const SelfTasks = () => {
   useEffect(() => {
     fetchTasks();
   }, [debouncedSearch, statusFilter, timeFilter]);
+
+  useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted'], fetchTasks);
 
   const handleModalClose = (refresh) => {
     setShowTaskModal(false);

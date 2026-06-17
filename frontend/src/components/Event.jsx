@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
 import UserSelectDropdown from "./UserSelectDropdown";
+import { publish } from "../utils/eventBus";
 import "./Event.css";
 
 const TYPE_MAP = {
@@ -178,6 +179,13 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
 
       setStep(1);
       setError("");
+      if (isEditing) {
+        publish('event:updated', data.event || data);
+        publish('data:changed', { type: 'event', action: 'updated' });
+      } else {
+        publish('event:created', data.event || data);
+        publish('data:changed', { type: 'event', action: 'created' });
+      }
       onEventCreated?.(data.event);
       onClose();
     } catch (err) {

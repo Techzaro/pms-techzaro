@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { FileText } from "lucide-react";
+import { FileText, Download, ExternalLink } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import ConfirmationDialog from "./ConfirmationDialog";
@@ -14,12 +14,22 @@ function formatDateTime(value) {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+function formatFileSize(bytes) {
+  if (!bytes) return "";
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1) return mb.toFixed(1) + " MB";
+  const kb = bytes / 1024;
+  if (kb >= 1) return kb.toFixed(0) + " KB";
+  return bytes + " B";
+}
+
 function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
   const [submission, setSubmission] = useState(null);
   const [loading, setLoading] = useState(true);
   const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null });
   const [reopenDialog, setReopenDialog] = useState(false);
   const [acting, setActing] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
 
   useEffect(() => {
     if (!isOpen || !deliverable) return;
@@ -87,6 +97,10 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
   if (!isOpen || !deliverable) return null;
 
   const statusLabel = (deliverable.status || "pending").charAt(0).toUpperCase() + (deliverable.status || "pending").slice(1);
+  const attachments = submission?.attachments || [];
+  const files = attachments.filter((a) => a.attachment_type === "file");
+  const images = attachments.filter((a) => a.attachment_type === "image");
+  const links = attachments.filter((a) => a.attachment_type === "link");
 
   return createPortal(
     <div className="avm-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -154,11 +168,59 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
                 </div>
                 {submission.comment && (
                   <div className="avm-detail-item" style={{ marginTop: "12px" }}>
-                    <span className="avm-detail-label">Comment</span>
+                    <span className="avm-detail-label">Notes</span>
                     <p className="avm-description-text">{submission.comment}</p>
                   </div>
                 )}
-                {submission.file_name && (
+
+                {/* Files */}
+                {files.length > 0 && (
+                  <div className="avm-attachments-section" style={{ marginTop: "12px" }}>
+                    <span className="avm-detail-label">Files ({files.length})</span>
+                    <div className="avm-attachments-list">
+                      {files.map((att) => (
+                        <a key={att.id} className="avm-file-link" href={att.full_url} target="_blank" rel="noopener noreferrer" download>
+                          <FileText size={16} />
+                          <span className="avm-attach-name">{att.original_name || att.file_name}</span>
+                          {att.file_size && <span className="avm-attach-size">{formatFileSize(att.file_size)}</span>}
+                          <Download size={14} />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Images */}
+                {images.length > 0 && (
+                  <div className="avm-attachments-section" style={{ marginTop: "12px" }}>
+                    <span className="avm-detail-label">Images ({images.length})</span>
+                    <div className="avm-image-grid">
+                      {images.map((att) => (
+                        <div key={att.id} className="avm-image-thumb" onClick={() => setImagePreview(att.full_url)}>
+                          <img src={att.full_url} alt={att.original_name || att.file_name} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Links */}
+                {links.length > 0 && (
+                  <div className="avm-attachments-section" style={{ marginTop: "12px" }}>
+                    <span className="avm-detail-label">Links ({links.length})</span>
+                    <div className="avm-attachments-list">
+                      {links.map((att) => (
+                        <a key={att.id} className="avm-file-link" href={att.url} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink size={16} />
+                          <span className="avm-attach-name">{att.original_name || att.url}</span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Old single file fallback */}
+                {submission.file_name && attachments.length === 0 && (
                   <div className="avm-detail-item" style={{ marginTop: "12px" }}>
                     <span className="avm-detail-label">Attachment</span>
                     <a
@@ -215,6 +277,13 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
             </div>
           )}
         </div>
+
+        {/* Image Preview Modal */}
+        {imagePreview && (
+          <div className="avm-image-overlay" onClick={() => setImagePreview(null)}>
+            <img src={imagePreview} alt="Preview" className="avm-image-full" />
+          </div>
+        )}
 
         <div className="avm-footer">
           <button className="avm-close-btn" onClick={onClose}>Close</button>

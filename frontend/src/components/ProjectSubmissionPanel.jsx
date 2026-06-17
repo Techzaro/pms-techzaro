@@ -1,4 +1,4 @@
-import { FileText } from "lucide-react";
+import { FileText, Download, ExternalLink } from "lucide-react";
 import ConfirmationDialog from "./ConfirmationDialog";
 import ProjectReopenDialog from "./ProjectReopenDialog";
 import API_URL from "../config/api";
@@ -9,6 +9,15 @@ function formatDateTime(value) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "\u2014";
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return "";
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1) return mb.toFixed(1) + " MB";
+  const kb = bytes / 1024;
+  if (kb >= 1) return kb.toFixed(0) + " KB";
+  return bytes + " B";
 }
 
 function formatDateShort(value) {
@@ -71,7 +80,9 @@ function ProjectSubmissionPanel({
     reject: "Are you sure you want to reject this project? The assignee will not be able to resubmit.",
   };
 
-  const historyItems = workflowEvents.map((e) => ({
+  const historyItems = workflowEvents
+    .filter((e) => e.action !== 'field_changed')
+    .map((e) => ({
     id: `evt-${e.id}`,
     action: e.action,
     user: e.user,
@@ -145,20 +156,77 @@ function ProjectSubmissionPanel({
               <p className="td-submission-text">{latestSubmission.comment}</p>
             </div>
           )}
-          {latestSubmission.file_name && (
-            <div className="td-submission-item" style={{ marginTop: "12px" }}>
-              <span className="td-submission-label">Attached File</span>
-              <a
-                className="td-submission-file-link"
-                href={`${API_URL}/projects/submission-file/${latestSubmission.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <FileText size={16} />
-                <span>{latestSubmission.file_name}</span>
-              </a>
-            </div>
-          )}
+
+          {/* Attachments */}
+          {(() => {
+            const atts = latestSubmission.attachments || [];
+            const files = atts.filter((a) => a.attachment_type === "file");
+            const images = atts.filter((a) => a.attachment_type === "image");
+            const links = atts.filter((a) => a.attachment_type === "link");
+
+            return (
+              <>
+                {files.length > 0 && (
+                  <div className="td-submission-item" style={{ marginTop: "12px" }}>
+                    <span className="td-submission-label">Files ({files.length})</span>
+                    <div className="td-attachments-list">
+                      {files.map((att) => (
+                        <a key={att.id} className="td-submission-file-link" href={att.full_url} target="_blank" rel="noopener noreferrer" download>
+                          <FileText size={16} />
+                          <span>{att.original_name || att.file_name}</span>
+                          {att.file_size && <span style={{ fontSize: "11px", color: "#9CA3AF", marginLeft: "auto" }}>{formatFileSize(att.file_size)}</span>}
+                          <Download size={14} />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {images.length > 0 && (
+                  <div className="td-submission-item" style={{ marginTop: "12px" }}>
+                    <span className="td-submission-label">Images ({images.length})</span>
+                    <div className="td-image-grid">
+                      {images.map((att) => (
+                        <div key={att.id} className="td-image-thumb" onClick={() => window.open(att.full_url, "_blank")}>
+                          <img src={att.full_url} alt={att.original_name || att.file_name} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {links.length > 0 && (
+                  <div className="td-submission-item" style={{ marginTop: "12px" }}>
+                    <span className="td-submission-label">Links ({links.length})</span>
+                    <div className="td-attachments-list">
+                      {links.map((att) => (
+                        <a key={att.id} className="td-submission-file-link" href={att.url} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink size={16} />
+                          <span>{att.original_name || att.url}</span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Old single file fallback */}
+                {latestSubmission.file_name && atts.length === 0 && (
+                  <div className="td-submission-item" style={{ marginTop: "12px" }}>
+                    <span className="td-submission-label">Attached File</span>
+                    <a
+                      className="td-submission-file-link"
+                      href={`${API_URL}/projects/submission-file/${latestSubmission.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <FileText size={16} />
+                      <span>{latestSubmission.file_name}</span>
+                    </a>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {isCreator && status === "submitted" && (
             <div className="td-review-actions">

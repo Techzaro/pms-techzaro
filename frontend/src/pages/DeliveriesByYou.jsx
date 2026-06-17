@@ -1,6 +1,8 @@
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect } from "react";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { authToken, rolePath } from "../utils/auth";
@@ -33,6 +35,7 @@ function DeliveriesByYou() {
   const [statusFilter, setStatusFilter] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
   const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const fetchDeliverables = () => {
     setLoading(true);
@@ -56,6 +59,31 @@ function DeliveriesByYou() {
   useEffect(() => {
     fetchDeliverables();
   }, [search, statusFilter, timeFilter]);
+
+  useRefreshOnEvent(['deliverable:updated', 'deliverable:created', 'deliverable:deleted'], fetchDeliverables);
+
+  useEffect(() => {
+    const selectedId = searchParams.get("selectedDeliverable");
+    if (!selectedId) return;
+
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("selectedDeliverable");
+      return next;
+    }, { replace: true });
+
+    const token = authToken();
+    fetch(`${API_URL}/deliverables/${selectedId}`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.deliverable) {
+          setViewModal({ open: true, deliverable: data.deliverable });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const getInitials = (name) => {
     if (!name) return "??";

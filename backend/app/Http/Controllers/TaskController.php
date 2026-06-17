@@ -259,13 +259,16 @@ class TaskController extends Controller
             'files:id,task_id,name,url',
             'assignees:id,name,email,role',
             'assigner:id,name,email,role',
-            'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
-            'latestSubmission' => fn ($q) => $q->with('submittedBy:id,name,email'),
+            'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
+            'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
             'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
             'approvedBy:id,name',
             'rejectedBy:id,name',
             'reopenedBy:id,name',
+            'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
         ]);
+
+        $unviewedChangesCount = $task->unviewedChanges->count();
 
         $subtasks = Subtask::where('task_id', $task->id)
             ->with(['assignee:id,name,email,role', 'assigner:id,name,email,role'])
@@ -306,6 +309,18 @@ class TaskController extends Controller
         $delCompleted = $deliverables->filter(fn ($d) => $d->status === 'approved')->count();
         $delProgress = $delTotal > 0 ? (int) round(($delCompleted / $delTotal) * 100) : 0;
 
+        $isApproved = strtolower((string) $task->status) === 'approved';
+        $pendingStatuses = ['pending', 'reopened'];
+
+        $changes = $task->unviewedChanges->map(fn ($c) => [
+            'id' => $c->id,
+            'field_name' => $c->field_name,
+            'old_value' => $c->old_value,
+            'new_value' => $c->new_value,
+            'modified_by' => $c->modifiedBy?->name ?? 'Unknown',
+            'created_at' => $c->created_at,
+        ]);
+
         return response()->json([
             'task' => array_merge($task->toArray(), [
                 'subtasks' => $subtasks,
@@ -314,6 +329,13 @@ class TaskController extends Controller
                 'deliverables_progress' => $delProgress,
                 'total_deliverables' => $delTotal,
                 'completed_deliverables' => $delCompleted,
+                'unviewed_changes' => $changes,
+                'unviewed_changes_count' => $unviewedChangesCount,
+                // Permission flags
+                'is_creator' => $isCreator,
+                'is_assignee' => $isAssignee,
+                'can_edit' => $isCreator && !$isApproved,
+                'can_submit' => $isAssignee && in_array($task->status, $pendingStatuses),
             ]),
         ]);
     }
@@ -360,7 +382,7 @@ class TaskController extends Controller
             // Create deliverables for this task if provided
             if (!empty($validated['deliverables'])) {
                 foreach ($validated['deliverables'] as $del) {
-                    $project->deliverables()->create([
+                    $deliverable = $project->deliverables()->create([
                         'task_id' => $task->id,
                         'title' => $del['title'],
                         'description' => $del['description'] ?? null,
@@ -370,6 +392,7 @@ class TaskController extends Controller
                         'assigned_to' => $userId,
                         'created_by' => $user->id,
                     ]);
+                    $this->sendDeliverableAssignmentNotification($deliverable, $user);
                 }
             }
 
@@ -427,7 +450,7 @@ class TaskController extends Controller
 
             if (!empty($validated['deliverables'])) {
                 foreach ($validated['deliverables'] as $del) {
-                    $task->deliverables()->create([
+                    $deliverable = $task->deliverables()->create([
                         'title' => $del['title'],
                         'description' => $del['description'] ?? null,
                         'status' => 'pending',
@@ -436,6 +459,7 @@ class TaskController extends Controller
                         'assigned_to' => $userId,
                         'created_by' => $user->id,
                     ]);
+                    $this->sendDeliverableAssignmentNotification($deliverable, $user);
                 }
             }
 
@@ -487,31 +511,106 @@ class TaskController extends Controller
         $assigneeIds = $validated['assigned_to'] ?? null;
         unset($validated['assigned_to']);
 
+        // Snapshot old values before update
+        $oldValues = [];
+        $fieldLabels = [
+            'title' => 'Title',
+            'description' => 'Description',
+            'start_date' => 'Start Date',
+            'end_date' => 'Due Date',
+            'priority' => 'Priority',
+            'status' => 'Status',
+        ];
+        foreach (['title', 'description', 'start_date', 'end_date', 'priority', 'status'] as $f) {
+            if (array_key_exists($f, $validated)) {
+                $oldValues[$f] = $task->{$f};
+            }
+        }
+
+        $oldAssigneeIds = $task->assignees()->pluck('users.id')->toArray();
+
         $task->update($validated);
 
-        if (!empty($assigneeIds)) {
+        // Track field changes
+        $changes = [];
+        foreach ($oldValues as $f => $oldVal) {
+            $newVal = $task->{$f};
+            $oldStr = is_object($oldVal) && method_exists($oldVal, 'format') ? $oldVal->format('Y-m-d H:i') : (string) $oldVal;
+            $newStr = is_object($newVal) && method_exists($newVal, 'format') ? $newVal->format('Y-m-d H:i') : (string) $newVal;
+            if ($oldStr !== $newStr) {
+                $changes[] = [
+                    'field_name' => $f,
+                    'label' => $fieldLabels[$f],
+                    'old_value' => $oldStr,
+                    'new_value' => $newStr,
+                ];
+            }
+        }
+
+        // Track assignee changes
+        if (!empty($assigneeIds) && $oldAssigneeIds !== $assigneeIds) {
+            $oldNames = User::whereIn('id', $oldAssigneeIds)->pluck('name')->implode(', ');
+            $newNames = User::whereIn('id', $assigneeIds)->pluck('name')->implode(', ');
+            $changes[] = [
+                'field_name' => 'assigned_to',
+                'label' => 'Assignee',
+                'old_value' => $oldNames ?: 'None',
+                'new_value' => $newNames ?: 'None',
+            ];
             $task->assignees()->sync($assigneeIds);
             $task->update(['assigned_to' => $assigneeIds[0]]);
         }
 
+        // Track new deliverables
+        $addedDeliverables = [];
         if (!empty($validated['deliverables'])) {
             foreach ($validated['deliverables'] as $del) {
-                $task->deliverables()->create([
+                $deliverable = $task->deliverables()->create([
                     'title' => $del['title'],
                     'description' => $del['description'] ?? null,
                     'due_date' => $del['due_date'] ?? null,
                     'assigned_to' => $task->assigned_to,
                     'created_by' => $user->id,
                 ]);
+                $this->sendDeliverableAssignmentNotification($deliverable, $user);
+                $addedDeliverables[] = $del['title'];
             }
+            $changes[] = [
+                'field_name' => 'deliverables',
+                'label' => 'Deliverable Added',
+                'old_value' => '',
+                'new_value' => implode(', ', $addedDeliverables),
+            ];
         }
 
+        // Create TaskChange records
+        foreach ($changes as $c) {
+            $task->changes()->create([
+                'field_name' => $c['field_name'],
+                'old_value' => $c['old_value'],
+                'new_value' => $c['new_value'],
+                'modified_by' => $user->id,
+                'is_viewed' => false,
+            ]);
+            TaskWorkflowEvent::create([
+                'task_id' => $task->id,
+                'user_id' => $user->id,
+                'action' => 'field_changed',
+                'comment' => $c['label'] . ': ' . $c['old_value'] . ' → ' . $c['new_value'],
+            ]);
+        }
+
+        $changeCount = count($changes);
+
         // Notify assignees about the update
-        $this->sendTaskUpdateNotification($task, $user);
+        $this->sendTaskUpdateNotification($task, $user, $changeCount);
 
         return response()->json([
-            'message' => 'Task updated successfully',
+            'message' => $changeCount > 0
+                ? 'Task updated — ' . $changeCount . ' change(s) made'
+                : 'Task updated successfully',
             'task' => $task->fresh()->load('assignees:id,name,email,role'),
+            'changes_count' => $changeCount,
         ]);
     }
 
@@ -581,12 +680,12 @@ class TaskController extends Controller
                     'related_id' => $task->id,
                     'title' => 'Task Completed',
                     'message' => $user->name . ' has marked the task "' . $task->title . '" as completed.',
-                    'link' => '/tasks/task-details/' . $task->id,
-                ]);
-            }
+'link' => '/tasks/task-details/' . $task->id . '?from=taskby',
+            ]);
+        }
 
-            return response()->json([
-                'message' => 'Task moved to deliverables',
+        return response()->json([
+            'message' => 'Task moved to deliverables',
                 'task' => $task->fresh()->load('assignees:id,name,email,role'),
                 'deliverable' => $deliverable,
             ], 201);
@@ -667,7 +766,7 @@ class TaskController extends Controller
             'files' => 'nullable|array',
             'files.*' => 'file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,webp,ppt,pptx,txt|max:51200',
             'links' => 'nullable|array',
-            'links.*' => 'url|max:2048',
+            'links.*' => 'string|max:2048',
         ]);
 
         $filePath = null;
@@ -762,7 +861,7 @@ class TaskController extends Controller
                 'related_id' => $task->id,
                 'title' => 'Task Submitted',
                 'message' => $user->name . ' has completed the task "' . $task->title . '" and submitted it for review.',
-                'link' => '/tasks/task-details/' . $task->id,
+                'link' => '/tasks/task-details/' . $task->id . '?from=taskby',
             ]);
         }
 
@@ -820,7 +919,7 @@ class TaskController extends Controller
                     'related_id' => $task->id,
                     'title' => 'Task Approved',
                     'message' => 'Your task "' . $task->title . '" has been approved.',
-                    'link' => '/tasks/task-details/' . $task->id,
+                    'link' => '/tasks/task-details/' . $task->id . '?from=tasks',
                 ]);
             }
         }
@@ -885,7 +984,7 @@ class TaskController extends Controller
                 'related_id' => $task->id,
                 'title' => 'Task Rejected',
                 'message' => $msg,
-                'link' => '/tasks/task-details/' . $task->id,
+                'link' => '/tasks/task-details/' . $task->id . '?from=tasks',
             ]);
         }
 
@@ -981,7 +1080,7 @@ class TaskController extends Controller
                 'related_id' => $task->id,
                 'title' => 'Task Reopened',
                 'message' => $msg,
-                'link' => '/tasks/task-details/' . $task->id,
+                'link' => '/tasks/task-details/' . $task->id . '?from=tasks',
             ]);
         }
 
@@ -1040,6 +1139,13 @@ class TaskController extends Controller
         return Storage::disk('public')->download($submission->file_path, $submission->file_name);
     }
 
+    public function markChangesRead(Task $task)
+    {
+        $user = request()->user();
+        $task->changes()->where('is_viewed', false)->update(['is_viewed' => true]);
+        return response()->json(['message' => 'Changes marked as read']);
+    }
+
     private function sendTaskAssignmentNotifications(array $tasks, \App\Models\User $sender): void
     {
         $sent = [];
@@ -1061,19 +1167,24 @@ class TaskController extends Controller
                     'related_id' => $task->id,
                     'title' => 'Task Assigned',
                     'message' => 'A new task "' . $task->title . '" has been assigned to you by ' . $sender->name . '.',
-                    'link' => '/tasks/task-details/' . $task->id,
+                    'link' => '/tasks/task-details/' . $task->id . '?from=tasks',
                 ]);
             }
         }
     }
 
-    private function sendTaskUpdateNotification(\App\Models\Task $task, \App\Models\User $updater): void
+    private function sendTaskUpdateNotification(\App\Models\Task $task, \App\Models\User $updater, int $changeCount = 0): void
     {
         $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
         foreach ($assigneeIds as $assigneeId) {
             if ((int) $assigneeId === (int) $updater->id) {
                 continue;
             }
+            $msg = 'The task "' . $task->title . '" has been updated by ' . $updater->name . '.';
+            if ($changeCount > 0) {
+                $msg .= ' ' . $changeCount . ' change(s) were made.';
+            }
+            $msg .= ' Click to review changes.';
             Notification::create([
                 'user_id' => $assigneeId,
                 'sender_user_id' => $updater->id,
@@ -1081,10 +1192,47 @@ class TaskController extends Controller
                 'related_module' => 'task',
                 'related_id' => $task->id,
                 'title' => 'Task Updated',
-                'message' => 'The task "' . $task->title . '" has been updated by ' . $updater->name . '. Please review the latest details.',
-                'link' => '/tasks/task-details/' . $task->id,
+                'message' => $msg,
+                'link' => '/tasks/task-details/' . $task->id . '?from=tasks',
             ]);
         }
+    }
+
+    private function sendDeliverableAssignmentNotification(\App\Models\Deliverable $deliverable, \App\Models\User $sender): void
+    {
+        if (!$deliverable->assigned_to || (int) $deliverable->assigned_to === (int) $sender->id) {
+            return;
+        }
+
+        $taskTitle = '';
+        if ($deliverable->task_id) {
+            $deliverable->loadMissing('task:id,title');
+            $taskTitle = $deliverable->task->title ?? '';
+        }
+
+        $dueDate = '';
+        if ($deliverable->due_date) {
+            $dueDate = $deliverable->due_date->format('d-M-Y');
+        }
+
+        $message = 'You have been assigned a new deliverable: "' . $deliverable->title . '"';
+        if ($taskTitle) {
+            $message .= "\n\nTask: " . $taskTitle;
+        }
+        if ($dueDate) {
+            $message .= "\n\nDue Date: " . $dueDate;
+        }
+
+        Notification::create([
+            'user_id' => $deliverable->assigned_to,
+            'sender_user_id' => $sender->id,
+            'type' => 'deliverable_assigned',
+            'related_module' => 'deliverable',
+            'related_id' => $deliverable->id,
+            'title' => 'Deliverable Assigned',
+            'message' => $message,
+            'link' => '/deliveries?selectedDeliverable=' . $deliverable->id,
+        ]);
     }
 
     public function destroy(Task $task)

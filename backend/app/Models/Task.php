@@ -136,4 +136,14 @@ class Task extends Model
     {
         return $this->belongsTo(User::class, 'reopened_by');
     }
+
+    public function changes()
+    {
+        return $this->hasMany(TaskChange::class)->latest();
+    }
+
+    public function unviewedChanges()
+    {
+        return $this->hasMany(TaskChange::class)->where('is_viewed', false);
+    }
 }

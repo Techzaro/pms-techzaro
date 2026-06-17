@@ -3,6 +3,7 @@ import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
 import { formatDateTime, toDatetimeLocal } from "../utils/formatDateTime";
+import { publish } from "../utils/eventBus";
 import "./layout/CreateProjectModal.css";
 
 const PRESET_PHASES = [
@@ -309,6 +310,8 @@ const EditProjectModal = ({ project, onClose }) => {
         await uploadAttachments(project.id, token);
       }
 
+      publish('project:updated', data.project || data);
+      publish('data:changed', { type: 'project', action: 'updated' });
       onClose(true);
     } catch (err) {
       setError(err.message);

@@ -5,6 +5,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
+import { publish } from "../utils/eventBus";
 import "./TaskDetails.css";
 import { formatDateTimeShort } from "../utils/formatDateTime";
 import "./DeliverableDetails.css";
@@ -80,6 +81,16 @@ function DeliverableDetails() {
 
   useEffect(() => { fetchDeliverable(); }, [fetchDeliverable]);
 
+  // Auto-mark deliverable changes as read
+  useEffect(() => {
+    if (!deliverable?.id || !deliverable?.unviewed_changes_count) return;
+    const token = authToken();
+    fetch(`${API_URL}/deliverables/${deliverable.id}/changes/mark-read`, {
+      method: "POST",
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    }).catch(() => {});
+  }, [deliverable?.id, deliverable?.unviewed_changes_count]);
+
   const currentUser = getUser();
   const isCreator = deliverable && currentUser && parseInt(deliverable.created_by, 10) === parseInt(currentUser.id, 10);
   const isAdminManager = currentUser && ["admin", "manager"].includes(currentUser.role);
@@ -106,6 +117,8 @@ function DeliverableDetails() {
 
       const data = await res.json();
       if (res.ok) {
+        publish('deliverable:updated', data.deliverable || data);
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
         showToast("Deliverable submitted successfully!");
         setShowSubmitForm(false);
         setSubmitComment("");
@@ -130,6 +143,8 @@ function DeliverableDetails() {
       });
       const data = await res.json();
       if (res.ok) {
+        publish('deliverable:updated', data.deliverable || data);
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
         showToast("Deliverable approved!");
         fetchDeliverable();
       } else {
@@ -150,6 +165,8 @@ function DeliverableDetails() {
       });
       const data = await res.json();
       if (res.ok) {
+        publish('deliverable:updated', data.deliverable || data);
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
         showToast("Deliverable rejected");
         setShowRejectForm(false);
         setRejectComment("");
@@ -197,6 +214,30 @@ function DeliverableDetails() {
               ...(deliverableSource ? [{ label: deliverableSource.label, path: deliverableSource.path }] : []),
               { label: deliverable.title },
             ]} />
+
+            {/* Recent Changes Summary — assignee only */}
+            {isAssignee && deliverable?.unviewed_changes?.length > 0 && (
+              <div className="td-changes-panel" style={{ marginTop: "6px", marginBottom: "12px" }}>
+                <div className="td-changes-header">
+                  <span className="td-changes-icon">&#9654;</span>
+                  <span className="td-changes-title">Recent Changes</span>
+                  <span className="td-changes-count">{deliverable.unviewed_changes.length} update(s)</span>
+                </div>
+                <ul className="td-changes-list">
+                  {deliverable.unviewed_changes.map((c, i) => (
+                    <li key={c.id || i}>
+                      <strong>{c.modified_by?.name || "Someone"}</strong> changed{' '}
+                      <strong>{c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+                      {c.old_value ? (
+                        <span className="td-change-detail"> — {c.old_value} &rarr; {c.new_value}</span>
+                      ) : (
+                        <span className="td-change-detail"> — {c.new_value}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="td-title-row">
               <h1 className="td-title">{deliverable.title}</h1>
