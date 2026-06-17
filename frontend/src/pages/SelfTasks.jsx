@@ -8,6 +8,7 @@ import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import CreateTaskModal from "../components/CreateTaskModal";
+import SubmitProjectModal from "../components/SubmitProjectModal";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
 import { formatDateOnly } from "../utils/formatDateTime";
@@ -44,6 +45,7 @@ const PRIORITY_TEXT_COLORS = {
 const SelfTasks = () => {
   const navigate = useNavigate();
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showProjectSubmitModal, setShowProjectSubmitModal] = useState({ open: false, project: null });
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -157,10 +159,6 @@ const SelfTasks = () => {
         </div>
       </div>
 
-      {showTaskModal && (
-        <CreateTaskModal onClose={handleModalClose} />
-      )}
-
       <div className="task-progress">
         <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
         <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => setStatusFilter("pending")} style={{ cursor: "pointer" }}>
@@ -247,6 +245,40 @@ const SelfTasks = () => {
                     <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'self-tasks' } })}>
                       <IoEyeOutline />
                     </button>
+                    {item.can_submit && (
+                      <button
+                        className="action-icon-btn action-submit"
+                        title="Submit Project"
+                        onClick={() => setShowProjectSubmitModal({ open: true, project: item })}
+                      >
+                        <LuSend />
+                      </button>
+                    )}
+                    {item.status === "submitted" && (
+                      <span className="action-status-badge" style={{ color: "#1E40AF", fontWeight: 600, fontSize: "12px" }}>
+                        Submitted
+                      </span>
+                    )}
+                    {item.status === "approved" && (
+                      <span className="action-status-badge" style={{ color: "#166534", fontWeight: 600, fontSize: "12px" }}>
+                        Approved
+                      </span>
+                    )}
+                    {item.status === "rejected" && (
+                      <span className="action-status-badge" style={{ color: "#991B1B", fontWeight: 600, fontSize: "12px" }}>
+                        Rejected
+                      </span>
+                    )}
+                    {item.status === "reopened" && (
+                      <span className="action-status-badge" style={{ color: "#92400E", fontWeight: 600, fontSize: "12px" }}>
+                        Reopened
+                      </span>
+                    )}
+                    {item.status === "completed" && (
+                      <span className="action-status-badge" style={{ color: "#166534", fontWeight: 600, fontSize: "12px" }}>
+                        Completed
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -295,6 +327,47 @@ const SelfTasks = () => {
           })
         )}
       </div>
+
+      {showProjectSubmitModal.open && (
+        <SubmitProjectModal
+          key={`project-submit-${showProjectSubmitModal.project?.id || "none"}`}
+          isOpen={showProjectSubmitModal.open}
+          onClose={() => setShowProjectSubmitModal({ open: false, project: null })}
+          project={showProjectSubmitModal.project}
+        />
+      )}
+
+      {showTaskModal.open && (
+        <CreateTaskModal
+          key={`task-create-${showTaskModal.id}`}
+          isOpen={showTaskModal.open}
+          onClose={() => setShowTaskModal({ open: false })}
+          onTaskCreated={handleTaskCreated}
+          projectId={showTaskModal.projectId}
+        />
+      )}
+
+      {showDeliverableSubmitModal.open && (
+        <SubmitDeliverableModal
+          key={`deliverable-submit-${showDeliverableSubmitModal.deliverable?.id || "none"}`}
+          isOpen={showDeliverableSubmitModal.open}
+          onClose={() => setShowDeliverableSubmitModal({ open: false, deliverable: null })}
+          deliverable={showDeliverableSubmitModal.deliverable}
+          onSubmitSuccess={handleDeliverableSubmitSuccess}
+        />
+      )}
+
+      {viewModal.open && (
+        <SelfDeliverableViewModal
+          key={`view-${viewModal.deliverable?.id || "none"}`}
+          isOpen={viewModal.open}
+          onClose={() => setViewModal({ open: false, deliverable: null })}
+          deliverable={viewModal.deliverable}
+          onActionSuccess={handleDeliverableUpdate}
+          onResubmit={(deliverable) => setShowDeliverableSubmitModal({ open: true, deliverable })}
+        />
+      )}
+
     </DashboardLayout>
   );
 };

@@ -253,3 +253,6 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
 });
+
+// Download route outside auth:sanctum so <a> tags can access it with token query param
+Route::get('/deliverables/attachment/{attachment}/download', [DeliverableController::class, 'downloadAttachment']);

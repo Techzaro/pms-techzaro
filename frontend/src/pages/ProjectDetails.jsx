@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { PiLineVerticalLight } from "react-icons/pi";
 import {
-  Activity,
   Building2,
   Calendar,
   CalendarDays,
@@ -20,6 +19,7 @@ import {
   ListChecks,
   Monitor,
   Pencil,
+  Plus,
   Percent,
   Settings,
   Send,
@@ -39,6 +39,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import SubmitProjectModal from "../components/SubmitProjectModal";
 import ProjectSubmissionPanel from "../components/ProjectSubmissionPanel";
 import { formatDateTimeShort } from "../utils/formatDateTime";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import "./ProjectDetails.css";
 import "./TaskDetails.css";
 
@@ -106,6 +107,16 @@ function taskStatusLabel(status) {
   if (s === "completed" || s === "done") return "Completed";
   if (s === "in_progress") return "In Progress";
   return status || "Pending";
+}
+
+function isCompletedTaskStatus(status) {
+  return ["approved", "completed", "done"].includes((status || "").toLowerCase());
+}
+
+function calculateProjectProgress(tasks) {
+  if (!tasks.length) return 0;
+  const completed = tasks.filter((task) => isCompletedTaskStatus(task.status)).length;
+  return Math.round((completed / tasks.length) * 100);
 }
 
 /**
@@ -206,7 +217,6 @@ function ProjectDetails() {
         deliverables: updatedDeliverables,
         total_deliverables: delTotal,
         completed_deliverables: delCompleted,
-        progress_percent: delTotal > 0 ? Math.round((delCompleted / delTotal) * 100) : 0,
       };
     });
     publish('deliverable:updated', updatedDeliverable);
@@ -257,6 +267,8 @@ function ProjectDetails() {
       cancelled = true;
     };
   }, [loadProject, navigate, showMessage]);
+
+  useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted'], loadProject);
 
   // Auto-mark project changes as read
   useEffect(() => {
@@ -379,10 +391,9 @@ function ProjectDetails() {
   const tasks = project.tasks || [];
   const members = project.members || [];
   const milestones = project.milestones || [];
-  const activities = project.activities || [];
   const files = project.files || [];
   const checklist = Array.isArray(project.goals_checklist) ? project.goals_checklist : [];
-  const progress = typeof project.progress_percent === "number" ? project.progress_percent : 0;
+  const progress = typeof project.progress_percent === "number" ? project.progress_percent : calculateProjectProgress(tasks);
 
   const isCreator = project.is_creator;
   const isAssigned = project.is_assigned;
@@ -445,30 +456,9 @@ function ProjectDetails() {
           </ul>
         )}
       </section>
-
-      <section className="pd-rail-card">
-        <h3 className="pd-rail-card__title">Activity feed</h3>
-        <ul className="pd-feed">
-          {activities.length === 0 ? (
-            <li className="pd-muted">No activity yet.</li>
-          ) : (
-            activities.slice(0, 8).map((a) => (
-              <li key={a.id} className="pd-feed__row">
-                <div className="pd-avatar pd-avatar--sm">{initials(a.user?.name || "?")}</div>
-                <div>
-                  <span className="pd-feed__who">{a.user?.name || "System"}</span>{" "}
-                  <span className="pd-feed__text">{a.summary}</span>
-                  <div className="pd-feed__when">{timeAgo(a.created_at)}</div>
-                </div>
-              </li>
-            ))
-          )}
-        </ul>
-      </section>
     </div>
   );
-
-  /**
+/**
    * Perform the overview inner.
    */
 
@@ -677,8 +667,15 @@ function ProjectDetails() {
                   Edit Project
                 </button>
               )}
-              {canSubmitProject && (
-                <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setSubmitProjectModal({ open: true, project })}>
+              {(isAssigned || isCreator) && ["pending", "reopened", "Planned", "in_progress", "In Progress"].includes(project?.status) && (
+                <button
+                  type="button"
+                  className="pd-btn-tx pd-btn-tx--primary"
+                  disabled={!canSubmitProject}
+                  title={!canSubmitProject ? "Submit all deliverables first" : ""}
+                  onClick={() => setSubmitProjectModal({ open: true, project })}
+                  style={!canSubmitProject ? { opacity: 0.5, cursor: "not-allowed" } : {}}
+                >
                   <Send size={16} />
                   {project.status === "reopened" ? "Resubmit Project" : "Submit Project"}
                 </button>
@@ -913,55 +910,37 @@ function ProjectDetails() {
                   </div>
                 )}
 
-                {tab === "files" && (
-                  <div className="pd-tab-panel">
-                    <section className="pd-card-flat">
-                      <h2 className="pd-block-title">Files & links</h2>
-                      {files.length === 0 ? (
-                        <p className="pd-muted">No files attached.</p>
-                      ) : (
-                        <ul className="pd-file-list">
-                          {files.map((f) => (
-                            <li key={f.id}>
-                              <FolderOpen size={18} />
-                              {f.url ? (
-                                <a href={f.url} target="_blank" rel="noopener noreferrer">
-                                  {f.name}
-                                </a>
-                              ) : (
-                                <span>{f.name}</span>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </section>
-                  </div>
-                )}
+              {tab === "files" && (
+  <div className="pd-tab-panel">
+    <section className="pd-card-flat">
+      <h2 className="pd-block-title">Files & links</h2>
 
-                {tab === "activity" && (
-                  <div className="pd-tab-panel">
-                    <section className="pd-card-flat">
-                      <h2 className="pd-block-title">Project activity</h2>
-                      <ul className="pd-feed pd-feed--full">
-                        {activities.length === 0 ? (
-                          <li className="pd-muted">No activity yet.</li>
-                        ) : (
-                          activities.map((a) => (
-                            <li key={a.id} className="pd-feed__row">
-                              <div className="pd-avatar pd-avatar--sm">{initials(a.user?.name || "?")}</div>
-                              <div>
-                                <span className="pd-feed__who">{a.user?.name || "System"}</span>{" "}
-                                <span className="pd-feed__text">{a.summary}</span>
-                                <div className="pd-feed__when">{timeAgo(a.created_at)}</div>
-                              </div>
-                            </li>
-                          ))
-                        )}
-                      </ul>
-                    </section>
-                  </div>
-                )}
+      {files.length === 0 ? (
+        <p className="pd-muted">No files attached.</p>
+      ) : (
+        <ul className="pd-file-list">
+          {files.map((f) => (
+            <li key={f.id}>
+              <FolderOpen size={18} />
+              {f.url ? (
+                <a
+                  href={f.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {f.name}
+                </a>
+              ) : (
+                <span>{f.name}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+    </section>
+  </div>
+)}
               </div>
             </div>
           </div>

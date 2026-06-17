@@ -8,6 +8,7 @@ import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import CreateTaskModal from "../components/CreateTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
+import SubmitProjectModal from "../components/SubmitProjectModal";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
 import { formatDateOnly } from "../utils/formatDateTime";
@@ -51,6 +52,7 @@ function Tasks() {
   const [statusFilter, setStatusFilter] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
+  const [submitProjectModal, setSubmitProjectModal] = useState({ open: false, project: null });
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -80,7 +82,7 @@ function Tasks() {
     fetchTasks();
   }, [debouncedSearch, statusFilter]);
 
-  useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted'], fetchTasks);
+  useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted', 'project:updated'], fetchTasks);
 
   const handleModalClose = (refresh) => {
     setShowTaskModal(false);
@@ -129,11 +131,31 @@ function Tasks() {
     );
   };
 
+  const handleProjectSubmitSuccess = (updatedProject) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.item_type === "project" && item.id === updatedProject.id
+          ? { ...item, ...updatedProject, item_type: "project" }
+          : item
+      )
+    );
+    fetchTasks();
+  };
+
   const calculateProgress = (item) => {
     const total = item.total_tasks ?? 0;
     const completed = item.completed_tasks ?? 0;
     if (total === 0) return 0;
     return Math.round((completed / total) * 100);
+  };
+
+  const isProjectSubmitState = (project) =>
+    ["pending", "reopened", "Planned", "in_progress", "In Progress"].includes(project.status);
+
+  const projectSubmitBlockReason = (project) => {
+    if ((project.pending_tasks_count || 0) > 0) return "Complete all project tasks first";
+    if ((project.pending_deliverables_count || 0) > 0) return "Submit all deliverables first";
+    return "";
   };
 
   const filteredItems = statusFilter
@@ -287,6 +309,19 @@ function Tasks() {
                     <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'tasks' } })}>
                       <IoEyeOutline />
                     </button>
+                    {isProjectSubmitState(item) && (
+                      <div style={{ position: "relative", display: "inline-flex" }}>
+                        <button
+                          className="action-icon-btn action-submit"
+                          title={item.can_submit ? "Submit Project" : projectSubmitBlockReason(item) || "Submit Project"}
+                          disabled={!item.can_submit}
+                          onClick={() => item.can_submit && setSubmitProjectModal({ open: true, project: item })}
+                          style={!item.can_submit ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                        >
+                          <LuSend />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -340,9 +375,17 @@ function Tasks() {
                     <IoEyeOutline />
                   </button>
                   {(item.status === "pending" || item.status === "reopened") && (
-                    <button className="action-icon-btn action-submit" title="Submit Task" onClick={() => setSubmitTaskModal({ open: true, task: item })}>
-                      <LuSend />
-                    </button>
+                    <div style={{ position: "relative", display: "inline-flex" }}>
+                      <button
+                        className="action-icon-btn action-submit"
+                        title={item.pending_deliverables_count > 0 ? "Submit all deliverables first" : "Submit Task"}
+                        disabled={item.pending_deliverables_count > 0}
+                        onClick={() => !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item })}
+                        style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                      >
+                        <LuSend />
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -357,6 +400,14 @@ function Tasks() {
         onClose={() => setSubmitTaskModal({ open: false, task: null })}
         task={submitTaskModal.task}
         onSubmitSuccess={handleTaskSubmitSuccess}
+      />
+
+      <SubmitProjectModal
+        key={`tasks-project-submit-${submitProjectModal.project?.id || "none"}`}
+        isOpen={submitProjectModal.open}
+        onClose={() => setSubmitProjectModal({ open: false, project: null })}
+        project={submitProjectModal.project}
+        onSubmitSuccess={handleProjectSubmitSuccess}
       />
     </DashboardLayout>
   );

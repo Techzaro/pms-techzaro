@@ -37,6 +37,7 @@ function buildHistoryTimeline(deliverable) {
       comment: sub.comment,
       file_path: sub.file_path,
       file_name: sub.file_name,
+      attachments: sub.attachments || [],
     });
   });
 
@@ -122,6 +123,16 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
   const isSubmitted = status === "submitted";
   const isReworkRequired = status === "rework_required";
   const isApproved = status === "approved";
+
+  const token = authToken();
+  const attachmentUrl = (attId, action) => {
+    let url = `${API_URL}/deliverables/attachment/${attId}/download`;
+    const params = [];
+    if (action) params.push(`action=${action}`);
+    if (token) params.push(`token=${token}`);
+    if (params.length) url += `?${params.join("&")}`;
+    return url;
+  };
 
   return createPortal(
     <div className="sdvm-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -233,6 +244,24 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
                         </a>
                       </div>
                     )}
+                    {latestSubmission.attachments?.length > 0 && (
+                      <div className="sdvm-detail-item" style={{ marginTop: "12px" }}>
+                        <span className="sdvm-detail-label">Additional Attachments</span>
+                        {latestSubmission.attachments.map((att) => (
+                          att.attachment_type === "link" ? (
+                            <a key={att.id} className="sdvm-file-link" href={att.url} target="_blank" rel="noopener noreferrer" style={{ display: "block", marginTop: "4px" }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                              <span>{att.original_name || att.url}</span>
+                            </a>
+                          ) : (
+                            <a key={att.id} className="sdvm-file-link" href={attachmentUrl(att.id, "download")} target="_blank" rel="noopener noreferrer" style={{ display: "block", marginTop: "4px" }}>
+                              <FileText size={14} />
+                              <span>{att.original_name || att.file_name || "Download File"}</span>
+                            </a>
+                          )
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -270,6 +299,23 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
                             <FileText size={14} />
                             <span>{item.file_name}</span>
                           </a>
+                        )}
+                        {item.attachments?.length > 0 && (
+                          <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                            {item.attachments.map((att) => (
+                              att.attachment_type === "link" ? (
+                                <a key={att.id} className="sdvm-file-link" href={att.url} target="_blank" rel="noopener noreferrer">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                                  <span>{att.original_name || att.url}</span>
+                                </a>
+                              ) : (
+                                <a key={att.id} className="sdvm-file-link" href={attachmentUrl(att.id, "download")} target="_blank" rel="noopener noreferrer">
+                                  <FileText size={14} />
+                                  <span>{att.original_name || att.file_name || "Download File"}</span>
+                                </a>
+                              )
+                            ))}
+                          </div>
                         )}
                       </div>
                     ))}

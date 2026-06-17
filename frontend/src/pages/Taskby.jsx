@@ -209,7 +209,7 @@ const Taskby = () => {
 
       <div className="container">
            <div className="table-header1">
-          <div>Assigned by</div>
+          <div>Assigned to</div>
           <div className="task-name-column" >Task Name</div>
           <div>Type</div>
           <div className="status-column" >Status</div>

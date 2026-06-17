@@ -65,7 +65,15 @@ class Project extends Model
     ];
 
     /**
-     * Project creator relationship.
+     * Project tasks relationship.
+     */
+    public function tasks()
+    {
+        return $this->hasMany(Task::class);
+    }
+
+    /**
+     * User who created the project.
      */
     public function creator()
     {
@@ -78,15 +86,6 @@ class Project extends Model
     public function team()
     {
         return $this->belongsTo(Team::class);
-    }
-
-    /**
-     * Perform the tasks.
-     */
-
-    public function tasks()
-    {
-        return $this->hasMany(Task::class);
     }
 
     /**

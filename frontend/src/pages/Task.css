@@ -334,9 +334,8 @@
   font-size: 14px;
   font-weight: 600;
   color: #111827;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .task-description {

@@ -96,6 +96,16 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
 
   if (!isOpen || !deliverable) return null;
 
+  const token = authToken();
+  const attachmentUrl = (attId, action) => {
+    let url = `${API_URL}/deliverables/attachment/${attId}/download`;
+    const params = [];
+    if (action) params.push(`action=${action}`);
+    if (token) params.push(`token=${token}`);
+    if (params.length) url += `?${params.join("&")}`;
+    return url;
+  };
+
   const statusLabel = (deliverable.status || "pending").charAt(0).toUpperCase() + (deliverable.status || "pending").slice(1);
   const attachments = submission?.attachments || [];
   const files = attachments.filter((a) => a.attachment_type === "file");
@@ -179,7 +189,7 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
                     <span className="avm-detail-label">Files ({files.length})</span>
                     <div className="avm-attachments-list">
                       {files.map((att) => (
-                        <a key={att.id} className="avm-file-link" href={att.full_url} target="_blank" rel="noopener noreferrer" download>
+                        <a key={att.id} className="avm-file-link" href={attachmentUrl(att.id, "download")} target="_blank" rel="noopener noreferrer">
                           <FileText size={16} />
                           <span className="avm-attach-name">{att.original_name || att.file_name}</span>
                           {att.file_size && <span className="avm-attach-size">{formatFileSize(att.file_size)}</span>}
@@ -196,8 +206,8 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
                     <span className="avm-detail-label">Images ({images.length})</span>
                     <div className="avm-image-grid">
                       {images.map((att) => (
-                        <div key={att.id} className="avm-image-thumb" onClick={() => setImagePreview(att.full_url)}>
-                          <img src={att.full_url} alt={att.original_name || att.file_name} />
+                        <div key={att.id} className="avm-image-thumb" onClick={() => setImagePreview(attachmentUrl(att.id))}>
+                          <img src={attachmentUrl(att.id)} alt={att.original_name || att.file_name} />
                         </div>
                       ))}
                     </div>
