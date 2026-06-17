@@ -28,7 +28,9 @@ function Projects() {
   const [visibilitySaving, setVisibilitySaving] = useState(false);
   const [submitProjectModal, setSubmitProjectModal] = useState({ open: false, project: null });
 
-  const navigate = useNavigate();
+  const currentUser = getUser();
+  const currentRole = getCurrentRole();
+  const isAdminOrManager = ["admin", "manager"].includes(String(currentRole || "").toLowerCase());
 
   const fetchProjects = async () => {
     try {
@@ -173,6 +175,13 @@ function Projects() {
       rejected: "Rejected",
     };
     return map[status] || status;
+  };
+
+  const calculateProgress = (project) => {
+    const total = project.total_tasks ?? project.total_deliverables ?? 0;
+    const completed = project.completed_tasks ?? project.completed_deliverables ?? 0;
+    if (!total || total === 0) return 0;
+    return Math.round((completed / total) * 100);
   };
 
   const canSubmitProject = (project) => {

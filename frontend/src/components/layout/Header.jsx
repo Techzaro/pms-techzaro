@@ -116,7 +116,7 @@ function Header() {
 
       const [projRes, taskRes, userRes] = await Promise.allSettled([
         fetch(`${API_URL}/projects`, { headers, skipLoader: true }),
-        fetch(`${API_URL}/tasks`, { headers, skipLoader: true }),
+        fetch(`${API_URL}/my-tasks`, { headers, skipLoader: true }),
         fetch(`${API_URL}/users`, { headers, skipLoader: true }),
       ]);
 

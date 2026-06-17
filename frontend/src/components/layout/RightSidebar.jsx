@@ -103,7 +103,7 @@ function RightSidebar({ isOpen, onClose }) {
     const fetchTasks = async () => {
       try {
         const token = authToken();
-        const response = await fetch(`${API_URL}/tasks`, {
+        const response = await fetch(`${API_URL}/my-tasks`, {
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         });
 

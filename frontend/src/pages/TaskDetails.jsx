@@ -392,8 +392,7 @@ function TaskDetails() {
                       <LuSend size={15} />
                       {task.status === "reopened" ? "Resubmit Task" : "Submit Task"}
                     </button>
-                  </>
-                )}
+                  )}
                 {!isApproved && (
                   <button className="td-btn-primary" onClick={() => setShowSubtaskModal(true)}>
                     <Plus size={16} strokeWidth={2.5} />
@@ -419,14 +418,9 @@ function TaskDetails() {
               <div>
                 <p className="td-desc">{task.description}</p>
               </div>
+            )}
 
-              {task.description && (
-                <div>
-                  <p className="td-desc">{task.description}</p>
-                </div>
-              )}
-
-              <div className="td-badges">
+            <div className="td-badges">
                 <span className="td-badge" style={{ background: statusBgColor(task.status), color: statusColor(task.status) }}>
                   <span className="td-badge-dot" style={{ background: statusColor(task.status) }} />
                   {statusLabel(task.status)}

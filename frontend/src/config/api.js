@@ -1,7 +1,9 @@
 import { getCurrentRole, getToken, clearSession } from "../utils/auth";
 import { showGlobalLoading, hideGlobalLoading } from "../utils/loadingManager";
 
-const API_URL = import.meta.env.VITE_API_URL;
+const rawApiUrl = import.meta.env.VITE_API_URL || "";
+// Normalize: remove any trailing slashes to avoid double-slash in constructed endpoints
+const API_URL = rawApiUrl.replace(/\/+$/g, "");
 
 /**
  * Global fetch interceptor.
