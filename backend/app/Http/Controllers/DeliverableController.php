@@ -821,7 +821,7 @@ class DeliverableController extends Controller
         $user = $request->user();
 
         $submission = DeliverableSubmission::where('deliverable_id', $deliverable->id)
-            ->with('submittedBy:id,name,email')
+            ->with(['submittedBy:id,name,email', 'attachments'])
             ->latest()
             ->first();
 
@@ -835,5 +835,45 @@ class DeliverableController extends Controller
         $user = request()->user();
         $deliverable->changes()->where('is_viewed', false)->update(['is_viewed' => true]);
         return response()->json(['message' => 'Changes marked as read']);
+    }
+
+    public function downloadAttachment(Request $request, SubmissionAttachment $attachment)
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if ($attachment->attachment_type === 'link') {
+            return redirect($attachment->url);
+        }
+
+        if (!$attachment->file_path) {
+            return response()->json(['message' => 'File not found'], 404);
+        }
+
+        $fullPath = storage_path('app/public/' . $attachment->file_path);
+
+        if (!file_exists($fullPath)) {
+            return response()->json(['message' => 'File not found on disk'], 404);
+        }
+
+        $filename = $attachment->original_name ?? basename($attachment->file_path);
+
+        $mimeType = mime_content_type($fullPath) ?: 'application/octet-stream';
+
+        if (str_starts_with($mimeType, 'image/') && $request->query('action') !== 'download') {
+            return response()->file($fullPath, [
+                'Content-Type' => $mimeType,
+                'Content-Disposition' => 'inline; filename="' . $filename . '"',
+                'Cache-Control' => 'public, max-age=3600',
+            ]);
+        }
+
+        return response()->file($fullPath, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
     }
 }

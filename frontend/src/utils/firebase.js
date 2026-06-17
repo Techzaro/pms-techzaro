@@ -18,7 +18,6 @@ export async function initFirebase() {
     };
 
     if (!firebaseConfig.apiKey) {
-      console.warn("Firebase config missing — skipping FCM registration");
       return;
     }
 

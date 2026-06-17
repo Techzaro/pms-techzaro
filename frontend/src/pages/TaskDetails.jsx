@@ -171,9 +171,9 @@ const nextTaskId =
 
 const currentUser = getUser();
 const canEdit = task?.can_edit ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10) && task?.status?.toLowerCase() !== "approved");
-const canSubmitTask = task?.can_submit ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)) && ["pending", "reopened"].includes(task?.status));
-const isCreator = task?.is_creator ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10));
 const isAssignee = task?.is_assignee ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)));
+const canSubmitTask = task?.can_submit ?? (isAssignee && ["pending", "reopened"].includes(task?.status) && !task?.pending_deliverables_count);
+const isCreator = task?.is_creator ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10));
 const isApproved = task?.status?.toLowerCase() === "approved";
 
 const goToTask = (id) => {
@@ -187,7 +187,7 @@ const goToTask = (id) => {
   const subtasks = task?.subtasks || [];
   const project = task?.project;
   const files = task?.files || [];
-  const progress = typeof task?.progress_percent === "number" ? task.progress_percent : 0;
+  const progress = typeof task?.deliverables_progress === "number" ? task.deliverables_progress : 0;
   const completedCount = subtasks.filter((t) => ["completed", "done"].includes((t.status || "").toLowerCase())).length;
 
   const showMessage = useCallback((text, type = "success") => {
@@ -240,13 +240,27 @@ const goToTask = (id) => {
       const deliverables = (prev.deliverables || []).map((d) =>
         d.id === updatedDeliverable.id ? { ...d, ...updatedDeliverable } : d
       );
-      const delTotal = deliverables.length;
-      const delCompleted = deliverables.filter((d) => d.status === "approved").length;
+      const previousDeliverable = (prev.deliverables || []).find((d) => d.id === updatedDeliverable.id);
+      const wasApproved = previousDeliverable?.status === "approved";
+      const isApprovedNow = updatedDeliverable.status === "approved";
+      const wasPending = previousDeliverable?.status === "pending";
+      const isPendingNow = updatedDeliverable.status === "pending";
+      const delTotal = prev.total_deliverables ?? deliverables.length;
+      const delCompleted = Math.max(
+        0,
+        (prev.completed_deliverables ?? 0) + (isApprovedNow && !wasApproved ? 1 : !isApprovedNow && wasApproved ? -1 : 0)
+      );
+      const pendingCount = Math.max(
+        0,
+        (prev.pending_deliverables_count ?? 0) + (isPendingNow && !wasPending ? 1 : !isPendingNow && wasPending ? -1 : 0)
+      );
       return {
         ...prev,
         deliverables,
         total_deliverables: delTotal,
         completed_deliverables: delCompleted,
+        pending_deliverables_count: pendingCount,
+        can_submit: isAssignee && ["pending", "reopened"].includes(prev.status) && pendingCount === 0,
         deliverables_progress: delTotal > 0 ? Math.round((delCompleted / delTotal) * 100) : 0,
       };
     });
@@ -348,8 +362,14 @@ const goToTask = (id) => {
                     Add Subtask
                   </button>
                 )}
-                {canSubmitTask && (
-                  <button className="td-btn-primary" onClick={() => setTaskSubmitModalOpen(true)}>
+                {isAssignee && ["pending", "reopened"].includes(task?.status) && (
+                  <button
+                    className="td-btn-primary"
+                    disabled={!canSubmitTask}
+                    title={!canSubmitTask ? "Submit all deliverables first" : ""}
+                    onClick={() => setTaskSubmitModalOpen(true)}
+                    style={!canSubmitTask ? { opacity: 0.5, cursor: "not-allowed" } : {}}
+                  >
                     <LuSend size={15} />
                     {task.status === "reopened" ? "Resubmit Task" : "Submit Task"}
                   </button>

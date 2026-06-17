@@ -35,7 +35,7 @@ class ProjectController extends Controller
         if (in_array($user->role, ['admin', 'manager'])) {
             $projects = Project::with(['creator', 'team', 'latestSubmission'])
                 ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
-                    $q->whereIn('status', ['done', 'completed']);
+                    $q->whereIn('status', $this->completedTaskStatuses());
                 }])
                 ->latest()
                 ->get();
@@ -57,11 +57,16 @@ class ProjectController extends Controller
             })
             ->with(['creator', 'team', 'latestSubmission'])
             ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
-                $q->whereIn('status', ['done', 'completed']);
+                $q->whereIn('status', $this->completedTaskStatuses());
             }])
             ->latest()
             ->get();
         }
+
+        $projects->each(function ($project) {
+            $project->pending_deliverables_count = $project->deliverables()->whereNull('task_id')->where('status', 'pending')->count();
+            $this->applyProjectTaskProgress($project);
+        });
 
         return response()->json($projects);
     }
@@ -214,14 +219,21 @@ class ProjectController extends Controller
         $isAssigned = in_array($user->id, $project->assigned_users ?? []);
         $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
 
+        // All project-level deliverables must be submitted before project can be submitted
+        $pendingDeliverables = $project->deliverables()->whereNull('task_id')->where('status', 'pending')->count();
+        $allDeliverablesSubmitted = $pendingDeliverables === 0;
+        $allTasksCompleted = $project->tasks->every(fn ($task) => $this->isCompletedTaskStatus($task->status));
+
         $payload = $project->toArray();
         $payload['members'] = $members;
         $payload['progress_percent'] = $this->computeProgressPercent($project);
+        $payload['total_tasks'] = $project->tasks->count();
+        $payload['completed_tasks'] = $project->tasks->filter(fn ($task) => $this->isCompletedTaskStatus($task->status))->count();
         $payload['is_creator'] = $isCreator;
         $payload['is_assigned'] = $isAssigned;
         $payload['is_admin_or_manager'] = $isAdminOrManager;
         $payload['can_edit'] = $isAdminOrManager;
-        $payload['can_submit'] = in_array($project->status, $submittableStatuses) && ($isAssigned || $isCreator);
+        $payload['can_submit'] = in_array($project->status, $submittableStatuses) && ($isAssigned || $isCreator) && $allDeliverablesSubmitted && $allTasksCompleted;
         $payload['can_review'] = $project->status === 'submitted' && ($isCreator || $isAdminOrManager);
         $payload['unviewed_changes'] = $project->unviewedChanges;
         $payload['unviewed_changes_count'] = $project->unviewedChanges->count();
@@ -241,9 +253,38 @@ class ProjectController extends Controller
             return 0;
         }
 
-        $done = $tasks->filter(fn ($t) => in_array(strtolower((string) $t->status), ['done', 'completed'], true))->count();
+        $done = $tasks->filter(fn ($task) => $this->isCompletedTaskStatus($task->status))->count();
 
         return (int) round(($done / $tasks->count()) * 100);
+    }
+
+    private function completedTaskStatuses(): array
+    {
+        return ['approved', 'completed', 'done'];
+    }
+
+    private function isCompletedTaskStatus(?string $status): bool
+    {
+        return in_array(strtolower((string) $status), $this->completedTaskStatuses(), true);
+    }
+
+    private function applyProjectTaskProgress(Project $project): Project
+    {
+        $total = $project->tasks()->count();
+        $completed = $project->tasks()->whereIn('status', $this->completedTaskStatuses())->count();
+        $pendingDeliverables = $project->deliverables()->whereNull('task_id')->where('status', 'pending')->count();
+        $incomplete = max(0, $total - $completed);
+        $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
+
+        $project->total_tasks = $total;
+        $project->completed_tasks = $completed;
+        $project->pending_tasks_count = $incomplete;
+        $project->pending_deliverables_count = $pendingDeliverables;
+        $project->can_submit = in_array($project->status, $submittableStatuses, true)
+            && $incomplete === 0
+            && $pendingDeliverables === 0;
+
+        return $project;
     }
 
     /**
@@ -645,6 +686,17 @@ class ProjectController extends Controller
 
         if (!in_array($project->status, ['pending', 'Planned', 'in_progress', 'In Progress', 'reopened'])) {
             return response()->json(['message' => 'This project cannot be submitted in its current status'], 422);
+        }
+
+        $incompleteTasks = $project->tasks()->whereNotIn('status', $this->completedTaskStatuses())->count();
+        if ($incompleteTasks > 0) {
+            return response()->json(['message' => 'All project tasks must be completed before submitting this project'], 422);
+        }
+
+        // All project-level deliverables must be submitted before project can be submitted
+        $pendingDeliverables = $project->deliverables()->whereNull('task_id')->where('status', 'pending')->count();
+        if ($pendingDeliverables > 0) {
+            return response()->json(['message' => 'All deliverables must be submitted before submitting this project'], 422);
         }
 
         $validated = $request->validate([

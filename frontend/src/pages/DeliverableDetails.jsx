@@ -9,6 +9,7 @@ import { publish } from "../utils/eventBus";
 import "./TaskDetails.css";
 import { formatDateTimeShort } from "../utils/formatDateTime";
 import "./DeliverableDetails.css";
+import "../components/layout/CreateTaskModal.css";
 
 function formatShortDate(value) {
   return formatDateTimeShort(value);
@@ -49,12 +50,16 @@ function DeliverableDetails() {
   const [showSubmitForm, setShowSubmitForm] = useState(false);
   const [submitComment, setSubmitComment] = useState("");
   const [submitFile, setSubmitFile] = useState(null);
+  const [submitFiles, setSubmitFiles] = useState([]);
+  const [links, setLinks] = useState([]);
+  const [linkInput, setLinkInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [rejectComment, setRejectComment] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("success");
   const fileInputRef = useRef(null);
+  const filesInputRef = useRef(null);
 
   const showToast = useCallback((text, type = "success") => {
     setMessage(text);
@@ -97,6 +102,22 @@ function DeliverableDetails() {
   const isAssignee = deliverable && currentUser && deliverable.assigned_to && parseInt(deliverable.assigned_to, 10) === parseInt(currentUser.id, 10);
   const canApproveReject = isCreator || isAdminManager;
 
+  const handleAddLink = () => {
+    if (!linkInput.trim()) return;
+    let url = linkInput.trim();
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    setLinks((prev) => [...prev, { url, name: url }]);
+    setLinkInput("");
+  };
+
+  const handleRemoveLink = (index) => {
+    setLinks((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleLinkKeyDown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); handleAddLink(); }
+  };
+
   const handleSubmit = async () => {
     if (!submitComment.trim() && !submitFile) {
       showToast("Please add a comment or attach a file.", "error");
@@ -108,6 +129,8 @@ function DeliverableDetails() {
       const formData = new FormData();
       if (submitComment.trim()) formData.append("comment", submitComment.trim());
       if (submitFile) formData.append("file", submitFile);
+      submitFiles.forEach((f) => formData.append("files[]", f));
+      links.forEach((l) => formData.append("links[]", l.url));
 
       const res = await fetch(`${API_URL}/deliverables/${deliverableId}/submit`, {
         method: "POST",
@@ -123,6 +146,9 @@ function DeliverableDetails() {
         setShowSubmitForm(false);
         setSubmitComment("");
         setSubmitFile(null);
+        setSubmitFiles([]);
+        setLinks([]);
+        setLinkInput("");
         fetchDeliverable();
       } else {
         showToast(data.message || "Failed to submit", "error");
@@ -317,11 +343,66 @@ function DeliverableDetails() {
                         </div>
                       )}
                     </div>
+                    <div style={{ marginTop: "12px" }}>
+                      <label style={{ display: "block", marginBottom: "6px", fontSize: "13px", fontWeight: 500, color: "#374151" }}>Additional Files</label>
+                      <input
+                        type="file"
+                        multiple
+                        ref={filesInputRef}
+                        onChange={(e) => setSubmitFiles(Array.from(e.target.files))}
+                        style={{ fontSize: "14px" }}
+                      />
+                      {submitFiles.length > 0 && (
+                        <div style={{ marginTop: "6px", fontSize: "13px", color: "#6366f1" }}>
+                          {submitFiles.length} file(s) selected
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ marginTop: "12px" }}>
+                      <label style={{ display: "block", marginBottom: "6px", fontSize: "13px", fontWeight: 500, color: "#374151" }}>Links</label>
+                      <div className="task-link-input-row">
+                        <input
+                          type="text"
+                          placeholder="Paste link (Drive, Figma, GitHub, etc.)"
+                          value={linkInput}
+                          onChange={(e) => setLinkInput(e.target.value)}
+                          onKeyDown={handleLinkKeyDown}
+                        />
+                        <button
+                          type="button"
+                          className="task-link-add-btn"
+                          onClick={handleAddLink}
+                          disabled={!linkInput.trim()}
+                        >
+                          Add Link
+                        </button>
+                      </div>
+                      {links.length > 0 && (
+                        <div className="task-attachments-list">
+                          {links.map((link, index) => (
+                            <div key={index} className="task-attachment-item">
+                              <span className="task-attachment-icon">🔗</span>
+                              <a href={link.url} target="_blank" rel="noopener noreferrer" className="task-attachment-name task-attachment-link">
+                                {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
+                              </a>
+                              <a href={link.url} target="_blank" rel="noopener noreferrer" className="task-attachment-open">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                  <polyline points="15 3 21 3 21 9" />
+                                  <line x1="10" y1="14" x2="21" y2="3" />
+                                </svg>
+                              </a>
+                              <button type="button" className="task-attachment-remove" onClick={() => handleRemoveLink(index)}>✕</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <div style={{ marginTop: "16px", display: "flex", gap: "10px" }}>
                       <button className="td-btn-primary" onClick={handleSubmit} disabled={submitting}>
                         {submitting ? "Submitting..." : "Submit"}
                       </button>
-                      <button className="td-btn-outline" onClick={() => { setShowSubmitForm(false); setSubmitComment(""); setSubmitFile(null); }}>
+                      <button className="td-btn-outline" onClick={() => { setShowSubmitForm(false); setSubmitComment(""); setSubmitFile(null); setSubmitFiles([]); setLinks([]); setLinkInput(""); }}>
                         Cancel
                       </button>
                     </div>
@@ -400,6 +481,25 @@ function DeliverableDetails() {
                           <Download size={14} />
                           {sub.file_name || "Download File"}
                         </a>
+                      </div>
+                    )}
+                    {sub.attachments?.length > 0 && (
+                      <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                        {sub.attachments.map((att) => (
+                          att.attachment_type === "link" ? (
+                            <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer"
+                              style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "#6366f1", fontSize: "13px", textDecoration: "none" }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                              {att.original_name || att.url}
+                            </a>
+                          ) : (
+                            <a key={att.id} href={att.full_url || `/storage/${att.file_path}`} target="_blank" rel="noopener noreferrer"
+                              style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "#6366f1", fontSize: "13px", textDecoration: "none" }}>
+                              <Download size={14} />
+                              {att.original_name || att.file_name || "Download File"}
+                            </a>
+                          )
+                        ))}
                       </div>
                     )}
                   </div>

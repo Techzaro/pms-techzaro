@@ -35,11 +35,7 @@ class TaskController extends Controller
 
         $tasks->getCollection()->transform(function ($task) {
             $task->item_type = 'task';
-            $total = $task->deliverables()->count();
-            $completed = $task->deliverables()->whereIn('status', ['approved'])->count();
-            $task->total_deliverables = $total;
-            $task->completed_deliverables = $completed;
-            $task->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
+            $this->applyDeliverableProgress($task);
             return $task;
         });
 
@@ -57,8 +53,7 @@ class TaskController extends Controller
 
         $projects = $projects->map(function ($project) {
             $project->item_type = 'project';
-            $project->total_tasks = $project->tasks()->count();
-            $project->completed_tasks = $project->tasks()->whereIn('status', ['done', 'completed'])->count();
+            $this->applyProjectTaskProgress($project);
             return $project;
         });
 
@@ -89,11 +84,7 @@ class TaskController extends Controller
 
         $tasks->getCollection()->transform(function ($task) {
             $task->item_type = 'task';
-            $total = $task->deliverables()->count();
-            $completed = $task->deliverables()->whereIn('status', ['approved'])->count();
-            $task->total_deliverables = $total;
-            $task->completed_deliverables = $completed;
-            $task->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
+            $this->applyDeliverableProgress($task);
             return $task;
         });
 
@@ -109,8 +100,7 @@ class TaskController extends Controller
         ->get()
         ->map(function ($project) {
             $project->item_type = 'project';
-            $project->total_tasks = $project->tasks()->count();
-            $project->completed_tasks = $project->tasks()->whereIn('status', ['done', 'completed'])->count();
+            $this->applyProjectTaskProgress($project);
             return $project;
         });
 
@@ -158,8 +148,7 @@ class TaskController extends Controller
 
         $expandedTasks = collect();
         foreach ($tasks as $task) {
-            $total = $task->deliverables()->count();
-            $completed = $task->deliverables()->whereIn('status', ['approved'])->count();
+            $deliverableProgress = $this->getDeliverableProgress($task);
             $assignees = $task->assignees->isEmpty() ? collect([null]) : $task->assignees;
             foreach ($assignees as $assignee) {
                 // Skip self-assigned entries — creator assigned to themselves
@@ -174,9 +163,7 @@ class TaskController extends Controller
                 $clone = clone $task;
                 $clone->assignees = $assignee ? collect([$assignee]) : collect();
                 $clone->item_type = 'task';
-                $clone->total_deliverables = $total;
-                $clone->completed_deliverables = $completed;
-                $clone->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
+                $this->applyDeliverableProgress($clone, $deliverableProgress);
                 $expandedTasks->push($clone);
             }
         }
@@ -201,8 +188,7 @@ class TaskController extends Controller
         $expandedProjects = collect();
         foreach ($projects as $project) {
             $project->item_type = 'project';
-            $project->total_tasks = $project->tasks()->count();
-            $project->completed_tasks = $project->tasks()->whereIn('status', ['done', 'completed'])->count();
+            $this->applyProjectTaskProgress($project);
             $assignedIds = $project->assigned_users;
             if (is_string($assignedIds)) {
                 $assignedIds = json_decode($assignedIds, true) ?? [];
@@ -305,12 +291,14 @@ class TaskController extends Controller
             $deliverable->has_submitted = in_array($deliverable->id, $submittedIds);
         });
 
-        $delTotal = $deliverables->count();
-        $delCompleted = $deliverables->filter(fn ($d) => $d->status === 'approved')->count();
-        $delProgress = $delTotal > 0 ? (int) round(($delCompleted / $delTotal) * 100) : 0;
+        $deliverableProgress = $this->getDeliverableProgress($task);
 
         $isApproved = strtolower((string) $task->status) === 'approved';
         $pendingStatuses = ['pending', 'reopened'];
+
+        // All task-level deliverables must be submitted before task can be submitted
+        $pendingDeliverables = $task->deliverables()->where('status', 'pending')->count();
+        $allDeliverablesSubmitted = $pendingDeliverables === 0;
 
         $changes = $task->unviewedChanges->map(fn ($c) => [
             'id' => $c->id,
@@ -326,16 +314,17 @@ class TaskController extends Controller
                 'subtasks' => $subtasks,
                 'progress_percent' => $progress,
                 'deliverables' => $deliverables,
-                'deliverables_progress' => $delProgress,
-                'total_deliverables' => $delTotal,
-                'completed_deliverables' => $delCompleted,
+                'deliverables_progress' => $deliverableProgress['progress'],
+                'total_deliverables' => $deliverableProgress['total'],
+                'completed_deliverables' => $deliverableProgress['completed'],
+                'pending_deliverables_count' => $deliverableProgress['pending'],
                 'unviewed_changes' => $changes,
                 'unviewed_changes_count' => $unviewedChangesCount,
                 // Permission flags
                 'is_creator' => $isCreator,
                 'is_assignee' => $isAssignee,
                 'can_edit' => $isCreator && !$isApproved,
-                'can_submit' => $isAssignee && in_array($task->status, $pendingStatuses),
+                'can_submit' => $isAssignee && in_array($task->status, $pendingStatuses) && $allDeliverablesSubmitted,
             ]),
         ]);
     }
@@ -758,6 +747,12 @@ class TaskController extends Controller
 
         if (!in_array($task->status, ['pending', 'reopened'])) {
             return response()->json(['message' => 'This task cannot be submitted in its current status'], 422);
+        }
+
+        // All task deliverables must be submitted before task can be submitted
+        $pendingDeliverables = $task->deliverables()->where('status', 'pending')->count();
+        if ($pendingDeliverables > 0) {
+            return response()->json(['message' => 'All deliverables must be submitted before submitting this task'], 422);
         }
 
         $validated = $request->validate([
@@ -1196,6 +1191,57 @@ class TaskController extends Controller
                 'link' => '/tasks/task-details/' . $task->id . '?from=tasks',
             ]);
         }
+    }
+
+    private function getDeliverableProgress(Task $task): array
+    {
+        $total = $task->deliverables()->count();
+        $completed = $task->deliverables()->where('status', 'approved')->count();
+        $pending = $task->deliverables()->where('status', 'pending')->count();
+
+        return [
+            'total' => $total,
+            'completed' => $completed,
+            'pending' => $pending,
+            'progress' => $total > 0 ? (int) round(($completed / $total) * 100) : 0,
+        ];
+    }
+
+    private function applyDeliverableProgress(Task $task, ?array $progress = null): Task
+    {
+        $progress ??= $this->getDeliverableProgress($task);
+
+        $task->total_deliverables = $progress['total'];
+        $task->completed_deliverables = $progress['completed'];
+        $task->approved_deliverables = $progress['completed'];
+        $task->pending_deliverables_count = $progress['pending'];
+        $task->deliverables_progress = $progress['progress'];
+
+        return $task;
+    }
+
+    private function completedProjectTaskStatuses(): array
+    {
+        return ['approved', 'completed', 'done'];
+    }
+
+    private function applyProjectTaskProgress(Project $project): Project
+    {
+        $total = $project->tasks()->count();
+        $completed = $project->tasks()->whereIn('status', $this->completedProjectTaskStatuses())->count();
+        $pendingDeliverables = $project->deliverables()->whereNull('task_id')->where('status', 'pending')->count();
+        $incomplete = max(0, $total - $completed);
+        $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
+
+        $project->total_tasks = $total;
+        $project->completed_tasks = $completed;
+        $project->pending_tasks_count = $incomplete;
+        $project->pending_deliverables_count = $pendingDeliverables;
+        $project->can_submit = in_array($project->status, $submittableStatuses, true)
+            && $incomplete === 0
+            && $pendingDeliverables === 0;
+
+        return $project;
     }
 
     private function sendDeliverableAssignmentNotification(\App\Models\Deliverable $deliverable, \App\Models\User $sender): void

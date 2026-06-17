@@ -9,12 +9,13 @@ import { IoSearchOutline, IoEyeOutline, IoClose } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import { GoDotFill } from "react-icons/go";
 import API_URL from "../config/api";
-import { authToken, getCurrentRole, rolePath } from "../utils/auth";
+import { authToken, getCurrentRole, rolePath, getUser } from "../utils/auth";
 import "./Projects.css";
 import { formatDateTime } from "../utils/formatDateTime";
 import "../pages/Task.css";
 
 function Projects() {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -27,13 +28,16 @@ function Projects() {
   const [visibilitySaving, setVisibilitySaving] = useState(false);
   const [submitProjectModal, setSubmitProjectModal] = useState({ open: false, project: null });
 
-  const navigate = useNavigate();
+  const role = getCurrentRole();
+  const isAdminOrManager = role === "admin" || role === "manager";
+  const currentUser = getUser(role);
 
-  useEffect(() => {
-    fetchProjects();
-  }, []);
-
-  useRefreshOnEvent(['project:created', 'project:updated', 'project:deleted'], fetchProjects);
+  const calculateProgress = (project) => {
+    const total = project.total_tasks ?? 0;
+    const completed = project.completed_tasks ?? 0;
+    if (total === 0) return 0;
+    return Math.round((completed / total) * 100);
+  };
 
   const fetchProjects = async () => {
     try {
@@ -64,6 +68,12 @@ function Projects() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  useRefreshOnEvent(['project:created', 'project:updated', 'project:deleted'], fetchProjects);
 
   const openVisibility = async (project, e) => {
     e.stopPropagation();
@@ -114,16 +124,6 @@ function Projects() {
     } finally {
       setVisibilitySaving(false);
     }
-  };
-
-  const role = getCurrentRole();
-  const isAdminOrManager = role === "admin" || role === "manager";
-
-  const calculateProgress = (project) => {
-    const total = project.total_tasks ?? 0;
-    const completed = project.completed_tasks ?? 0;
-    if (total === 0) return 0;
-    return Math.round((completed / total) * 100);
   };
 
   const calculateStatus = (project) => {
@@ -185,7 +185,26 @@ function Projects() {
   };
 
   const canSubmitProject = (project) => {
-    return project.status === "pending" || project.status === "reopened" || project.status === "Planned" || project.status === "in_progress";
+    // Use backend can_submit if available (includes task completion + deliverable checks)
+    if (project.can_submit !== undefined) {
+      return project.can_submit === true;
+    }
+
+    // Fallback: Check if project is in a submit state
+    const isSubmitState = project.status === "pending" || project.status === "reopened" || project.status === "Planned" || project.status === "in_progress";
+    if (!isSubmitState) return false;
+
+    // For Admin/Manager: check if they are assigned to the project
+    // For regular users: always true (they already filtered projects they have access to)
+    if (isAdminOrManager) {
+      // Check if the current user is in the project's assigned_users array
+      return Array.isArray(project.assigned_users) && project.assigned_users.includes(currentUser?.id);
+    }
+    return true;
+  };
+
+  const hasPendingDeliverables = (project) => {
+    return (project.pending_deliverables_count || 0) > 0;
   };
 
   const handleProjectSubmitSuccess = (updatedProject) => {
@@ -358,13 +377,17 @@ function Projects() {
                         </button>
                       )}
                       {canSubmitProject(project) && (
-                        <button
-                          className="action-icon-btn action-submit"
-                          title="Submit Project"
-                          onClick={() => setSubmitProjectModal({ open: true, project })}
-                        >
-                          <LuSend />
-                        </button>
+                        <div style={{ position: "relative", display: "inline-flex" }}>
+                          <button
+                            className="action-icon-btn action-submit"
+                            title={hasPendingDeliverables(project) ? "Submit all deliverables first" : "Submit Project"}
+                            disabled={hasPendingDeliverables(project)}
+                            onClick={() => !hasPendingDeliverables(project) && setSubmitProjectModal({ open: true, project })}
+                            style={hasPendingDeliverables(project) ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                          >
+                            <LuSend />
+                          </button>
+                        </div>
                       )}
                       <button
                         className="view-details-btn"

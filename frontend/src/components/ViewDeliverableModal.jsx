@@ -89,6 +89,16 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
 
   if (!isOpen || !deliverable) return null;
 
+  const token = authToken();
+  const attachmentUrl = (attId, action) => {
+    let url = `${API_URL}/deliverables/attachment/${attId}/download`;
+    const params = [];
+    if (action) params.push(`action=${action}`);
+    if (token) params.push(`token=${token}`);
+    if (params.length) url += `?${params.join("&")}`;
+    return url;
+  };
+
   const statusLabel = (deliverable.status || "pending").charAt(0).toUpperCase() + (deliverable.status || "pending").slice(1);
   const isReopened = deliverable.status === "reopened";
   const attachments = submission?.attachments || [];
