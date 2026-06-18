@@ -11,10 +11,6 @@ import { formatDateTimeShort } from "../utils/formatDateTime";
 import "./DeliverableDetails.css";
 import "../components/layout/CreateTaskModal.css";
 
-function formatShortDate(value) {
-  return formatDateTimeShort(value);
-}
-
 function timeAgo(iso) {
   if (!iso) return "";
   const then = new Date(iso).getTime();
@@ -294,7 +290,7 @@ function DeliverableDetails() {
                 <div className="td-trio-item">
                   <div>
                     <span className="td-stat-label">Due Date</span>
-                    <span className="td-stat-big td-stat-big--sm" style={{ display: "block" }}>{formatShortDate(deliverable.due_date)}</span>
+                    <span className="td-stat-big td-stat-big--sm" style={{ display: "block" }}>{formatDateTimeShort(deliverable.due_date)}</span>
                   </div>
                 </div>
               </div>
@@ -538,7 +534,7 @@ function DeliverableDetails() {
                   <span className="td-dot" style={{ background: "#22c55e" }} />
                   <div>
                     <span className="td-info-label">Due Date</span>
-                    <span className="td-info-val">{formatShortDate(deliverable.due_date)}</span>
+                    <span className="td-info-val">{formatDateTimeShort(deliverable.due_date)}</span>
                   </div>
                 </li>
                 <li>

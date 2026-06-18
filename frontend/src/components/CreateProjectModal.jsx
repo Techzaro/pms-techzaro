@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
-import { formatDateTime } from "../utils/formatDateTime";
+import { formatDateTime, toUTCIso } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
 import "./layout/CreateProjectModal.css";
 
@@ -121,9 +121,7 @@ const CreateProjectModal = ({ onClose }) => {
 
   const handleAddPhase = () => {
     if (!phaseName.trim() || !phaseDate) return;
-    const dt = new Date(phaseDate);
-    const pad = (n) => String(n).padStart(2, "0");
-    const formattedDt = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}:00`;
+    const formattedDt = toUTCIso(phaseDate);
     setMilestones((prev) => [...prev, { title: phaseName.trim(), due_date: formattedDt, status: "planned" }]);
     setPhaseName("");
     setPhaseDate("");
@@ -205,7 +203,7 @@ const CreateProjectModal = ({ onClose }) => {
   const handleAddDeliverableProj = () => {
     if (!deliverableProjInput.title.trim()) return;
     const dt = deliverableProjInput.due_datetime;
-    const dueDate = dt ? dt.replace("T", " ") + ":00" : null;
+    const dueDate = toUTCIso(dt);
     setDeliverablesProj((prev) => [...prev, { title: deliverableProjInput.title.trim(), due_date: dueDate }]);
     setDeliverableProjInput({ title: "", due_datetime: "" });
   };

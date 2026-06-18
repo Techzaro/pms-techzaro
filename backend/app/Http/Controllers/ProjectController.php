@@ -30,21 +30,21 @@ class ProjectController extends Controller
     public function index()
     {
         $user = request()->user();
+        $filter = request()->query('filter');
 
         // Admin and Manager see ALL projects
         if (in_array($user->role, ['admin', 'manager'])) {
-            $projects = Project::with(['creator', 'team', 'latestSubmission'])
+            $projectsQuery = Project::with(['creator', 'team', 'latestSubmission'])
                 ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
                     $q->whereIn('status', $this->completedTaskStatuses());
                 }])
-                ->latest()
-                ->get();
+                ->latest();
         } else {
             // Projects List: Show only if created by, manually visible, team member, or team leader
             // Projects assigned to user appear in /my-tasks pages, not here
             // Auto-visibility from task assignment does NOT apply to Projects List
             // IMPORTANT: Do NOT include project-task assignees here - those appear in /my-tasks
-            $projects = Project::where(function ($q) use ($user) {
+            $projectsQuery = Project::where(function ($q) use ($user) {
                 $q->whereHas('manuallyVisibleTo', fn ($q) => $q->where('user_id', $user->id))
                   ->orWhere(function ($q) use ($user) {
                       $q->where(function ($q) use ($user) {
@@ -59,9 +59,18 @@ class ProjectController extends Controller
             ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
                 $q->whereIn('status', $this->completedTaskStatuses());
             }])
-            ->latest()
-            ->get();
+            ->latest();
         }
+
+        if ($filter === 'active') {
+            $projectsQuery->whereNotIn('status', $this->inactiveProjectStatuses());
+
+            if (!in_array($user->role, ['admin', 'manager'])) {
+                $projectsQuery->whereIn('id', $this->getUserProjectIds($user));
+            }
+        }
+
+        $projects = $projectsQuery->get();
 
         $projects->each(function ($project) {
             $project->pending_deliverables_count = $project->deliverables()->whereNull('task_id')->where('status', 'pending')->count();
@@ -261,6 +270,49 @@ class ProjectController extends Controller
     private function completedTaskStatuses(): array
     {
         return ['approved', 'completed', 'done'];
+    }
+
+    private function inactiveProjectStatuses(): array
+    {
+        return [
+            'completed',
+            'Completed',
+            'done',
+            'Done',
+            'approved',
+            'Approved',
+            'rejected',
+            'Rejected',
+            'cancelled',
+            'Cancelled',
+            'canceled',
+            'Canceled',
+            'abandoned',
+            'Abandoned',
+            'closed',
+            'Closed',
+            'archived',
+            'Archived',
+        ];
+    }
+
+    private function getUserProjectIds(User $user)
+    {
+        if (in_array($user->role, ['admin', 'manager'])) {
+            return Project::pluck('id');
+        }
+
+        return Project::where(function ($q) use ($user) {
+            $q->whereHas('manuallyVisibleTo', fn ($q) => $q->where('user_id', $user->id))
+              ->orWhere(function ($q) use ($user) {
+                  $q->where(function ($q) use ($user) {
+                      $q->where('created_by', $user->id)
+                        ->orWhereHas('team.members', fn ($m) => $m->where('users.id', $user->id))
+                        ->orWhereHas('team', fn ($t) => $t->where('leader_id', $user->id))
+                        ->orWhereJsonContains('assigned_users', (int) $user->id);
+                  })->whereDoesntHave('visibility', fn ($q) => $q->where('user_id', $user->id)->where('is_visible', false));
+              });
+        })->pluck('id');
     }
 
     private function isCompletedTaskStatus(?string $status): bool

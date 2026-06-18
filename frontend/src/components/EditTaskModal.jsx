@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
-import { formatDateTime, toDatetimeLocal } from "../utils/formatDateTime";
+import { formatDateTime, toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
 import "./layout/CreateTaskModal.css";
 
@@ -54,7 +54,7 @@ export default function EditTaskModal({ task, onClose }) {
   const handleAddDeliverable = () => {
     if (!deliverableInput.title.trim()) return;
     const dt = deliverableInput.due_datetime;
-    const dueDate = dt ? dt.replace("T", " ") + ":00" : null;
+    const dueDate = toUTCIso(dt);
     setDeliverables((prev) => [...prev, { title: deliverableInput.title.trim(), due_date: dueDate }]);
     setDeliverableInput({ title: "", due_datetime: "" });
   };
@@ -72,7 +72,12 @@ export default function EditTaskModal({ task, onClose }) {
     setError("");
     setLoading(true);
     try {
-      const body = { ...form, assigned_to: selectedAssigneeIds };
+      const body = {
+        ...form,
+        start_date: toUTCIso(form.start_date),
+        end_date: toUTCIso(form.end_date),
+        assigned_to: selectedAssigneeIds,
+      };
       if (deliverables.length > 0) {
         body.deliverables = deliverables.map((d) => ({ title: d.title, due_date: d.due_date || null }));
       }

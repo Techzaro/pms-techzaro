@@ -3,16 +3,8 @@ import { createPortal } from "react-dom";
 import { FileText, Upload, X, Plus, Image } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
+import { formatDateTimeShort } from "../utils/formatDateTime";
 import "./SubmitDeliverableModal.css";
-
-function formatShortDate(value) {
-  if (!value) return "\u2014";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "\u2014";
-  const date = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-  const time = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
-  return `${date} ${time}`;
-}
 
 function SubmitProjectModal({ isOpen, onClose, project, onSubmitSuccess }) {
   const [comment, setComment] = useState("");
@@ -107,7 +99,7 @@ function SubmitProjectModal({ isOpen, onClose, project, onSubmitSuccess }) {
             <div className="sd-meta">
               <span className={`sd-status-badge sd-status-${project.status || "pending"}`}>{statusLabel}</span>
               {project.end_date && (
-                <span className="sd-due-date">Due Date & Time {formatShortDate(project.end_date)}</span>
+                <span className="sd-due-date">Due Date & Time {formatDateTimeShort(project.end_date)}</span>
               )}
             </div>
           </div>

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import "./ReopenDialog.css";
-import { toDatetimeLocal } from "../utils/formatDateTime";
+import { toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
 
 function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
   const [comment, setComment] = useState("");
@@ -40,7 +40,7 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
       const formData = new FormData();
       if (comment.trim()) formData.append("comment", comment.trim());
       if (instructions.trim()) formData.append("instructions", instructions.trim());
-      if (newDeadline) formData.append("new_deadline", newDeadline);
+      if (newDeadline) formData.append("new_deadline", toUTCIso(newDeadline));
       if (file) formData.append("file", file);
 
       const res = await fetch(`${API_URL}/tasks/${task.id}/reopen`, {

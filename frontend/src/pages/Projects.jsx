@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CreateProjectModal from "../components/CreateProjectModal";
@@ -16,12 +16,13 @@ import "../pages/Task.css";
 
 function Projects() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get("filter") === "active" ? "active" : "");
   const [visibilityProject, setVisibilityProject] = useState(null);
   const [visibilityUsers, setVisibilityUsers] = useState([]);
   const [visibilitySelected, setVisibilitySelected] = useState({});
@@ -34,10 +35,12 @@ function Projects() {
 
   const fetchProjects = async () => {
     try {
+      setLoading(true);
       const token = authToken();
+      const query = statusFilter === "active" ? "?filter=active" : "";
 
       const response = await fetch(
-        `${API_URL}/projects`,
+        `${API_URL}/projects${query}`,
         {
           method: "GET",
           headers: {
@@ -64,9 +67,28 @@ function Projects() {
 
   useEffect(() => {
     fetchProjects();
-  }, []);
+  }, [statusFilter]);
 
   useRefreshOnEvent(['project:created', 'project:updated', 'project:deleted'], fetchProjects);
+
+  useEffect(() => {
+    const nextFilter = searchParams.get("filter") === "active" ? "active" : "";
+    setStatusFilter((current) => {
+      if (nextFilter === "active" || current === "active") {
+        return current === nextFilter ? current : nextFilter;
+      }
+      return current;
+    });
+  }, [searchParams]);
+
+  const selectStatusFilter = (filter) => {
+    setStatusFilter(filter);
+    if (filter === "active") {
+      setSearchParams({ filter: "active" });
+    } else {
+      setSearchParams({});
+    }
+  };
 
   const openVisibility = async (project, e) => {
     e.stopPropagation();
@@ -220,6 +242,7 @@ function Projects() {
       return false;
     }
     if (statusFilter) {
+      if (statusFilter === "active") return true;
       if (statusFilter === "pending" && project.status !== "pending" && project.status !== "Planned" && project.status !== "in_progress") return false;
       if (statusFilter === "submitted" && project.status !== "submitted") return false;
       if (statusFilter === "reopened" && project.status !== "reopened") return false;
@@ -278,20 +301,23 @@ function Projects() {
 
         {/* STATUS FILTERS */}
         <div className="task-progress">
-          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
-          <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => setStatusFilter("pending")} style={{ cursor: "pointer" }}>
+          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
+          <p className={`Active ${statusFilter === "active" ? "active" : ""}`} onClick={() => selectStatusFilter("active")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Active Projects
+          </p>
+          <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Pending
           </p>
-          <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
+          <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Submitted
           </p>
-          <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => setStatusFilter("reopened")} style={{ cursor: "pointer" }}>
+          <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Reopened
           </p>
-          <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
+          <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Approved
           </p>
-          <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => setStatusFilter("rejected")} style={{ cursor: "pointer" }}>
+          <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Rejected
           </p>
         </div>

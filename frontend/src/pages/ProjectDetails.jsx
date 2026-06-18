@@ -48,13 +48,6 @@ import API_URL from "../config/api";
 import { publish } from "../utils/eventBus";
 const API = API_URL;
 
-/**
- * Perform the status slug.
- */
-
-/**
- * Handle status slug.
- */
 function statusSlug(status) {
   return (status || "")
     .toLowerCase()
@@ -62,24 +55,6 @@ function statusSlug(status) {
     .replace(/[^a-z0-9_]/g, "");
 }
 
-/**
- * Perform the format short date.
- */
-
-/**
- * Handle format short date.
- */
-function formatShortDate(value) {
-  return formatDateTimeShort(value);
-}
-
-/**
- * Perform the time ago.
- */
-
-/**
- * Handle time ago.
- */
 function timeAgo(iso) {
   if (!iso) return "";
   const then = new Date(iso).getTime();
@@ -428,7 +403,7 @@ function ProjectDetails() {
                 <span className={`pd-dot pd-dot--${statusSlug(m.status)}`} />
                 <div>
                   <div className="pd-milestones__title">{m.title}</div>
-                  <div className="pd-milestones__date">{formatShortDate(m.due_date)}</div>
+                  <div className="pd-milestones__date">{formatDateTimeShort(m.due_date)}</div>
                 </div>
               </li>
             ))
@@ -450,7 +425,7 @@ function ProjectDetails() {
                 <span className={`pd-pill pd-pill--task-${statusSlug(taskStatusLabel(t.status))}`} style={{ fontSize: 10 }}>
                   {taskStatusLabel(t.status)}
                 </span>
-                <span className="pd-rail-tasks__due">{formatShortDate(t.end_date)}</span>
+                <span className="pd-rail-tasks__due">{formatDateTimeShort(t.end_date)}</span>
               </li>
             ))}
           </ul>
@@ -527,7 +502,7 @@ function ProjectDetails() {
               </span>
               <div>
                 <span className="pd-meta-rows__label">Start date</span>
-                <span className="pd-meta-rows__value">{formatShortDate(project.start_date)}</span>
+                <span className="pd-meta-rows__value">{formatDateTimeShort(project.start_date)}</span>
               </div>
             </li>
             <li>
@@ -729,7 +704,7 @@ function ProjectDetails() {
                 <CalendarDays size={20} />
               </div>
               <div className="pd-mini-stat__text">
-                <span className="pd-mini-stat__num pd-mini-stat__num--sm">{formatShortDate(project.end_date)}</span>
+                <span className="pd-mini-stat__num pd-mini-stat__num--sm">{formatDateTimeShort(project.end_date)}</span>
                 <span className="pd-mini-stat__label">Deadline</span>
               </div>
             </div>
@@ -820,7 +795,7 @@ function ProjectDetails() {
                                   <td>
                                     <span className={`pd-pill pd-pill--pri-${(t.priority || "medium").toLowerCase()}`}>{t.priority}</span>
                                   </td>
-                                  <td>{formatShortDate(t.end_date)}</td>
+                                  <td>{formatDateTimeShort(t.end_date)}</td>
                                   <td>
                                     <button type="button" className="pd-btn-tx pd-btn-tx--danger" style={{ padding: "4px 8px", fontSize: "12px" }} onClick={() => handleDeleteTask(t.id)}>
                                       <Trash2 size={14} />
@@ -865,7 +840,7 @@ function ProjectDetails() {
                                 <tr key={d.id}>
                                   <td className="pd-table-strong">{d.title}</td>
                                   <td>{d.assignee?.name || "—"}</td>
-                                  <td>{formatShortDate(d.due_date)}</td>
+                                  <td>{formatDateTimeShort(d.due_date)}</td>
                                   <td>
                                     <span className={`pd-pill pd-pill--task-${statusSlug(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status)}`}>
                                       {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}

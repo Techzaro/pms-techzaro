@@ -9,6 +9,10 @@ namespace App\Http\Controllers;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use App\Models\TaskWorkflowEvent;
+use App\Models\DeliverableWorkflowEvent;
+use App\Models\ProjectWorkflowEvent;
+use App\Models\DeliverableSubmission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -32,7 +36,7 @@ class DashboardController extends Controller
             'activeProjects' => $this->getActiveProjects($user, $role),
             'recentActivity' => $this->getRecentActivity($user, $role),
             'upcomingDeadlines' => $this->getUpcomingDeadlines($user, $role),
-            'completedToday' => $this->getCompletedToday($user),
+            'completedToday' => $this->getTodayActivityFeed($user, $role),
         ]);
     }
 
@@ -42,68 +46,37 @@ class DashboardController extends Controller
     private function getSummary(User $user, string $role): array
     {
         $projectQuery = Project::query();
-        $taskQuery = Task::query();
+        $taskQuery = $this->dashboardTaskQuery($user, $role);
+        $projectAsTaskQuery = $this->dashboardProjectAsTaskQuery($user, $role);
 
         if (in_array($role, ['admin', 'manager'])) {
             // Admin/Manager: see all projects and tasks
         } else {
             $projectIds = $this->getUserProjectIds($user);
             $projectQuery->whereIn('id', $projectIds);
-            $taskQuery->whereIn('project_id', $projectIds)->where(function ($q) use ($user) {
-                $q->where('assigned_by', $user->id)
-                  ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
-            });
         }
 
         $activeProjects = $projectQuery->clone()
-            ->whereNotIn('status', ['completed', 'done'])
+            ->whereNotIn('status', $this->inactiveProjectStatuses())
             ->count();
 
-        // Admin/Manager: all tasks due today (unrestricted)
-        // Other roles: scoped to their projects/tasks
-        $tasksDueToday = in_array($role, ['admin', 'manager'])
-            ? Task::query()
-                ->whereDate('end_date', today())
-                ->whereNotIn('status', ['completed', 'done', 'approved', 'abandoned'])
-                ->count()
-            : Task::query()
-                ->whereDate('end_date', today())
-                ->whereNotIn('status', ['completed', 'done', 'approved', 'abandoned'])
-                ->where(function ($q) use ($user) {
-                    $q->whereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
-                      ->orWhere('assigned_to', $user->id);
-                })
+        $tasksDueToday = $this->getTasksDueTodayCount($user, $role);
+
+        $completedTasks = $taskQuery->clone()
+            ->whereIn('status', $this->completedTaskStatuses())
+            ->count()
+            + $projectAsTaskQuery->clone()
+                ->whereIn('status', $this->completedTaskStatuses())
                 ->count();
 
-        // Admin/Manager: all completed/approved tasks (unrestricted)
-        // Other roles: tasks assigned to them that are completed/approved
-        $completedTasks = in_array($role, ['admin', 'manager'])
-            ? Task::query()
-                ->whereIn('status', ['completed', 'done', 'approved'])
-                ->count()
-            : Task::query()
-                ->whereIn('status', ['completed', 'done', 'approved'])
-                ->where(function ($q) use ($user) {
-                    $q->whereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
-                      ->orWhere('assigned_to', $user->id);
-                })
+        $pendingTasks = $taskQuery->clone()
+            ->whereIn('status', $this->pendingTaskStatuses())
+            ->count()
+            + $projectAsTaskQuery->clone()
+                ->whereIn('status', $this->pendingTaskStatuses())
                 ->count();
 
-        // Admin/Manager: all pending/active tasks (unrestricted)
-        // Other roles: scoped to their projects/tasks
-        $pendingTasks = in_array($role, ['admin', 'manager'])
-            ? Task::query()
-                ->whereNotIn('status', ['completed', 'done', 'approved', 'abandoned'])
-                ->count()
-            : Task::query()
-                ->whereNotIn('status', ['completed', 'done', 'approved', 'abandoned'])
-                ->where(function ($q) use ($user) {
-                    $q->whereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
-                      ->orWhere('assigned_to', $user->id);
-                })
-                ->count();
-
-        $totalTasks = $taskQuery->clone()->count();
+        $totalTasks = $taskQuery->clone()->count() + $projectAsTaskQuery->clone()->count();
 
         return [
             'active_projects' => $activeProjects,
@@ -122,23 +95,58 @@ class DashboardController extends Controller
     private function getTodayWorkload(User $user, string $role): array
     {
         if (in_array($role, ['admin', 'manager'])) {
-            return Task::with(['project:id,title', 'assignees:id,name,role'])
+            $tasks = Task::with(['project:id,title', 'assignees:id,name,role'])
                 ->where('assigned_by', $user->id)
                 ->whereDate('end_date', today())
-                ->whereNotIn('status', ['completed', 'done', 'approved', 'abandoned'])
+                ->whereNotIn('status', $this->inactiveTaskStatuses())
                 ->latest()
-                ->limit(10)
                 ->get()
+                ->map(fn ($task) => array_merge($task->toArray(), [
+                    'module' => 'task',
+                    'item_type' => 'task',
+                    'entity_id' => $task->id,
+                ]));
+
+            $projects = $this->dashboardProjectAsTaskQuery($user, $role)
+                ->with(['creator:id,name,role'])
+                ->where('created_by', $user->id)
+                ->whereDate('end_date', today())
+                ->whereNotIn('status', $this->inactiveTaskStatuses())
+                ->latest()
+                ->get()
+                ->map(fn ($project) => $this->projectAsTaskPayload($project));
+
+            return $tasks->merge($projects)
+                ->sortByDesc('created_at')
+                ->values()
+                ->take(10)
                 ->toArray();
         }
 
-        return Task::with(['project:id,title', 'assignees:id,name'])
+        $tasks = $this->dashboardTaskQuery($user, $role)
+            ->with(['project:id,title', 'assignees:id,name,role'])
             ->whereDate('end_date', today())
-            ->whereNotIn('status', ['completed', 'done', 'abandoned'])
-            ->whereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
+            ->whereNotIn('status', $this->inactiveTaskStatuses())
             ->latest()
-            ->limit(10)
             ->get()
+            ->map(fn ($task) => array_merge($task->toArray(), [
+                'module' => 'task',
+                'item_type' => 'task',
+                'entity_id' => $task->id,
+            ]));
+
+        $projects = $this->dashboardProjectAsTaskQuery($user, $role)
+            ->with(['creator:id,name,role'])
+            ->whereDate('end_date', today())
+            ->whereNotIn('status', $this->inactiveTaskStatuses())
+            ->latest()
+            ->get()
+            ->map(fn ($project) => $this->projectAsTaskPayload($project));
+
+        return $tasks->merge($projects)
+            ->sortByDesc('created_at')
+            ->values()
+            ->take(10)
             ->toArray();
     }
 
@@ -148,7 +156,7 @@ class DashboardController extends Controller
     private function getActiveProjects(User $user, string $role): array
     {
         $projects = Project::with(['creator:id,name', 'team:id,name'])
-            ->whereNotIn('status', ['completed', 'done', 'cancelled', 'archived'])
+            ->whereNotIn('status', $this->inactiveProjectStatuses())
             ->whereIn('id', $this->getUserProjectIds($user))
             ->latest()
             ->limit(6)
@@ -157,7 +165,7 @@ class DashboardController extends Controller
         return $projects->map(function ($project) {
             $tasks = $project->tasks;
             $total = $tasks->count();
-            $done = $tasks->filter(fn ($t) => in_array(strtolower((string) $t->status), ['done', 'completed'], true))->count();
+            $done = $tasks->filter(fn ($t) => in_array(strtolower((string) $t->status), ['approved', 'completed', 'done'], true))->count();
             $progress = $total > 0 ? (int) round(($done / $total) * 100) : 0;
 
             $assignedUserIds = $project->assigned_users ?? [];
@@ -173,6 +181,8 @@ class DashboardController extends Controller
                 'name' => $project->title,
                 'client' => $project->client_name,
                 'progress' => $progress,
+                'total_tasks' => $total,
+                'completed_tasks' => $done,
                 'deadline' => $project->end_date?->format('M d, Y h:i A'),
                 'team' => $project->team?->name,
                 'assigned_users' => $assignedUsers->toArray(),
@@ -205,84 +215,212 @@ class DashboardController extends Controller
      */
     private function getUpcomingDeadlines(User $user, string $role): array
     {
-        $query = Task::with(['project:id,title'])
-            ->whereNotIn('status', ['completed', 'done', 'abandoned'])
+        $query = $this->dashboardTaskQuery($user, $role)
+            ->with(['project:id,title'])
+            ->whereNotIn('status', $this->inactiveTaskStatuses())
             ->where('end_date', '>=', now())
-            ->where('end_date', '<=', now()->addDays(7))
-            ->orderBy('end_date')
-            ->limit(10);
+            ->where('end_date', '<=', now()->addDays(7));
 
-        if ($role === 'team_lead' || $role === 'member') {
-            $query->whereIn('project_id', $this->getUserProjectIds($user))
-                  ->where(function ($q) use ($user) {
-                      $q->where('assigned_by', $user->id)
-                        ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
-                  });
-        }
-
-        return $query->get()->map(fn ($task) => [
+        $tasks = $query->get()->map(fn ($task) => [
             'id' => $task->id,
+            'entity_id' => $task->id,
+            'module' => 'task',
             'title' => $task->title,
             'project' => $task->project?->title,
             'end_date' => $task->end_date?->format('M d, Y h:i A'),
-        ])->toArray();
+            'sort_date' => $task->end_date,
+        ]);
+
+        $projects = $this->dashboardProjectAsTaskQuery($user, $role)
+            ->whereNotIn('status', $this->inactiveTaskStatuses())
+            ->where('end_date', '>=', now())
+            ->where('end_date', '<=', now()->addDays(7))
+            ->get()
+            ->map(fn ($project) => [
+                'id' => $project->id,
+                'entity_id' => $project->id,
+                'module' => 'project',
+                'title' => $project->title,
+                'project' => null,
+                'end_date' => $project->end_date?->format('M d, Y h:i A'),
+                'sort_date' => $project->end_date,
+            ]);
+
+        return $tasks->merge($projects)
+            ->sortBy('sort_date')
+            ->values()
+            ->take(10)
+            ->map(function ($item) {
+                unset($item['sort_date']);
+                return $item;
+            })
+            ->toArray();
     }
 
     /**
-     * Completed today: tasks completed/submitted today by the logged-in user.
+     * Get today's activity feed for the dashboard.
+     * Admin/Manager see all activities on items they assigned/created.
+     * Team Lead/Member see only their own activities.
      */
-    private function getCompletedToday(User $user): array
+    private function getTodayActivityFeed(User $user, string $role): array
     {
-        $submittedTasks = Task::with(['project:id,title', 'assignees:id,name,role'])
-            ->whereDate('submitted_at', today())
-            ->where(function ($q) use ($user) {
-                $q->where('assigned_by', $user->id)
-                  ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
-            })
-            ->latest('submitted_at')
-            ->limit(10)
-            ->get()
-            ->map(fn ($task) => [
-                'id' => $task->id,
-                'type' => 'task',
+        $isAdminOrManager = in_array($role, ['admin', 'manager']);
+        $today = today();
+        $activities = [];
+
+        // ── 1. Task workflow events (submitted/resubmitted/approved/rejected/reopened) ──
+        $taskEvents = TaskWorkflowEvent::with(['task:id,title,assigned_by', 'user:id,name,role'])
+            ->whereDate('created_at', $today)
+            ->whereIn('action', ['submitted', 'resubmitted', 'approved', 'rejected', 'reopened'])
+            ->get();
+
+        foreach ($taskEvents as $event) {
+            $task = $event->task;
+            if (!$task) continue;
+            $actor = $event->user;
+            if (!$actor) continue;
+
+            $isActor = (int) $actor->id === (int) $user->id;
+            $isTaskAssigner = (int) $task->assigned_by === (int) $user->id;
+            $isTaskAssignee = DB::table('task_user')
+                ->where('task_id', $task->id)
+                ->where('user_id', $user->id)
+                ->exists();
+
+            // Admin/Manager: show if they acted or on their assigned tasks
+            // Member: show only their own actions or actions on their tasks
+            if ($isAdminOrManager) {
+                if (!$isActor && !$isTaskAssigner && !$isTaskAssignee) continue;
+            } else {
+                if (!$isActor && !$isTaskAssignee) continue;
+            }
+
+            $activities[] = [
+                'id' => "task_event_{$event->id}",
+                'entity_id' => $task->id,
+                'module' => 'task',
+                'action' => $event->action,
                 'title' => $task->title,
-                'project' => $task->project?->title,
-                'submitted_at' => $task->submitted_at?->format('Y-m-d\TH:i:s'),
-                'time_ago' => $task->submitted_at?->diffForHumans(),
-                'assignees' => $task->assignees->map(fn ($u) => [
-                    'id' => $u->id,
-                    'name' => $u->name,
-                    'role' => $u->role,
-                ])->toArray(),
-            ]);
+                'actor_name' => $actor->name,
+                'actor_role' => $actor->role,
+                'is_actor' => $isActor,
+                'created_at' => $event->created_at->format('Y-m-d\TH:i:s'),
+                'time_ago' => $event->created_at->diffForHumans(),
+            ];
+        }
 
-        $submittedDeliverables = \App\Models\Deliverable::with(['project:id,title', 'assignee:id,name,role'])
-            ->whereDate('submitted_at', today())
-            ->where(function ($q) use ($user) {
-                $q->where('created_by', $user->id)
-                  ->orWhere('assigned_to', $user->id);
-            })
-            ->latest('submitted_at')
-            ->limit(10)
-            ->get()
-            ->map(fn ($dlv) => [
-                'id' => $dlv->id,
-                'type' => 'deliverable',
+        // ── 2. Project workflow events (submitted/resubmitted/approved/rejected/reopened) ──
+        $projectEvents = ProjectWorkflowEvent::with(['project:id,title,created_by,assigned_users', 'user:id,name,role'])
+            ->whereDate('created_at', $today)
+            ->whereIn('action', ['submitted', 'resubmitted', 'approved', 'rejected', 'reopened'])
+            ->get();
+
+        foreach ($projectEvents as $event) {
+            $project = $event->project;
+            if (!$project) continue;
+            $actor = $event->user;
+            if (!$actor) continue;
+
+            $isActor = (int) $actor->id === (int) $user->id;
+            $isProjectCreator = (int) $project->created_by === (int) $user->id;
+            $assignedUserIds = $this->normalizeAssignedUserIds($project->assigned_users);
+            $isProjectAssignee = in_array((int) $user->id, $assignedUserIds, true);
+
+            if ($isAdminOrManager) {
+                if (!$isActor && !$isProjectCreator && !$isProjectAssignee) continue;
+            } else {
+                if (!$isActor && !$isProjectCreator && !$isProjectAssignee) continue;
+            }
+
+            $activities[] = [
+                'id' => "project_event_{$event->id}",
+                'entity_id' => $project->id,
+                'module' => 'project',
+                'action' => $event->action,
+                'title' => $project->title,
+                'actor_name' => $actor->name,
+                'actor_role' => $actor->role,
+                'is_actor' => $isActor,
+                'created_at' => $event->created_at->format('Y-m-d\TH:i:s'),
+                'time_ago' => $event->created_at->diffForHumans(),
+            ];
+        }
+
+        // ── 3. Deliverable workflow events (approval / rework) ──
+        $dlvEvents = DeliverableWorkflowEvent::with(['deliverable:id,title,created_by,assigned_to', 'user:id,name,role'])
+            ->whereDate('created_at', $today)
+            ->whereIn('event_type', ['approval', 'rework'])
+            ->get();
+
+        foreach ($dlvEvents as $event) {
+            $dlv = $event->deliverable;
+            if (!$dlv) continue;
+            $actor = $event->user;
+            if (!$actor) continue;
+
+            $isActor = (int) $actor->id === (int) $user->id;
+            $isDlvCreator = (int) $dlv->created_by === (int) $user->id;
+            $isDlvAssignee = (int) $dlv->assigned_to === (int) $user->id;
+
+            if ($isAdminOrManager) {
+                if (!$isActor && !$isDlvCreator && !$isDlvAssignee) continue;
+            } else {
+                if (!$isActor && !$isDlvAssignee) continue;
+            }
+
+            $activities[] = [
+                'id' => "dlv_event_{$event->id}",
+                'entity_id' => $dlv->id,
+                'module' => 'deliverable',
+                'action' => $event->event_type,
                 'title' => $dlv->title,
-                'project' => $dlv->project?->title,
-                'submitted_at' => $dlv->submitted_at?->format('Y-m-d\TH:i:s'),
-                'time_ago' => $dlv->submitted_at?->diffForHumans(),
-                'assignees' => $dlv->assignee ? [[
-                    'id' => $dlv->assignee->id,
-                    'name' => $dlv->assignee->name,
-                    'role' => $dlv->assignee->role,
-                ]] : [],
-            ]);
+                'actor_name' => $actor->name,
+                'actor_role' => $actor->role,
+                'is_actor' => $isActor,
+                'created_at' => $event->created_at->format('Y-m-d\TH:i:s'),
+                'time_ago' => $event->created_at->diffForHumans(),
+            ];
+        }
 
-        return $submittedTasks->concat($submittedDeliverables)
-            ->sortByDesc('submitted_at')
-            ->values()
-            ->toArray();
+        // ── 4. Deliverable submissions (DeliverableSubmission — no workflow event for submit) ──
+        $dlvSubmissions = DeliverableSubmission::with(['deliverable:id,title,created_by,assigned_to', 'submittedBy:id,name,role'])
+            ->whereDate('created_at', $today)
+            ->get();
+
+        foreach ($dlvSubmissions as $sub) {
+            $dlv = $sub->deliverable;
+            if (!$dlv) continue;
+            $actor = $sub->submittedBy;
+            if (!$actor) continue;
+
+            $isActor = (int) $actor->id === (int) $user->id;
+            $isDlvCreator = (int) $dlv->created_by === (int) $user->id;
+            $isDlvAssignee = (int) $dlv->assigned_to === (int) $user->id;
+
+            if ($isAdminOrManager) {
+                if (!$isActor && !$isDlvCreator && !$isDlvAssignee) continue;
+            } else {
+                if (!$isActor && !$isDlvAssignee) continue;
+            }
+
+            $activities[] = [
+                'id' => "dlv_sub_{$sub->id}",
+                'entity_id' => $dlv->id,
+                'module' => 'deliverable',
+                'action' => 'submitted',
+                'title' => $dlv->title,
+                'actor_name' => $actor->name,
+                'actor_role' => $actor->role,
+                'is_actor' => $isActor,
+                'created_at' => $sub->created_at->format('Y-m-d\TH:i:s'),
+                'time_ago' => $sub->created_at->diffForHumans(),
+            ];
+        }
+
+        // Sort by latest first, limit to 20
+        usort($activities, fn ($a, $b) => strcmp($b['created_at'], $a['created_at']));
+
+        return array_slice($activities, 0, 20);
     }
 
     /**
@@ -309,5 +447,164 @@ class DashboardController extends Controller
                   })->whereDoesntHave('visibility', fn ($q) => $q->where('user_id', $user->id)->where('is_visible', false));
               });
         })->pluck('id');
+    }
+
+    private function dashboardTaskQuery(User $user, string $role)
+    {
+        $query = Task::query();
+
+        if (in_array($role, ['admin', 'manager'])) {
+            return $query;
+        }
+
+        return $query->where(function ($q) use ($user) {
+            $q->where('assigned_by', $user->id)
+              ->orWhere('assigned_to', $user->id)
+              ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
+        });
+    }
+
+    private function dashboardProjectAsTaskQuery(User $user, string $role)
+    {
+        $query = Project::query()
+            ->whereNotNull('assigned_users')
+            ->whereRaw('JSON_LENGTH(assigned_users) > 0');
+
+        if (in_array($role, ['admin', 'manager'])) {
+            return $query;
+        }
+
+        return $query->where(function ($q) use ($user) {
+            $q->where('created_by', $user->id)
+              ->orWhereJsonContains('assigned_users', (int) $user->id);
+        });
+    }
+
+    private function getTasksDueTodayCount(User $user, string $role): int
+    {
+        if (in_array($role, ['admin', 'manager'])) {
+            $adminManagerIds = User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray();
+            $tasks = Task::with('assignees:id')
+                ->whereIn('assigned_by', $adminManagerIds)
+                ->whereDate('end_date', today())
+                ->whereNotIn('status', $this->dueTodayCompletedStatuses())
+                ->get();
+
+            $taskRows = $tasks->sum(function ($task) {
+                if ($task->assignees->isEmpty()) {
+                    return (int) $task->assigned_to !== (int) $task->assigned_by ? 1 : 0;
+                }
+
+                return $task->assignees
+                    ->filter(fn ($assignee) => (int) $assignee->id !== (int) $task->assigned_by)
+                    ->count();
+            });
+
+            $projects = Project::query()
+                ->whereIn('created_by', $adminManagerIds)
+                ->whereNotNull('assigned_users')
+                ->whereRaw('JSON_LENGTH(assigned_users) > 0')
+                ->whereDate('end_date', today())
+                ->whereNotIn('status', $this->dueTodayCompletedStatuses())
+                ->get();
+
+            $projectRows = $projects->sum(function ($project) {
+                return collect($this->normalizeAssignedUserIds($project->assigned_users))
+                    ->filter(fn ($id) => (int) $id !== (int) $project->created_by)
+                    ->count();
+            });
+
+            return $taskRows + $projectRows;
+        }
+
+        return Task::query()
+            ->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+            ->where('assigned_by', '!=', $user->id)
+            ->whereDate('end_date', today())
+            ->whereNotIn('status', $this->dueTodayCompletedStatuses())
+            ->count()
+            + Project::query()
+                ->whereJsonContains('assigned_users', (int) $user->id)
+                ->where('created_by', '!=', $user->id)
+                ->whereNotNull('assigned_users')
+                ->whereRaw('JSON_LENGTH(assigned_users) > 0')
+                ->whereDate('end_date', today())
+                ->whereNotIn('status', $this->dueTodayCompletedStatuses())
+                ->count();
+    }
+
+    private function completedTaskStatuses(): array
+    {
+        return ['completed', 'done', 'approved'];
+    }
+
+    private function inactiveTaskStatuses(): array
+    {
+        return ['completed', 'done', 'approved', 'abandoned'];
+    }
+
+    private function dueTodayCompletedStatuses(): array
+    {
+        return ['approved', 'completed', 'done'];
+    }
+
+    private function inactiveProjectStatuses(): array
+    {
+        return [
+            'completed',
+            'Completed',
+            'done',
+            'Done',
+            'approved',
+            'Approved',
+            'rejected',
+            'Rejected',
+            'cancelled',
+            'Cancelled',
+            'canceled',
+            'Canceled',
+            'abandoned',
+            'Abandoned',
+            'closed',
+            'Closed',
+            'archived',
+            'Archived',
+        ];
+    }
+
+    private function pendingTaskStatuses(): array
+    {
+        return ['pending', 'in_progress', 'In Progress', 'Planned', 'submitted', 'reopened'];
+    }
+
+    private function normalizeAssignedUserIds($assignedUsers): array
+    {
+        if (is_string($assignedUsers)) {
+            $assignedUsers = json_decode($assignedUsers, true) ?? [];
+        }
+
+        if (!is_array($assignedUsers)) {
+            return [];
+        }
+
+        return array_map('intval', $assignedUsers);
+    }
+
+    private function projectAsTaskPayload(Project $project): array
+    {
+        $assignedUserIds = $this->normalizeAssignedUserIds($project->assigned_users);
+        $assignedUsers = empty($assignedUserIds)
+            ? collect()
+            : User::whereIn('id', $assignedUserIds)->select('id', 'name', 'role')->get();
+
+        return array_merge($project->toArray(), [
+            'module' => 'project',
+            'item_type' => 'project',
+            'entity_id' => $project->id,
+            'name' => $project->title,
+            'assignees' => $assignedUsers->toArray(),
+            'assigned_users' => $assignedUsers->toArray(),
+            'project' => null,
+        ]);
     }
 }

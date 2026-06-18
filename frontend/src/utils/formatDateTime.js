@@ -33,6 +33,22 @@ export function toDatetimeLocal(dateStr) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+export function toUTCIso(localDatetimeLocal) {
+  if (!localDatetimeLocal) return null;
+  const d = new Date(localDatetimeLocal);
+  if (Number.isNaN(d.getTime())) return null;
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:00`;
+}
+
+export function fromUTCIso(utcStr) {
+  if (!utcStr) return "";
+  const d = new Date(utcStr);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function formatDateOnly(dateStr) {
   if (!dateStr) return "-";
   const d = new Date(dateStr);

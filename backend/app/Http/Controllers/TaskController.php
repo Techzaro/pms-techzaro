@@ -25,12 +25,18 @@ class TaskController extends Controller
     public function myTasks(Request $request)
     {
         $user = $request->user();
+        $isDueTodayFilter = $request->input('status') === 'due_today';
+        $filters = $request->query();
+        if ($isDueTodayFilter) {
+            unset($filters['status']);
+        }
 
         $tasks = Task::whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
             ->where('assigned_by', '!=', $user->id)
+            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
             ->latest()
-            ->filter($request->query())
+            ->filter($filters)
             ->paginate(15);
 
         $tasks->getCollection()->transform(function ($task) {
@@ -43,6 +49,7 @@ class TaskController extends Controller
         // Exclude projects where user created them (self-assigned go to Self Tasks)
         $projects = Project::whereJsonContains('assigned_users', $user->id)
         ->where('created_by', '!=', $user->id)
+        ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
         ->where(function ($q) {
             $q->whereNotNull('assigned_users')
               ->whereRaw('JSON_LENGTH(assigned_users) > 0');
@@ -124,6 +131,7 @@ class TaskController extends Controller
     {
         $user = $request->user();
         $userId = $user->id;
+        $isDueTodayFilter = $request->input('status') === 'due_today';
 
         // Admin and Manager share visibility of assignments made to other users
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
@@ -143,7 +151,8 @@ class TaskController extends Controller
 
         $tasks = $tasksQuery->latest()
             ->when($request->filled('search'), fn ($q) => $q->where('title', 'like', '%' . $request->input('search') . '%'))
-            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')))
+            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
+            ->when($request->filled('status') && !$isDueTodayFilter, fn ($q) => $q->where('status', $request->input('status')))
             ->get();
 
         $expandedTasks = collect();
@@ -181,6 +190,7 @@ class TaskController extends Controller
         }
 
         $projects = $projectsQuery
+            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
             ->with(['creator:id,name,role', 'team:id,name'])
             ->latest()
             ->get();
@@ -1223,6 +1233,18 @@ class TaskController extends Controller
     private function completedProjectTaskStatuses(): array
     {
         return ['approved', 'completed', 'done'];
+    }
+
+    private function incompleteDueTodayStatuses(): array
+    {
+        return ['approved', 'completed', 'done'];
+    }
+
+    private function applyDueTodayFilter($query)
+    {
+        return $query
+            ->whereDate('end_date', today())
+            ->whereNotIn('status', $this->incompleteDueTodayStatuses());
     }
 
     private function applyProjectTaskProgress(Project $project): Project

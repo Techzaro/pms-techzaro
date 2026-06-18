@@ -5,7 +5,7 @@ import Breadcrumb from "../components/Breadcrumb";
 import { CiCalendar } from "react-icons/ci";
 import { IoIosArrowDown } from "react-icons/io";
 import { GoDotFill } from "react-icons/go";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
 import CreateTaskModal from "../components/CreateTaskModal";
 import API_URL from "../config/api";
@@ -43,12 +43,13 @@ const PRIORITY_TEXT_COLORS = {
 
 const Taskby = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") === "due_today" ? "due_today" : "");
   const [timeFilter, setTimeFilter] = useState("");
 
 
@@ -82,6 +83,25 @@ const Taskby = () => {
   }, [debouncedSearch, statusFilter, timeFilter]);
 
   useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted'], fetchTasks);
+
+  useEffect(() => {
+    const nextFilter = searchParams.get("status") === "due_today" ? "due_today" : "";
+    setStatusFilter((current) => {
+      if (nextFilter === "due_today" || current === "due_today") {
+        return current === nextFilter ? current : nextFilter;
+      }
+      return current;
+    });
+  }, [searchParams]);
+
+  const selectStatusFilter = (filter) => {
+    setStatusFilter(filter);
+    if (filter === "due_today") {
+      setSearchParams({ status: "due_today" });
+    } else {
+      setSearchParams({});
+    }
+  };
 
   const handleModalClose = (refresh) => {
     setShowTaskModal(false);
@@ -127,7 +147,7 @@ const Taskby = () => {
     return Math.round((completed / total) * 100);
   };
 
-  const filteredItems = statusFilter
+  const filteredItems = statusFilter && statusFilter !== "due_today"
     ? items.filter((item) => {
         if (item.item_type === "project") {
           const workflowStatuses = ["submitted","approved","rejected","reopened"];
@@ -179,20 +199,23 @@ const Taskby = () => {
       )}
 
       <div className="task-progress">
-        <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
-        <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => setStatusFilter("pending")} style={{ cursor: "pointer" }}>
+        <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
+        <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
+          <GoDotFill color="#EF4444" /> Tasks Due Today
+        </p>
+        <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
           <GoDotFill color={STATUS_COLORS.pending} /> Pending
         </p>
-        <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
+        <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
           <GoDotFill color={STATUS_COLORS.submitted} /> Submitted
         </p>
-        <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => setStatusFilter("reopened")} style={{ cursor: "pointer" }}>
+        <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
           <GoDotFill color={STATUS_COLORS.reopened} /> Reopened
         </p>
-        <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
+        <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
           <GoDotFill color={STATUS_COLORS.approved} /> Approved
         </p>
-        <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => setStatusFilter("rejected")} style={{ cursor: "pointer" }}>
+        <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
           <GoDotFill color={STATUS_COLORS.rejected} /> Rejected
         </p>
       </div>

@@ -31,10 +31,6 @@ import { publish } from "../utils/eventBus";
 import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
 import "./TaskDetails.css";
 
-function formatShortDate(value) {
-  return formatDateTimeShort(value);
-}
-
 function timeAgo(iso) {
   if (!iso) return "";
   const then = new Date(iso).getTime();
@@ -444,7 +440,7 @@ function TaskDetails() {
                   <div className="td-trio-item">
                     <div className="td-stat-ic td-stat-ic--green"><Calendar size={18} /></div>
                     <div>
-                      <span className="td-stat-big td-stat-big--sm">{formatShortDate(task.end_date)}</span>
+                      <span className="td-stat-big td-stat-big--sm">{formatDateTimeShort(task.end_date)}</span>
                       <span className="td-stat-label">Deadline</span>
                     </div>
                   </div>
@@ -555,7 +551,7 @@ function TaskDetails() {
                                     {statusLabel(t.status)}
                                   </span>
                                 </td>
-                                <td className="td-date">{formatShortDate(t.end_date)}</td>
+                                <td className="td-date">{formatDateTimeShort(t.end_date)}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -589,7 +585,7 @@ function TaskDetails() {
                                   <div className="td-task-name">{d.title}</div>
                                   {d.description && <div className="td-task-sub">{d.description}</div>}
                                 </td>
-                                <td className="td-date">{formatShortDate(d.due_date)}</td>
+                                <td className="td-date">{formatDateTimeShort(d.due_date)}</td>
                                 <td>
                                   <span className="td-pill" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }}>
                                     <span className="td-pill-dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }} />
@@ -647,7 +643,7 @@ function TaskDetails() {
               <li><span className="td-dot" style={{ background: "#f59e0b" }} /><div><span className="td-info-label">Created By</span><span className="td-info-val">{assigner?.name || "—"}</span></div></li>
               <li><span className="td-dot" style={{ background: "#8b5cf6" }} /><div><span className="td-info-label">Assigned To</span><span className="td-info-val">{assignees.map((a) => a.name).join(", ") || "—"}</span></div></li>
               <li><span className="td-dot" style={{ background: "#22c55e" }} /><div><span className="td-info-label">Last Updated</span><span className="td-info-val">{task.updated_at ? timeAgo(task.updated_at) : "—"}</span></div></li>
-              <li><span className="td-dot" style={{ background: "#ef4444" }} /><div><span className="td-info-label">Estimated Time</span><span className="td-info-val">{task.end_date ? formatShortDate(task.end_date) : "—"}</span></div></li>
+              <li><span className="td-dot" style={{ background: "#ef4444" }} /><div><span className="td-info-label">Estimated Time</span><span className="td-info-val">{task.end_date ? formatDateTimeShort(task.end_date) : "—"}</span></div></li>
             </ul>
           </div>
 

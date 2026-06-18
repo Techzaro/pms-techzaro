@@ -4,6 +4,7 @@ import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
 import UserSelectDropdown from "./UserSelectDropdown";
 import { publish } from "../utils/eventBus";
+import { toUTCIso } from "../utils/formatDateTime";
 import "./Event.css";
 
 const TYPE_MAP = {
@@ -37,12 +38,17 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
   const [users, setUsers] = useState([]);
   const [assignedUserIds, setAssignedUserIds] = useState([]);
   const [isGlobal, setIsGlobal] = useState(false);
+  const getLocalDateStr = (d) => {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    startDate: new Date().toISOString().split("T")[0],
+    startDate: getLocalDateStr(new Date()),
     startTime: "10:00",
-    endDate: new Date().toISOString().split("T")[0],
+    endDate: getLocalDateStr(new Date()),
     endTime: "11:00",
     eventType: "Meeting",
     allDay: false,
@@ -57,10 +63,10 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
       setFormData({
         title: editEvent.title || "",
         description: editEvent.description || "",
-        startDate: start.toISOString().split("T")[0],
-        startTime: start.toTimeString().slice(0, 5),
-        endDate: end.toISOString().split("T")[0],
-        endTime: end.toTimeString().slice(0, 5),
+        startDate: getLocalDateStr(start),
+        startTime: start.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
+        endDate: getLocalDateStr(end),
+        endTime: end.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
         eventType: TYPE_MAP_REVERSE[editEvent.type] || "Meeting",
         allDay: editEvent.all_day || false,
       });
@@ -70,9 +76,9 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
       setFormData({
         title: "",
         description: "",
-        startDate: new Date().toISOString().split("T")[0],
+        startDate: getLocalDateStr(new Date()),
         startTime: "10:00",
-        endDate: new Date().toISOString().split("T")[0],
+        endDate: getLocalDateStr(new Date()),
         endTime: "11:00",
         eventType: "Meeting",
         allDay: false,
@@ -136,12 +142,12 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
     setError("");
 
     const startDateTime = formData.allDay
-      ? formData.startDate + "T00:00:00"
-      : formData.startDate + "T" + formData.startTime + ":00";
+      ? toUTCIso(formData.startDate + "T00:00")
+      : toUTCIso(formData.startDate + "T" + formData.startTime);
 
     const endDateTime = formData.allDay
-      ? (formData.endDate || formData.startDate) + "T23:59:59"
-      : formData.endDate + "T" + formData.endTime + ":00";
+      ? toUTCIso((formData.endDate || formData.startDate) + "T23:59")
+      : toUTCIso(formData.endDate + "T" + formData.endTime);
 
     const payload = {
       title: formData.title.trim(),
