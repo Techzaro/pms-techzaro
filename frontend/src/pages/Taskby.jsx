@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -8,6 +8,7 @@ import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
 import CreateTaskModal from "../components/CreateTaskModal";
+import SortableTableWrapper from "../components/SortableTableWrapper";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
 import { formatDateOnly } from "../utils/formatDateTime";
@@ -50,7 +51,7 @@ const Taskby = () => {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
-
+  const [orderedItems, setOrderedItems] = useState([]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -82,6 +83,24 @@ const Taskby = () => {
   }, [debouncedSearch, statusFilter, timeFilter]);
 
   useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted'], fetchTasks);
+
+  useEffect(() => {
+    setOrderedItems(items);
+  }, [items]);
+
+  const handleTaskReorder = useCallback((reordered) => {
+    setOrderedItems(reordered);
+    const taskItems = reordered.filter((i) => i.item_type !== 'project');
+    if (taskItems.length) {
+      const payload = taskItems.map((item, idx) => ({ id: item.id, sort_order: idx }));
+      const token = authToken();
+      fetch(`${API_URL}/tasks/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ items: payload }),
+      }).catch(() => {});
+    }
+  }, []);
 
   const handleModalClose = (refresh) => {
     setShowTaskModal(false);
@@ -127,8 +146,9 @@ const Taskby = () => {
     return Math.round((completed / total) * 100);
   };
 
+  const baseItems = orderedItems.length ? orderedItems : items;
   const filteredItems = statusFilter
-    ? items.filter((item) => {
+    ? baseItems.filter((item) => {
         if (item.item_type === "project") {
           const workflowStatuses = ["submitted","approved","rejected","reopened"];
           const displayStatus = workflowStatuses.includes(item.status) ? item.status : "pending";
@@ -136,7 +156,7 @@ const Taskby = () => {
         }
         return item.status === statusFilter;
       })
-    : items;
+    : baseItems;
 
   const taskIdList = filteredItems.filter((i) => i.item_type !== "project").map((i) => i.id);
 
@@ -155,7 +175,7 @@ const Taskby = () => {
         </div>
 
         <div className="task-btns">
-            <div className="all-time">
+          <div className="all-time">
             <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
               <option value="">All Time</option>
               <option value="7">Last 7 Days</option>
@@ -208,15 +228,15 @@ const Taskby = () => {
       </div>
 
       <div className="container">
-           <div className="table-header1">
+        <div className="table-header1">
           <div>Assigned to</div>
-          <div className="task-name-column" >Task Name</div>
+          <div className="task-name-column">Task Name</div>
           <div>Type</div>
-          <div className="status-column" >Status</div>
+          <div className="status-column">Status</div>
           <div>Progress</div>
-          <div className="priority-column" >Priority</div>
-           <div>Due Date</div>
-           <div>Action</div>
+          <div className="priority-column">Priority</div>
+          <div>Due Date</div>
+          <div>Action</div>
         </div>
 
         {loading ? (
@@ -224,115 +244,189 @@ const Taskby = () => {
         ) : filteredItems.length === 0 ? (
           <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
         ) : (
-          filteredItems.map((item) => {
-            const isProject = item.item_type === "project";
-            const colors = getRandomColors(item.id);
+          <SortableTableWrapper 
+            items={filteredItems.map((i) => ({ ...i, sortableId: `${i.item_type}-${i.id}` }))} 
+            onReorder={(reordered) => handleTaskReorder(reordered)} 
+            idKey="sortableId"
+          >
+            {(item, idx) => {
+              const isProject = item.item_type === "project";
+              const colors = getRandomColors(item.id);
 
-            if (isProject) {
-              const primaryUser = item.assigned_user;
-              return (
-                <div className="taskby-row" key={`project-${item.id}-${primaryUser?.id || 0}`}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                      {getInitials(primaryUser?.name)}
+              if (isProject) {
+                const primaryUser = item.assigned_user;
+                return (
+                  <div className="taskby-row" key={item.sortableId}>
+                    <div className="col-assigned-to">
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                          {getInitials(primaryUser?.name)}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="user-name">{primaryUser?.name || "Unassigned"}</div>
+                          <div className="user-role">{primaryUser?.role || ""}</div>
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="user-name">{primaryUser?.name || "Unassigned"}</div>
-                      <div className="user-role">{primaryUser?.role || ""}</div>
+                    
+                    <div className="col-task-name">
+                      <div className="task-title">{item.title}</div>
+                    </div>
+                    
+                    <div className="col-type">
+                      <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5" }}>Project</span>
+                    </div>
+                    
+                    <div className="col-status">
+                      <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
+                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                        {["submitted","approved","rejected","reopened"].includes(item.status) ? formatStatus(item.status) : "Pending"}
+                      </span>
+                    </div>
+                    
+                    <div className="col-progress">
+                      <div style={{ 
+                        display: "flex", 
+                        justifyContent: "flex-start", 
+                        alignItems: "center",
+                        marginBottom: "4px"
+                      }}>
+                        <span style={{ 
+                          fontSize: "13px", 
+                          fontWeight: 600, 
+                          color: "#374151" 
+                        }}>
+                          {calculateProgress(item)}%
+                        </span>
+                      </div>
+                      <div className="progress-bar-track">
+                        <div className="progress-bar-fill" style={{ width: `${calculateProgress(item)}%` }}></div>
+                      </div>
+                      <div style={{ 
+                        fontSize: "11px", 
+                        color: "#6b7280",
+                        marginTop: "4px"
+                      }}>
+                        {item.completed_tasks || 0}/{item.total_tasks || 0} tasks
+                      </div>
+                    </div>
+                    
+                    <div className="col-priority">
+                      <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
+                        <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
+                        {item.priority}
+                      </span>
+                    </div>
+                    
+                    <div className="col-due-date">
+                      <div className="date-box">
+                        <div>{formatDate(item.start_date)}</div>
+                        <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
+                      </div>
+                    </div>
+                    
+                    <div className="col-action">
+                      <div className="action-btns">
+                        <button 
+                          className="action-icon-btn action-view" 
+                          title="View" 
+                          onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'taskby' } })}
+                        >
+                          <IoEyeOutline />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <div>
+                );
+              }
+
+              const assignees = item.assignees || [];
+              const primaryAssignee = assignees[0];
+              return (
+                <div className="taskby-row" key={item.sortableId}>
+                  <div className="col-assigned-to">
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                        {getInitials(primaryAssignee?.name)}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="user-name">{primaryAssignee?.name || "Unassigned"}</div>
+                        <div className="user-role">{primaryAssignee?.role || ""}</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="col-task-name">
                     <div className="task-title">{item.title}</div>
                   </div>
-                  <div>
-                    <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5" }}>
-                      Project
-                    </span>
+                  
+                  <div className="col-type">
+                    <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a" }}>Task</span>
                   </div>
-                  <div>
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || (item.status !== "Planned" && item.status !== "in_progress" ? "#F3F4F6" : "#FEF3C7"), color: STATUS_TEXT_COLORS[item.status] || (item.status !== "Planned" && item.status !== "in_progress" ? "#374151" : "#92400E") }}>
-                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || (item.status !== "Planned" && item.status !== "in_progress" ? "#374151" : "#92400E") }}></span>
-                      {["submitted","approved","rejected","reopened"].includes(item.status) ? formatStatus(item.status) : "Pending"}
-                    </span>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{calculateProgress(item)}%</div>
-                    <div className="progress-bar-track">
-                      <div className="progress-bar-fill" style={{ width: `${calculateProgress(item)}%` }}></div>
-                    </div>
-                    <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.completed_tasks || 0}/{item.total_tasks || 0} tasks</div>
-                  </div>
-                  <div>
-                    <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
-                      <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
-                      {item.priority}
-                    </span>
-                  </div>
-                  <div className="date-box">
-                    <div>{formatDate(item.start_date)}</div>
-                    <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
-                  </div>
-                  <div className="action-btns">
-                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'taskby' } })}>
-                      <IoEyeOutline />
-                    </button>
-                  </div>
-                </div>
-              );
-            }
-
-            const assignees = item.assignees || [];
-            const primaryAssignee = assignees[0];
-            return (
-              <div className="taskby-row" key={`task-${item.id}-${primaryAssignee?.id || 0}`}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                    {getInitials(primaryAssignee?.name)}
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div className="user-name">{primaryAssignee?.name || "Unassigned"}</div>
-                    <div className="user-role">{primaryAssignee?.role || ""}</div>
-                  </div>
-                </div>
-                <div>
-                  <div className="task-title">{item.title}</div>
-                </div>
-                <div>
-                  <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a" }}>
-                    Task
-                  </span>
-                </div>
-                  <div>
+                  
+                  <div className="col-status">
                     <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
                       <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                       {formatStatus(item.status)}
                     </span>
                   </div>
-                  <div>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{item.deliverables_progress || 0}%</div>
+                  
+                  <div className="col-progress">
+                    <div style={{ 
+                      display: "flex", 
+                      justifyContent: "flex-start", 
+                      alignItems: "center",
+                      marginBottom: "4px"
+                    }}>
+                      <span style={{ 
+                        fontSize: "13px", 
+                        fontWeight: 600, 
+                        color: "#374151" 
+                      }}>
+                        {item.deliverables_progress || 0}%
+                      </span>
+                    </div>
                     <div className="progress-bar-track">
                       <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
                     </div>
-                    <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.approved_deliverables || 0}/{item.total_deliverables || 0} Deliverables Approved</div>
+                    <div style={{ 
+                      fontSize: "11px", 
+                      color: "#6b7280",
+                      marginTop: "4px"
+                    }}>
+                      {item.approved_deliverables || 0}/{item.total_deliverables || 0} Deliverables Approved
+                    </div>
                   </div>
-                  <div>
+                  
+                  <div className="col-priority">
                     <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
                       <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
                       {item.priority}
                     </span>
                   </div>
-                  <div className="date-box">
-                  <div>{formatDate(item.start_date)}</div>
-                  <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
+                  
+                  <div className="col-due-date">
+                    <div className="date-box">
+                      <div>{formatDate(item.start_date)}</div>
+                      <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="col-action">
+                    <div className="action-btns">
+                      <button 
+                        className="action-icon-btn action-view" 
+                        title="View" 
+                        onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
+                      >
+                        <IoEyeOutline />
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div className="action-btns">
-                  <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}>
-                    <IoEyeOutline />
-                  </button>
-                </div>
-              </div>
-            );
-          })
+              );
+            }}
+          </SortableTableWrapper>
         )}
       </div>
     </DashboardLayout>

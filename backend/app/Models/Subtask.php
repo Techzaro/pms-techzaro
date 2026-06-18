@@ -17,6 +17,7 @@ class Subtask extends Model
         'end_date',
         'assigned_to',
         'assigned_by',
+        'sort_order',
     ];
 
     protected $casts = [

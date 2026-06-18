@@ -1405,5 +1405,41 @@ class TaskController extends Controller
         ]);
         
     }
+
+    /**
+     * Reorder tasks / subtasks by updating sort_order values.
+     */
+    public function reorderTasks(Request $request)
+    {
+        $request->validate([
+            'items' => 'required|array',
+            'items.*.id' => 'required|integer|exists:tasks,id',
+            'items.*.sort_order' => 'required|integer|min:0',
+        ]);
+
+        foreach ($request->items as $item) {
+            Task::where('id', $item['id'])->update(['sort_order' => $item['sort_order']]);
+        }
+
+        return response()->json(['message' => 'Tasks reordered successfully']);
+    }
+
+    /**
+     * Reorder subtasks.
+     */
+    public function reorderSubtasks(Request $request)
+    {
+        $request->validate([
+            'items' => 'required|array',
+            'items.*.id' => 'required|integer|exists:subtasks,id',
+            'items.*.sort_order' => 'required|integer|min:0',
+        ]);
+
+        foreach ($request->items as $item) {
+            Subtask::where('id', $item['id'])->update(['sort_order' => $item['sort_order']]);
+        }
+
+        return response()->json(['message' => 'Subtasks reordered successfully']);
+    }
     
 }

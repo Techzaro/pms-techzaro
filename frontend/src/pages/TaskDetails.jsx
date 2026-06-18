@@ -18,6 +18,7 @@ import { LuSend } from "react-icons/lu";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CreateSubtaskModal from "../components/CreateSubtaskModal";
+import SortableTableWrapper from "../components/SortableTableWrapper";
 import EditTaskModal from "../components/EditTaskModal";
 import ConfirmModal from "../components/ConfirmModal";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
@@ -126,6 +127,8 @@ function TaskDetails() {
   const [noteInput, setNoteInput] = useState("");
   const [notes, setNotes] = useState([]);
   const [noteSaving, setNoteSaving] = useState(false);
+  const [orderedSubtasks, setOrderedSubtasks] = useState([]);
+  const [orderedDeliverables, setOrderedDeliverables] = useState([]);
 
   const source = sourcePages[location.state?.from] || null;
 
@@ -172,6 +175,34 @@ function TaskDetails() {
       : null;
 
   // YAHAN taskSourcePages aur second source declaration NAHI hona chahiye
+
+  useEffect(() => {
+    setOrderedSubtasks(task?.subtasks || []);
+  }, [task?.subtasks]);
+
+  useEffect(() => {
+    setOrderedDeliverables(task?.deliverables || []);
+  }, [task?.deliverables]);
+
+  const handleSubtaskReorder = useCallback((reordered) => {
+    setOrderedSubtasks(reordered);
+    const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
+    fetch(`${API_URL}/subtasks/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken()}` },
+      body: JSON.stringify({ items: payload }),
+    }).catch(() => {});
+  }, []);
+
+  const handleDeliverableReorder = useCallback((reordered) => {
+    setOrderedDeliverables(reordered);
+    const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
+    fetch(`${API_URL}/deliverables/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken()}` },
+      body: JSON.stringify({ items: payload }),
+    }).catch(() => {});
+  }, []);
 
   const currentUser = getUser();
   const canEdit = task?.can_edit ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10) && task?.status?.toLowerCase() !== "approved");
@@ -521,7 +552,7 @@ function TaskDetails() {
                         <h2 className="td-section-title">Subtasks</h2>
                         <span className="td-section-count">{completedCount}/{subtasks.length} Completed</span>
                       </div>
-                      {subtasks.length === 0 ? (
+                      {(orderedSubtasks.length === 0 && subtasks.length === 0) ? (
                         <p className="td-empty">No subtasks yet. Click "Add Subtask" to create one.</p>
                       ) : (
                         <table className="td-table">
@@ -534,30 +565,32 @@ function TaskDetails() {
                             </tr>
                           </thead>
                           <tbody>
-                            {subtasks.map((t) => (
-                              <tr key={t.id}>
-                                <td>
-                                  <div className="td-task-name">{t.title}</div>
-                                  {t.description && <div className="td-task-sub">{t.description}</div>}
-                                </td>
-                                <td>
-                                  <div className="td-assignee">
-                                    <div className="td-avatar">{initials(t.assignee?.name)}</div>
-                                    <div>
-                                      <div className="td-assignee-name">{t.assignee?.name || "—"}</div>
-                                      <div className="td-assignee-role">Member</div>
+                            <SortableTableWrapper items={orderedSubtasks.length ? orderedSubtasks : subtasks} onReorder={handleSubtaskReorder}>
+                              {(t, idx) => (
+                                <tr key={t.id}>
+                                  <td>
+                                    <div className="td-task-name">{t.title}</div>
+                                    {t.description && <div className="td-task-sub">{t.description}</div>}
+                                  </td>
+                                  <td>
+                                    <div className="td-assignee">
+                                      <div className="td-avatar">{initials(t.assignee?.name)}</div>
+                                      <div>
+                                        <div className="td-assignee-name">{t.assignee?.name || "—"}</div>
+                                        <div className="td-assignee-role">Member</div>
+                                      </div>
                                     </div>
-                                  </div>
-                                </td>
-                                <td>
-                                  <span className="td-pill" style={{ background: statusBgColor(t.status), color: statusColor(t.status) }}>
-                                    <span className="td-pill-dot" style={{ background: statusColor(t.status) }} />
-                                    {statusLabel(t.status)}
-                                  </span>
-                                </td>
-                                <td className="td-date">{formatShortDate(t.end_date)}</td>
-                              </tr>
-                            ))}
+                                  </td>
+                                  <td>
+                                    <span className="td-pill" style={{ background: statusBgColor(t.status), color: statusColor(t.status) }}>
+                                      <span className="td-pill-dot" style={{ background: statusColor(t.status) }} />
+                                      {statusLabel(t.status)}
+                                    </span>
+                                  </td>
+                                  <td className="td-date">{formatShortDate(t.end_date)}</td>
+                                </tr>
+                              )}
+                            </SortableTableWrapper>
                           </tbody>
                         </table>
                       )}
@@ -570,7 +603,7 @@ function TaskDetails() {
                         <h2 className="td-section-title">Deliverables</h2>
                         <span className="td-section-count">{task.completed_deliverables || 0}/{task.total_deliverables || 0} Completed</span>
                       </div>
-                      {(task.deliverables || []).length === 0 ? (
+                      {(orderedDeliverables.length === 0 && (task.deliverables || []).length === 0) ? (
                         <p className="td-empty">No deliverables linked to this task.</p>
                       ) : (
                         <table className="td-table">
@@ -583,34 +616,35 @@ function TaskDetails() {
                             </tr>
                           </thead>
                           <tbody>
-                            {(task.deliverables || []).map((d) => (
-                              <tr key={d.id}>
-                                <td>
-                                  <div className="td-task-name">{d.title}</div>
-                                  {d.description && <div className="td-task-sub">{d.description}</div>}
-                                </td>
-                                <td className="td-date">{formatShortDate(d.due_date)}</td>
-                                <td>
-                                  <span className="td-pill" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }}>
-                                    <span className="td-pill-dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }} />
-                                    {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}
-                                  </span>
-                                </td>
-                                <td>
-                                  <div style={{ display: "flex", gap: "6px" }}>
-                                    {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
-                                      <button
-                                        className="td-btn-outline"
-                                        style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
-                                        onClick={() => setSubmitModal({ open: true, deliverable: d })}
-                                      >
-                                        <LuSend size={12} /> Submit
-                                      </button>
-                                    ) : (
-                                      <button
-                                        className="td-btn-outline"
-                                        style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
-                                        onClick={() => {
+                            <SortableTableWrapper items={orderedDeliverables.length ? orderedDeliverables : (task.deliverables || [])} onReorder={handleDeliverableReorder}>
+                              {(d, idx) => (
+                                <tr key={d.id}>
+                                  <td>
+                                    <div className="td-task-name">{d.title}</div>
+                                    {d.description && <div className="td-task-sub">{d.description}</div>}
+                                  </td>
+                                  <td className="td-date">{formatShortDate(d.due_date)}</td>
+                                  <td>
+                                    <span className="td-pill" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }}>
+                                      <span className="td-pill-dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }} />
+                                      {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <div style={{ display: "flex", gap: "6px" }}>
+                                      {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
+                                        <button
+                                          className="td-btn-outline"
+                                          style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
+                                          onClick={() => setSubmitModal({ open: true, deliverable: d })}
+                                        >
+                                          <LuSend size={12} /> Submit
+                                        </button>
+                                      ) : (
+                                        <button
+                                          className="td-btn-outline"
+                                          style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
+                                          onClick={() => {
                                           if (isCreator) {
                                             setAssignerModal({ open: true, deliverable: d });
                                           } else {
@@ -624,11 +658,12 @@ function TaskDetails() {
                                   </div>
                                 </td>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
+                            )}
+                          </SortableTableWrapper>
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
                   )}
 
                   {tab === "files" && <FileUploadSection taskId={task.id} files={files} isCreator={isCreator} isAssignee={isAssignee} isApproved={isApproved} onFileChange={() => fetchTask(false)} />}

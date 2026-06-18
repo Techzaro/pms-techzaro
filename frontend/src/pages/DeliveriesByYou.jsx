@@ -1,6 +1,6 @@
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
@@ -9,6 +9,7 @@ import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import AssignerViewModal from "../components/AssignerViewModal";
 import { formatDateTime } from "../utils/formatDateTime";
+import SortableTableWrapper from "../components/SortableTableWrapper";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
 
@@ -30,6 +31,7 @@ const STATUS_TEXT_COLORS = {
 
 function DeliveriesByYou() {
   const [deliverables, setDeliverables] = useState([]);
+  const [orderedDeliverables, setOrderedDeliverables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -85,6 +87,21 @@ function DeliveriesByYou() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    setOrderedDeliverables(deliverables);
+  }, [deliverables]);
+
+  const handleDeliverableReorder = useCallback((reordered) => {
+    setOrderedDeliverables(reordered);
+    const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
+    const token = authToken();
+    fetch(`${API_URL}/deliverables/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ items: payload }),
+    }).catch(() => {});
+  }, []);
+
   const getInitials = (name) => {
     if (!name) return "??";
     return name.split(" ").map((w) => w[0]).join("").substring(0, 2).toUpperCase();
@@ -122,6 +139,8 @@ function DeliveriesByYou() {
       prev.map((d) => (d.id === updatedDeliverable.id ? { ...d, ...updatedDeliverable } : d))
     );
   };
+
+  const displayItems = orderedDeliverables.length ? orderedDeliverables : deliverables;
 
   const breadcrumbs = [
     { label: "Deliverables", path: rolePath("deliveries") },
@@ -175,7 +194,7 @@ function DeliveriesByYou() {
           <div className="deliveries-table-header">
             <div>Deliverable</div>
             <div>Task</div>
-            <div>Assigned To</div>
+            <div className="assigned" style={{paddingLeft:"60px"}}>Assigned To</div>
             <div>Status</div>
             <div>Due Date</div>
             <div>Action</div>
@@ -183,50 +202,54 @@ function DeliveriesByYou() {
 
           {loading ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
-          ) : deliverables.length === 0 ? (
+          ) : displayItems.length === 0 ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
           ) : (
-            deliverables.map((item) => {
-              const colors = getRandomColors(item.id);
-              return (
-                <div className="deliveries-table-row" key={item.id}>
-                  <div className="user-box">
-                    <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                      {getInitials(item.title)}
+            <SortableTableWrapper items={displayItems} onReorder={handleDeliverableReorder} as="div">
+              {(item, idx) => {
+                const colors = getRandomColors(item.id);
+                return (
+                  <div className="deliveries-table-row" key={item.id}>
+                    <div className="user-box">
+                      <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                        {getInitials(item.title)}
+                      </div>
+                      <div>
+                        <div className="user-name">{item.title}</div>
+                      </div>
                     </div>
+                     <div>
+                       <div className="task-title">{item.task?.title || item.project?.title || "-"}</div>
+                     </div>
+                     <div style={{paddingLeft:"50px"}}>
+                    <div className="user-box">
+                      <div className="avatar" style={{ background: colors.bg, color: colors.text, }}>
+                        {getInitials(item.assignee?.name)}
+                      </div>
+                      <div >
+                        <div className="user-name">{item.assignee?.name || "Unassigned"}</div>
+                        <div className="user-role">{item.assignee?.role ? item.assignee.role.replace("_", " ") : ""}</div>
+                      </div>
+                    </div>
+                     </div>
                     <div>
-                      <div className="user-name">{item.title}</div>
+                      <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                        {formatStatus(item.status)}
+                      </span>
+                    </div>
+                    <div className="date-box">
+                      <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.due_date)}</div>
+                    </div>
+                    <div className="action-btns">
+                      <button className="action-icon-btn action-view" title="View" onClick={() => setViewModal({ open: true, deliverable: item })}>
+                        <IoEyeOutline />
+                      </button>
                     </div>
                   </div>
-                   <div>
-                     <div className="task-title">{item.task?.title || item.project?.title || "-"}</div>
-                   </div>
-                  <div className="user-box">
-                    <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                      {getInitials(item.assignee?.name)}
-                    </div>
-                    <div>
-                      <div className="user-name">{item.assignee?.name || "Unassigned"}</div>
-                      <div className="user-role">{item.assignee?.role ? item.assignee.role.replace("_", " ") : ""}</div>
-                    </div>
-                  </div>
-                  <div>
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
-                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                      {formatStatus(item.status)}
-                    </span>
-                  </div>
-                  <div className="date-box">
-                    <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.due_date)}</div>
-                  </div>
-                  <div className="action-btns">
-                    <button className="action-icon-btn action-view" title="View" onClick={() => setViewModal({ open: true, deliverable: item })}>
-                      <IoEyeOutline />
-                    </button>
-                  </div>
-                </div>
-              );
-            })
+                );
+              }}
+            </SortableTableWrapper>
           )}
         </div>
       </div>

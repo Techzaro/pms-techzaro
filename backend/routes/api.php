@@ -74,6 +74,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/users/{id}/profile', [UserController::class, 'profile']);
         Route::get('/users/{user}/documents/{document}', [UserController::class, 'downloadDocument']);
         Route::post('/test-email', [UserController::class, 'testEmail']);
+        Route::post('/users/reorder', [UserController::class, 'reorder']);
     });
 
     // Get users for team management (all authenticated users)
@@ -157,6 +158,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Subtask creation under a parent task
     Route::post('/tasks/{task}/subtasks', [TaskController::class, 'storeSubtask']);
 
+    // Task reordering
+    Route::post('/tasks/reorder', [TaskController::class, 'reorderTasks']);
+    Route::post('/subtasks/reorder', [TaskController::class, 'reorderSubtasks']);
+
     // Mark task changes as read
     Route::post('/tasks/{task}/changes/mark-read', [TaskController::class, 'markChangesRead']);
 
@@ -184,6 +189,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/deliverables/{deliverable}', [DeliverableController::class, 'show']);
     Route::post('/deliverables/{deliverable}/changes/mark-read', [DeliverableController::class, 'markChangesRead']);
     Route::get('/self-deliverables', [DeliverableController::class, 'mySelfDeliverables']);
+    Route::post('/deliverables/reorder', [DeliverableController::class, 'reorder']);
 
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
         Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']);

@@ -33,6 +33,7 @@ class Task extends Model
         'reopen_new_deadline',
         'reopen_file_path',
         'reopen_file_name',
+        'sort_order',
     ];
 
     protected $casts = [
@@ -94,12 +95,12 @@ class Task extends Model
 
     public function subtasks()
     {
-        return $this->hasMany(\App\Models\Subtask::class);
+        return $this->hasMany(\App\Models\Subtask::class)->orderBy('sort_order')->orderBy('id');
     }
 
     public function deliverables()
     {
-        return $this->hasMany(\App\Models\Deliverable::class);
+        return $this->hasMany(\App\Models\Deliverable::class)->orderBy('sort_order')->orderBy('id');
     }
 
     public function files()

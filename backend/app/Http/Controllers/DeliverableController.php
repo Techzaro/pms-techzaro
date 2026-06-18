@@ -84,7 +84,7 @@ class DeliverableController extends Controller
 
         $query->whereColumn('created_by', '!=', 'assigned_to');
 
-        $deliverables = $query->latest()
+        $deliverables = $query->orderBy('sort_order')->orderBy('id')
             ->filter($request->query())
             ->paginate(15);
 
@@ -109,7 +109,7 @@ class DeliverableController extends Controller
         ])
             ->where('assigned_to', $user->id)
             ->where('created_by', $user->id)
-            ->latest()
+            ->orderBy('sort_order')->orderBy('id')
             ->filter($request->query())
             ->paginate(15);
 
@@ -875,5 +875,23 @@ class DeliverableController extends Controller
             'Content-Type' => $mimeType,
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
+    }
+
+    /**
+     * Reorder deliverables by updating sort_order values.
+     */
+    public function reorder(Request $request)
+    {
+        $request->validate([
+            'items' => 'required|array',
+            'items.*.id' => 'required|integer|exists:deliverables,id',
+            'items.*.sort_order' => 'required|integer|min:0',
+        ]);
+
+        foreach ($request->items as $item) {
+            Deliverable::where('id', $item['id'])->update(['sort_order' => $item['sort_order']]);
+        }
+
+        return response()->json(['message' => 'Deliverables reordered successfully']);
     }
 }

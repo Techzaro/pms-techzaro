@@ -70,6 +70,7 @@ class User extends Authenticatable
         'previous_exp_letter',
         'previous_salary_slip',
         'other_document',
+        'sort_order',
     ];
 
     protected $hidden = [

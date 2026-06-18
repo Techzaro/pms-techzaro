@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -9,6 +9,7 @@ import { LuSend } from "react-icons/lu";
 import CreateTaskModal from "../components/CreateTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import SubmitProjectModal from "../components/SubmitProjectModal";
+import SortableTableWrapper from "../components/SortableTableWrapper";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
 import { formatDateOnly } from "../utils/formatDateTime";
@@ -50,6 +51,7 @@ function Tasks() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [orderedItems, setOrderedItems] = useState([]);
   const [timeFilter, setTimeFilter] = useState("");
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [submitProjectModal, setSubmitProjectModal] = useState({ open: false, project: null });
@@ -83,6 +85,24 @@ function Tasks() {
   }, [debouncedSearch, statusFilter]);
 
   useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted', 'project:updated'], fetchTasks);
+
+  useEffect(() => {
+    setOrderedItems(items);
+  }, [items]);
+
+  const handleTaskListReorder = useCallback((reordered) => {
+    setOrderedItems(reordered);
+    const taskItems = reordered.filter((i) => i.item_type !== 'project');
+    if (taskItems.length) {
+      const payload = taskItems.map((item, idx) => ({ id: item.id, sort_order: idx }));
+      const token = authToken();
+      fetch(`${API_URL}/tasks/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ items: payload }),
+      }).catch(() => {});
+    }
+  }, []);
 
   const handleModalClose = (refresh) => {
     setShowTaskModal(false);
@@ -158,8 +178,9 @@ function Tasks() {
     return "";
   };
 
+  const baseItems = orderedItems.length ? orderedItems : items;
   const filteredItems = statusFilter
-    ? items.filter((item) => {
+    ? baseItems.filter((item) => {
         if (item.item_type === "project") {
           const workflowStatuses = ["submitted","approved","rejected","reopened"];
           const displayStatus = workflowStatuses.includes(item.status) ? item.status : "pending";
@@ -167,7 +188,7 @@ function Tasks() {
         }
         return item.status === statusFilter;
       })
-    : items;
+    : baseItems;
 
   const taskIdList = filteredItems.filter((i) => i.item_type !== "project").map((i) => i.id);
 
@@ -244,12 +265,12 @@ function Tasks() {
       <div className="container">
         <div className="table-header1">
           <div>Assigned by</div>
-          <div className="task-name-column" >Task Name</div>
+          <div className="task-name-column">Task Name</div>
           <div>Type</div>
-          <div className="status-column" >Status</div>
+          <div className="status-column">Status</div>
           <div>Progress</div>
-          <div className="priority-column" >Priority</div>
-          <div className="date-column">  Due Date</div>
+          <div className="priority-column">Priority</div>
+          <div className="date-column">Due Date</div>
           <div>Action</div>
         </div>
 
@@ -258,139 +279,199 @@ function Tasks() {
         ) : filteredItems.length === 0 ? (
           <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
         ) : (
-          filteredItems.map((item) => {
-            const isProject = item.item_type === "project";
-            const colors = getRandomColors(item.id);
+          <SortableTableWrapper 
+            items={filteredItems.map((i) => ({ ...i, sortableId: `${i.item_type}-${i.id}` }))} 
+            onReorder={(reordered) => handleTaskListReorder(reordered)} 
+            idKey="sortableId"
+          >
+            {(item, idx) => {
+              const isProject = item.item_type === "project";
+              const colors = getRandomColors(item.id);
 
-            if (isProject) {
-              return (
-                <div className="taskby-row" key={`project-${item.id}`}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                      {getInitials(item.creator?.name)}
+              if (isProject) {
+                return (
+                  <div className="taskby-row" key={item.sortableId}>
+                    <div className="col-assigned-to">
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                          {getInitials(item.creator?.name)}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="user-name">{item.creator?.name || "System"}</div>
+                          <div className="user-role">{item.creator?.role || ""}</div>
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="user-name">{item.creator?.name || "System"}</div>
-                      <div className="user-role">{item.creator?.role || ""}</div>
+                    
+                    <div className="col-task-name">
+                      <div className="task-title">{item.title}</div>
+                    </div>
+                    
+                    <div className="col-type">
+                      <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5", backgroundColor: "#e0eaf0" }}>Project</span>
+                    </div>
+                    
+                    <div className="col-status">
+                      <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
+                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                        {["submitted","approved","rejected","reopened"].includes(item.status) ? formatStatus(item.status) : "Pending"}
+                      </span>
+                    </div>
+                    
+                    <div className="col-progress">
+                      <div style={{ 
+                        display: "flex", 
+                        justifyContent: "flex-start", 
+                        alignItems: "center",
+                        marginBottom: "4px"
+                      }}>
+                        <span style={{ 
+                          fontSize: "13px", 
+                          fontWeight: 600, 
+                          color: "#374151" 
+                        }}>
+                          {calculateProgress(item)}%
+                        </span>
+                      </div>
+                      <div className="progress-bar-track">
+                        <div className="progress-bar-fill" style={{ width: `${calculateProgress(item)}%` }}></div>
+                      </div>
+                      <div style={{ 
+                        fontSize: "11px", 
+                        color: "#6b7280",
+                        marginTop: "4px"
+                      }}>
+                        {item.completed_tasks || 0}/{item.total_tasks || 0} tasks
+                      </div>
+                    </div>
+                    
+                    <div className="col-priority">
+                      <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
+                        <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
+                        {item.priority}
+                      </span>
+                    </div>
+                    
+                    <div className="col-due-date">
+                      <div className="date-box">
+                        <div>{formatDate(item.start_date)}</div>
+                        <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
+                      </div>
+                    </div>
+                    
+                    <div className="col-action">
+                      <div className="action-btns">
+                        <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'tasks' } })}><IoEyeOutline /></button>
+                        {isProjectSubmitState(item) && (
+                          <div style={{ position: "relative", display: "inline-flex" }}>
+                            <button 
+                              className="action-icon-btn action-submit" 
+                              title={item.can_submit ? "Submit Project" : projectSubmitBlockReason(item) || "Submit Project"} 
+                              disabled={!item.can_submit} 
+                              onClick={() => item.can_submit && setSubmitProjectModal({ open: true, project: item })} 
+                              style={!item.can_submit ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                            >
+                              <LuSend />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div>
+                );
+              }
+
+              const assigner = item.assigner;
+              return (
+                <div className="taskby-row" key={item.sortableId}>
+                  <div className="col-assigned-to">
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <div className="avatar" style={{ background: colors.bg, color: colors.text }}>{getInitials(assigner?.name)}</div>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="user-name">{assigner?.name || "System"}</div>
+                        <div className="user-role">{assigner?.role || ""}</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="col-task-name">
                     <div className="task-title">{item.title}</div>
                   </div>
-                  <div>
-                    <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5", backgroundColor:"#e0eaf0" }}>
-                      Project
-                    </span>
+                  
+                  <div className="col-type">
+                    <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a" }}>Task</span>
                   </div>
-                  <div>
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || (item.status !== "Planned" && item.status !== "in_progress" ? "#F3F4F6" : "#FEF3C7"), color: STATUS_TEXT_COLORS[item.status] || (item.status !== "Planned" && item.status !== "in_progress" ? "#374151" : "#92400E") }}>
-                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || (item.status !== "Planned" && item.status !== "in_progress" ? "#374151" : "#92400E") }}></span>
-                      {["submitted","approved","rejected","reopened"].includes(item.status) ? formatStatus(item.status) : "Pending"}
-                    </span>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{calculateProgress(item)}%</div>
-                    <div className="progress-bar-track">
-                      <div className="progress-bar-fill" style={{ width: `${calculateProgress(item)}%` }}></div>
-                    </div>
-                    <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.completed_tasks || 0}/{item.total_tasks || 0} tasks</div>
-                  </div>
-                  <div>
-                    <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
-                      <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
-                      {item.priority}
-                    </span>
-                  </div>
-                  <div className="date-box">
-                    <div>{formatDate(item.start_date)}</div>
-                    <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
-                  </div>
-                  <div className="action-btns">
-                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'tasks' } })}>
-                      <IoEyeOutline />
-                    </button>
-                    {isProjectSubmitState(item) && (
-                      <div style={{ position: "relative", display: "inline-flex" }}>
-                        <button
-                          className="action-icon-btn action-submit"
-                          title={item.can_submit ? "Submit Project" : projectSubmitBlockReason(item) || "Submit Project"}
-                          disabled={!item.can_submit}
-                          onClick={() => item.can_submit && setSubmitProjectModal({ open: true, project: item })}
-                          style={!item.can_submit ? { opacity: 0.4, cursor: "not-allowed" } : {}}
-                        >
-                          <LuSend />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            }
-
-            const assigner = item.assigner;
-            return (
-              <div className="taskby-row" key={`task-${item.id}`}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                    {getInitials(assigner?.name)}
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div className="user-name">{assigner?.name || "System"}</div>
-                    <div className="user-role">{assigner?.role || ""}</div>
-                  </div>
-                </div>
-                <div>
-                  <div className="task-title">{item.title}</div>
-                </div>
-                <div>
-                  <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a" }}>
-                    Task
-                  </span>
-                </div>
-                  <div>
+                  
+                  <div className="col-status">
                     <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
                       <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                       {formatStatus(item.status)}
                     </span>
                   </div>
-                  <div>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{item.deliverables_progress || 0}%</div>
+                  
+                  <div className="col-progress">
+                    <div style={{ 
+                      display: "flex", 
+                      justifyContent: "flex-start", 
+                      alignItems: "center",
+                      marginBottom: "4px"
+                    }}>
+                      <span style={{ 
+                        fontSize: "13px", 
+                        fontWeight: 600, 
+                        color: "#374151" 
+                      }}>
+                        {item.deliverables_progress || 0}%
+                      </span>
+                    </div>
                     <div className="progress-bar-track">
                       <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
                     </div>
-                    <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.approved_deliverables || 0}/{item.total_deliverables || 0} Deliverables Approved</div>
+                    <div style={{ 
+                      fontSize: "11px", 
+                      color: "#6b7280",
+                      marginTop: "4px"
+                    }}>
+                      {item.approved_deliverables || 0}/{item.total_deliverables || 0} Deliverables Approved
+                    </div>
                   </div>
-                  <div>
+                  
+                  <div className="col-priority">
                     <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
                       <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
                       {item.priority}
                     </span>
                   </div>
-                  <div className="date-box">
-                  <div>{formatDate(item.start_date)}</div>
-                  <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
-                </div>
-                <div className="action-btns">
-                  <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}>
-                    <IoEyeOutline />
-                  </button>
-                  {(item.status === "pending" || item.status === "reopened") && (
-                    <div style={{ position: "relative", display: "inline-flex" }}>
-                      <button
-                        className="action-icon-btn action-submit"
-                        title={item.pending_deliverables_count > 0 ? "Submit all deliverables first" : "Submit Task"}
-                        disabled={item.pending_deliverables_count > 0}
-                        onClick={() => !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item })}
-                        style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
-                      >
-                        <LuSend />
-                      </button>
+                  
+                  <div className="col-due-date">
+                    <div className="date-box">
+                      <div>{formatDate(item.start_date)}</div>
+                      <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
                     </div>
-                  )}
+                  </div>
+                  
+                  <div className="col-action">
+                    <div className="action-btns">
+                      <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}><IoEyeOutline /></button>
+                      {(item.status === "pending" || item.status === "reopened") && (
+                        <div style={{ position: "relative", display: "inline-flex" }}>
+                          <button 
+                            className="action-icon-btn action-submit" 
+                            title={item.pending_deliverables_count > 0 ? "Submit all deliverables first" : "Submit Task"} 
+                            disabled={item.pending_deliverables_count > 0} 
+                            onClick={() => !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item })} 
+                            style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                          >
+                            <LuSend />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            );
-          })
+              );
+            }}
+          </SortableTableWrapper>
         )}
       </div>
 
