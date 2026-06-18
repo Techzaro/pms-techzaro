@@ -20,13 +20,7 @@ import {
 import "../pages/ExportReport.css";
 
 import API_URL from "../config/api";
-
-function formatShortDate(value) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
+import { formatDateTimeShort } from "../utils/formatDateTime";
 
 const exportTypes = [
   {
@@ -973,11 +967,11 @@ function ExportReport({ isOpen, onClose }) {
                   </div>
                   <div className="sr-summary-row">
                     <span className="sr-summary-label">Start Date</span>
-                    <span className="sr-summary-value">{formatShortDate(previewData.project.start_date)}</span>
+                    <span className="sr-summary-value">{formatDateTimeShort(previewData.project.start_date)}</span>
                   </div>
                   <div className="sr-summary-row sr-summary-row--last">
                     <span className="sr-summary-label">Due Date</span>
-                    <span className="sr-summary-value">{formatShortDate(previewData.project.end_date)}</span>
+                    <span className="sr-summary-value">{formatDateTimeShort(previewData.project.end_date)}</span>
                   </div>
                 </div>
               </div>
@@ -1026,8 +1020,8 @@ function ExportReport({ isOpen, onClose }) {
                             {m.status === "completed" || m.status === "done" ? "Completed" : m.status === "in_progress" ? "In Progress" : m.status || "Pending"}
                           </span>
                         </span>
-                        <span>{formatShortDate(m.targetDate)}</span>
-                        <span>{formatShortDate(m.dueDate)}</span>
+                        <span>{formatDateTimeShort(m.targetDate)}</span>
+                        <span>{formatDateTimeShort(m.dueDate)}</span>
                       </div>
                     ))}
                   </div>
@@ -1131,7 +1125,7 @@ function ExportReport({ isOpen, onClose }) {
                               {p.status || "—"}
                             </span>
                           ) : (
-                            formatShortDate(p.date)
+                            formatDateTimeShort(p.date)
                           )}
                         </span>
                       </div>
@@ -1215,7 +1209,7 @@ function ExportReport({ isOpen, onClose }) {
                             {t.status === "completed" || t.status === "done" ? "Completed" : t.status === "in_progress" ? "In Progress" : t.status || "—"}
                           </span>
                         </span>
-                        <span>{formatShortDate(t.dueDate)}</span>
+                        <span>{formatDateTimeShort(t.dueDate)}</span>
                       </div>
                     ))}
                   </div>

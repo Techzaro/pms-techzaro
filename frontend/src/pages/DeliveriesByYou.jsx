@@ -1,6 +1,6 @@
+import React, { useState, useEffect, useCallback } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
-import { useState, useEffect, useCallback } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
@@ -191,65 +191,102 @@ function DeliveriesByYou() {
         </div>
 
         <div className="container">
-          <div className="deliveries-table-header">
-            <div>Deliverable</div>
-            <div>Task</div>
-            <div className="assigned" style={{paddingLeft:"60px"}}>Assigned To</div>
-            <div>Status</div>
-            <div>Due Date</div>
-            <div>Action</div>
-          </div>
+          {/* Header Table */}
+          <table className="deliveries-table">
+            <thead>
+              <tr className="deliveries-table-header">
+                <th>Deliverable</th>
+                <th>Task</th>
+                <th className="assigned" style={{paddingLeft:"60px"}}>Assigned To</th>
+                <th>Status</th>
+                <th>Due Date</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+          </table>
 
           {loading ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
           ) : displayItems.length === 0 ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
           ) : (
-            <SortableTableWrapper items={displayItems} onReorder={handleDeliverableReorder} as="div">
-              {(item, idx) => {
-                const colors = getRandomColors(item.id);
-                return (
-                  <div className="deliveries-table-row" key={item.id}>
-                    <div className="user-box">
-                      <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                        {getInitials(item.title)}
-                      </div>
-                      <div>
-                        <div className="user-name">{item.title}</div>
-                      </div>
-                    </div>
-                     <div>
-                       <div className="task-title">{item.task?.title || item.project?.title || "-"}</div>
-                     </div>
-                     <div style={{paddingLeft:"50px"}}>
-                    <div className="user-box">
-                      <div className="avatar" style={{ background: colors.bg, color: colors.text, }}>
-                        {getInitials(item.assignee?.name)}
-                      </div>
-                      <div >
-                        <div className="user-name">{item.assignee?.name || "Unassigned"}</div>
-                        <div className="user-role">{item.assignee?.role ? item.assignee.role.replace("_", " ") : ""}</div>
-                      </div>
-                    </div>
-                     </div>
-                    <div>
-                      <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
-                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                        {formatStatus(item.status)}
-                      </span>
-                    </div>
-                    <div className="date-box">
-                      <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.due_date)}</div>
-                    </div>
-                    <div className="action-btns">
-                      <button className="action-icon-btn action-view" title="View" onClick={() => setViewModal({ open: true, deliverable: item })}>
-                        <IoEyeOutline />
-                      </button>
-                    </div>
-                  </div>
-                );
-              }}
-            </SortableTableWrapper>
+            <div className="sortable-table-container">
+              <table className="deliveries-table">
+                <tbody>
+                  <SortableTableWrapper 
+                    items={displayItems.map((item, index) => ({
+                      ...item,
+                      sortableId: `deliverable-${item.id}-${index}`
+                    }))} 
+                    onReorder={handleDeliverableReorder} 
+                    idKey="sortableId"
+                    as="tr"
+                  >
+                    {(item, idx) => {
+                      const colors = getRandomColors(item.id);
+                      const uniqueKey = `deliverable-${item.id}-${idx}`;
+                      return (
+                        <React.Fragment key={uniqueKey}>
+                          <td>
+                            <div className="user-box">
+                              <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                                {getInitials(item.title)}
+                              </div>
+                              <div>
+                                <div className="user-name">{item.title}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="task-title">{item.task?.title || item.project?.title || "-"}</div>
+                          </td>
+                          <td style={{paddingLeft:"50px"}}>
+                            <div className="user-box">
+                              <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                                {getInitials(item.assignee?.name)}
+                              </div>
+                              <div>
+                                <div className="user-name">{item.assignee?.name || "Unassigned"}</div>
+                                <div className="user-role">{item.assignee?.role ? item.assignee.role.replace("_", " ") : ""}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <span className="badge" style={{ 
+                              background: STATUS_COLORS[item.status] || "#F3F4F6", 
+                              color: STATUS_TEXT_COLORS[item.status] || "#374151", 
+                              padding: "4px 10px", 
+                              borderRadius: "999px", 
+                              fontSize: "12px", 
+                              fontWeight: 600 
+                            }}>
+                              <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                              {formatStatus(item.status)}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="date-box">
+                              <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.due_date)}</div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="action-btns">
+                              <button 
+                                className="action-icon-btn action-view" 
+                                title="View" 
+                                onClick={() => setViewModal({ open: true, deliverable: item })}
+                              >
+                                <IoEyeOutline />
+                              </button>
+                            </div>
+                          </td>
+                        </React.Fragment>
+                      );
+                    }}
+                  </SortableTableWrapper>
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>

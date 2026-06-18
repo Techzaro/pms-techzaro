@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
+import { toUTCIso } from "../utils/formatDateTime";
 import "./layout/CreateTaskModal.css";
 
 const padNum = (n) => String(n).padStart(2, "0");
@@ -145,8 +146,8 @@ const CreateSubtaskModal = ({ parentId, projectId, onClose }) => {
       const body = {
         title: form.title.trim(),
         description: form.description || null,
-        start_date: startDate || null,
-        end_date: endDate || null,
+        start_date: toUTCIso(startDate),
+        end_date: toUTCIso(endDate),
         assigned_to: form.assigned_to,
         priority: form.priority,
       };

@@ -3,17 +3,9 @@ import { createPortal } from "react-dom";
 import { FileText, Upload, X, Image } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
+import { formatDateTimeShort } from "../utils/formatDateTime";
 import "./SubmitDeliverableModal.css";
 import "./layout/CreateTaskModal.css";
-
-function formatShortDate(value) {
-  if (!value) return "\u2014";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "\u2014";
-  const date = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-  const time = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
-  return `${date} ${time}`;
-}
 
 function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess }) {
   const [comment, setComment] = useState("");
@@ -115,7 +107,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
             <div className="sd-meta">
               <span className={`sd-status-badge sd-status-${deliverable.status || "pending"}`}>{statusLabel}</span>
               {deliverable.due_date && (
-                <span className="sd-due-date">Due Date {formatShortDate(deliverable.due_date)}</span>
+                <span className="sd-due-date">Due Date {formatDateTimeShort(deliverable.due_date)}</span>
               )}
             </div>
           </div>

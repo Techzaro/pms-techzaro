@@ -57,8 +57,8 @@ export default function SortableTableWrapper({
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const items = localRef.current;
-    const oldIndex = items.findIndex((i) => i[idKey] === active.id);
-    const newIndex = items.findIndex((i) => i[idKey] === over.id);
+    const oldIndex = items.findIndex((i) => String(i[idKey]) === String(active.id));
+    const newIndex = items.findIndex((i) => String(i[idKey]) === String(over.id));
     if (oldIndex === -1 || newIndex === -1) return;
     const reordered = arrayMove(items, oldIndex, newIndex);
     setLocalItems(reordered);
@@ -69,13 +69,17 @@ export default function SortableTableWrapper({
     setActiveId(null);
   }, []);
 
-  const activeItem = activeId ? localItems.find((i) => i[idKey] === activeId) : null;
+  const activeItem = activeId ? localItems.find((i) => String(i[idKey]) === String(activeId)) : null;
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
-      <SortableContext items={localItems.map((i) => i[idKey])} strategy={verticalListSortingStrategy} disabled={disabled}>
+      <SortableContext items={localItems.map((i) => String(i[idKey]))} strategy={verticalListSortingStrategy} disabled={disabled}>
         {localItems.map((item, idx) => (
-          <SortableItem key={item[idKey]} id={item[idKey]} as={as}>
+          <SortableItem 
+            key={`${item[idKey]}-${idx}`}
+            id={String(item[idKey])} 
+            as={as}
+          >
             {(dndProps) => renderRow(item, idx, dndProps)}
           </SortableItem>
         ))}

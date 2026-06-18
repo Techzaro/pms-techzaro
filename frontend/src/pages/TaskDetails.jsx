@@ -32,10 +32,6 @@ import { publish } from "../utils/eventBus";
 import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
 import "./TaskDetails.css";
 
-function formatShortDate(value) {
-  return formatDateTimeShort(value);
-}
-
 function timeAgo(iso) {
   if (!iso) return "";
   const then = new Date(iso).getTime();
@@ -96,6 +92,12 @@ function initials(name) {
   const a = parts[0]?.[0] || "";
   const b = parts[1]?.[0] || "";
   return (a + b).toUpperCase() || a.toUpperCase();
+}
+
+function formatShortDate(dateString) {
+  if (!dateString) return "—";
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function TaskDetails() {
@@ -174,8 +176,6 @@ function TaskDetails() {
       ? taskIds[currentIdx + 1]
       : null;
 
-  // YAHAN taskSourcePages aur second source declaration NAHI hona chahiye
-
   useEffect(() => {
     setOrderedSubtasks(task?.subtasks || []);
   }, [task?.subtasks]);
@@ -223,7 +223,6 @@ function TaskDetails() {
   const project = task?.project;
   const files = task?.files || [];
   const progress = typeof task?.deliverables_progress === "number" ? task.deliverables_progress : 0;
-  const completedCount = subtasks.filter((t) => ["completed", "done"].includes((t.status || "").toLowerCase())).length;
 
   const showMessage = useCallback((text, type = "success") => {
     setMessage(text);
@@ -433,13 +432,13 @@ function TaskDetails() {
                 </div>
               </div>
 
-            {task.description && (
-              <div>
-                <p className="td-desc">{task.description}</p>
-              </div>
-            )}
+              {task.description && (
+                <div>
+                  <p className="td-desc">{task.description}</p>
+                </div>
+              )}
 
-            <div className="td-badges">
+              <div className="td-badges">
                 <span className="td-badge" style={{ background: statusBgColor(task.status), color: statusColor(task.status) }}>
                   <span className="td-badge-dot" style={{ background: statusColor(task.status) }} />
                   {statusLabel(task.status)}
@@ -475,7 +474,7 @@ function TaskDetails() {
                   <div className="td-trio-item">
                     <div className="td-stat-ic td-stat-ic--green"><Calendar size={18} /></div>
                     <div>
-                      <span className="td-stat-big td-stat-big--sm">{formatShortDate(task.end_date)}</span>
+                      <span className="td-stat-big td-stat-big--sm">{formatDateTimeShort(task.end_date)}</span>
                       <span className="td-stat-label">Deadline</span>
                     </div>
                   </div>
@@ -550,23 +549,25 @@ function TaskDetails() {
                     <div>
                       <div className="td-section-header">
                         <h2 className="td-section-title">Subtasks</h2>
-                        <span className="td-section-count">{completedCount}/{subtasks.length} Completed</span>
                       </div>
-                      {(orderedSubtasks.length === 0 && subtasks.length === 0) ? (
-                        <p className="td-empty">No subtasks yet. Click "Add Subtask" to create one.</p>
+                      {(orderedSubtasks.length === 0 && (task.subtasks || []).length === 0) ? (
+                        <p className="td-empty">No subtasks for this task.</p>
                       ) : (
                         <table className="td-table">
                           <thead>
                             <tr>
-                              <th>Deliverables</th>
-                              <th>Assigned By</th>
+                              <th>Task</th>
+                              <th>Assignee</th>
                               <th>Status</th>
-                              <th>Date</th>
+                              <th>Due Date</th>
                             </tr>
                           </thead>
                           <tbody>
-                            <SortableTableWrapper items={orderedSubtasks.length ? orderedSubtasks : subtasks} onReorder={handleSubtaskReorder}>
-                              {(t, idx) => (
+                            <SortableTableWrapper
+                              items={orderedSubtasks.length ? orderedSubtasks : subtasks}
+                              onReorder={handleSubtaskReorder}
+                            >
+                              {(t) => (
                                 <tr key={t.id}>
                                   <td>
                                     <div className="td-task-name">{t.title}</div>
@@ -582,8 +583,17 @@ function TaskDetails() {
                                     </div>
                                   </td>
                                   <td>
-                                    <span className="td-pill" style={{ background: statusBgColor(t.status), color: statusColor(t.status) }}>
-                                      <span className="td-pill-dot" style={{ background: statusColor(t.status) }} />
+                                    <span
+                                      className="td-pill"
+                                      style={{
+                                        background: statusBgColor(t.status),
+                                        color: statusColor(t.status),
+                                      }}
+                                    >
+                                      <span
+                                        className="td-pill-dot"
+                                        style={{ background: statusColor(t.status) }}
+                                      />
                                       {statusLabel(t.status)}
                                     </span>
                                   </td>
@@ -616,8 +626,11 @@ function TaskDetails() {
                             </tr>
                           </thead>
                           <tbody>
-                            <SortableTableWrapper items={orderedDeliverables.length ? orderedDeliverables : (task.deliverables || [])} onReorder={handleDeliverableReorder}>
-                              {(d, idx) => (
+                            <SortableTableWrapper 
+                              items={orderedDeliverables.length ? orderedDeliverables : (task.deliverables || [])} 
+                              onReorder={handleDeliverableReorder}
+                            >
+                              {(d) => (
                                 <tr key={d.id}>
                                   <td>
                                     <div className="td-task-name">{d.title}</div>
@@ -625,8 +638,13 @@ function TaskDetails() {
                                   </td>
                                   <td className="td-date">{formatShortDate(d.due_date)}</td>
                                   <td>
-                                    <span className="td-pill" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }}>
-                                      <span className="td-pill-dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }} />
+                                    <span className="td-pill" style={{ 
+                                      background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), 
+                                      color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) 
+                                    }}>
+                                      <span className="td-pill-dot" style={{ 
+                                        background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) 
+                                      }} />
                                       {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}
                                     </span>
                                   </td>
@@ -645,25 +663,25 @@ function TaskDetails() {
                                           className="td-btn-outline"
                                           style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
                                           onClick={() => {
-                                          if (isCreator) {
-                                            setAssignerModal({ open: true, deliverable: d });
-                                          } else {
-                                            setViewModal({ open: true, deliverable: d });
-                                          }
-                                        }}
-                                      >
-                                        <IoEyeOutline size={12} /> View
-                                      </button>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </SortableTableWrapper>
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
+                                            if (isCreator) {
+                                              setAssignerModal({ open: true, deliverable: d });
+                                            } else {
+                                              setViewModal({ open: true, deliverable: d });
+                                            }
+                                          }}
+                                        >
+                                          <IoEyeOutline size={12} /> View
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </SortableTableWrapper>
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
                   )}
 
                   {tab === "files" && <FileUploadSection taskId={task.id} files={files} isCreator={isCreator} isAssignee={isAssignee} isApproved={isApproved} onFileChange={() => fetchTask(false)} />}
@@ -672,48 +690,47 @@ function TaskDetails() {
               </div>
             </div>
           </div>
-        
-        {/* ===== RIGHT SIDEBAR ===== */}
-        <aside className="td-sidebar">
-          <div className="td-card">
-            <h3 className="td-card-title">Task Information</h3>
-            <ul className="td-info">
-              <li><span className="td-dot" style={{ background: "#3b82f6" }} /><div><span className="td-info-label">Project</span><span className="td-info-val">{project?.title || "—"}</span></div></li>
-              <li><span className="td-dot" style={{ background: "#f59e0b" }} /><div><span className="td-info-label">Created By</span><span className="td-info-val">{assigner?.name || "—"}</span></div></li>
-              <li><span className="td-dot" style={{ background: "#8b5cf6" }} /><div><span className="td-info-label">Assigned To</span><span className="td-info-val">{assignees.map((a) => a.name).join(", ") || "—"}</span></div></li>
-              <li><span className="td-dot" style={{ background: "#22c55e" }} /><div><span className="td-info-label">Last Updated</span><span className="td-info-val">{task.updated_at ? timeAgo(task.updated_at) : "—"}</span></div></li>
-              <li><span className="td-dot" style={{ background: "#ef4444" }} /><div><span className="td-info-label">Estimated Time</span><span className="td-info-val">{task.end_date ? formatShortDate(task.end_date) : "—"}</span></div></li>
-            </ul>
-          </div>
 
-          <div className="td-card">
-            <div className="td-card-head">
-              <h3 className="td-card-title">Notes</h3>
+          {/* ===== RIGHT SIDEBAR ===== */}
+          <aside className="td-sidebar">
+            <div className="td-card">
+              <h3 className="td-card-title">Task Information</h3>
+              <ul className="td-info">
+                <li><span className="td-dot" style={{ background: "#3b82f6" }} /><div><span className="td-info-label">Project</span><span className="td-info-val">{project?.title || "—"}</span></div></li>
+                <li><span className="td-dot" style={{ background: "#f59e0b" }} /><div><span className="td-info-label">Created By</span><span className="td-info-val">{assigner?.name || "—"}</span></div></li>
+                <li><span className="td-dot" style={{ background: "#8b5cf6" }} /><div><span className="td-info-label">Assigned To</span><span className="td-info-val">{assignees.map((a) => a.name).join(", ") || "—"}</span></div></li>
+                <li><span className="td-dot" style={{ background: "#22c55e" }} /><div><span className="td-info-label">Last Updated</span><span className="td-info-val">{task.updated_at ? timeAgo(task.updated_at) : "—"}</span></div></li>
+                <li><span className="td-dot" style={{ background: "#ef4444" }} /><div><span className="td-info-label">Estimated Time</span><span className="td-info-val">{task.end_date ? formatDateTimeShort(task.end_date) : "—"}</span></div></li>
+              </ul>
             </div>
-            <textarea
-              className="td-notes-textarea"
-              rows={3}
-              placeholder="Write a note..."
-              value={noteInput}
-              onChange={(e) => setNoteInput(e.target.value)}
-            />
-            <button type="button" className="td-save-notes-btn" disabled={noteSaving || !noteInput.trim()} onClick={saveNote}>
-              {noteSaving ? "Saving…" : "Add Note"}
-            </button>
-            {notes.length > 0 && (
-              <div className="td-notes-list">
-                {notes.map((n) => (
-                  <div key={n.id} className="td-saved-note">
-                    <button type="button" className="td-note-delete" onClick={() => deleteNote(n.id)} title="Delete note">&times;</button>
-                    <p className="td-notes">{n.note}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
 
-        </aside>
-      </div>
+            <div className="td-card">
+              <div className="td-card-head">
+                <h3 className="td-card-title">Notes</h3>
+              </div>
+              <textarea
+                className="td-notes-textarea"
+                rows={3}
+                placeholder="Write a note..."
+                value={noteInput}
+                onChange={(e) => setNoteInput(e.target.value)}
+              />
+              <button type="button" className="td-save-notes-btn" disabled={noteSaving || !noteInput.trim()} onClick={saveNote}>
+                {noteSaving ? "Saving…" : "Add Note"}
+              </button>
+              {notes.length > 0 && (
+                <div className="td-notes-list">
+                  {notes.map((n) => (
+                    <div key={n.id} className="td-saved-note">
+                      <button type="button" className="td-note-delete" onClick={() => deleteNote(n.id)} title="Delete note">&times;</button>
+                      <p className="td-notes">{n.note}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
 
         {showEditModal && (
           <EditTaskModal

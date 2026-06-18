@@ -3,14 +3,8 @@ import { createPortal } from "react-dom";
 import { FileText, Download, ExternalLink } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
+import { formatDateTime } from "../utils/formatDateTime";
 import "./ViewDeliverableModal.css";
-
-function formatDateTime(value) {
-  if (!value) return "\u2014";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "\u2014";
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}
 
 function formatFileSize(bytes) {
   if (!bytes) return "";

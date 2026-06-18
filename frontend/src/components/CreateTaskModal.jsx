@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
-import { formatDateTime, toDatetimeLocal } from "../utils/formatDateTime";
+import { formatDateTime, toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
 import "./layout/CreateTaskModal.css";
 
@@ -174,7 +174,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   const handleAddDeliverable = () => {
     if (!deliverableInput.title.trim()) return;
     const dt = deliverableInput.due_datetime;
-    const dueDate = dt ? dt.replace("T", " ") + ":00" : null;
+    const dueDate = toUTCIso(dt);
     setDeliverables((prev) => [...prev, { title: deliverableInput.title.trim(), due_date: dueDate }]);
     setDeliverableInput({ title: "", due_datetime: "" });
   };
@@ -290,8 +290,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         title: form.title.trim(),
         description: form.description || null,
         requirements: requirementsList.length > 0 ? requirementsList : null,
-        start_date: form.start_date || null,
-        end_date: form.end_date || null,
+        start_date: toUTCIso(form.start_date),
+        end_date: toUTCIso(form.end_date),
         assigned_to: form.assigned_to,
         priority: form.priority,
         deliverables: deliverables.length > 0 ? deliverables.map(d => ({ title: d.title, due_date: d.due_date || null })) : undefined,

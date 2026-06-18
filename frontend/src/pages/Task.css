@@ -784,3 +784,36 @@
 .confirm-btn:hover {
   background: #16A34A;
 }
+
+.task-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.task-table .table-header1 th {
+  text-align: left;
+  padding: 14px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #6b7280;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.task-table tbody td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+
+.task-table .taskby-row:hover {
+  background-color: #f9fafb;
+}
+
+.task-table .taskby-row:last-child td {
+  border-bottom: none;
+}
