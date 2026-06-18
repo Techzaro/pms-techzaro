@@ -54,14 +54,14 @@ class Project extends Model
     protected $casts = [
         'assigned_users' => 'array',
         'goals_checklist' => 'array',
-        'start_date' => 'datetime',
-        'end_date' => 'datetime',
+        'start_date' => 'datetime:Y-m-d\TH:i:s',
+        'end_date' => 'datetime:Y-m-d\TH:i:s',
         'budget' => 'decimal:2',
-        'submitted_at' => 'datetime',
-        'approved_at' => 'datetime',
-        'rejected_at' => 'datetime',
-        'reopened_at' => 'datetime',
-        'reopen_new_deadline' => 'datetime',
+        'submitted_at' => 'datetime:Y-m-d\TH:i:s',
+        'approved_at' => 'datetime:Y-m-d\TH:i:s',
+        'rejected_at' => 'datetime:Y-m-d\TH:i:s',
+        'reopened_at' => 'datetime:Y-m-d\TH:i:s',
+        'reopen_new_deadline' => 'datetime:Y-m-d\TH:i:s',
     ];
 
     /**

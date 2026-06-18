@@ -37,13 +37,13 @@ class Task extends Model
 
     protected $casts = [
         'requirements' => 'array',
-        'start_date' => 'datetime',
-        'end_date' => 'datetime',
-        'submitted_at' => 'datetime',
-        'approved_at' => 'datetime',
-        'rejected_at' => 'datetime',
-        'reopened_at' => 'datetime',
-        'reopen_new_deadline' => 'datetime',
+        'start_date' => 'datetime:Y-m-d\TH:i:s',
+        'end_date' => 'datetime:Y-m-d\TH:i:s',
+        'submitted_at' => 'datetime:Y-m-d\TH:i:s',
+        'approved_at' => 'datetime:Y-m-d\TH:i:s',
+        'rejected_at' => 'datetime:Y-m-d\TH:i:s',
+        'reopened_at' => 'datetime:Y-m-d\TH:i:s',
+        'reopen_new_deadline' => 'datetime:Y-m-d\TH:i:s',
     ];
 
     public function scopeFilter(Builder $query, array $filters): Builder

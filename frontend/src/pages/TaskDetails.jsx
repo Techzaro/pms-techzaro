@@ -387,32 +387,20 @@ function TaskDetails() {
                       Add Subtask
                     </button>
                   )}
-                  {canSubmitTask && (
-                    <button className="td-btn-primary" onClick={() => setTaskSubmitModalOpen(true)}>
+                  {isAssignee && ["pending", "reopened"].includes(task?.status) && (
+                    <button
+                      className="td-btn-primary"
+                      disabled={!canSubmitTask}
+                      title={!canSubmitTask ? "Submit all deliverables first" : ""}
+                      onClick={() => setTaskSubmitModalOpen(true)}
+                      style={!canSubmitTask ? { opacity: 0.5, cursor: "not-allowed" } : {}}
+                    >
                       <LuSend size={15} />
                       {task.status === "reopened" ? "Resubmit Task" : "Submit Task"}
                     </button>
                   )}
-                {!isApproved && (
-                  <button className="td-btn-primary" onClick={() => setShowSubtaskModal(true)}>
-                    <Plus size={16} strokeWidth={2.5} />
-                    Add Subtask
-                  </button>
-                )}
-                {isAssignee && ["pending", "reopened"].includes(task?.status) && (
-                  <button
-                    className="td-btn-primary"
-                    disabled={!canSubmitTask}
-                    title={!canSubmitTask ? "Submit all deliverables first" : ""}
-                    onClick={() => setTaskSubmitModalOpen(true)}
-                    style={!canSubmitTask ? { opacity: 0.5, cursor: "not-allowed" } : {}}
-                  >
-                    <LuSend size={15} />
-                    {task.status === "reopened" ? "Resubmit Task" : "Submit Task"}
-                  </button>
-                )}
+                </div>
               </div>
-            </div>
 
             {task.description && (
               <div>

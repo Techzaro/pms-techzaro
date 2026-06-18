@@ -3,6 +3,14 @@ let listener = null;
 
 export function setLoadingManager(cb) {
   listener = cb;
+  // Sync current count to newly registered listener so UI reflects current loading state
+  if (listener) {
+    try {
+      listener(count > 0);
+    } catch (e) {
+      // ignore listener errors
+    }
+  }
 }
 
 export function showGlobalLoading() {

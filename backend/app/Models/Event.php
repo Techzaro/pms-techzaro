@@ -22,8 +22,8 @@ class Event extends Model
     ];
 
     protected $casts = [
-        'start_date' => 'datetime',
-        'end_date' => 'datetime',
+        'start_date' => 'datetime:Y-m-d\TH:i:s',
+        'end_date' => 'datetime:Y-m-d\TH:i:s',
         'all_day' => 'boolean',
         'is_global' => 'boolean',
     ];

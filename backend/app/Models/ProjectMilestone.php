@@ -23,7 +23,7 @@ class ProjectMilestone extends Model
     ];
 
     protected $casts = [
-        'due_date' => 'date',
+        'due_date' => 'date:Y-m-d',
     ];
 
     /**

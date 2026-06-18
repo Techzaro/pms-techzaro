@@ -31,8 +31,9 @@ export function useCalendarData() {
 
     const start = new Date(year, month, 1);
     const end = new Date(year, month + 1, 0);
-    const from = start.toISOString().split("T")[0];
-    const to = end.toISOString().split("T")[0];
+    const pad = (n) => String(n).padStart(2, "0");
+    const from = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+    const to = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`;
 
     fetchPromise = (async () => {
       try {
@@ -108,7 +109,8 @@ export function useCalendarData() {
   }, []);
 
   const getEventsForDate = useCallback((date) => {
-    const dateStr = date.toISOString().split("T")[0];
+    const pad = (n) => String(n).padStart(2, "0");
+    const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
     return events.filter((ev) => {
       const start = ev.start_date?.split("T")[0];
       const end = ev.end_date?.split("T")[0] || start;

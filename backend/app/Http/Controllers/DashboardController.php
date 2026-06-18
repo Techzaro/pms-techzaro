@@ -28,7 +28,7 @@ class DashboardController extends Controller
 
         return response()->json([
             'summary' => $this->getSummary($user, $role),
-            'todayWorkload' => $this->getTodayWorkload($user),
+            'todayWorkload' => $this->getTodayWorkload($user, $role),
             'activeProjects' => $this->getActiveProjects($user, $role),
             'recentActivity' => $this->getRecentActivity($user, $role),
             'upcomingDeadlines' => $this->getUpcomingDeadlines($user, $role),
@@ -44,7 +44,9 @@ class DashboardController extends Controller
         $projectQuery = Project::query();
         $taskQuery = Task::query();
 
-        if ($role === 'team_lead' || $role === 'member') {
+        if (in_array($role, ['admin', 'manager'])) {
+            // Admin/Manager: see all projects and tasks
+        } else {
             $projectIds = $this->getUserProjectIds($user);
             $projectQuery->whereIn('id', $projectIds);
             $taskQuery->whereIn('project_id', $projectIds)->where(function ($q) use ($user) {
@@ -54,21 +56,52 @@ class DashboardController extends Controller
         }
 
         $activeProjects = $projectQuery->clone()
-            ->whereIn('status', ['In Progress', 'Active', 'planned'])
+            ->whereNotIn('status', ['completed', 'done'])
             ->count();
 
-        $tasksDueToday = $taskQuery->clone()
-            ->whereDate('end_date', today())
-            ->whereNotIn('status', ['completed', 'done', 'abandoned'])
-            ->count();
+        // Admin/Manager: all tasks due today (unrestricted)
+        // Other roles: scoped to their projects/tasks
+        $tasksDueToday = in_array($role, ['admin', 'manager'])
+            ? Task::query()
+                ->whereDate('end_date', today())
+                ->whereNotIn('status', ['completed', 'done', 'approved', 'abandoned'])
+                ->count()
+            : Task::query()
+                ->whereDate('end_date', today())
+                ->whereNotIn('status', ['completed', 'done', 'approved', 'abandoned'])
+                ->where(function ($q) use ($user) {
+                    $q->whereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
+                      ->orWhere('assigned_to', $user->id);
+                })
+                ->count();
 
-        $completedTasks = $taskQuery->clone()
-            ->whereIn('status', ['completed', 'done'])
-            ->count();
+        // Admin/Manager: all completed/approved tasks (unrestricted)
+        // Other roles: tasks assigned to them that are completed/approved
+        $completedTasks = in_array($role, ['admin', 'manager'])
+            ? Task::query()
+                ->whereIn('status', ['completed', 'done', 'approved'])
+                ->count()
+            : Task::query()
+                ->whereIn('status', ['completed', 'done', 'approved'])
+                ->where(function ($q) use ($user) {
+                    $q->whereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
+                      ->orWhere('assigned_to', $user->id);
+                })
+                ->count();
 
-        $pendingTasks = $taskQuery->clone()
-            ->whereNotIn('status', ['completed', 'done', 'abandoned'])
-            ->count();
+        // Admin/Manager: all pending/active tasks (unrestricted)
+        // Other roles: scoped to their projects/tasks
+        $pendingTasks = in_array($role, ['admin', 'manager'])
+            ? Task::query()
+                ->whereNotIn('status', ['completed', 'done', 'approved', 'abandoned'])
+                ->count()
+            : Task::query()
+                ->whereNotIn('status', ['completed', 'done', 'approved', 'abandoned'])
+                ->where(function ($q) use ($user) {
+                    $q->whereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
+                      ->orWhere('assigned_to', $user->id);
+                })
+                ->count();
 
         $totalTasks = $taskQuery->clone()->count();
 
@@ -82,10 +115,23 @@ class DashboardController extends Controller
     }
 
     /**
-     * Today's tasks: tasks due today assigned to the logged-in user.
+     * Today's tasks: tasks due today.
+     * Admin/Manager: tasks they assigned to others, not yet submitted/approved/completed.
+     * Other roles: tasks assigned to them due today.
      */
-    private function getTodayWorkload(User $user): array
+    private function getTodayWorkload(User $user, string $role): array
     {
+        if (in_array($role, ['admin', 'manager'])) {
+            return Task::with(['project:id,title', 'assignees:id,name,role'])
+                ->where('assigned_by', $user->id)
+                ->whereDate('end_date', today())
+                ->whereNotIn('status', ['completed', 'done', 'approved', 'abandoned'])
+                ->latest()
+                ->limit(10)
+                ->get()
+                ->toArray();
+        }
+
         return Task::with(['project:id,title', 'assignees:id,name'])
             ->whereDate('end_date', today())
             ->whereNotIn('status', ['completed', 'done', 'abandoned'])
@@ -102,7 +148,7 @@ class DashboardController extends Controller
     private function getActiveProjects(User $user, string $role): array
     {
         $projects = Project::with(['creator:id,name', 'team:id,name'])
-            ->whereIn('status', ['In Progress', 'Active', 'planned'])
+            ->whereNotIn('status', ['completed', 'done', 'cancelled', 'archived'])
             ->whereIn('id', $this->getUserProjectIds($user))
             ->latest()
             ->limit(6)
@@ -114,6 +160,14 @@ class DashboardController extends Controller
             $done = $tasks->filter(fn ($t) => in_array(strtolower((string) $t->status), ['done', 'completed'], true))->count();
             $progress = $total > 0 ? (int) round(($done / $total) * 100) : 0;
 
+            $assignedUserIds = $project->assigned_users ?? [];
+            $assignedUsers = collect();
+            if (!empty($assignedUserIds)) {
+                $assignedUsers = \App\Models\User::whereIn('id', $assignedUserIds)
+                    ->select('id', 'name')
+                    ->get();
+            }
+
             return [
                 'id' => $project->id,
                 'name' => $project->title,
@@ -121,6 +175,7 @@ class DashboardController extends Controller
                 'progress' => $progress,
                 'deadline' => $project->end_date?->format('M d, Y h:i A'),
                 'team' => $project->team?->name,
+                'assigned_users' => $assignedUsers->toArray(),
             ];
         })->toArray();
     }
@@ -178,27 +233,62 @@ class DashboardController extends Controller
      */
     private function getCompletedToday(User $user): array
     {
-        return Task::with(['project:id,title'])
-            ->whereIn('status', ['completed', 'done'])
-            ->whereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
-            ->whereDate('updated_at', today())
-            ->latest()
+        $submittedTasks = Task::with(['project:id,title', 'assignees:id,name,role'])
+            ->whereDate('submitted_at', today())
+            ->where(function ($q) use ($user) {
+                $q->where('assigned_by', $user->id)
+                  ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
+            })
+            ->latest('submitted_at')
             ->limit(10)
             ->get()
             ->map(fn ($task) => [
                 'id' => $task->id,
+                'type' => 'task',
                 'title' => $task->title,
                 'project' => $task->project?->title,
-                'completed_at' => $task->updated_at?->format('M d, Y h:i A'),
-            ])
+                'submitted_at' => $task->submitted_at?->format('Y-m-d\TH:i:s'),
+                'time_ago' => $task->submitted_at?->diffForHumans(),
+                'assignees' => $task->assignees->map(fn ($u) => [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'role' => $u->role,
+                ])->toArray(),
+            ]);
+
+        $submittedDeliverables = \App\Models\Deliverable::with(['project:id,title', 'assignee:id,name,role'])
+            ->whereDate('submitted_at', today())
+            ->where(function ($q) use ($user) {
+                $q->where('created_by', $user->id)
+                  ->orWhere('assigned_to', $user->id);
+            })
+            ->latest('submitted_at')
+            ->limit(10)
+            ->get()
+            ->map(fn ($dlv) => [
+                'id' => $dlv->id,
+                'type' => 'deliverable',
+                'title' => $dlv->title,
+                'project' => $dlv->project?->title,
+                'submitted_at' => $dlv->submitted_at?->format('Y-m-d\TH:i:s'),
+                'time_ago' => $dlv->submitted_at?->diffForHumans(),
+                'assignees' => $dlv->assignee ? [[
+                    'id' => $dlv->assignee->id,
+                    'name' => $dlv->assignee->name,
+                    'role' => $dlv->assignee->role,
+                ]] : [],
+            ]);
+
+        return $submittedTasks->concat($submittedDeliverables)
+            ->sortByDesc('submitted_at')
+            ->values()
             ->toArray();
     }
 
     /**
      * Get project IDs accessible to a user.
      * Admin and Manager see all projects.
-     * Team Leads and Members see projects they created, team membership, or manually visible.
-     * IMPORTANT: Assigned projects do NOT appear on dashboard - only in /my-tasks endpoint
+     * Team Leads and Members see projects they created, team membership, manually visible, or assigned to them.
      */
     private function getUserProjectIds(User $user)
     {
@@ -214,7 +304,8 @@ class DashboardController extends Controller
                   $q->where(function ($q) use ($user) {
                       $q->where('created_by', $user->id)
                         ->orWhereHas('team.members', fn ($m) => $m->where('users.id', $user->id))
-                        ->orWhereHas('team', fn ($t) => $t->where('leader_id', $user->id));
+                        ->orWhereHas('team', fn ($t) => $t->where('leader_id', $user->id))
+                        ->orWhereJsonContains('assigned_users', (int)$user->id);
                   })->whereDoesntHave('visibility', fn ($q) => $q->where('user_id', $user->id)->where('is_visible', false));
               });
         })->pluck('id');
