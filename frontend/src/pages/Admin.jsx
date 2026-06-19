@@ -15,21 +15,33 @@ import "./Admin.css";
 
 
 const TYPE_COLORS = {
-  meeting: { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" },
+  Meeting: { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" },
+  Training: { bg: "#eff6ff", text: "#3b82f6", dot: "#3b82f6" },
+  Workshop: { bg: "#f5f3ff", text: "#8b5cf6", dot: "#8b5cf6" },
+  "Client Meeting": { bg: "#fffbeb", text: "#f59e0b", dot: "#f59e0b" },
+  "Company Event": { bg: "#ecfdf5", text: "#22c55e", dot: "#22c55e" },
+  Holiday: { bg: "#fef2f2", text: "#ef4444", dot: "#ef4444" },
+  Interview: { bg: "#fdf2f8", text: "#ec4899", dot: "#ec4899" },
+  "Project Milestone": { bg: "#f0fdfa", text: "#14b8a6", dot: "#14b8a6" },
+  "Internship Activity": { bg: "#ecfeff", text: "#06b6d4", dot: "#06b6d4" },
+  Other: { bg: "#f3f4f6", text: "#6b7280", dot: "#6b7280" },
   task: { bg: "#eff6ff", text: "#3b82f6", dot: "#3b82f6" },
-  other: { bg: "#fff7ed", text: "#f59e0b", dot: "#f59e0b" },
-  deadline: { bg: "#fef2f2", text: "#ef4444", dot: "#ef4444" },
-  personal: { bg: "#ecfdf5", text: "#22c55e", dot: "#22c55e" },
   project: { bg: "#f5f3ff", text: "#8b5cf6", dot: "#8b5cf6" },
   deliverable: { bg: "#f0fdf4", text: "#16a34a", dot: "#16a34a" },
 };
 
 const TYPE_LABELS = {
-  meeting: "Meeting",
+  Meeting: "Meeting",
+  Training: "Training",
+  Workshop: "Workshop",
+  "Client Meeting": "Client Meeting",
+  "Company Event": "Company Event",
+  Holiday: "Holiday",
+  Interview: "Interview",
+  "Project Milestone": "Project Milestone",
+  "Internship Activity": "Internship Activity",
+  Other: "Other",
   task: "Task",
-  other: "Review",
-  deadline: "Deadline",
-  personal: "Personal",
   project: "Project",
   deliverable: "Deliverable",
 };
@@ -112,8 +124,8 @@ function Admin() {
   const summaryCards = [
     { title: "Active Projects", value: String(summaryData.active_projects ?? 0), icon: "/Vector-5.svg", valueColor: "#2563EB", bgColor: "#EEF2FF", filter: "active-projects" },
     { title: "Tasks Due Today", value: String(summaryData.tasks_due_today ?? 0), icon: "/Vector-1%20(3).svg", valueColor: "#EF4444", bgColor: "#FEF2F2", filter: "tasks-due-today" },
-    { title: "Completed Tasks", value: String(summaryData.completed_tasks ?? 0), icon: "/Vector-2.svg", valueColor: "#22C55E", bgColor: "#ECFDF5" },
-    { title: "Pending Tasks", value: String(summaryData.pending_tasks ?? 0), icon: "/Vector-3.svg", valueColor: "#F59E0B", bgColor: "#FEF3C7" },
+    { title: "Approved Tasks", value: String(summaryData.approved_tasks ?? 0), icon: "/Vector-2.svg", valueColor: "#22C55E", bgColor: "#ECFDF5", filter: "approved-tasks" },
+    { title: "Pending Tasks", value: String(summaryData.pending_tasks ?? 0), icon: "/Vector-3.svg", valueColor: "#F59E0B", bgColor: "#FEF3C7", filter: "pending-tasks" },
   ];
 
   const openActiveProjects = () => {
@@ -122,23 +134,25 @@ function Admin() {
 
   const openTasksDueToday = () => {
     const isAdminOrManager = currentRole === "admin" || currentRole === "manager";
-    navigate(`${rolePath(isAdminOrManager ? "tasks/taskby" : "tasks")}?status=due_today`);
+    navigate(`${rolePath(isAdminOrManager ? "taskby" : "tasks")}?status=due_today`);
+  };
+
+  const openApprovedTasks = () => {
+    const isAdminOrManager = currentRole === "admin" || currentRole === "manager";
+    navigate(`${rolePath(isAdminOrManager ? "taskby" : "tasks")}?status=approved`);
+  };
+
+  const openPendingTasks = () => {
+    const isAdminOrManager = currentRole === "admin" || currentRole === "manager";
+    navigate(`${rolePath(isAdminOrManager ? "taskby" : "tasks")}?status=pending`);
   };
 
   const handleSummaryCardClick = (card) => {
     if (card.filter === "active-projects") openActiveProjects();
     if (card.filter === "tasks-due-today") openTasksDueToday();
+    if (card.filter === "approved-tasks") openApprovedTasks();
+    if (card.filter === "pending-tasks") openPendingTasks();
   };
-
-  // Helpers to determine dates
-  const isSameDay = (dateA, dateB) => {
-    if (!dateA || !dateB) return false;
-    const a = new Date(dateA);
-    const b = new Date(dateB);
-    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  };
-
-  const today = new Date();
 
   const getInitials = (name) => {
     if (!name) return "?";
@@ -267,19 +281,25 @@ function Admin() {
       }
     }
     // Someone else acted
+    const getActorLabel = (role, name) => {
+      if (role === "admin") return currentRole === "manager" ? "Admin" : `Admin ${name}`;
+      if (role === "manager") return `Manager ${name}`;
+      return name;
+    };
+    const actorLabel = getActorLabel(item.actor_role, item.actor_name);
     switch (item.action) {
       case "submitted":
       case "resubmitted":
-        return <>{item.actor_name} {item.action === "resubmitted" ? "resubmitted" : "submitted"} {moduleLabel} {titleSpan}</>;
+        return <>{actorLabel} {item.action === "resubmitted" ? "resubmitted" : "submitted"} {moduleLabel} {titleSpan}</>;
       case "approved":
-        return <>{item.actor_name} approved {moduleLabel} {titleSpan}</>;
+        return <>{actorLabel} approved {moduleLabel} {titleSpan}</>;
       case "rejected":
-        return <>{item.actor_name} rejected {moduleLabel} {titleSpan}</>;
+        return <>{actorLabel} rejected {moduleLabel} {titleSpan}</>;
       case "reopened":
       case "rework":
-        return <>{item.actor_name} reopened {moduleLabel} {titleSpan}</>;
+        return <>{actorLabel} reopened {moduleLabel} {titleSpan}</>;
       default:
-        return <>{item.actor_name} performed an action on {moduleLabel} {titleSpan}</>;
+        return <>{actorLabel} performed an action on {moduleLabel} {titleSpan}</>;
     }
   };
 
@@ -354,15 +374,6 @@ function Admin() {
             {summaryCards.map((card) => (
               <div
                 key={card.title}
-                onClick={card.filter ? () => handleSummaryCardClick(card) : undefined}
-                role={card.filter ? "button" : undefined}
-                tabIndex={card.filter ? 0 : undefined}
-                onKeyDown={(e) => {
-                  if (card.filter && (e.key === "Enter" || e.key === " ")) {
-                    e.preventDefault();
-                    handleSummaryCardClick(card);
-                  }
-                }}
                 style={{
                   background: "#fff",
                   borderRadius: "16px",
@@ -372,7 +383,6 @@ function Admin() {
                   display: "flex",
                   flexDirection: "column",
                   gap: "18px",
-                  cursor: card.filter ? "pointer" : "default",
                 }}
               >
                 {/* TOP */}
@@ -408,10 +418,22 @@ function Admin() {
                   {/* TEXT */}
                   <div>
                     <h4
+                      onClick={card.filter ? () => handleSummaryCardClick(card) : undefined}
+                      role={card.filter ? "button" : undefined}
+                      tabIndex={card.filter ? 0 : undefined}
+                      onKeyDown={(e) => {
+                        if (card.filter && (e.key === "Enter" || e.key === " ")) {
+                          e.preventDefault();
+                          handleSummaryCardClick(card);
+                        }
+                      }}
                       style={{
                         margin: 0,
                         fontSize: "15px",
-                        color: "#6b7280",
+                        color: card.filter ? "#2563EB" : "#6b7280",
+                        cursor: card.filter ? "pointer" : "default",
+                        textDecoration: card.filter ? "underline" : "none",
+                        textUnderlineOffset: "2px",
                       }}
                     >
                       {card.title}
@@ -885,7 +907,7 @@ function Admin() {
                 </p>
               ) : (
                 todayEvents.map((ev) => {
-                  const colors = TYPE_COLORS[ev.type] || TYPE_COLORS.meeting;
+                  const colors = TYPE_COLORS[ev.type] || { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" };
                   const time = ev.all_day ? "All Day" : new Date(ev.start_date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
                   return (
                     <div className="agenda-item" key={ev.id}>
@@ -918,7 +940,7 @@ function Admin() {
                 </p>
               ) : (
                 upcomingEvents.slice(0, 5).map((ev) => {
-                  const colors = TYPE_COLORS[ev.type] || TYPE_COLORS.meeting;
+                  const colors = TYPE_COLORS[ev.type] || { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" };
                   const parts = (ev.start_date || ev.date || "").split("T")[0].split(" ")[0].split("-");
                   const evDate = new Date(+parts[0], +parts[1] - 1, +parts[2]).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
                   return (

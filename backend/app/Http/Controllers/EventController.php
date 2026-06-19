@@ -15,16 +15,31 @@ class EventController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Event::with('user:id,name')
+        $user = $request->user();
+        $query = Event::with('user:id,name', 'assignedUsers:id,name')
             ->latest('start_date')
             ->filter($request->query());
 
+        // Role-based visibility: Admin/Manager see all, TL/Member see only assigned
+        if (!in_array($user->role, ['admin', 'manager'])) {
+            $query->whereHas('assignedUsers', function ($q) use ($user) {
+                $q->where('user_id', $user->id);
+            });
+        }
+
         if ($request->boolean('all')) {
             $events = $query->get();
-            return response()->json(['data' => $events]);
+            return response()->json([
+                'data' => $events->map(function ($event) {
+                    return $this->formatEventResponse($event);
+                }),
+            ]);
         }
 
         $events = $query->paginate(50);
+        $events->getCollection()->transform(function ($event) {
+            return $this->formatEventResponse($event);
+        });
         return response()->json($events);
     }
 
@@ -175,12 +190,18 @@ class EventController extends Controller
         }
 
         $manualEventsQuery = Event::with(['user:id,name','assignedUsers:id']);
-        $manualEventsQuery->where(function ($q) use ($user) {
-            $q->where('is_global', true)
-              ->orWhereHas('assignedUsers', function ($aq) use ($user) {
-                  $aq->where('user_id', $user->id);
-              });
-        });
+        // Role-based visibility
+        if (in_array($user->role, ['admin', 'manager'])) {
+            // Admin/Manager see all events
+        } else {
+            // Team Lead/Member see only assigned events
+            $manualEventsQuery->where(function ($q) use ($user) {
+                $q->where('is_global', true)
+                  ->orWhereHas('assignedUsers', function ($aq) use ($user) {
+                      $aq->where('user_id', $user->id);
+                  });
+            });
+        }
 
         if ($startDate && $endDate) {
             $manualEventsQuery->where(function ($q) use ($startDate, $endDate) {
@@ -284,13 +305,19 @@ class EventController extends Controller
             ->get();
 
         // MANUAL EVENTS
-        $manualEvents = Event::with(['user:id,name','assignedUsers:id'])
-            ->where(function ($q) use ($user) {
+        $manualEventsQuery = Event::with(['user:id,name','assignedUsers:id']);
+        // Role-based visibility
+        if (in_array($user->role, ['admin', 'manager'])) {
+            // Admin/Manager see all events
+        } else {
+            $manualEventsQuery->where(function ($q) use ($user) {
                 $q->where('is_global', true)
                   ->orWhereHas('assignedUsers', function ($aq) use ($user) {
                       $aq->where('user_id', $user->id);
                   });
-            })
+            });
+        }
+        $manualEvents = $manualEventsQuery
             ->where(function ($q) use ($today) {
                 $q->whereDate('start_date', '>=', $today)
                   ->orWhereDate('end_date', '>=', $today);
@@ -415,20 +442,13 @@ class EventController extends Controller
                     : $ev['date']->format('Y-m-d');
             }
 
-            $endStr = null;
-            if ($ev['end_date']) {
-                $endStr = is_string($ev['end_date'])
-                    ? explode('T', $ev['end_date'])[0]
-                    : $ev['end_date']->format('Y-m-d');
-            }
-            if (!$endStr) {
-                $endStr = $startStr;
-            }
+            if (!$startStr) continue;
 
-            // Check if today falls in [startStr, endStr]
-            if ($startStr && $endStr && $today >= $startStr && $today <= $endStr) {
+            // Today: exact date match on start_date
+            // Upcoming: start_date > today
+            if ($startStr === $today) {
                 $todayEvents->push($ev);
-            } elseif ($startStr && $startStr > $today) {
+            } elseif ($startStr > $today) {
                 $upcomingEvents->push($ev);
             }
         }
@@ -451,11 +471,16 @@ class EventController extends Controller
     private function getEventTypeLabel(string $type): string
     {
         $labels = [
-            'meeting' => 'Meeting',
-            'deadline' => 'Deadline',
-            'task' => 'Task',
-            'personal' => 'Personal',
-            'other' => 'Review',
+            'Meeting' => 'Meeting',
+            'Training' => 'Training',
+            'Workshop' => 'Workshop',
+            'Client Meeting' => 'Client Meeting',
+            'Company Event' => 'Company Event',
+            'Holiday' => 'Holiday',
+            'Interview' => 'Interview',
+            'Project Milestone' => 'Project Milestone',
+            'Internship Activity' => 'Internship Activity',
+            'Other' => 'Other',
         ];
 
         return $labels[$type] ?? $type;
@@ -466,12 +491,14 @@ class EventController extends Controller
         $user = request()->user();
 
         $event->load('assignedUsers');
-        if (! $event->is_global && ! $event->assignedUsers->contains('id', $user->id)) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+        // Admin/Manager can see all events; TL/Member only assigned or global
+        if (!in_array($user->role, ['admin', 'manager'])) {
+            if (! $event->is_global && ! $event->assignedUsers->contains('id', $user->id)) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
         }
 
-        $event->load('user:id,name,email');
-        return response()->json(['event' => $event]);
+        return response()->json(['event' => $this->formatEventResponse($event)]);
     }
 
     public function store(Request $request)
@@ -484,7 +511,7 @@ class EventController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'type' => 'nullable|string|max:32|in:meeting,deadline,task,personal,other',
+            'type' => 'nullable|string|max:32|in:Meeting,Training,Workshop,Client Meeting,Company Event,Holiday,Interview,Project Milestone,Internship Activity,Other',
             'color' => 'nullable|string|max:16',
             'start_date' => 'required|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
@@ -498,7 +525,7 @@ class EventController extends Controller
             'user_id' => $user->id,
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
-            'type' => $validated['type'] ?? 'meeting',
+            'type' => $validated['type'] ?? 'Meeting',
             'color' => $validated['color'] ?? null,
             'start_date' => $validated['start_date'],
             'end_date' => $validated['end_date'] ?? null,
@@ -515,7 +542,7 @@ class EventController extends Controller
 
         return response()->json([
             'message' => 'Event created successfully',
-            'event' => $event->load('user:id,name','assignedUsers:id,name'),
+            'event' => $this->formatEventResponse($event->fresh()),
         ], 201);
     }
 
@@ -529,7 +556,7 @@ class EventController extends Controller
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'description' => 'sometimes|nullable|string',
-            'type' => 'sometimes|string|max:32|in:meeting,deadline,task,personal,other',
+            'type' => 'sometimes|string|max:32|in:Meeting,Training,Workshop,Client Meeting,Company Event,Holiday,Interview,Project Milestone,Internship Activity,Other',
             'color' => 'sometimes|nullable|string|max:16',
             'start_date' => 'sometimes|required|date',
             'end_date' => 'sometimes|nullable|date|after_or_equal:start_date',
@@ -563,7 +590,7 @@ class EventController extends Controller
 
         return response()->json([
             'message' => 'Event updated successfully',
-            'event' => $event->fresh()->load('user:id,name','assignedUsers:id,name'),
+            'event' => $this->formatEventResponse($event->fresh()),
         ]);
     }
 
@@ -634,6 +661,37 @@ class EventController extends Controller
 
         // Fall back to creator if no assigned users
         return [$event->user_id];
+    }
+
+    /**
+     * Format a single event into a consistent API response shape.
+     */
+    private function formatEventResponse(Event $event): array
+    {
+        $event->loadMissing('user:id,name', 'assignedUsers:id,name');
+        return [
+            'id' => $event->id,
+            'source' => 'manual',
+            'type' => $event->type,
+            'title' => $event->title,
+            'description' => $event->description,
+            'event_type' => $event->type,
+            'event_date' => $event->start_date ? $event->start_date->format('Y-m-d') : null,
+            'start_date' => $event->start_date ? $event->start_date->toIso8601String() : null,
+            'end_date' => $event->end_date ? $event->end_date->toIso8601String() : null,
+            'all_day' => (bool) $event->all_day,
+            'color' => $event->color,
+            'is_global' => (bool) $event->is_global,
+            'user_id' => $event->user_id,
+            'created_by' => $event->user_id,
+            'creator_name' => $event->user ? $event->user->name : null,
+            'assigned_users' => $event->assignedUsers->map(function ($u) {
+                return ['id' => $u->id, 'name' => $u->name];
+            })->toArray(),
+            'assigned_user_ids' => $event->assignedUsers->pluck('id')->toArray(),
+            'created_at' => $event->created_at ? $event->created_at->toIso8601String() : null,
+            'updated_at' => $event->updated_at ? $event->updated_at->toIso8601String() : null,
+        ];
     }
 
     private function buildEventMessage(Event $event, User $sender, string $type): string

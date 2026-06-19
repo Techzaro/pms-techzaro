@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -8,6 +8,7 @@ import { GoDotFill } from "react-icons/go";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
 import CreateTaskModal from "../components/CreateTaskModal";
+import SortableTableWrapper from "../components/SortableTableWrapper";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
 import { formatDateOnly } from "../utils/formatDateTime";
@@ -49,9 +50,14 @@ const Taskby = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") === "due_today" ? "due_today" : "");
+  const [totalCount, setTotalCount] = useState(0);
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const status = searchParams.get("status");
+    if (status) return status;
+    return "";
+  });
   const [timeFilter, setTimeFilter] = useState("");
-
+  const [orderedItems, setOrderedItems] = useState([]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -73,6 +79,7 @@ const Taskby = () => {
       .then((res) => (res.ok ? res.json() : { data: [] }))
       .then((data) => {
         setItems(data?.data || []);
+        setTotalCount(data?.total ?? 0);
       })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
@@ -85,19 +92,32 @@ const Taskby = () => {
   useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted'], fetchTasks);
 
   useEffect(() => {
-    const nextFilter = searchParams.get("status") === "due_today" ? "due_today" : "";
-    setStatusFilter((current) => {
-      if (nextFilter === "due_today" || current === "due_today") {
-        return current === nextFilter ? current : nextFilter;
-      }
-      return current;
-    });
+    setOrderedItems(items);
+  }, [items]);
+
+  useEffect(() => {
+    const status = searchParams.get("status") || "";
+    setStatusFilter(status);
   }, [searchParams]);
+
+  const handleTaskReorder = useCallback((reordered) => {
+    setOrderedItems(reordered);
+    const taskItems = reordered.filter((i) => i.item_type !== 'project');
+    if (taskItems.length) {
+      const payload = taskItems.map((item, idx) => ({ id: item.id, sort_order: idx }));
+      const token = authToken();
+      fetch(`${API_URL}/tasks/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ items: payload }),
+      }).catch(() => {});
+    }
+  }, []);
 
   const selectStatusFilter = (filter) => {
     setStatusFilter(filter);
-    if (filter === "due_today") {
-      setSearchParams({ status: "due_today" });
+    if (filter) {
+      setSearchParams({ status: filter });
     } else {
       setSearchParams({});
     }
@@ -147,16 +167,29 @@ const Taskby = () => {
     return Math.round((completed / total) * 100);
   };
 
-  const filteredItems = statusFilter && statusFilter !== "due_today"
-    ? items.filter((item) => {
-        if (item.item_type === "project") {
-          const workflowStatuses = ["submitted","approved","rejected","reopened"];
-          const displayStatus = workflowStatuses.includes(item.status) ? item.status : "pending";
-          return displayStatus === statusFilter;
+  const baseItems = orderedItems.length ? orderedItems : items;
+  const pendingStatuses = ["pending", "in_progress", "In Progress", "Planned", "submitted", "reopened", "rejected"];
+  
+  const filteredItems = baseItems.filter((item) => {
+    if (statusFilter === "due_today") {
+      return true;
+    }
+    if (statusFilter) {
+      if (item.item_type === "project") {
+        if (statusFilter === "pending") {
+          return pendingStatuses.includes(item.status);
         }
-        return item.status === statusFilter;
-      })
-    : items;
+        const workflowStatuses = ["submitted", "approved", "rejected", "reopened"];
+        const displayStatus = workflowStatuses.includes(item.status) ? item.status : "pending";
+        return displayStatus === statusFilter;
+      }
+      if (statusFilter === "pending") {
+        return pendingStatuses.includes(item.status);
+      }
+      return item.status === statusFilter;
+    }
+    return true;
+  });
 
   const taskIdList = filteredItems.filter((i) => i.item_type !== "project").map((i) => i.id);
 
@@ -172,10 +205,21 @@ const Taskby = () => {
         <div className="task-text">
           <h3>Tasks Assigned By You</h3>
           <p>Manage and track tasks and projects you assigned</p>
+          <div className="task-count-badge" style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
+            <span style={{ background: "#EEF2FF", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+              Total: {totalCount} items
+            </span>
+            <span style={{ background: "#F0FDF4", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+              Tasks: {filteredItems.filter(i => i.item_type !== "project").length}
+            </span>
+            <span style={{ background: "#EEF2FF", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+              Projects: {filteredItems.filter(i => i.item_type === "project").length}
+            </span>
+          </div>
         </div>
 
         <div className="task-btns">
-            <div className="all-time">
+          <div className="all-time">
             <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
               <option value="">All Time</option>
               <option value="7">Last 7 Days</option>
@@ -231,131 +275,221 @@ const Taskby = () => {
       </div>
 
       <div className="container">
-           <div className="table-header1">
-          <div>Assigned to</div>
-          <div className="task-name-column" >Task Name</div>
-          <div>Type</div>
-          <div className="status-column" >Status</div>
-          <div>Progress</div>
-          <div className="priority-column" >Priority</div>
-           <div>Due Date</div>
-           <div>Action</div>
-        </div>
+        {/* Header Table */}
+        <table className="task-table">
+          <thead>
+            <tr className="table-header1">
+              <th>Assigned to</th>
+              <th className="task-name-column">Task Name</th>
+              <th>Type</th>
+              <th className="status-column">Status</th>
+              <th>Progress</th>
+              <th className="priority-column">Priority</th>
+              <th>Due Date</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+        </table>
 
         {loading ? (
           <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
         ) : filteredItems.length === 0 ? (
           <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
         ) : (
-          filteredItems.map((item) => {
-            const isProject = item.item_type === "project";
-            const colors = getRandomColors(item.id);
+          <div className="sortable-table-container">
+            <table className="task-table">
+              <tbody>
+                <SortableTableWrapper 
+                  items={filteredItems.map((i, index) => ({ 
+                    ...i, 
+                    sortableId: `${i.item_type}-${i.id}-${index}`
+                  }))} 
+                  onReorder={(reordered) => handleTaskReorder(reordered)} 
+                  idKey="sortableId"
+                  as="tr"
+                >
+                  {(item, idx) => {
+                    const isProject = item.item_type === "project";
+                    const colors = getRandomColors(item.id);
+                    const uniqueKey = `${item.item_type}-${item.id}-${idx}`;
 
-            if (isProject) {
-              const primaryUser = item.assigned_user;
-              return (
-                <div className="taskby-row" key={`project-${item.id}-${primaryUser?.id || 0}`}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                      {getInitials(primaryUser?.name)}
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="user-name">{primaryUser?.name || "Unassigned"}</div>
-                      <div className="user-role">{primaryUser?.role || ""}</div>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="task-title">{item.title}</div>
-                  </div>
-                  <div>
-                    <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5" }}>
-                      Project
-                    </span>
-                  </div>
-                  <div>
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || (item.status !== "Planned" && item.status !== "in_progress" ? "#F3F4F6" : "#FEF3C7"), color: STATUS_TEXT_COLORS[item.status] || (item.status !== "Planned" && item.status !== "in_progress" ? "#374151" : "#92400E") }}>
-                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || (item.status !== "Planned" && item.status !== "in_progress" ? "#374151" : "#92400E") }}></span>
-                      {["submitted","approved","rejected","reopened"].includes(item.status) ? formatStatus(item.status) : "Pending"}
-                    </span>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{calculateProgress(item)}%</div>
-                    <div className="progress-bar-track">
-                      <div className="progress-bar-fill" style={{ width: `${calculateProgress(item)}%` }}></div>
-                    </div>
-                    <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.completed_tasks || 0}/{item.total_tasks || 0} tasks</div>
-                  </div>
-                  <div>
-                    <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
-                      <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
-                      {item.priority}
-                    </span>
-                  </div>
-                  <div className="date-box">
-                    <div>{formatDate(item.start_date)}</div>
-                    <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
-                  </div>
-                  <div className="action-btns">
-                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'taskby' } })}>
-                      <IoEyeOutline />
-                    </button>
-                  </div>
-                </div>
-              );
-            }
+                    if (isProject) {
+                      const primaryUser = item.assigned_user;
+                      return (
+                        <React.Fragment key={uniqueKey}>
+                          <td className="col-assigned-to">
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                                {getInitials(primaryUser?.name)}
+                              </div>
+                              <div style={{ minWidth: 0 }}>
+                                <div className="user-name">{primaryUser?.name || "Unassigned"}</div>
+                                <div className="user-role">{primaryUser?.role || ""}</div>
+                              </div>
+                            </div>
+                          </td>
+                          
+                          <td className="col-task-name">
+                            <div className="task-title">{item.title}</div>
+                          </td>
+                          
+                          <td className="col-type">
+                            <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5" }}>Project</span>
+                          </td>
+                          
+                          <td className="col-status">
+                            <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
+                              <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                              {["submitted","approved","rejected","reopened"].includes(item.status) ? formatStatus(item.status) : "Pending"}
+                            </span>
+                          </td>
+                          
+                          <td className="col-progress">
+                            <div style={{ 
+                              display: "flex", 
+                              justifyContent: "flex-start", 
+                              alignItems: "center",
+                              marginBottom: "4px"
+                            }}>
+                              <span style={{ 
+                                fontSize: "13px", 
+                                fontWeight: 600, 
+                                color: "#374151" 
+                              }}>
+                                {calculateProgress(item)}%
+                              </span>
+                            </div>
+                            <div className="progress-bar-track">
+                              <div className="progress-bar-fill" style={{ width: `${calculateProgress(item)}%` }}></div>
+                            </div>
+                            <div style={{ 
+                              fontSize: "11px", 
+                              color: "#6b7280",
+                              marginTop: "4px"
+                            }}>
+                              {item.completed_tasks || 0}/{item.total_tasks || 0} tasks
+                            </div>
+                          </td>
+                          
+                          <td className="col-priority">
+                            <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
+                              <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
+                              {item.priority}
+                            </span>
+                          </td>
+                          
+                          <td className="col-due-date">
+                            <div className="date-box">
+                              <div>{formatDate(item.start_date)}</div>
+                              <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
+                            </div>
+                          </td>
+                          
+                          <td className="col-action">
+                            <div className="action-btns">
+                              <button 
+                                className="action-icon-btn action-view" 
+                                title="View" 
+                                onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'taskby' } })}
+                              >
+                                <IoEyeOutline />
+                              </button>
+                            </div>
+                          </td>
+                        </React.Fragment>
+                      );
+                    }
 
-            const assignees = item.assignees || [];
-            const primaryAssignee = assignees[0];
-            return (
-              <div className="taskby-row" key={`task-${item.id}-${primaryAssignee?.id || 0}`}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                    {getInitials(primaryAssignee?.name)}
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div className="user-name">{primaryAssignee?.name || "Unassigned"}</div>
-                    <div className="user-role">{primaryAssignee?.role || ""}</div>
-                  </div>
-                </div>
-                <div>
-                  <div className="task-title">{item.title}</div>
-                </div>
-                <div>
-                  <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a" }}>
-                    Task
-                  </span>
-                </div>
-                  <div>
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
-                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                      {formatStatus(item.status)}
-                    </span>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{item.deliverables_progress || 0}%</div>
-                    <div className="progress-bar-track">
-                      <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
-                    </div>
-                    <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.approved_deliverables || 0}/{item.total_deliverables || 0} Deliverables Approved</div>
-                  </div>
-                  <div>
-                    <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
-                      <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
-                      {item.priority}
-                    </span>
-                  </div>
-                  <div className="date-box">
-                  <div>{formatDate(item.start_date)}</div>
-                  <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
-                </div>
-                <div className="action-btns">
-                  <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}>
-                    <IoEyeOutline />
-                  </button>
-                </div>
-              </div>
-            );
-          })
+                    const assignees = item.assignees || [];
+                    const primaryAssignee = assignees[0];
+                    return (
+                      <React.Fragment key={uniqueKey}>
+                        <td className="col-assigned-to">
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                              {getInitials(primaryAssignee?.name)}
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <div className="user-name">{primaryAssignee?.name || "Unassigned"}</div>
+                              <div className="user-role">{primaryAssignee?.role || ""}</div>
+                            </div>
+                          </div>
+                        </td>
+                        
+                        <td className="col-task-name">
+                          <div className="task-title">{item.title}</div>
+                        </td>
+                        
+                        <td className="col-type">
+                          <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a" }}>Task</span>
+                        </td>
+                        
+                        <td className="col-status">
+                          <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
+                            <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                            {formatStatus(item.status)}
+                          </span>
+                        </td>
+                        
+                        <td className="col-progress">
+                          <div style={{ 
+                            display: "flex", 
+                            justifyContent: "flex-start", 
+                            alignItems: "center",
+                            marginBottom: "4px"
+                          }}>
+                            <span style={{ 
+                              fontSize: "13px", 
+                              fontWeight: 600, 
+                              color: "#374151" 
+                            }}>
+                              {item.deliverables_progress || 0}%
+                            </span>
+                          </div>
+                          <div className="progress-bar-track">
+                            <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
+                          </div>
+                          <div style={{ 
+                            fontSize: "11px", 
+                            color: "#6b7280",
+                            marginTop: "4px"
+                          }}>
+                            {item.approved_deliverables || 0}/{item.total_deliverables || 0} Deliverables Approved
+                          </div>
+                        </td>
+                        
+                        <td className="col-priority">
+                          <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
+                            <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
+                            {item.priority}
+                          </span>
+                        </td>
+                        
+                        <td className="col-due-date">
+                          <div className="date-box">
+                            <div>{formatDate(item.start_date)}</div>
+                            <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
+                          </div>
+                        </td>
+                        
+                        <td className="col-action">
+                          <div className="action-btns">
+                            <button 
+                              className="action-icon-btn action-view" 
+                              title="View" 
+                              onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
+                            >
+                              <IoEyeOutline />
+                            </button>
+                          </div>
+                        </td>
+                      </React.Fragment>
+                    );
+                  }}
+                </SortableTableWrapper>
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </DashboardLayout>

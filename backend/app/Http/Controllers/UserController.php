@@ -41,7 +41,7 @@ class UserController extends Controller
      */
     public function index()
     {
-        $users = User::orderBy('created_at', 'desc')->get();
+        $users = User::orderBy('sort_order')->orderBy('id')->get();
 
         return response()->json([
             'users' => $users,
@@ -297,6 +297,24 @@ class UserController extends Controller
             'message' => 'User updated successfully',
             'user' => $user,
         ]);
+    }
+
+    /**
+     * Reorder users by updating sort_order values.
+     */
+    public function reorder(Request $request)
+    {
+        $request->validate([
+            'items' => 'required|array',
+            'items.*.id' => 'required|integer|exists:users,id',
+            'items.*.sort_order' => 'required|integer|min:0',
+        ]);
+
+        foreach ($request->items as $item) {
+            User::where('id', $item['id'])->update(['sort_order' => $item['sort_order']]);
+        }
+
+        return response()->json(['message' => 'Users reordered successfully']);
     }
 
     /**

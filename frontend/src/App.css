@@ -182,3 +182,28 @@
     border-right-color: var(--border);
   }
 }
+
+/* Drag and Drop reordering */
+.sortable-row-dragging {
+  opacity: 0.4;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.sortable-row-over {
+  border-top: 2px solid var(--accent, #4A90D9) !important;
+}
+
+.drag-handle:hover {
+  color: var(--accent, #4A90D9) !important;
+}
+
+.drag-overlay-item {
+  background: var(--bg, #fff);
+  border: 1px solid var(--border, #ddd);
+  border-radius: 6px;
+  padding: 8px 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  font-size: 14px;
+  opacity: 0.9;
+  pointer-events: none;
+}

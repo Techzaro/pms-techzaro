@@ -37,6 +37,7 @@ class Deliverable extends Model
         'rework_new_deadline',
         'rework_file_path',
         'rework_file_name',
+        'sort_order',
     ];
 
     protected $casts = [

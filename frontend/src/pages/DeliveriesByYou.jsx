@@ -1,6 +1,6 @@
+import React, { useState, useEffect, useCallback } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
-import { useState, useEffect } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
@@ -9,6 +9,7 @@ import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import AssignerViewModal from "../components/AssignerViewModal";
 import { formatDateTime } from "../utils/formatDateTime";
+import SortableTableWrapper from "../components/SortableTableWrapper";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
 
@@ -29,13 +30,18 @@ const STATUS_TEXT_COLORS = {
 };
 
 function DeliveriesByYou() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [deliverables, setDeliverables] = useState([]);
+  const [orderedDeliverables, setOrderedDeliverables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const status = searchParams.get("status");
+    if (status) return status;
+    return "";
+  });
   const [timeFilter, setTimeFilter] = useState("");
   const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
-  const [searchParams, setSearchParams] = useSearchParams();
 
   const fetchDeliverables = () => {
     setLoading(true);
@@ -85,6 +91,35 @@ function DeliveriesByYou() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    const status = searchParams.get("status") || "";
+    setStatusFilter(status);
+  }, [searchParams]);
+
+  useEffect(() => {
+    setOrderedDeliverables(deliverables);
+  }, [deliverables]);
+
+  const selectStatusFilter = (filter) => {
+    setStatusFilter(filter);
+    if (filter) {
+      setSearchParams({ status: filter });
+    } else {
+      setSearchParams({});
+    }
+  };
+
+  const handleDeliverableReorder = useCallback((reordered) => {
+    setOrderedDeliverables(reordered);
+    const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
+    const token = authToken();
+    fetch(`${API_URL}/deliverables/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ items: payload }),
+    }).catch(() => {});
+  }, []);
+
   const getInitials = (name) => {
     if (!name) return "??";
     return name.split(" ").map((w) => w[0]).join("").substring(0, 2).toUpperCase();
@@ -123,6 +158,8 @@ function DeliveriesByYou() {
     );
   };
 
+  const displayItems = orderedDeliverables.length ? orderedDeliverables : deliverables;
+
   const breadcrumbs = [
     { label: "Deliverables", path: rolePath("deliveries") },
     { label: "Assigned By You" },
@@ -148,20 +185,23 @@ function DeliveriesByYou() {
         </div>
 
         <div className="task-progress">
-          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
-          <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => setStatusFilter("pending")} style={{ cursor: "pointer" }}>
+          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
+          <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
+            <GoDotFill color="#EF4444" /> Deliverables Due Today
+          </p>
+          <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Pending
           </p>
-          <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
+          <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Submitted
           </p>
-          <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => setStatusFilter("reopened")} style={{ cursor: "pointer" }}>
+          <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Reopened
           </p>
-          <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
+          <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Approved
           </p>
-          <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => setStatusFilter("rejected")} style={{ cursor: "pointer" }}>
+          <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Rejected
           </p>
         </div>
@@ -172,61 +212,102 @@ function DeliveriesByYou() {
         </div>
 
         <div className="container">
-          <div className="deliveries-table-header">
-            <div>Deliverable</div>
-            <div>Task</div>
-            <div>Assigned To</div>
-            <div>Status</div>
-            <div>Due Date</div>
-            <div>Action</div>
-          </div>
+          {/* Header Table */}
+          <table className="deliveries-table">
+            <thead>
+              <tr className="deliveries-table-header">
+                <th>Deliverable</th>
+                <th>Task</th>
+                <th className="assigned" style={{paddingLeft:"60px"}}>Assigned To</th>
+                <th>Status</th>
+                <th>Due Date</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+          </table>
 
           {loading ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
-          ) : deliverables.length === 0 ? (
+          ) : displayItems.length === 0 ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
           ) : (
-            deliverables.map((item) => {
-              const colors = getRandomColors(item.id);
-              return (
-                <div className="deliveries-table-row" key={item.id}>
-                  <div className="user-box">
-                    <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                      {getInitials(item.title)}
-                    </div>
-                    <div>
-                      <div className="user-name">{item.title}</div>
-                    </div>
-                  </div>
-                   <div>
-                     <div className="task-title">{item.task?.title || item.project?.title || "-"}</div>
-                   </div>
-                  <div className="user-box">
-                    <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                      {getInitials(item.assignee?.name)}
-                    </div>
-                    <div>
-                      <div className="user-name">{item.assignee?.name || "Unassigned"}</div>
-                      <div className="user-role">{item.assignee?.role ? item.assignee.role.replace("_", " ") : ""}</div>
-                    </div>
-                  </div>
-                  <div>
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
-                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                      {formatStatus(item.status)}
-                    </span>
-                  </div>
-                  <div className="date-box">
-                    <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.due_date)}</div>
-                  </div>
-                  <div className="action-btns">
-                    <button className="action-icon-btn action-view" title="View" onClick={() => setViewModal({ open: true, deliverable: item })}>
-                      <IoEyeOutline />
-                    </button>
-                  </div>
-                </div>
-              );
-            })
+            <div className="sortable-table-container">
+              <table className="deliveries-table">
+                <tbody>
+                  <SortableTableWrapper 
+                    items={displayItems.map((item, index) => ({
+                      ...item,
+                      sortableId: `deliverable-${item.id}-${index}`
+                    }))} 
+                    onReorder={handleDeliverableReorder} 
+                    idKey="sortableId"
+                    as="tr"
+                  >
+                    {(item, idx) => {
+                      const colors = getRandomColors(item.id);
+                      const uniqueKey = `deliverable-${item.id}-${idx}`;
+                      return (
+                        <React.Fragment key={uniqueKey}>
+                          <td>
+                            <div className="user-box">
+                              <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                                {getInitials(item.title)}
+                              </div>
+                              <div>
+                                <div className="user-name">{item.title}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="task-title">{item.task?.title || item.project?.title || "-"}</div>
+                          </td>
+                          <td style={{paddingLeft:"50px"}}>
+                            <div className="user-box">
+                              <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                                {getInitials(item.assignee?.name)}
+                              </div>
+                              <div>
+                                <div className="user-name">{item.assignee?.name || "Unassigned"}</div>
+                                <div className="user-role">{item.assignee?.role ? item.assignee.role.replace("_", " ") : ""}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <span className="badge" style={{ 
+                              background: STATUS_COLORS[item.status] || "#F3F4F6", 
+                              color: STATUS_TEXT_COLORS[item.status] || "#374151", 
+                              padding: "4px 10px", 
+                              borderRadius: "999px", 
+                              fontSize: "12px", 
+                              fontWeight: 600 
+                            }}>
+                              <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                              {formatStatus(item.status)}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="date-box">
+                              <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.due_date)}</div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="action-btns">
+                              <button 
+                                className="action-icon-btn action-view" 
+                                title="View" 
+                                onClick={() => setViewModal({ open: true, deliverable: item })}
+                              >
+                                <IoEyeOutline />
+                              </button>
+                            </div>
+                          </td>
+                        </React.Fragment>
+                      );
+                    }}
+                  </SortableTableWrapper>
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>

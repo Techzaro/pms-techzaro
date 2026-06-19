@@ -1,11 +1,13 @@
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import { authToken, rolePath } from "../utils/auth";
+import SortableTableWrapper from "../components/SortableTableWrapper";
 import API_URL from "../config/api";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
 import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal";
@@ -28,13 +30,28 @@ const STATUS_TEXT_COLORS = {
 };
 
 function SelfDeliveries() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [deliverables, setDeliverables] = useState([]);
+  const [orderedDeliverables, setOrderedDeliverables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const status = searchParams.get("status");
+    if (status) return status;
+    return "";
+  });
   const [timeFilter, setTimeFilter] = useState("");
   const [submitModal, setSubmitModal] = useState({ open: false, deliverable: null });
   const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
+
+  useEffect(() => {
+    setOrderedDeliverables(deliverables);
+  }, [deliverables]);
+
+  useEffect(() => {
+    const status = searchParams.get("status") || "";
+    setStatusFilter(status);
+  }, [searchParams]);
 
   const fetchDeliverables = () => {
     setLoading(true);
@@ -60,6 +77,26 @@ function SelfDeliveries() {
   }, [search, statusFilter, timeFilter]);
 
   useRefreshOnEvent(['deliverable:updated', 'deliverable:created', 'deliverable:deleted'], fetchDeliverables);
+
+  const selectStatusFilter = (filter) => {
+    setStatusFilter(filter);
+    if (filter) {
+      setSearchParams({ status: filter });
+    } else {
+      setSearchParams({});
+    }
+  };
+
+  const handleDeliverableReorder = useCallback((reordered) => {
+    setOrderedDeliverables(reordered);
+    const token = authToken();
+    const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
+    fetch(`${API_URL}/deliverables/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ items: payload }),
+    }).catch(() => {});
+  }, []);
 
   const getInitials = (name) => {
     if (!name) return "??";
@@ -125,17 +162,20 @@ function SelfDeliveries() {
         </div>
 
         <div className="task-progress">
-          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
-          <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => setStatusFilter("pending")} style={{ cursor: "pointer" }}>
+          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
+          <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
+            <GoDotFill color="#EF4444" /> Deliverables Due Today
+          </p>
+          <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Draft
           </p>
-          <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
+          <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Submitted
           </p>
-          <p className={`Reopened ${statusFilter === "rework_required" ? "active" : ""}`} onClick={() => setStatusFilter("rework_required")} style={{ cursor: "pointer" }}>
+          <p className={`Reopened ${statusFilter === "rework_required" ? "active" : ""}`} onClick={() => selectStatusFilter("rework_required")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Rework Required
           </p>
-          <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
+          <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Approved
           </p>
         </div>
@@ -159,54 +199,56 @@ function SelfDeliveries() {
           ) : deliverables.length === 0 ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
           ) : (
-            deliverables.map((item) => {
-              const colors = getRandomColors(item.id);
-              const canSubmit = item.status === "pending";
-              const canView = item.status === "submitted" || item.status === "approved" || item.status === "rework_required";
-              return (
-                <div className="deliveries-table-row self-deliveries-grid" key={item.id}>
-                  <div className="user-box">
-                    <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                      {getInitials(item.title)}
+            <SortableTableWrapper items={orderedDeliverables.length ? orderedDeliverables : deliverables} onReorder={handleDeliverableReorder} idKey="id" as="div">
+              {(item, idx) => {
+                const colors = getRandomColors(item.id);
+                const canSubmit = item.status === "pending";
+                const canView = item.status === "submitted" || item.status === "approved" || item.status === "rework_required";
+                return (
+                  <div className="deliveries-table-row self-deliveries-grid">
+                    <div className="user-box">
+                      <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                        {getInitials(item.title)}
+                      </div>
+                      <div>
+                        <div className="user-name">{item.title}</div>
+                      </div>
                     </div>
                     <div>
-                      <div className="user-name">{item.title}</div>
+                      <div className="task-title">{item.task?.title || item.project?.title || "-"}</div>
+                    </div>
+                    <div>
+                      <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
+                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                        {formatStatus(item.status)}
+                      </span>
+                    </div>
+                    <div className="date-box">
+                      <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.due_date)}</div>
+                    </div>
+                    <div className="action-btns">
+                      {canSubmit ? (
+                        <button
+                          className="action-icon-btn action-submit"
+                          title="Submit Deliverable"
+                          onClick={() => setSubmitModal({ open: true, deliverable: item })}
+                        >
+                          <LuSend />
+                        </button>
+                      ) : canView ? (
+                        <button
+                          className="action-icon-btn action-view"
+                          title="View Deliverable"
+                          onClick={() => setViewModal({ open: true, deliverable: item })}
+                        >
+                          <IoEyeOutline />
+                        </button>
+                      ) : null}
                     </div>
                   </div>
-                  <div>
-                    <div className="task-title">{item.task?.title || item.project?.title || "-"}</div>
-                  </div>
-                  <div>
-                    <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
-                      <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                      {formatStatus(item.status)}
-                    </span>
-                  </div>
-                  <div className="date-box">
-                    <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.due_date)}</div>
-                  </div>
-                  <div className="action-btns">
-                    {canSubmit ? (
-                      <button
-                        className="action-icon-btn action-submit"
-                        title="Submit Deliverable"
-                        onClick={() => setSubmitModal({ open: true, deliverable: item })}
-                      >
-                        <LuSend />
-                      </button>
-                    ) : canView ? (
-                      <button
-                        className="action-icon-btn action-view"
-                        title="View Deliverable"
-                        onClick={() => setViewModal({ open: true, deliverable: item })}
-                      >
-                        <IoEyeOutline />
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })
+                );
+              }}
+            </SortableTableWrapper>
           )}
         </div>
       </div>

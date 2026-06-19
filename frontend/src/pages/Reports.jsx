@@ -1,7 +1,8 @@
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import SortableTableWrapper from "../components/SortableTableWrapper";
 import ExportReport from "./ExportReport";
 import { getUser, rolePath } from "../utils/auth";
 import "./Reports.css";
@@ -43,6 +44,7 @@ const summaryCards = [
 
 const teamMembers = [
   {
+    id: 0,
     initials: "LI",
     name: "Lorem ipsum",
     role: "Member",
@@ -53,6 +55,7 @@ const teamMembers = [
     avatarColor: "#6366f1",
   },
   {
+    id: 1,
     initials: "LI",
     name: "Lorem ipsum",
     role: "Member",
@@ -63,6 +66,7 @@ const teamMembers = [
     avatarColor: "#10b981",
   },
   {
+    id: 2,
     initials: "LI",
     name: "Lorem ipsum",
     role: "Member",
@@ -73,6 +77,7 @@ const teamMembers = [
     avatarColor: "#f59e0b",
   },
   {
+    id: 3,
     initials: "LI",
     name: "Lorem ipsum",
     role: "Member",
@@ -87,6 +92,24 @@ const teamMembers = [
 function Reports() {
   const [timeFilter, setTimeFilter] = useState("All Time");
   const [showExportModal, setShowExportModal] = useState(false);
+  const [orderedMembers, setOrderedMembers] = useState(() => {
+    const saved = localStorage.getItem('reports-member-order');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    if (!orderedMembers.length) {
+      setOrderedMembers(teamMembers);
+    }
+  }, [teamMembers]);
+
+  const handleReportReorder = useCallback((reordered) => {
+    setOrderedMembers(reordered);
+    localStorage.setItem('reports-member-order', JSON.stringify(reordered));
+  }, []);
+
+  const displayMembers = orderedMembers.length ? orderedMembers : teamMembers;
+
   const stored = getUser();
   const userName = stored?.name || "Lorem Ipsum";
   const userRole = stored?.role || "Member";
@@ -161,53 +184,55 @@ function Reports() {
               <span className="th-action">Action</span>
             </div>
 
-            {teamMembers.map((member, idx) => (
-              <div key={idx} className="table-row">
-                <div className="table-member">
-                  <div
-                    className="member-avatar"
-                    style={{ background: member.avatarColor, color: "#fff" }}
-                  >
-                    {member.initials}
-                  </div>
-                  <div className="member-info">
-                    <div className="member-name">{member.name}</div>
-                    <div className="member-role">{member.role}</div>
-                  </div>
-                </div>
-
-                <div className="stat-cell">
-                  <span className="stat-badge assigned">{member.assigned}</span>
-                </div>
-                <div className="stat-cell">
-                  <span className="stat-badge completed">{member.completed}</span>
-                </div>
-                <div className="stat-cell">
-                  <span className="stat-badge pending">{member.pending}</span>
-                </div>
-
-                <div className="table-tasks">
-                  {member.tasks.map((task, i) => (
-                    <div key={i} className="task-badge">
-                      <span className="task-badge-dot" />
-                      {task}
+            <SortableTableWrapper items={displayMembers} onReorder={handleReportReorder} idKey="id" as="div">
+              {(member, idx) => (
+                <div className="table-row">
+                  <div className="table-member">
+                    <div
+                      className="member-avatar"
+                      style={{ background: member.avatarColor, color: "#fff" }}
+                    >
+                      {member.initials}
                     </div>
-                  ))}
-                </div>
+                    <div className="member-info">
+                      <div className="member-name">{member.name}</div>
+                      <div className="member-role">{member.role}</div>
+                    </div>
+                  </div>
 
-                <div className="action-cell">
-                  <button
-                    className="table-action-btn"
-                    onClick={() => navigate(rolePath(`reports/user-performance/${idx}`))}
-                  >
-                    Profile
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M5 3L9 7L5 11" />
-                    </svg>
-                  </button>
+                  <div className="stat-cell">
+                    <span className="stat-badge assigned">{member.assigned}</span>
+                  </div>
+                  <div className="stat-cell">
+                    <span className="stat-badge completed">{member.completed}</span>
+                  </div>
+                  <div className="stat-cell">
+                    <span className="stat-badge pending">{member.pending}</span>
+                  </div>
+
+                  <div className="table-tasks">
+                    {member.tasks.map((task, i) => (
+                      <div key={i} className="task-badge">
+                        <span className="task-badge-dot" />
+                        {task}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="action-cell">
+                    <button
+                      className="table-action-btn"
+                      onClick={() => navigate(rolePath(`reports/user-performance/${idx}`))}
+                    >
+                      Profile
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 3L9 7L5 11" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )}
+            </SortableTableWrapper>
           </div>
         </div>
 

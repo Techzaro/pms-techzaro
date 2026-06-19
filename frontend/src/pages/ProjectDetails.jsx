@@ -28,6 +28,7 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
+import SortableTableWrapper from "../components/SortableTableWrapper";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CreateTaskModal from "../components/CreateTaskModal";
@@ -161,6 +162,8 @@ function ProjectDetails() {
   const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null });
   const [reopenDialog, setReopenDialog] = useState(false);
   const [acting, setActing] = useState(false);
+  const [orderedTasks, setOrderedTasks] = useState([]);
+  const [orderedDeliverables, setOrderedDeliverables] = useState([]);
 
   const memberCount = useMemo(() => {
     if (!project) return 0;
@@ -178,6 +181,39 @@ function ProjectDetails() {
       setMessage("");
       setMessageType("");
     }, 4000);
+  }, []);
+
+  const authHeadersLocal = () => {
+    const token = authToken();
+    return { 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : '' };
+  };
+
+  useEffect(() => {
+    setOrderedTasks(project?.tasks || []);
+  }, [project?.tasks]);
+
+  useEffect(() => {
+    setOrderedDeliverables(project?.deliverables || []);
+  }, [project?.deliverables]);
+
+  const handleTaskReorder = useCallback((reordered) => {
+    setOrderedTasks(reordered);
+    const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
+    fetch(`${API}/tasks/reorder`, {
+      method: 'POST',
+      headers: authHeadersLocal(),
+      body: JSON.stringify({ items: payload }),
+    }).catch(() => {});
+  }, []);
+
+  const handleDeliverableReorder = useCallback((reordered) => {
+    setOrderedDeliverables(reordered);
+    const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
+    fetch(`${API}/deliverables/reorder`, {
+      method: 'POST',
+      headers: authHeadersLocal(),
+      body: JSON.stringify({ items: payload }),
+    }).catch(() => {});
   }, []);
 
   const handleDeliverableActionSuccess = (updatedDeliverable) => {
@@ -363,12 +399,12 @@ function ProjectDetails() {
     );
   }
 
-  const tasks = project.tasks || [];
   const members = project.members || [];
   const milestones = project.milestones || [];
   const files = project.files || [];
   const checklist = Array.isArray(project.goals_checklist) ? project.goals_checklist : [];
-  const progress = typeof project.progress_percent === "number" ? project.progress_percent : calculateProjectProgress(tasks);
+  const tasks = orderedTasks.length ? orderedTasks : (project.tasks || []);
+  const progress = typeof project.progress_percent === "number" ? project.progress_percent : calculateProjectProgress(project.tasks || []);
 
   const isCreator = project.is_creator;
   const isAssigned = project.is_assigned;
@@ -774,35 +810,36 @@ function ProjectDetails() {
                           <tbody>
                             {tasks.length === 0 ? (
                               <tr>
-                                <td colSpan={6} className="pd-muted pd-table-empty">
-                                  No tasks yet.
-                                </td>
+                                <td colSpan={6} className="pd-muted pd-table-empty">No tasks yet.</td>
                               </tr>
                             ) : (
-                              tasks.map((t) => (
-                                <tr key={t.id}>
-                                  <td className="pd-table-strong">
-                                    <Link to={rolePath(`tasks/task-details/${t.id}`)} style={{ color: "inherit", textDecoration: "none" }}>
-                                      {t.title}
-                                    </Link>
-                                  </td>
-                                  <td>{(t.assignees || []).map((a) => a.name).join(", ") || "—"}</td>
-                                  <td>
-                                    <span className={`pd-pill pd-pill--task-${statusSlug(taskStatusLabel(t.status))}`}>
-                                      {taskStatusLabel(t.status)}
-                                    </span>
-                                  </td>
-                                  <td>
-                                    <span className={`pd-pill pd-pill--pri-${(t.priority || "medium").toLowerCase()}`}>{t.priority}</span>
-                                  </td>
-                                  <td>{formatDateTimeShort(t.end_date)}</td>
-                                  <td>
-                                    <button type="button" className="pd-btn-tx pd-btn-tx--danger" style={{ padding: "4px 8px", fontSize: "12px" }} onClick={() => handleDeleteTask(t.id)}>
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))
+                              <SortableTableWrapper items={tasks} onReorder={handleTaskReorder}>
+                                {(t, idx) => (
+                                  <tr key={t.id}>
+                                    <td className="pd-table-strong">
+                                      <Link to={rolePath(`tasks/task-details/${t.id}`)} style={{ color: "inherit", textDecoration: "none" }}>
+                                        {t.title}
+                                      </Link>
+                                    </td>
+                                    <td>{(t.assignees || []).map((a) => a.name).join(", ") || "—"}</td>
+                                    <td>
+                                      <span className={`pd-pill pd-pill--task-${statusSlug(taskStatusLabel(t.status))}`}>
+                                        {taskStatusLabel(t.status)}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <span className={`pd-pill pd-pill--pri-${(t.priority || "medium").toLowerCase()}`}>{t.priority}</span>
+                                    </td>
+                                    <td>{formatShortDate(t.end_date)}</td>
+                                    <td>
+                                      <button type="button" className="pd-btn-tx pd-btn-tx--danger" style={{ padding: "4px 8px", fontSize: "12px" }} onClick={() => handleDeleteTask(t.id)}>
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                )}
+                              </SortableTableWrapper>
+                           
                             )}
                           </tbody>
                         </table>
@@ -829,54 +866,39 @@ function ProjectDetails() {
                             </tr>
                           </thead>
                           <tbody>
-                            {(project.deliverables || []).length === 0 ? (
+                            {(orderedDeliverables.length === 0 && (project.deliverables || []).length === 0) ? (
                               <tr>
-                                <td colSpan={5} className="pd-muted pd-table-empty">
-                                  No deliverables.
-                                </td>
+                                <td colSpan={5} className="pd-muted pd-table-empty">No deliverables.</td>
                               </tr>
                             ) : (
-                              (project.deliverables || []).map((d) => (
-                                <tr key={d.id}>
-                                  <td className="pd-table-strong">{d.title}</td>
-                                  <td>{d.assignee?.name || "—"}</td>
-                                  <td>{formatDateTimeShort(d.due_date)}</td>
-                                  <td>
-                                    <span className={`pd-pill pd-pill--task-${statusSlug(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status)}`}>
-                                      {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}
-                                    </span>
-                                  </td>
-                                  <td>
-                                         <div style={{ display: "flex", gap: "6px" }}>
-                                          {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
-                                            <button
-                                              type="button"
-                                              className="pd-btn-tx pd-btn-tx--outline"
-                                              style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
-                                              onClick={() => setSubmitModal({ open: true, deliverable: d })}
-                                            >
-                                              <Send size={12} /> Submit
-                                            </button>
-                                          ) : (
-                                            <button
-                                              type="button"
-                                              className="pd-btn-tx pd-btn-tx--outline"
-                                              style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
-                                              onClick={() => {
-                                                  if (isAdminOrManager || isCreator) {
-                                                  setAssignerModal({ open: true, deliverable: d });
-                                                } else {
-                                                  setViewModal({ open: true, deliverable: d });
-                                                }
-                                              }}
-                                            >
-                                              <Eye size={12} /> View
-                                            </button>
-                                          )}
-                                        </div>
-                                  </td>
-                                </tr>
-                              ))
+                              <SortableTableWrapper items={orderedDeliverables.length ? orderedDeliverables : (project.deliverables || [])} onReorder={handleDeliverableReorder}>
+                                {(d, idx) => (
+                                  <tr key={d.id}>
+                                    <td className="pd-table-strong">{d.title}</td>
+                                    <td>{d.assignee?.name || "—"}</td>
+                                    <td>{formatShortDate(d.due_date)}</td>
+                                    <td>
+                                      <span className={`pd-pill pd-pill--task-${statusSlug(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status)}`}>
+                                        {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <div style={{ display: "flex", gap: "6px" }}>
+                                        {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
+                                          <button type="button" className="pd-btn-tx pd-btn-tx--outline" style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }} onClick={() => setSubmitModal({ open: true, deliverable: d })}>
+                                            <Send size={12} /> Submit
+                                          </button>
+                                        ) : (
+                                          <button type="button" className="pd-btn-tx pd-btn-tx--outline" style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }} onClick={() => { if (isAdminOrManager || isCreator) { setAssignerModal({ open: true, deliverable: d }); } else { setViewModal({ open: true, deliverable: d }); } }}>
+                                            <Eye size={12} /> View
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </SortableTableWrapper>
+                           
                             )}
                           </tbody>
                         </table>

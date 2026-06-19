@@ -11,21 +11,33 @@ import { useUnifiedSummary } from "../hooks/useUnifiedSummary";
 import "../pages/Calender.css";
 
 const TYPE_COLORS = {
-  meeting: { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" },
+  Meeting: { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" },
+  Training: { bg: "#eff6ff", text: "#3b82f6", dot: "#3b82f6" },
+  Workshop: { bg: "#f5f3ff", text: "#8b5cf6", dot: "#8b5cf6" },
+  "Client Meeting": { bg: "#fffbeb", text: "#f59e0b", dot: "#f59e0b" },
+  "Company Event": { bg: "#ecfdf5", text: "#22c55e", dot: "#22c55e" },
+  Holiday: { bg: "#fef2f2", text: "#ef4444", dot: "#ef4444" },
+  Interview: { bg: "#fdf2f8", text: "#ec4899", dot: "#ec4899" },
+  "Project Milestone": { bg: "#f0fdfa", text: "#14b8a6", dot: "#14b8a6" },
+  "Internship Activity": { bg: "#ecfeff", text: "#06b6d4", dot: "#06b6d4" },
+  Other: { bg: "#f3f4f6", text: "#6b7280", dot: "#6b7280" },
   task: { bg: "#eff6ff", text: "#3b82f6", dot: "#3b82f6" },
-  other: { bg: "#fff7ed", text: "#f59e0b", dot: "#f59e0b" },
-  deadline: { bg: "#fef2f2", text: "#ef4444", dot: "#ef4444" },
-  personal: { bg: "#ecfdf5", text: "#22c55e", dot: "#22c55e" },
   project: { bg: "#f5f3ff", text: "#8b5cf6", dot: "#8b5cf6" },
   deliverable: { bg: "#f0fdf4", text: "#16a34a", dot: "#16a34a" },
 };
 
 const TYPE_LABELS = {
-  meeting: "Meeting",
+  Meeting: "Meeting",
+  Training: "Training",
+  Workshop: "Workshop",
+  "Client Meeting": "Client Meeting",
+  "Company Event": "Company Event",
+  Holiday: "Holiday",
+  Interview: "Interview",
+  "Project Milestone": "Project Milestone",
+  "Internship Activity": "Internship Activity",
+  Other: "Other",
   task: "Task",
-  other: "Review",
-  deadline: "Deadline",
-  personal: "Personal",
   project: "Project",
   deliverable: "Deliverable",
 };
@@ -405,7 +417,7 @@ function UserPerformance() {
                 </p>
               ) : (
                 todayEvents.map((ev) => {
-                  const colors = TYPE_COLORS[ev.type] || TYPE_COLORS.meeting;
+                  const colors = TYPE_COLORS[ev.type] || { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" };
                   const time = ev.all_day ? "All Day" : new Date(ev.start_date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
                   return (
                     <div className="agenda-item" key={ev.id}>
@@ -441,7 +453,7 @@ function UserPerformance() {
                 </p>
               ) : (
                 upcomingEvents.slice(0, 5).map((ev) => {
-                  const colors = TYPE_COLORS[ev.type] || TYPE_COLORS.meeting;
+                  const colors = TYPE_COLORS[ev.type] || { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" };
                   const parts = (ev.start_date || ev.date || "").split("T")[0].split(" ")[0].split("-");
                   const evDate = new Date(+parts[0], +parts[1] - 1, +parts[2]).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
                   return (

@@ -136,6 +136,7 @@
 
 /* color pills by parent so dot matches label */
 .task-progress .All { color: #6B7280; }
+.task-progress .DueToday { color: #EF4444; }
 .task-progress .Pending { color: #F59E0B; }
 .task-progress .Progress { color: #3B82F6; }
 .task-progress .Submitted { color: #3B82F6; }
@@ -777,4 +778,69 @@
     padding: 4px 8px;
     font-size: 10px;
   }
+}
+.deliveries-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.deliveries-table .deliveries-table-header th {
+  text-align: left;
+  padding: 14px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #6b7280;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.deliveries-table tbody td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+
+.deliveries-table .deliveries-table-row:hover {
+  background-color: #f9fafb;
+}
+
+.deliveries-table .deliveries-table-row:last-child td {
+  border-bottom: none;
+}
+
+.deliveries-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.deliveries-table .deliveries-table-header th {
+  text-align: left;
+  padding: 14px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #6b7280;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.deliveries-table tbody td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+
+.deliveries-table .deliveries-table-row:hover {
+  background-color: #f9fafb;
+}
+
+.deliveries-table .deliveries-table-row:last-child td {
+  border-bottom: none;
 }

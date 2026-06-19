@@ -3,11 +3,14 @@
  * Rendered when the user navigates to /manageusers or related route.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { MdVisibility } from "react-icons/md";
 import { IoSearchOutline } from "react-icons/io5";
 import { CiCirclePlus } from "react-icons/ci";
 import { useNavigate } from "react-router-dom";
+import { DndContext, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
@@ -89,6 +92,12 @@ function ManageUsers() {
   const [timeFilter, setTimeFilter] = useState("");
   const [resignConfirmOpen, setResignConfirmOpen] = useState(false);
   const [resignUserId, setResignUserId] = useState(null);
+
+  const [localUsers, setLocalUsers] = useState([]);
+  const [activeDragId, setActiveDragId] = useState(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const localUsersRef = useRef(localUsers);
+  localUsersRef.current = localUsers;
 
   const [currentUserId, setCurrentUserId] = useState(() => {
     const user = getUser();
@@ -197,6 +206,36 @@ function ManageUsers() {
     }
     fetchUsers();
   }, [navigate]);
+
+  useEffect(() => {
+    setLocalUsers(users);
+  }, [users]);
+
+  const handleDragStart = useCallback((event) => {
+    setActiveDragId(event.active.id);
+  }, []);
+
+  const handleDragEnd = useCallback((event) => {
+    setActiveDragId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const items = localUsersRef.current;
+    const oldIndex = items.findIndex((i) => i.id === active.id);
+    const newIndex = items.findIndex((i) => i.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(items, oldIndex, newIndex);
+    setLocalUsers(reordered);
+    const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
+    fetch(`${API_URL}/users/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ items: payload }),
+    }).catch(() => {});
+  }, []);
+
+  const handleDragCancel = useCallback(() => {
+    setActiveDragId(null);
+  }, []);
 
   const openModal = () => setIsAddModalOpen(true);
 
@@ -410,7 +449,7 @@ function ManageUsers() {
     );
   };
 
-  const filteredUsers = users.filter((user) => {
+  const filteredUsers = localUsers.filter((user) => {
     const matchesSearch =
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase());
@@ -422,11 +461,48 @@ function ManageUsers() {
     return matchesSearch && matchesRole && matchesStatus;
   });
 
-  const sortedUsers = [...filteredUsers].sort((a, b) => {
-    if (sortOrder === "asc") return a.name.localeCompare(b.name);
-    if (sortOrder === "desc") return b.name.localeCompare(a.name);
-    return 0;
-  });
+  const sortedUsers = sortOrder
+    ? [...filteredUsers].sort((a, b) =>
+        sortOrder === "asc" ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
+      )
+    : filteredUsers;
+
+  const activeDragUser = activeDragId ? users.find((u) => u.id === activeDragId) : null;
+
+  function SortableUserRow({ user, isActive, canModifyUser, isSelf, isTargetProtected }) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: user.id });
+    const rowStyle = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.4 : 1,
+    };
+    return (
+      <tr ref={setNodeRef} className={!isActive ? "resigned-row" : ""} style={rowStyle} {...listeners} {...attributes}>
+        <td style={{ textAlign: "left" }}>
+          <div className="user-info">
+            <span className="user-avatar">{getInitials(user.name)}</span>
+            <div className="user-details">
+              <span className="user-name">{user.name}</span>
+              <span className="user-email">{user.email}</span>
+            </div>
+          </div>
+        </td>
+        <td>
+          <span className={`role-badge role-${user.role}`}>
+            {user.role === "team_lead" ? "Team Lead" : user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+          </span>
+        </td>
+        <td><StatusBadge active={isActive} /></td>
+        <td>
+          <div className="action-buttons">
+            <button className="btn-view" onClick={() => navigate(rolePath(`manage-users/user-profile/${user.id}`))} aria-label="View user profile"><MdVisibility size={24} /></button>
+            <button className="btn-resign" onClick={() => handleResignUser(user.id)} disabled={!canModifyUser} aria-label="Resign user"><ResignIcon className="resign-icon" /></button>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -556,41 +632,50 @@ function ManageUsers() {
           <div className="table-card-header">
             <h2>Existing Users</h2>
           </div>
-          <table className="manage-user-table">
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
+            <table className="manage-user-table">
+              <thead>
                 <tr>
-                  <td colSpan="4" className="loading-row">
-                    Loading users...
-                  </td>
+                  <th>User</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Action</th>
                 </tr>
-              ) : users.length ? (
-                sortedUsers.length ? (
-                  sortedUsers.map(renderUserRow)
-                ) : (
-                  <tr>
-                    <td colSpan="4" className="empty-row">
-                      No users match your search or filters.
-                    </td>
-                  </tr>
-                )
-              ) : (
-                <tr>
-                  <td colSpan="4" className="empty-row">
-                    No users found yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <SortableContext items={sortedUsers.map((u) => u.id)} strategy={verticalListSortingStrategy}>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan="4" className="loading-row">Loading users...</td>
+                    </tr>
+                  ) : localUsers.length ? (
+                    sortedUsers.length ? (
+                      sortedUsers.map((user) => {
+                        const isSelf = currentUserId === user.id;
+                        const isTargetProtected = user.role === "admin" || user.role === "manager";
+                        const isActive = user.active !== false;
+                        const canModifyUser = isActive && !isSelf && !(currentUserRole === "manager" && isTargetProtected);
+                        return (
+                          <SortableUserRow key={user.id} user={user} isActive={isActive} canModifyUser={canModifyUser} isSelf={isSelf} isTargetProtected={isTargetProtected} />
+                        );
+                      })
+                    ) : (
+                      <tr><td colSpan="4" className="empty-row">No users match your search or filters.</td></tr>
+                    )
+                  ) : (
+                    <tr><td colSpan="4" className="empty-row">No users found yet.</td></tr>
+                  )}
+                </tbody>
+              </SortableContext>
+            </table>
+            <DragOverlay>
+              {activeDragUser ? (
+                <div className="drag-overlay-item" style={{ padding: '10px 16px' }}>
+                  <strong>{activeDragUser.name}</strong> &mdash; {activeDragUser.email}
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         </div>
 
         {/* ===================== ADD USER MODAL ===================== */}

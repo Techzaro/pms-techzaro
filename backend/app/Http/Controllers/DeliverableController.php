@@ -21,6 +21,11 @@ class DeliverableController extends Controller
     {
         $user = $request->user();
         $view = $request->query('view', 'assignee');
+        $isDueTodayFilter = $request->input('status') === 'due_today';
+        $filters = $request->query();
+        if ($isDueTodayFilter) {
+            unset($filters['status']);
+        }
 
         $query = Deliverable::with([
             'project:id,title',
@@ -37,8 +42,10 @@ class DeliverableController extends Controller
             $query->where('created_by', $user->id);
         }
 
+        $query->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()));
+
         $deliverables = $query->latest()
-            ->filter($request->query())
+            ->filter($filters)
             ->paginate(15);
 
         // Add has_submitted flag per user
@@ -63,6 +70,11 @@ class DeliverableController extends Controller
     {
         $user = $request->user();
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
+        $isDueTodayFilter = $request->input('status') === 'due_today';
+        $filters = $request->query();
+        if ($isDueTodayFilter) {
+            unset($filters['status']);
+        }
 
         $query = Deliverable::with([
             'project:id,title',
@@ -84,8 +96,10 @@ class DeliverableController extends Controller
 
         $query->whereColumn('created_by', '!=', 'assigned_to');
 
-        $deliverables = $query->latest()
-            ->filter($request->query())
+        $query->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()));
+
+        $deliverables = $query->orderBy('sort_order')->orderBy('id')
+            ->filter($filters)
             ->paginate(15);
 
         return response()->json($deliverables);
@@ -97,6 +111,11 @@ class DeliverableController extends Controller
     public function mySelfDeliverables(Request $request)
     {
         $user = $request->user();
+        $isDueTodayFilter = $request->input('status') === 'due_today';
+        $filters = $request->query();
+        if ($isDueTodayFilter) {
+            unset($filters['status']);
+        }
 
         $deliverables = Deliverable::with([
             'project:id,title',
@@ -109,8 +128,9 @@ class DeliverableController extends Controller
         ])
             ->where('assigned_to', $user->id)
             ->where('created_by', $user->id)
-            ->latest()
-            ->filter($request->query())
+            ->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()))
+            ->orderBy('sort_order')->orderBy('id')
+            ->filter($filters)
             ->paginate(15);
 
         return response()->json($deliverables);
@@ -875,5 +895,28 @@ class DeliverableController extends Controller
             'Content-Type' => $mimeType,
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
+    }
+
+    /**
+     * Reorder deliverables by updating sort_order values.
+     */
+    public function reorder(Request $request)
+    {
+        $request->validate([
+            'items' => 'required|array',
+            'items.*.id' => 'required|integer|exists:deliverables,id',
+            'items.*.sort_order' => 'required|integer|min:0',
+        ]);
+
+        foreach ($request->items as $item) {
+            Deliverable::where('id', $item['id'])->update(['sort_order' => $item['sort_order']]);
+        }
+
+        return response()->json(['message' => 'Deliverables reordered successfully']);
+    }
+
+    private function dueTodayExcludedStatuses(): array
+    {
+        return ['approved'];
     }
 }
