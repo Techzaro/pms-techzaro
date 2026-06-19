@@ -230,28 +230,27 @@
   border-radius: var(--tx-radius);
   padding: 12px 14px;
   box-shadow: var(--tx-shadow);
-  min-width: 0;
-  flex: 1 1 0;
+  min-width:400px;
+  
 }
 
 .pd-stat {
   display: flex;
-  justify-content: space-between;
-  gap: 15px;
+  gap: 70px;
   background: var(--tx-card);
   border: 1px solid var(--tx-border);
   border-radius: var(--tx-radius);
   padding: 12px 14px;
   box-shadow: var(--tx-shadow);
-  min-width: 0;
-  flex: 2 1 0;
+  min-width: 680px;
+
 }
 
 .pd-mini-stat1,
 .pd-mini-stat2,
 .pd-mini-stat3 {
   display: flex;
-  gap: 15px;
+  gap: 10px;
 }
 
 @media (max-width: 768px) {
@@ -442,13 +441,11 @@
 }
 
 .pd-rail-tasks__row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   padding: 8px 0;
   border-bottom: 1px solid #f1f5f9;
-  font-size: 12px;
-  align-items: center;
 }
 
 .pd-rail-tasks__row:last-child {
@@ -457,14 +454,13 @@
 
 .pd-rail-tasks__name {
   font-weight: 600;
+  font-size: 13px;
   color: var(--tx-text);
-  grid-column: 1 / -1;
 }
 
 .pd-rail-tasks__due {
   font-size: 11px;
   color: var(--tx-muted);
-  grid-column: 1 / -1;
 }
 
 .pd-shell {

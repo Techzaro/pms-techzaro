@@ -120,10 +120,52 @@
   font-size: 15px;
   line-height: 1.7;
   color: #6b7280;
+  overflow: hidden;
+}
+
+.card-subtitle.clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  position: relative;
 }
 
 .card-subtitle p {
   margin: 0;
+}
+
+.read-more-btn {
+  background: #fff;
+  border: none;
+  color: #3b82f6;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0 0 0 4px;
+  margin: 0;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  line-height: 1.7;
+}
+
+.read-more-btn:hover {
+  text-decoration: underline;
+}
+
+.show-less-btn {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 0 0;
+  margin: 0;
+}
+
+.show-less-btn:hover {
+  text-decoration: underline;
 }
 
 .progress-section {

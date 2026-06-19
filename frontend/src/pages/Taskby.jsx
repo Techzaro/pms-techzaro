@@ -11,7 +11,7 @@ import CreateTaskModal from "../components/CreateTaskModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
-import { formatDateOnly } from "../utils/formatDateTime";
+import { formatDateOnly, formatDateTime } from "../utils/formatDateTime";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
@@ -110,7 +110,7 @@ const Taskby = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ items: payload }),
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }, []);
 
@@ -146,7 +146,7 @@ const Taskby = () => {
   };
 
   const formatDate = (dateStr) => {
-    return formatDateOnly(dateStr);
+    return formatDateTime(dateStr);
   };
 
   const formatStatus = (status) => {
@@ -169,7 +169,7 @@ const Taskby = () => {
 
   const baseItems = orderedItems.length ? orderedItems : items;
   const pendingStatuses = ["pending", "in_progress", "In Progress", "Planned", "submitted", "reopened", "rejected"];
-  
+
   const filteredItems = baseItems.filter((item) => {
     if (statusFilter === "due_today") {
       return true;
@@ -206,13 +206,13 @@ const Taskby = () => {
           <h3>Tasks Assigned By You</h3>
           <p>Manage and track tasks and projects you assigned</p>
           <div className="task-count-badge" style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
-            <span style={{ background: "#EEF2FF", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+            <span style={{ background: "#dedfe0", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
               Total: {totalCount} items
             </span>
-            <span style={{ background: "#F0FDF4", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+            <span style={{ background: "#d6d6d6", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
               Tasks: {filteredItems.filter(i => i.item_type !== "project").length}
             </span>
-            <span style={{ background: "#EEF2FF", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+            <span style={{ background: "#d4d4d4", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
               Projects: {filteredItems.filter(i => i.item_type === "project").length}
             </span>
           </div>
@@ -276,20 +276,20 @@ const Taskby = () => {
 
       <div className="container">
         {/* Header Table */}
-        <table className="task-table">
-          <thead>
-            <tr className="table-header1">
-              <th>Assigned to</th>
-              <th className="task-name-column">Task Name</th>
-              <th>Type</th>
-              <th className="status-column">Status</th>
-              <th>Progress</th>
-              <th className="priority-column">Priority</th>
-              <th>Due Date</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-        </table>
+
+
+        <div className="table-header1">
+          <div>Assigned by</div>
+          <div className="task-name-column">Task Name</div>
+          <div>Type</div>
+          <div className="status-column">Status</div>
+          <div>Progress</div>
+          <div className="priority-column">Priority</div>
+          <div className="date-column">Due Date</div>
+          <div>Action</div>
+        </div>
+
+
 
         {loading ? (
           <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
@@ -299,12 +299,12 @@ const Taskby = () => {
           <div className="sortable-table-container">
             <table className="task-table">
               <tbody>
-                <SortableTableWrapper 
-                  items={filteredItems.map((i, index) => ({ 
-                    ...i, 
+                <SortableTableWrapper
+                  items={filteredItems.map((i, index) => ({
+                    ...i,
                     sortableId: `${i.item_type}-${i.id}-${index}`
-                  }))} 
-                  onReorder={(reordered) => handleTaskReorder(reordered)} 
+                  }))}
+                  onReorder={(reordered) => handleTaskReorder(reordered)}
                   idKey="sortableId"
                   as="tr"
                 >
@@ -328,33 +328,33 @@ const Taskby = () => {
                               </div>
                             </div>
                           </td>
-                          
+
                           <td className="col-task-name">
                             <div className="task-title">{item.title}</div>
                           </td>
-                          
+
                           <td className="col-type">
                             <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5" }}>Project</span>
                           </td>
-                          
+
                           <td className="col-status">
                             <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
                               <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                              {["submitted","approved","rejected","reopened"].includes(item.status) ? formatStatus(item.status) : "Pending"}
+                              {["submitted", "approved", "rejected", "reopened"].includes(item.status) ? formatStatus(item.status) : "Pending"}
                             </span>
                           </td>
-                          
+
                           <td className="col-progress">
-                            <div style={{ 
-                              display: "flex", 
-                              justifyContent: "flex-start", 
+                            <div style={{
+                              display: "flex",
+                              justifyContent: "flex-start",
                               alignItems: "center",
                               marginBottom: "4px"
                             }}>
-                              <span style={{ 
-                                fontSize: "13px", 
-                                fontWeight: 600, 
-                                color: "#374151" 
+                              <span style={{
+                                fontSize: "13px",
+                                fontWeight: 600,
+                                color: "#374151"
                               }}>
                                 {calculateProgress(item)}%
                               </span>
@@ -362,34 +362,34 @@ const Taskby = () => {
                             <div className="progress-bar-track">
                               <div className="progress-bar-fill" style={{ width: `${calculateProgress(item)}%` }}></div>
                             </div>
-                            <div style={{ 
-                              fontSize: "11px", 
+                            <div style={{
+                              fontSize: "11px",
                               color: "#6b7280",
                               marginTop: "4px"
                             }}>
                               {item.completed_tasks || 0}/{item.total_tasks || 0} tasks
                             </div>
                           </td>
-                          
+
                           <td className="col-priority">
                             <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
                               <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
                               {item.priority}
                             </span>
                           </td>
-                          
+
                           <td className="col-due-date">
                             <div className="date-box">
                               <div>{formatDate(item.start_date)}</div>
                               <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
                             </div>
                           </td>
-                          
+
                           <td className="col-action">
                             <div className="action-btns">
-                              <button 
-                                className="action-icon-btn action-view" 
-                                title="View" 
+                              <button
+                                className="action-icon-btn action-view"
+                                title="View"
                                 onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'taskby' } })}
                               >
                                 <IoEyeOutline />
@@ -415,33 +415,33 @@ const Taskby = () => {
                             </div>
                           </div>
                         </td>
-                        
+
                         <td className="col-task-name">
                           <div className="task-title">{item.title}</div>
                         </td>
-                        
+
                         <td className="col-type">
                           <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a" }}>Task</span>
                         </td>
-                        
+
                         <td className="col-status">
                           <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
                             <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                             {formatStatus(item.status)}
                           </span>
                         </td>
-                        
+
                         <td className="col-progress">
-                          <div style={{ 
-                            display: "flex", 
-                            justifyContent: "flex-start", 
+                          <div style={{
+                            display: "flex",
+                            justifyContent: "flex-start",
                             alignItems: "center",
                             marginBottom: "4px"
                           }}>
-                            <span style={{ 
-                              fontSize: "13px", 
-                              fontWeight: 600, 
-                              color: "#374151" 
+                            <span style={{
+                              fontSize: "13px",
+                              fontWeight: 600,
+                              color: "#374151"
                             }}>
                               {item.deliverables_progress || 0}%
                             </span>
@@ -449,34 +449,33 @@ const Taskby = () => {
                           <div className="progress-bar-track">
                             <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
                           </div>
-                          <div style={{ 
-                            fontSize: "11px", 
+                          <div style={{
+                            fontSize: "11px",
                             color: "#6b7280",
                             marginTop: "4px"
                           }}>
                             {item.approved_deliverables || 0}/{item.total_deliverables || 0} Deliverables Approved
                           </div>
                         </td>
-                        
+
                         <td className="col-priority">
                           <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
                             <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
                             {item.priority}
                           </span>
                         </td>
-                        
+
                         <td className="col-due-date">
                           <div className="date-box">
-                            <div>{formatDate(item.start_date)}</div>
                             <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
                           </div>
                         </td>
-                        
+
                         <td className="col-action">
                           <div className="action-btns">
-                            <button 
-                              className="action-icon-btn action-view" 
-                              title="View" 
+                            <button
+                              className="action-icon-btn action-view"
+                              title="View"
                               onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
                             >
                               <IoEyeOutline />

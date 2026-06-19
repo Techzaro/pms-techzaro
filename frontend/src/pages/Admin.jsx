@@ -369,6 +369,7 @@ function Admin() {
               gridTemplateColumns:
                 "repeat(auto-fit, minmax(100px, 1fr))",
               gap: "20px",
+              
             }}
           >
             {summaryCards.map((card) => (
@@ -432,7 +433,6 @@ function Admin() {
                         fontSize: "15px",
                         color: card.filter ? "#2563EB" : "#6b7280",
                         cursor: card.filter ? "pointer" : "default",
-                        textDecoration: card.filter ? "underline" : "none",
                         textUnderlineOffset: "2px",
                       }}
                     >
@@ -550,7 +550,7 @@ function Admin() {
                 Active Projects
               </h3>
 
-              <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "16px", }}>
                 <button
                   onClick={openActiveProjects}
                   style={{

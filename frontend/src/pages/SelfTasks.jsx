@@ -186,13 +186,13 @@ const SelfTasks = () => {
           <h3>Self Tasks</h3>
           <p>Tasks and projects you assigned to yourself</p>
           <div className="task-count-badge" style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
-            <span style={{ background: "#EEF2FF", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+            <span style={{ background: "#dedfe0", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
               Total: {totalCount} items
             </span>
-            <span style={{ background: "#F0FDF4", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+            <span style={{ background: "#d6d6d6", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
               Tasks: {filteredItems.filter(i => i.item_type !== "project").length}
             </span>
-            <span style={{ background: "#EEF2FF", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+            <span style={{ background: "#d4d4d4", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
               Projects: {filteredItems.filter(i => i.item_type === "project").length}
             </span>
           </div>
@@ -300,7 +300,17 @@ const SelfTasks = () => {
                     </div>
                     <div className="action-btns">
                       <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'self-tasks' } })}><IoEyeOutline /></button>
-                      {item.can_submit && <button className="action-icon-btn action-submit" title="Submit Project" onClick={() => setShowProjectSubmitModal({ open: true, project: item })}><LuSend /></button>}
+                      {["pending", "reopened", "Planned", "in_progress", "In Progress"].includes(item.status) && (
+                        <button 
+                          className="action-icon-btn action-submit" 
+                          title={item.can_submit ? "Submit Project" : "All tasks and deliverables must be approved"} 
+                          disabled={!item.can_submit}
+                          onClick={() => item.can_submit && setShowProjectSubmitModal({ open: true, project: item })}
+                          style={!item.can_submit ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                        >
+                          <LuSend />
+                        </button>
+                      )}
                       {item.status === "submitted" && <span className="action-status-badge" style={{ color: "#1E40AF", fontWeight: 600, fontSize: "12px" }}>Submitted</span>}
                       {item.status === "approved" && <span className="action-status-badge" style={{ color: "#166534", fontWeight: 600, fontSize: "12px" }}>Approved</span>}
                       {item.status === "rejected" && <span className="action-status-badge" style={{ color: "#991B1B", fontWeight: 600, fontSize: "12px" }}>Rejected</span>}

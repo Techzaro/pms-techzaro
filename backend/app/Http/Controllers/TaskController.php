@@ -1318,13 +1318,18 @@ class TaskController extends Controller
         $incomplete = max(0, $total - $completed);
         $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
 
+        // All tasks must be approved (not just completed/done) before project can be submitted
+        $unapprovedTasks = $project->tasks()->where('status', '!=', 'approved')->count();
+        // All deliverables (including task-linked) must be approved
+        $unapprovedDeliverables = $project->deliverables()->where('status', '!=', 'approved')->count();
+
         $project->total_tasks = $total;
         $project->completed_tasks = $completed;
         $project->pending_tasks_count = $incomplete;
         $project->pending_deliverables_count = $pendingDeliverables;
         $project->can_submit = in_array($project->status, $submittableStatuses, true)
-            && $incomplete === 0
-            && $pendingDeliverables === 0;
+            && $unapprovedTasks === 0
+            && $unapprovedDeliverables === 0;
 
         return $project;
     }

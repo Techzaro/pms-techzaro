@@ -29,7 +29,7 @@ const EditProjectModal = ({ project, onClose }) => {
     priority: project?.priority || "Medium",
     client_name: project?.client_name || "",
     budget: project?.budget || "",
-    status: project?.status || "in_progress",
+
   });
 
   const [milestones, setMilestones] = useState(() => {
@@ -278,7 +278,6 @@ const EditProjectModal = ({ project, onClose }) => {
         team_id: form.team_id ? parseInt(form.team_id) : null,
         assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
         priority: form.priority,
-        status: form.status,
         end_date: computedEndDate,
         client_name: form.client_name || null,
         budget: form.budget ? parseFloat(form.budget) : null,
@@ -529,18 +528,6 @@ const EditProjectModal = ({ project, onClose }) => {
 
           {/* RIGHT */}
           <div className="cp-right">
-
-            {/* STATUS */}
-            <div className="cp-card">
-              <div className="cp-card-top">
-                <span>Status</span>
-              </div>
-              <select name="status" value={form.status} onChange={handleChange}>
-                <option value="in_progress">In Progress</option>
-                <option value="completed">Completed</option>
-                <option value="failed">Failed</option>
-              </select>
-            </div>
 
             {/* PRIORITY */}
             <div className="cp-card">

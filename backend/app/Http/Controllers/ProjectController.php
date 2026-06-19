@@ -228,10 +228,12 @@ class ProjectController extends Controller
         $isAssigned = in_array($user->id, $project->assigned_users ?? []);
         $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
 
-        // All project-level deliverables must be submitted before project can be submitted
-        $pendingDeliverables = $project->deliverables()->whereNull('task_id')->where('status', 'pending')->count();
-        $allDeliverablesSubmitted = $pendingDeliverables === 0;
-        $allTasksCompleted = $project->tasks->every(fn ($task) => $this->isCompletedTaskStatus($task->status));
+        // All tasks must be approved (not just completed/done) before project can be submitted
+        $unapprovedTasks = $project->tasks()->where('status', '!=', 'approved')->count();
+        $allTasksApproved = $unapprovedTasks === 0;
+        // All deliverables (including task-linked) must be approved
+        $unapprovedDeliverables = $project->deliverables()->where('status', '!=', 'approved')->count();
+        $allDeliverablesApproved = $unapprovedDeliverables === 0;
 
         $payload = $project->toArray();
         $payload['members'] = $members;
@@ -242,7 +244,7 @@ class ProjectController extends Controller
         $payload['is_assigned'] = $isAssigned;
         $payload['is_admin_or_manager'] = $isAdminOrManager;
         $payload['can_edit'] = $isAdminOrManager;
-        $payload['can_submit'] = in_array($project->status, $submittableStatuses) && ($isAssigned || $isCreator) && $allDeliverablesSubmitted && $allTasksCompleted;
+        $payload['can_submit'] = in_array($project->status, $submittableStatuses) && ($isAssigned || $isCreator) && $allDeliverablesApproved && $allTasksApproved;
         $payload['can_review'] = $project->status === 'submitted' && ($isCreator || $isAdminOrManager);
         $payload['unviewed_changes'] = $project->unviewedChanges;
         $payload['unviewed_changes_count'] = $project->unviewedChanges->count();
@@ -328,13 +330,18 @@ class ProjectController extends Controller
         $incomplete = max(0, $total - $completed);
         $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
 
+        // All tasks must be approved (not just completed/done) before project can be submitted
+        $unapprovedTasks = $project->tasks()->where('status', '!=', 'approved')->count();
+        // All deliverables (including task-linked) must be approved
+        $unapprovedDeliverables = $project->deliverables()->where('status', '!=', 'approved')->count();
+
         $project->total_tasks = $total;
         $project->completed_tasks = $completed;
         $project->pending_tasks_count = $incomplete;
         $project->pending_deliverables_count = $pendingDeliverables;
         $project->can_submit = in_array($project->status, $submittableStatuses, true)
-            && $incomplete === 0
-            && $pendingDeliverables === 0;
+            && $unapprovedTasks === 0
+            && $unapprovedDeliverables === 0;
 
         return $project;
     }
@@ -740,15 +747,16 @@ class ProjectController extends Controller
             return response()->json(['message' => 'This project cannot be submitted in its current status'], 422);
         }
 
-        $incompleteTasks = $project->tasks()->whereNotIn('status', $this->completedTaskStatuses())->count();
-        if ($incompleteTasks > 0) {
-            return response()->json(['message' => 'All project tasks must be completed before submitting this project'], 422);
+        // All tasks must be approved before project can be submitted
+        $unapprovedTasks = $project->tasks()->where('status', '!=', 'approved')->count();
+        if ($unapprovedTasks > 0) {
+            return response()->json(['message' => 'All project tasks must be approved before submitting this project'], 422);
         }
 
-        // All project-level deliverables must be submitted before project can be submitted
-        $pendingDeliverables = $project->deliverables()->whereNull('task_id')->where('status', 'pending')->count();
-        if ($pendingDeliverables > 0) {
-            return response()->json(['message' => 'All deliverables must be submitted before submitting this project'], 422);
+        // All deliverables (including task-linked) must be approved
+        $unapprovedDeliverables = $project->deliverables()->where('status', '!=', 'approved')->count();
+        if ($unapprovedDeliverables > 0) {
+            return response()->json(['message' => 'All deliverables must be approved before submitting this project'], 422);
         }
 
         $validated = $request->validate([

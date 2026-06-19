@@ -556,10 +556,10 @@ function TaskDetails() {
                         <table className="td-table">
                           <thead>
                             <tr>
-                              <th>Task</th>
-                              <th>Assignee</th>
-                              <th>Status</th>
-                              <th>Due Date</th>
+                              <th style={{ width: "35%", textAlign: "left" }}>Task</th>
+                              <th style={{ width: "25%", textAlign: "left" }}>Assignee</th>
+                              <th style={{ width: "20%", textAlign: "center" }}>Status</th>
+                              <th style={{ width: "20%", textAlign: "center" }}>Due Date</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -568,12 +568,12 @@ function TaskDetails() {
                               onReorder={handleSubtaskReorder}
                             >
                               {(t) => (
-                                <tr key={t.id}>
-                                  <td>
+                                <>
+                                  <td style={{ width: "35%", textAlign: "left" }}>
                                     <div className="td-task-name">{t.title}</div>
                                     {t.description && <div className="td-task-sub">{t.description}</div>}
                                   </td>
-                                  <td>
+                                  <td style={{ width: "25%", textAlign: "left" }}>
                                     <div className="td-assignee">
                                       <div className="td-avatar">{initials(t.assignee?.name)}</div>
                                       <div>
@@ -582,7 +582,7 @@ function TaskDetails() {
                                       </div>
                                     </div>
                                   </td>
-                                  <td>
+                                  <td style={{ width: "20%", textAlign: "center" }}>
                                     <span
                                       className="td-pill"
                                       style={{
@@ -597,8 +597,8 @@ function TaskDetails() {
                                       {statusLabel(t.status)}
                                     </span>
                                   </td>
-                                  <td className="td-date">{formatShortDate(t.end_date)}</td>
-                                </tr>
+                                  <td style={{ width: "20%", textAlign: "center" }} className="td-date">{formatShortDate(t.end_date)}</td>
+                                </>
                               )}
                             </SortableTableWrapper>
                           </tbody>
@@ -619,10 +619,10 @@ function TaskDetails() {
                         <table className="td-table">
                           <thead>
                             <tr>
-                              <th>Deliverable</th>
-                              <th>Due Date</th>
-                              <th>Status</th>
-                              <th>Action</th>
+                              <th style={{ width: "35%", textAlign: "left" }}>Deliverable</th>
+                              <th style={{ width: "20%", textAlign: "center" }}>Due Date</th>
+                              <th style={{ width: "20%", textAlign: "center" }}>Status</th>
+                              <th style={{ width: "25%", textAlign: "center" }}>Action</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -631,13 +631,15 @@ function TaskDetails() {
                               onReorder={handleDeliverableReorder}
                             >
                               {(d) => (
-                                <tr key={d.id}>
-                                  <td>
+                                <>
+                                  <td style={{ width: "35%", textAlign: "left" }}>
                                     <div className="td-task-name">{d.title}</div>
                                     {d.description && <div className="td-task-sub">{d.description}</div>}
                                   </td>
-                                  <td className="td-date">{formatShortDate(d.due_date)}</td>
-                                  <td>
+                                  <td style={{ width: "20%", textAlign: "center" }}>
+                                    <div className="td-date">{formatShortDate(d.due_date)}</div>
+                                  </td>
+                                  <td style={{ width: "20%", textAlign: "center" }}>
                                     <span className="td-pill" style={{ 
                                       background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), 
                                       color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) 
@@ -648,8 +650,8 @@ function TaskDetails() {
                                       {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}
                                     </span>
                                   </td>
-                                  <td>
-                                    <div style={{ display: "flex", gap: "6px" }}>
+                                  <td style={{ width: "25%", textAlign: "center" }}>
+                                    <div style={{ display: "flex", gap: "6px", justifyContent: "center" }}>
                                       {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
                                         <button
                                           className="td-btn-outline"
@@ -675,7 +677,7 @@ function TaskDetails() {
                                       )}
                                     </div>
                                   </td>
-                                </tr>
+                                </>
                               )}
                             </SortableTableWrapper>
                           </tbody>
@@ -691,16 +693,53 @@ function TaskDetails() {
             </div>
           </div>
 
-          {/* ===== RIGHT SIDEBAR ===== */}
+          {/* ===== RIGHT SIDEBAR - UPDATED WITH START DATE AND DUE DATE WITH TIME ===== */}
           <aside className="td-sidebar">
             <div className="td-card">
               <h3 className="td-card-title">Task Information</h3>
               <ul className="td-info">
-                <li><span className="td-dot" style={{ background: "#3b82f6" }} /><div><span className="td-info-label">Project</span><span className="td-info-val">{project?.title || "—"}</span></div></li>
-                <li><span className="td-dot" style={{ background: "#f59e0b" }} /><div><span className="td-info-label">Created By</span><span className="td-info-val">{assigner?.name || "—"}</span></div></li>
-                <li><span className="td-dot" style={{ background: "#8b5cf6" }} /><div><span className="td-info-label">Assigned To</span><span className="td-info-val">{assignees.map((a) => a.name).join(", ") || "—"}</span></div></li>
-                <li><span className="td-dot" style={{ background: "#22c55e" }} /><div><span className="td-info-label">Last Updated</span><span className="td-info-val">{task.updated_at ? timeAgo(task.updated_at) : "—"}</span></div></li>
-                <li><span className="td-dot" style={{ background: "#ef4444" }} /><div><span className="td-info-label">Estimated Time</span><span className="td-info-val">{task.end_date ? formatDateTimeShort(task.end_date) : "—"}</span></div></li>
+                <li>
+                  <span className="td-dot" style={{ background: "#3b82f6" }} />
+                  <div>
+                    <span className="td-info-label">Project</span>
+                    <span className="td-info-val">{project?.title || "—"}</span>
+                  </div>
+                </li>
+                <li>
+                  <span className="td-dot" style={{ background: "#f59e0b" }} />
+                  <div>
+                    <span className="td-info-label">Created By</span>
+                    <span className="td-info-val">{assigner?.name || "—"}</span>
+                  </div>
+                </li>
+                <li>
+                  <span className="td-dot" style={{ background: "#8b5cf6" }} />
+                  <div>
+                    <span className="td-info-label">Assigned To</span>
+                    <span className="td-info-val">{assignees.map((a) => a.name).join(", ") || "—"}</span>
+                  </div>
+                </li>
+                <li>
+                  <span className="td-dot" style={{ background: "#22c55e" }} />
+                  <div>
+                    <span className="td-info-label">Last Updated</span>
+                    <span className="td-info-val">{task.updated_at ? timeAgo(task.updated_at) : "—"}</span>
+                  </div>
+                </li>
+                <li>
+                  <span className="td-dot" style={{ background: "#3b82f6" }} />
+                  <div>
+                    <span className="td-info-label">Start Date</span>
+                    <span className="td-info-val">{task.start_date ? formatDateTime(task.start_date) : "—"}</span>
+                  </div>
+                </li>
+                <li>
+                  <span className="td-dot" style={{ background: "#ef4444" }} />
+                  <div>
+                    <span className="td-info-label">Due Date</span>
+                    <span className="td-info-val">{task.end_date ? formatDateTime(task.end_date) : "—"}</span>
+                  </div>
+                </li>
               </ul>
             </div>
 
