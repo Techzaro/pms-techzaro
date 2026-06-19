@@ -184,7 +184,7 @@ function Reports() {
               <span className="th-action">Action</span>
             </div>
 
-            <SortableTableWrapper items={displayMembers} onReorder={handleReportReorder} idKey="id">
+            <SortableTableWrapper items={displayMembers} onReorder={handleReportReorder} idKey="id" as="div">
               {(member, idx) => (
                 <div className="table-row">
                   <div className="table-member">

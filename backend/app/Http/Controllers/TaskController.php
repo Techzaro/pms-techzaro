@@ -26,14 +26,24 @@ class TaskController extends Controller
     {
         $user = $request->user();
         $isDueTodayFilter = $request->input('status') === 'due_today';
+        $isApprovedFilter = $request->input('status') === 'approved';
+        $isPendingFilter = $request->input('status') === 'pending';
+        $isSubmittedFilter = $request->input('status') === 'submitted';
+        $isReopenedFilter = $request->input('status') === 'reopened';
+        $isRejectedFilter = $request->input('status') === 'rejected';
+        $statusFilter = $request->input('status');
         $filters = $request->query();
-        if ($isDueTodayFilter) {
+        if ($isDueTodayFilter || $isPendingFilter) {
             unset($filters['status']);
         }
 
-        $tasks = Task::whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+        $tasks = Task::where(function ($q) use ($user) {
+                $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+                  ->orWhere('assigned_to', $user->id);
+            })
             ->where('assigned_by', '!=', $user->id)
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
+            ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
             ->latest()
             ->filter($filters)
@@ -53,6 +63,14 @@ class TaskController extends Controller
         ->where(function ($q) {
             $q->whereNotNull('assigned_users')
               ->whereRaw('JSON_LENGTH(assigned_users) > 0');
+        })
+        ->when($isApprovedFilter, fn ($q) => $q->where('status', 'approved'))
+        ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
+        ->when($isSubmittedFilter, fn ($q) => $q->where('status', 'submitted'))
+        ->when($isReopenedFilter, fn ($q) => $q->where('status', 'reopened'))
+        ->when($isRejectedFilter, fn ($q) => $q->where('status', 'rejected'))
+        ->when($statusFilter && !$isDueTodayFilter && !in_array($statusFilter, ['approved', 'pending', 'submitted', 'reopened', 'rejected']), function ($q) use ($statusFilter) {
+            $q->where('status', $statusFilter);
         })
         ->with(['creator:id,name,role', 'team:id,name'])
         ->latest()
@@ -81,12 +99,25 @@ class TaskController extends Controller
     public function mySelfTasks(Request $request)
     {
         $user = $request->user();
+        $isApprovedFilter = $request->input('status') === 'approved';
+        $isPendingFilter = $request->input('status') === 'pending';
+        $isSubmittedFilter = $request->input('status') === 'submitted';
+        $isReopenedFilter = $request->input('status') === 'reopened';
+        $isRejectedFilter = $request->input('status') === 'rejected';
+        $filters = $request->query();
+        if ($isPendingFilter) {
+            unset($filters['status']);
+        }
 
         $tasks = Task::where('assigned_by', $user->id)
-            ->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+            ->where(function ($q) use ($user) {
+                $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+                  ->orWhere('assigned_to', $user->id);
+            })
+            ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
             ->latest()
-            ->filter($request->query())
+            ->filter($filters)
             ->paginate(15);
 
         $tasks->getCollection()->transform(function ($task) {
@@ -102,6 +133,11 @@ class TaskController extends Controller
             $q->whereNotNull('assigned_users')
               ->whereRaw('JSON_LENGTH(assigned_users) > 0');
         })
+        ->when($isApprovedFilter, fn ($q) => $q->where('status', 'approved'))
+        ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
+        ->when($isSubmittedFilter, fn ($q) => $q->where('status', 'submitted'))
+        ->when($isReopenedFilter, fn ($q) => $q->where('status', 'reopened'))
+        ->when($isRejectedFilter, fn ($q) => $q->where('status', 'rejected'))
         ->with(['creator:id,name,role', 'team:id,name'])
         ->latest()
         ->get()
@@ -132,6 +168,12 @@ class TaskController extends Controller
         $user = $request->user();
         $userId = $user->id;
         $isDueTodayFilter = $request->input('status') === 'due_today';
+        $isApprovedFilter = $request->input('status') === 'approved';
+        $isPendingFilter = $request->input('status') === 'pending';
+        $isSubmittedFilter = $request->input('status') === 'submitted';
+        $isReopenedFilter = $request->input('status') === 'reopened';
+        $isRejectedFilter = $request->input('status') === 'rejected';
+        $statusFilter = $request->input('status');
 
         // Admin and Manager share visibility of assignments made to other users
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
@@ -144,7 +186,12 @@ class TaskController extends Controller
         $tasksQuery = Task::with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role']);
 
         if ($isAdminOrManager) {
-            $tasksQuery->whereIn('assigned_by', $adminManagerIds);
+            $tasksQuery
+                ->whereIn('assigned_by', $adminManagerIds)
+                ->where(function ($q) {
+                    $q->whereColumn('assigned_by', '!=', 'assigned_to')
+                      ->orWhereNull('assigned_to');
+                });
         } else {
             $tasksQuery->where('assigned_by', $userId);
         }
@@ -152,7 +199,8 @@ class TaskController extends Controller
         $tasks = $tasksQuery->latest()
             ->when($request->filled('search'), fn ($q) => $q->where('title', 'like', '%' . $request->input('search') . '%'))
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
-            ->when($request->filled('status') && !$isDueTodayFilter, fn ($q) => $q->where('status', $request->input('status')))
+            ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
+            ->when($request->filled('status') && !$isDueTodayFilter && !$isPendingFilter, fn ($q) => $q->where('status', $request->input('status')))
             ->get();
 
         $expandedTasks = collect();
@@ -184,13 +232,22 @@ class TaskController extends Controller
         });
 
         if ($isAdminOrManager) {
-            $projectsQuery->whereIn('created_by', $adminManagerIds);
+            $projectsQuery
+                ->whereIn('created_by', $adminManagerIds);
         } else {
             $projectsQuery->where('created_by', $user->id);
         }
 
         $projects = $projectsQuery
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
+            ->when($isApprovedFilter, fn ($q) => $q->where('status', 'approved'))
+            ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
+            ->when($isSubmittedFilter, fn ($q) => $q->where('status', 'submitted'))
+            ->when($isReopenedFilter, fn ($q) => $q->where('status', 'reopened'))
+            ->when($isRejectedFilter, fn ($q) => $q->where('status', 'rejected'))
+            ->when($statusFilter && !$isDueTodayFilter && !in_array($statusFilter, ['approved', 'pending', 'submitted', 'reopened', 'rejected']), function ($q) use ($statusFilter) {
+                $q->where('status', $statusFilter);
+            })
             ->with(['creator:id,name,role', 'team:id,name'])
             ->latest()
             ->get();
@@ -226,6 +283,7 @@ class TaskController extends Controller
 
         return response()->json([
             'data' => $allItems,
+            'total' => $allItems->count(),
         ]);
     }
 
@@ -1233,6 +1291,11 @@ class TaskController extends Controller
     private function completedProjectTaskStatuses(): array
     {
         return ['approved', 'completed', 'done'];
+    }
+
+    private function pendingTaskStatuses(): array
+    {
+        return ['pending', 'in_progress', 'In Progress', 'Planned', 'submitted', 'reopened', 'rejected'];
     }
 
     private function incompleteDueTodayStatuses(): array

@@ -69,6 +69,13 @@ class DashboardController extends Controller
                 ->whereIn('status', $this->completedTaskStatuses())
                 ->count();
 
+        $approvedTasks = $taskQuery->clone()
+            ->whereIn('status', $this->approvedTaskStatuses())
+            ->count()
+            + $projectAsTaskQuery->clone()
+                ->whereIn('status', $this->approvedTaskStatuses())
+                ->count();
+
         $pendingTasks = $taskQuery->clone()
             ->whereIn('status', $this->pendingTaskStatuses())
             ->count()
@@ -82,6 +89,7 @@ class DashboardController extends Controller
             'active_projects' => $activeProjects,
             'tasks_due_today' => $tasksDueToday,
             'completed_tasks' => $completedTasks,
+            'approved_tasks' => $approvedTasks,
             'pending_tasks' => $pendingTasks,
             'total_tasks' => $totalTasks,
         ];
@@ -97,6 +105,13 @@ class DashboardController extends Controller
         if (in_array($role, ['admin', 'manager'])) {
             $tasks = Task::with(['project:id,title', 'assignees:id,name,role'])
                 ->where('assigned_by', $user->id)
+                ->where(function ($q) use ($user) {
+                    $q->whereDoesntHave('assignees', fn ($q) => $q->where('users.id', $user->id))
+                      ->orWhere(function ($q) use ($user) {
+                          $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+                            ->where('assigned_to', '!=', $user->id);
+                      });
+                })
                 ->whereDate('end_date', today())
                 ->whereNotIn('status', $this->inactiveTaskStatuses())
                 ->latest()
@@ -114,9 +129,13 @@ class DashboardController extends Controller
                 ->whereNotIn('status', $this->inactiveTaskStatuses())
                 ->latest()
                 ->get()
+                ->filter(function ($project) use ($user) {
+                    $ids = $this->normalizeAssignedUserIds($project->assigned_users);
+                    return !in_array((int) $user->id, $ids);
+                })
                 ->map(fn ($project) => $this->projectAsTaskPayload($project));
 
-            return $tasks->merge($projects)
+            return collect($tasks)->merge(collect($projects))
                 ->sortByDesc('created_at')
                 ->values()
                 ->take(10)
@@ -129,6 +148,12 @@ class DashboardController extends Controller
             ->whereNotIn('status', $this->inactiveTaskStatuses())
             ->latest()
             ->get()
+            ->filter(function ($task) use ($user) {
+                $isCreator = (int) $task->assigned_by === (int) $user->id;
+                $isAssignee = (int) $task->assigned_to === (int) $user->id
+                    || $task->assignees->contains('id', $user->id);
+                return !($isCreator && $isAssignee);
+            })
             ->map(fn ($task) => array_merge($task->toArray(), [
                 'module' => 'task',
                 'item_type' => 'task',
@@ -141,9 +166,15 @@ class DashboardController extends Controller
             ->whereNotIn('status', $this->inactiveTaskStatuses())
             ->latest()
             ->get()
+            ->filter(function ($project) use ($user) {
+                $ids = $this->normalizeAssignedUserIds($project->assigned_users);
+                $isCreator = (int) $project->created_by === (int) $user->id;
+                $isAssignee = in_array((int) $user->id, $ids);
+                return !($isCreator && $isAssignee);
+            })
             ->map(fn ($project) => $this->projectAsTaskPayload($project));
 
-        return $tasks->merge($projects)
+        return collect($tasks)->merge(collect($projects))
             ->sortByDesc('created_at')
             ->values()
             ->take(10)
@@ -246,7 +277,7 @@ class DashboardController extends Controller
                 'sort_date' => $project->end_date,
             ]);
 
-        return $tasks->merge($projects)
+        return collect($tasks)->merge(collect($projects))
             ->sortBy('sort_date')
             ->values()
             ->take(10)
@@ -281,19 +312,14 @@ class DashboardController extends Controller
             if (!$actor) continue;
 
             $isActor = (int) $actor->id === (int) $user->id;
-            $isTaskAssigner = (int) $task->assigned_by === (int) $user->id;
             $isTaskAssignee = DB::table('task_user')
                 ->where('task_id', $task->id)
                 ->where('user_id', $user->id)
                 ->exists();
 
-            // Admin/Manager: show if they acted or on their assigned tasks
+            // Admin/Manager: see all task workflow events today
             // Member: show only their own actions or actions on their tasks
-            if ($isAdminOrManager) {
-                if (!$isActor && !$isTaskAssigner && !$isTaskAssignee) continue;
-            } else {
-                if (!$isActor && !$isTaskAssignee) continue;
-            }
+            if (!$isAdminOrManager && !$isActor && !$isTaskAssignee) continue;
 
             $activities[] = [
                 'id' => "task_event_{$event->id}",
@@ -326,11 +352,8 @@ class DashboardController extends Controller
             $assignedUserIds = $this->normalizeAssignedUserIds($project->assigned_users);
             $isProjectAssignee = in_array((int) $user->id, $assignedUserIds, true);
 
-            if ($isAdminOrManager) {
-                if (!$isActor && !$isProjectCreator && !$isProjectAssignee) continue;
-            } else {
-                if (!$isActor && !$isProjectCreator && !$isProjectAssignee) continue;
-            }
+            // Admin/Manager: see all project workflow events today
+            if (!$isAdminOrManager && !$isActor && !$isProjectCreator && !$isProjectAssignee) continue;
 
             $activities[] = [
                 'id' => "project_event_{$event->id}",
@@ -359,14 +382,10 @@ class DashboardController extends Controller
             if (!$actor) continue;
 
             $isActor = (int) $actor->id === (int) $user->id;
-            $isDlvCreator = (int) $dlv->created_by === (int) $user->id;
             $isDlvAssignee = (int) $dlv->assigned_to === (int) $user->id;
 
-            if ($isAdminOrManager) {
-                if (!$isActor && !$isDlvCreator && !$isDlvAssignee) continue;
-            } else {
-                if (!$isActor && !$isDlvAssignee) continue;
-            }
+            // Admin/Manager: see all deliverable workflow events today
+            if (!$isAdminOrManager && !$isActor && !$isDlvAssignee) continue;
 
             $activities[] = [
                 'id' => "dlv_event_{$event->id}",
@@ -394,14 +413,10 @@ class DashboardController extends Controller
             if (!$actor) continue;
 
             $isActor = (int) $actor->id === (int) $user->id;
-            $isDlvCreator = (int) $dlv->created_by === (int) $user->id;
             $isDlvAssignee = (int) $dlv->assigned_to === (int) $user->id;
 
-            if ($isAdminOrManager) {
-                if (!$isActor && !$isDlvCreator && !$isDlvAssignee) continue;
-            } else {
-                if (!$isActor && !$isDlvAssignee) continue;
-            }
+            // Admin/Manager: see all deliverable submissions today
+            if (!$isAdminOrManager && !$isActor && !$isDlvAssignee) continue;
 
             $activities[] = [
                 'id' => "dlv_sub_{$sub->id}",
@@ -454,7 +469,8 @@ class DashboardController extends Controller
         $query = Task::query();
 
         if (in_array($role, ['admin', 'manager'])) {
-            return $query;
+            $adminManagerIds = User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray();
+            return $query->whereIn('assigned_by', $adminManagerIds);
         }
 
         return $query->where(function ($q) use ($user) {
@@ -471,7 +487,8 @@ class DashboardController extends Controller
             ->whereRaw('JSON_LENGTH(assigned_users) > 0');
 
         if (in_array($role, ['admin', 'manager'])) {
-            return $query;
+            $adminManagerIds = User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray();
+            return $query->whereIn('created_by', $adminManagerIds);
         }
 
         return $query->where(function ($q) use ($user) {
@@ -538,6 +555,11 @@ class DashboardController extends Controller
         return ['completed', 'done', 'approved'];
     }
 
+    private function approvedTaskStatuses(): array
+    {
+        return ['approved'];
+    }
+
     private function inactiveTaskStatuses(): array
     {
         return ['completed', 'done', 'approved', 'abandoned'];
@@ -574,7 +596,7 @@ class DashboardController extends Controller
 
     private function pendingTaskStatuses(): array
     {
-        return ['pending', 'in_progress', 'In Progress', 'Planned', 'submitted', 'reopened'];
+        return ['pending', 'in_progress', 'In Progress', 'Planned', 'submitted', 'reopened', 'rejected'];
     }
 
     private function normalizeAssignedUserIds($assignedUsers): array

@@ -8,27 +8,42 @@ import { toUTCIso } from "../utils/formatDateTime";
 import "./Event.css";
 
 const TYPE_MAP = {
-  Meeting: "meeting",
-  Task: "task",
-  Review: "other",
-  Deadline: "deadline",
-  Personal: "personal",
+  "Meeting": "Meeting",
+  "Training": "Training",
+  "Workshop": "Workshop",
+  "Client Meeting": "Client Meeting",
+  "Company Event": "Company Event",
+  "Holiday": "Holiday",
+  "Interview": "Interview",
+  "Project Milestone": "Project Milestone",
+  "Internship Activity": "Internship Activity",
+  "Other": "Other",
 };
 
 const TYPE_MAP_REVERSE = {
-  meeting: "Meeting",
-  task: "Task",
-  other: "Review",
-  deadline: "Deadline",
-  personal: "Personal",
+  "Meeting": "Meeting",
+  "Training": "Training",
+  "Workshop": "Workshop",
+  "Client Meeting": "Client Meeting",
+  "Company Event": "Company Event",
+  "Holiday": "Holiday",
+  "Interview": "Interview",
+  "Project Milestone": "Project Milestone",
+  "Internship Activity": "Internship Activity",
+  "Other": "Other",
 };
 
 const COLOR_MAP = {
-  meeting: "#6366f1",
-  task: "#3b82f6",
-  other: "#f97316",
-  deadline: "#ef4444",
-  personal: "#22c55e",
+  "Meeting": "#6366f1",
+  "Training": "#3b82f6",
+  "Workshop": "#8b5cf6",
+  "Client Meeting": "#f59e0b",
+  "Company Event": "#22c55e",
+  "Holiday": "#ef4444",
+  "Interview": "#ec4899",
+  "Project Milestone": "#14b8a6",
+  "Internship Activity": "#06b6d4",
+  "Other": "#6b7280",
 };
 
 function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
@@ -114,10 +129,15 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
 
   const eventTypes = [
     { label: "Meeting", color: "blue" },
-    { label: "Task", color: "light-blue" },
-    { label: "Review", color: "green" },
-    { label: "Deadline", color: "red" },
-    { label: "Personal", color: "orange" },
+    { label: "Training", color: "light-blue" },
+    { label: "Workshop", color: "purple" },
+    { label: "Client Meeting", color: "amber" },
+    { label: "Company Event", color: "green" },
+    { label: "Holiday", color: "red" },
+    { label: "Interview", color: "pink" },
+    { label: "Project Milestone", color: "teal" },
+    { label: "Internship Activity", color: "cyan" },
+    { label: "Other", color: "gray" },
   ];
 
   const handleChange = (field, value) => {
@@ -152,7 +172,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
     const payload = {
       title: formData.title.trim(),
       description: formData.description.trim() || null,
-      type: TYPE_MAP[formData.eventType] || "meeting",
+      type: TYPE_MAP[formData.eventType] || "Meeting",
       color: COLOR_MAP[TYPE_MAP[formData.eventType]] || null,
       start_date: startDateTime,
       end_date: endDateTime,

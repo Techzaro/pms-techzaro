@@ -1,8 +1,8 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { useCalendarData, triggerCalendarSync } from "../../hooks/useCalendarData";
-import { TYPE_COLORS, TYPE_LABELS } from "../../pages/Calender";
+import { TYPE_COLORS, TYPE_LABELS, DEFAULT_EVENT_COLOR } from "../../pages/Calender";
 import API_URL from "../../config/api";
 import { authToken } from "../../utils/auth";
 import "./RightSidebar.css";
@@ -99,30 +99,52 @@ function RightSidebar({ isOpen, onClose }) {
   const getTypeLabel = (type) => TYPE_LABELS[type] || type;
   const [tasks, setTasks] = useState([]);
 
+  const fetchTodayTasks = useCallback(async () => {
+    try {
+      const token = authToken();
+      const response = await fetch(`${API_URL}/my-tasks`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+      const today = new Date().toISOString().split("T")[0];
+      const todayTasks = (data.data || []).filter(
+        (task) => task.due_date?.split("T")[0] === today
+      );
+
+      setTasks(todayTasks);
+    } catch (error) {
+      console.error("Error fetching tasks:", error);
+    }
+  }, []);
+
   useEffect(() => {
-    const fetchTasks = async () => {
-      try {
-        const token = authToken();
-        const response = await fetch(`${API_URL}/my-tasks`, {
-          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        });
+    fetchTodayTasks();
 
-        if (!response.ok) return;
-
-        const data = await response.json();
-        const today = new Date().toISOString().split("T")[0];
-        const todayTasks = (data.data || []).filter(
-          (task) => task.due_date?.split("T")[0] === today
-        );
-
-        setTasks(todayTasks);
-      } catch (error) {
-        console.error("Error fetching tasks:", error);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchTodayTasks();
       }
     };
+    document.addEventListener("visibilitychange", handleVisibility);
 
-    fetchTasks();
-  }, []);
+    // Check every minute if the day changed and refetch if so
+    let lastDate = new Date().toDateString();
+    const interval = setInterval(() => {
+      const currentDate = new Date().toDateString();
+      if (currentDate !== lastDate) {
+        lastDate = currentDate;
+        fetchTodayTasks();
+      }
+    }, 60000);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      clearInterval(interval);
+    };
+  }, [fetchTodayTasks]);
 
   return (
     <>
@@ -218,7 +240,7 @@ function RightSidebar({ isOpen, onClose }) {
                 })
                 .slice(0, 5)
                 .map((ev) => {
-                  const colors = TYPE_COLORS[ev.type] || TYPE_COLORS.meeting;
+                  const colors = TYPE_COLORS[ev.type] || DEFAULT_EVENT_COLOR;
                   const dateParts = (ev.start_date || ev.date || "").split("T")[0].split(" ")[0].split("-");
                   const evDate = new Date(+dateParts[0], +dateParts[1] - 1, +dateParts[2]).toLocaleDateString("en-US", {
                     month: "short",
@@ -300,7 +322,7 @@ function RightSidebar({ isOpen, onClose }) {
             </div>
             <div className="hover-popup-events">
               {hoveredDate.events.slice(0, 5).map((ev) => {
-                const colors = TYPE_COLORS[ev.type] || TYPE_COLORS.meeting;
+                const colors = TYPE_COLORS[ev.type] || DEFAULT_EVENT_COLOR;
                 const time = ev.all_day
                   ? "All Day"
                   : new Date(ev.start_date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });

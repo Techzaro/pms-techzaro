@@ -58,6 +58,7 @@ const SelfTasks = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [totalCount, setTotalCount] = useState(0);
   const [statusFilter, setStatusFilter] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
   const [orderedItems, setOrderedItems] = useState([]);
@@ -82,6 +83,7 @@ const SelfTasks = () => {
       .then((res) => (res.ok ? res.json() : { data: [] }))
       .then((data) => {
         setItems(data?.data || []);
+        setTotalCount(data?.total ?? 0);
       })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
@@ -151,12 +153,19 @@ const SelfTasks = () => {
   };
 
   const baseItems = orderedItems.length ? orderedItems : items;
+  const pendingStatuses = ["pending", "in_progress", "In Progress", "Planned", "submitted", "reopened", "rejected"];
   const filteredItems = statusFilter
     ? baseItems.filter((item) => {
         if (item.item_type === "project") {
+          if (statusFilter === "pending") {
+            return pendingStatuses.includes(item.status);
+          }
           const workflowStatuses = ["submitted","approved","rejected","reopened"];
           const displayStatus = workflowStatuses.includes(item.status) ? item.status : "pending";
           return displayStatus === statusFilter;
+        }
+        if (statusFilter === "pending") {
+          return pendingStatuses.includes(item.status);
         }
         return item.status === statusFilter;
       })
@@ -176,6 +185,17 @@ const SelfTasks = () => {
         <div className="task-text">
           <h3>Self Tasks</h3>
           <p>Tasks and projects you assigned to yourself</p>
+          <div className="task-count-badge" style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
+            <span style={{ background: "#EEF2FF", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+              Total: {totalCount} items
+            </span>
+            <span style={{ background: "#F0FDF4", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+              Tasks: {filteredItems.filter(i => i.item_type !== "project").length}
+            </span>
+            <span style={{ background: "#EEF2FF", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+              Projects: {filteredItems.filter(i => i.item_type === "project").length}
+            </span>
+          </div>
         </div>
 
         <div className="task-btns">

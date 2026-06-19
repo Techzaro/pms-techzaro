@@ -2,6 +2,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect, useCallback } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
@@ -29,11 +30,16 @@ const STATUS_TEXT_COLORS = {
 };
 
 function SelfDeliveries() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [deliverables, setDeliverables] = useState([]);
   const [orderedDeliverables, setOrderedDeliverables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const status = searchParams.get("status");
+    if (status) return status;
+    return "";
+  });
   const [timeFilter, setTimeFilter] = useState("");
   const [submitModal, setSubmitModal] = useState({ open: false, deliverable: null });
   const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
@@ -41,6 +47,11 @@ function SelfDeliveries() {
   useEffect(() => {
     setOrderedDeliverables(deliverables);
   }, [deliverables]);
+
+  useEffect(() => {
+    const status = searchParams.get("status") || "";
+    setStatusFilter(status);
+  }, [searchParams]);
 
   const fetchDeliverables = () => {
     setLoading(true);
@@ -66,6 +77,15 @@ function SelfDeliveries() {
   }, [search, statusFilter, timeFilter]);
 
   useRefreshOnEvent(['deliverable:updated', 'deliverable:created', 'deliverable:deleted'], fetchDeliverables);
+
+  const selectStatusFilter = (filter) => {
+    setStatusFilter(filter);
+    if (filter) {
+      setSearchParams({ status: filter });
+    } else {
+      setSearchParams({});
+    }
+  };
 
   const handleDeliverableReorder = useCallback((reordered) => {
     setOrderedDeliverables(reordered);
@@ -142,17 +162,20 @@ function SelfDeliveries() {
         </div>
 
         <div className="task-progress">
-          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
-          <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => setStatusFilter("pending")} style={{ cursor: "pointer" }}>
+          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
+          <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
+            <GoDotFill color="#EF4444" /> Deliverables Due Today
+          </p>
+          <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Draft
           </p>
-          <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
+          <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Submitted
           </p>
-          <p className={`Reopened ${statusFilter === "rework_required" ? "active" : ""}`} onClick={() => setStatusFilter("rework_required")} style={{ cursor: "pointer" }}>
+          <p className={`Reopened ${statusFilter === "rework_required" ? "active" : ""}`} onClick={() => selectStatusFilter("rework_required")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Rework Required
           </p>
-          <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
+          <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Approved
           </p>
         </div>
@@ -176,7 +199,7 @@ function SelfDeliveries() {
           ) : deliverables.length === 0 ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
           ) : (
-            <SortableTableWrapper items={orderedDeliverables} onReorder={handleDeliverableReorder} idKey="id">
+            <SortableTableWrapper items={orderedDeliverables.length ? orderedDeliverables : deliverables} onReorder={handleDeliverableReorder} idKey="id" as="div">
               {(item, idx) => {
                 const colors = getRandomColors(item.id);
                 const canSubmit = item.status === "pending";

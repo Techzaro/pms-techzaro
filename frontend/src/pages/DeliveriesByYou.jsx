@@ -30,14 +30,18 @@ const STATUS_TEXT_COLORS = {
 };
 
 function DeliveriesByYou() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [deliverables, setDeliverables] = useState([]);
   const [orderedDeliverables, setOrderedDeliverables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const status = searchParams.get("status");
+    if (status) return status;
+    return "";
+  });
   const [timeFilter, setTimeFilter] = useState("");
   const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
-  const [searchParams, setSearchParams] = useSearchParams();
 
   const fetchDeliverables = () => {
     setLoading(true);
@@ -88,8 +92,22 @@ function DeliveriesByYou() {
   }, []);
 
   useEffect(() => {
+    const status = searchParams.get("status") || "";
+    setStatusFilter(status);
+  }, [searchParams]);
+
+  useEffect(() => {
     setOrderedDeliverables(deliverables);
   }, [deliverables]);
+
+  const selectStatusFilter = (filter) => {
+    setStatusFilter(filter);
+    if (filter) {
+      setSearchParams({ status: filter });
+    } else {
+      setSearchParams({});
+    }
+  };
 
   const handleDeliverableReorder = useCallback((reordered) => {
     setOrderedDeliverables(reordered);
@@ -167,20 +185,23 @@ function DeliveriesByYou() {
         </div>
 
         <div className="task-progress">
-          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
-          <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => setStatusFilter("pending")} style={{ cursor: "pointer" }}>
+          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
+          <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
+            <GoDotFill color="#EF4444" /> Deliverables Due Today
+          </p>
+          <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Pending
           </p>
-          <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
+          <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Submitted
           </p>
-          <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => setStatusFilter("reopened")} style={{ cursor: "pointer" }}>
+          <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Reopened
           </p>
-          <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
+          <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Approved
           </p>
-          <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => setStatusFilter("rejected")} style={{ cursor: "pointer" }}>
+          <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Rejected
           </p>
         </div>

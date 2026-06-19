@@ -37,9 +37,29 @@ export function useUnifiedSummary() {
       fetchSummary();
     };
 
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchSummary();
+      }
+    };
+
+    // Check every minute if the day changed
+    let lastDate = new Date().toDateString();
+    const interval = setInterval(() => {
+      const currentDate = new Date().toDateString();
+      if (currentDate !== lastDate) {
+        lastDate = currentDate;
+        fetchSummary();
+      }
+    }, 60000);
+
     window.addEventListener("calendar-sync", handleSync);
+    document.addEventListener("visibilitychange", handleVisibility);
+
     return () => {
       window.removeEventListener("calendar-sync", handleSync);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      clearInterval(interval);
     };
   }, [fetchSummary]);
 

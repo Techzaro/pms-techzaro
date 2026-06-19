@@ -71,8 +71,14 @@ export default function SortableTableWrapper({
 
   const activeItem = activeId ? localItems.find((i) => String(i[idKey]) === String(activeId)) : null;
 
+  // When rendered inside <tbody>, portal the DndKit accessibility <div> to <body>
+  // to avoid "div cannot be a child of tbody" HTML nesting warnings.
+  const dndAccessibility = as === 'tr' && typeof document !== 'undefined'
+    ? { container: document.body }
+    : undefined;
+
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel} accessibility={dndAccessibility}>
       <SortableContext items={localItems.map((i) => String(i[idKey]))} strategy={verticalListSortingStrategy} disabled={disabled}>
         {localItems.map((item, idx) => (
           <SortableItem 

@@ -52,7 +52,12 @@ function Tasks() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [orderedItems, setOrderedItems] = useState([]);
-  const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") === "due_today" ? "due_today" : "");
+  const [totalCount, setTotalCount] = useState(0);
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const status = searchParams.get("status");
+    if (status) return status;
+    return "";
+  });
   const [timeFilter, setTimeFilter] = useState("");
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [submitProjectModal, setSubmitProjectModal] = useState({ open: false, project: null });
@@ -76,6 +81,7 @@ function Tasks() {
       .then((res) => (res.ok ? res.json() : { data: [] }))
       .then((data) => {
         setItems(data?.data || []);
+        setTotalCount(data?.total ?? 0);
       })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
@@ -106,10 +112,10 @@ function Tasks() {
   }, []);
 
   useEffect(() => {
-    const nextFilter = searchParams.get("status") === "due_today" ? "due_today" : "";
+    const nextFilter = searchParams.get("status") || "";
     setStatusFilter((current) => {
-      if (nextFilter === "due_today" || current === "due_today") {
-        return current === nextFilter ? current : nextFilter;
+      if (nextFilter === "due_today" || current === "due_today" || nextFilter !== current) {
+        return nextFilter;
       }
       return current;
     });
@@ -117,8 +123,8 @@ function Tasks() {
 
   const selectStatusFilter = (filter) => {
     setStatusFilter(filter);
-    if (filter === "due_today") {
-      setSearchParams({ status: "due_today" });
+    if (filter) {
+      setSearchParams({ status: filter });
     } else {
       setSearchParams({});
     }
@@ -199,12 +205,19 @@ function Tasks() {
   };
 
   const baseItems = orderedItems.length ? orderedItems : items;
+  const pendingStatuses = ["pending", "in_progress", "In Progress", "Planned", "submitted", "reopened", "rejected"];
   const filteredItems = statusFilter && statusFilter !== "due_today"
     ? items.filter((item) => {
         if (item.item_type === "project") {
+          if (statusFilter === "pending") {
+            return pendingStatuses.includes(item.status);
+          }
           const workflowStatuses = ["submitted","approved","rejected","reopened"];
           const displayStatus = workflowStatuses.includes(item.status) ? item.status : "pending";
           return displayStatus === statusFilter;
+        }
+        if (statusFilter === "pending") {
+          return pendingStatuses.includes(item.status);
         }
         return item.status === statusFilter;
       })
@@ -224,6 +237,17 @@ function Tasks() {
         <div className="task-text">
           <h3>Tasks Assigned To You</h3>
           <p>Manage and track your tasks and projects</p>
+          <div className="task-count-badge" style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
+            <span style={{ background: "#EEF2FF", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+              Total: {totalCount} items
+            </span>
+            <span style={{ background: "#F0FDF4", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+              Tasks: {filteredItems.filter(i => i.item_type !== "project").length}
+            </span>
+            <span style={{ background: "#EEF2FF", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+              Projects: {filteredItems.filter(i => i.item_type === "project").length}
+            </span>
+          </div>
         </div>
 
         <div className="task-btns">
@@ -306,6 +330,7 @@ function Tasks() {
             items={filteredItems.map((i) => ({ ...i, sortableId: `${i.item_type}-${i.id}` }))} 
             onReorder={(reordered) => handleTaskListReorder(reordered)} 
             idKey="sortableId"
+            as="div"
           >
             {(item, idx) => {
               const isProject = item.item_type === "project";
