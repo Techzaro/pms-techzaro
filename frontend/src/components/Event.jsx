@@ -4,7 +4,6 @@ import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
 import UserSelectDropdown from "./UserSelectDropdown";
 import { publish } from "../utils/eventBus";
-import { toUTCIso } from "../utils/formatDateTime";
 import "./Event.css";
 
 const TYPE_MAP = {
@@ -65,6 +64,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
     startTime: "10:00",
     endDate: getLocalDateStr(new Date()),
     endTime: "11:00",
+    hasEndDate: false,
     eventType: "Meeting",
     allDay: false,
   });
@@ -75,13 +75,16 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
     if (editEvent) {
       const start = new Date(editEvent.start_date);
       const end = editEvent.end_date ? new Date(editEvent.end_date) : start;
+      const startStr = getLocalDateStr(start);
+      const endStr = getLocalDateStr(end);
       setFormData({
         title: editEvent.title || "",
         description: editEvent.description || "",
-        startDate: getLocalDateStr(start),
+        startDate: startStr,
         startTime: start.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
-        endDate: getLocalDateStr(end),
+        endDate: endStr,
         endTime: end.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
+        hasEndDate: startStr !== endStr || (editEvent.end_date && editEvent.start_date !== editEvent.end_date),
         eventType: TYPE_MAP_REVERSE[editEvent.type] || "Meeting",
         allDay: editEvent.all_day || false,
       });
@@ -95,6 +98,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
         startTime: "10:00",
         endDate: getLocalDateStr(new Date()),
         endTime: "11:00",
+        hasEndDate: false,
         eventType: "Meeting",
         allDay: false,
       });
@@ -161,13 +165,12 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
     setLoading(true);
     setError("");
 
-    const startDateTime = formData.allDay
-      ? toUTCIso(formData.startDate + "T00:00")
-      : toUTCIso(formData.startDate + "T" + formData.startTime);
+    const startDateTime = formData.startDate + "T" + (formData.allDay ? "00:00" : formData.startTime) + ":00";
 
-    const endDateTime = formData.allDay
-      ? toUTCIso((formData.endDate || formData.startDate) + "T23:59")
-      : toUTCIso(formData.endDate + "T" + formData.endTime);
+    const endDateToUse = formData.hasEndDate ? formData.endDate : formData.startDate;
+    const endTimeToUse = formData.hasEndDate ? formData.endTime : (formData.allDay ? "23:59" : formData.startTime);
+
+    const endDateTime = endDateToUse + "T" + endTimeToUse + ":00";
 
     const payload = {
       title: formData.title.trim(),
@@ -280,20 +283,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
 
         {step === 2 && (
           <div className="event-step">
-            <label className="event-label required">Date &amp; Time</label>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <input
-                type="checkbox"
-                id="allDay"
-                checked={formData.allDay}
-                onChange={(e) => handleChange("allDay", e.target.checked)}
-                style={{ width: 16, height: 16, cursor: "pointer" }}
-              />
-              <label htmlFor="allDay" style={{ fontSize: 14, color: "#374151", cursor: "pointer" }}>
-                All Day Event
-              </label>
-            </div>
+            <label className="event-label required">Event Date</label>
 
             <div className="event-datetime-row">
               <input
@@ -312,37 +302,70 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
               )}
             </div>
 
-            <div className="event-datetime-row">
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <input
-                type="date"
-                className="event-input"
-                value={formData.endDate}
-                onChange={(e) => handleChange("endDate", e.target.value)}
+                type="checkbox"
+                id="allDay"
+                checked={formData.allDay}
+                onChange={(e) => handleChange("allDay", e.target.checked)}
+                style={{ width: 16, height: 16, cursor: "pointer" }}
               />
-              {!formData.allDay && (
-                <input
-                  type="time"
-                  className="event-input"
-                  value={formData.endTime}
-                  onChange={(e) => handleChange("endTime", e.target.value)}
-                />
-              )}
+              <label htmlFor="allDay" style={{ fontSize: 14, color: "#374151", cursor: "pointer" }}>
+                All Day Event
+              </label>
             </div>
 
-            <label className="event-label">Event Type</label>
-            <div className="event-type-pills">
-              {eventTypes.map((type) => (
-                <button
-                  key={type.label}
-                  className={`type-pill type-${type.color} ${
-                    formData.eventType === type.label ? "active" : ""
-                  }`}
-                  onClick={() => handleChange("eventType", type.label)}
-                >
-                  {type.label}
-                </button>
-              ))}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <input
+                type="checkbox"
+                id="hasEndDate"
+                checked={formData.hasEndDate}
+                onChange={(e) => {
+                  handleChange("hasEndDate", e.target.checked);
+                  if (!e.target.checked) {
+                    handleChange("endDate", formData.startDate);
+                    handleChange("endTime", formData.startTime);
+                  }
+                }}
+                style={{ width: 16, height: 16, cursor: "pointer" }}
+              />
+              <label htmlFor="hasEndDate" style={{ fontSize: 14, color: "#374151", cursor: "pointer" }}>
+                Add End Date &amp; Time
+              </label>
             </div>
+
+            {formData.hasEndDate && (
+              <div className="event-datetime-row">
+                <input
+                  type="date"
+                  className="event-input"
+                  value={formData.endDate}
+                  onChange={(e) => handleChange("endDate", e.target.value)}
+                />
+                {!formData.allDay && (
+                  <input
+                    type="time"
+                    className="event-input"
+                    value={formData.endTime}
+                    onChange={(e) => handleChange("endTime", e.target.value)}
+                  />
+                )}
+              </div>
+            )}
+
+            <label className="event-label">Event Type</label>
+            <select
+              className="event-input"
+              value={formData.eventType}
+              onChange={(e) => handleChange("eventType", e.target.value)}
+              style={{ marginBottom: 12 }}
+            >
+              {eventTypes.map((type) => (
+                <option key={type.label} value={type.label}>
+                  {type.label}
+                </option>
+              ))}
+            </select>
 
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 18 }}>
               <input

@@ -61,3 +61,27 @@ export function getNowDatetimeLocal() {
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+export function formatEventDate(event) {
+  if (!event) return "—";
+  const dateStr = event.start_date || event.date;
+  return formatDateOnly(dateStr);
+}
+
+export function formatEventTime(event) {
+  if (!event) return "—";
+  if (event.all_day) return "All Day";
+  const dateStr = event.start_date || event.date;
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+export function formatEventDateTime(event) {
+  if (!event) return "—";
+  const dateStr = event.start_date || event.date;
+  if (!dateStr) return "—";
+  if (event.all_day) return formatDateOnly(dateStr);
+  return `${formatDateOnly(dateStr)} • ${formatEventTime(event)}`;
+}

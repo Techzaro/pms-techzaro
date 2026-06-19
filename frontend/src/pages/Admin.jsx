@@ -11,40 +11,10 @@ import { authToken, getUser, getCurrentRole, rolePath } from "../utils/auth";
 import { useUnifiedSummary } from "../hooks/useUnifiedSummary";
 import API_URL from "../config/api";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import EventInfoPopup from "../components/EventInfoPopup";
+import EventsWidget from "../components/EventsWidget";
 import "./Admin.css";
 
-
-const TYPE_COLORS = {
-  Meeting: { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" },
-  Training: { bg: "#eff6ff", text: "#3b82f6", dot: "#3b82f6" },
-  Workshop: { bg: "#f5f3ff", text: "#8b5cf6", dot: "#8b5cf6" },
-  "Client Meeting": { bg: "#fffbeb", text: "#f59e0b", dot: "#f59e0b" },
-  "Company Event": { bg: "#ecfdf5", text: "#22c55e", dot: "#22c55e" },
-  Holiday: { bg: "#fef2f2", text: "#ef4444", dot: "#ef4444" },
-  Interview: { bg: "#fdf2f8", text: "#ec4899", dot: "#ec4899" },
-  "Project Milestone": { bg: "#f0fdfa", text: "#14b8a6", dot: "#14b8a6" },
-  "Internship Activity": { bg: "#ecfeff", text: "#06b6d4", dot: "#06b6d4" },
-  Other: { bg: "#f3f4f6", text: "#6b7280", dot: "#6b7280" },
-  task: { bg: "#eff6ff", text: "#3b82f6", dot: "#3b82f6" },
-  project: { bg: "#f5f3ff", text: "#8b5cf6", dot: "#8b5cf6" },
-  deliverable: { bg: "#f0fdf4", text: "#16a34a", dot: "#16a34a" },
-};
-
-const TYPE_LABELS = {
-  Meeting: "Meeting",
-  Training: "Training",
-  Workshop: "Workshop",
-  "Client Meeting": "Client Meeting",
-  "Company Event": "Company Event",
-  Holiday: "Holiday",
-  Interview: "Interview",
-  "Project Milestone": "Project Milestone",
-  "Internship Activity": "Internship Activity",
-  Other: "Other",
-  task: "Task",
-  project: "Project",
-  deliverable: "Deliverable",
-};
 
 const formatDisplayDate = (d) => {
   return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
@@ -60,6 +30,7 @@ function Admin() {
   const [projects, setProjects] = useState([]);
   const { today: todayEvents, upcoming: upcomingEvents } = useUnifiedSummary();
   const [dashboard, setDashboard] = useState(null);
+  const [selectedEvent, setSelectedEvent] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -788,182 +759,20 @@ function Admin() {
             )}
           </div>
 
-          {/* TODAY'S ACTIVITY */}
-          <div style={{ background: "#fff", borderRadius: "20px", padding: "24px", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", marginBottom: "30px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "600" }}>Today's Activity</h3>
-              <button
-                onClick={() => navigate(rolePath("tasks"))}
-                style={{ background: "transparent", border: "none", color: "#6366F1", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}
-              >
-                View All Tasks
-              </button>
-            </div>
-            {completedToday.length === 0 ? (
-              <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No activity today</p>
-            ) : (
-              completedToday.map((item, index) => {
-                const cfg = activityActionConfig[item.action] || activityActionConfig.submitted;
-                return (
-                  <div
-                    key={item.id || index}
-                    onClick={() => {
-                      if (item.module === "task") {
-                        const taskId = item.entity_id || String(item.id).replace("task_event_", "").replace("task_sub_", "");
-                        navigate(rolePath(`tasks/task-details/${taskId}`), { state: { from: "admin" } });
-                      } else if (item.module === "project") {
-                        const projectId = item.entity_id || String(item.id).replace("project_event_", "");
-                        navigate(rolePath(`projects/project-details/${projectId}`), { state: { from: "admin" } });
-                      } else {
-                        const dlvId = item.entity_id || String(item.id).replace("dlv_event_", "").replace("dlv_sub_", "");
-                        navigate(rolePath(`deliveries/deliverable-details/${dlvId}`), { state: { from: "admin" } });
-                      }
-                    }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "14px 0",
-                      borderBottom: index < completedToday.length - 1 ? "1px solid #F3F4F6" : "none",
-                      cursor: "pointer",
-                      borderRadius: "8px",
-                      transition: "background 0.15s",
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "#F9FAFB"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "14px", flex: 1, minWidth: 0 }}>
-                      {/* Icon */}
-                      <div style={{
-                        width: "40px",
-                        height: "40px",
-                        borderRadius: "50%",
-                        background: cfg.bg,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}>
-                        <span style={{ fontSize: "16px", color: cfg.color }}>{cfg.icon}</span>
-                      </div>
-
-                      {/* Message */}
-                      <div style={{ minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: "14px", color: "#374151", lineHeight: "1.4" }}>
-                          {getActivityMessage(item)}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Actor Avatar + Time */}
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0, marginLeft: "12px" }}>
-                      {/* Actor Avatar */}
-                      <div
-                        title={item.actor_name}
-                        style={{
-                          width: "28px",
-                          height: "28px",
-                          borderRadius: "50%",
-                          background: "#1a1a1a",
-                          color: "#fff",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: "10px",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          border: "2px solid #fff",
-                        }}
-                      >
-                        {getInitials(item.actor_name)}
-                      </div>
-
-                      {/* Time */}
-                      <span style={{ color: "#9CA3AF", fontSize: "13px", whiteSpace: "nowrap" }}>
-                        {item.time_ago}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-         
         </div>
 
-         <div className="calender-sidebar">
-
-          {/* TODAY AGENDA */}
-          <div className="task-card">
-            <h3>
-              Today <span className="today-date">• {formatDisplayDate(new Date())}</span>
-            </h3>
-
-            <div className="agenda-list">
-              {todayEvents.length === 0 ? (
-                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
-                  No events today
-                </p>
-              ) : (
-                todayEvents.map((ev) => {
-                  const colors = TYPE_COLORS[ev.type] || { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" };
-                  const time = ev.all_day ? "All Day" : new Date(ev.start_date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-                  return (
-                    <div className="agenda-item" key={ev.id}>
-                      <span className="agenda-dot" style={{ background: colors.dot }} />
-                      <div className="agenda-content">
-                        <div className="agenda-top">
-                          <h4>{time}</h4>
-                          <span>{TYPE_LABELS[ev.type] || ev.type}</span>
-                        </div>
-                        <p>{ev.title}</p>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-          </div>
-<br/>
-
-          {/* UPCOMING DEADLINES */}
-          <div className="task-card">
-            <p style={{fontWeight:"bold",fontSize:"20px", margin: 0}}>Upcoming Deadlines</p>
-            <br />
-
-            <div className="deadline-list">
-              {upcomingEvents.length === 0 ? (
-                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
-                  No upcoming events
-                </p>
-              ) : (
-                upcomingEvents.slice(0, 5).map((ev) => {
-                  const colors = TYPE_COLORS[ev.type] || { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" };
-                  const parts = (ev.start_date || ev.date || "").split("T")[0].split(" ")[0].split("-");
-                  const evDate = new Date(+parts[0], +parts[1] - 1, +parts[2]).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-                  return (
-                    <div className="deadline-item" key={ev.id}>
-                      <div>
-                        <h4>{ev.title}</h4>
-                        <div className="dealine-date" style={{ display: "flex", alignItems: "center", gap: 40 }}>
-                          <p>{TYPE_LABELS[ev.type] || ev.type}</p>
-                          <span className="deadline-date" style={{ color: colors.dot }}>{evDate}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-          
-          </div>
-
+        <div className="calender-sidebar">
+          <EventsWidget
+            todayEvents={todayEvents}
+            upcomingEvents={upcomingEvents}
+            onEventClick={(ev) => setSelectedEvent(ev)}
+            currentRole={currentRole}
+          />
         </div>
 
       </div>
+
+      <EventInfoPopup event={selectedEvent} onClose={() => setSelectedEvent(null)} />
 
     </div>
   );

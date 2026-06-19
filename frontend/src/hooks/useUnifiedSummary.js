@@ -19,8 +19,8 @@ export function useUnifiedSummary() {
       if (res.ok) {
         const data = await res.json();
         setSummary({
-          today: data.today || [],
-          upcoming: data.upcoming || [],
+          today: (data.today || []).filter(ev => ev.source === "manual"),
+          upcoming: (data.upcoming || []).filter(ev => ev.source === "manual"),
         });
       }
     } catch (err) {

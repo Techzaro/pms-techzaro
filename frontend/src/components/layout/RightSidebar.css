@@ -327,8 +327,8 @@
    HOVER POPUP
 ========================= */
 .hover-popup {
-    position: absolute;
-    z-index: 9999;
+    position: fixed;
+    z-index: 10010;
     background: #fff;
     border-radius: 14px;
     padding: 14px;

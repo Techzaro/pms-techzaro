@@ -4,9 +4,13 @@ import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { useUnifiedSummary } from "../hooks/useUnifiedSummary";
 import "../pages/Calender.css";
 import "../components/Event.css";
-import { ChevronLeft, ChevronRight, Search, Plus, Trash2, Edit3 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, Plus } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Event from "../components/Event";
+import EventInfoPopup from "../components/EventInfoPopup";
+import ItemDetailPopup from "../components/ItemDetailPopup";
+import DayPopup from "../components/DayPopup";
+import { formatEventDateTime } from "../utils/formatDateTime";
 import { authToken, getCurrentRole, getUser } from "../utils/auth";
 import API_URL from "../config/api";
 import { publish } from "../utils/eventBus";
@@ -95,6 +99,8 @@ function Calender() {
   const [showDayPopup, setShowDayPopup] = useState(false);
   const [search, setSearch] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(null);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [selectedItem, setSelectedItem] = useState(null);
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   const [searchParams] = useSearchParams();
@@ -355,6 +361,7 @@ function Calender() {
                       </p>
                       {dayEvents.slice(0, 2).map((ev) => {
                         const colors = TYPE_COLORS[ev.type] || DEFAULT_EVENT_COLOR;
+                        const sourceIcon = ev.source === "task" ? "📋" : ev.source === "deliverable" ? "📦" : ev.source === "project" ? "🚀" : "📅";
                         return (
                           <div
                             key={ev.id}
@@ -362,16 +369,11 @@ function Calender() {
                             style={{ background: colors.bg, marginBottom: 4, cursor: "pointer" }}
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (ev.source === "manual" && canManageEvents) {
-                                handleEdit(ev);
-                              } else {
-                                setSelectedDay(date);
-                                setShowDayPopup(true);
-                              }
+                              setSelectedItem(ev);
                             }}
                           >
                             <p style={{ color: colors.text, fontSize: 11, margin: 0 }}>
-                              {ev.title}
+                              {sourceIcon} {ev.title}
                             </p>
                           </div>
                         );
@@ -407,22 +409,29 @@ function Calender() {
              <div className="agenda-list">
               {todayEvents.length === 0 ? (
                 <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
-                  No events today
+                  No events scheduled for today.
                 </p>
               ) : (
                 todayEvents.map((ev) => {
                   const colors = TYPE_COLORS[ev.type] || DEFAULT_EVENT_COLOR;
-                  const dateTimeStr = ev.start_date || ev.date || "";
-                  const time = ev.all_day ? "All Day" : new Date(dateTimeStr).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
                   return (
                     <div className="agenda-item" key={ev.id}>
                       <span className="agenda-dot" style={{ background: colors.dot }} />
                       <div className="agenda-content">
-                        <div className="agenda-top">
-                          <h4>{time}</h4>
-                          <span>{TYPE_LABELS[ev.type] || ev.type}</span>
-                        </div>
-                        <p>{ev.title}</p>
+                        <p
+                          onClick={() => setSelectedEvent(ev)}
+                          style={{ margin: 0, fontWeight: 600, fontSize: "14px", color: "#111827", cursor: "pointer" }}
+                          onMouseEnter={(e) => { e.target.style.color = "#6366f1"; }}
+                          onMouseLeave={(e) => { e.target.style.color = "#111827"; }}
+                        >
+                          {ev.title}
+                        </p>
+                        <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#6b7280" }}>
+                          {formatEventDateTime(ev)}
+                        </p>
+                        <span style={{ fontSize: "11px", color: colors.text, fontWeight: 600 }}>
+                          {TYPE_LABELS[ev.type] || ev.type}
+                        </span>
                       </div>
                     </div>
                   );
@@ -438,21 +447,25 @@ function Calender() {
             <div className="deadline-list">
               {upcomingEvents.length === 0 ? (
                 <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
-                  No upcoming events
+                  No upcoming events found.
                 </p>
               ) : (
                 upcomingEvents.map((ev) => {
                   const colors = TYPE_COLORS[ev.type] || DEFAULT_EVENT_COLOR;
-                  const dateStr = (ev.start_date || ev.date || "").split("T")[0].split(" ")[0];
-                  const [year, month, day] = dateStr.split("-").map(Number);
-                  const evDate = new Date(year, month - 1, day).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
                   return (
                     <div className="deadline-item" key={ev.id}>
-                      <div>
-                        <h4>{ev.title}</h4>
-                        <div className="dealine-date" style={{ display: "flex", alignItems: "center", gap: 40 }}>
-                          <p>{TYPE_LABELS[ev.type] || ev.type}</p>
-                          <span className="deadline-date" style={{ color: colors.dot }}>{evDate}</span>
+                      <div style={{ flex: 1 }}>
+                        <p
+                          onClick={() => setSelectedEvent(ev)}
+                          style={{ margin: 0, fontWeight: 600, fontSize: "14px", color: "#111827", cursor: "pointer" }}
+                          onMouseEnter={(e) => { e.target.style.color = "#6366f1"; }}
+                          onMouseLeave={(e) => { e.target.style.color = "#111827"; }}
+                        >
+                          {ev.title}
+                        </p>
+                        <div className="dealine-date" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                          <span className="deadline-date" style={{ color: colors.dot, fontSize: "13px" }}>{formatEventDateTime(ev)}</span>
+                          <span style={{ fontSize: "12px", color: "#9ca3af" }}>{TYPE_LABELS[ev.type] || ev.type}</span>
                         </div>
                       </div>
                     </div>
@@ -464,123 +477,17 @@ function Calender() {
         </div>
       </div>
 
-      {showDayPopup && selectedDay && (
-        <div
-          className="event-overlay"
-          onClick={() => { setShowDayPopup(false); setSelectedDay(null); }}
-          style={{ zIndex: 10001 }}
-        >
-          <div
-            className="event-modal"
-            style={{ maxWidth: 520 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="event-header">
-              <div>
-                <p className="event-label" style={{ marginBottom: 8 }}>
-                  {selectedDay.toLocaleDateString("en-US", { weekday: "long" })}
-                </p>
-                <h2 style={{ margin: 0, fontSize: 24 }}>
-                  {selectedDay.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-                </h2>
-              </div>
-              <button className="event-close" onClick={() => { setShowDayPopup(false); setSelectedDay(null); }}>×</button>
-            </div>
-
-            <div className="event-step">
-              {(() => {
-                const dayEvents = getEventsForDate(selectedDay);
-                if (dayEvents.length === 0) {
-                  return (
-                    <div style={{ textAlign: "center", padding: "20px 0" }}>
-                      <p style={{ color: "#9ca3af", marginBottom: 16 }}>No events for this day</p>
-                      <button
-                        className="btn-primary"
-                        onClick={() => { setShowDayPopup(false); setSelectedDay(null); setEditEvent(null); setShowEventModal(true); }}
-                      >
-                        Create Event
-                      </button>
-                    </div>
-                  );
-                }
-                return (
-                  <>
-                    {dayEvents.map((ev) => {
-                      const colors = TYPE_COLORS[ev.type] || DEFAULT_EVENT_COLOR;
-                      const time = ev.all_day ? "All Day" :
-                        `${new Date(ev.start_date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} - ${ev.end_date ? new Date(ev.end_date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""}`;
-                      return (
-                        <div key={ev.id} style={{
-                          padding: "14px 16px",
-                          borderRadius: 12,
-                          background: colors.bg,
-                          marginBottom: 10,
-                        }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                            <div style={{ flex: 1 }}>
-                              <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: colors.text }}>
-                                {ev.title}
-                              </p>
-                              <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>
-                                {time} • {TYPE_LABELS[ev.type] || ev.type}
-                              </p>
-                              {ev.description && (
-                                <p style={{ margin: "8px 0 0", fontSize: 13, color: "#4b5563", lineHeight: 1.5 }}>
-                                  {ev.description}
-                                </p>
-                              )}
-                            </div>
-                            <div style={{ display: "flex", gap: 6, flexShrink: 0, marginLeft: 8 }}>
-                              {canManageEvents && ev.source === "manual" && (
-                                <button
-                                  onClick={() => handleEdit(ev)}
-                                  style={{
-                                    border: "none", background: "white", borderRadius: 8,
-                                    padding: "6px 8px", cursor: "pointer", color: colors.text,
-                                    display: "flex", alignItems: "center",
-                                  }}
-                                  title="Edit"
-                                >
-                                  <Edit3 size={14} />
-                                </button>
-                              )}
-                              {canManageEvents && ev.source === "manual" && (
-                                <button
-                                  onClick={() => handleDelete(ev.id)}
-                                  disabled={deleteLoading === ev.id}
-                                  style={{
-                                    border: "none", background: "white", borderRadius: 8,
-                                    padding: "6px 8px", cursor: "pointer", color: "#ef4444",
-                                    display: "flex", alignItems: "center", opacity: deleteLoading === ev.id ? 0.5 : 1,
-                                  }}
-                                  title="Delete"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {canManageEvents && (
-                      <div style={{ marginTop: 12, textAlign: "center" }}>
-                        <button
-                          className="btn-primary"
-                          onClick={() => { setShowDayPopup(false); setSelectedDay(null); setEditEvent(null); setShowEventModal(true); }}
-                          style={{ padding: "8px 20px", fontSize: 13 }}
-                        >
-                          Add Another Event
-                        </button>
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
-      )}
+      <DayPopup
+        date={selectedDay}
+        events={selectedDay ? getEventsForDate(selectedDay) : []}
+        onClose={() => { setShowDayPopup(false); setSelectedDay(null); }}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        canManageEvents={canManageEvents}
+        onItemClick={(ev) => setSelectedItem(ev)}
+        deleteLoading={deleteLoading}
+        onAddEvent={() => { setShowDayPopup(false); setSelectedDay(null); setEditEvent(null); setShowEventModal(true); }}
+      />
 
       <Event
         isOpen={showEventModal}
@@ -588,6 +495,9 @@ function Calender() {
         onEventCreated={handleEventCreated}
         editEvent={editEvent}
       />
+
+      <EventInfoPopup event={selectedEvent} onClose={() => setSelectedEvent(null)} />
+      {selectedItem && <ItemDetailPopup item={selectedItem} role={currentRole} onClose={() => setSelectedItem(null)} onEdit={handleEdit} />}
     </DashboardLayout>
   );
 }

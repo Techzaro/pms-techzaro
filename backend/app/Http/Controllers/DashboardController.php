@@ -69,12 +69,7 @@ class DashboardController extends Controller
                 ->whereIn('status', $this->completedTaskStatuses())
                 ->count();
 
-        $approvedTasks = $taskQuery->clone()
-            ->whereIn('status', $this->approvedTaskStatuses())
-            ->count()
-            + $projectAsTaskQuery->clone()
-                ->whereIn('status', $this->approvedTaskStatuses())
-                ->count();
+        $approvedTasks = $this->getApprovedTasksCount($user, $role);
 
         $pendingTasks = $taskQuery->clone()
             ->whereIn('status', $this->pendingTaskStatuses())
@@ -548,6 +543,73 @@ class DashboardController extends Controller
                 ->whereDate('end_date', today())
                 ->whereNotIn('status', $this->dueTodayCompletedStatuses())
                 ->count();
+    }
+
+    /**
+     * Approved tasks count matching task list filter logic.
+     * Admin/Manager: tasks they assigned (excluding self-assigned).
+     * Team Lead/Member: tasks assigned to them (excluding self-assigned).
+     */
+    private function getApprovedTasksCount(User $user, string $role): int
+    {
+        if (in_array($role, ['admin', 'manager'])) {
+            $adminManagerIds = User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray();
+
+            // Tasks: same query as assignedByMe() — expand by assignee, skip self-assigned
+            $tasks = Task::with('assignees:id')
+                ->whereIn('assigned_by', $adminManagerIds)
+                ->where(function ($q) {
+                    $q->whereColumn('assigned_by', '!=', 'assigned_to')
+                      ->orWhereNull('assigned_to');
+                })
+                ->where('status', 'approved')
+                ->get();
+
+            $taskRows = $tasks->sum(function ($task) {
+                if ($task->assignees->isEmpty()) {
+                    return (int) $task->assigned_to !== (int) $task->assigned_by ? 1 : 0;
+                }
+                return $task->assignees
+                    ->filter(fn ($a) => (int) $a->id !== (int) $task->assigned_by)
+                    ->count();
+            });
+
+            // Projects: same query as assignedByMe()
+            $projects = Project::whereIn('created_by', $adminManagerIds)
+                ->whereNotNull('assigned_users')
+                ->whereRaw('JSON_LENGTH(assigned_users) > 0')
+                ->where('status', 'approved')
+                ->get();
+
+            $projectRows = $projects->sum(function ($project) {
+                $ids = is_string($project->assigned_users)
+                    ? json_decode($project->assigned_users, true) ?? []
+                    : ($project->assigned_users ?? []);
+                return collect($ids)
+                    ->filter(fn ($id) => (int) $id !== (int) $project->created_by)
+                    ->count();
+            });
+
+            return $taskRows + $projectRows;
+        }
+
+        // Team Lead / Member: matches myTasks() — assigned to user, not self-assigned
+        $tasks = Task::where(function ($q) use ($user) {
+                $q->whereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id))
+                  ->orWhere('assigned_to', $user->id);
+            })
+            ->where('assigned_by', '!=', $user->id)
+            ->where('status', 'approved')
+            ->count();
+
+        $projects = Project::whereJsonContains('assigned_users', (int) $user->id)
+            ->where('created_by', '!=', $user->id)
+            ->whereNotNull('assigned_users')
+            ->whereRaw('JSON_LENGTH(assigned_users) > 0')
+            ->where('status', 'approved')
+            ->count();
+
+        return $tasks + $projects;
     }
 
     private function completedTaskStatuses(): array
