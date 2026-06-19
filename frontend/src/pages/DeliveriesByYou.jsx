@@ -88,7 +88,7 @@ function DeliveriesByYou() {
           setViewModal({ open: true, deliverable: data.deliverable });
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -117,7 +117,7 @@ function DeliveriesByYou() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ items: payload }),
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   const getInitials = (name) => {
@@ -212,19 +212,15 @@ function DeliveriesByYou() {
         </div>
 
         <div className="container">
-          {/* Header Table */}
-          <table className="deliveries-table">
-            <thead>
-              <tr className="deliveries-table-header">
-                <th>Deliverable</th>
-                <th>Task</th>
-                <th className="assigned" style={{paddingLeft:"60px"}}>Assigned To</th>
-                <th>Status</th>
-                <th>Due Date</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-          </table>
+          {/* Header - Div based */}
+          <div className="deliveries-table-header">
+            <div>Deliverable</div>
+            <div>Task</div>
+            <div style={{ paddingLeft: "60px" }}>Assigned By</div>
+            <div>Status</div>
+            <div style={{ textAlign: "left", paddingRight: "20px" }}>Due Date</div>
+            <div>Action</div>
+          </div>
 
           {loading ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
@@ -232,81 +228,66 @@ function DeliveriesByYou() {
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
           ) : (
             <div className="sortable-table-container">
-              <table className="deliveries-table">
-                <tbody>
-                  <SortableTableWrapper 
-                    items={displayItems.map((item, index) => ({
-                      ...item,
-                      sortableId: `deliverable-${item.id}-${index}`
-                    }))} 
-                    onReorder={handleDeliverableReorder} 
-                    idKey="sortableId"
-                    as="tr"
-                  >
-                    {(item, idx) => {
-                      const colors = getRandomColors(item.id);
-                      const uniqueKey = `deliverable-${item.id}-${idx}`;
-                      return (
-                        <React.Fragment key={uniqueKey}>
-                          <td>
-                            <div className="user-box">
-                              <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                                {getInitials(item.title)}
-                              </div>
-                              <div>
-                                <div className="user-name">{item.title}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="task-title">{item.task?.title || item.project?.title || "-"}</div>
-                          </td>
-                          <td style={{paddingLeft:"50px"}}>
-                            <div className="user-box">
-                              <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                                {getInitials(item.assignee?.name)}
-                              </div>
-                              <div>
-                                <div className="user-name">{item.assignee?.name || "Unassigned"}</div>
-                                <div className="user-role">{item.assignee?.role ? item.assignee.role.replace("_", " ") : ""}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <span className="badge" style={{ 
-                              background: STATUS_COLORS[item.status] || "#F3F4F6", 
-                              color: STATUS_TEXT_COLORS[item.status] || "#374151", 
-                              padding: "4px 10px", 
-                              borderRadius: "999px", 
-                              fontSize: "12px", 
-                              fontWeight: 600 
-                            }}>
-                              <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                              {formatStatus(item.status)}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="date-box">
-                              <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.due_date)}</div>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="action-btns">
-                              <button 
-                                className="action-icon-btn action-view" 
-                                title="View" 
-                                onClick={() => setViewModal({ open: true, deliverable: item })}
-                              >
-                                <IoEyeOutline />
-                              </button>
-                            </div>
-                          </td>
-                        </React.Fragment>
-                      );
-                    }}
-                  </SortableTableWrapper>
-                </tbody>
-              </table>
+              {displayItems.map((item, index) => {
+                const colors = getRandomColors(item.id);
+                return (
+                  <div key={`deliverable-${item.id}-${index}`} className="deliveries-table-row">
+                    <div>
+                      <div className="user-box">
+                        <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                          {getInitials(item.title)}
+                        </div>
+                        <div>
+                          <div className="user-name">{item.title}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="task-title">{item.task?.title || item.project?.title || "-"}</div>
+                    </div>
+                    <div style={{ paddingLeft: "20px" }}>
+                      <div className="user-box">
+                        <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                          {getInitials(item.assignee?.name)}
+                        </div>
+                        <div>
+                          <div className="user-name">{item.assignee?.name || "Unassigned"}</div>
+                          <div className="user-role">{item.assignee?.role ? item.assignee.role.replace("_", " ") : ""}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="badge" style={{
+                        background: STATUS_COLORS[item.status] || "#F3F4F6",
+                        color: STATUS_TEXT_COLORS[item.status] || "#374151",
+                        padding: "4px 10px",
+                        borderRadius: "999px",
+                        fontSize: "12px",
+                        fontWeight: 600
+                      }}>
+                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                        {formatStatus(item.status)}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="date-box">
+                        <div>{formatDate(item.due_date)}</div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="action-btns">
+                        <button
+                          className="action-icon-btn action-view"
+                          title="View"
+                          onClick={() => setViewModal({ open: true, deliverable: item })}
+                        >
+                          <IoEyeOutline />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

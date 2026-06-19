@@ -201,6 +201,7 @@ function Tasks() {
   const projectSubmitBlockReason = (project) => {
     if ((project.pending_tasks_count || 0) > 0) return "Complete all project tasks first";
     if ((project.pending_deliverables_count || 0) > 0) return "Submit all deliverables first";
+    if (!project.can_submit) return "All tasks and deliverables must be approved";
     return "";
   };
 
@@ -238,13 +239,13 @@ function Tasks() {
           <h3>Tasks Assigned To You</h3>
           <p>Manage and track your tasks and projects</p>
           <div className="task-count-badge" style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
-            <span style={{ background: "#EEF2FF", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+            <span style={{ background: "#dedfe0", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
               Total: {totalCount} items
             </span>
-            <span style={{ background: "#F0FDF4", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+            <span style={{ background: "#d6d6d6", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
               Tasks: {filteredItems.filter(i => i.item_type !== "project").length}
             </span>
-            <span style={{ background: "#EEF2FF", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
+            <span style={{ background: "#d4d4d4", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
               Projects: {filteredItems.filter(i => i.item_type === "project").length}
             </span>
           </div>

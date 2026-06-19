@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -28,6 +28,27 @@ function Projects() {
   const [visibilitySelected, setVisibilitySelected] = useState({});
   const [visibilitySaving, setVisibilitySaving] = useState(false);
   const [submitProjectModal, setSubmitProjectModal] = useState({ open: false, project: null });
+  const [expandedDesc, setExpandedDesc] = useState({});
+  const [overflowDetected, setOverflowDetected] = useState({});
+  const descEls = useRef({});
+
+  const toggleDescription = (id) => {
+    setExpandedDesc((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const measureRef = (id) => (el) => {
+    if (el && overflowDetected[id] === undefined) {
+      descEls.current[id] = el;
+      // Need to wait for content to render before measuring
+      requestAnimationFrame(() => {
+        if (el.scrollHeight > el.clientHeight) {
+          setOverflowDetected((prev) => ({ ...prev, [id]: true }));
+        } else {
+          setOverflowDetected((prev) => ({ ...prev, [id]: false }));
+        }
+      });
+    }
+  };
 
   const currentUser = getUser();
   const currentRole = getCurrentRole();
@@ -342,11 +363,25 @@ function Projects() {
                   <div className="project-card-header">
                     <h3>{project.title}</h3>
                     <div
-                      className="card-subtitle"
-                      dangerouslySetInnerHTML={{
-                        __html: project.description || "No description available",
-                      }}
-                    />
+                      className={`card-subtitle${!expandedDesc[project.id] ? " clamped" : ""}`}
+                      ref={!expandedDesc[project.id] ? measureRef(project.id) : null}
+                    >
+                      <div
+                        dangerouslySetInnerHTML={{
+                          __html: project.description || "No description available",
+                        }}
+                      />
+                      {overflowDetected[project.id] && !expandedDesc[project.id] && (
+                        <button className="read-more-btn" style={{fontSize: "18px"}} onClick={() => toggleDescription(project.id)}>
+                          Read more
+                        </button>
+                      )}
+                    </div>
+                    {expandedDesc[project.id] && (
+                      <button className="show-less-btn" style={{fontSize: "18px"}} onClick={() => toggleDescription(project.id)}>
+                        Show less
+                      </button>
+                    )}
                   </div>
 
                   {/* PROGRESS */}
@@ -402,14 +437,14 @@ function Projects() {
                           <IoEyeOutline /> Show To
                         </button>
                       )}
-                      {canSubmitProject(project) && (
+                      {["pending", "reopened", "Planned", "in_progress", "In Progress"].includes(project.status) && (
                         <div style={{ position: "relative", display: "inline-flex" }}>
                           <button
                             className="action-icon-btn action-submit"
-                            title={hasPendingDeliverables(project) ? "Submit all deliverables first" : "Submit Project"}
-                            disabled={hasPendingDeliverables(project)}
-                            onClick={() => !hasPendingDeliverables(project) && setSubmitProjectModal({ open: true, project })}
-                            style={hasPendingDeliverables(project) ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                            title={project.can_submit ? "Submit Project" : "All tasks and deliverables must be approved"}
+                            disabled={!project.can_submit}
+                            onClick={() => project.can_submit && setSubmitProjectModal({ open: true, project })}
+                            style={!project.can_submit ? { opacity: 0.4, cursor: "not-allowed" } : {}}
                           >
                             <LuSend />
                           </button>
