@@ -317,7 +317,7 @@ function Sidebar() {
           )}
 
           <Link
-            to={user.role === "admin" || user.role === "manager" || user.role === "team_lead" || user.role === "teamlead" ? rolePath("reports") : rolePath("reports/user-performance/me")}
+            to={user.role === "admin" || user.role === "manager" ? rolePath("reports") : rolePath("reports/user-performance/me")}
             className={`sidebar-link ${isActive("reports") || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`) ? "active" : ""}`}
           >
             <MdBarChart />

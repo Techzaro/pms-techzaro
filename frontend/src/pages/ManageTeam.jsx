@@ -84,19 +84,6 @@ function ManageTeam() {
 
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const role = getCurrentRole();
-    const token = authToken();
-    if (!token || (role !== "admin" && role !== "manager")) {
-      navigate("/");
-      return;
-    }
-    fetchUsers();
-    fetchTeams();
-  }, []);
-
-  useRefreshOnEvent(["data:changed"], fetchTeams);
-
   const showMessage = (text, type = "success") => {
     setMessage(text);
     setMessageType(type);
@@ -138,6 +125,19 @@ function ManageTeam() {
       console.error("Failed to load teams", error);
     }
   };
+
+  useEffect(() => {
+    const role = getCurrentRole();
+    const token = authToken();
+    if (!token || (role !== "admin" && role !== "manager")) {
+      navigate("/");
+      return;
+    }
+    fetchUsers();
+    fetchTeams();
+  }, []);
+
+  useRefreshOnEvent(["data:changed"], fetchTeams);
 
   const handleSetLeader = async (teamId, memberId) => {
     const member = teams.flatMap(t => t.members).find(m => Number(m.id) === Number(memberId));

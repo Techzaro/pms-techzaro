@@ -180,6 +180,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/my-tasks', [TaskController::class, 'myTasks']);
     Route::get('/assigned-tasks', [TaskController::class, 'assignedByMe']);
     Route::get('/self-tasks', [TaskController::class, 'mySelfTasks']);
+    Route::get('/user-tasks/{userId}', [TaskController::class, 'userTasks']);
 
     /*
     | DELIVERABLES
@@ -252,6 +253,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reports/progress', [ReportController::class, 'progressReport']);
     Route::get('/reports/user/{user}', [ReportController::class, 'userPerformance']);
     Route::get('/reports/project/{project}', [ReportController::class, 'projectReport']);
+    Route::get('/reports/summary-cards', [ReportController::class, 'summaryCards']);
+    Route::get('/reports/user-performance-table', [ReportController::class, 'userPerformanceTable']);
 
     /*
     | ROLE BASED DASHBOARD INFO (all roles)
