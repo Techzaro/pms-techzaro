@@ -16,6 +16,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import API_URL from "../config/api";
 import "./ManageTeam.css";
 
@@ -93,6 +94,8 @@ function ManageTeam() {
     fetchUsers();
     fetchTeams();
   }, []);
+
+  useRefreshOnEvent(["data:changed"], fetchTeams);
 
   const showMessage = (text, type = "success") => {
     setMessage(text);

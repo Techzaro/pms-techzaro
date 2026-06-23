@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
-import { PiLineVerticalLight } from "react-icons/pi";
+
 import {
   Building2,
   Calendar,
@@ -20,8 +20,6 @@ import {
   Monitor,
   Pencil,
   Plus,
-  Percent,
-  Settings,
   Send,
   Tag,
   Trash2,
@@ -279,7 +277,7 @@ function ProjectDetails() {
     };
   }, [loadProject, navigate, showMessage]);
 
-  useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted'], loadProject);
+  useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted', 'project:updated', 'project:deleted', 'deliverable:updated'], loadProject);
 
   // Auto-mark project changes as read
   useEffect(() => {
@@ -679,7 +677,7 @@ function ProjectDetails() {
                       Edit Project
                     </button>
                   )}
-                  {(isAssigned || isCreator) && ["pending", "reopened", "Planned", "in_progress", "In Progress"].includes(project?.status) && (
+                  {isAssigned && ["pending", "reopened", "Planned", "in_progress", "In Progress"].includes(project?.status) && (
                     <button
                       type="button"
                       className="pd-btn-tx pd-btn-tx--primary"
@@ -702,48 +700,32 @@ function ProjectDetails() {
               </div>
             </header>
 
-            <div className="pd-stat-strip">
-              <div className="pd-mini-stat">
-                <div className="pd-mini-stat__ic pd-mini-stat__ic--blue">
-                  <Percent size={20} />
-                </div>
-                <div className="pd-mini-stat__text">
-                  <span className="pd-mini-stat__label">Overall Progress</span>
-                  <div className="pd-mini-stat__bar">
-                    <span style={{ width: `${progress}%` }} />
-                  </div>
-                  <span className="pd-mini-stat__val">{progress}%</span>
-                </div>
+            <div className="td-stats">
+              <div className="td-stat td-stat--progress">
+                <span className="td-stat-label">Overall Progress</span>
+                <div className="td-progress"><span style={{ width: `${progress}%` }} /></div>
+                <span className="td-stat-big">{progress}%</span>
               </div>
-              <div className="pd-stat">
-                <div className="pd-mini-stat1">
-                  <div className="pd-mini-stat__ic pd-mini-stat__ic--orange">
-                    <ClipboardList size={20} />
-                  </div>
-                  <div className="pd-mini-stat__text">
-                    <span className="pd-mini-stat__num">{tasks.length}</span>
-                    <span className="pd-mini-stat__label">Tasks</span>
+              <div className="td-stat td-stat--trio">
+                <div className="td-trio-item">
+                  <div className="td-stat-ic td-stat-ic--blue"><ClipboardList size={18} /></div>
+                  <div>
+                    <span className="td-stat-big">{tasks.length}</span>
+                    <span className="td-stat-label">Tasks</span>
                   </div>
                 </div>
-                <div className="pd-mini-stat2">
-                  <PiLineVerticalLight fontSize={60} color="#d4d7db" />
-                  <div className="pd-mini-stat__ic pd-mini-stat__ic--indigo">
-                    <Users size={20} />
-                  </div>
-                  <div className="pd-mini-stat__text">
-                    <span className="pd-mini-stat__num">{memberCount}</span>
-                    <span className="pd-mini-stat__label">Members</span>
+                <div className="td-trio-item">
+                  <div className="td-stat-ic td-stat-ic--orange"><Users size={18} /></div>
+                  <div>
+                    <span className="td-stat-big">{memberCount}</span>
+                    <span className="td-stat-label">Members</span>
                   </div>
                 </div>
-
-                <div className="pd-mini-stat3">
-                  <PiLineVerticalLight fontSize={60} color="#d4d7db" />
-                  <div className="pd-mini-stat__ic pd-mini-stat__ic--green">
-                    <CalendarDays size={20} />
-                  </div>
-                  <div className="pd-mini-stat__text">
-                    <span className="pd-mini-stat__num pd-mini-stat__num--sm">{formatDateTimeShort(project.end_date)}</span>
-                    <span className="pd-mini-stat__label">Deadline</span>
+                <div className="td-trio-item">
+                  <div className="td-stat-ic td-stat-ic--green"><CalendarDays size={18} /></div>
+                  <div>
+                    <span className="td-stat-big td-stat-big--sm">{formatDateTimeShort(project.end_date)}</span>
+                    <span className="td-stat-label">Deadline</span>
                   </div>
                 </div>
               </div>
@@ -754,7 +736,7 @@ function ProjectDetails() {
               <ProjectSubmissionPanel
                 project={project}
                 isCreator={isCreator}
-                isAssignee={isAssigned || isCreator}
+                isAssignee={isAssigned}
                 onProjectUpdate={handleProjectActionSuccess}
                 onSubmitClick={() => setSubmitProjectModal({ open: true, project })}
                 confirmDialog={confirmDialog}

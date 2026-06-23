@@ -195,15 +195,7 @@ function Tasks() {
     return Math.round((completed / total) * 100);
   };
 
-  const isProjectSubmitState = (project) =>
-    ["pending", "reopened", "Planned", "in_progress", "In Progress"].includes(project.status);
 
-  const projectSubmitBlockReason = (project) => {
-    if ((project.pending_tasks_count || 0) > 0) return "Complete all project tasks first";
-    if ((project.pending_deliverables_count || 0) > 0) return "Submit all deliverables first";
-    if (!project.can_submit) return "All tasks and deliverables must be approved";
-    return "";
-  };
 
   const baseItems = orderedItems.length ? orderedItems : items;
   const pendingStatuses = ["pending", "in_progress", "In Progress", "Planned", "submitted", "reopened", "rejected"];
@@ -282,19 +274,19 @@ function Tasks() {
           <GoDotFill color="#EF4444" /> Tasks Due Today
         </p>
         <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.pending} /> Pending
+          <GoDotFill /> Pending
         </p>
         <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.submitted} /> Submitted
+          <GoDotFill /> Submitted
         </p>
         <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.reopened} /> Reopened
+          <GoDotFill /> Reopened
         </p>
         <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.approved} /> Approved
+          <GoDotFill /> Approved
         </p>
         <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.rejected} /> Rejected
+          <GoDotFill /> Rejected
         </p>
       </div>
 
@@ -411,14 +403,12 @@ function Tasks() {
                     <div className="col-action">
                       <div className="action-btns">
                         <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'tasks' } })}><IoEyeOutline /></button>
-                        {isProjectSubmitState(item) && (
+                        {item.can_submit && (
                           <div style={{ position: "relative", display: "inline-flex" }}>
                             <button 
                               className="action-icon-btn action-submit" 
-                              title={item.can_submit ? "Submit Project" : projectSubmitBlockReason(item) || "Submit Project"} 
-                              disabled={!item.can_submit} 
-                              onClick={() => item.can_submit && setSubmitProjectModal({ open: true, project: item })} 
-                              style={!item.can_submit ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                              title="Submit Project" 
+                              onClick={() => setSubmitProjectModal({ open: true, project: item })} 
                             >
                               <LuSend />
                             </button>

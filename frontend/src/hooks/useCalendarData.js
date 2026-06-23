@@ -74,7 +74,7 @@ export function useCalendarData() {
     let mounted = true;
 
     const loadEvents = async () => {
-      setLoading();
+      setLoading(true);
       try {
         const data = await fetchEventsForMonth(currentMonth.year, currentMonth.month);
         if (mounted) {

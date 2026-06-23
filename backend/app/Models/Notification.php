@@ -37,7 +37,7 @@ class Notification extends Model
                 return;
             }
 
-            // Send email notification
+            // Queue email notification (async)
             if (static::wantsChannel($notification, 'email')) {
                 try {
                     Mail::to($notification->user->email)
@@ -51,15 +51,13 @@ class Notification extends Model
                 }
             }
 
-            // Send FCM push notification (mobile / browser)
+            // Queue FCM push notification (async via dispatch)
             if (static::wantsChannel($notification, 'mobile_push')) {
                 try {
-                    $channel = app(FcmChannel::class);
-                    $channel->send($notification->user, new FcmMessage($notification));
+                    \App\Jobs\SendFcmNotification::dispatch($notification);
                 } catch (\Throwable $e) {
-                    Log::error('Failed to send FCM push', [
+                    Log::error('Failed to dispatch FCM push', [
                         'notification_id' => $notification->id,
-                        'user_id' => $notification->user_id,
                         'error' => $e->getMessage(),
                     ]);
                 }
@@ -75,7 +73,6 @@ class Notification extends Model
             return true;
         }
 
-        // Map module -> notification type preference field
         $moduleField = [
             'task' => 'task_notifications',
             'deliverable' => 'deliverable_notifications',
@@ -84,14 +81,12 @@ class Notification extends Model
         ];
         $typeField = $moduleField[$notification->related_module] ?? 'system_notifications';
 
-        // Check the module-level toggle
         if (!$preference->{$typeField}) {
             return false;
         }
 
-        // Check the channel toggle
         if ($channel === 'email') {
-            return true; // email uses the module-level toggles only
+            return true;
         }
 
         if ($channel === 'mobile_push') {

@@ -106,6 +106,8 @@
 }
 
 .All,
+.Active,
+.DueToday,
 .Pending,
 .Progress,
 .Submitted,
@@ -115,7 +117,7 @@
 .Completed,
 .Failed,
 .Aban {
-  border: 1px solid lightgrey;
+  border: 1px solid #9CA3AF;
   padding: 10px 15px;
   display: flex;
   justify-content: center;
@@ -124,6 +126,34 @@
   gap: 5px;
   cursor: pointer;
   white-space: nowrap;
+  background: transparent;
+  transition: 0.15s ease;
+}
+
+.All.active,
+.Active.active,
+.DueToday.active,
+.Pending.active,
+.Progress.active,
+.Submitted.active,
+.Reopened.active,
+.Approved.active,
+.Rejected.active,
+.Completed.active,
+.Failed.active,
+.Aban.active {
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  border-color: #9CA3AF;
+  font-weight: 600;
+}
+
+.Active {
+  color: #3B82F6;
+}
+
+.DueToday {
+  color: #EF4444;
 }
 
 .Pending {

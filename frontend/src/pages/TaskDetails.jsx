@@ -29,6 +29,7 @@ import TaskSubmissionPanel from "../components/TaskSubmissionPanel";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { publish } from "../utils/eventBus";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
 import "./TaskDetails.css";
 
@@ -163,6 +164,8 @@ function TaskDetails() {
   useEffect(() => {
     if (taskId) fetchTask(true);
   }, [taskId, fetchTask]);
+
+  useRefreshOnEvent(["task:updated", "task:deleted", "deliverable:created", "deliverable:updated", "deliverable:deleted"], () => fetchTask(false));
 
   const currentIdx = taskIds.findIndex(
     (id) => String(id) === String(taskId)

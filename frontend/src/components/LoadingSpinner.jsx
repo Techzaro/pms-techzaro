@@ -1,25 +1,12 @@
-import { useLoading } from "../context/LoadingContext";
+import { memo } from "react";
 import "./LoadingSpinner.css";
 
-function LoadingSpinner() {
-  const { loading } = useLoading();
-
-  if (!loading) return null;
-
+const LoadingSpinner = memo(function LoadingSpinner() {
   return (
-    <div className="global-loading-overlay">
-      <div className="global-loading-spinner">
-        <div className="spinner-blade"></div>
-        <div className="spinner-blade"></div>
-        <div className="spinner-blade"></div>
-        <div className="spinner-blade"></div>
-        <div className="spinner-blade"></div>
-        <div className="spinner-blade"></div>
-        <div className="spinner-blade"></div>
-        <div className="spinner-blade"></div>
-      </div>
+    <div className="loading-spinner-overlay">
+      <div className="loading-spinner" />
     </div>
   );
-}
+});
 
 export default LoadingSpinner;

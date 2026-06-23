@@ -232,11 +232,5 @@
 }
 .completed-list .completed-item:last-child { border-bottom: none; }
 
-/* Agenda / Today box */
-.task-card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 8px rgba(0,0,0,0.04); }
-.agenda-item { display:flex; gap:12px; align-items:flex-start; padding:8px 0; }
-.agenda-dot { width:10px; height:10px; border-radius:50%; margin-top:6px; }
-.agenda-top { display:flex; justify-content:space-between; gap:12px; align-items:center; }
-
 .calender-sidebar { width: 320px; }
 

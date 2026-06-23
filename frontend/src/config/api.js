@@ -1,32 +1,19 @@
 import { getCurrentRole, getToken, clearSession } from "../utils/auth";
-import { showGlobalLoading, hideGlobalLoading } from "../utils/loadingManager";
 
 const rawApiUrl = import.meta.env.VITE_API_URL || "";
-// Normalize: remove any trailing slashes to avoid double-slash in constructed endpoints
 const API_URL = rawApiUrl.replace(/\/+$/g, "");
 
-/**
- * Global fetch interceptor.
- * Automatically shows/hides the global loading spinner for fetch calls.
- * Pass { skipLoader: true } in the fetch options to skip the spinner.
- *
- * Usage:
- *   fetch(url)                          → shows spinner
- *   fetch(url, { skipLoader: true })    → skips spinner
- */
+// No response cache here — React Query handles caching.
+// The fetch wrapper only handles 401 session expiry.
+
 const originalFetch = window.fetch;
 window.fetch = async function (...args) {
-  const [resource, config] = args;
-  const skipLoader = config?.skipLoader === true;
-
-  if (!skipLoader) {
-    showGlobalLoading();
-  }
-
   try {
+    const [resource, config = {}] = args;
+    const noCacheConfig = { ...config, cache: 'no-store' };
     const role = getCurrentRole();
     const tokenAtRequest = getToken(role);
-    const res = await originalFetch.apply(this, args);
+    const res = await originalFetch.apply(this, [resource, noCacheConfig]);
 
     if (res.status === 401) {
       const tokenNow = getToken(role);
@@ -37,22 +24,20 @@ window.fetch = async function (...args) {
     }
 
     return res;
-  } finally {
-    if (!skipLoader) {
-      hideGlobalLoading();
-    }
+  } catch (e) {
+    throw e;
   }
 };
 
-/**
- * Listen for storage changes from other tabs.
- */
+// Cache removed — React Query handles caching.
+// These are kept as no-ops for backward compatibility.
+export function invalidateCache() {}
+export function onMutation() {}
+
 window.addEventListener("storage", (e) => {
   if (!e.key) return;
-
   const role = getCurrentRole();
   if (!role) return;
-
   if (e.key === `token_${role}` && e.oldValue && e.newValue && e.oldValue !== e.newValue) {
     clearSession(role);
     window.location.href = "/?message=" + encodeURIComponent("You have been logged in from another tab.");

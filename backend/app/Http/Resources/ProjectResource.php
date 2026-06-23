@@ -1,0 +1,58 @@
+<?php
+
+namespace App\Http\Resources;
+
+use Illuminate\Http\Resources\Json\JsonResource;
+
+class ProjectResource extends JsonResource
+{
+    public function toArray($request)
+    {
+        return [
+            'id' => $this->id,
+            'title' => $this->title,
+            'description' => $this->description,
+            'status' => $this->status,
+            'priority' => $this->priority,
+            'client_name' => $this->client_name,
+            'category' => $this->category,
+            'budget' => $this->budget,
+            'start_date' => $this->start_date?->format('Y-m-d\TH:i:s'),
+            'end_date' => $this->end_date?->format('Y-m-d\TH:i:s'),
+            'created_by' => $this->created_by,
+            'team_id' => $this->team_id,
+            'assigned_users' => $this->assigned_users,
+            'goals_checklist' => $this->goals_checklist,
+            'sidebar_notes' => $this->sidebar_notes,
+            'submitted_at' => $this->submitted_at?->format('Y-m-d\TH:i:s'),
+            'approved_at' => $this->approved_at?->format('Y-m-d\TH:i:s'),
+            'rejected_at' => $this->rejected_at?->format('Y-m-d\TH:i:s'),
+            'rejection_comment' => $this->rejection_comment,
+            'reopened_at' => $this->reopened_at?->format('Y-m-d\TH:i:s'),
+            'reopen_comment' => $this->reopen_comment,
+            'reopen_instructions' => $this->reopen_instructions,
+            'reopen_new_deadline' => $this->reopen_new_deadline?->format('Y-m-d\TH:i:s'),
+            'created_at' => $this->created_at?->format('Y-m-d\TH:i:s'),
+            'updated_at' => $this->updated_at?->format('Y-m-d\TH:i:s'),
+            'creator' => UserMinResource::make($this->whenLoaded('creator')),
+            'team' => TeamResource::make($this->whenLoaded('team')),
+            'tasks' => TaskMinResource::collection($this->whenLoaded('tasks')),
+            'milestones' => $this->whenLoaded('milestones'),
+            'files' => $this->whenLoaded('files'),
+            'deliverables' => DeliverableResource::collection($this->whenLoaded('deliverables')),
+            'submissions' => $this->whenLoaded('submissions'),
+            'latest_submission' => $this->whenLoaded('latestSubmission'),
+            'workflow_events' => $this->whenLoaded('workflowEvents'),
+            'approved_by' => $this->whenLoaded('approvedBy')?->name,
+            'rejected_by' => $this->whenLoaded('rejectedBy')?->name,
+            'reopened_by' => $this->whenLoaded('reopenedBy')?->name,
+            'total_tasks' => $this->total_tasks ?? $this->tasks_count ?? 0,
+            'completed_tasks' => $this->completed_tasks ?? 0,
+            'progress_percent' => $this->when($this->total_tasks ?? $this->tasks_count, function () {
+                $total = $this->total_tasks ?? $this->tasks_count ?? 0;
+                if ($total === 0) return 0;
+                return (int) round(($this->completed_tasks / $total) * 100);
+            }),
+        ];
+    }
+}

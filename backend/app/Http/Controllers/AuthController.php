@@ -132,13 +132,12 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        $totalAssignedTasks = Task::where('assigned_to', $user->id)->count();
-        $completedTasks = Task::where('assigned_to', $user->id)
-            ->where('status', 'completed')
-            ->count();
-        $pendingTasks = Task::where('assigned_to', $user->id)
-            ->whereIn('status', ['pending', 'in_progress'])
-            ->count();
+        $taskStats = Task::where('assigned_to', $user->id)
+            ->selectRaw('COUNT(*) as total_assigned')
+            ->selectRaw("COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed")
+            ->selectRaw("COUNT(CASE WHEN status IN ('pending', 'in_progress') THEN 1 END) as pending")
+            ->first();
+
         $totalProjects = Project::where('created_by', $user->id)->count();
 
         $loginHistory = [];
@@ -169,7 +168,6 @@ class AuthController extends Controller
                 'emergency_contact_relation' => $user->emergency_contact_relation,
                 'emergency_contact_phone' => $user->emergency_contact_phone,
                 'personal_email' => $user->personal_email,
-                'professional_email' => $user->professional_email,
                 'professional_email_password' => $user->professional_email_password,
                 'recovery_email' => $user->recovery_email,
                 'hired_for' => $user->hired_for,
@@ -193,9 +191,9 @@ class AuthController extends Controller
                 'updated_at' => $user->updated_at->toDateTimeString(),
             ],
             'stats' => [
-                'total_assigned_tasks' => $totalAssignedTasks,
-                'completed_tasks' => $completedTasks,
-                'pending_tasks' => $pendingTasks,
+                'total_assigned_tasks' => (int) $taskStats->total_assigned,
+                'completed_tasks' => (int) $taskStats->completed,
+                'pending_tasks' => (int) $taskStats->pending,
                 'total_projects' => $totalProjects,
             ],
             'login_history' => $loginHistory,
@@ -233,7 +231,6 @@ class AuthController extends Controller
             'emergency_contact_relation' => 'nullable|string|max:255',
             'emergency_contact_phone' => 'nullable|string|max:32',
             'personal_email' => 'nullable|email|max:255',
-            'professional_email' => 'nullable|email|max:255',
             'professional_email_password' => 'nullable|string|max:255',
             'recovery_email' => 'nullable|email|max:255',
             'department' => 'nullable|string|max:255',
@@ -253,7 +250,7 @@ class AuthController extends Controller
             'name', 'father_name', 'id_card_number',
             'phone_number', 'present_address', 'permanent_address',
             'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
-            'personal_email', 'professional_email', 'professional_email_password', 'recovery_email',
+            'personal_email', 'professional_email_password', 'recovery_email',
             'department', 'designation', 'hired_for', 'employee_code',
             'job_started_date', 'job_ended_date',
             'gross_salary', 'applied_via',

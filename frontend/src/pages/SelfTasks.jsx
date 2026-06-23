@@ -221,19 +221,19 @@ const SelfTasks = () => {
       <div className="task-progress">
         <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
         <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => setStatusFilter("pending")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.pending} /> Pending
+          <GoDotFill /> Pending
         </p>
         <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.submitted} /> Submitted
+          <GoDotFill /> Submitted
         </p>
         <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => setStatusFilter("reopened")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.reopened} /> Reopened
+          <GoDotFill /> Reopened
         </p>
         <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.approved} /> Approved
+          <GoDotFill /> Approved
         </p>
         <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => setStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.rejected} /> Rejected
+          <GoDotFill /> Rejected
         </p>
       </div>
 
@@ -300,13 +300,11 @@ const SelfTasks = () => {
                     </div>
                     <div className="action-btns">
                       <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'self-tasks' } })}><IoEyeOutline /></button>
-                      {["pending", "reopened", "Planned", "in_progress", "In Progress"].includes(item.status) && (
+                      {item.can_submit && (
                         <button 
                           className="action-icon-btn action-submit" 
-                          title={item.can_submit ? "Submit Project" : "All tasks and deliverables must be approved"} 
-                          disabled={!item.can_submit}
-                          onClick={() => item.can_submit && setShowProjectSubmitModal({ open: true, project: item })}
-                          style={!item.can_submit ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                          title="Submit Project" 
+                          onClick={() => setShowProjectSubmitModal({ open: true, project: item })}
                         >
                           <LuSend />
                         </button>

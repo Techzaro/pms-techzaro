@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\NotificationResource;
 use App\Models\Notification;
 use Illuminate\Http\Request;
 
@@ -11,18 +12,15 @@ class NotificationController extends Controller
     {
         $user = $request->user();
 
-        $query = $user->notifications()->with('sender:id,name,email');
+        $query = Notification::where('user_id', $user->id)
+            ->where(function ($q) use ($user) {
+                // Exclude notifications triggered by the user themselves
+                $q->whereNull('sender_user_id')
+                  ->orWhere('sender_user_id', '!=', $user->id);
+            })
+            ->with('sender:id,name')
+            ->latest();
 
-        // Filter by read/unread
-        if ($request->filled('filter')) {
-            if ($request->input('filter') === 'unread') {
-                $query->where('is_read', false);
-            } elseif ($request->input('filter') === 'read') {
-                $query->where('is_read', true);
-            }
-        }
-
-        // Search
         if ($request->filled('search')) {
             $search = $request->input('search');
             $query->where(function ($q) use ($search) {
@@ -31,16 +29,27 @@ class NotificationController extends Controller
             });
         }
 
-        $notifications = $query->paginate(20);
+        if ($request->filled('type')) {
+            $query->where('type', $request->input('type'));
+        }
 
-        return response()->json($notifications);
+        return response()->json([
+            'data' => NotificationResource::collection($query->paginate(20)),
+        ]);
     }
 
     public function unreadCount(Request $request)
     {
         $user = $request->user();
-        $count = $user->unreadNotifications()->count();
-        return response()->json(['count' => $count]);
+        $count = $user->notifications()
+            ->where('is_read', false)
+            ->where(function ($q) use ($user) {
+                $q->whereNull('sender_user_id')
+                  ->orWhere('sender_user_id', '!=', $user->id);
+            })
+            ->count();
+
+        return response()->json(['unread_count' => $count]);
     }
 
     public function markAsRead(Request $request, Notification $notification)
@@ -56,7 +65,15 @@ class NotificationController extends Controller
 
     public function markAllAsRead(Request $request)
     {
-        $request->user()->unreadNotifications()->update(['is_read' => true]);
+        $user = $request->user();
+        $user->notifications()
+            ->where('is_read', false)
+            ->where(function ($q) use ($user) {
+                $q->whereNull('sender_user_id')
+                  ->orWhere('sender_user_id', '!=', $user->id);
+            })
+            ->update(['is_read' => true]);
+
         return response()->json(['message' => 'All notifications marked as read']);
     }
 }

@@ -227,25 +227,6 @@ function Projects() {
     return Math.round((completed / total) * 100);
   };
 
-  const canSubmitProject = (project) => {
-    // Use backend can_submit if available (includes task completion + deliverable checks)
-    if (project.can_submit !== undefined) {
-      return project.can_submit === true;
-    }
-
-    // Fallback: Check if project is in a submit state
-    const isSubmitState = project.status === "pending" || project.status === "reopened" || project.status === "Planned" || project.status === "in_progress";
-    if (!isSubmitState) return false;
-
-    // For Admin/Manager: check if they are assigned to the project
-    // For regular users: always true (they already filtered projects they have access to)
-    if (isAdminOrManager) {
-      // Check if the current user is in the project's assigned_users array
-      return Array.isArray(project.assigned_users) && project.assigned_users.includes(currentUser?.id);
-    }
-    return true;
-  };
-
   const hasPendingDeliverables = (project) => {
     return (project.pending_deliverables_count || 0) > 0;
   };
@@ -437,14 +418,12 @@ function Projects() {
                           <IoEyeOutline /> Show To
                         </button>
                       )}
-                      {["pending", "reopened", "Planned", "in_progress", "In Progress"].includes(project.status) && (
+                      {project.can_submit && (
                         <div style={{ position: "relative", display: "inline-flex" }}>
                           <button
                             className="action-icon-btn action-submit"
-                            title={project.can_submit ? "Submit Project" : "All tasks and deliverables must be approved"}
-                            disabled={!project.can_submit}
-                            onClick={() => project.can_submit && setSubmitProjectModal({ open: true, project })}
-                            style={!project.can_submit ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                            title="Submit Project"
+                            onClick={() => setSubmitProjectModal({ open: true, project })}
                           >
                             <LuSend />
                           </button>

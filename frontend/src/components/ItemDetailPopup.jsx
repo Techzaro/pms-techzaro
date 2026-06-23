@@ -72,7 +72,7 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
         const endDate = item.end_date ? formatDateStr(item.end_date) : null;
         const dueLabel = startDate && endDate && startDate !== endDate ? `${startDate} - ${endDate}` : (endDate || startDate || "—");
         const timeStr = item.end_date ? formatTimeStr(item.end_date) : (item.start_date ? formatTimeStr(item.start_date) : null);
-        const priorityColor = item.priority === "high" ? "#ef4444" : item.priority === "medium" ? "#f59e0b" : "#6b7280";
+        const priorityColor = (item.priority || "").toLowerCase() === "high" ? "#ef4444" : (item.priority || "").toLowerCase() === "medium" ? "#f59e0b" : "#6b7280";
         return (
           <>
             <MetaRow label="Status" value={item.status || "—"} />

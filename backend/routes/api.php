@@ -18,6 +18,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\DeliverableController;
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\ActivityController;
 
 /*
 | PUBLIC ROUTES
@@ -219,6 +220,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // Device tokens for push notifications (all authenticated users)
     Route::post('/device-tokens', [\App\Http\Controllers\DeviceTokenController::class, 'store']);
     Route::delete('/device-tokens', [\App\Http\Controllers\DeviceTokenController::class, 'destroy']);
+
+    /*
+    | ACTIVITIES (Today's Activity)
+    */
+    Route::get('/activities/today', [ActivityController::class, 'today']);
+    Route::get('/activities', [ActivityController::class, 'index']);
 
     /*
     | CALENDAR / EVENTS

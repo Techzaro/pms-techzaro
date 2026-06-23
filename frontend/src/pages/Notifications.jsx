@@ -2,24 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import { authToken, rolePath, getUser } from "../utils/auth";
+import { timeAgo } from "../utils/formatDateTime";
+import { useRelativeTime } from "../hooks/useRelativeTime";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import API_URL from "../config/api";
 import "./Notifications.css";
-
-function formatTime(dateStr) {
-  if (!dateStr) return "";
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now - date;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return diffMins + "m ago";
-  if (diffHours < 24) return diffHours + "h ago";
-  if (diffDays < 7) return diffDays + "d ago";
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
 
 const TYPE_ICONS = {
   project_assigned: { icon: "folder", bg: "#ede9fe", color: "#7c3aed" },
@@ -28,6 +15,8 @@ const TYPE_ICONS = {
   project_approved: { icon: "check", bg: "#d1fae5", color: "#059669" },
   project_rejected: { icon: "x", bg: "#fee2e2", color: "#dc2626" },
   project_reopened: { icon: "refresh", bg: "#fef3c7", color: "#d97706" },
+  project_access_granted: { icon: "check", bg: "#d1fae5", color: "#059669" },
+  project_access_removed: { icon: "x", bg: "#fee2e2", color: "#dc2626" },
   task_assigned: { icon: "task", bg: "#ede9fe", color: "#7c3aed" },
   task_updated: { icon: "edit", bg: "#dbeafe", color: "#2563eb" },
   task_submitted: { icon: "upload", bg: "#dbeafe", color: "#2563eb" },
@@ -142,12 +131,43 @@ function Notifications() {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("all");
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
   const [selected, setSelected] = useState(new Set());
   const [page, setPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const tick = useRelativeTime();
 
-  const fetchNotifications = useCallback(async (p = 1, filter = activeTab, q = search) => {
+  const NOTIFICATION_TYPES = [
+    { value: "", label: "All Types" },
+    { value: "project_assigned", label: "Project Assigned" },
+    { value: "project_updated", label: "Project Updated" },
+    { value: "project_submitted", label: "Project Submitted" },
+    { value: "project_approved", label: "Project Approved" },
+    { value: "project_rejected", label: "Project Rejected" },
+    { value: "project_reopened", label: "Project Reopened" },
+    { value: "project_access_granted", label: "Project Access Granted" },
+    { value: "project_access_removed", label: "Project Access Removed" },
+    { value: "task_assigned", label: "Task Assigned" },
+    { value: "task_updated", label: "Task Updated" },
+    { value: "task_submitted", label: "Task Submitted" },
+    { value: "task_completed", label: "Task Completed" },
+    { value: "task_approved", label: "Task Approved" },
+    { value: "task_rejected", label: "Task Rejected" },
+    { value: "task_reopened", label: "Task Reopened" },
+    { value: "deliverable_assigned", label: "Deliverable Assigned" },
+    { value: "deliverable_updated", label: "Deliverable Updated" },
+    { value: "deliverable_submitted", label: "Deliverable Submitted" },
+    { value: "deliverable_approved", label: "Deliverable Approved" },
+    { value: "deliverable_rejected", label: "Deliverable Rejected" },
+    { value: "deliverable_reopened", label: "Deliverable Reopened" },
+    { value: "event_created", label: "Event Created" },
+    { value: "event_updated", label: "Event Updated" },
+    { value: "event_cancelled", label: "Event Cancelled" },
+    { value: "event_reminder", label: "Event Reminder" },
+  ];
+
+  const fetchNotifications = useCallback(async (p = 1, filter = activeTab, q = search, type = typeFilter) => {
     const token = authToken();
     if (!token) return;
     setLoading(true);
@@ -157,6 +177,7 @@ function Notifications() {
       if (filter === "unread") params.set("filter", "unread");
       else if (filter === "read") params.set("filter", "read");
       if (q) params.set("search", q);
+      if (type) params.set("type", type);
 
       const res = await fetch(`${API_URL}/notifications?${params}`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -173,11 +194,13 @@ function Notifications() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, search]);
+  }, [activeTab, search, typeFilter]);
 
   useEffect(() => {
     fetchNotifications(1, activeTab, search);
   }, [activeTab]);
+
+  useRefreshOnEvent(["data:changed"], () => fetchNotifications(1, activeTab, search));
 
   const handleSearch = (q) => {
     setSearch(q);
@@ -297,6 +320,22 @@ function Notifications() {
                 </button>
               )}
             </div>
+            <select
+              value={typeFilter}
+              onChange={(e) => {
+                setTypeFilter(e.target.value);
+                fetchNotifications(1, activeTab, search, e.target.value);
+              }}
+              style={{
+                padding: "10px 14px", borderRadius: "10px", border: "1px solid #E5E7EB",
+                fontSize: "14px", color: "#374151", background: "#fff", cursor: "pointer",
+                outline: "none", minWidth: "180px",
+              }}
+            >
+              {NOTIFICATION_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
           </div>
 
           {/* Tabs + Mark All */}
@@ -380,7 +419,7 @@ function Notifications() {
                     </div>
 
                     <div className="notif-meta">
-                      <span className="notif-time">{formatTime(n.created_at)}</span>
+                      <span className="notif-time">{timeAgo(n.created_at_raw)}</span>
                       {!n.is_read && <span className="notif-unread-dot"></span>}
                     </div>
                   </Link>

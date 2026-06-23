@@ -248,19 +248,19 @@ const Taskby = () => {
           <GoDotFill color="#EF4444" /> Tasks Due Today
         </p>
         <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.pending} /> Pending
+          <GoDotFill /> Pending
         </p>
         <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.submitted} /> Submitted
+          <GoDotFill /> Submitted
         </p>
         <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.reopened} /> Reopened
+          <GoDotFill /> Reopened
         </p>
         <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.approved} /> Approved
+          <GoDotFill /> Approved
         </p>
         <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-          <GoDotFill color={STATUS_COLORS.rejected} /> Rejected
+          <GoDotFill /> Rejected
         </p>
       </div>
 

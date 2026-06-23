@@ -11,7 +11,6 @@ import ItemDetailPopup from "../ItemDetailPopup";
 import DayPopup from "../DayPopup";
 import { formatEventTime } from "../../utils/formatDateTime";
 import { getCurrentRole } from "../../utils/auth";
-import "../../pages/Calender.css";
 import "./RightSidebar.css";
 
 
@@ -94,7 +93,7 @@ function RightSidebar({ isOpen, onClose }) {
   }, [activeDate]);
 
   const handleViewAllClick = () => {
-    const role = searchParams.get("role") || "admin";
+    const role = getCurrentRole() || "admin";
     onClose?.();
     navigate(`/${role}/calender`);
   };
@@ -102,7 +101,8 @@ function RightSidebar({ isOpen, onClose }) {
     goToToday();
     const today = new Date();
     const dateStr = formatDate(today);
-    const targetPath = `/${searchParams.get("role") || "admin"}/calender?date=${dateStr}`;
+    const role = getCurrentRole() || "admin";
+    const targetPath = `/${role}/calender?date=${dateStr}`;
     onClose?.();
     navigate(targetPath);
   };
@@ -219,14 +219,12 @@ function RightSidebar({ isOpen, onClose }) {
           document.body
         )}
 
-        <div className="right-card">
-          <EventsWidget
-            todayEvents={widgetToday}
-            upcomingEvents={widgetUpcoming}
-            onEventClick={(ev) => setSelectedEvent(ev)}
-            currentRole={currentRole}
-          />
-        </div>
+        <EventsWidget
+          todayEvents={widgetToday}
+          upcomingEvents={widgetUpcoming}
+          onEventClick={(ev) => setSelectedEvent(ev)}
+          currentRole={currentRole}
+        />
       </aside>
       {selectedEvent && <EventInfoPopup event={selectedEvent} onClose={() => setSelectedEvent(null)} />}
       {selectedPopupDay && (

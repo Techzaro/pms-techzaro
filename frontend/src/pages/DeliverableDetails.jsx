@@ -6,6 +6,7 @@ import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { publish } from "../utils/eventBus";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import "./TaskDetails.css";
 import { formatDateTimeShort } from "../utils/formatDateTime";
 import "./DeliverableDetails.css";
@@ -81,6 +82,8 @@ function DeliverableDetails() {
   }, [deliverableId]);
 
   useEffect(() => { fetchDeliverable(); }, [fetchDeliverable]);
+
+  useRefreshOnEvent(["deliverable:updated", "task:updated"], fetchDeliverable);
 
   // Auto-mark deliverable changes as read
   useEffect(() => {

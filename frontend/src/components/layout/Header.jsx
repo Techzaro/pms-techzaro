@@ -124,9 +124,9 @@ function Header() {
         const projData = await projRes.value.json();
         const projList = projData.projects ?? projData ?? [];
         matchedProjects = projList
-          .filter((p) => p.name?.toLowerCase().includes(q))
+          .filter((p) => p.title?.toLowerCase().includes(q))
           .slice(0, 5)
-          .map((p) => ({ id: p.id, name: p.name, path: rolePath(`projects/project-details/${p.id}`) }));
+          .map((p) => ({ id: p.id, name: p.title, path: rolePath(`projects/project-details/${p.id}`) }));
       }
 
       if (taskRes.status === "fulfilled" && taskRes.value.ok) {

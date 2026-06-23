@@ -85,3 +85,24 @@ export function formatEventDateTime(event) {
   if (event.all_day) return formatDateOnly(dateStr);
   return `${formatDateOnly(dateStr)} • ${formatEventTime(event)}`;
 }
+
+export function timeAgo(dateString) {
+  if (!dateString) return "—";
+  const now = new Date();
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "—";
+  const diffMs = now - date;
+  const diffSeconds = Math.floor(diffMs / 1000);
+
+  if (diffSeconds < 60) return "Just now";
+
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? "" : "s"} ago`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return "Yesterday";
+  return `${diffDays} days ago`;
+}

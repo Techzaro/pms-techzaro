@@ -63,6 +63,31 @@
     opacity: 0.9;
 }
 
+.calendar-card {
+    background: white;
+    border-radius: 24px;
+    padding: 24px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    min-width: 0;
+}
+
+.calendar-nav-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.calendar-nav-btn:hover {
+    background: #f3f4f6;
+}
+
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -94,6 +119,16 @@
 .calendar-cell.today {
     background: #2563eb;
     color: white;
+}
+
+.calendar-day-number {
+    font-size: 13px;
+    font-weight: 500;
+    pointer-events: none;
+}
+
+.calendar-cell.has-events {
+    cursor: pointer;
 }
 
 .event-item,

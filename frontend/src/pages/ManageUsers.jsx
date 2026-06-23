@@ -16,6 +16,7 @@ import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, getUser, setUser, rolePath } from "../utils/auth";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import "./ManageUsers.css";
 
 const DEPARTMENTS = [
@@ -206,6 +207,8 @@ function ManageUsers() {
     }
     fetchUsers();
   }, [navigate]);
+
+  useRefreshOnEvent(["data:changed"], fetchUsers);
 
   useEffect(() => {
     setLocalUsers(users);

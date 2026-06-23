@@ -435,31 +435,29 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
 
-        $totalAssignedTasks = Task::where('assigned_to', $user->id)->count();
-        $completedTasks = Task::where('assigned_to', $user->id)
-            ->where('status', 'completed')
-            ->count();
-        $pendingTasks = Task::where('assigned_to', $user->id)
-            ->whereIn('status', ['pending', 'in_progress'])
-            ->count();
+        $taskStats = Task::where('assigned_to', $user->id)
+            ->selectRaw('COUNT(*) as total_assigned')
+            ->selectRaw("COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed")
+            ->selectRaw("COUNT(CASE WHEN status IN ('pending', 'in_progress') THEN 1 END) as pending")
+            ->first();
 
         $totalProjects = Project::where('created_by', $user->id)->count();
 
         $projects = Project::where('created_by', $user->id)
-            ->with(['tasks' => function ($query) use ($user) {
+            ->withCount(['tasks as total_tasks' => function ($query) use ($user) {
                 $query->where('assigned_to', $user->id);
+            }, 'tasks as completed_tasks' => function ($query) use ($user) {
+                $query->where('assigned_to', $user->id)->where('status', 'completed');
             }])
             ->get()
             ->map(function ($project) {
-                $completed = $project->tasks->where('status', 'completed')->count();
-                $pending = $project->tasks->where('status', '!=', 'completed')->count();
                 return [
                     'id' => $project->id,
-                    'name' => $project->name,
+                    'name' => $project->title,
                     'status' => $project->status ?? 'active',
-                    'total_tasks' => $project->tasks->count(),
-                    'completed_tasks' => $completed,
-                    'pending_tasks' => $pending,
+                    'total_tasks' => (int) $project->total_tasks,
+                    'completed_tasks' => (int) $project->completed_tasks,
+                    'pending_tasks' => (int) $project->total_tasks - (int) $project->completed_tasks,
                 ];
             });
 
@@ -491,9 +489,9 @@ class UserController extends Controller
                 'last_login_at', 'created_at', 'updated_at',
             ]),
             'stats' => [
-                'total_assigned_tasks' => $totalAssignedTasks,
-                'completed_tasks' => $completedTasks,
-                'pending_tasks' => $pendingTasks,
+                'total_assigned_tasks' => (int) $taskStats->total_assigned,
+                'completed_tasks' => (int) $taskStats->completed,
+                'pending_tasks' => (int) $taskStats->pending,
                 'total_projects' => $totalProjects,
             ],
             'projects' => $projects,

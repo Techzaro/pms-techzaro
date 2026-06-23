@@ -136,6 +136,7 @@
 
 /* color pills by parent so dot matches label */
 .task-progress .All { color: #6B7280; }
+.task-progress .Active { color: #3B82F6; }
 .task-progress .DueToday { color: #EF4444; }
 .task-progress .Pending { color: #F59E0B; }
 .task-progress .Progress { color: #3B82F6; }

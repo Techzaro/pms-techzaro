@@ -1,16 +1,11 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import Header from "../components/layout/Header";
-import Sidebar from "../components/layout/Sidebar";
+import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import MemberExportReport from "./MemberExportReport";
 import "../components/layout/DashboardLayout.css";
 import "../pages/UserPerformance.css";
 import { getUser, getCurrentRole } from "../utils/auth";
-import { useUnifiedSummary } from "../hooks/useUnifiedSummary";
-import EventInfoPopup from "../components/EventInfoPopup";
-import EventsWidget from "../components/EventsWidget";
-import "../pages/Calender.css";
 
 
 
@@ -97,9 +92,7 @@ function UserPerformance() {
   const [activeFilter, setActiveFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [showExportModal, setShowExportModal] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState(null);
   const currentRole = getCurrentRole() || "member";
-  const { today: todayEvents, upcoming: upcomingEvents } = useUnifiedSummary();
 
   const stored = getUser();
   const userName = stored?.name || "Umar Naseer";
@@ -116,13 +109,7 @@ function UserPerformance() {
   });
 
   return (
-    <div className="dashboard-page">
-      <Header />
-
-      <div className="main-layout">
-        <Sidebar />
-
-        <div className="dashboard-content">
+    <DashboardLayout>
           <Breadcrumb items={[
             { label: "Reports", path: "/reports" },
             { label: "User Performance" },
@@ -366,24 +353,10 @@ function UserPerformance() {
               </div>
 
             </div>
-
           </div>
-        </div>
-
-        <div className="calender-sidebar">
-          <EventsWidget
-            todayEvents={todayEvents}
-            upcomingEvents={upcomingEvents}
-            onEventClick={(ev) => setSelectedEvent(ev)}
-            currentRole={currentRole}
-          />
-        </div>
-
-      </div>
 
       <MemberExportReport isOpen={showExportModal} onClose={() => setShowExportModal(false)} />
-      {selectedEvent && <EventInfoPopup event={selectedEvent} onClose={() => setSelectedEvent(null)} />}
-    </div>
+    </DashboardLayout>
   );
 }
 
