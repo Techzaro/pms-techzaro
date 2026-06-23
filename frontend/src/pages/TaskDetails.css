@@ -787,3 +787,13 @@
   gap: 8px;
 }
 
+.td-project-link {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.td-project-link:hover {
+  text-decoration: underline;
+}
+
