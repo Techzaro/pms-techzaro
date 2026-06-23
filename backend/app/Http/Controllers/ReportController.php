@@ -6,6 +6,7 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\Team;
+use App\Models\Deliverable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -94,51 +95,222 @@ class ReportController extends Controller
     public function userPerformance(Request $request, User $user)
     {
         $timeFilter = $request->query('period', 'all');
-        $cacheKey = "report_user_perf_{$user->id}_{$timeFilter}";
-        $ttl = 300;
 
-        return Cache::remember($cacheKey, $ttl, function () use ($user, $timeFilter) {
-            $taskBase = Task::whereHas('assignees', fn ($q) => $q->where('users.id', $user->id));
-            if ($timeFilter !== 'all') $taskBase = $this->applyTimeFilter($taskBase, $timeFilter);
+        // --- TASKS ASSIGNED TO USER ---
+        $taskBase = Task::whereHas('assignees', fn ($q) => $q->where('users.id', $user->id));
+        if ($timeFilter !== 'all') $taskBase = $this->applyTimeFilter($taskBase, $timeFilter);
 
-            $taskIds = (clone $taskBase)->pluck('id');
+        $taskIds = (clone $taskBase)->pluck('id');
 
-            // Single aggregated stats query
-            $stats = $taskIds->isNotEmpty()
-                ? Task::selectRaw("
-                    COUNT(*) as assigned,
-                    SUM(CASE WHEN status IN ('completed','done') THEN 1 ELSE 0 END) as completed,
-                    SUM(CASE WHEN status IN ('failed','abandoned') THEN 1 ELSE 0 END) as failed
-                ")->whereIn('id', $taskIds)->first()
-                : (object)['assigned' => 0, 'completed' => 0, 'failed' => 0];
+        // Single aggregated stats query for tasks
+        $taskAgg = $taskIds->isNotEmpty()
+            ? Task::selectRaw("
+                COUNT(*) as assigned,
+                SUM(CASE WHEN status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN status IN ('submitted','reopened') THEN 1 ELSE 0 END) as in_review,
+                SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
+            ")->whereIn('id', $taskIds)->first()
+            : (object)['assigned' => 0, 'completed' => 0, 'in_review' => 0, 'overdue' => 0];
 
-            $assigned = (int) $stats->assigned;
-            $completed = (int) $stats->completed;
-            $pending = $assigned - $completed - (int) $stats->failed;
+        // Task status breakdown
+        $taskStatusBreakdown = $taskIds->isNotEmpty()
+            ? Task::selectRaw("status, COUNT(*) as count")
+                ->whereIn('id', $taskIds)->groupBy('status')->get()
+            : collect();
 
-            $recentTasks = (clone $taskBase)
-                ->with('project:id,title')
-                ->latest()
-                ->limit(10)
-                ->get();
+        // --- PROJECTS ASSIGNED AS TASKS ---
+        $projectQuery = Project::whereJsonContains('assigned_users', $user->id)
+            ->whereNotNull('assigned_users');
+        if ($timeFilter !== 'all') {
+            $this->applyTimeFilter($projectQuery, $timeFilter);
+        }
+        $projectAsTaskStats = $projectQuery->selectRaw("
+            COUNT(*) as assigned,
+            SUM(CASE WHEN status IN ('approved','completed','done') THEN 1 ELSE 0 END) as completed,
+            SUM(CASE WHEN status IN ('submitted','reopened') THEN 1 ELSE 0 END) as in_review,
+            SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
+        ")->first();
 
-            $projectStats = (clone $taskBase)
-                ->join('projects', 'projects.id', '=', 'tasks.project_id')
-                ->select(
-                    'projects.id as project_id', 'projects.title as project_title',
-                    DB::raw('COUNT(*) as total_tasks'),
-                    DB::raw('SUM(CASE WHEN tasks.status IN ("completed","done") THEN 1 ELSE 0 END) as completed_tasks')
-                )
-                ->groupBy('projects.id', 'projects.title')
-                ->get();
+        // Project-as-task status breakdown (mapped to task statuses)
+        $projectAsTaskBreakdown = $projectQuery->selectRaw("
+            CASE
+                WHEN status IN ('approved','completed','done') THEN 'completed'
+                WHEN status IN ('submitted','reopened') THEN 'submitted'
+                WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 'overdue'
+                ELSE 'pending'
+            END as mapped_status,
+            COUNT(*) as count
+        ")->groupBy('mapped_status')->get();
 
-            return [
-                'user' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'role' => $user->role],
-                'summary' => ['assigned' => $assigned, 'completed' => $completed, 'pending' => max($pending, 0), 'failed' => (int) $stats->failed],
-                'recent_tasks' => $recentTasks,
-                'project_stats' => $projectStats,
-            ];
-        });
+        // --- MERGE TASK + PROJECT-AS-TASK COUNTS ---
+        $assigned = (int) $taskAgg->assigned + (int) $projectAsTaskStats->assigned;
+        $completed = (int) $taskAgg->completed + (int) $projectAsTaskStats->completed;
+        $inReview = (int) $taskAgg->in_review + (int) $projectAsTaskStats->in_review;
+        $overdue = (int) $taskAgg->overdue + (int) $projectAsTaskStats->overdue;
+        $pending = max($assigned - $completed - $inReview - $overdue, 0);
+
+        // Merge status breakdowns
+        $mergedBreakdown = ['completed' => $completed, 'pending' => $pending, 'in_review' => $inReview, 'overdue' => $overdue, 'total' => $assigned];
+
+        // --- RECENT TASKS (tasks + project-as-task items) ---
+        $recentTasks = (clone $taskBase)
+            ->with('project:id,title')
+            ->latest()
+            ->limit(10)
+            ->get()
+            ->map(fn ($t) => [
+                'id' => $t->id,
+                'title' => $t->title,
+                'project' => $t->project?->title ?? '—',
+                'status' => $t->status,
+                'priority' => $t->priority ?? 'Medium',
+                'end_date' => $t->end_date,
+                'item_type' => 'task',
+            ]);
+
+        $recentProjectTasks = $projectQuery->latest()->limit(10)->get()
+            ->map(fn ($p) => [
+                'id' => 'proj_' . $p->id,
+                'title' => $p->title,
+                'project' => $p->title,
+                'status' => $p->status,
+                'priority' => $p->priority ?? 'Medium',
+                'end_date' => $p->end_date,
+                'item_type' => 'project',
+            ]);
+
+        $allRecentTasks = collect($recentTasks)->merge(collect($recentProjectTasks))
+            ->sortByDesc('end_date')
+            ->take(10)
+            ->values();
+
+        // --- PROJECTS WITH TASK COUNTS (projects tab) ---
+        $projectStats = (clone $taskBase)
+            ->join('projects', 'projects.id', '=', 'tasks.project_id')
+            ->select(
+                'projects.id as project_id', 'projects.title as project_title', 'projects.status as project_status',
+                'projects.start_date', 'projects.end_date',
+                DB::raw('COUNT(*) as total_tasks'),
+                DB::raw('SUM(CASE WHEN tasks.status IN ("completed","done","approved") THEN 1 ELSE 0 END) as completed_tasks')
+            )
+            ->groupBy('projects.id', 'projects.title', 'projects.status', 'projects.start_date', 'projects.end_date')
+            ->get()
+            ->map(fn ($p) => [
+                'id' => $p->project_id,
+                'name' => $p->project_title,
+                'status' => $p->project_status,
+                'start_date' => $p->start_date,
+                'end_date' => $p->end_date,
+                'total_tasks' => (int) $p->total_tasks,
+                'completed_tasks' => (int) $p->completed_tasks,
+                'progress' => $p->total_tasks > 0 ? (int) round(($p->completed_tasks / $p->total_tasks) * 100) : 0,
+            ]);
+
+        // Also include projects assigned directly as tasks (not via tasks table)
+        $directProjectStats = Project::whereJsonContains('assigned_users', $user->id)
+            ->whereNotNull('assigned_users')
+            ->select('id', 'title', 'status', 'start_date', 'end_date')
+            ->get()
+            ->filter(fn ($p) => !$projectStats->contains('id', $p->id))
+            ->map(fn ($p) => [
+                'id' => $p->id,
+                'name' => $p->title,
+                'status' => $p->status,
+                'start_date' => $p->start_date,
+                'end_date' => $p->end_date,
+                'total_tasks' => 0,
+                'completed_tasks' => 0,
+                'progress' => 0,
+            ]);
+
+        $allProjects = collect($projectStats)->merge(collect($directProjectStats))->values();
+
+        // Build status distribution from task breakdown + project breakdown
+        $statusDistribution = [
+            'approved' => $completed,
+            'pending' => $pending,
+            'submitted' => 0,
+            'reopened' => 0,
+            'rejected' => 0,
+            'overdue' => $overdue,
+        ];
+        foreach ($taskStatusBreakdown as $ts) {
+            $s = strtolower($ts->status);
+            if (isset($statusDistribution[$s])) {
+                // already counted via merged logic
+            } elseif ($s === 'submitted') {
+                $statusDistribution['submitted'] = $ts->count;
+            } elseif ($s === 'reopened') {
+                $statusDistribution['reopened'] = $ts->count;
+            } elseif ($s === 'rejected') {
+                $statusDistribution['rejected'] = $ts->count;
+            }
+        }
+
+        $team = $user->teams()->first();
+
+        // --- DELIVERABLES ---
+        $deliverableStats = Deliverable::where('assigned_to', $user->id)
+            ->selectRaw("
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END) as submitted,
+                SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
+                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_review,
+                SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected,
+                SUM(CASE WHEN status = 'reopened' THEN 1 ELSE 0 END) as reopened
+            ")->first();
+
+        $deliverables = Deliverable::where('assigned_to', $user->id)
+            ->with('task:id,title', 'project:id,title')
+            ->latest()
+            ->get()
+            ->map(fn ($d) => [
+                'id' => $d->id,
+                'title' => $d->title,
+                'task' => $d->task?->title ?? null,
+                'project' => $d->project?->title ?? null,
+                'status' => $d->status,
+                'submitted_at' => $d->submitted_at,
+                'approved_at' => $d->approved_at,
+            ]);
+
+        // Reporting To (team leader)
+        $reportingTo = null;
+        if ($team) {
+            $leader = $team->leader;
+            $reportingTo = $leader ? $leader->name : null;
+        }
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'employee_id' => $user->employee_id ?? 'EMP-' . str_pad($user->id, 4, '0', STR_PAD_LEFT),
+                'team' => $team?->name ?? null,
+                'reporting_to' => $reportingTo,
+            ],
+            'summary' => [
+                'total_assigned' => $assigned,
+                'approved' => $completed,
+                'pending' => $pending,
+                'overdue' => $overdue,
+            ],
+            'status_breakdown' => $mergedBreakdown,
+            'status_distribution' => $statusDistribution,
+            'deliverable_summary' => [
+                'total' => (int) $deliverableStats->total,
+                'submitted' => (int) $deliverableStats->submitted,
+                'approved' => (int) $deliverableStats->approved,
+                'pending_review' => (int) $deliverableStats->pending_review,
+                'rejected' => (int) $deliverableStats->rejected,
+                'reopened' => (int) $deliverableStats->reopened,
+            ],
+            'deliverables' => $deliverables,
+            'recent_tasks' => $allRecentTasks,
+            'projects' => $allProjects,
+        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     }
 
     public function projectReport(Project $project)
@@ -393,6 +565,133 @@ class ReportController extends Controller
                 'milestones' => $milestones, 'open_tasks' => $openTasks,
             ];
         });
+    }
+
+    public function summaryCards(Request $request)
+    {
+        $user = $request->user();
+        $timeFilter = $request->query('period', 'all');
+        $role = $user->role === 'teamlead' ? 'team_lead' : $user->role;
+
+        // --- TASKS ---
+        $taskQuery = Task::query();
+        switch ($role) {
+            case 'admin':
+            case 'manager':
+                break;
+            case 'team_lead':
+            case 'member':
+                $taskQuery->where('assigned_to', $user->id);
+                break;
+        }
+        if ($timeFilter !== 'all') {
+            $this->applyTimeFilter($taskQuery, $timeFilter);
+        }
+        $taskStats = $taskQuery->selectRaw("
+            COUNT(*) as total_assigned,
+            SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
+            SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
+        ")->first();
+
+        // --- PROJECTS ASSIGNED AS TASKS ---
+        $projectQuery = Project::whereNotNull('assigned_users');
+        switch ($role) {
+            case 'admin':
+            case 'manager':
+                $projectQuery->whereRaw('JSON_LENGTH(assigned_users) > 0');
+                break;
+            case 'team_lead':
+            case 'member':
+                $projectQuery->whereJsonContains('assigned_users', $user->id);
+                break;
+        }
+        if ($timeFilter !== 'all') {
+            $this->applyTimeFilter($projectQuery, $timeFilter);
+        }
+        $projectStats = $projectQuery->selectRaw("
+            COUNT(*) as total_assigned,
+            SUM(CASE WHEN status IN ('approved','completed','done') THEN 1 ELSE 0 END) as approved,
+            SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
+        ")->first();
+
+        // Merge task + project-as-task counts
+        $totalAssigned = (int) $taskStats->total_assigned + (int) $projectStats->total_assigned;
+        $approved = (int) $taskStats->approved + (int) $projectStats->approved;
+        $pending = max($totalAssigned - $approved, 0);
+        $overdue = (int) $taskStats->overdue + (int) $projectStats->overdue;
+
+        return response()->json([
+            'total_assigned' => $totalAssigned,
+            'approved' => $approved,
+            'pending' => $pending,
+            'overdue' => $overdue,
+        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    }
+
+    public function userPerformanceTable(Request $request)
+    {
+        $timeFilter = $request->query('period', 'all');
+
+        // --- TASK STATS PER USER (from tasks table via task_user pivot) ---
+        $taskQuery = User::query()
+            ->select('users.id', 'users.name', 'users.role')
+            ->where('users.active', true)
+            ->leftJoin('task_user', 'users.id', '=', 'task_user.user_id')
+            ->leftJoin('tasks', 'tasks.id', '=', 'task_user.task_id');
+
+        if ($timeFilter !== 'all') {
+            $this->applyTimeFilter($taskQuery, $timeFilter);
+        }
+
+        $taskStats = $taskQuery->addSelect(DB::raw("
+            COUNT(task_user.task_id) as assigned,
+            SUM(CASE WHEN tasks.status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
+            SUM(CASE WHEN tasks.end_date < NOW() AND tasks.status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
+        "))
+            ->groupBy('users.id', 'users.name', 'users.role')
+            ->get()
+            ->keyBy('id');
+
+        // --- PROJECT-AS-TASK STATS PER USER (from projects.assigned_users JSON) ---
+        $allUsers = User::where('active', true)->select('id', 'name', 'role')->orderBy('name')->get();
+        $projectStats = collect();
+        foreach ($allUsers as $u) {
+            $pq = Project::whereJsonContains('assigned_users', $u->id)
+                ->whereNotNull('assigned_users');
+            if ($timeFilter !== 'all') {
+                $this->applyTimeFilter($pq, $timeFilter);
+            }
+            $ps = $pq->selectRaw("
+                COUNT(*) as assigned,
+                SUM(CASE WHEN status IN ('approved','completed','done') THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
+            ")->first();
+            $projectStats->put($u->id, $ps);
+        }
+
+        // --- MERGE TASK + PROJECT-AS-TASK COUNTS ---
+        $stats = $allUsers->map(function ($user) use ($taskStats, $projectStats) {
+            $ts = $taskStats->get($user->id);
+            $ps = $projectStats->get($user->id);
+
+            $assigned = (int) ($ts->assigned ?? 0) + (int) ($ps->assigned ?? 0);
+            $completed = (int) ($ts->completed ?? 0) + (int) ($ps->completed ?? 0);
+            $overdue = (int) ($ts->overdue ?? 0) + (int) ($ps->overdue ?? 0);
+            $pending = max($assigned - $completed, 0);
+
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'role' => $user->role,
+                'assigned' => $assigned,
+                'completed' => $completed,
+                'pending' => $pending,
+                'overdue' => $overdue,
+            ];
+        })->values();
+
+        return response()->json($stats)
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     }
 
     private function applyTimeFilter($query, string $period)

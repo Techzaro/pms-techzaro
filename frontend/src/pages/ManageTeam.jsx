@@ -144,6 +144,8 @@ function ManageTeam() {
   useRefreshOnEvent(["data:changed"], fetchTeams);
 
   // ... rest of the functions (handleSetLeader, handleRemoveMember, etc.)
+  useRefreshOnEvent(["data:changed"], fetchTeams);
+
   const handleSetLeader = async (teamId, memberId) => {
     const member = teams.flatMap(t => t.members).find(m => Number(m.id) === Number(memberId));
     setLeaderConfirmData({ teamId, memberId, memberName: member?.name || "this member" });
