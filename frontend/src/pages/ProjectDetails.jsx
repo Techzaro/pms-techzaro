@@ -5,6 +5,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
+import { IoEyeOutline } from "react-icons/io5";
+import { LuSend } from "react-icons/lu";
 
 import {
   Building2,
@@ -37,15 +39,61 @@ import AssignerViewModal from "../components/AssignerViewModal";
 import ConfirmModal from "../components/ConfirmModal";
 import SubmitProjectModal from "../components/SubmitProjectModal";
 import ProjectSubmissionPanel from "../components/ProjectSubmissionPanel";
+import SubmitTaskModal from "../components/SubmitTaskModal";
 import { formatDateTimeShort } from "../utils/formatDateTime";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import "./ProjectDetails.css";
 import "./TaskDetails.css";
 
-import { authToken, rolePath } from "../utils/auth";
+import { authToken, rolePath, getUser } from "../utils/auth";
 import API_URL from "../config/api";
 import { publish } from "../utils/eventBus";
 const API = API_URL;
+
+const STATUS_COLORS = {
+  pending: "#FEF3C7",
+  submitted: "#DBEAFE",
+  reopened: "#EDE9FE",
+  approved: "#DCFCE7",
+  rejected: "#FEE2E2",
+};
+
+const STATUS_TEXT_COLORS = {
+  pending: "#92400E",
+  submitted: "#1E40AF",
+  reopened: "#5B21B6",
+  approved: "#166534",
+  rejected: "#991B1B",
+};
+
+const PRIORITY_COLORS = {
+  High: "#FEE2E2",
+  Medium: "#FEF3C7",
+  Low: "#DCFCE7",
+};
+
+const PRIORITY_TEXT_COLORS = {
+  High: "#991B1B",
+  Medium: "#92400E",
+  Low: "#166534",
+};
+
+function formatStatus(status) {
+  const map = {
+    pending: "Pending",
+    submitted: "Submitted",
+    reopened: "Reopened",
+    approved: "Approved",
+    rejected: "Rejected",
+  };
+  return map[status] || status;
+}
+
+function formatShortDate(dateString) {
+  if (!dateString) return "—";
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
 
 function statusSlug(status) {
   return (status || "")
@@ -64,13 +112,6 @@ function timeAgo(iso) {
   return `${Math.floor(sec / 86400)} days ago`;
 }
 
-/**
- * Perform the task status label.
- */
-
-/**
- * Handle task status label.
- */
 function taskStatusLabel(status) {
   const s = (status || "").toLowerCase();
   if (s === "pending") return "Pending";
@@ -93,13 +134,6 @@ function calculateProjectProgress(tasks) {
   return Math.round((completed / tasks.length) * 100);
 }
 
-/**
- * Perform the initials.
- */
-
-/**
- * Handle initials.
- */
 function initials(name) {
   if (!name) return "?";
   const parts = name.trim().split(/\s+/);
@@ -108,24 +142,10 @@ function initials(name) {
   return (a + b).toUpperCase() || a.toUpperCase();
 }
 
-/**
- * Perform the sanitize html.
- */
-
-/**
- * Handle sanitize html.
- */
 function sanitizeHtml(html) {
   return String(html || "").replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
 }
 
-/**
- * Perform the project details.
- */
-
-/**
- * Page displaying full project details, tasks, milestones and notes.
- */
 function ProjectDetails() {
   const { projectId } = useParams();
   const navigate = useNavigate();
@@ -157,6 +177,7 @@ function ProjectDetails() {
   const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
   const [assignerModal, setAssignerModal] = useState({ open: false, deliverable: null });
   const [submitProjectModal, setSubmitProjectModal] = useState({ open: false, project: null });
+  const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null });
   const [reopenDialog, setReopenDialog] = useState(false);
   const [acting, setActing] = useState(false);
@@ -279,7 +300,6 @@ function ProjectDetails() {
 
   useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted', 'project:updated', 'project:deleted', 'deliverable:updated'], loadProject);
 
-  // Auto-mark project changes as read
   useEffect(() => {
     if (!project?.id || !project?.unviewed_changes_count) return;
     const token = authToken();
@@ -288,7 +308,6 @@ function ProjectDetails() {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
     }).catch(() => { });
   }, [project?.id, project?.unviewed_changes_count]);
-
 
   const handleDeleteTask = async (taskId) => {
     setDeleteTaskId(taskId);
@@ -317,13 +336,6 @@ function ProjectDetails() {
     }
   };
 
-  /**
-   * Perform the handle toggle goal.
-   */
-
-  /**
-   * Handle handle toggle goal.
-   */
   const handleToggleGoal = async (index) => {
     const list = Array.isArray(project.goals_checklist) ? [...project.goals_checklist] : [];
     if (!list[index]) return;
@@ -348,13 +360,6 @@ function ProjectDetails() {
     }
   };
 
-  /**
-   * Perform the handle delete project.
-   */
-
-  /**
-   * Handle handle delete project.
-   */
   const handleDeleteProject = async () => {
     setDeleteProjectConfirmOpen(true);
   };
@@ -404,11 +409,15 @@ function ProjectDetails() {
   const tasks = orderedTasks.length ? orderedTasks : (project.tasks || []);
   const progress = typeof project.progress_percent === "number" ? project.progress_percent : calculateProjectProgress(project.tasks || []);
 
+  const currentUser = getUser();
+  const currentUserId = currentUser?.id;
+
   const isCreator = project.is_creator;
   const isAssigned = project.is_assigned;
   const isAdminOrManager = project.is_admin_or_manager;
-  const canSubmitProject = project.can_submit;
+
   const canEdit = project.can_edit;
+  const canSubmitProject = tasks.length > 0 && tasks.every((t) => t.status === "approved");
 
   const tabs = [
     { id: "overview", label: "Overview", icon: ListChecks },
@@ -417,13 +426,6 @@ function ProjectDetails() {
     { id: "files", label: "Files", icon: FolderOpen },
   ];
 
-  /**
-   * Perform the render rail.
-   */
-
-  /**
-   * Handle render rail.
-   */
   const renderRail = () => (
     <div className="pd-rail">
       <section className="pd-rail-card">
@@ -468,13 +470,7 @@ function ProjectDetails() {
       </section>
     </div>
   );
-  /**
-     * Perform the overview inner.
-     */
 
-  /**
-   * Handle overview inner.
-   */
   const overviewInner = (
     <>
       <div className="pd-shell-split">
@@ -632,7 +628,6 @@ function ProjectDetails() {
               { label: project.title },
             ]} />
 
-            {/* Recent Changes Summary — assignee only */}
             {isAssigned && project?.unviewed_changes?.length > 0 && (
               <div className="td-changes-panel" style={{ marginTop: "6px", marginBottom: "12px" }}>
                 <div className="td-changes-header">
@@ -663,40 +658,40 @@ function ProjectDetails() {
                     <Monitor size={28} strokeWidth={1.75} />
                   </div>
                   <h1 className="pd-title-tx">{project.title}</h1>
+                  <div className="pd-hero-actions">
+                    <button className="td-nav-btn" onClick={() => goToProject(prevProjectId)} disabled={!prevProjectId} title="Previous project"><ChevronLeft size={18} /></button>
+                    <button className="td-nav-btn" onClick={() => goToProject(nextProjectId)} disabled={!nextProjectId} title="Next project"><ChevronRight size={18} /></button>
+                    <span className={`pd-pill-status pd-pill-status--${statusSlug(project.status)}`}>{project.status}</span>
+                    {canEdit && (
+                      <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => setShowEditModal(true)}>
+                        <Pencil size={16} />
+                        Edit Project
+                      </button>
+                    )}
+                    {isAssigned && ["pending", "reopened", "Planned", "in_progress", "In Progress"].includes(project?.status) && (
+                      <button
+                        type="button"
+                        className="pd-btn-tx pd-btn-tx--primary"
+                        disabled={!canSubmitProject}
+                        title={!canSubmitProject ? "All tasks and deliverables must be approved first" : ""}
+                        onClick={() => setSubmitProjectModal({ open: true, project })}
+                        style={!canSubmitProject ? { opacity: 0.5, cursor: "not-allowed" } : {}}
+                      >
+                        <Send size={16} />
+                        {project.status === "reopened" ? "Resubmit Project" : "Submit Project"}
+                      </button>
+                    )}
+                    {canEdit && (
+                      <button type="button" className="pd-btn-tx pd-btn-tx--danger" onClick={handleDeleteProject}>
+                        <Trash2 size={16} />
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {project.description && (
                   <div className="pd-desc-tx pd-rich" dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.description) }} />
                 )}
-                <div className="pd-hero-actions">
-                  <button className="td-nav-btn" onClick={() => goToProject(prevProjectId)} disabled={!prevProjectId} title="Previous project"><ChevronLeft size={18} /></button>
-                  <button className="td-nav-btn" onClick={() => goToProject(nextProjectId)} disabled={!nextProjectId} title="Next project"><ChevronRight size={18} /></button>
-                  <span className={`pd-pill-status pd-pill-status--${statusSlug(project.status)}`}>{project.status}</span>
-                  {canEdit && (
-                    <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => setShowEditModal(true)}>
-                      <Pencil size={16} />
-                      Edit Project
-                    </button>
-                  )}
-                  {isAssigned && ["pending", "reopened", "Planned", "in_progress", "In Progress"].includes(project?.status) && (
-                    <button
-                      type="button"
-                      className="pd-btn-tx pd-btn-tx--primary"
-                      disabled={!canSubmitProject}
-                      title={!canSubmitProject ? "All tasks and deliverables must be approved first" : ""}
-                      onClick={() => setSubmitProjectModal({ open: true, project })}
-                      style={!canSubmitProject ? { opacity: 0.5, cursor: "not-allowed" } : {}}
-                    >
-                      <Send size={16} />
-                      {project.status === "reopened" ? "Resubmit Project" : "Submit Project"}
-                    </button>
-                  )}
-                  {canEdit && (
-                    <button type="button" className="pd-btn-tx pd-btn-tx--danger" onClick={handleDeleteProject}>
-                      <Trash2 size={16} />
-                      Delete
-                    </button>
-                  )}
-                </div>
               </div>
             </header>
 
@@ -731,7 +726,6 @@ function ProjectDetails() {
               </div>
             </div>
 
-            {/* Project Submission Workflow */}
             {(project.status === "submitted" || project.status === "reopened" || (["approved", "rejected"].includes(project.status) && project.latestSubmission)) && (
               <ProjectSubmissionPanel
                 project={project}
@@ -780,53 +774,93 @@ function ProjectDetails() {
                             </button>
                           </div>
                           <div className="pd-table-wrap">
-                            <table className="pd-table">
-                              <thead>
-                                <tr>
-                                  <th>Task name</th>
-                                  <th>Assigned To</th>
-                                  <th>Status</th>
-                                  <th>Priority</th>
-                                  <th>Due date</th>
-                                  <th>Action</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {tasks.length === 0 ? (
-                                  <tr>
-                                    <td colSpan={6} className="pd-muted pd-table-empty">No tasks yet.</td>
-                                  </tr>
-                                ) : (
-                                  <SortableTableWrapper items={tasks} onReorder={handleTaskReorder}>
-                                    {(t, idx) => (
-                                      <tr key={t.id}>
-                                        <td className="pd-table-strong">
-                                          <Link to={rolePath(`tasks/task-details/${t.id}`)} style={{ color: "inherit", textDecoration: "none" }}>
+                            <div className="project-task-table">
+                              <div className="ptt-header">
+                                <div>Assigned To</div>
+                                <div className="ptt-col-name">Task Name</div>
+                                <div>Status</div>
+                                <div>Progress</div>
+                                <div>Priority</div>
+                                <div>Due Date</div>
+                                <div>Action</div>
+                              </div>
+                              {tasks.length === 0 ? (
+                                <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>No tasks yet.</div>
+                              ) : (
+                                <SortableTableWrapper items={tasks} onReorder={handleTaskReorder} as="div">
+                                  {(t) => {
+                                    const statusKey = (t.status || "").toLowerCase();
+                                    return (
+                                      <div className="ptt-row" key={t.id}>
+                                        <div>{(t.assignees || []).map((a) => a.name).join(", ") || "—"}</div>
+                                        <div className="ptt-col-name">
+                                          <Link to={rolePath(`tasks/task-details/${t.id}`)} className="ptt-task-link">
                                             {t.title}
                                           </Link>
-                                        </td>
-                                        <td>{(t.assignees || []).map((a) => a.name).join(", ") || "—"}</td>
-                                        <td>
-                                          <span className={`pd-pill pd-pill--task-${statusSlug(taskStatusLabel(t.status))}`}>
-                                            {taskStatusLabel(t.status)}
+                                        </div>
+                                        <div>
+                                          <span className="badge" style={{ background: STATUS_COLORS[statusKey] || "#F3F4F6", color: STATUS_TEXT_COLORS[statusKey] || "#374151" }}>
+                                            <span className="dot" style={{ background: STATUS_TEXT_COLORS[statusKey] || "#374151" }}></span>
+                                            {formatStatus(t.status)}
                                           </span>
-                                        </td>
-                                        <td>
-                                          <span className={`pd-pill pd-pill--pri-${(t.priority || "medium").toLowerCase()}`}>{t.priority}</span>
-                                        </td>
-                                        <td>{formatShortDate(t.end_date)}</td>
-                                        <td>
-                                          <button type="button" className="pd-btn-tx pd-btn-tx--danger" style={{ padding: "4px 8px", fontSize: "12px" }} onClick={() => handleDeleteTask(t.id)}>
-                                            <Trash2 size={14} />
-                                          </button>
-                                        </td>
-                                      </tr>
-                                    )}
-                                  </SortableTableWrapper>
-
-                                )}
-                              </tbody>
-                            </table>
+                                        </div>
+                                        <div>
+                                          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: "4px" }}>
+                                            <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                                              {t.deliverables_progress || 0}%
+                                            </span>
+                                          </div>
+                                          <div className="progress-bar-track">
+                                            <div className="progress-bar-fill" style={{ width: `${t.deliverables_progress || 0}%` }}></div>
+                                          </div>
+                                          <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
+                                            {t.approved_deliverables || 0}/{t.total_deliverables || 0} Del. Approved
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <span className="badge" style={{ background: PRIORITY_COLORS[t.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[t.priority] || "#374151" }}>
+                                            <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[t.priority] || "#374151" }}></span>
+                                            {t.priority}
+                                          </span>
+                                        </div>
+                                        <div>{formatShortDate(t.end_date)}</div>
+                                        <div>
+                                          <div className="action-btns">
+                                            <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${t.id}`), { state: { from: 'project-details' } })}><IoEyeOutline /></button>
+                                            {(() => {
+                                              const isAssigner = t.assigner?.id && t.assigner.id === currentUserId;
+                                              const isAssignee = (t.assignees || []).some((a) => a.id === currentUserId);
+                                              const showSubmit = (t.status === "pending" || t.status === "reopened") && isAssignee;
+                                              const showDelete = false;
+                                              return (
+                                                <>
+                                                  {showSubmit && (
+                                                    <button
+                                                      className="action-icon-btn action-submit"
+                                                      title={t.pending_deliverables_count > 0 ? "Submit all deliverables first" : "Submit Task"}
+                                                      disabled={t.pending_deliverables_count > 0}
+                                                      onClick={() => !t.pending_deliverables_count && setSubmitTaskModal({ open: true, task: t })}
+                                                      style={t.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                                                    >
+                                                      <LuSend size={14} />
+                                                    </button>
+                                                  )}
+                                                  {showDelete && (
+                                                    <button type="button" className="action-icon-btn action-delete" title="Delete" onClick={() => handleDeleteTask(t.id)}>
+                                                      <Trash2 size={14} />
+                                                    </button>
+                                                  )}
+                                                </>
+                                              );
+                                            })()}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  }}
+                                </SortableTableWrapper>
+                              )}
+                            </div>
                           </div>
                         </section>
                       </div>
@@ -842,11 +876,11 @@ function ProjectDetails() {
                             <table className="pd-table">
                               <thead>
                                 <tr>
-                                  <th>Deliverable</th>
-                                  <th>Assigned To</th>
-                                  <th>Due Date</th>
-                                  <th>Status</th>
-                                  <th>Action</th>
+                                  <th style={{ width: '25%' }}>DELIVERABLE</th>
+                                  <th style={{ width: '20%' }}>ASSIGNED TO</th>
+                                  <th style={{ width: '15%' }}>DUE DATE</th>
+                                  <th style={{ width: '15%' }}>STATUS</th>
+                                  <th style={{ width: '25%' }}>ACTION</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -855,34 +889,75 @@ function ProjectDetails() {
                                     <td colSpan={5} className="pd-muted pd-table-empty">No deliverables.</td>
                                   </tr>
                                 ) : (
-                                  <SortableTableWrapper items={orderedDeliverables.length ? orderedDeliverables : (project.deliverables || [])} onReorder={handleDeliverableReorder}>
-                                    {(d, idx) => (
-                                      <tr key={d.id}>
-                                        <td className="pd-table-strong">{d.title}</td>
-                                        <td>{d.assignee?.name || "—"}</td>
-                                        <td>{formatShortDate(d.due_date)}</td>
+                                  (orderedDeliverables.length ? orderedDeliverables : (project.deliverables || [])).map((d, idx) => {
+                                    // Get deliverable name from various possible fields
+                                    const deliverableName = d.deliverable_name || d.name || d.title || d.label || d.description || '';
+                                    // Use deliverable name or fallback to "Deliverable #"
+                                    const displayName = deliverableName || `Deliverable ${idx + 1}`;
+                                    
+                                    return (
+                                      <tr key={d.id || idx}>
+                                        <td className="pd-table-strong">
+                                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                            <span style={{ fontWeight: 600 }}>{displayName}</span>
+                                            {d.id && (
+                                              <span style={{ fontSize: '10px', color: '#94a3b8' }}>
+                                                ID: {d.id}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </td>
+                                        <td>{d.assignee?.name || d.assigned_to?.name || "—"}</td>
+                                        <td>{formatShortDate(d.due_date || d.dueDate)}</td>
                                         <td>
                                           <span className={`pd-pill pd-pill--task-${statusSlug(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status)}`}>
                                             {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}
                                           </span>
                                         </td>
                                         <td>
-                                          <div style={{ display: "flex", gap: "6px" }}>
-                                            {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
-                                              <button type="button" className="pd-btn-tx pd-btn-tx--outline" style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }} onClick={() => setSubmitModal({ open: true, deliverable: d })}>
-                                                <Send size={12} /> Submit
-                                              </button>
-                                            ) : (
-                                              <button type="button" className="pd-btn-tx pd-btn-tx--outline" style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }} onClick={() => { if (isAdminOrManager || isCreator) { setAssignerModal({ open: true, deliverable: d }); } else { setViewModal({ open: true, deliverable: d }); } }}>
-                                                <Eye size={12} /> View
-                                              </button>
-                                            )}
+                                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                                            {(() => {
+                                              const isAssigner = d.created_by && d.created_by === currentUserId;
+                                              const isAssignee = d.assignee?.id && d.assignee.id === currentUserId;
+                                              const isSubmittable = d.status === "pending" || d.status === "rejected" || d.status === "reopened";
+                                              const showSubmit = isSubmittable && isAssignee;
+                                              const showView = !isSubmittable || isAssigner || isAdminOrManager;
+                                              return (
+                                                <>
+                                                  {showSubmit && (
+                                                    <button 
+                                                      type="button" 
+                                                      className="pd-btn-tx pd-btn-tx--outline" 
+                                                      style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }} 
+                                                      onClick={() => setSubmitModal({ open: true, deliverable: d })}
+                                                    >
+                                                      <Send size={12} /> Submit
+                                                    </button>
+                                                  )}
+                                                  {showView && (
+                                                    <button 
+                                                      type="button" 
+                                                      className="pd-btn-tx pd-btn-tx--outline" 
+                                                      style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }} 
+                                                      onClick={() => { 
+                                                        if (isAssigner || isAdminOrManager) { 
+                                                          setAssignerModal({ open: true, deliverable: d }); 
+                                                        } else { 
+                                                          setViewModal({ open: true, deliverable: d }); 
+                                                        } 
+                                                      }}
+                                                    >
+                                                      <Eye size={12} /> View
+                                                    </button>
+                                                  )}
+                                                </>
+                                              );
+                                            })()}
                                           </div>
                                         </td>
                                       </tr>
-                                    )}
-                                  </SortableTableWrapper>
-
+                                    );
+                                  })
                                 )}
                               </tbody>
                             </table>
@@ -997,6 +1072,15 @@ function ProjectDetails() {
         cancelText="Cancel"
         danger
       />
+
+      {submitTaskModal.open && (
+        <SubmitTaskModal
+          isOpen={submitTaskModal.open}
+          onClose={() => setSubmitTaskModal({ open: false, task: null })}
+          task={submitTaskModal.task}
+          onSubmitSuccess={() => { setSubmitTaskModal({ open: false, task: null }); loadProject(); }}
+        />
+      )}
 
       <ConfirmModal
         isOpen={deleteTaskConfirmOpen}

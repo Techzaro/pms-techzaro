@@ -398,7 +398,7 @@ function Header() {
           {/* TASK BUTTON */}
 
           <button
-            className="task-btn"
+            className="task-btn1"
             onClick={() =>
               setShowTaskModal(true)
             }

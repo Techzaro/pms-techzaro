@@ -705,7 +705,13 @@ function TaskDetails() {
                   <span className="td-dot" style={{ background: "#3b82f6" }} />
                   <div>
                     <span className="td-info-label">Project</span>
-                    <span className="td-info-val">{project?.title || "—"}</span>
+                    <span className="td-info-val">
+                      {project ? (
+                        <Link to={rolePath(`projects/project-details/${project.id}`)} className="td-project-link">
+                          {project.title}
+                        </Link>
+                      ) : "—"}
+                    </span>
                   </div>
                 </li>
                 <li>

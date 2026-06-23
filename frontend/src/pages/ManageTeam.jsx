@@ -93,6 +93,7 @@ function ManageTeam() {
     }, 4000);
   };
 
+  // ✅ Define fetchUsers first
   const fetchUsers = async () => {
     const token = authToken();
     if (!token) return;
@@ -112,6 +113,7 @@ function ManageTeam() {
     }
   };
 
+  // ✅ Define fetchTeams BEFORE the useEffect that uses it
   const fetchTeams = async () => {
     const token = authToken();
     if (!token) return;
@@ -126,6 +128,7 @@ function ManageTeam() {
     }
   };
 
+  // ✅ Now useEffect can safely call fetchTeams and fetchUsers
   useEffect(() => {
     const role = getCurrentRole();
     const token = authToken();
@@ -137,6 +140,10 @@ function ManageTeam() {
     fetchTeams();
   }, []);
 
+  // ✅ useRefreshOnEvent with fetchTeams (now defined)
+  useRefreshOnEvent(["data:changed"], fetchTeams);
+
+  // ... rest of the functions (handleSetLeader, handleRemoveMember, etc.)
   useRefreshOnEvent(["data:changed"], fetchTeams);
 
   const handleSetLeader = async (teamId, memberId) => {
@@ -443,7 +450,6 @@ function ManageTeam() {
               <option value="oldest">Oldest First</option>
               <option value="name-asc">Name A-Z</option>
               <option value="name-desc">Name Z-A</option>
-
             </select>
           </div>
         </div>

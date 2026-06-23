@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { useCalendarData } from "../../hooks/useCalendarData";
 import { useUnifiedSummary } from "../../hooks/useUnifiedSummary";
@@ -15,26 +15,18 @@ import "./RightSidebar.css";
 
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function formatDate(date) {
-  return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
-}
-
-function formatDisplayDate(date) {
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
+const HOVER_DELAY = 200;
+const LEAVE_DELAY = 150;
 
 function RightSidebar({ isOpen, onClose }) {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  // activeDate is the single global tooltip source. It holds the date and its events.
-  const [activeDate, setActiveDate] = useState(null);
-  const [hoverPopupPosition, setHoverPopupPosition] = useState({ top: 0, left: 0 });
+  const [hoverDate, setHoverDate] = useState(null);
+  const [hoverPosition, setHoverPosition] = useState({ top: 0, left: 0 });
+  const hoverTimeoutRef = useRef(null);
   const calendarRef = useRef(null);
 
 
   const {
-    currentMonth,
     monthName,
     calendarDays,
     navigateMonth,
@@ -50,61 +42,42 @@ function RightSidebar({ isOpen, onClose }) {
     return () => window.removeEventListener("calendar-sync", handleSync);
   }, [refetch]);
 
-  const handleDateClick = (date) => {
-    if (!date) return;
-    setSelectedPopupDay(date);
-  };
-
-  // On click we set a single active date (global tooltip source) and position the tooltip to the LEFT
-  // side of the sidebar calendar. Tooltip is rendered in document.body and uses fixed positioning.
-  const handleCellClick = (e, date) => {
-    if (!date) return;
-    const rect = e.currentTarget.getBoundingClientRect();
+  const getTooltipPosition = useCallback((cellRect) => {
     const tooltipWidth = 260;
-    // place tooltip to the left of the calendar cell
-    let left = rect.left - tooltipWidth - 8;
-    // ensure tooltip doesn't overflow on the left
+    let left = cellRect.left - tooltipWidth - 8;
     if (left < 8) left = 8;
+    const top = Math.min(Math.max(cellRect.top, 8), window.innerHeight - 96);
+    return { top, left };
+  }, []);
 
-    // compute top and clamp inside viewport. We don't know tooltip height exactly, so use a safe clamp.
-    const top = Math.min(Math.max(rect.top, 8), window.innerHeight - 96);
+  const handleCellHover = useCallback((e, date) => {
+    if (!date) return;
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    const rect = e.currentTarget.getBoundingClientRect();
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoverPosition(getTooltipPosition(rect));
+      setHoverDate(date);
+    }, HOVER_DELAY);
+  }, [getTooltipPosition]);
 
-    setHoverPopupPosition({ top, left });
-    const dayEvents = getEventsForDate(date);
-    setActiveDate({ date, events: dayEvents });
-  };
+  const handleCellLeave = useCallback(() => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoverDate(null);
+    }, LEAVE_DELAY);
+  }, []);
 
-  // Close tooltip when clicking outside the calendar card
-  useEffect(() => {
-    if (!activeDate) return;
-    const handleClickOutside = (e) => {
-      if (calendarRef.current && !calendarRef.current.contains(e.target)) {
-        setActiveDate(null);
-      }
-    };
-    // Delay adding listener to avoid the same click that opened it
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [activeDate]);
+  const handleCellClick = useCallback((date) => {
+    if (!date) return;
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    setHoverDate(null);
+    setSelectedPopupDay(date);
+  }, []);
 
   const handleViewAllClick = () => {
     const role = getCurrentRole() || "admin";
     onClose?.();
     navigate(`/${role}/calender`);
-  };
-  const handleTodayClick = () => {
-    goToToday();
-    const today = new Date();
-    const dateStr = formatDate(today);
-    const role = getCurrentRole() || "admin";
-    const targetPath = `/${role}/calender?date=${dateStr}`;
-    onClose?.();
-    navigate(targetPath);
   };
 
   const currentRole = getCurrentRole() || "admin";
@@ -152,70 +125,75 @@ function RightSidebar({ isOpen, onClose }) {
               const today = isToday(date);
               const dayEvents = getEventsForDate(date);
               const hasEvents = dayEvents.length > 0;
+              const isHovered = hoverDate && date.getTime() === hoverDate.getTime();
 
               return (
-                  <div
-                       key={index}
-                       className={`calendar-cell ${today ? "today" : ""} ${hasEvents ? "has-events" : ""}`}
-                       onClick={(e) => handleCellClick(e, date)}
-                       style={{ cursor: hasEvents ? "pointer" : "default" }}
-                     >
+                <div
+                  key={index}
+                  className={`calendar-cell ${today ? "today" : ""} ${hasEvents ? "has-events" : ""} ${isHovered ? "hovered" : ""}`}
+                  onClick={() => handleCellClick(date)}
+                  onMouseEnter={(e) => handleCellHover(e, date)}
+                  onMouseLeave={handleCellLeave}
+                  style={{ cursor: hasEvents ? "pointer" : "default" }}
+                >
                   <span className="calendar-day-number">{date.getDate()}</span>
+                  {hasEvents && <span className="calendar-cell-dot" />}
                 </div>
               );
             })}
           </div>
 
         </div>
-        {activeDate && createPortal(
-          <div
-            className="hover-popup"
-            role="dialog"
-            aria-modal="false"
-            style={{
-              position: 'fixed',
-              top: Math.min(Math.max(8, hoverPopupPosition.top), window.innerHeight - 96),
-              left: Math.min(Math.max(8, hoverPopupPosition.left), window.innerWidth - 260),
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setActiveDate(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 16 }} title="Close">×</button>
-            </div>
-            <div className="hover-popup-header">
-              <span className="hover-popup-date">
-                {activeDate.date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
-              </span>
-              <span className="hover-popup-count">{activeDate.events.length} event{activeDate.events.length !== 1 ? "s" : ""}</span>
-            </div>
-            <div className="hover-popup-events">
-              {activeDate.events.slice(0, 5).map((ev) => {
-                const colors = TYPE_COLORS[ev.type] || DEFAULT_EVENT_COLOR;
-                return (
-                  <div
-                    key={ev.id}
-                    className="event-summary-item"
-                    onClick={() => { setSelectedPopupItem(ev); setActiveDate(null); }}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <div className="hover-popup-event-title">{ev.title}</div>
-                    <div className="hover-popup-event-meta">
-                      <span className="hover-popup-event-type" style={{ color: colors.dot }}>
-                        {getTypeLabel(ev.type)}
-                      </span>
-                      <span className="hover-popup-event-time">{formatEventTime(ev)}</span>
-                    </div>
-                  </div>
-                );
-              })}
-              {activeDate.events.length > 5 && (
-                <div className="hover-popup-more">+{activeDate.events.length - 5} more</div>
-              )}
-            </div>
-            <button className="hover-popup-view-all" onClick={() => { handleDateClick(activeDate.date); setActiveDate(null); }}>
-              View All
-            </button>
-          </div>,
+        {hoverDate && createPortal(
+          (() => {
+            const dayEvents = getEventsForDate(hoverDate);
+            return (
+              <div
+                className="hover-popup"
+                style={{
+                  position: 'fixed',
+                  top: Math.min(Math.max(8, hoverPosition.top), window.innerHeight - 96),
+                  left: Math.min(Math.max(8, hoverPosition.left), window.innerWidth - 260),
+                }}
+                onMouseEnter={() => { if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current); }}
+                onMouseLeave={handleCellLeave}
+              >
+                <div className="hover-popup-header">
+                  <span className="hover-popup-date">
+                    {hoverDate.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+                  </span>
+                  <span className="hover-popup-count">{dayEvents.length} event{dayEvents.length !== 1 ? "s" : ""}</span>
+                </div>
+                <div className="hover-popup-events">
+                  {dayEvents.slice(0, 5).map((ev) => {
+                    const colors = TYPE_COLORS[ev.type] || DEFAULT_EVENT_COLOR;
+                    return (
+                      <div
+                        key={ev.id}
+                        className="event-summary-item"
+                        onClick={(e) => { e.stopPropagation(); setSelectedPopupItem(ev); setHoverDate(null); }}
+                        style={{ cursor: "pointer" }}
+                      >
+                        <div className="hover-popup-event-title">{ev.title}</div>
+                        <div className="hover-popup-event-meta">
+                          <span className="hover-popup-event-type" style={{ color: colors.dot }}>
+                            {getTypeLabel(ev.type)}
+                          </span>
+                          <span className="hover-popup-event-time">{formatEventTime(ev)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {dayEvents.length > 5 && (
+                    <div className="hover-popup-more">+{dayEvents.length - 5} more</div>
+                  )}
+                </div>
+                <button className="hover-popup-view-all" onClick={() => { setSelectedPopupDay(hoverDate); setHoverDate(null); }}>
+                  View All
+                </button>
+              </div>
+            );
+          })(),
           document.body
         )}
 

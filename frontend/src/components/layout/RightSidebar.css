@@ -101,6 +101,7 @@
 }
 
 .calendar-cell {
+    position: relative;
     height: 32px;
     min-height: 32px;
     display: flex;
@@ -129,6 +130,33 @@
 
 .calendar-cell.has-events {
     cursor: pointer;
+}
+
+.calendar-cell.hovered {
+    background: #dbeafe;
+    outline: 2px solid #2563eb;
+    outline-offset: -1px;
+}
+
+.calendar-cell.today.hovered {
+    background: #1d4ed8;
+    outline: 2px solid #93c5fd;
+    outline-offset: -1px;
+}
+
+.calendar-cell-dot {
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #2563eb;
+}
+
+.calendar-cell.today .calendar-cell-dot {
+    background: white;
 }
 
 .event-item,

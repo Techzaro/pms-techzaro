@@ -424,8 +424,12 @@ class TaskController extends Controller
         $isCreator = $task->assigned_by === $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
+        $isProjectCreator = $task->project && $task->project->created_by === $user->id;
+        $isTeamLeader = $task->project && $task->project->team && $task->project->team->leader_id === $user->id;
+        $isTeamMember = $task->project && $task->project->team && $task->project->team->members()
+            ->where('users.id', $user->id)->exists();
 
-        if (!$isCreator && !$isAssignee && !$isAdminOrManager) {
+        if (!$isCreator && !$isAssignee && !$isAdminOrManager && !$isProjectCreator && !$isTeamLeader && !$isTeamMember) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 

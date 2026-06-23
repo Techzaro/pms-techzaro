@@ -238,6 +238,12 @@ class ProjectController extends Controller
             'rejectedBy:id,name',
             'reopenedBy:id,name',
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
+            'deliverables' => fn ($q) => $q->with(['assignee:id,name', 'creator:id,name'])->orderBy('sort_order'),
+            'tasks' => fn ($q) => $q->with(['assignees:id,name', 'assigner:id,name,role'])->withCount([
+                'deliverables as total_deliverables',
+                'deliverables as approved_deliverables' => fn ($q) => $q->where('status', 'approved'),
+                'deliverables as pending_deliverables' => fn ($q) => $q->whereNotIn('status', ['approved']),
+            ])->orderBy('sort_order')->latest(),
         ]);
 
         $project->loadCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
