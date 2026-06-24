@@ -283,14 +283,13 @@
   }
   .projects-header {
     flex-direction: column;
+    gap: 12px;
   }
   .projects-header h1 {
     font-size: 24px;
   }
   .header-actions {
     width: 100%;
-  }
-  .header-actions {
     flex-direction: row;
     flex-wrap: wrap;
     gap: 8px;
@@ -299,6 +298,11 @@
   .header-actions .all-time {
     flex: none;
     width: auto;
+  }
+  .projects-search-bar {
+    max-width: 100%;
+    min-width: 0;
+    margin-bottom: 12px;
   }
   .project-card-header h3 {
     font-size: 22px;

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Activity;
 use App\Models\Deliverable;
 use App\Models\DeliverableSubmission;
 use App\Models\DeliverableWorkflowEvent;
@@ -40,7 +39,6 @@ class DashboardController extends Controller
                 'upcomingDeadlines' => $this->getCachedUpcomingDeadlines($user, $role, $projectIds),
                 'completedToday' => $completedToday,
                 'todayNotifications' => $todayNotifications,
-                'todayActivities' => $this->getTodayActivities($user),
             ];
         });
     }
@@ -50,27 +48,6 @@ class DashboardController extends Controller
         return Cache::remember(self::ADMIN_MANAGER_CACHE_KEY, 3600, fn () =>
             User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray()
         );
-    }
-
-    /**
-     * Get today's activities performed by the logged-in user from the activities table.
-     */
-    private function getTodayActivities(User $user): array
-    {
-        return Activity::where('user_id', $user->id)
-            ->whereDate('created_at', today())
-            ->latest()
-            ->limit(20)
-            ->get()
-            ->map(fn ($activity) => [
-                'id' => $activity->id,
-                'activity_type' => $activity->activity_type,
-                'related_module' => $activity->related_module,
-                'related_id' => $activity->related_id,
-                'description' => $activity->description,
-                'created_at' => $activity->created_at->toIso8601String(),
-            ])
-            ->toArray();
     }
 
     private function getCachedSummary(User $user, string $role, array $projectIds): array

@@ -49,6 +49,13 @@ import { authToken, rolePath, getUser } from "../utils/auth";
 import API_URL from "../config/api";
 import { publish } from "../utils/eventBus";
 const API = API_URL;
+const API_BASE = API_URL.replace(/\/api\/?$/, "");
+
+function fileUrl(url) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  return API_BASE + url;
+}
 
 const STATUS_COLORS = {
   pending: "#FEF3C7",
@@ -980,7 +987,7 @@ function ProjectDetails() {
                                   <FolderOpen size={18} />
                                   {f.url ? (
                                     <a
-                                      href={f.url}
+                                      href={fileUrl(f.url)}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                     >

@@ -5,6 +5,14 @@ import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { formatDateTime } from "../utils/formatDateTime";
 
+const API_BASE = API_URL.replace(/\/api\/?$/, "");
+
+function fileUrl(url) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  return API_BASE + url;
+}
+
 function formatFileSize(bytes) {
   if (!bytes) return "";
   const mb = bytes / (1024 * 1024);
@@ -168,7 +176,7 @@ function TaskSubmissionPanel({
                     <span className="td-submission-label">Files ({files.length})</span>
                     <div className="td-attachments-list">
                       {files.map((att) => (
-                        <a key={att.id} className="td-submission-file-link" href={att.full_url} target="_blank" rel="noopener noreferrer" download>
+                        <a key={att.id} className="td-submission-file-link" href={fileUrl(att.full_url)} target="_blank" rel="noopener noreferrer">
                           <FileText size={16} />
                           <span>{att.original_name || att.file_name}</span>
                           {att.file_size && <span style={{ fontSize: "11px", color: "#9CA3AF", marginLeft: "auto" }}>{formatFileSize(att.file_size)}</span>}
@@ -184,8 +192,8 @@ function TaskSubmissionPanel({
                     <span className="td-submission-label">Images ({images.length})</span>
                     <div className="td-image-grid">
                       {images.map((att) => (
-                        <div key={att.id} className="td-image-thumb" onClick={() => window.open(att.full_url, "_blank")}>
-                          <img src={att.full_url} alt={att.original_name || att.file_name} />
+                        <div key={att.id} className="td-image-thumb" onClick={() => window.open(fileUrl(att.full_url), "_blank")}>
+                          <img src={fileUrl(att.full_url)} alt={att.original_name || att.file_name} />
                         </div>
                       ))}
                     </div>

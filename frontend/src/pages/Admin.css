@@ -142,6 +142,7 @@
 
   .dashboard-content {
     width: 100%;
+    padding: 14px !important;
   }
 
   .calender-sidebar {
@@ -156,44 +157,154 @@
   }
 
   .workload-card {
-    padding: 16px;
+    padding: 14px;
+    border-radius: 14px;
   }
 
   .workload-card-header h3 {
-    font-size: 16px;
+    font-size: 15px;
+  }
+
+  .workload-view-btn {
+    font-size: 12px;
+  }
+
+  .workload-item {
+    padding: 10px 0;
+  }
+
+  .workload-time {
+    font-size: 11px;
+    min-width: 48px;
+  }
+
+  .workload-title {
+    font-size: 13px;
+  }
+
+  .workload-member {
+    font-size: 11px;
+  }
+
+  .project-card {
+    border-radius: 12px;
+    padding: 14px;
   }
 }
 
 @media (max-width: 600px) {
   .summary-cards-grid {
     grid-template-columns: repeat(2, 1fr) !important;
-    gap: 12px !important;
+    gap: 10px !important;
+  }
+
+  .summary-cards-grid > .summary-card {
+    padding: 14px !important;
+  }
+
+  .summary-cards-grid .summary-card h4 {
+    font-size: 12px !important;
+  }
+
+  .summary-cards-grid .summary-card > div > div > div:last-child {
+    font-size: 28px !important;
   }
 }
 
 @media (max-width: 480px) {
   .summary-cards-grid {
-    gap: 10px !important;
-  }
-  .summary-cards-grid > div {
-    padding: 14px !important;
+    gap: 8px !important;
   }
 
   .welcome-box h1 {
-    font-size: 22px !important;
+    font-size: 20px !important;
+  }
+
+  .welcome-box p {
+    font-size: 13px !important;
   }
 
   .dashboard-content {
-    padding: 12px !important;
+    padding: 10px !important;
+  }
+
+  .workload-card {
+    padding: 12px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+
+  .workload-list {
+    border-radius: 10px;
   }
 
   .workload-item {
     flex-direction: column;
     align-items: flex-start;
+    gap: 6px;
   }
 
   .workload-priority {
     margin-left: 0;
+  }
+
+  .active-projects-section {
+    padding: 14px;
+    border-radius: 14px;
+    margin-bottom: 16px;
+  }
+
+  .today-activity-section {
+    padding: 14px;
+    border-radius: 14px;
+    margin-bottom: 16px;
+  }
+
+  .today-activity-section h3 {
+    font-size: 16px;
+  }
+
+  /* Activity items mobile responsive */
+  .today-activity-section > div:last-child > div {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .today-activity-section > div:last-child > div > div:last-child {
+    margin-left: 0;
+    margin-top: 4px;
+  }
+
+  /* Past Activity section mobile */
+  .past-activity-section {
+    padding: 14px;
+    border-radius: 14px;
+    margin-bottom: 16px;
+  }
+
+  .past-activity-section h3 {
+    font-size: 16px;
+  }
+
+  /* Override inline styles for summary cards */
+  .summary-cards-grid .summary-card {
+    gap: 10px !important;
+  }
+
+  .summary-cards-grid .summary-card > div:first-child {
+    gap: 10px !important;
+  }
+
+  .summary-cards-grid .summary-card > div:first-child > div:first-child {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 10px !important;
+  }
+
+  .summary-cards-grid .summary-card > div:first-child > div:first-child img {
+    width: 20px !important;
+    height: 20px !important;
   }
 }
 
@@ -209,6 +320,8 @@
   padding: 18px;
   border: 1px solid #F1F5F9;
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  box-sizing: border-box;
+  overflow: hidden;
 }
 .project-progress-bar {
   width: 100%;

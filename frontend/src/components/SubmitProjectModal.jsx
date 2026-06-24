@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { FileText, Upload, X, Plus, Image } from "lucide-react";
+import { FileText, Upload, X, Image } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { formatDateTimeShort } from "../utils/formatDateTime";
+import SubmissionLinkSection from "./SubmissionLinkSection";
 import "./SubmitDeliverableModal.css";
+import "./layout/CreateTaskModal.css";
 
 function SubmitProjectModal({ isOpen, onClose, project, onSubmitSuccess }) {
   const [comment, setComment] = useState("");
   const [files, setFiles] = useState([]);
-  const [links, setLinks] = useState([""]);
+  const [links, setLinks] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -18,7 +20,7 @@ function SubmitProjectModal({ isOpen, onClose, project, onSubmitSuccess }) {
       document.body.style.overflow = "hidden";
       setComment("");
       setFiles([]);
-      setLinks([""]);
+      setLinks([]);
       setError("");
     } else {
       document.body.style.overflow = "";
@@ -34,23 +36,13 @@ function SubmitProjectModal({ isOpen, onClose, project, onSubmitSuccess }) {
 
   const removeFile = (index) => setFiles((prev) => prev.filter((_, i) => i !== index));
 
-  const addLink = () => setLinks((prev) => [...prev, ""]);
-  const removeLink = (index) => setLinks((prev) => prev.filter((_, i) => i !== index));
-  const updateLink = (index, value) => setLinks((prev) => prev.map((l, i) => (i === index ? value : l)));
-
   const handleDrop = (e) => {
     e.preventDefault();
     setFiles((prev) => [...prev, ...Array.from(e.dataTransfer.files || [])]);
   };
 
-  const normalizeUrl = (url) => {
-    url = url.trim();
-    if (url && !/^https?:\/\//i.test(url)) return "https://" + url;
-    return url;
-  };
-
   const handleSubmit = async () => {
-    const validLinks = links.filter((l) => l.trim()).map(normalizeUrl);
+    const validLinks = links.map((l) => l.url);
     if (!comment.trim() && files.length === 0 && validLinks.length === 0) {
       setError("Please add a comment, attach files, or add links.");
       return;
@@ -160,30 +152,9 @@ function SubmitProjectModal({ isOpen, onClose, project, onSubmitSuccess }) {
             )}
           </div>
 
-          <div className="sd-field">
-            <label className="sd-label">Links ({links.filter((l) => l.trim()).length})</label>
-            {links.map((link, i) => (
-              <div key={i} className="sd-link-row">
-                <input
-                  type="url"
-                  className="sd-link-input"
-                  placeholder="https://example.com/file"
-                  value={link}
-                  onChange={(e) => updateLink(i, e.target.value)}
-                />
-                {links.length > 1 && (
-                  <button className="sd-link-remove" onClick={() => removeLink(i)}>
-                    <X size={14} />
-                  </button>
-                )}
-                {i === links.length - 1 && (
-                  <button className="sd-link-add" onClick={addLink}>
-                    <Plus size={14} />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
+          <SubmissionLinkSection
+            onLinksChange={setLinks}
+          />
 
           {error && <div className="sd-error">{error}</div>}
         </div>

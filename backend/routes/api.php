@@ -223,9 +223,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/device-tokens', [\App\Http\Controllers\DeviceTokenController::class, 'destroy']);
 
     /*
-    | ACTIVITIES (Today's Activity)
+    | ACTIVITIES (Today's Activity + Past Activity)
     */
     Route::get('/activities/today', [ActivityController::class, 'today']);
+    Route::get('/activities/past', [ActivityController::class, 'past']);
     Route::get('/activities', [ActivityController::class, 'index']);
 
     /*

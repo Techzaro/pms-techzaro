@@ -10,27 +10,60 @@ class ActivityService
     /**
      * Log an activity for a user.
      */
-    public function log(int $userId, string $activityType, string $description, ?string $module = null, ?int $relatedId = null): ?Activity
-    {
+    public function log(
+        int $userId,
+        string $activityType,
+        string $description,
+        ?string $module = null,
+        ?int $relatedId = null,
+        ?string $action = null,
+        ?string $entityName = null,
+        ?int $relatedUserId = null,
+        ?array $metadata = null
+    ): ?Activity {
         return Activity::create([
             'user_id' => $userId,
             'activity_type' => $activityType,
+            'action' => $action,
             'related_module' => $module,
             'related_id' => $relatedId,
+            'entity_name' => $entityName,
+            'related_user_id' => $relatedUserId,
             'description' => $description,
+            'metadata' => $metadata,
         ]);
     }
 
     /**
      * Get today's activities for a user.
      */
-    public function getTodayActivities(int $userId, int $limit = 20)
+    public function getTodayActivities(int $userId, int $limit = 50)
     {
         return Activity::where('user_id', $userId)
             ->whereDate('created_at', Carbon::today())
             ->latest()
             ->limit($limit)
             ->get();
+    }
+
+    /**
+     * Get past activities for a user, grouped by date.
+     */
+    public function getPastActivities(int $userId, int $limit = 100): array
+    {
+        $activities = Activity::where('user_id', $userId)
+            ->whereDate('created_at', '<', Carbon::today())
+            ->latest()
+            ->limit($limit)
+            ->get();
+
+        $grouped = [];
+        foreach ($activities as $activity) {
+            $dateKey = $activity->created_at->format('Y-m-d');
+            $grouped[$dateKey][] = $activity;
+        }
+
+        return $grouped;
     }
 
     /**

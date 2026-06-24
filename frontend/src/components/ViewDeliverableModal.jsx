@@ -6,6 +6,14 @@ import { authToken } from "../utils/auth";
 import { formatDateTime } from "../utils/formatDateTime";
 import "./ViewDeliverableModal.css";
 
+const API_BASE = API_URL.replace(/\/api\/?$/, "");
+
+function fileUrl(url) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  return API_BASE + url;
+}
+
 function formatFileSize(bytes) {
   if (!bytes) return "";
   const mb = bytes / (1024 * 1024);
@@ -169,7 +177,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
                       <h3 className="vd-section-title">Files ({viewFiles.length})</h3>
                       <div className="vd-file-list">
                         {viewFiles.map((att) => (
-                          <a key={att.id} className="vd-file-link" href={att.full_url} target="_blank" rel="noopener noreferrer" download>
+                          <a key={att.id} className="vd-file-link" href={fileUrl(att.full_url)} target="_blank" rel="noopener noreferrer">
                             <FileText size={16} />
                             <span className="vd-file-name">{att.original_name || att.file_name}</span>
                             {att.file_size && <span className="vd-file-size">{formatFileSize(att.file_size)}</span>}
@@ -186,8 +194,8 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
                       <h3 className="vd-section-title">Images ({viewImages.length})</h3>
                       <div className="vd-image-grid">
                         {viewImages.map((att) => (
-                          <div key={att.id} className="vd-image-thumb" onClick={() => setImagePreview(att.full_url)}>
-                            <img src={att.full_url} alt={att.original_name || att.file_name} />
+                          <div key={att.id} className="vd-image-thumb" onClick={() => setImagePreview(fileUrl(att.full_url))}>
+                            <img src={fileUrl(att.full_url)} alt={att.original_name || att.file_name} />
                           </div>
                         ))}
                       </div>

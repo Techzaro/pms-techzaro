@@ -119,7 +119,7 @@
 .Aban {
   border: 1px solid #9CA3AF;
   padding: 10px 15px;
-  display: flex;
+  display: inline-flex;
   justify-content: center;
   align-items: center;
   border-radius: 10px;
@@ -128,6 +128,7 @@
   white-space: nowrap;
   background: transparent;
   transition: 0.15s ease;
+  font-size: 14px;
 }
 
 .All.active,
@@ -633,7 +634,11 @@
   }
 
   .task-progress {
-    gap: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+    padding-bottom: 0;
   }
 
   .All,
@@ -646,8 +651,10 @@
   .Completed,
   .Failed,
   .Aban {
-    padding: 6px 10px;
+    padding: 7px 12px;
     font-size: 12px;
+    border-radius: 8px;
+    flex-shrink: 0;
   }
 }
 
@@ -685,6 +692,10 @@
     font-size: 13px;
   }
 
+  .task-progress {
+    gap: 6px;
+  }
+
   .All,
   .Pending,
   .Progress,
@@ -695,8 +706,9 @@
   .Completed,
   .Failed,
   .Aban {
-    padding: 5px 8px;
+    padding: 6px 10px;
     font-size: 11px;
+    border-radius: 8px;
   }
 
   .action-icon-btn {
@@ -724,7 +736,7 @@
   .Completed,
   .Failed,
   .Aban {
-    padding: 4px 6px;
+    padding: 5px 8px;
     font-size: 10px;
   }
 

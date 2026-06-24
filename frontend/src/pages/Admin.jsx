@@ -169,10 +169,10 @@ const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, ge
           </p>
         </div>
       </div>
-      <div style={{ marginBottom: "18px", marginLeft: "-18px", marginRight: "-18px" }}>
+      <div style={{ marginBottom: "18px", width: "100%", boxSizing: "border-box" }}>
         <div style={{
           display: "flex", justifyContent: "space-between", marginBottom: "10px",
-          fontSize: "13px", fontWeight: 600, color: "#6b7280", paddingLeft: "18px", paddingRight: "18px",
+          fontSize: "13px", fontWeight: 600, color: "#6b7280",
         }}>
           <span>Progress</span>
           <span>{project.progress}%</span>
@@ -291,33 +291,25 @@ function Admin() {
     [dashboard?.activeProjects]
   );
 
-  const completedToday = (dashboard?.completedToday || []).map((item) => ({
-    id: item.id,
-    entity_id: item.entity_id,
-    module: item.module,
-    action: item.action,
-    title: item.title,
-    actor_name: item.actor_name,
-    actor_role: item.actor_role,
-    is_actor: item.is_actor,
-    submitted_by_name: item.submitted_by_name,
-    submitted_by_role: item.submitted_by_role,
-    comment: item.comment,
-    time_ago: item.time_ago || '—',
-    created_at: item.created_at,
-  }));
-
-  // New: Today's Activities (user's own actions from activities table)
-  const todayActivities = useMemo(() =>
-    (dashboard?.todayActivities || []).map((item) => ({
-      id: item.id,
-      activity_type: item.activity_type,
-      related_module: item.related_module,
-      related_id: item.related_id,
-      description: item.description,
-      created_at: item.created_at,
-    })),
-    [dashboard?.todayActivities]
+  const completedToday = useMemo(() =>
+    (dashboard?.completedToday || [])
+      .filter((item) => item.is_actor)
+      .map((item) => ({
+        id: item.id,
+        entity_id: item.entity_id,
+        module: item.module,
+        action: item.action,
+        title: item.title,
+        actor_name: item.actor_name,
+        actor_role: item.actor_role,
+        is_actor: item.is_actor,
+        submitted_by_name: item.submitted_by_name,
+        submitted_by_role: item.submitted_by_role,
+        comment: item.comment,
+        time_ago: item.time_ago || '—',
+        created_at: item.created_at,
+      })),
+    [dashboard?.completedToday]
   );
 
   const activityActionConfig = {
@@ -332,30 +324,6 @@ function Admin() {
     completed:       { icon: "✓", color: "#22C55E", bg: "#ECFDF5" },
     status_updated:  { icon: "⚡", color: "#8B5CF6", bg: "#F5F3FF" },
     field_changed:   { icon: "✎", color: "#6B7280", bg: "#F3F4F6" },
-  };
-
-  // Activity type config for the new "My Activities" section
-  const myActivityConfig = {
-    project_created:           { icon: "★", color: "#3B82F6", bg: "#EFF6FF" },
-    project_updated:           { icon: "✎", color: "#6B7280", bg: "#F3F4F6" },
-    project_submitted:         { icon: "✓", color: "#22C55E", bg: "#ECFDF5" },
-    project_approved:          { icon: "✓", color: "#22C55E", bg: "#ECFDF5" },
-    project_rejected:          { icon: "✕", color: "#EF4444", bg: "#FEF2F2" },
-    project_reopened:          { icon: "↻", color: "#F59E0B", bg: "#FFFBEB" },
-    project_visibility_updated:{ icon: "👁", color: "#8B5CF6", bg: "#F5F3FF" },
-    task_created:              { icon: "★", color: "#3B82F6", bg: "#EFF6FF" },
-    task_completed:            { icon: "✓", color: "#22C55E", bg: "#ECFDF5" },
-    task_submitted:            { icon: "✓", color: "#22C55E", bg: "#ECFDF5" },
-    task_approved:             { icon: "✓", color: "#22C55E", bg: "#ECFDF5" },
-    task_rejected:             { icon: "✕", color: "#EF4444", bg: "#FEF2F2" },
-    task_reopened:             { icon: "↻", color: "#F59E0B", bg: "#FFFBEB" },
-    deliverable_submitted:     { icon: "✓", color: "#22C55E", bg: "#ECFDF5" },
-    deliverable_approved:      { icon: "✓", color: "#22C55E", bg: "#ECFDF5" },
-    deliverable_rejected:      { icon: "✕", color: "#EF4444", bg: "#FEF2F2" },
-    deliverable_reopened:      { icon: "↻", color: "#F59E0B", bg: "#FFFBEB" },
-    event_created:             { icon: "📅", color: "#3B82F6", bg: "#EFF6FF" },
-    event_updated:             { icon: "✎", color: "#6B7280", bg: "#F3F4F6" },
-    event_cancelled:           { icon: "✕", color: "#EF4444", bg: "#FEF2F2" },
   };
 
   const getModuleLabel = (module) => {
@@ -406,11 +374,25 @@ function Admin() {
   };
 
   const [projectSlide, setProjectSlide] = useState(0);
-  const PROJECTS_PER_VIEW = 3;
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [pastActivityOpen, setPastActivityOpen] = useState(false);
+  const { data: pastActivityData, isLoading: pastLoading } = useApiQuery(
+    ["activities", "past"],
+    "/activities/past",
+    null,
+    { enabled: pastActivityOpen, staleTime: 300000 }
+  );
+  const PROJECTS_PER_VIEW = isMobile ? 1 : 3;
   const sliderRef = useRef(null);
   const [cardWidth, setCardWidth] = useState(0);
   const totalProjectSlides = Math.max(0, activeProjects.length - PROJECTS_PER_VIEW);
-  const GAP = 20;
+  const GAP = isMobile ? 0 : 20;
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     const measure = () => {
@@ -423,7 +405,7 @@ function Admin() {
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, [activeProjects.length]);
+  }, [activeProjects.length, PROJECTS_PER_VIEW, GAP]);
 
   return (
     <DashboardLayout>
@@ -434,8 +416,8 @@ function Admin() {
           <div className="summary-cards-grid"
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
-              gap: "20px",
+              gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(100px, 1fr))",
+              gap: isMobile ? "10px" : "20px",
             }}
           >
             {summaryCards.map((card) => (
@@ -466,7 +448,7 @@ function Admin() {
               )}
             </div>
           </div>
-          <div style={{
+          <div className="active-projects-section" style={{
             background: "#fff", borderRadius: "20px", padding: "24px",
             boxShadow: "0 2px 10px rgba(0,0,0,0.05)", marginBottom: "30px", overflow: "hidden",
           }}>
@@ -550,14 +532,14 @@ function Admin() {
           </div>
 
           {/* TODAY'S ACTIVITY */}
-          <div style={{ background: "#fff", borderRadius: "20px", padding: "24px", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", marginBottom: "30px" }}>
+          <div className="today-activity-section" style={{ background: "#fff", borderRadius: "20px", padding: "24px", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", marginBottom: "30px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
               <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "600" }}>Today's Activity</h3>
               <button
-                onClick={() => navigate(rolePath("tasks"))}
+                onClick={() => setPastActivityOpen(!pastActivityOpen)}
                 style={{ background: "transparent", border: "none", color: "#6366F1", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}
               >
-                Past Activities
+                {pastActivityOpen ? "Hide Past" : "Past Activities"}
               </button>
             </div>
             {completedToday.length === 0 ? (
@@ -642,44 +624,62 @@ function Admin() {
             )}
           </div>
 
-          {/* MY ACTIVITIES - Today's actions performed by the logged-in user */}
-          {todayActivities.length > 0 && (
-            <div style={{ background: "#fff", borderRadius: "20px", padding: "24px", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", marginBottom: "30px" }}>
+          {/* PAST ACTIVITY (expandable) */}
+          {pastActivityOpen && (
+            <div className="past-activity-section" style={{ background: "#fff", borderRadius: "20px", padding: "24px", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", marginBottom: "30px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "600" }}>My Activities Today</h3>
-                <span style={{ color: "#9CA3AF", fontSize: "13px" }}>{todayActivities.length} action(s)</span>
+                <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "600" }}>Past Activity</h3>
+                <button
+                  onClick={() => setPastActivityOpen(false)}
+                  style={{ background: "transparent", border: "none", color: "#6366F1", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}
+                >
+                  Collapse
+                </button>
               </div>
-              {todayActivities.map((item, index) => {
-                const cfg = myActivityConfig[item.activity_type] || { icon: "•", color: "#6B7280", bg: "#F3F4F6" };
-                return (
-                  <div
-                    key={item.id || index}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "14px",
-                      padding: "12px 0",
-                      borderBottom: index < todayActivities.length - 1 ? "1px solid #F3F4F6" : "none",
-                    }}
-                  >
-                    <div style={{
-                      width: "36px", height: "36px", borderRadius: "50%",
-                      background: cfg.bg, display: "flex", alignItems: "center",
-                      justifyContent: "center", flexShrink: 0,
-                    }}>
-                      <span style={{ fontSize: "14px", color: cfg.color }}>{cfg.icon}</span>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: "14px", color: "#374151", lineHeight: "1.4" }}>
-                        {item.description}
-                      </p>
-                    </div>
-                    <span style={{ color: "#9CA3AF", fontSize: "13px", whiteSpace: "nowrap" }}>
-                      {timeAgo(item.created_at)}
-                    </span>
+              {pastLoading ? (
+                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>Loading past activities...</p>
+              ) : (pastActivityData?.data || []).length === 0 ? (
+                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No past activities</p>
+              ) : (
+                (pastActivityData?.data || []).map((group, gi) => (
+                  <div key={group.date} style={{ marginBottom: gi < (pastActivityData?.data || []).length - 1 ? "24px" : "0" }}>
+                    <h4 style={{ margin: "0 0 12px 0", fontSize: "15px", fontWeight: "600", color: "#374151", borderBottom: "1px solid #F3F4F6", paddingBottom: "8px" }}>
+                      {group.label}
+                    </h4>
+                    {group.activities.map((item, index) => {
+                      const cfg = activityActionConfig[item.action] || activityActionConfig.submitted;
+                      return (
+                        <div
+                          key={item.id || index}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "14px",
+                            padding: "12px 0",
+                            borderBottom: index < group.activities.length - 1 ? "1px solid #F3F4F6" : "none",
+                          }}
+                        >
+                          <div style={{
+                            width: "36px", height: "36px", borderRadius: "50%",
+                            background: cfg.bg, display: "flex", alignItems: "center",
+                            justifyContent: "center", flexShrink: 0,
+                          }}>
+                            <span style={{ fontSize: "14px", color: cfg.color }}>{cfg.icon}</span>
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ margin: 0, fontSize: "14px", color: "#374151", lineHeight: "1.4" }}>
+                              {item.description}
+                            </p>
+                          </div>
+                          <span style={{ color: "#9CA3AF", fontSize: "13px", whiteSpace: "nowrap" }}>
+                            {timeAgo(item.created_at)}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                ))
+              )}
             </div>
           )}
     </DashboardLayout>

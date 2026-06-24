@@ -28,6 +28,14 @@ import SubmitTaskModal from "../components/SubmitTaskModal";
 import TaskSubmissionPanel from "../components/TaskSubmissionPanel";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
+
+const API_BASE = API_URL.replace(/\/api\/?$/, "");
+
+function fileUrl(url) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  return API_BASE + url;
+}
 import { publish } from "../utils/eventBus";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
@@ -953,7 +961,7 @@ function FileUploadSection({ taskId, files, isCreator, isAssignee, isApproved, o
           {files.map((f) => (
             <li key={f.id}>
               <FolderOpen size={18} />
-              {f.url ? <a href={f.url} target="_blank" rel="noopener noreferrer">{f.name}</a> : <span>{f.name}</span>}
+              {f.url ? <a href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer">{f.name}</a> : <span>{f.name}</span>}
               {canManage && (
                 <button className="td-btn-danger" style={{ marginLeft: "auto", padding: "2px 8px", fontSize: "12px" }} onClick={() => handleDelete(f.id)}>
                   <Trash2 size={12} />
