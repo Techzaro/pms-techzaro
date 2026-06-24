@@ -33,6 +33,15 @@ class NotificationController extends Controller
             $query->where('type', $request->input('type'));
         }
 
+        if ($request->filled('filter')) {
+            $filter = $request->input('filter');
+            if ($filter === 'unread') {
+                $query->where('is_read', false);
+            } elseif ($filter === 'read') {
+                $query->where('is_read', true);
+            }
+        }
+
         return response()->json([
             'data' => NotificationResource::collection($query->paginate(20)),
         ]);

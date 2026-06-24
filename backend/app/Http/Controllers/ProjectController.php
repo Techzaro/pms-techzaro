@@ -184,7 +184,7 @@ class ProjectController extends Controller
         if (!empty($deliverables)) {
             $assignedUsers = $validated['assigned_users'] ?? [];
             if (!empty($assignedUsers)) {
-                $project->deliverables()->createMany(
+                $createdDeliverables = $project->deliverables()->createMany(
                     collect($deliverables)->flatMap(fn ($del) => collect($assignedUsers)->map(fn ($userId) => [
                         'title' => $del['title'],
                         'description' => $del['description'] ?? null,
@@ -195,6 +195,20 @@ class ProjectController extends Controller
                         'created_by' => $request->user()->id,
                     ]))->toArray()
                 );
+                foreach ($createdDeliverables as $deliverable) {
+                    if ($deliverable->assigned_to && (int) $deliverable->assigned_to !== (int) $request->user()->id) {
+                        $this->notificationService->notify(
+                            $deliverable->assigned_to,
+                            $request->user()->id,
+                            'deliverable_assigned',
+                            'deliverable',
+                            $deliverable->id,
+                            'Deliverable Assigned',
+                            'A new deliverable "' . $deliverable->title . '" has been assigned to you by ' . $request->user()->name . '.',
+                            '/deliveries?selectedDeliverable=' . $deliverable->id
+                        );
+                    }
+                }
             }
         }
 
@@ -378,12 +392,24 @@ class ProjectController extends Controller
             if (!empty($assignedUsers)) {
                 foreach ($deliverables as $del) {
                     foreach ($assignedUsers as $userId) {
-                        $project->deliverables()->create([
+                        $newDeliverable = $project->deliverables()->create([
                             'title' => $del['title'], 'description' => $del['description'] ?? null,
                             'status' => 'pending', 'priority' => $project->priority ?? 'Medium',
                             'due_date' => $del['due_date'] ?? null, 'assigned_to' => $userId,
                             'created_by' => $request->user()->id,
                         ]);
+                        if ($newDeliverable->assigned_to && (int) $newDeliverable->assigned_to !== (int) $user->id) {
+                            $this->notificationService->notify(
+                                $newDeliverable->assigned_to,
+                                $user->id,
+                                'deliverable_assigned',
+                                'deliverable',
+                                $newDeliverable->id,
+                                'Deliverable Assigned',
+                                'A new deliverable "' . $newDeliverable->title . '" has been assigned to you by ' . $user->name . '.',
+                                '/deliveries?selectedDeliverable=' . $newDeliverable->id
+                            );
+                        }
                     }
                     $addedDeliverables[] = $del['title'];
                 }

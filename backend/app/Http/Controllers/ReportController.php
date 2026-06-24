@@ -694,6 +694,147 @@ class ReportController extends Controller
             ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     }
 
+    public function companyEmployeesReport(Request $request)
+    {
+        $timeFilter = $request->query('period', 'all');
+
+        $allUsers = User::where('active', true)->select('id', 'name', 'role')->orderBy('name')->get();
+        $totalEmployees = $allUsers->count();
+
+        // --- TASK STATS PER USER ---
+        $taskQuery = User::query()
+            ->select('users.id', 'users.name', 'users.role')
+            ->where('users.active', true)
+            ->leftJoin('task_user', 'users.id', '=', 'task_user.user_id')
+            ->leftJoin('tasks', 'tasks.id', '=', 'task_user.task_id');
+
+        if ($timeFilter !== 'all') {
+            $this->applyTimeFilter($taskQuery, $timeFilter);
+        }
+
+        $taskStats = $taskQuery->addSelect(DB::raw("
+            COUNT(task_user.task_id) as assigned,
+            SUM(CASE WHEN tasks.status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
+            SUM(CASE WHEN tasks.end_date < NOW() AND tasks.status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
+        "))
+            ->groupBy('users.id', 'users.name', 'users.role')
+            ->get()
+            ->keyBy('id');
+
+        // --- PROJECT-AS-TASK STATS PER USER ---
+        $projectStats = collect();
+        foreach ($allUsers as $u) {
+            $pq = Project::whereJsonContains('assigned_users', $u->id)
+                ->whereNotNull('assigned_users');
+            if ($timeFilter !== 'all') {
+                $this->applyTimeFilter($pq, $timeFilter);
+            }
+            $ps = $pq->selectRaw("
+                COUNT(*) as assigned,
+                SUM(CASE WHEN status IN ('approved','completed','done') THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
+            ")->first();
+            $projectStats->put($u->id, $ps);
+        }
+
+        // --- MERGE TASK + PROJECT-AS-TASK COUNTS PER USER ---
+        $employeeStats = $allUsers->map(function ($user) use ($taskStats, $projectStats) {
+            $ts = $taskStats->get($user->id);
+            $ps = $projectStats->get($user->id);
+
+            $assigned = (int) ($ts->assigned ?? 0) + (int) ($ps->assigned ?? 0);
+            $completed = (int) ($ts->completed ?? 0) + (int) ($ps->completed ?? 0);
+            $overdue = (int) ($ts->overdue ?? 0) + (int) ($ps->overdue ?? 0);
+            $pending = max($assigned - $completed, 0);
+            $completionRate = $assigned > 0 ? (int) round(($completed / $assigned) * 100) : 0;
+
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'role' => $user->role,
+                'assigned' => $assigned,
+                'completed' => $completed,
+                'pending' => $pending,
+                'overdue' => $overdue,
+                'completion_rate' => $completionRate,
+            ];
+        });
+
+        $totalAssigned = $employeeStats->sum('assigned');
+        $totalCompleted = $employeeStats->sum('completed');
+        $totalPending = $employeeStats->sum('pending');
+        $totalOverdue = $employeeStats->sum('overdue');
+
+        // --- STATUS DISTRIBUTION (OVERALL) ---
+        $allTaskIds = Task::pluck('id');
+        $statusDistribution = $allTaskIds->isNotEmpty()
+            ? Task::selectRaw("
+                SUM(CASE WHEN status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN status IN ('pending','assigned') THEN 1 ELSE 0 END) as pending,
+                SUM(CASE WHEN status IN ('submitted','reopened') THEN 1 ELSE 0 END) as in_review,
+                SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
+            ")->whereIn('id', $allTaskIds)->first()
+            : (object)['completed' => 0, 'pending' => 0, 'in_review' => 0, 'overdue' => 0];
+
+        // --- TEAM WISE SUMMARY ---
+        $teams = Team::withCount(['members as member_count'])->get()->map(function ($team) use ($timeFilter) {
+            $memberIds = $team->members()->pluck('users.id');
+            $taskStats = $memberIds->isNotEmpty()
+                ? Task::whereHas('assignees', fn ($q) => $q->whereIn('users.id', $memberIds))
+                    ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter))
+                    ->selectRaw('COUNT(*) as total, SUM(CASE WHEN status IN ("completed","done","approved") THEN 1 ELSE 0 END) as completed, SUM(CASE WHEN end_date < NOW() AND status NOT IN ("completed","done","abandoned","approved") THEN 1 ELSE 0 END) as overdue')
+                    ->first()
+                : (object)['total' => 0, 'completed' => 0, 'overdue' => 0];
+            $total = (int) $taskStats->total;
+            $completed = (int) $taskStats->completed;
+            $overdue = (int) $taskStats->overdue;
+            return [
+                'name' => $team->name,
+                'members' => $team->member_count,
+                'assigned' => $total,
+                'completed' => $completed,
+                'pending' => max($total - $completed, 0),
+                'overdue' => $overdue,
+                'completion_rate' => $total > 0 ? (int) round(($completed / $total) * 100) : 0,
+            ];
+        });
+
+        // --- TASKS TREND (weekly data by day of week) ---
+        $weekStart = now()->startOfWeek();
+        $tasksTrend = Task::where('created_at', '>=', $weekStart)
+            ->selectRaw("DAYNAME(created_at) as day_name, COUNT(*) as count")
+            ->groupBy('day_name')
+            ->get()
+            ->pluck('count', 'day_name')
+            ->toArray();
+
+        $dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        $trendData = collect($dayOrder)->map(fn ($d) => $tasksTrend[$d] ?? 0)->values();
+
+        return response()->json([
+            'overview' => [
+                'total_employees' => $totalEmployees,
+                'company_name' => 'Techxaro Solutions',
+            ],
+            'summary' => [
+                'total_assigned' => $totalAssigned,
+                'completed' => $totalCompleted,
+                'pending' => $totalPending,
+                'overdue' => $totalOverdue,
+            ],
+            'employees' => $employeeStats->values(),
+            'status_distribution' => [
+                'completed' => (int) ($statusDistribution->completed ?? 0),
+                'pending' => (int) ($statusDistribution->pending ?? 0),
+                'in_review' => (int) ($statusDistribution->in_review ?? 0),
+                'overdue' => (int) ($statusDistribution->overdue ?? 0),
+                'total' => $totalAssigned,
+            ],
+            'teams' => $teams,
+            'tasks_trend' => $trendData,
+        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    }
+
     private function applyTimeFilter($query, string $period)
     {
         return match ($period) {

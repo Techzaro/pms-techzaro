@@ -587,9 +587,10 @@ class DeliverableController extends Controller
         $deliverable->loadMissing('task:id,title');
         $taskTitle = $deliverable->task->title ?? '';
         $dueDate = $deliverable->due_date ? $deliverable->due_date->format('d-M-Y') : '';
-        $message = 'You have been assigned a new deliverable: "' . $deliverable->title . '"';
-        if ($taskTitle) $message .= "\n\nTask: " . $taskTitle;
-        if ($dueDate) $message .= "\n\nDue Date: " . $dueDate;
+        $message = 'A new deliverable "' . $deliverable->title . '" has been assigned to you.';
+        if ($sender->name) $message .= ' by ' . $sender->name . '.';
+        if ($taskTitle) $message .= ' Task: ' . $taskTitle . '.';
+        if ($dueDate) $message .= ' Due Date: ' . $dueDate . '.';
 
         $this->notificationService->notify(
             $deliverable->assigned_to,

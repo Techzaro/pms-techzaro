@@ -255,6 +255,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reports/project/{project}', [ReportController::class, 'projectReport']);
     Route::get('/reports/summary-cards', [ReportController::class, 'summaryCards']);
     Route::get('/reports/user-performance-table', [ReportController::class, 'userPerformanceTable']);
+    Route::get('/reports/company-employees', [ReportController::class, 'companyEmployeesReport']);
 
     /*
     | ROLE BASED DASHBOARD INFO (all roles)

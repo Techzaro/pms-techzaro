@@ -101,7 +101,7 @@ const PRIORITY_TEXT_COLORS = {
 };
 
 function UserPerformance() {
-  const { userId } = useParams();
+  const { userId: urlUserId } = useParams();
   const navigate = useNavigate();
   const [showExportModal, setShowExportModal] = useState(false);
   const [showCreateTask, setShowCreateTask] = useState(false);
@@ -109,6 +109,14 @@ function UserPerformance() {
   const stored = getUser();
   const currentRole = stored?.role || "member";
   const isAdminOrManager = currentRole === "admin" || currentRole === "manager";
+
+  // Resolve "me" to actual user ID
+  const userId = useMemo(() => {
+    if (urlUserId === "me") {
+      return stored?.id || urlUserId;
+    }
+    return urlUserId;
+  }, [urlUserId, stored]);
 
   const { data, isLoading } = useApiQuery(
     ["user-performance", userId],

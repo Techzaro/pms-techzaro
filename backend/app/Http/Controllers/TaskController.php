@@ -599,7 +599,21 @@ class TaskController extends Controller
         }
 
         if (!empty($deliverablesToCreate)) {
-            Deliverable::insert($deliverablesToCreate);
+            foreach ($deliverablesToCreate as $delData) {
+                $newDeliverable = Deliverable::create($delData);
+                if ($newDeliverable->assigned_to && (int) $newDeliverable->assigned_to !== (int) $user->id) {
+                    $this->notificationService->notify(
+                        $newDeliverable->assigned_to,
+                        $user->id,
+                        'deliverable_assigned',
+                        'deliverable',
+                        $newDeliverable->id,
+                        'Deliverable Assigned',
+                        'A new deliverable "' . $newDeliverable->title . '" has been assigned to you by ' . $user->name . '.',
+                        '/deliveries?selectedDeliverable=' . $newDeliverable->id
+                    );
+                }
+            }
         }
 
         // Bulk notifications
@@ -692,7 +706,7 @@ class TaskController extends Controller
             }
 
             if (!empty($validated['deliverables'])) {
-                $task->deliverables()->createMany(
+                $createdDeliverables = $task->deliverables()->createMany(
                     collect($validated['deliverables'])->map(fn ($del) => [
                         'title' => $del['title'], 'description' => $del['description'] ?? null,
                         'status' => 'pending', 'priority' => $validated['priority'],
@@ -700,6 +714,20 @@ class TaskController extends Controller
                         'assigned_to' => $userId, 'created_by' => $user->id,
                     ])->toArray()
                 );
+                foreach ($createdDeliverables as $deliverable) {
+                    if ($deliverable->assigned_to && (int) $deliverable->assigned_to !== (int) $user->id) {
+                        $this->notificationService->notify(
+                            $deliverable->assigned_to,
+                            $user->id,
+                            'deliverable_assigned',
+                            'deliverable',
+                            $deliverable->id,
+                            'Deliverable Assigned',
+                            'A new deliverable "' . $deliverable->title . '" has been assigned to you by ' . $user->name . '.',
+                            '/deliveries?selectedDeliverable=' . $deliverable->id
+                        );
+                    }
+                }
             }
 
             $createdTasks[] = $task;
@@ -880,7 +908,7 @@ class TaskController extends Controller
                     'task',
                     $task->id,
                     'Task Completed',
-                    $user->name . ' has marked the task "' . $task->title . '" as completed.',
+                    $user->name . ' has completed the task "' . $task->title . '" and submitted it for review.',
                     '/tasks/task-details/' . $task->id . '?from=taskby'
                 );
             }

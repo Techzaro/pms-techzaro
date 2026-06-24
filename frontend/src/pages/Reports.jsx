@@ -2,7 +2,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useCallback, memo } from "react";
 import { useNavigate } from "react-router-dom";
-import ExportReport from "./ExportReport";
+import CompanyEmployeeReport from "./CompanyEmployeeReport";
 import { getUser, rolePath } from "../utils/auth";
 import { useApiQuery } from "../hooks/useApi";
 import { useQueryClient } from "@tanstack/react-query";
@@ -112,7 +112,7 @@ const SummaryCard = memo(function SummaryCard({ card, onClick }) {
 
 function Reports() {
   const [timeFilter, setTimeFilter] = useState("All Time");
-  const [showExportModal, setShowExportModal] = useState(false);
+  const [showCompanyReport, setShowCompanyReport] = useState(false);
 
   const period = PERIOD_MAP[timeFilter] || "all";
   const queryClient = useQueryClient();
@@ -185,13 +185,15 @@ function Reports() {
               <option>Last 30 Days</option>
               <option>Last 6 Months</option>
             </select>
-            <button
-              className="reports-export-btn"
-              onClick={() => setShowExportModal(true)}
-            >
-              Export Report
-              <span>↓</span>
-            </button>
+            {isAdminOrManager && (
+              <button
+                className="reports-export-btn"
+                onClick={() => setShowCompanyReport(true)}
+              >
+                Export Report
+                <span>↓</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -283,7 +285,7 @@ function Reports() {
 
       </div>
 
-      <ExportReport isOpen={showExportModal} onClose={() => setShowExportModal(false)} />
+      <CompanyEmployeeReport isOpen={showCompanyReport} onClose={() => setShowCompanyReport(false)} />
     </DashboardLayout>
   );
 }

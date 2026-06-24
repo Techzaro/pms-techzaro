@@ -212,7 +212,7 @@ function Header() {
     })
       .then((res) => (res.ok ? res.json() : { count: 0 }))
       .then((data) => {
-        const newCount = data.count || 0;
+        const newCount = data.unread_count || 0;
         setUnreadCount((prev) => {
           if (newCount > prev && prev > 0) {
             showBrowserNotification('New PMS Notification', {
