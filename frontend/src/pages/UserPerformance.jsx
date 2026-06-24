@@ -118,6 +118,11 @@ function UserPerformance() {
     return urlUserId;
   }, [urlUserId, stored]);
 
+  // Check if user is viewing their own page
+  const isOwnPage = useMemo(() => {
+    return urlUserId === "me" || String(stored?.id) === String(userId);
+  }, [urlUserId, stored, userId]);
+
   const { data, isLoading } = useApiQuery(
     ["user-performance", userId],
     `/reports/user/${userId}`,
@@ -261,7 +266,7 @@ function UserPerformance() {
     <DashboardLayout>
       <Breadcrumb items={[
         { label: "Reports", path: "/reports" },
-        { label: "User Performance" },
+        { label: isOwnPage ? "My Performance" : "User Performance" },
       ]} />
       <div className="up-layout">
         <div className="up-main">
@@ -285,7 +290,7 @@ function UserPerformance() {
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
                 </svg>
-                Export Report
+                {isOwnPage ? "Export My Report" : "Export Report"}
               </button>
               {isAdminOrManager && (
                 <button className="up-export-btn" onClick={() => setShowCreateTask(true)}>
@@ -394,7 +399,7 @@ function UserPerformance() {
           <div style={{ marginTop: "32px" }}>
             <div className="task-text">
               <h3>Tasks</h3>
-              <p>All tasks and projects assigned to {userInfo.name || "this user"}</p>
+              <p>All tasks and projects assigned to {isOwnPage ? "me" : (userInfo.name || "this user")}</p>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "6px", flexWrap: "wrap", gap: "8px" }}>
                 <div className="task-count-badge" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                   <span style={{ background: "#dedfe0", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
@@ -608,6 +613,7 @@ function UserPerformance() {
       <MemberExportReport
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
+        isOwnPage={isOwnPage}
         userData={{
           user: userInfo,
           summary,

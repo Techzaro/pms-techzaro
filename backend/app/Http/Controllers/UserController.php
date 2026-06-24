@@ -8,6 +8,8 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Task;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use App\Models\Project;
 use App\Mail\UserCreated;
 use App\Mail\UserResigned;
@@ -41,7 +43,11 @@ class UserController extends Controller
      */
     public function index()
     {
-        $users = User::orderBy('sort_order')->orderBy('id')->get();
+        $users = Cache::remember('all_users_list', 300, function () {
+            return User::select('id', 'name', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order')
+                ->orderBy('sort_order')->orderBy('id')
+                ->get();
+        });
 
         return response()->json([
             'users' => $users,
@@ -310,10 +316,12 @@ class UserController extends Controller
             'items.*.sort_order' => 'required|integer|min:0',
         ]);
 
-        foreach ($request->items as $item) {
-            User::where('id', $item['id'])->update(['sort_order' => $item['sort_order']]);
+        $ids = []; $bindings = [];
+        foreach ($request->items as $item) { $ids[] = (int) $item['id']; $bindings[] = (int) $item['id']; $bindings[] = (int) $item['sort_order']; }
+        if (!empty($ids)) {
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            DB::statement("UPDATE users SET sort_order = CASE id " . implode(' ', array_fill(0, count($ids), 'WHEN ? THEN ?')) . " END WHERE id IN ($ph)", [...$bindings, ...$ids]);
         }
-
         return response()->json(['message' => 'Users reordered successfully']);
     }
 

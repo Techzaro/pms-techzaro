@@ -226,7 +226,7 @@ class TaskController extends Controller
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
             ->latest();
 
-        $tasks = $tasksQuery->get();
+        $tasks = $tasksQuery->limit(200)->get();
 
         $taskIds = $tasks->pluck('id');
         $dlvStats = collect();
@@ -322,7 +322,7 @@ class TaskController extends Controller
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->when($request->filled('status') && !$isDueTodayFilter && !$isPendingFilter, fn ($q) => $q->where('status', $request->input('status')))
-            ->get();
+            ->limit(100)->get();
 
         // Bulk load deliverable counts
         $taskIds = $tasks->pluck('id');
@@ -380,10 +380,18 @@ class TaskController extends Controller
             ->when($statusFilter && !$isDueTodayFilter && !in_array($statusFilter, ['approved', 'pending', 'submitted', 'reopened', 'rejected']), fn ($q) => $q->where('status', $statusFilter))
             ->with(['creator:id,name,role', 'team:id,name'])
             ->latest()
-            ->get();
+            ->limit(100)->get();
 
         $expandedProjects = collect();
         $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
+
+        // Bulk-load all assigned user IDs across projects
+        $allUserIds = $projects->flatMap(fn ($p) => is_string($p->assigned_users) ? json_decode($p->assigned_users, true) ?? [] : ($p->assigned_users ?? []))
+            ->unique()->values()->toArray();
+        $allResolvedUsers = !empty($allUserIds)
+            ? User::whereIn('id', $allUserIds)->select('id', 'name', 'role')->get()->keyBy('id')
+            : collect();
+
         foreach ($projects as $project) {
             $project->item_type = 'project';
             $assignedIds = $project->assigned_users;
@@ -397,11 +405,10 @@ class TaskController extends Controller
                 $clone->can_submit = false;
                 $expandedProjects->push($clone);
             } else {
-                $resolvedUsers = User::whereIn('id', $assignedUsers->toArray())->select('id', 'name', 'role')->get()->keyBy('id');
                 foreach ($assignedUsers as $id) {
                     if ((int)$id === (int)$project->created_by) continue;
                     $clone = clone $project;
-                    $clone->assigned_user = $resolvedUsers->get($id);
+                    $clone->assigned_user = $allResolvedUsers->get($id);
                     $isAssignedToUser = (int)$id === (int)$user->id;
                     $clone->is_assigned = $isAssignedToUser;
                     $clone->can_submit = in_array($clone->status, $submittableStatuses) && $isAssignedToUser;
@@ -421,13 +428,13 @@ class TaskController extends Controller
     public function show(Task $task)
     {
         $user = request()->user();
+        $task->load('project:id,created_by,team_id', 'project.team:id,leader_id', 'assignees:id');
         $isCreator = $task->assigned_by === $user->id;
-        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+        $isAssignee = $task->assignees->contains('id', $user->id);
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
         $isProjectCreator = $task->project && $task->project->created_by === $user->id;
         $isTeamLeader = $task->project && $task->project->team && $task->project->team->leader_id === $user->id;
-        $isTeamMember = $task->project && $task->project->team && $task->project->team->members()
-            ->where('users.id', $user->id)->exists();
+        $isTeamMember = $task->project && $task->project->team && $task->project->team->members && $task->project->team->members->contains('id', $user->id);
 
         if (!$isCreator && !$isAssignee && !$isAdminOrManager && !$isProjectCreator && !$isTeamLeader && !$isTeamMember) {
             return response()->json(['message' => 'Unauthorized'], 403);
@@ -544,7 +551,9 @@ class TaskController extends Controller
 
         $createdTasks = [];
         $deliverablesToCreate = [];
-        $notifications = [];
+        $deliverableNotifications = [];
+        $workflowRecords = [];
+        $assignees = User::whereIn('id', $validated['assigned_to'])->get()->keyBy('id');
 
         foreach ($validated['assigned_to'] as $userId) {
             $task = $project->tasks()->create([
@@ -560,23 +569,26 @@ class TaskController extends Controller
             ]);
             $task->assignees()->sync([$userId]);
 
-            // Create workflow event for task creation/assignment
-            $assignee = User::find($userId);
-            TaskWorkflowEvent::create([
+            $assignee = $assignees->get($userId);
+
+            $workflowRecords[] = [
                 'task_id' => $task->id,
                 'user_id' => $user->id,
                 'action' => 'created',
                 'comment' => $assignee ? 'Assigned to ' . $assignee->name : null,
-            ]);
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
 
-            // Create separate assignment event for the assignee's activity feed
             if ($assignee && (int) $userId !== (int) $user->id) {
-                TaskWorkflowEvent::create([
+                $workflowRecords[] = [
                     'task_id' => $task->id,
                     'user_id' => $user->id,
                     'action' => 'assigned',
                     'comment' => 'Assigned to ' . $assignee->name,
-                ]);
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
             }
 
             if (!empty($validated['deliverables'])) {
@@ -598,22 +610,27 @@ class TaskController extends Controller
             $createdTasks[] = $task;
         }
 
+        if (!empty($workflowRecords)) {
+            DB::table('task_workflow_events')->insert($workflowRecords);
+        }
+
         if (!empty($deliverablesToCreate)) {
-            foreach ($deliverablesToCreate as $delData) {
-                $newDeliverable = Deliverable::create($delData);
-                if ($newDeliverable->assigned_to && (int) $newDeliverable->assigned_to !== (int) $user->id) {
-                    $this->notificationService->notify(
-                        $newDeliverable->assigned_to,
-                        $user->id,
-                        'deliverable_assigned',
-                        'deliverable',
-                        $newDeliverable->id,
-                        'Deliverable Assigned',
-                        'A new deliverable "' . $newDeliverable->title . '" has been assigned to you by ' . $user->name . '.',
-                        '/deliveries?selectedDeliverable=' . $newDeliverable->id
-                    );
+            Deliverable::insert($deliverablesToCreate);
+            // Collect notification data using the inserted data (IDs not needed for link)
+            foreach ($deliverablesToCreate as $d) {
+                if ((int) $d['assigned_to'] !== (int) $user->id) {
+                    $deliverableNotifications[] = [
+                        'user_id' => $d['assigned_to'], 'sender_user_id' => $user->id,
+                        'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
+                        'title' => 'Deliverable Assigned',
+                        'message' => 'A new deliverable "' . $d['title'] . '" has been assigned to you by ' . $user->name . '.',
+                        'link' => '/deliveries',
+                    ];
                 }
             }
+        }
+        if (!empty($deliverableNotifications)) {
+            Notification::insert($deliverableNotifications);
         }
 
         // Bulk notifications
@@ -669,7 +686,9 @@ class TaskController extends Controller
         ]);
 
         $createdTasks = [];
-        $notifications = [];
+        $deliverableNotifications = [];
+        $workflowRecords = [];
+        $assignees = User::whereIn('id', $validated['assigned_to'])->get()->keyBy('id');
 
         foreach ($validated['assigned_to'] as $userId) {
             $task = Task::create([
@@ -686,51 +705,58 @@ class TaskController extends Controller
             ]);
             $task->assignees()->sync([$userId]);
 
-            // Create workflow event for task creation/assignment
-            $assignee = User::find($userId);
-            TaskWorkflowEvent::create([
+            $assignee = $assignees->get($userId);
+
+            $workflowRecords[] = [
                 'task_id' => $task->id,
                 'user_id' => $user->id,
                 'action' => 'created',
                 'comment' => $assignee ? 'Assigned to ' . $assignee->name : null,
-            ]);
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
 
-            // Create separate assignment event for the assignee's activity feed
             if ($assignee && (int) $userId !== (int) $user->id) {
-                TaskWorkflowEvent::create([
+                $workflowRecords[] = [
                     'task_id' => $task->id,
                     'user_id' => $user->id,
                     'action' => 'assigned',
                     'comment' => 'Assigned to ' . $assignee->name,
-                ]);
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
             }
 
             if (!empty($validated['deliverables'])) {
-                $createdDeliverables = $task->deliverables()->createMany(
-                    collect($validated['deliverables'])->map(fn ($del) => [
-                        'title' => $del['title'], 'description' => $del['description'] ?? null,
-                        'status' => 'pending', 'priority' => $validated['priority'],
-                        'due_date' => $del['due_date'] ?? $validated['end_date'] ?? null,
-                        'assigned_to' => $userId, 'created_by' => $user->id,
-                    ])->toArray()
-                );
-                foreach ($createdDeliverables as $deliverable) {
-                    if ($deliverable->assigned_to && (int) $deliverable->assigned_to !== (int) $user->id) {
-                        $this->notificationService->notify(
-                            $deliverable->assigned_to,
-                            $user->id,
-                            'deliverable_assigned',
-                            'deliverable',
-                            $deliverable->id,
-                            'Deliverable Assigned',
-                            'A new deliverable "' . $deliverable->title . '" has been assigned to you by ' . $user->name . '.',
-                            '/deliveries?selectedDeliverable=' . $deliverable->id
-                        );
+                $deliverableData = collect($validated['deliverables'])->map(fn ($del) => [
+                    'title' => $del['title'], 'description' => $del['description'] ?? null,
+                    'status' => 'pending', 'priority' => $validated['priority'],
+                    'due_date' => $del['due_date'] ?? $validated['end_date'] ?? null,
+                    'assigned_to' => $userId, 'created_by' => $user->id,
+                    'created_at' => now(), 'updated_at' => now(),
+                ])->toArray();
+                $task->deliverables()->createMany($deliverableData);
+                foreach ($deliverableData as $d) {
+                    if ((int) $d['assigned_to'] !== (int) $user->id) {
+                        $deliverableNotifications[] = [
+                            'user_id' => $d['assigned_to'], 'sender_user_id' => $user->id,
+                            'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
+                            'title' => 'Deliverable Assigned',
+                            'message' => 'A new deliverable "' . $d['title'] . '" has been assigned to you by ' . $user->name . '.',
+                            'link' => '/deliveries',
+                        ];
                     }
                 }
             }
 
             $createdTasks[] = $task;
+        }
+
+        if (!empty($workflowRecords)) {
+            DB::table('task_workflow_events')->insert($workflowRecords);
+        }
+        if (!empty($deliverableNotifications)) {
+            Notification::insert($deliverableNotifications);
         }
 
         $sent = [];
@@ -820,14 +846,13 @@ class TaskController extends Controller
 
         $addedDeliverables = [];
         if (!empty($validated['deliverables'])) {
-            foreach ($validated['deliverables'] as $del) {
-                $task->deliverables()->create([
-                    'title' => $del['title'], 'description' => $del['description'] ?? null,
-                    'due_date' => $del['due_date'] ?? null, 'assigned_to' => $task->assigned_to,
-                    'created_by' => $user->id,
-                ]);
-                $addedDeliverables[] = $del['title'];
-            }
+            $delData = collect($validated['deliverables'])->map(fn ($del) => [
+                'title' => $del['title'], 'description' => $del['description'] ?? null,
+                'due_date' => $del['due_date'] ?? null, 'assigned_to' => $task->assigned_to,
+                'created_by' => $user->id,
+            ])->toArray();
+            $task->deliverables()->createMany($delData);
+            $addedDeliverables = array_column($delData, 'title');
             $changes[] = ['field_name' => 'deliverables', 'label' => 'Deliverable Added', 'old_value' => '', 'new_value' => implode(', ', $addedDeliverables)];
         }
 
@@ -1297,20 +1322,31 @@ class TaskController extends Controller
     public function reorderTasks(Request $request)
     {
         $request->validate(['items' => 'required|array', 'items.*.id' => 'required|integer|exists:tasks,id', 'items.*.sort_order' => 'required|integer|min:0']);
-        foreach ($request->items as $item) { Task::where('id', $item['id'])->update(['sort_order' => $item['sort_order']]); }
+        $ids = []; $bindings = [];
+        foreach ($request->items as $item) { $ids[] = (int) $item['id']; $bindings[] = (int) $item['id']; $bindings[] = (int) $item['sort_order']; }
+        if (!empty($ids)) {
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            DB::statement("UPDATE tasks SET sort_order = CASE id " . implode(' ', array_fill(0, count($ids), 'WHEN ? THEN ?')) . " END WHERE id IN ($ph)", [...$bindings, ...$ids]);
+        }
         return response()->json(['message' => 'Tasks reordered successfully']);
     }
 
     public function reorderSubtasks(Request $request)
     {
         $request->validate(['items' => 'required|array', 'items.*.id' => 'required|integer|exists:subtasks,id', 'items.*.sort_order' => 'required|integer|min:0']);
-        foreach ($request->items as $item) { Subtask::where('id', $item['id'])->update(['sort_order' => $item['sort_order']]); }
+        $ids = []; $bindings = [];
+        foreach ($request->items as $item) { $ids[] = (int) $item['id']; $bindings[] = (int) $item['id']; $bindings[] = (int) $item['sort_order']; }
+        if (!empty($ids)) {
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            DB::statement("UPDATE subtasks SET sort_order = CASE id " . implode(' ', array_fill(0, count($ids), 'WHEN ? THEN ?')) . " END WHERE id IN ($ph)", [...$bindings, ...$ids]);
+        }
         return response()->json(['message' => 'Subtasks reordered successfully']);
     }
 
     private function sendTaskUpdateNotification(Task $task, User $updater, int $changeCount = 0): void
     {
-        $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+        if (!$task->relationLoaded('assignees')) $task->load('assignees:id');
+        $assigneeIds = $task->assignees->pluck('id')->toArray();
 
         $msg = 'The task "' . $task->title . '" has been updated by ' . $updater->name . '.';
         if ($changeCount > 0) $msg .= ' ' . $changeCount . ' change(s) were made.';

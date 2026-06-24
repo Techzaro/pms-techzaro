@@ -224,24 +224,20 @@ function Admin() {
   const [greeting, setGreeting] = useState("Welcome");
   const [modalOpen, setModalOpen] = useState(false);
   const currentRole = getCurrentRole() || "member";
-  const currentUser = getUser();
 
   const { data: dashboard, isLoading } = useApiQuery(
     "dashboard",
     "/dashboard",
     null,
-    { staleTime: 0, refetchOnMount: true, refetchInterval: 30000 }
+    { staleTime: 120000, refetchOnMount: false, refetchOnWindowFocus: false, refetchInterval: false }
   );
 
-  // Clear API cache on mount so new projects appear immediately
   useEffect(() => {
     const handler = (e) => setModalOpen(e.detail.open);
     window.addEventListener("modal-state", handler);
-
     const stored = getUser();
     const name = stored?.name || "User";
     setGreeting(`Welcome, ${name}`);
-
     return () => window.removeEventListener("modal-state", handler);
   }, []);
 

@@ -341,14 +341,15 @@ class EventController extends Controller
         $recipientIds = $this->getEventRecipientIds($event);
         $notifications = [];
 
+        // Single bulk EXISTS check instead of per-recipient
+        $existingUserIds = Notification::whereIn('user_id', $recipientIds)->where('type', $type)
+            ->where('related_module', 'event')->where('related_id', $event->id)
+            ->where('created_at', '>=', now()->subMinutes(5))
+            ->pluck('user_id')->toArray();
+
         foreach ($recipientIds as $recipientId) {
             if ((int) $recipientId === (int) $sender->id) continue;
-
-            $exists = Notification::where('user_id', $recipientId)->where('type', $type)
-                ->where('related_module', 'event')->where('related_id', $event->id)
-                ->where('created_at', '>=', now()->subMinutes(5))->exists();
-
-            if ($exists) continue;
+            if (in_array((int) $recipientId, $existingUserIds, true)) continue;
 
             $notifications[] = [
                 'user_id' => $recipientId, 'sender_user_id' => $sender->id,

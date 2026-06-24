@@ -13,6 +13,7 @@ use App\Services\NotificationService;
 use App\Services\ActivityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class DeliverableController extends Controller
@@ -578,7 +579,17 @@ class DeliverableController extends Controller
     public function reorder(Request $request)
     {
         $request->validate(['items' => 'required|array', 'items.*.id' => 'required|integer|exists:deliverables,id', 'items.*.sort_order' => 'required|integer|min:0']);
-        foreach ($request->items as $item) { Deliverable::where('id', $item['id'])->update(['sort_order' => $item['sort_order']]); }
+        $ids = []; $cases = []; $bindings = [];
+        foreach ($request->items as $i => $item) {
+            $ids[] = $item['id'];
+            $cases[] = "WHEN ? THEN ?";
+            $bindings[] = $item['id'];
+            $bindings[] = $item['sort_order'];
+        }
+        if (!empty($ids)) {
+            $placeholders = implode(', ', array_fill(0, count($ids), '?'));
+            DB::statement("UPDATE deliverables SET sort_order = CASE id " . implode(' ', $cases) . " END WHERE id IN ($placeholders)", [...$bindings, ...$ids]);
+        }
         return response()->json(['message' => 'Deliverables reordered successfully']);
     }
 

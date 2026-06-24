@@ -9,6 +9,7 @@ namespace App\Http\Controllers;
 use App\Models\Team;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Team management controller.
@@ -21,7 +22,9 @@ class TeamController extends Controller
      */
     public function index()
     {
-        $teams = Team::with(['leader:id,name', 'members:id,name'])->orderBy('created_at', 'desc')->get();
+        $teams = Cache::remember('all_teams_list', 300, function () {
+            return Team::with(['leader:id,name', 'members:id,name'])->orderBy('created_at', 'desc')->get();
+        });
         return response()->json($teams);
     }
 

@@ -17,31 +17,39 @@ use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
-    const CACHE_TTL = 60; // 1 minute — short TTL so new projects appear quickly
+    const CACHE_TTL = 300;
+    const ADMIN_MANAGER_CACHE_KEY = 'admin_manager_ids';
 
     public function index(Request $request)
     {
         $user = $request->user();
-        $role = $user->role;
-        $projectIds = $this->getUserProjectIds($user);
-        $summary = $this->computeSummary($user, $role, $projectIds);
+        $cacheKey = "dashboard_{$user->id}";
 
-        $response = [
-            'summary' => $summary,
-            'todayWorkload' => $this->getTodayWorkload($user, $role),
-            'activeProjects' => $this->computeActiveProjects($user, $projectIds),
-            'recentActivity' => $this->getRecentActivity($user, $role, $projectIds),
-            'upcomingDeadlines' => $this->getUpcomingDeadlines($user, $role, $projectIds),
-        ];
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($user) {
+            $role = $user->role;
+            $projectIds = $this->getUserProjectIds($user);
 
-        // Always fresh — never cached so created_at is never stale
-        $response['completedToday'] = $this->getTodayActivityFeed($user, $role, $projectIds);
-        $response['todayNotifications'] = $this->getTodayNotifications($user, $role, $projectIds);
+            // Single merged pass for activity feed + notifications (cuts ~16 queries to ~8)
+            [$completedToday, $todayNotifications] = $this->getTodayActivityFeedAndNotifications($user, $role, $projectIds);
 
-        // New: Today's Activity from the activities table (user's own actions)
-        $response['todayActivities'] = $this->getTodayActivities($user);
+            return [
+                'summary' => $this->getCachedSummary($user, $role, $projectIds),
+                'todayWorkload' => $this->getCachedTodayWorkload($user, $role),
+                'activeProjects' => $this->getCachedActiveProjects($user, $projectIds),
+                'recentActivity' => $this->getRecentActivity($user, $role, $projectIds),
+                'upcomingDeadlines' => $this->getCachedUpcomingDeadlines($user, $role, $projectIds),
+                'completedToday' => $completedToday,
+                'todayNotifications' => $todayNotifications,
+                'todayActivities' => $this->getTodayActivities($user),
+            ];
+        });
+    }
 
-        return $response;
+    private function getAdminManagerIds(): array
+    {
+        return Cache::remember(self::ADMIN_MANAGER_CACHE_KEY, 3600, fn () =>
+            User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray()
+        );
     }
 
     /**
@@ -78,7 +86,7 @@ class DashboardController extends Controller
         $isAdminOrManager = in_array($role, ['admin', 'manager']);
 
         if ($isAdminOrManager) {
-            $adminManagerIds = User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray();
+            $adminManagerIds = $this->getAdminManagerIds();
 
             $activeProjects = Project::whereIn('id', $projectIds)
                 ->whereNotIn('status', $this->inactiveProjectStatuses())->count();
@@ -137,46 +145,42 @@ class DashboardController extends Controller
         ];
     }
 
-    private function getTodayWorkload(User $user, string $role): array
+    private function getCachedTodayWorkload(User $user, string $role): array
     {
-        $isAdminOrManager = in_array($role, ['admin', 'manager']);
-        $limit = 10;
+        $cacheKey = "dashboard_workload_{$user->id}";
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($user, $role) {
+            $isAdminOrManager = in_array($role, ['admin', 'manager']);
+            $limit = 10;
 
-        if ($isAdminOrManager) {
-            $adminManagerIds = User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray();
+            if ($isAdminOrManager) {
+                $adminManagerIds = $this->getAdminManagerIds();
+                $tasks = Task::with(['project:id,title', 'assignees:id,name,role'])
+                    ->whereIn('assigned_by', $adminManagerIds)
+                    ->where(function ($q) use ($user) {
+                        $q->whereDoesntHave('assignees', fn ($q) => $q->where('users.id', $user->id))
+                          ->orWhere(function ($q) use ($user) {
+                              $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+                                ->where('assigned_to', '!=', $user->id);
+                          });
+                    })
+                    ->whereDate('end_date', today())
+                    ->whereNotIn('status', $this->inactiveTaskStatuses())
+                    ->latest()->limit($limit)->get();
+            } else {
+                $tasks = Task::with(['project:id,title', 'assignees:id,name,role'])
+                    ->where(function ($q) use ($user) {
+                        $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+                          ->orWhere('assigned_to', $user->id);
+                    })
+                    ->whereDate('end_date', today())
+                    ->whereNotIn('status', $this->inactiveTaskStatuses())
+                    ->latest()->limit($limit)->get();
+            }
 
-            $tasks = Task::with(['project:id,title', 'assignees:id,name,role'])
-                ->whereIn('assigned_by', $adminManagerIds)
-                ->where(function ($q) use ($user) {
-                    $q->whereDoesntHave('assignees', fn ($q) => $q->where('users.id', $user->id))
-                      ->orWhere(function ($q) use ($user) {
-                          $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
-                            ->where('assigned_to', '!=', $user->id);
-                      });
-                })
-                ->whereDate('end_date', today())
-                ->whereNotIn('status', $this->inactiveTaskStatuses())
-                ->latest()
-                ->limit($limit)
-                ->get();
-        } else {
-            $tasks = Task::with(['project:id,title', 'assignees:id,name,role'])
-                ->where(function ($q) use ($user) {
-                    $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
-                      ->orWhere('assigned_to', $user->id);
-                })
-                ->whereDate('end_date', today())
-                ->whereNotIn('status', $this->inactiveTaskStatuses())
-                ->latest()
-                ->limit($limit)
-                ->get();
-        }
-
-        return $tasks->map(fn ($task) => array_merge($task->toArray(), [
-            'module' => 'task',
-            'item_type' => 'task',
-            'entity_id' => $task->id,
-        ]))->toArray();
+            return $tasks->map(fn ($task) => array_merge($task->toArray(), [
+                'module' => 'task', 'item_type' => 'task', 'entity_id' => $task->id,
+            ]))->toArray();
+        });
     }
 
     private function getCachedActiveProjects(User $user, array $projectIds): array
@@ -198,7 +202,6 @@ class DashboardController extends Controller
             ->latest()
             ->get();
 
-        // Bulk load all assigned user IDs across all projects (eliminates N+1)
         $allUserIds = [];
         foreach ($projects as $project) {
             $ids = $this->normalizeAssignedUserIds($project->assigned_users);
@@ -212,22 +215,14 @@ class DashboardController extends Controller
             $total = $project->total_tasks ?? 0;
             $done = $project->completed_tasks ?? 0;
             $progress = $total > 0 ? (int) round(($done / $total) * 100) : 0;
-
             $assignedUserIds = $this->normalizeAssignedUserIds($project->assigned_users);
-            $assignedUsers = collect();
-            if (!empty($assignedUserIds)) {
-                $assignedUsers = collect($assignedUserIds)
-                    ->map(fn ($id) => $allUsers->get($id))
-                    ->filter();
-            }
+            $assignedUsers = !empty($assignedUserIds)
+                ? collect($assignedUserIds)->map(fn ($id) => $allUsers->get($id))->filter()
+                : collect();
 
             return [
-                'id' => $project->id,
-                'name' => $project->title,
-                'client' => $project->client_name,
-                'progress' => $progress,
-                'total_tasks' => $total,
-                'completed_tasks' => $done,
+                'id' => $project->id, 'name' => $project->title, 'client' => $project->client_name,
+                'progress' => $progress, 'total_tasks' => $total, 'completed_tasks' => $done,
                 'deadline' => $project->end_date?->format('M d, Y h:i A'),
                 'team' => $project->team?->name,
                 'assigned_users' => $assignedUsers->toArray(),
@@ -255,48 +250,48 @@ class DashboardController extends Controller
         });
     }
 
-    private function getUpcomingDeadlines(User $user, string $role, array $projectIds): array
+    private function getCachedUpcomingDeadlines(User $user, string $role, array $projectIds): array
     {
-        $query = Task::with(['project:id,title'])
-            ->whereNotIn('status', $this->inactiveTaskStatuses())
-            ->where('end_date', '>=', now())
-            ->where('end_date', '<=', now()->addDays(7));
+        $cacheKey = "dashboard_upcoming_deadlines_{$user->id}";
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($user, $role) {
+            $query = Task::with(['project:id,title'])
+                ->whereNotIn('status', $this->inactiveTaskStatuses())
+                ->where('end_date', '>=', now())
+                ->where('end_date', '<=', now()->addDays(7));
 
-        if (in_array($role, ['admin', 'manager'])) {
-            $adminManagerIds = User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray();
-            $query->whereIn('assigned_by', $adminManagerIds);
-        } else {
-            $query->where(function ($q) use ($user) {
-                $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
-                  ->orWhere('assigned_to', $user->id);
-            });
-        }
+            if (in_array($role, ['admin', 'manager'])) {
+                $query->whereIn('assigned_by', $this->getAdminManagerIds());
+            } else {
+                $query->where(function ($q) use ($user) {
+                    $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+                      ->orWhere('assigned_to', $user->id);
+                });
+            }
 
-        return $query->limit(10)->get()->map(fn ($task) => [
-            'id' => $task->id,
-            'entity_id' => $task->id,
-            'module' => 'task',
-            'title' => $task->title,
-            'project' => $task->project?->title,
-            'end_date' => $task->end_date?->format('M d, Y h:i A'),
-            'sort_date' => $task->end_date,
-        ])->sortBy('sort_date')->values()->map(function ($item) {
-            unset($item['sort_date']);
-            return $item;
-        })->toArray();
+            return $query->limit(10)->get()->map(fn ($task) => [
+                'id' => $task->id, 'entity_id' => $task->id, 'module' => 'task',
+                'title' => $task->title, 'project' => $task->project?->title,
+                'end_date' => $task->end_date?->format('M d, Y h:i A'),
+                'sort_date' => $task->end_date,
+            ])->sortBy('sort_date')->values()->map(function ($item) {
+                unset($item['sort_date']);
+                return $item;
+            })->toArray();
+        });
     }
 
     // ──────────────────────────────────────────────────────────────────
-    // TODAY'S ACTIVITY FEED — own actions + others' actions affecting user
+    // SINGLE MERGED PASS for Today's Activity Feed + Notifications
+    // Loads all workflow events ONCE and splits into my-activity / notifications
     // ──────────────────────────────────────────────────────────────────
 
-    private function getTodayActivityFeed(User $user, string $role, array $projectIds): array
+    private function getTodayActivityFeedAndNotifications(User $user, string $role, array $projectIds): array
     {
         $isAdminOrManager = in_array($role, ['admin', 'manager']);
         $today = today();
         $activities = [];
+        $notifications = [];
 
-        // Bulk load task_user membership for the user (used for non-admin activity filtering)
         $myTaskIds = DB::table('task_user')->where('user_id', $user->id)->pluck('task_id')->toArray();
 
         // ── TASKS ──
@@ -305,34 +300,17 @@ class DashboardController extends Controller
             ->whereIn('action', ['created', 'assigned', 'submitted', 'resubmitted', 'approved', 'rejected', 'reopened', 'completed', 'field_changed', 'status_updated'])
             ->limit(50)->get();
 
-        // Bulk-load submitters for approval/rejection/reopen events
         $taskIdsNeedingSub = $taskEvents->filter(fn($e) => in_array($e->action, ['approved', 'rejected', 'reopened']))->pluck('task.id')->filter()->unique()->toArray();
-        $taskSubmitters = [];
-        if (!empty($taskIdsNeedingSub)) {
-            $subEvents = TaskWorkflowEvent::whereIn('task_id', $taskIdsNeedingSub)
-                ->where('action', 'submitted')
-                ->with('user:id,name,role')
-                ->select('task_id', 'user_id')
-                ->get()
-                ->groupBy('task_id');
-            foreach ($subEvents as $tid => $events) {
-                $latest = $events->sortByDesc('id')->first();
-                if ($latest && $latest->user) {
-                    $taskSubmitters[$tid] = $latest->user;
-                }
-            }
-        }
+        $taskSubmitters = $this->loadTaskSubmitters($taskIdsNeedingSub);
 
         foreach ($taskEvents as $event) {
             $task = $event->task;
             if (!$task || !$event->user) continue;
-
             $isActor = (int) $event->user->id === (int) $user->id;
             $isRelated = $isActor || $this->isUserRelatedToTask($user, $task, $myTaskIds, $isAdminOrManager);
             if (!$isRelated) continue;
-
-            $submitter = $taskSubmitters[$task->id] ?? null;
-            $activities[] = $this->formatActivity('task', $event->id, $task->id, $task->title, $event->action, $event->user, $isActor, $submitter, $event->comment ?? null, $event->created_at);
+            $item = $this->formatActivity('task', $event->id, $task->id, $task->title, $event->action, $event->user, $isActor, $taskSubmitters[$task->id] ?? null, $event->comment ?? null, $event->created_at);
+            if ($isActor) { $activities[] = $item; } else { $notifications[] = $item; }
         }
 
         // ── PROJECTS ──
@@ -342,32 +320,16 @@ class DashboardController extends Controller
             ->limit(50)->get();
 
         $projectIdsNeedingSub = $projectEvents->filter(fn($e) => in_array($e->action, ['approved', 'rejected', 'reopened']))->pluck('project.id')->filter()->unique()->toArray();
-        $projectSubmitters = [];
-        if (!empty($projectIdsNeedingSub)) {
-            $subEvents = ProjectWorkflowEvent::whereIn('project_id', $projectIdsNeedingSub)
-                ->where('action', 'submitted')
-                ->with('user:id,name,role')
-                ->select('project_id', 'user_id')
-                ->get()
-                ->groupBy('project_id');
-            foreach ($subEvents as $pid => $events) {
-                $latest = $events->sortByDesc('id')->first();
-                if ($latest && $latest->user) {
-                    $projectSubmitters[$pid] = $latest->user;
-                }
-            }
-        }
+        $projectSubmitters = $this->loadProjectSubmitters($projectIdsNeedingSub);
 
         foreach ($projectEvents as $event) {
             $project = $event->project;
             if (!$project || !$event->user) continue;
-
             $isActor = (int) $event->user->id === (int) $user->id;
             $isRelated = $isActor || $this->isUserRelatedToProject($user, $project, $isAdminOrManager);
             if (!$isRelated) continue;
-
-            $submitter = $projectSubmitters[$project->id] ?? null;
-            $activities[] = $this->formatActivity('project', $event->id, $project->id, $project->title, $event->action, $event->user, $isActor, $submitter, $event->comment ?? null, $event->created_at);
+            $item = $this->formatActivity('project', $event->id, $project->id, $project->title, $event->action, $event->user, $isActor, $projectSubmitters[$project->id] ?? null, $event->comment ?? null, $event->created_at);
+            if ($isActor) { $activities[] = $item; } else { $notifications[] = $item; }
         }
 
         // ── DELIVERABLES ──
@@ -377,32 +339,17 @@ class DashboardController extends Controller
             ->limit(50)->get();
 
         $dlvIdsNeedingSub = $dlvEvents->pluck('deliverable.id')->filter()->unique()->toArray();
-        $dlvSubmitters = [];
-        if (!empty($dlvIdsNeedingSub)) {
-            $subs = DeliverableSubmission::whereIn('deliverable_id', $dlvIdsNeedingSub)
-                ->with('submittedBy:id,name,role')
-                ->select('deliverable_id', 'submitted_by')
-                ->get()
-                ->groupBy('deliverable_id');
-            foreach ($subs as $did => $items) {
-                $latest = $items->sortByDesc('id')->first();
-                if ($latest && $latest->submittedBy) {
-                    $dlvSubmitters[$did] = $latest->submittedBy;
-                }
-            }
-        }
+        $dlvSubmitters = $this->loadDeliverableSubmitters($dlvIdsNeedingSub);
 
         foreach ($dlvEvents as $event) {
             $dlv = $event->deliverable;
             if (!$dlv || !$event->user) continue;
-
             $isActor = (int) $event->user->id === (int) $user->id;
             $isRelated = $isActor || $this->isUserRelatedToDeliverable($user, $dlv);
             if (!$isRelated) continue;
-
             $action = $event->event_type === 'approval' ? 'approved' : $event->event_type;
-            $submitter = $dlvSubmitters[$dlv->id] ?? null;
-            $activities[] = $this->formatActivity('deliverable', $event->id, $dlv->id, $dlv->title, $action, $event->user, $isActor, $submitter, $event->comment ?? null, $event->created_at);
+            $item = $this->formatActivity('deliverable', $event->id, $dlv->id, $dlv->title, $action, $event->user, $isActor, $dlvSubmitters[$dlv->id] ?? null, $event->comment ?? null, $event->created_at);
+            if ($isActor) { $activities[] = $item; } else { $notifications[] = $item; }
         }
 
         // ── DELIVERABLE SUBMISSIONS ──
@@ -411,152 +358,58 @@ class DashboardController extends Controller
         foreach ($dlvSubmissions as $sub) {
             $dlv = $sub->deliverable;
             if (!$dlv || !$sub->submittedBy) continue;
-
             $isActor = (int) $sub->submittedBy->id === (int) $user->id;
             $isRelated = $isActor || $this->isUserRelatedToDeliverable($user, $dlv);
             if (!$isRelated) continue;
-
-            $activities[] = $this->formatActivity('deliverable', "sub_{$sub->id}", $dlv->id, $dlv->title, 'submitted', $sub->submittedBy, $isActor, null, null, $sub->created_at);
+            $item = $this->formatActivity('deliverable', "sub_{$sub->id}", $dlv->id, $dlv->title, 'submitted', $sub->submittedBy, $isActor, null, null, $sub->created_at);
+            if ($isActor) { $activities[] = $item; } else { $notifications[] = $item; }
         }
 
         usort($activities, fn ($a, $b) => strcmp($b['created_at'], $a['created_at']));
-        return array_slice($activities, 0, 20);
+        usort($notifications, fn ($a, $b) => strcmp($b['created_at'], $a['created_at']));
+        return [array_slice($activities, 0, 20), array_slice($notifications, 0, 20)];
     }
 
-    // ──────────────────────────────────────────────────────────────────
-    // TODAY'S NOTIFICATIONS — ONLY other users' actions affecting user
-    // ──────────────────────────────────────────────────────────────────
-
-    private function getTodayNotifications(User $user, string $role, array $projectIds): array
+    private function loadTaskSubmitters(array $taskIds): array
     {
-        $isAdminOrManager = in_array($role, ['admin', 'manager']);
-        $today = today();
-        $notifications = [];
-
-        $myTaskIds = DB::table('task_user')->where('user_id', $user->id)->pluck('task_id')->toArray();
-
-        // ── TASKS — only other users' actions on tasks I'm related to ──
-        $taskEvents = TaskWorkflowEvent::with(['task:id,title,assigned_by,assigned_to', 'user:id,name,role'])
-            ->whereDate('created_at', $today)
-            ->whereIn('action', ['created', 'assigned', 'submitted', 'resubmitted', 'approved', 'rejected', 'reopened', 'completed', 'field_changed', 'status_updated'])
-            ->where('user_id', '!=', $user->id)
-            ->limit(50)->get();
-
-        $taskIdsNeedingSub = $taskEvents->filter(fn($e) => in_array($e->action, ['approved', 'rejected', 'reopened']))->pluck('task.id')->filter()->unique()->toArray();
-        $taskSubmitters = [];
-        if (!empty($taskIdsNeedingSub)) {
-            $subEvents = TaskWorkflowEvent::whereIn('task_id', $taskIdsNeedingSub)
-                ->where('action', 'submitted')
-                ->with('user:id,name,role')
-                ->select('task_id', 'user_id')
-                ->get()
-                ->groupBy('task_id');
-            foreach ($subEvents as $tid => $events) {
-                $latest = $events->sortByDesc('id')->first();
-                if ($latest && $latest->user) {
-                    $taskSubmitters[$tid] = $latest->user;
-                }
-            }
+        if (empty($taskIds)) return [];
+        $subEvents = TaskWorkflowEvent::whereIn('task_id', $taskIds)
+            ->where('action', 'submitted')->with('user:id,name,role')
+            ->select('task_id', 'user_id')->get()->groupBy('task_id');
+        $submitters = [];
+        foreach ($subEvents as $tid => $events) {
+            $latest = $events->sortByDesc('id')->first();
+            if ($latest && $latest->user) $submitters[$tid] = $latest->user;
         }
+        return $submitters;
+    }
 
-        foreach ($taskEvents as $event) {
-            $task = $event->task;
-            if (!$task || !$event->user) continue;
-
-            $isRelated = $this->isUserRelatedToTask($user, $task, $myTaskIds, $isAdminOrManager);
-            if (!$isRelated) continue;
-
-            $submitter = $taskSubmitters[$task->id] ?? null;
-            $notifications[] = $this->formatActivity('task', $event->id, $task->id, $task->title, $event->action, $event->user, false, $submitter, $event->comment ?? null, $event->created_at);
+    private function loadProjectSubmitters(array $projectIds): array
+    {
+        if (empty($projectIds)) return [];
+        $subEvents = ProjectWorkflowEvent::whereIn('project_id', $projectIds)
+            ->where('action', 'submitted')->with('user:id,name,role')
+            ->select('project_id', 'user_id')->get()->groupBy('project_id');
+        $submitters = [];
+        foreach ($subEvents as $pid => $events) {
+            $latest = $events->sortByDesc('id')->first();
+            if ($latest && $latest->user) $submitters[$pid] = $latest->user;
         }
+        return $submitters;
+    }
 
-        // ── PROJECTS — only other users' actions on projects I'm related to ──
-        $projectEvents = ProjectWorkflowEvent::with(['project:id,title,created_by,assigned_users', 'user:id,name,role'])
-            ->whereDate('created_at', $today)
-            ->whereIn('action', ['created', 'assigned', 'submitted', 'resubmitted', 'approved', 'rejected', 'reopened', 'completed', 'field_changed', 'status_updated'])
-            ->where('user_id', '!=', $user->id)
-            ->limit(50)->get();
-
-        $projectIdsNeedingSub = $projectEvents->filter(fn($e) => in_array($e->action, ['approved', 'rejected', 'reopened']))->pluck('project.id')->filter()->unique()->toArray();
-        $projectSubmitters = [];
-        if (!empty($projectIdsNeedingSub)) {
-            $subEvents = ProjectWorkflowEvent::whereIn('project_id', $projectIdsNeedingSub)
-                ->where('action', 'submitted')
-                ->with('user:id,name,role')
-                ->select('project_id', 'user_id')
-                ->get()
-                ->groupBy('project_id');
-            foreach ($subEvents as $pid => $events) {
-                $latest = $events->sortByDesc('id')->first();
-                if ($latest && $latest->user) {
-                    $projectSubmitters[$pid] = $latest->user;
-                }
-            }
+    private function loadDeliverableSubmitters(array $dlvIds): array
+    {
+        if (empty($dlvIds)) return [];
+        $subs = DeliverableSubmission::whereIn('deliverable_id', $dlvIds)
+            ->with('submittedBy:id,name,role')->select('deliverable_id', 'submitted_by')
+            ->get()->groupBy('deliverable_id');
+        $submitters = [];
+        foreach ($subs as $did => $items) {
+            $latest = $items->sortByDesc('id')->first();
+            if ($latest && $latest->submittedBy) $submitters[$did] = $latest->submittedBy;
         }
-
-        foreach ($projectEvents as $event) {
-            $project = $event->project;
-            if (!$project || !$event->user) continue;
-
-            $isRelated = $this->isUserRelatedToProject($user, $project, $isAdminOrManager);
-            if (!$isRelated) continue;
-
-            $submitter = $projectSubmitters[$project->id] ?? null;
-            $notifications[] = $this->formatActivity('project', $event->id, $project->id, $project->title, $event->action, $event->user, false, $submitter, $event->comment ?? null, $event->created_at);
-        }
-
-        // ── DELIVERABLES — only other users' actions on deliverables I'm related to ──
-        $dlvEvents = DeliverableWorkflowEvent::with(['deliverable:id,title,created_by,assigned_to', 'user:id,name,role'])
-            ->whereDate('created_at', $today)
-            ->whereIn('event_type', ['created', 'assigned', 'submitted', 'resubmitted', 'approved', 'rejected', 'reopened', 'completed', 'status_updated', 'field_changed', 'approval', 'rework'])
-            ->where('user_id', '!=', $user->id)
-            ->limit(50)->get();
-
-        $dlvIdsNeedingSub = $dlvEvents->pluck('deliverable.id')->filter()->unique()->toArray();
-        $dlvSubmitters = [];
-        if (!empty($dlvIdsNeedingSub)) {
-            $subs = DeliverableSubmission::whereIn('deliverable_id', $dlvIdsNeedingSub)
-                ->with('submittedBy:id,name,role')
-                ->select('deliverable_id', 'submitted_by')
-                ->get()
-                ->groupBy('deliverable_id');
-            foreach ($subs as $did => $items) {
-                $latest = $items->sortByDesc('id')->first();
-                if ($latest && $latest->submittedBy) {
-                    $dlvSubmitters[$did] = $latest->submittedBy;
-                }
-            }
-        }
-
-        foreach ($dlvEvents as $event) {
-            $dlv = $event->deliverable;
-            if (!$dlv || !$event->user) continue;
-
-            $isRelated = $this->isUserRelatedToDeliverable($user, $dlv);
-            if (!$isRelated) continue;
-
-            $action = $event->event_type === 'approval' ? 'approved' : $event->event_type;
-            $submitter = $dlvSubmitters[$dlv->id] ?? null;
-            $notifications[] = $this->formatActivity('deliverable', $event->id, $dlv->id, $dlv->title, $action, $event->user, false, $submitter, $event->comment ?? null, $event->created_at);
-        }
-
-        // ── DELIVERABLE SUBMISSIONS — only other users ──
-        $dlvSubmissions = DeliverableSubmission::with(['deliverable:id,title,created_by,assigned_to', 'submittedBy:id,name,role'])
-            ->whereDate('created_at', $today)
-            ->where('submitted_by', '!=', $user->id)
-            ->limit(50)->get();
-        foreach ($dlvSubmissions as $sub) {
-            $dlv = $sub->deliverable;
-            if (!$dlv || !$sub->submittedBy) continue;
-
-            $isRelated = $this->isUserRelatedToDeliverable($user, $dlv);
-            if (!$isRelated) continue;
-
-            $notifications[] = $this->formatActivity('deliverable', "sub_{$sub->id}", $dlv->id, $dlv->title, 'submitted', $sub->submittedBy, false, null, null, $sub->created_at);
-        }
-
-        usort($notifications, fn ($a, $b) => strcmp($b['created_at'], $a['created_at']));
-        return array_slice($notifications, 0, 20);
+        return $submitters;
     }
 
     // ──────────────────────────────────────────────────────────────────

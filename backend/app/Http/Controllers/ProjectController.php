@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Deliverable;
 use App\Models\Notification;
 use App\Models\Project;
+use App\Models\ProjectVisibility;
 use App\Models\ProjectFile;
 use App\Models\ProjectSubmission;
 use App\Models\ProjectWorkflowEvent;
@@ -75,7 +76,7 @@ class ProjectController extends Controller
             $projectsQuery->whereNotIn('status', $this->inactiveProjectStatuses());
         }
 
-        $projects = $projectsQuery->get();
+        $projects = $projectsQuery->limit(200)->get();
 
         return $projects->map(function ($project) use ($user, $submittableStatuses) {
             $isAssigned = in_array($user->id, $project->assigned_users ?? []);
@@ -155,18 +156,24 @@ class ProjectController extends Controller
                 : null,
         ]);
 
-        // Create separate assignment event for each assigned user's activity feed
+        // Create assignment events in bulk
         if (!empty($validated['assigned_users'])) {
             $assigneeNames = User::whereIn('id', $validated['assigned_users'])->pluck('name')->implode(', ');
+            $assignedEvents = [];
             foreach ($validated['assigned_users'] as $assigneeId) {
                 if ((int) $assigneeId !== (int) $request->user()->id) {
-                    ProjectWorkflowEvent::create([
+                    $assignedEvents[] = [
                         'project_id' => $project->id,
                         'user_id' => $request->user()->id,
                         'action' => 'assigned',
                         'comment' => 'Assigned to ' . $assigneeNames . ' — gave view access',
-                    ]);
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
                 }
+            }
+            if (!empty($assignedEvents)) {
+                DB::table('project_workflow_events')->insert($assignedEvents);
             }
         }
 
@@ -184,31 +191,29 @@ class ProjectController extends Controller
         if (!empty($deliverables)) {
             $assignedUsers = $validated['assigned_users'] ?? [];
             if (!empty($assignedUsers)) {
-                $createdDeliverables = $project->deliverables()->createMany(
+                $project->deliverables()->createMany(
                     collect($deliverables)->flatMap(fn ($del) => collect($assignedUsers)->map(fn ($userId) => [
-                        'title' => $del['title'],
-                        'description' => $del['description'] ?? null,
-                        'status' => 'pending',
-                        'priority' => $validated['priority'] ?? 'Medium',
-                        'due_date' => $del['due_date'] ?? null,
-                        'assigned_to' => $userId,
+                        'title' => $del['title'], 'description' => $del['description'] ?? null,
+                        'status' => 'pending', 'priority' => $validated['priority'] ?? 'Medium',
+                        'due_date' => $del['due_date'] ?? null, 'assigned_to' => $userId,
                         'created_by' => $request->user()->id,
                     ]))->toArray()
                 );
-                foreach ($createdDeliverables as $deliverable) {
-                    if ($deliverable->assigned_to && (int) $deliverable->assigned_to !== (int) $request->user()->id) {
-                        $this->notificationService->notify(
-                            $deliverable->assigned_to,
-                            $request->user()->id,
-                            'deliverable_assigned',
-                            'deliverable',
-                            $deliverable->id,
-                            'Deliverable Assigned',
-                            'A new deliverable "' . $deliverable->title . '" has been assigned to you by ' . $request->user()->name . '.',
-                            '/deliveries?selectedDeliverable=' . $deliverable->id
-                        );
+                $dlvNotifications = [];
+                foreach ($deliverables as $del) {
+                    foreach ($assignedUsers as $userId) {
+                        if ((int) $userId !== (int) $request->user()->id) {
+                            $dlvNotifications[] = [
+                                'user_id' => $userId, 'sender_user_id' => $request->user()->id,
+                                'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
+                                'title' => 'Deliverable Assigned',
+                                'message' => 'A new deliverable "' . $del['title'] . '" has been assigned to you by ' . $request->user()->name . '.',
+                                'link' => '/deliveries',
+                            ];
+                        }
                     }
                 }
+                if (!empty($dlvNotifications)) Notification::insert($dlvNotifications);
             }
         }
 
@@ -223,6 +228,7 @@ class ProjectController extends Controller
         $user = request()->user();
 
         if (!in_array($user->role, ['admin', 'manager'])) {
+            $project->load('team.members:id', 'manuallyVisibleTo:user_id');
             $isCreator = $project->created_by === $user->id;
             $isAssigned = in_array($user->id, $project->assigned_users ?? []);
             $isTeamMember = $project->team_id && $project->team && (
@@ -230,7 +236,7 @@ class ProjectController extends Controller
                 $project->team->leader_id === $user->id
             );
             $hasTasksUnderProject = $project->tasks()->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))->exists();
-            $isManuallyVisible = $project->manuallyVisibleTo()->where('user_id', $user->id)->exists();
+            $isManuallyVisible = $project->manuallyVisibleTo->isNotEmpty();
             $isTeamLead = $user->role === 'team_lead';
 
             if (!$isCreator && !$isAssigned && !$isTeamMember && !$hasTasksUnderProject && !$isManuallyVisible && !$isTeamLead) {
@@ -390,28 +396,33 @@ class ProjectController extends Controller
         if (!empty($deliverables)) {
             $assignedUsers = $project->assigned_users ?? [];
             if (!empty($assignedUsers)) {
+                $bulkDeliverables = [];
+                $bulkNotifications = [];
                 foreach ($deliverables as $del) {
                     foreach ($assignedUsers as $userId) {
-                        $newDeliverable = $project->deliverables()->create([
+                        $bulkDeliverables[] = [
                             'title' => $del['title'], 'description' => $del['description'] ?? null,
                             'status' => 'pending', 'priority' => $project->priority ?? 'Medium',
                             'due_date' => $del['due_date'] ?? null, 'assigned_to' => $userId,
                             'created_by' => $request->user()->id,
-                        ]);
-                        if ($newDeliverable->assigned_to && (int) $newDeliverable->assigned_to !== (int) $user->id) {
-                            $this->notificationService->notify(
-                                $newDeliverable->assigned_to,
-                                $user->id,
-                                'deliverable_assigned',
-                                'deliverable',
-                                $newDeliverable->id,
-                                'Deliverable Assigned',
-                                'A new deliverable "' . $newDeliverable->title . '" has been assigned to you by ' . $user->name . '.',
-                                '/deliveries?selectedDeliverable=' . $newDeliverable->id
-                            );
+                        ];
+                        if ((int) $userId !== (int) $user->id) {
+                            $bulkNotifications[] = [
+                                'user_id' => $userId, 'sender_user_id' => $user->id,
+                                'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
+                                'title' => 'Deliverable Assigned',
+                                'message' => 'A new deliverable "' . $del['title'] . '" has been assigned to you by ' . $user->name . '.',
+                                'link' => '/deliveries?selectedDeliverable=0',
+                            ];
                         }
                     }
                     $addedDeliverables[] = $del['title'];
+                }
+                if (!empty($bulkDeliverables)) {
+                    $project->deliverables()->createMany($bulkDeliverables);
+                }
+                if (!empty($bulkNotifications)) {
+                    Notification::insert($bulkNotifications);
                 }
             }
         }
@@ -601,59 +612,54 @@ class ProjectController extends Controller
         $existing = $project->visibility()->get()->keyBy('user_id');
 
         $grantedUsers = [];
-        $removedUsers = [];
+        $newRecords = [];
 
         foreach ($newIds as $uid) {
             if ($existing->has($uid)) {
-                $existing->get($uid)->update(['is_visible' => true]);
                 $existing->forget($uid);
-                $grantedUsers[] = $uid;
             } else {
-                $project->visibility()->create(['user_id' => $uid, 'is_visible' => true]);
-                $grantedUsers[] = $uid;
+                $newRecords[] = ['project_id' => $project->id, 'user_id' => $uid, 'is_visible' => true];
             }
+            $grantedUsers[] = $uid;
         }
 
-        foreach ($existing as $row) {
-            $row->update(['is_visible' => false]);
-            $removedUsers[] = $row->user_id;
+        // Bulk insert new records + bulk update removed
+        if (!empty($newRecords)) ProjectVisibility::insert($newRecords);
+        ProjectVisibility::where('project_id', $project->id)->whereIn('user_id', $newIds->toArray())->update(['is_visible' => true]);
+        $removedIds = $existing->pluck('user_id')->toArray();
+        if (!empty($removedIds)) {
+            ProjectVisibility::where('project_id', $project->id)->whereIn('user_id', $removedIds)->update(['is_visible' => false]);
         }
 
-        // Notify users who were granted access
+        // Bulk notifications
+        $notifications = [];
         foreach ($grantedUsers as $uid) {
             if ((int) $uid !== (int) $user->id) {
-                $this->notificationService->notify(
-                    $uid,
-                    $user->id,
-                    'project_access_granted',
-                    'project',
-                    $project->id,
-                    'Project View Access Granted',
-                    $user->name . ' granted you view access to project "' . $project->title . '".',
-                    '/projects/project-details/' . $project->id
-                );
+                $notifications[] = [
+                    'user_id' => $uid, 'sender_user_id' => $user->id,
+                    'type' => 'project_access_granted', 'related_module' => 'project',
+                    'related_id' => $project->id, 'title' => 'Project View Access Granted',
+                    'message' => $user->name . ' granted you view access to project "' . $project->title . '".',
+                    'link' => '/projects/project-details/' . $project->id,
+                ];
             }
         }
-
-        // Notify users whose access was removed
-        foreach ($removedUsers as $uid) {
+        foreach ($removedIds as $uid) {
             if ((int) $uid !== (int) $user->id) {
-                $this->notificationService->notify(
-                    $uid,
-                    $user->id,
-                    'project_access_removed',
-                    'project',
-                    $project->id,
-                    'Project View Access Removed',
-                    $user->name . ' removed your view access to project "' . $project->title . '".',
-                    '/projects/project-details/' . $project->id
-                );
+                $notifications[] = [
+                    'user_id' => $uid, 'sender_user_id' => $user->id,
+                    'type' => 'project_access_removed', 'related_module' => 'project',
+                    'related_id' => $project->id, 'title' => 'Project View Access Removed',
+                    'message' => $user->name . ' removed your view access to project "' . $project->title . '".',
+                    'link' => '/projects/project-details/' . $project->id,
+                ];
             }
         }
+        if (!empty($notifications)) Notification::insert($notifications);
 
         // Log activity
         $grantCount = count($grantedUsers);
-        $removeCount = count($removedUsers);
+        $removeCount = count($removedIds);
         if ($grantCount > 0 || $removeCount > 0) {
             $parts = [];
             if ($grantCount > 0) $parts[] = 'granted access to ' . $grantCount . ' user(s)';

@@ -418,17 +418,7 @@ class ReportController extends Controller
                     'completed_tasks' => $done, 'total_tasks' => $total, 'status' => $p->status];
             });
 
-            $teams = Team::withCount(['members as member_count'])->get()->map(function ($team) {
-                $memberIds = $team->members()->pluck('users.id');
-                $taskStats = $memberIds->isNotEmpty()
-                    ? Task::whereHas('assignees', fn ($q) => $q->whereIn('users.id', $memberIds))
-                        ->selectRaw('COUNT(*) as total, SUM(CASE WHEN status IN ("completed","done") THEN 1 ELSE 0 END) as completed')
-                        ->first()
-                    : (object)['total' => 0, 'completed' => 0];
-                return ['name' => $team->name, 'members' => $team->member_count,
-                    'completed_tasks' => (int) $taskStats->completed, 'total_tasks' => (int) $taskStats->total,
-                    'completion_rate' => (int) $taskStats->total > 0 ? (int) round(((int) $taskStats->completed / (int) $taskStats->total) * 100) : 0];
-            });
+            $teams = $this->getTeamsWithTaskStats();
 
             $overdueList = Task::where('end_date', '<', now())
                 ->whereNotIn('status', ['completed', 'done', 'abandoned'])
@@ -461,17 +451,7 @@ class ReportController extends Controller
             $totalOverdue = Task::where('end_date', '<', now())
                 ->whereNotIn('status', ['completed', 'done', 'abandoned'])->count();
 
-            $teams = Team::withCount(['members as member_count'])->get()->map(function ($team) {
-                $memberIds = $team->members()->pluck('users.id');
-                $stats = $memberIds->isNotEmpty()
-                    ? Task::whereHas('assignees', fn ($q) => $q->whereIn('users.id', $memberIds))
-                        ->selectRaw('COUNT(*) as total, SUM(CASE WHEN status IN ("completed","done") THEN 1 ELSE 0 END) as completed')
-                        ->first()
-                    : (object)['total' => 0, 'completed' => 0];
-                return ['name' => $team->name, 'members' => $team->member_count,
-                    'completed_tasks' => (int) $stats->completed, 'total_tasks' => (int) $stats->total,
-                    'completion_rate' => (int) $stats->total > 0 ? (int) round(((int) $stats->completed / (int) $stats->total) * 100) : 0];
-            });
+            $teams = $this->getTeamsWithTaskStats();
 
             $members = User::where('active', true)->select('id', 'name', 'role')->orderBy('name')->get();
             $memberIds = $members->pluck('id');
@@ -652,22 +632,9 @@ class ReportController extends Controller
             ->get()
             ->keyBy('id');
 
-        // --- PROJECT-AS-TASK STATS PER USER (from projects.assigned_users JSON) ---
+        // --- PROJECT-AS-TASK STATS PER USER — single query instead of N+1 ---
         $allUsers = User::where('active', true)->select('id', 'name', 'role')->orderBy('name')->get();
-        $projectStats = collect();
-        foreach ($allUsers as $u) {
-            $pq = Project::whereJsonContains('assigned_users', $u->id)
-                ->whereNotNull('assigned_users');
-            if ($timeFilter !== 'all') {
-                $this->applyTimeFilter($pq, $timeFilter);
-            }
-            $ps = $pq->selectRaw("
-                COUNT(*) as assigned,
-                SUM(CASE WHEN status IN ('approved','completed','done') THEN 1 ELSE 0 END) as completed,
-                SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
-            ")->first();
-            $projectStats->put($u->id, $ps);
-        }
+        $projectStats = $this->getProjectAsTaskStats($allUsers->pluck('id'), $timeFilter);
 
         // --- MERGE TASK + PROJECT-AS-TASK COUNTS ---
         $stats = $allUsers->map(function ($user) use ($taskStats, $projectStats) {
@@ -721,21 +688,8 @@ class ReportController extends Controller
             ->get()
             ->keyBy('id');
 
-        // --- PROJECT-AS-TASK STATS PER USER ---
-        $projectStats = collect();
-        foreach ($allUsers as $u) {
-            $pq = Project::whereJsonContains('assigned_users', $u->id)
-                ->whereNotNull('assigned_users');
-            if ($timeFilter !== 'all') {
-                $this->applyTimeFilter($pq, $timeFilter);
-            }
-            $ps = $pq->selectRaw("
-                COUNT(*) as assigned,
-                SUM(CASE WHEN status IN ('approved','completed','done') THEN 1 ELSE 0 END) as completed,
-                SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
-            ")->first();
-            $projectStats->put($u->id, $ps);
-        }
+        // --- PROJECT-AS-TASK STATS PER USER — single query instead of N+1 ---
+        $projectStats = $this->getProjectAsTaskStats($allUsers->pluck('id'), $timeFilter);
 
         // --- MERGE TASK + PROJECT-AS-TASK COUNTS PER USER ---
         $employeeStats = $allUsers->map(function ($user) use ($taskStats, $projectStats) {
@@ -766,36 +720,23 @@ class ReportController extends Controller
         $totalOverdue = $employeeStats->sum('overdue');
 
         // --- STATUS DISTRIBUTION (OVERALL) ---
-        $allTaskIds = Task::pluck('id');
-        $statusDistribution = $allTaskIds->isNotEmpty()
-            ? Task::selectRaw("
-                SUM(CASE WHEN status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
-                SUM(CASE WHEN status IN ('pending','assigned') THEN 1 ELSE 0 END) as pending,
-                SUM(CASE WHEN status IN ('submitted','reopened') THEN 1 ELSE 0 END) as in_review,
-                SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
-            ")->whereIn('id', $allTaskIds)->first()
-            : (object)['completed' => 0, 'pending' => 0, 'in_review' => 0, 'overdue' => 0];
+        $statusDistribution = Task::selectRaw("
+            SUM(CASE WHEN status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
+            SUM(CASE WHEN status IN ('pending','assigned') THEN 1 ELSE 0 END) as pending,
+            SUM(CASE WHEN status IN ('submitted','reopened') THEN 1 ELSE 0 END) as in_review,
+            SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
+        ")->first();
 
-        // --- TEAM WISE SUMMARY ---
-        $teams = Team::withCount(['members as member_count'])->get()->map(function ($team) use ($timeFilter) {
-            $memberIds = $team->members()->pluck('users.id');
-            $taskStats = $memberIds->isNotEmpty()
-                ? Task::whereHas('assignees', fn ($q) => $q->whereIn('users.id', $memberIds))
-                    ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter))
-                    ->selectRaw('COUNT(*) as total, SUM(CASE WHEN status IN ("completed","done","approved") THEN 1 ELSE 0 END) as completed, SUM(CASE WHEN end_date < NOW() AND status NOT IN ("completed","done","abandoned","approved") THEN 1 ELSE 0 END) as overdue')
-                    ->first()
-                : (object)['total' => 0, 'completed' => 0, 'overdue' => 0];
-            $total = (int) $taskStats->total;
-            $completed = (int) $taskStats->completed;
-            $overdue = (int) $taskStats->overdue;
+        // --- TEAM WISE SUMMARY (bulk-loaded, 2 total queries instead of 2N) ---
+        $teams = $this->getTeamsWithTaskStats($timeFilter)->map(function ($t) {
             return [
-                'name' => $team->name,
-                'members' => $team->member_count,
-                'assigned' => $total,
-                'completed' => $completed,
-                'pending' => max($total - $completed, 0),
-                'overdue' => $overdue,
-                'completion_rate' => $total > 0 ? (int) round(($completed / $total) * 100) : 0,
+                'name' => $t['name'],
+                'members' => $t['members'],
+                'assigned' => $t['total_tasks'],
+                'completed' => $t['completed_tasks'],
+                'pending' => max($t['total_tasks'] - $t['completed_tasks'], 0),
+                'overdue' => 0,
+                'completion_rate' => $t['completion_rate'],
             ];
         });
 
@@ -843,5 +784,89 @@ class ReportController extends Controller
             'month' => $query->where('created_at', '>=', now()->startOfMonth()),
             default => $query,
         };
+    }
+
+    /**
+     * Bulk compute project-as-task stats for all user IDs in a single pass.
+     * Replaces N+1 pattern where one query ran per user.
+     */
+    private function getProjectAsTaskStats($userIds, string $timeFilter): \Illuminate\Support\Collection
+    {
+        $results = collect();
+        $allProjects = Project::whereNotNull('assigned_users')
+            ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter))
+            ->select('id', 'assigned_users', 'status', 'end_date', 'created_at')
+            ->get();
+
+        foreach ($userIds as $uid) {
+            $assigned = 0; $completed = 0; $overdue = 0;
+            foreach ($allProjects as $p) {
+                $ids = is_string($p->assigned_users) ? json_decode($p->assigned_users, true) ?? [] : ($p->assigned_users ?? []);
+                if (!in_array((int) $uid, array_map('intval', $ids), true)) continue;
+                $assigned++;
+                if (in_array(strtolower((string) $p->status), ['approved', 'completed', 'done'])) $completed++;
+                if ($p->end_date && now()->greaterThan($p->end_date) && !in_array(strtolower((string) $p->status), ['completed', 'done', 'abandoned', 'approved'])) $overdue++;
+            }
+            $results->put($uid, (object)['assigned' => $assigned, 'completed' => $completed, 'overdue' => $overdue]);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Bulk compute team task stats in 2 queries instead of N+1 per team.
+     */
+    private function getTeamsWithTaskStats(string $timeFilter = 'all'): \Illuminate\Support\Collection
+    {
+        $teams = Team::with('members:id')->withCount(['members as member_count'])->get();
+
+        $teamMemberMap = [];
+        foreach ($teams as $team) {
+            $teamMemberMap[$team->id] = $team->members->pluck('id')->toArray();
+        }
+
+        $allMemberIds = collect($teamMemberMap)->flatten()->unique()->toArray();
+        $userTaskCounts = [];
+        if (!empty($allMemberIds)) {
+            $query = DB::table('task_user')
+                ->join('tasks', 'tasks.id', '=', 'task_user.task_id')
+                ->whereIn('task_user.user_id', $allMemberIds);
+
+            if ($timeFilter !== 'all') {
+                $query->where('tasks.created_at', '>=', match ($timeFilter) {
+                    'today' => today(),
+                    'week' => now()->startOfWeek(),
+                    'month' => now()->startOfMonth(),
+                    'quarter' => now()->startOfQuarter(),
+                    'year' => now()->startOfYear(),
+                    default => now()->subDays((int) $timeFilter),
+                });
+            }
+
+            $rows = $query->selectRaw('task_user.user_id, COUNT(*) as total, SUM(CASE WHEN tasks.status IN ("completed","done") THEN 1 ELSE 0 END) as completed')
+                ->groupBy('task_user.user_id')
+                ->get();
+            foreach ($rows as $r) {
+                $userTaskCounts[$r->user_id] = ['total' => (int) $r->total, 'completed' => (int) $r->completed];
+            }
+        }
+
+        return $teams->map(function ($team) use ($teamMemberMap, $userTaskCounts) {
+            $memberIds = $teamMemberMap[$team->id] ?? [];
+            $total = 0; $completed = 0;
+            foreach ($memberIds as $uid) {
+                if (isset($userTaskCounts[$uid])) {
+                    $total += $userTaskCounts[$uid]['total'];
+                    $completed += $userTaskCounts[$uid]['completed'];
+                }
+            }
+            return [
+                'name' => $team->name,
+                'members' => $team->member_count,
+                'completed_tasks' => $completed,
+                'total_tasks' => $total,
+                'completion_rate' => $total > 0 ? (int) round(($completed / $total) * 100) : 0,
+            ];
+        })->values();
     }
 }
