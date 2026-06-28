@@ -7,12 +7,14 @@ const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
 
 const padNum = (n) => String(n).padStart(2, "0");
 
-const CustomDateTimePicker = ({ value, onChange, label, dateOnly = false }) => {
+const CustomDateTimePicker = ({ value, onChange, label, dateOnly = false, min = null }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
   const now = new Date();
   const parsed = value ? new Date(value) : null;
+
+  const minDate = min ? new Date(min) : null;
 
   const [year, setYear] = useState(parsed ? parsed.getFullYear() : now.getFullYear());
   const [month, setMonth] = useState(parsed ? parsed.getMonth() : now.getMonth());
@@ -38,20 +40,48 @@ const CustomDateTimePicker = ({ value, onChange, label, dateOnly = false }) => {
     }
   }, [value]);
 
+  useEffect(() => {
+    if (!minDate) return;
+    let changed = false;
+    let y = year, mo = month, d = day, h = hours, m = minutes;
+    if (y < minDate.getFullYear()) { y = minDate.getFullYear(); mo = minDate.getMonth(); d = minDate.getDate(); h = minDate.getHours(); m = Math.ceil(minDate.getMinutes() / 5) * 5; changed = true; }
+    else if (y === minDate.getFullYear() && mo < minDate.getMonth()) { mo = minDate.getMonth(); d = minDate.getDate(); h = minDate.getHours(); m = Math.ceil(minDate.getMinutes() / 5) * 5; changed = true; }
+    else if (y === minDate.getFullYear() && mo === minDate.getMonth() && d < minDate.getDate()) { d = minDate.getDate(); h = minDate.getHours(); m = Math.ceil(minDate.getMinutes() / 5) * 5; changed = true; }
+    else if (y === minDate.getFullYear() && mo === minDate.getMonth() && d === minDate.getDate() && h < minDate.getHours()) { h = minDate.getHours(); m = Math.ceil(minDate.getMinutes() / 5) * 5; changed = true; }
+    else if (y === minDate.getFullYear() && mo === minDate.getMonth() && d === minDate.getDate() && h === minDate.getHours() && m < Math.ceil(minDate.getMinutes() / 5) * 5) { m = Math.ceil(minDate.getMinutes() / 5) * 5; changed = true; }
+    if (changed) {
+      setYear(y); setMonth(mo); setDay(d); setHours(h); setMinutes(m);
+      applyValue(y, mo, d, h, m);
+    }
+  }, [min]);
+
   const maxDay = getDaysInMonth(year, month);
   const safeDay = Math.min(day, maxDay);
+
+  const minYear = minDate ? minDate.getFullYear() : null;
+  const minMonth = minDate && year === minDate.getFullYear() ? minDate.getMonth() : null;
+  const minDay = minDate && year === minDate.getFullYear() && month === minDate.getMonth() ? minDate.getDate() : null;
+  const minHours = minDate && year === minDate.getFullYear() && month === minDate.getMonth() && safeDay === minDate.getDate() ? minDate.getHours() : null;
+  const minMinutes = minDate && year === minDate.getFullYear() && month === minDate.getMonth() && safeDay === minDate.getDate() && hours === minDate.getHours() ? Math.ceil(minDate.getMinutes() / 5) * 5 : null;
 
   const years = [];
   for (let y = now.getFullYear() - 5; y <= now.getFullYear() + 5; y++) years.push(y);
 
+  const months = minYear !== null
+    ? MONTHS.map((m, i) => ({ name: m, index: i })).filter((m) => year > minYear || m.index >= minMonth)
+    : MONTHS.map((m, i) => ({ name: m, index: i }));
+
   const days = [];
-  for (let d = 1; d <= maxDay; d++) days.push(d);
+  const startDay = minDay !== null ? minDay : 1;
+  for (let d = startDay; d <= maxDay; d++) days.push(d);
 
   const hoursList = [];
-  for (let h = 0; h < 24; h++) hoursList.push(h);
+  const startHour = minHours !== null ? minHours : 0;
+  for (let h = startHour; h < 24; h++) hoursList.push(h);
 
   const minutesList = [];
-  for (let m = 0; m < 60; m += 5) minutesList.push(m);
+  const startMin = minMinutes !== null ? minMinutes : 0;
+  for (let m = startMin; m < 60; m += 5) minutesList.push(m);
 
   const applyValue = (y, mo, d, h, m) => {
     const safeD = Math.min(d, getDaysInMonth(y, mo));
@@ -118,8 +148,8 @@ const CustomDateTimePicker = ({ value, onChange, label, dateOnly = false }) => {
                   applyValue(year, mo, newDay, hours, minutes);
                 }}
               >
-                {MONTHS.map((m, i) => (
-                  <option key={i} value={i}>{m}</option>
+                {months.map((m) => (
+                  <option key={m.index} value={m.index}>{m.name}</option>
                 ))}
               </select>
             </div>

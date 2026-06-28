@@ -12,6 +12,7 @@ import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath, getUser } from "../utils/auth";
 import "./Projects.css";
 import { formatDateTime } from "../utils/formatDateTime";
+import Pagination from "../components/Pagination";
 import "../pages/Task.css";
 
 function Projects() {
@@ -31,6 +32,9 @@ function Projects() {
   const [expandedDesc, setExpandedDesc] = useState({});
   const [overflowDetected, setOverflowDetected] = useState({});
   const descEls = useRef({});
+  const [page, setPage] = useState(1);
+  const [showAll, setShowAll] = useState(false);
+  const ITEMS_PER_PAGE = 10;
 
   const toggleDescription = (id) => {
     setExpandedDesc((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -104,6 +108,8 @@ function Projects() {
 
   const selectStatusFilter = (filter) => {
     setStatusFilter(filter);
+    setShowAll(!filter);
+    setPage(1);
     if (filter === "active") {
       setSearchParams({ filter: "active" });
     } else {
@@ -262,6 +268,9 @@ function Projects() {
     return true;
   });
 
+  const totalPages = showAll ? 1 : Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
+  const paginatedProjects = showAll ? filteredProjects : filteredProjects.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
   const breadcrumbs = [
     { label: "Projects" },
   ];
@@ -280,7 +289,7 @@ function Projects() {
 
           <div className="header-actions">
             <div className="all-time">
-              <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
+              <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
                 <option value="">All Time</option>
                 <option value="7">Last 7 Days</option>
                 <option value="30">Last 30 Days</option>
@@ -305,7 +314,7 @@ function Projects() {
             type="text"
             placeholder="Search by project name"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
           />
         </div>
 
@@ -342,7 +351,7 @@ function Projects() {
           ) : filteredProjects.length === 0 ? (
             <div className="loading-text">No projects found</div>
           ) : (
-            filteredProjects.map((project) => {
+            paginatedProjects.map((project) => {
               const progress = calculateProgress(project);
               const displayStatus = calculateStatus(project);
 
@@ -453,6 +462,10 @@ function Projects() {
             })
           )}
         </div>
+
+        {!showAll && totalPages > 1 && (
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+        )}
       </div>
 
       {/* VISIBILITY MODAL */}

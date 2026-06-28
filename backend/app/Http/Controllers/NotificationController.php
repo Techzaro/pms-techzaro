@@ -42,9 +42,7 @@ class NotificationController extends Controller
             }
         }
 
-        return response()->json([
-            'data' => NotificationResource::collection($query->paginate(20)),
-        ]);
+        return NotificationResource::collection($query->paginate(20));
     }
 
     public function unreadCount(Request $request)

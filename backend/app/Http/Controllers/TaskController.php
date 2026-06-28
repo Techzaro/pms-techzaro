@@ -6,7 +6,6 @@ use App\Models\Deliverable;
 use App\Models\DeliverableSubmission;
 use App\Models\Notification;
 use App\Models\Project;
-use App\Models\Subtask;
 use App\Models\Task;
 use App\Models\TaskFile;
 use App\Models\TaskSubmission;
@@ -46,13 +45,13 @@ class TaskController extends Controller
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
-            ->latest()
+            ->orderBy('sort_order', 'asc')
             ->filter($filters);
 
-        $tasks = $tasksQuery->paginate(15);
+        $tasks = $tasksQuery->get();
 
-        // Bulk load deliverable counts for all tasks in this page
-        $taskIds = $tasks->getCollection()->pluck('id');
+        // Bulk load deliverable counts for all tasks
+        $taskIds = $tasks->pluck('id');
         $dlvStats = collect();
         if ($taskIds->isNotEmpty()) {
             $dlvStats = Deliverable::selectRaw('task_id, COUNT(*) as total, SUM(CASE WHEN status = "approved" THEN 1 ELSE 0 END) as completed, SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending')
@@ -61,7 +60,7 @@ class TaskController extends Controller
                 ->get()->keyBy('task_id');
         }
 
-        $tasks->getCollection()->transform(function ($task) use ($dlvStats) {
+        $tasks->transform(function ($task) use ($dlvStats) {
             $task->item_type = 'task';
             $stats = $dlvStats->get($task->id);
             $total = $stats ? (int) $stats->total : 0;
@@ -92,6 +91,7 @@ class TaskController extends Controller
 
         $projects = $projects->map(function ($project) use ($user) {
             $project->item_type = 'project';
+            $project->sort_order = null;
             $isAssigned = in_array($user->id, $project->assigned_users ?? []);
             $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
             $project->is_assigned = $isAssigned;
@@ -99,14 +99,13 @@ class TaskController extends Controller
             return $project;
         });
 
-        $allItems = $tasks->getCollection()->merge($projects)->sortByDesc('created_at')->values();
+        $allItems = $tasks->merge($projects)->sortBy(function ($item) {
+            return $item->sort_order ?? PHP_INT_MAX;
+        })->values();
 
         return response()->json([
             'data' => $allItems,
-            'current_page' => $tasks->currentPage(),
-            'last_page' => $tasks->lastPage(),
-            'per_page' => $tasks->perPage(),
-            'total' => $tasks->total() + $projects->count(),
+            'total' => $allItems->count(),
         ]);
     }
 
@@ -128,12 +127,12 @@ class TaskController extends Controller
             })
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
-            ->latest()
+            ->orderBy('sort_order', 'asc')
             ->filter($filters)
-            ->paginate(15);
+            ->get();
 
         // Bulk load deliverable counts
-        $taskIds = $tasks->getCollection()->pluck('id');
+        $taskIds = $tasks->pluck('id');
         $dlvStats = collect();
         if ($taskIds->isNotEmpty()) {
             $dlvStats = Deliverable::selectRaw('task_id, COUNT(*) as total, SUM(CASE WHEN status = "approved" THEN 1 ELSE 0 END) as completed, SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending')
@@ -142,7 +141,7 @@ class TaskController extends Controller
                 ->get()->keyBy('task_id');
         }
 
-        $tasks->getCollection()->transform(function ($task) use ($dlvStats) {
+        $tasks->transform(function ($task) use ($dlvStats) {
             $task->item_type = 'task';
             $stats = $dlvStats->get($task->id);
             $total = $stats ? (int) $stats->total : 0;
@@ -168,6 +167,7 @@ class TaskController extends Controller
             ->get()
             ->map(function ($project) use ($user) {
                 $project->item_type = 'project';
+                $project->sort_order = null;
                 $isAssigned = in_array($user->id, $project->assigned_users ?? []);
                 $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
                 $project->is_assigned = $isAssigned;
@@ -175,14 +175,13 @@ class TaskController extends Controller
                 return $project;
             });
 
-        $allItems = $tasks->getCollection()->merge($projects)->sortByDesc('created_at')->values();
+        $allItems = $tasks->merge($projects)->sortBy(function ($item) {
+            return $item->sort_order ?? PHP_INT_MAX;
+        })->values();
 
         return response()->json([
             'data' => $allItems,
-            'current_page' => $tasks->currentPage(),
-            'last_page' => $tasks->lastPage(),
-            'per_page' => $tasks->perPage(),
-            'total' => $tasks->total() + $projects->count(),
+            'total' => $allItems->count(),
         ]);
     }
 
@@ -230,7 +229,7 @@ class TaskController extends Controller
             ->when($search, fn ($q) => $q->where('title', 'like', '%' . $search . '%'))
             ->when($statusFilter && !$isDueTodayFilter && !$isPendingFilter, fn ($q) => $q->where('status', $statusFilter))
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
-            ->latest();
+            ->orderBy('sort_order', 'asc');
 
         $tasks = $tasksQuery->limit(200)->get();
 
@@ -283,13 +282,16 @@ class TaskController extends Controller
         foreach ($projects as $project) {
             $clone = clone $project;
             $clone->item_type = 'project';
+            $clone->sort_order = null;
             $clone->assigned_user = $targetUser;
             $clone->is_assigned = true;
             $clone->can_submit = in_array($clone->status, $submittableStatuses);
             $expandedProjects->push($clone);
         }
 
-        $allItems = $expandedTasks->merge($expandedProjects)->sortByDesc('created_at')->values();
+        $allItems = $expandedTasks->merge($expandedProjects)->sortBy(function ($item) {
+            return $item->sort_order ?? PHP_INT_MAX;
+        })->values();
 
         return response()->json(['success' => true, 'data' => $allItems, 'total' => $allItems->count()]);
     }
@@ -322,7 +324,7 @@ class TaskController extends Controller
             $tasksQuery->where('assigned_by', $userId);
         }
 
-        $tasks = $tasksQuery->latest()
+        $tasks = $tasksQuery->orderBy('sort_order', 'asc')
             ->when($request->filled('search'), fn ($q) => $q->where('title', 'like', '%' . $request->input('search') . '%'))
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
@@ -399,6 +401,7 @@ class TaskController extends Controller
 
         foreach ($projects as $project) {
             $project->item_type = 'project';
+            $project->sort_order = null;
             $assignedIds = $project->assigned_users;
             if (is_string($assignedIds)) $assignedIds = json_decode($assignedIds, true) ?? [];
             $assignedUsers = collect($assignedIds);
@@ -422,7 +425,9 @@ class TaskController extends Controller
             }
         }
 
-        $allItems = $expandedTasks->merge($expandedProjects)->sortByDesc('created_at')->values();
+        $allItems = $expandedTasks->merge($expandedProjects)->sortBy(function ($item) {
+            return $item->sort_order ?? PHP_INT_MAX;
+        })->values();
 
         return response()->json(['success' => true, 'data' => $allItems, 'total' => $allItems->count()]);
     }
@@ -464,17 +469,6 @@ class TaskController extends Controller
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
         ]);
 
-        $subtasks = Subtask::where('task_id', $task->id)
-            ->with(['assignee:id,name,email,role', 'assigner:id,name,email,role'])
-            ->orderBy('created_at')
-            ->get();
-
-        $progress = 0;
-        if ($subtasks->count() > 0) {
-            $done = $subtasks->filter(fn ($t) => in_array(strtolower((string) $t->status), ['completed', 'done']))->count();
-            $progress = (int) round(($done / $subtasks->count()) * 100);
-        }
-
         // Single query for deliverables with stats
         $deliverables = $task->deliverables()->when(!$isCreator, function ($q) use ($user) {
             $q->where(function ($qq) use ($user) {
@@ -484,7 +478,7 @@ class TaskController extends Controller
             'assignee:id,name,email,role', 'creator:id,name,role',
             'latestSubmission', 'latestSubmission.submittedBy:id,name,email',
             'reopenedBy:id,name',
-        ])->latest()->get();
+        ])->orderBy('sort_order', 'asc')->get();
 
         $deliverableIds = $deliverables->pluck('id');
         $submittedIds = $deliverableIds->isNotEmpty()
@@ -514,8 +508,6 @@ class TaskController extends Controller
         ]);
 
         $payload = $task->toArray();
-        $payload['subtasks'] = $subtasks;
-        $payload['progress_percent'] = $progress;
         $payload['deliverables'] = $deliverables;
         $payload['deliverables_progress'] = (int) $dlvStats->total > 0 ? (int) round(((int) $dlvStats->completed / max((int) $dlvStats->total, 1)) * 100) : 0;
         $payload['total_deliverables'] = (int) $dlvStats->total;
@@ -582,17 +574,6 @@ class TaskController extends Controller
                 'updated_at' => now(),
             ];
 
-            if ($assignee && (int) $userId !== (int) $user->id) {
-                $workflowRecords[] = [
-                    'task_id' => $task->id,
-                    'user_id' => $user->id,
-                    'action' => 'assigned',
-                    'comment' => 'Assigned to ' . $assignee->name,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-            }
-
             if (!empty($validated['deliverables'])) {
                 foreach ($validated['deliverables'] as $del) {
                     $deliverablesToCreate[] = [
@@ -632,7 +613,8 @@ class TaskController extends Controller
             }
         }
         if (!empty($deliverableNotifications)) {
-            Notification::insert($deliverableNotifications);
+            $now = now()->toDateTimeString();
+            Notification::insert(array_map(fn ($n) => $n + ['created_at' => $now, 'updated_at' => $now], $deliverableNotifications));
         }
 
         // Bulk notifications
@@ -719,17 +701,6 @@ class TaskController extends Controller
                 'updated_at' => now(),
             ];
 
-            if ($assignee && (int) $userId !== (int) $user->id) {
-                $workflowRecords[] = [
-                    'task_id' => $task->id,
-                    'user_id' => $user->id,
-                    'action' => 'assigned',
-                    'comment' => 'Assigned to ' . $assignee->name,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-            }
-
             if (!empty($validated['deliverables'])) {
                 $deliverableData = collect($validated['deliverables'])->map(fn ($del) => [
                     'title' => $del['title'], 'description' => $del['description'] ?? null,
@@ -759,7 +730,8 @@ class TaskController extends Controller
             DB::table('task_workflow_events')->insert($workflowRecords);
         }
         if (!empty($deliverableNotifications)) {
-            Notification::insert($deliverableNotifications);
+            $now = now()->toDateTimeString();
+            Notification::insert(array_map(fn ($n) => $n + ['created_at' => $now, 'updated_at' => $now], $deliverableNotifications));
         }
 
         $sent = [];
@@ -846,6 +818,24 @@ class TaskController extends Controller
             $changes[] = ['field_name' => 'assigned_to', 'label' => 'Assignee', 'old_value' => $oldNames ?: 'None', 'new_value' => $newNames ?: 'None'];
             $task->assignees()->sync($assigneeIds);
             $task->update(['assigned_to' => $assigneeIds[0]]);
+
+            $newlyAssignedIds = array_values(array_diff($assigneeIds, $oldAssigneeIds));
+            if (!empty($newlyAssignedIds)) {
+                $newAssignNotifications = [];
+                foreach ($newlyAssignedIds as $newId) {
+                    if ((int) $newId === (int) $user->id) continue;
+                    $newAssignNotifications[] = [
+                        'user_id' => $newId, 'sender_user_id' => $user->id,
+                        'type' => 'task_assigned', 'related_module' => 'task',
+                        'related_id' => $task->id, 'title' => 'Task Assigned',
+                        'message' => 'A new task "' . $task->title . '" has been assigned to you by ' . $user->name . '.',
+                        'link' => '/tasks/task-details/' . $task->id . '?from=tasks',
+                    ];
+                }
+                if (!empty($newAssignNotifications)) {
+                    $this->notificationService->createBulk($newAssignNotifications);
+                }
+            }
         }
 
         $addedDeliverables = [];
@@ -955,38 +945,6 @@ class TaskController extends Controller
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Failed to complete task: ' . $e->getMessage()], 500);
         }
-    }
-
-    public function storeSubtask(Request $request, Task $task)
-    {
-        $user = $request->user();
-        $isCreator = $task->assigned_by === $user->id;
-        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
-        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
-
-        if (!$isCreator && !$isAssignee && !$isAdminOrManager) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        if (strtolower((string) $task->status) === 'approved') return response()->json(['success' => false, 'message' => 'Approved tasks cannot be modified.'], 403);
-
-        $validated = $request->validate([
-            'title' => 'required|string|max:255', 'description' => 'nullable|string',
-            'start_date' => 'nullable|date', 'end_date' => 'nullable|date',
-            'assigned_to' => 'required|array|min:1', 'assigned_to.*' => 'exists:users,id',
-            'priority' => 'required|string|max:32',
-        ]);
-
-        $subtasks = [];
-        foreach ($validated['assigned_to'] as $userId) {
-            $subtasks[] = Subtask::create([
-                'task_id' => $task->id, 'title' => $validated['title'],
-                'description' => $validated['description'] ?? null,
-                'start_date' => $validated['start_date'] ?? now()->toDateTimeString(),
-                'end_date' => $validated['end_date'] ?? null,
-                'assigned_to' => (int) $userId, 'assigned_by' => $user->id,
-                'priority' => $validated['priority'], 'status' => 'pending',
-            ]);
-        }
-
-        return response()->json(['success' => true, 'message' => count($subtasks) . ' subtask(s) created successfully', 'subtasks' => $subtasks], 201);
     }
 
     public function submit(Request $request, Task $task)
@@ -1341,18 +1299,6 @@ class TaskController extends Controller
         return response()->json(['success' => true, 'message' => 'Tasks reordered successfully']);
     }
 
-    public function reorderSubtasks(Request $request)
-    {
-        $request->validate(['items' => 'required|array', 'items.*.id' => 'required|integer|exists:subtasks,id', 'items.*.sort_order' => 'required|integer|min:0']);
-        $ids = []; $bindings = [];
-        foreach ($request->items as $item) { $ids[] = (int) $item['id']; $bindings[] = (int) $item['id']; $bindings[] = (int) $item['sort_order']; }
-        if (!empty($ids)) {
-            $ph = implode(',', array_fill(0, count($ids), '?'));
-            DB::statement("UPDATE subtasks SET sort_order = CASE id " . implode(' ', array_fill(0, count($ids), 'WHEN ? THEN ?')) . " END WHERE id IN ($ph)", [...$bindings, ...$ids]);
-        }
-        return response()->json(['success' => true, 'message' => 'Subtasks reordered successfully']);
-    }
-
     private function sendTaskUpdateNotification(Task $task, User $updater, int $changeCount = 0): void
     {
         if (!$task->relationLoaded('assignees')) $task->load('assignees:id');
@@ -1362,16 +1308,18 @@ class TaskController extends Controller
         if ($changeCount > 0) $msg .= ' ' . $changeCount . ' change(s) were made.';
         $msg .= ' Click to review changes.';
 
-        $this->notificationService->notifyMultiple(
-            array_filter($assigneeIds, fn($id) => (int) $id !== (int) $updater->id),
-            $updater->id,
-            'task_updated',
-            'task',
-            $task->id,
-            'Task Updated',
-            $msg,
-            '/tasks/task-details/' . $task->id . '?from=tasks'
-        );
+        foreach (array_filter($assigneeIds, fn($id) => (int) $id !== (int) $updater->id) as $assigneeId) {
+            $this->notificationService->notify(
+                $assigneeId,
+                $updater->id,
+                'task_updated',
+                'task',
+                $task->id,
+                'Task Updated',
+                $msg,
+                '/tasks/task-details/' . $task->id . '?from=tasks'
+            );
+        }
     }
 
     private function pendingTaskStatuses(): array { return ['pending', 'in_progress', 'In Progress', 'Planned', 'submitted', 'reopened', 'rejected']; }

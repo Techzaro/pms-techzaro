@@ -97,6 +97,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
               type="datetime-local"
               className="rd-input"
               value={newDeadline}
+              min={new Date().toISOString().slice(0, 16)}
               onChange={(e) => setNewDeadline(e.target.value)}
             />
           </div>

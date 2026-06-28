@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
-import { authToken, rolePath, getUser } from "../utils/auth";
+import { authToken, rolePath, getUser, normalizeRole } from "../utils/auth";
 import { timeAgo } from "../utils/formatDateTime";
 import { useRelativeTime } from "../hooks/useRelativeTime";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
@@ -186,9 +186,9 @@ function Notifications() {
       if (!res.ok) throw new Error("Failed to fetch notifications");
       const data = await res.json();
       setNotifications(data.data || []);
-      setPage(data.current_page || 1);
-      setLastPage(data.last_page || 1);
-      setTotal(data.total || 0);
+      setPage(data.meta?.current_page || data.current_page || 1);
+      setLastPage(data.meta?.last_page || data.last_page || 1);
+      setTotal(data.meta?.total || data.total || 0);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -280,6 +280,7 @@ function Notifications() {
 
   return (
     <DashboardLayout hideRightSidebar={true}>
+      <br />
       <div className="notif-layout">
         {/* Header - spans full width */}
         <div className="notif-header">
@@ -358,6 +359,8 @@ function Notifications() {
               </button>
             )}
           </div>
+
+          <div className="notif-gap"></div>
 
           {/* Notification List */}
           <div className="notif-list">
@@ -465,7 +468,7 @@ function Notifications() {
                 </svg>
                 <div>
                   <span className="notif-sidebar-label">Account Type</span>
-                  <span className="notif-sidebar-value">{user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : "Employee"}</span>
+                  <span className="notif-sidebar-value">{user?.role ? normalizeRole(user.role) : "Employee"}</span>
                 </div>
               </div>
               <div className="notif-sidebar-row">

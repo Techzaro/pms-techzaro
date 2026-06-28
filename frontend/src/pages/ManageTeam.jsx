@@ -18,6 +18,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import API_URL from "../config/api";
+import Pagination from "../components/Pagination";
 import { useNotification } from "../context/NotificationContext";
 import "./ManageTeam.css";
 
@@ -81,6 +82,8 @@ function ManageTeam() {
   const [removeMemberConfirmOpen, setRemoveMemberConfirmOpen] = useState(false);
   const [removeMemberData, setRemoveMemberData] = useState({ teamId: null, memberId: null, memberName: "" });
   const [editTeamId, setEditTeamId] = useState(null);
+  const [page, setPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const navigate = useNavigate();
 
@@ -403,6 +406,9 @@ function ManageTeam() {
       return 0;
     });
 
+  const totalTeamPages = Math.ceil(filteredTeams.length / ITEMS_PER_PAGE);
+  const paginatedTeams = filteredTeams.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
   const breadcrumbs = [
     { label: "Teams" },
   ];
@@ -432,7 +438,7 @@ function ManageTeam() {
               type="text"
               placeholder="Search teams.."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
             />
           </div>
           <select className="reports-filter" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
@@ -455,13 +461,13 @@ function ManageTeam() {
 
         {/* TEAM LIST */}
         <div className="mt-team-list">
-          {filteredTeams.length === 0 ? (
+          {paginatedTeams.length === 0 ? (
             <div className="mt-card mt-empty">
               <MdGroup size={48} className="mt-empty-icon" />
               <p>No teams created yet.</p>
             </div>
           ) : (
-            filteredTeams.map((team) => {
+            paginatedTeams.map((team) => {
               const leader = team.leader_id
                 ? team.members.find((m) => Number(m.id) === Number(team.leader_id))
                 : null;
@@ -572,6 +578,10 @@ function ManageTeam() {
             })
           )}
         </div>
+
+        {totalTeamPages > 1 && (
+          <Pagination currentPage={page} totalPages={totalTeamPages} onPageChange={setPage} />
+        )}
 
         {/* MODAL */}
         {isModalOpen && (

@@ -213,7 +213,10 @@ class ProjectController extends Controller
                         }
                     }
                 }
-                if (!empty($dlvNotifications)) Notification::insert($dlvNotifications);
+                if (!empty($dlvNotifications)) {
+                    $now = now()->toDateTimeString();
+                    Notification::insert(array_map(fn ($n) => $n + ['created_at' => $now, 'updated_at' => $now], $dlvNotifications));
+                }
             }
         }
 
@@ -423,7 +426,8 @@ class ProjectController extends Controller
                     $project->deliverables()->createMany($bulkDeliverables);
                 }
                 if (!empty($bulkNotifications)) {
-                    Notification::insert($bulkNotifications);
+                    $now = now()->toDateTimeString();
+                    Notification::insert(array_map(fn ($n) => $n + ['created_at' => $now, 'updated_at' => $now], $bulkNotifications));
                 }
             }
         }
@@ -659,7 +663,10 @@ class ProjectController extends Controller
                 ];
             }
         }
-        if (!empty($notifications)) Notification::insert($notifications);
+        if (!empty($notifications)) {
+            $now = now()->toDateTimeString();
+            Notification::insert(array_map(fn ($n) => $n + ['created_at' => $now, 'updated_at' => $now], $notifications));
+        }
 
         // Log activity
         $grantCount = count($grantedUsers);
@@ -1054,16 +1061,18 @@ class ProjectController extends Controller
         $message = 'The project "' . $project->title . '" has been updated by ' . $updater->name . '.';
         if ($changeCount > 0) $message .= ' ' . $changeCount . ' change(s) were made. Click to review changes.';
 
-        $this->notificationService->notifyMultiple(
-            array_filter($assignedUserIds, fn($id) => (int) $id !== (int) $updater->id),
-            $updater->id,
-            'project_updated',
-            'project',
-            $project->id,
-            'Project Updated',
-            $message,
-            '/projects/project-details/' . $project->id
-        );
+        foreach (array_filter($assignedUserIds, fn($id) => (int) $id !== (int) $updater->id) as $userId) {
+            $this->notificationService->notify(
+                $userId,
+                $updater->id,
+                'project_updated',
+                'project',
+                $project->id,
+                'Project Updated',
+                $message,
+                '/projects/project-details/' . $project->id
+            );
+        }
     }
 
     public function markChangesRead(Project $project)

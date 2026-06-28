@@ -10,6 +10,7 @@ import CreateTaskModal from "../components/CreateTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import SubmitProjectModal from "../components/SubmitProjectModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
+import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
 import { formatDateTime } from "../utils/formatDateTime";
@@ -61,6 +62,9 @@ function Tasks() {
   const [timeFilter, setTimeFilter] = useState("");
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [submitProjectModal, setSubmitProjectModal] = useState({ open: false, project: null });
+  const [page, setPage] = useState(1);
+  const [showAll, setShowAll] = useState(false);
+  const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -123,6 +127,8 @@ function Tasks() {
 
   const selectStatusFilter = (filter) => {
     setStatusFilter(filter);
+    setShowAll(!filter);
+    setPage(1);
     if (filter) {
       setSearchParams({ status: filter });
     } else {
@@ -217,6 +223,9 @@ function Tasks() {
     : baseItems;
 
   const taskIdList = filteredItems.filter((i) => i.item_type !== "project").map((i) => i.id);
+
+  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
+  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   const breadcrumbs = [
     { label: "Tasks", path: rolePath("tasks") },
@@ -320,7 +329,7 @@ function Tasks() {
           <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
         ) : (
           <SortableTableWrapper 
-            items={filteredItems.map((i) => ({ ...i, sortableId: `${i.item_type}-${i.id}` }))} 
+            items={paginatedItems.map((i) => ({ ...i, sortableId: `${i.item_type}-${i.id}` }))} 
             onReorder={(reordered) => handleTaskListReorder(reordered)} 
             idKey="sortableId"
             as="div"
@@ -503,6 +512,10 @@ function Tasks() {
           </SortableTableWrapper>
         )}
       </div>
+
+      {!showAll && totalPages > 1 && (
+        <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+      )}
 
       <SubmitTaskModal
         key={`tasks-submit-${submitTaskModal.task?.id || "none"}`}

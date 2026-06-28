@@ -60,9 +60,6 @@ return new class extends Migration
         // project_activities user joins
         $this->addIndexIfMissing('project_activities', ['user_id'], 'idx_project_activities_user_id');
 
-        // subtasks assigned_by
-        $this->addIndexIfMissing('subtasks', ['assigned_by'], 'idx_subtasks_assigned_by');
-
         // task workflow users
         $this->addIndexIfMissing('tasks', ['approved_by'], 'idx_tasks_approved_by');
         $this->addIndexIfMissing('tasks', ['rejected_by'], 'idx_tasks_rejected_by');

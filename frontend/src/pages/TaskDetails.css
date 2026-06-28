@@ -315,17 +315,6 @@
 }
 .td-img-placeholder span { font-size: 13px; font-weight: 500; }
 
-/* SUBTASKS SEPARATE CARD */
-.td-subtasks-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  padding: 24px;
-  margin-top: 20px;
-  overflow: hidden;
-  max-width: 100%;
-}
-
 /* TABLE */
 .td-table { width: 100%; border-collapse: collapse; }
 .td-table thead tr { background: #f8fafc; }
@@ -527,7 +516,6 @@
   .td-tab svg { display: none; }
   .td-section-title { font-size: 14px; }
   .td-card { padding: 14px; border-radius: 12px; }
-  .td-subtasks-card { padding: 16px; border-radius: 12px; }
   .td-img-placeholder { height: 120px; }
   .td-feed { gap: 12px; }
   .td-feed-row { gap: 8px; }

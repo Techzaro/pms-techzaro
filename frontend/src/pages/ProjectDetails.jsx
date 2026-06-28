@@ -883,58 +883,65 @@ function ProjectDetails() {
                             {(orderedDeliverables.length === 0 && (project.deliverables || []).length === 0) ? (
                               <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>No deliverables.</div>
                             ) : (
-                              (orderedDeliverables.length ? orderedDeliverables : (project.deliverables || [])).map((d, idx) => {
-                                const deliverableName = d.deliverable_name || d.name || d.title || d.label || d.description || '';
-                                const displayName = deliverableName || `Deliverable ${idx + 1}`;
-                                const isAssigner = d.created_by && d.created_by === currentUserId;
-                                const isAssignee = d.assignee?.id && d.assignee.id === currentUserId;
-                                const isSubmittable = d.status === "pending" || d.status === "rejected" || d.status === "reopened";
-                                const showSubmit = isSubmittable && isAssignee;
-                                const showView = !isSubmittable || isAssigner || isAdminOrManager;
-                                const statusKey = (d.status || '').toLowerCase();
+                              <SortableTableWrapper
+                                items={(orderedDeliverables.length ? orderedDeliverables : (project.deliverables || [])).map((d, idx) => ({ ...d, sortableId: `del-${d.id || idx}` }))}
+                                onReorder={handleDeliverableReorder}
+                                idKey="sortableId"
+                                as="div"
+                              >
+                                {(d, idx) => {
+                                  const deliverableName = d.deliverable_name || d.name || d.title || d.label || d.description || '';
+                                  const displayName = deliverableName || `Deliverable ${idx + 1}`;
+                                  const isAssigner = d.created_by && d.created_by === currentUserId;
+                                  const isAssignee = d.assignee?.id && d.assignee.id === currentUserId;
+                                  const isSubmittable = d.status === "pending" || d.status === "rejected" || d.status === "reopened";
+                                  const showSubmit = isSubmittable && isAssignee;
+                                  const showView = !isSubmittable || isAssigner || isAdminOrManager;
+                                  const statusKey = (d.status || '').toLowerCase();
 
-                                return (
-                                  <div className="deliveries-table-row pd-deliverables-grid" key={d.id || idx}>
-                                    <div className="user-box">
-                                      <div className="avatar" style={{ background: '#EEF2FF', color: '#4F46E5', width: '42px', height: '42px', fontSize: '14px' }}>
-                                        {initials(displayName)}
+                                  return (
+                                    <div className="deliveries-table-row pd-deliverables-grid" key={d.sortableId}>
+                                      <div className="user-box">
+                                        <div className="avatar" style={{ background: '#EEF2FF', color: '#4F46E5', width: '42px', height: '42px', fontSize: '14px' }}>
+                                          {initials(displayName)}
+                                        </div>
+                                        <div>
+                                          <div className="user-name">{displayName}</div>
+                                        </div>
                                       </div>
                                       <div>
-                                        <div className="user-name">{displayName}</div>
+                                        <div className="user-name">{isAdminOrManager || isCreator ? (d.assignee?.name || d.assigned_to?.name || "—") : (d.creator?.name || "—")}</div>
+                                        <div className="user-role">{isAdminOrManager || isCreator ? (d.assignee?.role ? d.assignee.role.replace("_", " ") : "") : (d.creator?.role ? d.creator.role.replace("_", " ") : "")}</div>
+                                      </div>
+                                      <div className="date-box" style={{ whiteSpace: "pre-line" }}>{formatDateTime(d.due_date || d.dueDate)}</div>
+                                      <div>
+                                        <span className="badge" style={{ background: STATUS_COLORS[statusKey] || "#F3F4F6", color: STATUS_TEXT_COLORS[statusKey] || "#374151" }}>
+                                          <span className="dot" style={{ background: STATUS_TEXT_COLORS[statusKey] || "#374151" }}></span>
+                                          {formatStatus(d.status)}
+                                        </span>
+                                      </div>
+                                      <div className="action-btns">
+                                        {showSubmit && (
+                                          <button className="action-icon-btn action-submit" title="Submit" onClick={() => setSubmitModal({ open: true, deliverable: d })}>
+                                            <LuSend size={16} />
+                                          </button>
+                                        )}
+                                        {showView && (
+                                          <button className="action-icon-btn action-view" title="View" onClick={() => {
+                                            if (isAssigner || isAdminOrManager) {
+                                              setAssignerModal({ open: true, deliverable: d });
+                                            } else {
+                                              setViewModal({ open: true, deliverable: d });
+                                            }
+                                          }}>
+                                            <IoEyeOutline size={16} />
+                                          </button>
+                                        )}
                                       </div>
                                     </div>
-                                    <div>
-                                      <div className="user-name">{isAdminOrManager || isCreator ? (d.assignee?.name || d.assigned_to?.name || "—") : (d.creator?.name || "—")}</div>
-                                      <div className="user-role">{isAdminOrManager || isCreator ? (d.assignee?.role ? d.assignee.role.replace("_", " ") : "") : (d.creator?.role ? d.creator.role.replace("_", " ") : "")}</div>
-                                    </div>
-                                    <div className="date-box" style={{ whiteSpace: "pre-line" }}>{formatDateTime(d.due_date || d.dueDate)}</div>
-                                    <div>
-                                      <span className="badge" style={{ background: STATUS_COLORS[statusKey] || "#F3F4F6", color: STATUS_TEXT_COLORS[statusKey] || "#374151" }}>
-                                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[statusKey] || "#374151" }}></span>
-                                        {formatStatus(d.status)}
-                                      </span>
-                                    </div>
-                                    <div className="action-btns">
-                                      {showSubmit && (
-                                        <button className="action-icon-btn action-submit" title="Submit" onClick={() => setSubmitModal({ open: true, deliverable: d })}>
-                                          <LuSend size={16} />
-                                        </button>
-                                      )}
-                                      {showView && (
-                                        <button className="action-icon-btn action-view" title="View" onClick={() => {
-                                          if (isAssigner || isAdminOrManager) {
-                                            setAssignerModal({ open: true, deliverable: d });
-                                          } else {
-                                            setViewModal({ open: true, deliverable: d });
-                                          }
-                                        }}>
-                                          <IoEyeOutline size={16} />
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })
+                                  );
+                                }}
+                              </SortableTableWrapper>
                             )}
                           </div>
                         </section>

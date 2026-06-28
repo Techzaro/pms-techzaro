@@ -15,9 +15,10 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
 import API_URL from "../config/api";
-import { authToken, getCurrentRole, getUser, setUser, rolePath } from "../utils/auth";
+import { authToken, getCurrentRole, getUser, setUser, rolePath, normalizeRole } from "../utils/auth";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { useNotification } from "../context/NotificationContext";
+import Pagination from "../components/Pagination";
 import "./ManageUsers.css";
 
 const DEPARTMENTS = [
@@ -58,7 +59,6 @@ function ManageUsers() {
     emergencyContactRelation: "",
     emergencyContactPhone: "",
     email: "",
-    personalEmail: "",
     department: "",
     departmentCustom: "",
     designation: "",
@@ -92,6 +92,8 @@ function ManageUsers() {
   const [timeFilter, setTimeFilter] = useState("");
   const [resignConfirmOpen, setResignConfirmOpen] = useState(false);
   const [resignUserId, setResignUserId] = useState(null);
+  const [page, setPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const [localUsers, setLocalUsers] = useState([]);
   const [activeDragId, setActiveDragId] = useState(null);
@@ -232,6 +234,7 @@ function ManageUsers() {
 
   const openModal = () => {
     setEditingUser(null);
+    setAddErrors({});
     setNewUser({
       fullName: "",
       fatherName: "",
@@ -243,7 +246,6 @@ function ManageUsers() {
       emergencyContactRelation: "",
       emergencyContactPhone: "",
       email: "",
-      personalEmail: "",
       recoveryEmail: "",
       department: "",
       departmentCustom: "",
@@ -290,7 +292,6 @@ function ManageUsers() {
       emergencyContactRelation: user.emergency_contact_relation || "",
       emergencyContactPhone: user.emergency_contact_phone || "",
       email: user.email || "",
-      personalEmail: user.personal_email || "",
       department: isCustomDept ? "__custom__" : deptVal,
       departmentCustom: isCustomDept ? deptVal : "",
       designation: isCustomDesg ? "__custom__" : desgVal,
@@ -333,7 +334,6 @@ function ManageUsers() {
       emergencyContactRelation: "",
       emergencyContactPhone: "",
       email: "",
-      personalEmail: "",
       recoveryEmail: "",
       department: "",
       departmentCustom: "",
@@ -390,9 +390,6 @@ function ManageUsers() {
       errors.email = "Email Address is required.";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.email.trim())) {
       errors.email = "Please enter a valid email address.";
-    }
-    if (newUser.personalEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.personalEmail.trim())) {
-      errors.personalEmail = "Please enter a valid email address.";
     }
     if (!newUser.department) {
       errors.department = "Department is required.";
@@ -521,9 +518,7 @@ function ManageUsers() {
         </td>
         <td style={{ width: "20%" }}>
           <span className={`role-badge role-${user.role}`}>
-            {user.role === "team_lead"
-              ? "Team Lead"
-              : user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+            {normalizeRole(user.role)}
           </span>
         </td>
         <td style={{ width: "20%" }}>
@@ -570,6 +565,10 @@ function ManageUsers() {
       )
     : filteredUsers;
 
+  const showAllUsers = false;
+  const totalUserPages = Math.ceil(sortedUsers.length / ITEMS_PER_PAGE);
+  const paginatedUsers = sortedUsers.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
   const activeDragUser = activeDragId ? users.find((u) => u.id === activeDragId) : null;
 
   function SortableUserRow({ user, isActive, canModifyUser, isSelf, isTargetProtected }) {
@@ -592,7 +591,7 @@ function ManageUsers() {
         </td>
         <td style={{ width: "20%" }}>
           <span className={`role-badge role-${user.role}`}>
-            {user.role === "team_lead" ? "Team Lead" : user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+            {normalizeRole(user.role)}
           </span>
         </td>
         <td style={{ width: "20%" }}><StatusBadge active={isActive} /></td>
@@ -630,7 +629,6 @@ function ManageUsers() {
     formData.append("emergency_contact_name", newUser.emergencyContactName);
     formData.append("emergency_contact_relation", newUser.emergencyContactRelation);
     formData.append("emergency_contact_phone", newUser.emergencyContactPhone);
-    formData.append("personal_email", newUser.personalEmail);
     formData.append("recovery_email", newUser.recoveryEmail || "");
     formData.append("department", finalDepartment || "");
     formData.append("designation", finalDesignation || "");
@@ -663,18 +661,43 @@ function ManageUsers() {
       const token = authToken();
       const isEdit = !!editingUser;
       const url = isEdit ? `${API_URL}/users/${editingUser.id}` : `${API_URL}/users`;
-      const method = isEdit ? "PUT" : "POST";
+
+      if (isEdit) {
+        formData.append('_method', 'PUT');
+      }
 
       const res = await fetch(url, {
-        method,
+        method: "POST",
         headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
         body: formData,
         _notifHandled: true,
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || (isEdit ? "Unable to update user" : "Unable to create user"));
+      if (!res.ok) {
+        if (data.errors) {
+          const fieldMap = {
+            email: "email", full_name: "fullName",
+            father_name: "fatherName", id_card_number: "idCardNumber", phone_number: "phoneNumber",
+            present_address: "presentAddress", permanent_address: "permanentAddress",
+            emergency_contact_name: "emergencyContactName", emergency_contact_relation: "emergencyContactRelation",
+            emergency_contact_phone: "emergencyContactPhone", department: "department", designation: "designation",
+            hired_for: "hiredFor", employee_code: "employeeCode", role: "role",
+            gross_salary: "grossSalary", job_started_date: "jobStartedDate", job_ended_date: "jobEndedDate",
+            applied_via: "appliedVia", bank_name: "bankName", bank_account_number: "bankAccountNumber",
+            bank_account_title: "bankAccountTitle", password: "password",
+          };
+          const mapped = {};
+          Object.entries(data.errors).forEach(([key, msgs]) => {
+            mapped[fieldMap[key] || key] = Array.isArray(msgs) ? msgs[0] : msgs;
+          });
+          setAddErrors(mapped);
+        }
+        notify.error(data.message || (isEdit ? "Unable to update user" : "Unable to create user"));
+        return;
+      }
 
+      setAddErrors({});
       if (isEdit) {
         setUsers((prev) => prev.map((item) => item.id === editingUser.id ? { ...item, ...data.user } : item));
         notify.success(data.message || "User updated successfully.");
@@ -711,7 +734,7 @@ function ManageUsers() {
         <div className="bar">
           <div className="search-bar">
             <IoSearchOutline fontSize={"25px"} />
-            <input type="text" placeholder="Search users by name or email....." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <input type="text" placeholder="Search users by name or email....." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }} />
           </div>
           <select className="reports-filter" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
             <option value="">All Time</option>
@@ -719,14 +742,14 @@ function ManageUsers() {
             <option value="30">Last 30 Days</option>
             <option value="180">Last 6 Months</option>
           </select>
-          <select className="bar-role" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+          <select className="bar-role" value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}>
             <option value="">Role</option>
             <option value="admin">Admin</option>
             <option value="manager">Manager</option>
             <option value="team_lead">Team-Lead</option>
             <option value="member">Member</option>
           </select>
-          <select className="bar-status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <select className="bar-status" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
             <option value="">Status</option>
             <option value="active">Active</option>
             <option value="resigned">Resigned</option>
@@ -752,15 +775,15 @@ function ManageUsers() {
                   <th style={{ width: "20%" }}>Action</th>
                 </tr>
               </thead>
-              <SortableContext items={sortedUsers.map((u) => u.id)} strategy={verticalListSortingStrategy}>
+              <SortableContext items={paginatedUsers.map((u) => u.id)} strategy={verticalListSortingStrategy}>
                 <tbody>
                   {loading ? (
                     <tr>
                       <td colSpan="4" className="loading-row">Loading users...</td>
                     </tr>
                   ) : localUsers.length ? (
-                    sortedUsers.length ? (
-                      sortedUsers.map((user) => {
+                      paginatedUsers.length ? (
+                        paginatedUsers.map((user) => {
                         const isSelf = currentUserId === user.id;
                         const isTargetProtected = user.role === "admin" || user.role === "manager";
                         const isActive = user.active !== false;
@@ -787,6 +810,10 @@ function ManageUsers() {
             </DragOverlay>
           </DndContext>
         </div>
+
+        {totalUserPages > 1 && (
+          <Pagination currentPage={page} totalPages={totalUserPages} onPageChange={setPage} />
+        )}
 
         {/* ===================== ADD USER MODAL ===================== */}
         {isAddModalOpen && (
@@ -874,11 +901,6 @@ function ManageUsers() {
                     <input type="email" id="email" name="email" value={newUser.email} onChange={handleChange} placeholder="Enter email address" className={addErrors.email ? "field-error" : ""} />
                     {addErrors.email && <span className="field-error-text">{addErrors.email}</span>}
                   </div>
-                  <div className="form-row">
-                    <label htmlFor="personalEmail">Personal Email Address</label>
-                    <input type="email" id="personalEmail" name="personalEmail" value={newUser.personalEmail} onChange={handleChange} placeholder="Enter personal email" className={addErrors.personalEmail ? "field-error" : ""} />
-                    {addErrors.personalEmail && <span className="field-error-text">{addErrors.personalEmail}</span>}
-                  </div>
                 </div>
 
                 {/* ===== Employment Details ===== */}
@@ -946,12 +968,12 @@ function ManageUsers() {
                   </div>
                   <div className="form-row">
                     <label htmlFor="jobStartedDate">Job Started Date *</label>
-                    <input type="date" id="jobStartedDate" name="jobStartedDate" value={newUser.jobStartedDate} onChange={handleChange} className={addErrors.jobStartedDate ? "field-error" : ""} />
+                    <input type="date" id="jobStartedDate" name="jobStartedDate" value={newUser.jobStartedDate} min={new Date().toISOString().split('T')[0]} onChange={handleChange} className={addErrors.jobStartedDate ? "field-error" : ""} />
                     {addErrors.jobStartedDate && <span className="field-error-text">{addErrors.jobStartedDate}</span>}
                   </div>
                   <div className="form-row">
                     <label htmlFor="jobEndedDate">Job Ended Date</label>
-                    <input type="date" id="jobEndedDate" name="jobEndedDate" value={newUser.jobEndedDate} onChange={handleChange} />
+                    <input type="date" id="jobEndedDate" name="jobEndedDate" value={newUser.jobEndedDate} min={newUser.jobStartedDate || new Date().toISOString().split('T')[0]} onChange={handleChange} />
                   </div>
                 </div>
 
@@ -999,7 +1021,7 @@ function ManageUsers() {
                       <label htmlFor={key}>{label}</label>
                       {editingUser && editingUser[api] && !newUser[key] && (
                         <div style={{ marginBottom: 6, fontSize: 13, color: "#64748b" }}>
-                          Current: <a href={`${API_URL}/users/${editingUser.id}/documents/${api}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>View uploaded file</a>
+                          Current: <a href={`${API_URL}/users/${editingUser.id}/documents/${api}?token=${authToken()}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>View uploaded file</a>
                         </div>
                       )}
                       <input

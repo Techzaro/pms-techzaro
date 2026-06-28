@@ -93,11 +93,6 @@ class Task extends Model
         return $this->belongsToMany(User::class, 'task_user')->withTimestamps();
     }
 
-    public function subtasks()
-    {
-        return $this->hasMany(\App\Models\Subtask::class)->orderBy('sort_order')->orderBy('id');
-    }
-
     public function deliverables()
     {
         return $this->hasMany(\App\Models\Deliverable::class)->orderBy('sort_order')->orderBy('id');

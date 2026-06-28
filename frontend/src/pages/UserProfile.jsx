@@ -3,8 +3,9 @@ import { useParams, useNavigate } from "react-router-dom";
 import { MdEdit, MdArrowBack } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
+import { publish } from "../utils/eventBus";
 import API_URL from "../config/api";
-import { authToken, getCurrentRole, rolePath, getUser } from "../utils/auth";
+import { authToken, getCurrentRole, rolePath, getUser, normalizeRole } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import "./UserProfile.css";
 import "./ManageUsers.css";
@@ -27,7 +28,6 @@ function UserProfile() {
     emergency_contact_name: "",
     emergency_contact_relation: "",
     emergency_contact_phone: "",
-    personal_email: "",
     email: "",
     recovery_email: "",
     department: "",
@@ -134,7 +134,6 @@ function UserProfile() {
       emergency_contact_name: u.emergency_contact_name || "",
       emergency_contact_relation: u.emergency_contact_relation || "",
       emergency_contact_phone: u.emergency_contact_phone || "",
-      personal_email: u.personal_email || "",
       email: u.email || "",
       recovery_email: u.recovery_email || "",
       department: isCustomDept ? "__custom__" : deptVal,
@@ -201,9 +200,6 @@ function UserProfile() {
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editUser.email.trim())) {
       errors.email = "Please enter a valid email address.";
     }
-    if (editUser.personal_email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editUser.personal_email.trim())) {
-      errors.personal_email = "Please enter a valid email address.";
-    }
     if (!editUser.department) {
       errors.department = "Department is required.";
     } else if (editUser.department === "__custom__" && !editUser.departmentCustom.trim()) {
@@ -249,7 +245,6 @@ function UserProfile() {
       formData.append("emergency_contact_name", editUser.emergency_contact_name);
       formData.append("emergency_contact_relation", editUser.emergency_contact_relation);
       formData.append("emergency_contact_phone", editUser.emergency_contact_phone);
-      formData.append("personal_email", editUser.personal_email);
       formData.append("email", editUser.email);
       formData.append("recovery_email", editUser.recovery_email);
       formData.append("department", finalDepartment || "");
@@ -276,17 +271,14 @@ function UserProfile() {
         }
       });
 
-      let url, method;
-      if (isOwnProfile) {
-        url = `${API_URL}/auth/update-profile`;
-        method = "POST";
-      } else {
-        url = `${API_URL}/users/${userId}`;
-        method = "PUT";
+      let url = isOwnProfile ? `${API_URL}/auth/update-profile` : `${API_URL}/users/${userId}`;
+
+      if (!isOwnProfile) {
+        formData.append('_method', 'PUT');
       }
 
       const res = await fetch(url, {
-        method,
+        method: "POST",
         headers: {
           Accept: "application/json",
           Authorization: `Bearer ${authToken()}`,
@@ -307,6 +299,7 @@ function UserProfile() {
       }
 
       notify.success("User updated successfully.");
+      publish('data:changed', { type: 'user', action: 'updated' });
 
       try {
         const profileRes = await fetch(`${API_URL}/users/${userId}/profile`, {
@@ -380,7 +373,7 @@ function UserProfile() {
                 </div>
                 <div className="profile-user-info">
                   <h2>{user.name}</h2>
-                  <span className="profile-designation">{user.designation || user.role === "team_lead" ? "Team Lead" : user.role.charAt(0).toUpperCase() + user.role.slice(1)}</span>
+                  <span className="profile-designation">{user.designation || normalizeRole(user.role)}</span>
                 </div>
               </div>
             </div>
@@ -499,9 +492,7 @@ function UserProfile() {
                 <div className="info-row">
                   <span className="info-label">Role</span>
                   <span className="info-value">
-                    {user.role === "team_lead"
-                      ? "Team Lead"
-                      : user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                    {normalizeRole(user.role)}
                   </span>
                 </div>
                 <div className="info-row">
@@ -565,7 +556,7 @@ function UserProfile() {
                     <span className="info-value">
                       {user[key] ? (
                         <a
-                          href={`${API_URL}/users/${userId}/documents/${key}`}
+                          href={`${API_URL}/users/${userId}/documents/${key}?token=${authToken()}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{ color: "#2563eb", textDecoration: "underline" }}
@@ -717,11 +708,6 @@ function UserProfile() {
                     <input type="email" id="edit-email" name="email" value={editUser.email} onChange={handleEditChange} placeholder="Enter email address" className={editErrors.email ? "field-error" : ""} />
                     {editErrors.email && <span className="field-error-text">{editErrors.email}</span>}
                   </div>
-                  <div className="form-row">
-                    <label htmlFor="edit-personal_email">Personal Email</label>
-                    <input type="email" id="edit-personal_email" name="personal_email" value={editUser.personal_email} onChange={handleEditChange} placeholder="Enter personal email" className={editErrors.personal_email ? "field-error" : ""} />
-                    {editErrors.personal_email && <span className="field-error-text">{editErrors.personal_email}</span>}
-                  </div>
                 </div>
 
                 {/* ===== Employment Details ===== */}
@@ -842,7 +828,7 @@ function UserProfile() {
                       <label htmlFor={`edit-${key}`}>{label}</label>
                       {user[key] && !editFiles[key] && (
                         <div style={{ marginBottom: 6, fontSize: 13, color: "#64748b" }}>
-                          Current: <a href={`${API_URL}/users/${userId}/documents/${key}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>View uploaded file</a>
+                          Current: <a href={`${API_URL}/users/${userId}/documents/${key}?token=${authToken()}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>View uploaded file</a>
                         </div>
                       )}
                       <input

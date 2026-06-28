@@ -6,7 +6,15 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Run the migrations.
+     */
     public function up(): void
+    {
+        Schema::dropIfExists('subtasks');
+    }
+
+    public function down(): void
     {
         Schema::create('subtasks', function (Blueprint $table) {
             $table->id();
@@ -19,12 +27,8 @@ return new class extends Migration
             $table->dateTime('end_date')->nullable();
             $table->foreignId('assigned_to')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('assigned_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->unsignedInteger('sort_order')->default(0);
             $table->timestamps();
         });
-    }
-
-    public function down(): void
-    {
-        Schema::dropIfExists('subtasks');
     }
 };

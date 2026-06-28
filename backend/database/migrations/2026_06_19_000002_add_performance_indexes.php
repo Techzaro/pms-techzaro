@@ -63,10 +63,6 @@ return new class extends Migration
         $this->addIndexIfMissing('team_user', ['team_id', 'user_id']);
         $this->addIndexIfMissing('project_visibility', ['project_id', 'user_id', 'is_visible'], 'idx_pvis_project_user_visible');
 
-        $this->addIndexIfMissing('subtasks', ['task_id']);
-        $this->addIndexIfMissing('subtasks', ['assigned_to']);
-        $this->addIndexIfMissing('subtasks', ['status']);
-
         $this->addIndexIfMissing('task_changes', ['task_id', 'is_viewed']);
         $this->addIndexIfMissing('project_changes', ['project_id', 'is_viewed']);
         $this->addIndexIfMissing('deliverable_changes', ['deliverable_id', 'is_viewed']);

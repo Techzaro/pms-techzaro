@@ -548,6 +548,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                   <CustomDateTimePicker
                     value={form.start_date}
                     onChange={(val) => setForm((prev) => ({ ...prev, start_date: val }))}
+                    min={new Date().toISOString()}
                   />
                 </div>
                 <div>
@@ -555,6 +556,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                   <CustomDateTimePicker
                     value={form.end_date}
                     onChange={(val) => setForm((prev) => ({ ...prev, end_date: val }))}
+                    min={new Date().toISOString()}
                   />
                 </div>
               </div>
@@ -620,6 +622,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                   <CustomDateTimePicker
                     value={deliverableInput.due_datetime}
                     onChange={(val) => setDeliverableInput((prev) => ({ ...prev, due_datetime: val }))}
+                    min={new Date().toISOString()}
                   />
                 </div>
               </div>

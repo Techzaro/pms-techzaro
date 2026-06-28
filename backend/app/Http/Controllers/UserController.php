@@ -13,13 +13,16 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Project;
 use App\Mail\UserCreated;
 use App\Mail\UserResigned;
+use App\Mail\UserProfileUpdated;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Laravel\Sanctum\PersonalAccessToken;
 
 /**
  * User management controller.
@@ -87,7 +90,6 @@ class UserController extends Controller
             'emergency_contact_name' => 'nullable|string|max:255',
             'emergency_contact_relation' => 'nullable|string|max:255',
             'emergency_contact_phone' => 'nullable|string|max:32',
-            'personal_email' => 'nullable|email|max:255',
             'recovery_email' => 'nullable|email|max:255',
             'department' => 'required|string|max:255',
             'designation' => 'required|string|max:255',
@@ -147,7 +149,6 @@ class UserController extends Controller
             'emergency_contact_phone' => $request->input('emergency_contact_phone'),
 
             // Emails
-            'personal_email' => $request->input('personal_email'),
             'recovery_email' => $request->input('recovery_email'),
 
             // Employment
@@ -224,7 +225,6 @@ class UserController extends Controller
             'emergency_contact_name' => 'nullable|string|max:255',
             'emergency_contact_relation' => 'nullable|string|max:255',
             'emergency_contact_phone' => 'nullable|string|max:32',
-            'personal_email' => 'nullable|email|max:255',
             'recovery_email' => 'nullable|email|max:255',
             'department' => 'sometimes|required|string|max:255',
             'designation' => 'sometimes|required|string|max:255',
@@ -282,12 +282,19 @@ class UserController extends Controller
             'father_name', 'id_card_number', 'phone_number',
             'present_address', 'permanent_address',
             'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
-            'personal_email', 'recovery_email',
+            'recovery_email',
             'department', 'designation', 'hired_for', 'employee_code',
             'job_started_date', 'job_ended_date',
             'gross_salary', 'applied_via',
             'bank_name', 'bank_account_number', 'bank_account_title',
         ];
+
+        $oldValues = [];
+        foreach ($fields as $field) {
+            if ($request->has($field)) {
+                $oldValues[$field] = $user->$field;
+            }
+        }
 
         foreach ($fields as $field) {
             if ($request->has($field)) {
@@ -309,6 +316,24 @@ class UserController extends Controller
         }
 
         $user->save();
+
+        $changes = [];
+        foreach ($oldValues as $field => $oldVal) {
+            $newVal = $user->$field;
+            $oldStr = $oldVal === null ? '' : (string) $oldVal;
+            $newStr = $newVal === null ? '' : (string) $newVal;
+            if ($oldStr !== $newStr) {
+                $changes[$field] = ['old' => $oldStr, 'new' => $newStr];
+            }
+        }
+
+        if (!empty($changes)) {
+            try {
+                Mail::to($user->email)->send(new UserProfileUpdated($user, $authUser->name, $changes));
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('Failed to send profile update email: ' . $e->getMessage());
+            }
+        }
 
         // Handle file uploads
         $this->handleFileUploads($request, $user);
@@ -502,7 +527,7 @@ class UserController extends Controller
                 'father_name', 'id_card_number', 'phone_number', 'contact_no',
                 'present_address', 'permanent_address', 'address',
                 'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
-                'personal_email', 'recovery_email',
+                'recovery_email',
                 'department', 'designation', 'hired_for', 'employee_code',
                 'job_started_date', 'job_ended_date',
                 'gross_salary', 'applied_via',
@@ -534,6 +559,10 @@ class UserController extends Controller
      */
     public function downloadDocument(Request $request, User $user, string $document)
     {
+        if (!$this->resolveAuth($request)) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
         if (!in_array($document, $this->documentFields)) {
             return response()->json(['success' => false, 'message' => 'Invalid document field.'], 404);
         }
@@ -550,15 +579,34 @@ class UserController extends Controller
             return response()->json(['success' => false, 'message' => 'File not found on disk.'], 404);
         }
 
-        $mimeType = mime_content_type($fullPath);
         $filename = basename($path);
 
-        return response()->file($fullPath, [
-            'Content-Type' => $mimeType,
-            'Content-Disposition' => ($request->query('action') === 'download')
-                ? 'attachment; filename="' . $filename . '"'
-                : 'inline; filename="' . $filename . '"',
-        ]);
+        if ($request->query('action') === 'download') {
+            return response()->download($fullPath, $filename);
+        }
+
+        return response()->file($fullPath);
+    }
+
+    /**
+     * Try to authenticate via Bearer token header or ?token= query param.
+     */
+    private function resolveAuth(Request $request): ?User
+    {
+        if ($request->user()) {
+            return $request->user();
+        }
+
+        $token = $request->query('token');
+        if ($token) {
+            $accessToken = PersonalAccessToken::findToken($token);
+            if ($accessToken) {
+                Auth::login($accessToken->tokenable);
+                return $accessToken->tokenable;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -618,6 +666,10 @@ class UserController extends Controller
      */
     public function downloadMyDocument(Request $request, string $document)
     {
+        if (!$this->resolveAuth($request)) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
         $user = $request->user();
 
         if (!in_array($document, $this->documentFields)) {
@@ -636,15 +688,13 @@ class UserController extends Controller
             return response()->json(['success' => false, 'message' => 'File not found on disk.'], 404);
         }
 
-        $mimeType = mime_content_type($fullPath);
         $filename = basename($path);
 
-        return response()->file($fullPath, [
-            'Content-Type' => $mimeType,
-            'Content-Disposition' => ($request->query('action') === 'download')
-                ? 'attachment; filename="' . $filename . '"'
-                : 'inline; filename="' . $filename . '"',
-        ]);
+        if ($request->query('action') === 'download') {
+            return response()->download($fullPath, $filename);
+        }
+
+        return response()->file($fullPath);
     }
 
     /**

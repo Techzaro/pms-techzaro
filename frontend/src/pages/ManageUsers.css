@@ -222,7 +222,8 @@
   color: #2563eb;
 }
 
-.role-team_lead {
+.role-team_lead,
+.role-teamlead {
   background: #faf5ff;
   color: #7c3aed;
 }

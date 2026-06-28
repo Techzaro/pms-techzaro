@@ -8,6 +8,7 @@ import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import { authToken, rolePath } from "../utils/auth";
 import SortableTableWrapper from "../components/SortableTableWrapper";
+import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
 import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal";
@@ -43,6 +44,9 @@ function SelfDeliveries() {
   const [timeFilter, setTimeFilter] = useState("");
   const [submitModal, setSubmitModal] = useState({ open: false, deliverable: null });
   const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
+  const [page, setPage] = useState(1);
+  const [showAll, setShowAll] = useState(false);
+  const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
     setOrderedDeliverables(deliverables);
@@ -66,7 +70,8 @@ function SelfDeliveries() {
     })
       .then((res) => (res.ok ? res.json() : { data: [] }))
       .then((data) => {
-        setDeliverables(data?.data || data || []);
+        const items = data?.data;
+        setDeliverables(Array.isArray(items) ? items : (Array.isArray(items?.data) ? items.data : []));
       })
       .catch(() => setDeliverables([]))
       .finally(() => setLoading(false));
@@ -80,6 +85,8 @@ function SelfDeliveries() {
 
   const selectStatusFilter = (filter) => {
     setStatusFilter(filter);
+    setShowAll(!filter);
+    setPage(1);
     if (filter) {
       setSearchParams({ status: filter });
     } else {
@@ -136,6 +143,11 @@ function SelfDeliveries() {
       )
     );
   };
+
+  const displayItems = orderedDeliverables.length ? orderedDeliverables : deliverables;
+
+  const totalPages = showAll ? 1 : Math.ceil(displayItems.length / ITEMS_PER_PAGE);
+  const paginatedItems = showAll ? displayItems : displayItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   const breadcrumbs = [
     { label: "Deliverables", path: rolePath("deliveries") },
@@ -199,7 +211,7 @@ function SelfDeliveries() {
           ) : deliverables.length === 0 ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
           ) : (
-            <SortableTableWrapper items={orderedDeliverables.length ? orderedDeliverables : deliverables} onReorder={handleDeliverableReorder} idKey="id" as="div">
+            <SortableTableWrapper items={paginatedItems} onReorder={handleDeliverableReorder} idKey="id" as="div">
               {(item, idx) => {
                 const colors = getRandomColors(item.id);
                 const canSubmit = item.status === "pending";
@@ -252,6 +264,10 @@ function SelfDeliveries() {
           )}
         </div>
       </div>
+
+      {!showAll && totalPages > 1 && (
+        <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+      )}
 
       <SubmitDeliverableModal
         key={`submit-${submitModal.deliverable?.id || "none"}`}

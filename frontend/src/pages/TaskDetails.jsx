@@ -9,7 +9,6 @@ import {
   FolderOpen,
   Pencil,
   Trash2,
-  Users,
 } from "lucide-react";
 import { IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
@@ -134,7 +133,6 @@ function TaskDetails() {
   const [noteInput, setNoteInput] = useState("");
   const [notes, setNotes] = useState([]);
   const [noteSaving, setNoteSaving] = useState(false);
-  const [orderedSubtasks, setOrderedSubtasks] = useState([]);
   const [orderedDeliverables, setOrderedDeliverables] = useState([]);
 
   const source = sourcePages[location.state?.from] || null;
@@ -185,22 +183,8 @@ function TaskDetails() {
       : null;
 
   useEffect(() => {
-    setOrderedSubtasks(task?.subtasks || []);
-  }, [task?.subtasks]);
-
-  useEffect(() => {
     setOrderedDeliverables(task?.deliverables || []);
   }, [task?.deliverables]);
-
-  const handleSubtaskReorder = useCallback((reordered) => {
-    setOrderedSubtasks(reordered);
-    const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
-    fetch(`${API_URL}/subtasks/reorder`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken()}` },
-      body: JSON.stringify({ items: payload }),
-    }).catch(() => {});
-  }, []);
 
   const handleDeliverableReorder = useCallback((reordered) => {
     setOrderedDeliverables(reordered);
@@ -227,7 +211,6 @@ function TaskDetails() {
   };
   const assignees = task?.assignees || [];
   const assigner = task?.assigner;
-  const subtasks = task?.subtasks || [];
   const project = task?.project;
   const files = task?.files || [];
   const progress = typeof task?.deliverables_progress === "number" ? task.deliverables_progress : 0;
@@ -326,7 +309,14 @@ function TaskDetails() {
 
   const handleTaskActionSuccess = (updatedTask) => {
     setTask((prev) => ({ ...prev, ...updatedTask }));
-    notify.success("Task updated successfully.");
+    const statusMessages = {
+      submitted: "Task submitted successfully.",
+      approved: "Task approved successfully.",
+      rejected: "Task rejected.",
+      reopened: "Task reopened successfully.",
+    };
+    const msg = statusMessages[updatedTask?.status] || "Task updated successfully.";
+    notify.success(msg);
     publish('task:updated', updatedTask);
     publish('data:changed', { type: 'task', action: 'updated' });
   };
@@ -456,13 +446,6 @@ function TaskDetails() {
                 </div>
                 <div className="td-stat td-stat--trio">
                   <div className="td-trio-item">
-                    <div className="td-stat-ic td-stat-ic--blue"><Users size={18} /></div>
-                    <div>
-                      <span className="td-stat-big">{subtasks.length}</span>
-                      <span className="td-stat-label">Subtasks</span>
-                    </div>
-                  </div>
-                  <div className="td-trio-item">
                     <div className="td-stat-ic td-stat-ic--orange"><FolderOpen size={18} /></div>
                     <div>
                       <span className="td-stat-big">{files.length}</span>
@@ -503,7 +486,6 @@ function TaskDetails() {
                   {[
                     { id: "deliverables", label: "Deliverables", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg> },
                     { id: "overview", label: "Overview", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
-                    { id: "subtasks", label: "Subtasks", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="14" height="14" rx="2" /><path d="M9 3v4M14 3v4" /><path d="M9 12l2 2 4-4" /></svg> },
                     { id: "files", label: "Files", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg> },
                   ].map(({ id, label, icon }) => (
                     <button key={id} className={`td-tab ${tab === id ? "td-tab--on" : ""}`} onClick={() => setTab(id)}>
@@ -540,68 +522,6 @@ function TaskDetails() {
                           </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-
-                  {tab === "subtasks" && (
-                    <div>
-                      <div className="td-section-header">
-                        <h2 className="td-section-title">Subtasks</h2>
-                      </div>
-                      {(orderedSubtasks.length === 0 && (task.subtasks || []).length === 0) ? (
-                        <p className="td-empty">No subtasks for this task.</p>
-                      ) : (
-                        <table className="td-table">
-                          <thead>
-                            <tr>
-                              <th style={{ width: "35%", textAlign: "left" }}>Task</th>
-                              <th style={{ width: "25%", textAlign: "left" }}>Assignee</th>
-                              <th style={{ width: "20%", textAlign: "center" }}>Status</th>
-                              <th style={{ width: "20%", textAlign: "center" }}>Due Date</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <SortableTableWrapper
-                              items={orderedSubtasks.length ? orderedSubtasks : subtasks}
-                              onReorder={handleSubtaskReorder}
-                            >
-                              {(t) => (
-                                <>
-                                  <td style={{ width: "35%", textAlign: "left" }}>
-                                    <div className="td-task-name">{t.title}</div>
-                                    {t.description && <div className="td-task-sub">{t.description}</div>}
-                                  </td>
-                                  <td style={{ width: "25%", textAlign: "left" }}>
-                                    <div className="td-assignee">
-                                      <div className="td-avatar">{initials(t.assignee?.name)}</div>
-                                      <div>
-                                        <div className="td-assignee-name">{t.assignee?.name || "—"}</div>
-                                        <div className="td-assignee-role">Member</div>
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td style={{ width: "20%", textAlign: "center" }}>
-                                    <span
-                                      className="td-pill"
-                                      style={{
-                                        background: statusBgColor(t.status),
-                                        color: statusColor(t.status),
-                                      }}
-                                    >
-                                      <span
-                                        className="td-pill-dot"
-                                        style={{ background: statusColor(t.status) }}
-                                      />
-                                      {statusLabel(t.status)}
-                                    </span>
-                                  </td>
-                                  <td style={{ width: "20%", textAlign: "center", whiteSpace: "pre-line" }} className="td-date">{formatDateTime(t.end_date)}</td>
-                                </>
-                              )}
-                            </SortableTableWrapper>
-                          </tbody>
-                        </table>
-                      )}
                     </div>
                   )}
 

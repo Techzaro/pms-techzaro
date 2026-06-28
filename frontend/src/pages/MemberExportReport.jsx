@@ -125,7 +125,11 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
   const genDate = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const genTime = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
   const genBy = user.name || "Admin";
-  const roleDisplay = user.role ? (user.role.charAt(0).toUpperCase() + user.role.slice(1).replace("_", " ")) : "Member";
+  const roleDisplay = user.role
+    ? user.role === "team_lead" || user.role === "teamlead"
+      ? "Team Lead"
+      : user.role.charAt(0).toUpperCase() + user.role.slice(1)
+    : "Member";
   const empId = user.employee_id || "EMP-" + String(user.id || 0).padStart(4, "0");
 
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];

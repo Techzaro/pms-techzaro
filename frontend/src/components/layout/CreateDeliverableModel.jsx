@@ -172,6 +172,7 @@ const CreateDeliverableTask = ({ onClose }) => {
                     value={form.start_date}
                     onChange={(val) => setForm((p) => ({ ...p, start_date: val }))}
                     dateOnly
+                    min={new Date().toISOString()}
                   />
                 </div>
 
@@ -182,6 +183,7 @@ const CreateDeliverableTask = ({ onClose }) => {
                     value={form.due_date}
                     onChange={(val) => setForm((p) => ({ ...p, due_date: val }))}
                     dateOnly
+                    min={new Date().toISOString()}
                   />
                 </div>
 

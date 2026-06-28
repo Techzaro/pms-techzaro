@@ -34,7 +34,6 @@ class TaskResource extends JsonResource
             'project' => ProjectMinResource::make($this->whenLoaded('project')),
             'assignees' => UserMinResource::collection($this->whenLoaded('assignees')),
             'assigner' => UserMinResource::make($this->whenLoaded('assigner')),
-            'subtasks' => $this->whenLoaded('subtasks'),
             'files' => $this->whenLoaded('files'),
             'submissions' => $this->whenLoaded('submissions'),
             'latest_submission' => SubmissionResource::make($this->whenLoaded('latestSubmission')),

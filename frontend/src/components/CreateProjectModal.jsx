@@ -636,6 +636,7 @@ const CreateProjectModal = ({ onClose }) => {
                   <CustomDateTimePicker
                     value={phaseDate}
                     onChange={setPhaseDate}
+                    min={new Date().toISOString()}
                   />
                 </div>
               </div>
@@ -700,6 +701,7 @@ const CreateProjectModal = ({ onClose }) => {
                   <CustomDateTimePicker
                     value={deliverableProjInput.due_datetime}
                     onChange={(val) => setDeliverableProjInput((prev) => ({ ...prev, due_datetime: val }))}
+                    min={new Date().toISOString()}
                   />
                 </div>
               </div>

@@ -31,7 +31,13 @@ class NotificationService
         });
 
         if (!empty($filtered)) {
-            Notification::insert(array_values($filtered));
+            $now = now()->toDateTimeString();
+            $data = array_values(array_map(function ($n) use ($now) {
+                $n['created_at'] = $n['created_at'] ?? $now;
+                $n['updated_at'] = $n['updated_at'] ?? $now;
+                return $n;
+            }, $filtered));
+            Notification::insert($data);
         }
     }
 

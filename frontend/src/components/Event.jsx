@@ -273,6 +273,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
                 type="date"
                 className="event-input"
                 value={formData.startDate}
+                min={getLocalDateStr(new Date())}
                 onChange={(e) => handleChange("startDate", e.target.value)}
               />
               {!formData.allDay && (
@@ -323,6 +324,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
                   type="date"
                   className="event-input"
                   value={formData.endDate}
+                  min={formData.startDate || getLocalDateStr(new Date())}
                   onChange={(e) => handleChange("endDate", e.target.value)}
                 />
                 {!formData.allDay && (

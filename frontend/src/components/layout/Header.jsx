@@ -3,7 +3,7 @@ import { MdKeyboardArrowDown, MdNotifications } from "react-icons/md";
 import { Link, useNavigate } from "react-router-dom";
 
 import API_URL from "../../config/api";
-import { authToken, getCurrentRole, getUser, setUser, rolePath } from "../../utils/auth";
+import { authToken, getCurrentRole, getUser, setUser, rolePath, normalizeRole } from "../../utils/auth";
 import { subscribe } from "../../utils/eventBus";
 import { requestNotificationPermission, showBrowserNotification } from "../../utils/browserNotification";
 import { initFirebase } from "../../utils/firebase";
@@ -450,7 +450,7 @@ function Header() {
 
               <h6>{user.name}</h6>
 
-              <span>{user.role}</span>
+              <span>{normalizeRole(user.role)}</span>
 
             </div>
 
@@ -499,7 +499,7 @@ function Header() {
                   <span>Role</span>
 
                   <strong>
-                    {user.role}
+                    {normalizeRole(user.role)}
                   </strong>
                 </div>
 

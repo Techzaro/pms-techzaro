@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import "../components/layout/DashboardLayout.css";
-import { getUser, getCurrentRole, rolePath } from "../utils/auth";
+import { getUser, getCurrentRole, rolePath, normalizeRole } from "../utils/auth";
 import { timeAgo } from "../utils/formatDateTime";
 import { useApiQuery } from "../hooks/useApi";
 import { useRelativeTime } from "../hooks/useRelativeTime";
@@ -27,9 +27,7 @@ const getProgressColor = (percent) => {
 };
 
 const getRoleLabel = (role) => {
-  if (role === "member") return "Member";
-  if (role === "team_lead") return "Team Lead";
-  return role ? role.charAt(0).toUpperCase() + role.slice(1) : "User";
+  return role ? normalizeRole(role) : "User";
 };
 
 const SummaryCard = memo(function SummaryCard({ card, onClick }) {

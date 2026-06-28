@@ -12,9 +12,11 @@ use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\ActivityService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class DeliverableController extends Controller
 {
@@ -43,7 +45,7 @@ class DeliverableController extends Controller
 
         $query->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()));
 
-        $deliverables = $query->latest()->filter($filters)->paginate(15);
+        $deliverables = $query->orderBy('sort_order', 'asc')->filter($filters)->get();
 
         // Bulk has_submitted query
         $deliverableIds = $deliverables->pluck('id');
@@ -55,12 +57,15 @@ class DeliverableController extends Controller
                 ->toArray();
         }
 
-        $deliverables->getCollection()->transform(function ($deliverable) use ($submittedIds) {
+        $deliverables->transform(function ($deliverable) use ($submittedIds) {
             $deliverable->has_submitted = in_array($deliverable->id, $submittedIds);
             return $deliverable;
         });
 
         return response()->json(['success' => true, 'data' => $deliverables]);
+    }
+
+    public function assignedByMe(Request $request)
     {
         $user = $request->user();
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
@@ -87,7 +92,7 @@ class DeliverableController extends Controller
         $query->whereColumn('created_by', '!=', 'assigned_to');
         $query->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()));
 
-        return response()->json(['success' => true, 'data' => $query->orderBy('sort_order')->orderBy('id')->filter($filters)->paginate(15)]);
+        return response()->json(['success' => true, 'data' => $query->orderBy('sort_order')->orderBy('id')->filter($filters)->get()]);
     }
 
     public function mySelfDeliverables(Request $request)
@@ -107,10 +112,14 @@ class DeliverableController extends Controller
             ->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()))
             ->orderBy('sort_order')->orderBy('id')
             ->filter($filters)
-            ->paginate(15);
+            ->get();
 
         return response()->json(['success' => true, 'data' => $deliverables]);
+    }
+
+    public function show(Request $request, $id)
     {
+        $deliverable = Deliverable::findOrFail($id);
         $user = request()->user();
         $isCreator = $deliverable->created_by === $user->id;
         $isAssignee = $deliverable->assigned_to === $user->id;
@@ -134,6 +143,9 @@ class DeliverableController extends Controller
         $payload['unviewed_changes_count'] = $deliverable->unviewedChanges->count();
 
         return response()->json(['success' => true, 'deliverable' => $payload]);
+    }
+
+    public function store(Request $request, Project $project)
     {
         $validated = $request->validate([
             'title' => 'required|string|max:255', 'description' => 'nullable|string',
@@ -547,6 +559,9 @@ class DeliverableController extends Controller
         $submission = DeliverableSubmission::where('deliverable_id', $deliverable->id)
             ->with(['submittedBy:id,name,email', 'attachments'])->latest()->first();
         return response()->json(['success' => true, 'submission' => $submission]);
+    }
+
+    public function markChangesRead(Request $request, Deliverable $deliverable)
     {
         $deliverable->changes()->where('is_viewed', false)->update(['is_viewed' => true]);
         return response()->json(['success' => true, 'message' => 'Changes marked as read']);
@@ -554,7 +569,7 @@ class DeliverableController extends Controller
 
     public function downloadAttachment(Request $request, SubmissionAttachment $attachment)
     {
-        $user = $request->user();
+        $user = $this->resolveDocAuth($request);
         if (!$user) return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
         if ($attachment->attachment_type === 'link') return redirect($attachment->url);
         if (!$attachment->file_path) return response()->json(['success' => false, 'message' => 'File not found'], 404);
@@ -563,13 +578,12 @@ class DeliverableController extends Controller
         if (!file_exists($fullPath)) return response()->json(['success' => false, 'message' => 'File not found on disk'], 404);
 
         $filename = $attachment->original_name ?? basename($attachment->file_path);
-        $mimeType = mime_content_type($fullPath) ?: 'application/octet-stream';
 
-        if (str_starts_with($mimeType, 'image/') && $request->query('action') !== 'download') {
-            return response()->file($fullPath, ['Content-Type' => $mimeType, 'Content-Disposition' => 'inline; filename="' . $filename . '"', 'Cache-Control' => 'public, max-age=3600']);
+        if ($request->query('action') === 'download') {
+            return response()->download($fullPath, $filename);
         }
 
-        return response()->file($fullPath, ['Content-Type' => $mimeType, 'Content-Disposition' => 'attachment; filename="' . $filename . '"']);
+        return response()->file($fullPath, ['Cache-Control' => 'public, max-age=3600']);
     }
 
     public function reorder(Request $request)
@@ -632,4 +646,20 @@ class DeliverableController extends Controller
     }
 
     private function dueTodayExcludedStatuses(): array { return ['approved']; }
+
+    private function resolveDocAuth(Request $request): ?User
+    {
+        if ($request->user()) return $request->user();
+
+        $token = $request->query('token');
+        if ($token) {
+            $accessToken = PersonalAccessToken::findToken($token);
+            if ($accessToken) {
+                Auth::login($accessToken->tokenable);
+                return $accessToken->tokenable;
+            }
+        }
+
+        return null;
+    }
 }

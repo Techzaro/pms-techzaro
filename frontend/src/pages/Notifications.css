@@ -149,6 +149,10 @@
   gap: 10px;
 }
 
+.notif-gap {
+  height: 16px;
+}
+
 .notif-tabs {
   display: flex;
   gap: 4px;

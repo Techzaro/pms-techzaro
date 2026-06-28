@@ -9,6 +9,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
 import CreateTaskModal from "../components/CreateTaskModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
+import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
 import { formatDateOnly, formatDateTime } from "../utils/formatDateTime";
@@ -58,6 +59,9 @@ const Taskby = () => {
   });
   const [timeFilter, setTimeFilter] = useState("");
   const [orderedItems, setOrderedItems] = useState([]);
+  const [page, setPage] = useState(1);
+  const [showAll, setShowAll] = useState(false);
+  const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -116,6 +120,8 @@ const Taskby = () => {
 
   const selectStatusFilter = (filter) => {
     setStatusFilter(filter);
+    setShowAll(!filter);
+    setPage(1);
     if (filter) {
       setSearchParams({ status: filter });
     } else {
@@ -192,6 +198,10 @@ const Taskby = () => {
   });
 
   const taskIdList = filteredItems.filter((i) => i.item_type !== "project").map((i) => i.id);
+
+  const showAllItems = showAll;
+  const totalPages = showAllItems ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
+  const paginatedItems = showAllItems ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   const breadcrumbs = [
     { label: "Tasks", path: rolePath("tasks") },
@@ -298,7 +308,7 @@ const Taskby = () => {
         ) : (
           <div className="sortable-table-container">
             <SortableTableWrapper
-              items={filteredItems.map((i, index) => ({
+              items={paginatedItems.map((i, index) => ({
                 ...i,
                 sortableId: `${i.item_type}-${i.id}-${index}`
               }))}
@@ -476,6 +486,10 @@ const Taskby = () => {
               }}
             </SortableTableWrapper>
           </div>
+        )}
+
+        {!showAllItems && totalPages > 1 && (
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
         )}
       </div>
     </DashboardLayout>

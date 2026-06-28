@@ -48,9 +48,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // Update own profile (any authenticated user)
     Route::post('/auth/update-profile', [AuthController::class, 'updateProfile']);
 
-    // Download own documents (any authenticated user)
-    Route::get('/auth/my-documents/{document}', [UserController::class, 'downloadMyDocument']);
-
     // Change password
     Route::put('/user/change-password', [AuthController::class, 'changePassword']);
 
@@ -73,7 +70,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
         Route::put('/users/{user}/resign', [UserController::class, 'resign']);
         Route::get('/users/{id}/profile', [UserController::class, 'profile']);
-        Route::get('/users/{user}/documents/{document}', [UserController::class, 'downloadDocument']);
         Route::post('/test-email', [UserController::class, 'testEmail']);
         Route::post('/users/reorder', [UserController::class, 'reorder']);
     });
@@ -156,12 +152,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/projects/{project}/reject', [ProjectController::class, 'reject']);
     Route::post('/projects/{project}/reopen', [ProjectController::class, 'reopen']);
 
-    // Subtask creation under a parent task
-    Route::post('/tasks/{task}/subtasks', [TaskController::class, 'storeSubtask']);
-
     // Task reordering
     Route::post('/tasks/reorder', [TaskController::class, 'reorderTasks']);
-    Route::post('/subtasks/reorder', [TaskController::class, 'reorderSubtasks']);
 
     // Mark task changes as read
     Route::post('/tasks/{task}/changes/mark-read', [TaskController::class, 'markChangesRead']);
@@ -272,5 +264,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 });
 
-// Download route outside auth:sanctum so <a> tags can access it with token query param
+// Document routes outside auth:sanctum so <a> tags can access them with ?token= query param
 Route::get('/deliverables/attachment/{attachment}/download', [DeliverableController::class, 'downloadAttachment']);
+Route::get('/auth/my-documents/{document}', [UserController::class, 'downloadMyDocument']);
+Route::get('/users/{user}/documents/{document}', [UserController::class, 'downloadDocument']);

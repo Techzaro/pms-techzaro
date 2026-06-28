@@ -4,7 +4,7 @@ import { MdEdit } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
-import { authToken, getCurrentRole } from "../utils/auth";
+import { authToken, getCurrentRole, normalizeRole } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import "./UserProfile.css";
 
@@ -157,9 +157,7 @@ function MyProfile() {
 
   const { user, account } = profileData;
 
-  const roleDisplay = user.role === "team_lead"
-    ? "Team Lead"
-    : user.role.charAt(0).toUpperCase() + user.role.slice(1);
+  const roleDisplay = normalizeRole(user.role);
 
   const breadcrumbs = [
     { label: "Profile" },
@@ -310,12 +308,12 @@ function MyProfile() {
                     <span className="info-value">
                       {user[key] ? (
                         <a
-                          href={`${API_URL}/auth/my-documents/${key}`}
+                          href={`${API_URL}/auth/my-documents/${key}?token=${authToken()}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{ color: "#4f6ef7", textDecoration: "underline" }}
                         >
-                          View Document
+                          View File
                         </a>
                       ) : (
                         "---"

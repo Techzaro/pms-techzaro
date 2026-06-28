@@ -10,6 +10,7 @@ import API_URL from "../config/api";
 import AssignerViewModal from "../components/AssignerViewModal";
 import { formatDateTime } from "../utils/formatDateTime";
 import SortableTableWrapper from "../components/SortableTableWrapper";
+import Pagination from "../components/Pagination";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
 
@@ -42,6 +43,9 @@ function DeliveriesByYou() {
   });
   const [timeFilter, setTimeFilter] = useState("");
   const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
+  const [page, setPage] = useState(1);
+  const [showAll, setShowAll] = useState(false);
+  const ITEMS_PER_PAGE = 10;
 
   const fetchDeliverables = () => {
     setLoading(true);
@@ -56,7 +60,8 @@ function DeliveriesByYou() {
     })
       .then((res) => (res.ok ? res.json() : { data: [] }))
       .then((data) => {
-        setDeliverables(data?.data || data || []);
+        const items = data?.data;
+        setDeliverables(Array.isArray(items) ? items : (Array.isArray(items?.data) ? items.data : []));
       })
       .catch(() => setDeliverables([]))
       .finally(() => setLoading(false));
@@ -102,6 +107,8 @@ function DeliveriesByYou() {
 
   const selectStatusFilter = (filter) => {
     setStatusFilter(filter);
+    setShowAll(!filter);
+    setPage(1);
     if (filter) {
       setSearchParams({ status: filter });
     } else {
@@ -159,6 +166,9 @@ function DeliveriesByYou() {
   };
 
   const displayItems = orderedDeliverables.length ? orderedDeliverables : deliverables;
+
+  const totalPages = showAll ? 1 : Math.ceil(displayItems.length / ITEMS_PER_PAGE);
+  const paginatedItems = showAll ? displayItems : displayItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   const breadcrumbs = [
     { label: "Deliverables", path: rolePath("deliveries") },
@@ -228,10 +238,11 @@ function DeliveriesByYou() {
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
           ) : (
             <div className="sortable-table-container">
-              {displayItems.map((item, index) => {
+              <SortableTableWrapper items={paginatedItems} onReorder={handleDeliverableReorder} as="div">
+              {(item, index) => {
                 const colors = getRandomColors(item.id);
                 return (
-                  <div key={`deliverable-${item.id}-${index}`} className="deliveries-table-row">
+                  <div className="deliveries-table-row" key={`deliverable-${item.id}-${index}`}>
                     <div>
                       <div className="user-box">
                         <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
@@ -287,11 +298,16 @@ function DeliveriesByYou() {
                     </div>
                   </div>
                 );
-              })}
+              }}
+              </SortableTableWrapper>
             </div>
           )}
         </div>
       </div>
+
+      {!showAll && totalPages > 1 && (
+        <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+      )}
 
       <AssignerViewModal
         key={`avm-${viewModal.deliverable?.id || "none"}`}

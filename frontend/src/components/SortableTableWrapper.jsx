@@ -37,13 +37,13 @@ export default function SortableTableWrapper({
   overlayRender,
   disabled = false,
 }) {
-  const [localItems, setLocalItems] = useState(externalItems || []);
+  const [localItems, setLocalItems] = useState(Array.isArray(externalItems) ? externalItems : []);
   const [activeId, setActiveId] = useState(null);
   const localRef = useRef(localItems);
   localRef.current = localItems;
 
   useEffect(() => {
-    setLocalItems(externalItems || []);
+    setLocalItems(Array.isArray(externalItems) ? externalItems : []);
   }, [externalItems]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));

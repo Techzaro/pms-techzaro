@@ -137,3 +137,11 @@ export function rolePath(page = "") {
 export function getUrlRole() {
   return ROLE_URL_MAP[getCurrentRole()] || "member";
 }
+
+/* ───── role display normalization ───── */
+
+export function normalizeRole(role) {
+  if (!role) return "";
+  if (role === "team_lead" || role === "teamlead") return "Team Lead";
+  return role.charAt(0).toUpperCase() + role.slice(1);
+}

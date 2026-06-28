@@ -13,6 +13,7 @@ import SubmitProjectModal from "../components/SubmitProjectModal";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal"; // Added missing import
 import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal"; // Added missing import
 import SortableTableWrapper from "../components/SortableTableWrapper";
+import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
 import { formatDateTime } from "../utils/formatDateTime";
@@ -62,9 +63,14 @@ const SelfTasks = () => {
   const [statusFilter, setStatusFilter] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
   const [orderedItems, setOrderedItems] = useState([]);
+  const [page, setPage] = useState(1);
+  const [showAll, setShowAll] = useState(false);
+  const ITEMS_PER_PAGE = 10;
 
   const selectStatusFilter = (filter) => {
     setStatusFilter(filter);
+    setShowAll(!filter);
+    setPage(1);
   };
 
   useEffect(() => {
@@ -177,6 +183,9 @@ const SelfTasks = () => {
 
   const taskIdList = filteredItems.filter((i) => i.item_type !== "project").map((i) => i.id);
 
+  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
+  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
   const breadcrumbs = [
     { label: "Tasks", path: rolePath("tasks") },
     { label: "Self Tasks" },
@@ -272,7 +281,7 @@ const SelfTasks = () => {
         ) : (
           <SortableTableWrapper 
             as="div" 
-            items={filteredItems.map((i) => ({ ...i, sortableId: `${i.item_type}-${i.id}` }))} 
+            items={paginatedItems.map((i) => ({ ...i, sortableId: `${i.item_type}-${i.id}` }))} 
             onReorder={(reordered) => handleTaskReorder(reordered)} 
             idKey="sortableId"
           >
@@ -358,6 +367,10 @@ const SelfTasks = () => {
           </SortableTableWrapper>
         )}
       </div>
+
+      {!showAll && totalPages > 1 && (
+        <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+      )}
 
       {/* Modals */}
       {showProjectSubmitModal.open && (
