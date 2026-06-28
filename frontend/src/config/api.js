@@ -23,7 +23,7 @@ window.fetch = async function (...args) {
 
     if (!config._notifHandled && res.status !== 204) {
       const url = typeof resource === "string" ? resource : resource?.url || "";
-      const isApiCall = url.includes("/api") || url.includes("techxaro.com");
+      const isApiCall = url.includes("/api") || (API_URL && url.includes(API_URL));
       if (isApiCall) {
         try {
           const clone = res.clone();
