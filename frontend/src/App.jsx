@@ -51,6 +51,7 @@ function App() {
           <Route path="/:role/tasks/task-details/:taskId" element={<ProtectedRoute><TaskDetails /></ProtectedRoute>} />
           <Route path="/:role/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
           <Route path="/:role/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+          <Route path="/:role/team-members-report" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/:role/manage-users" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><ManageUsers /></RoleProtectedRoute>} />
           <Route path="/:role/manage-users/user-profile/:userId" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><UserProfile /></RoleProtectedRoute>} />
           <Route path="/:role/my-profile" element={<ProtectedRoute><MyProfile /></ProtectedRoute>} />

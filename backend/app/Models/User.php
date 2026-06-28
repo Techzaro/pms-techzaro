@@ -46,7 +46,6 @@ class User extends Authenticatable
 
         // Emails
         'personal_email',
-        'professional_email_password',
         'recovery_email',
 
         // Employment details
@@ -76,7 +75,6 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
-        'professional_email_password',
     ];
 
     protected $casts = [

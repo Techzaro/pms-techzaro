@@ -1,7 +1,18 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import CustomSelect from "../CustomSelect";
+import CustomDateTimePicker from "../CustomDateTimePicker";
 import "../layout/CreateDeliverableModel.css";
 
 const CreateDeliverableTask = ({ onClose }) => {
+  const [form, setForm] = useState({
+    task: "",
+    assign_to: "",
+    status: "Pending",
+    priority: "Medium",
+    start_date: "",
+    due_date: "",
+  });
+
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: true } }));
     return () => window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: false } }));
@@ -54,11 +65,14 @@ const CreateDeliverableTask = ({ onClose }) => {
                   Deliverable Task
                 </label>
 
-                <select>
-                  <option>
-                    Select Task
-                  </option>
-                </select>
+                <CustomSelect
+                  value={form.task}
+                  onChange={(val) => setForm((p) => ({ ...p, task: val }))}
+                  placeholder="Select Task"
+                  options={[
+                    { value: "", label: "Select Task" },
+                  ]}
+                />
 
               </div>
 
@@ -68,15 +82,14 @@ const CreateDeliverableTask = ({ onClose }) => {
                   Assign To <span>*</span>
                 </label>
 
-                <select>
-                  <option>
-                    Select user(s)
-                  </option>
-                </select>
-
-                <small>
-                  Hold Ctrl/Cmd to select multiple
-                </small>
+                <CustomSelect
+                  value={form.assign_to}
+                  onChange={(val) => setForm((p) => ({ ...p, assign_to: val }))}
+                  placeholder="Select user(s)"
+                  options={[
+                    { value: "", label: "Select user(s)" },
+                  ]}
+                />
 
               </div>
 
@@ -108,25 +121,17 @@ const CreateDeliverableTask = ({ onClose }) => {
                 Status
               </label>
 
-              <select>
-                <option>
-                  Pending
-                </option>
-
-                <option>
-                  In Progress
-                </option>
-
-                <option>
-                  Completed
-                </option>
-                <option>
-                  Abandoned
-                </option>
-                <option>
-                  Failed
-                </option>
-              </select>
+              <CustomSelect
+                value={form.status}
+                onChange={(val) => setForm((p) => ({ ...p, status: val }))}
+                options={[
+                  { value: "Pending", label: "Pending" },
+                  { value: "In Progress", label: "In Progress" },
+                  { value: "Completed", label: "Completed" },
+                  { value: "Abandoned", label: "Abandoned" },
+                  { value: "Failed", label: "Failed" },
+                ]}
+              />
 
             </div>
 
@@ -138,19 +143,15 @@ const CreateDeliverableTask = ({ onClose }) => {
                 Priority
               </label>
 
-              <select>
-                <option>
-                  Medium
-                </option>
-
-                <option>
-                  Low
-                </option>
-
-                <option>
-                  High
-                </option>
-              </select>
+              <CustomSelect
+                value={form.priority}
+                onChange={(val) => setForm((p) => ({ ...p, priority: val }))}
+                options={[
+                  { value: "Medium", label: "Medium" },
+                  { value: "Low", label: "Low" },
+                  { value: "High", label: "High" },
+                ]}
+              />
 
             </div>
 
@@ -167,13 +168,21 @@ const CreateDeliverableTask = ({ onClose }) => {
                 <div>
                   <span>Start Date</span>
 
-                  <input type="date" />
+                  <CustomDateTimePicker
+                    value={form.start_date}
+                    onChange={(val) => setForm((p) => ({ ...p, start_date: val }))}
+                    dateOnly
+                  />
                 </div>
 
                 <div>
                   <span>Due Date</span>
 
-                  <input type="date" />
+                  <CustomDateTimePicker
+                    value={form.due_date}
+                    onChange={(val) => setForm((p) => ({ ...p, due_date: val }))}
+                    dateOnly
+                  />
                 </div>
 
               </div>

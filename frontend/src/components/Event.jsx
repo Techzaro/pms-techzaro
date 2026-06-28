@@ -4,6 +4,7 @@ import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
 import UserSelectDropdown from "./UserSelectDropdown";
 import { publish } from "../utils/eventBus";
+import { notify } from "../utils/notify";
 import "./Event.css";
 
 const TYPE_MAP = {
@@ -48,7 +49,6 @@ const COLOR_MAP = {
 function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [users, setUsers] = useState([]);
   const [assignedUserIds, setAssignedUserIds] = useState([]);
   const [isGlobal, setIsGlobal] = useState(false);
@@ -106,7 +106,6 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
       setIsGlobal(false);
     }
     setStep(1);
-    setError("");
   }, [editEvent, isOpen]);
 
   useEffect(() => {
@@ -117,8 +116,8 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       skipLoader: true,
     })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setUsers(Array.isArray(data) ? data : []))
+      .then((res) => (res.ok ? res.json() : { users: [] }))
+      .then((data) => setUsers(Array.isArray(data) ? data : (data.users || [])))
       .catch(() => setUsers([]));
   }, [isOpen]);
 
@@ -152,18 +151,16 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
   const handleBack = () => setStep(1);
   const handleCancel = () => {
     setStep(1);
-    setError("");
     onClose();
   };
 
   const handleCreate = async () => {
     if (!formData.title.trim()) {
-      setError("Event title is required");
+      notify.error("Event title is required");
       return;
     }
 
     setLoading(true);
-    setError("");
 
     const startDateTime = formData.startDate + "T" + (formData.allDay ? "00:00" : formData.startTime) + ":00";
 
@@ -198,6 +195,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
+        _notifHandled: true,
       });
 
       const data = await res.json();
@@ -207,7 +205,6 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
       }
 
       setStep(1);
-      setError("");
       if (isEditing) {
         publish('event:updated', data.event || data);
         publish('data:changed', { type: 'event', action: 'updated' });
@@ -218,7 +215,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
       onEventCreated?.(data.event);
       onClose();
     } catch (err) {
-      setError(err.message || "Something went wrong");
+      notify.error(err.message || "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -234,20 +231,6 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
           <h2>{isEditing ? "Edit Event" : "Add New Event"}</h2>
           <button className="event-close" onClick={handleCancel}>×</button>
         </div>
-
-        {error && (
-          <div style={{
-            margin: "0 24px",
-            padding: "10px 14px",
-            background: "#FEF2F2",
-            color: "#B91C1C",
-            borderRadius: 8,
-            fontSize: 13,
-            fontWeight: 500,
-          }}>
-            {error}
-          </div>
-        )}
 
         {step === 1 && (
           <div className="event-step">

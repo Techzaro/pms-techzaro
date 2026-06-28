@@ -81,7 +81,7 @@
 .login-box input[type="password"] {
   width: 100%;
   padding: 14px 16px;
-  margin-bottom: 18px;
+  margin-bottom: 6px;
   border: 1px solid #dfe4ea;
   border-radius: 10px;
   font-size: 15px;
@@ -89,6 +89,29 @@
   transition: 0.3s;
   background: #f1f2f6;
   color: #2f3542;
+}
+
+.login-box input[type="email"].field-error,
+.login-box input[type="password"].field-error {
+  border-color: #e74c3c;
+}
+
+.field-error-text {
+  display: block;
+  color: #e74c3c;
+  font-size: 13px;
+  margin-bottom: 12px;
+  margin-top: -2px;
+}
+
+.field-error-text.form-error {
+  color: #e74c3c;
+  background: #fdeaea;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  text-align: center;
 }
 
 .login-box input[type="email"]:focus,

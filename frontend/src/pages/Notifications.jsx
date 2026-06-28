@@ -281,24 +281,25 @@ function Notifications() {
   return (
     <DashboardLayout hideRightSidebar={true}>
       <div className="notif-layout">
-        <div className="notif-page">
-          {/* Header */}
-          <div className="notif-header">
-            <div className="notif-header-left">
-              <div className="notif-header-icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="notif-title">Notifications</h1>
-                <p className="notif-subtitle">Stay updated with your latest activities</p>
-              </div>
+        {/* Header - spans full width */}
+        <div className="notif-header">
+          <div className="notif-header-left">
+            <div className="notif-header-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="notif-title">Notifications</h1>
+              <p className="notif-subtitle">Stay updated with your latest activities</p>
             </div>
           </div>
+        </div>
 
-          {/* Search */}
+        <div className="notif-layout-row">
+        <div className="notif-page">
+          {/* Search + Type Filter */}
           <div className="notif-search-wrap">
             <div className="notif-search">
               <svg className="notif-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -321,15 +322,11 @@ function Notifications() {
               )}
             </div>
             <select
+              className="notif-type-filter"
               value={typeFilter}
               onChange={(e) => {
                 setTypeFilter(e.target.value);
                 fetchNotifications(1, activeTab, search, e.target.value);
-              }}
-              style={{
-                padding: "10px 14px", borderRadius: "10px", border: "1px solid #E5E7EB",
-                fontSize: "14px", color: "#374151", background: "#fff", cursor: "pointer",
-                outline: "none", minWidth: "180px",
               }}
             >
               {NOTIFICATION_TYPES.map((t) => (
@@ -484,6 +481,7 @@ function Notifications() {
             </div>
           </div>
         </aside>
+        </div>
       </div>
     </DashboardLayout>
   );

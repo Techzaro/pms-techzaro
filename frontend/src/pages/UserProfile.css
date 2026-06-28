@@ -4,6 +4,7 @@
   min-width: 0;
   padding: 0;
   box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .user-profile-page * {
@@ -363,5 +364,15 @@
 
   .info-row .info-value {
     text-align: left;
+  }
+
+  .user-form select,
+  .user-form input {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .user-form-grid {
+    overflow: hidden;
   }
 }

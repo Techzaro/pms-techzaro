@@ -20,7 +20,7 @@ class NotificationMail extends Mailable implements ShouldQueue
     public function __construct(Notification $notification)
     {
         $this->notification = $notification;
-        $this->frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:5173'), '/');
+        $this->frontendUrl = rtrim(config('app.frontend_url'), '/');
     }
 
     public function envelope(): Envelope

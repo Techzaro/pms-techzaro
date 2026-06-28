@@ -2,8 +2,17 @@
 
 .notif-layout {
   display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: -30px;
+  padding-top: 0;
+}
+
+.notif-layout-row {
+  display: flex;
   gap: 24px;
   align-items: flex-start;
+  margin-top: 0;
 }
 
 .notif-page {
@@ -15,7 +24,12 @@
 /* ── Header ── */
 
 .notif-header {
-  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+  gap: 16px;
+  width: 100%;
 }
 
 .notif-header-left {
@@ -51,6 +65,9 @@
 /* ── Search ── */
 
 .notif-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 16px;
 }
 
@@ -58,20 +75,22 @@
   position: relative;
   display: flex;
   align-items: center;
+  flex: 1;
+  max-width: 340px;
 }
 
 .notif-search-icon {
   position: absolute;
-  left: 14px;
+  left: 12px;
   pointer-events: none;
 }
 
 .notif-search input {
   width: 100%;
-  padding: 11px 40px 11px 42px;
+  padding: 9px 36px 9px 38px;
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  font-size: 14px;
+  border-radius: 10px;
+  font-size: 13px;
   color: #111827;
   background: #fff;
   outline: none;
@@ -88,12 +107,12 @@
 
 .notif-search-clear {
   position: absolute;
-  right: 10px;
-  width: 28px;
-  height: 28px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
   border: none;
   background: #f3f4f6;
-  border-radius: 8px;
+  border-radius: 6px;
   color: #6b7280;
   cursor: pointer;
   display: flex;
@@ -104,6 +123,19 @@
 
 .notif-search-clear:hover {
   background: #e5e7eb;
+}
+
+.notif-type-filter {
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  font-size: 13px;
+  color: #374151;
+  background: #fff;
+  cursor: pointer;
+  outline: none;
+  min-width: 150px;
+  flex-shrink: 0;
 }
 
 /* ── Toolbar ── */
@@ -352,6 +384,19 @@
     padding: 0 0 24px;
   }
 
+  .notif-search-wrap {
+    flex-direction: column;
+  }
+
+  .notif-search {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .notif-type-filter {
+    width: 100%;
+  }
+
   .notif-toolbar {
     flex-direction: column;
     align-items: flex-start;
@@ -381,6 +426,15 @@
     justify-content: center;
   }
 
+  .notif-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .notif-layout-row {
+    flex-direction: column;
+  }
+
   .notif-layout {
     flex-direction: column;
   }
@@ -403,7 +457,7 @@
   border-radius: 16px;
   padding: 20px;
   position: sticky;
-  top: 24px;
+  top: 0px;
 }
 
 .notif-sidebar-title {

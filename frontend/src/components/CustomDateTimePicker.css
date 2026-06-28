@@ -1,0 +1,138 @@
+.cdt-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.cdt-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+  cursor: pointer;
+  text-align: left;
+  box-sizing: border-box;
+  min-height: 42px;
+}
+
+.cdt-trigger:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.cdt-placeholder {
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+.cdt-arrow {
+  flex-shrink: 0;
+  transition: transform 0.2s;
+  color: #6b7280;
+}
+
+.cdt-arrow-open {
+  transform: rotate(180deg);
+}
+
+.cdt-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  padding: 12px;
+}
+
+.cdt-row {
+  display: flex;
+  gap: 8px;
+}
+
+.cdt-time-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.cdt-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.cdt-col label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cdt-col select {
+  width: 100%;
+  padding: 8px 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #111827;
+  background: #f9fafb;
+  cursor: pointer;
+  box-sizing: border-box;
+  -webkit-appearance: auto;
+  appearance: auto;
+}
+
+.cdt-col select:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+
+.cdt-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.cdt-today,
+.cdt-clear {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #374151;
+}
+
+.cdt-today {
+  background: #4f46e5;
+  color: #fff;
+  border-color: #4f46e5;
+}
+
+.cdt-today:hover {
+  background: #4338ca;
+}
+
+.cdt-clear:hover {
+  background: #f3f4f6;
+}

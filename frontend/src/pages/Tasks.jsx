@@ -12,7 +12,7 @@ import SubmitProjectModal from "../components/SubmitProjectModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
-import { formatDateOnly } from "../utils/formatDateTime";
+import { formatDateTime } from "../utils/formatDateTime";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
@@ -153,7 +153,7 @@ function Tasks() {
   };
 
   const formatDate = (dateStr) => {
-    return formatDateOnly(dateStr);
+    return formatDateTime(dateStr);
   };
 
   const formatStatus = (status) => {
@@ -271,7 +271,7 @@ function Tasks() {
       <div className="task-progress">
         <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
         <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
-          <GoDotFill color="#EF4444" /> Tasks Due Today
+          <GoDotFill color="#EF4444" /> Due Today
         </p>
         <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Pending
@@ -377,11 +377,7 @@ function Tasks() {
                       <div className="progress-bar-track">
                         <div className="progress-bar-fill" style={{ width: `${calculateProgress(item)}%` }}></div>
                       </div>
-                      <div style={{ 
-                        fontSize: "11px", 
-                        color: "#6b7280",
-                        marginTop: "4px"
-                      }}>
+                      <div className="deliverables-approved-text">
                         {item.completed_tasks || 0}/{item.total_tasks || 0} tasks
                       </div>
                     </div>
@@ -395,7 +391,6 @@ function Tasks() {
                     
                     <div className="col-due-date">
                       <div className="date-box">
-                        <div>{formatDate(item.start_date)}</div>
                         <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
                       </div>
                     </div>
@@ -466,11 +461,7 @@ function Tasks() {
                     <div className="progress-bar-track">
                       <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
                     </div>
-                    <div style={{ 
-                      fontSize: "11px", 
-                      color: "#6b7280",
-                      marginTop: "4px"
-                    }}>
+                    <div className="deliverables-approved-text">
                       {item.approved_deliverables || 0}/{item.total_deliverables || 0} Deliverables Approved
                     </div>
                   </div>
@@ -484,7 +475,6 @@ function Tasks() {
                   
                   <div className="col-due-date">
                     <div className="date-box">
-                      <div>{formatDate(item.start_date)}</div>
                       <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
                     </div>
                   </div>

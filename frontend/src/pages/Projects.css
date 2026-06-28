@@ -1,5 +1,6 @@
 .projects-page {
   padding: 0;
+  overflow-x: hidden;
 }
 
 .projects-header {

@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
+import CustomSelect from "./CustomSelect";
+import CustomDateTimePicker from "./CustomDateTimePicker";
 import { formatDateTime, toUTCIso } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
+import { notify } from "../utils/notify";
 import "./layout/CreateProjectModal.css";
 
 const PRESET_PHASES = [
@@ -17,7 +20,6 @@ const TEAM_ROLES = ["Solution", "Tech", "Developer"];
 
 const CreateProjectModal = ({ onClose }) => {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [formErrors, setFormErrors] = useState({});
   const [teams, setTeams] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
@@ -40,6 +42,8 @@ const CreateProjectModal = ({ onClose }) => {
   const [milestones, setMilestones] = useState([]);
   const [phaseName, setPhaseName] = useState("");
   const [phaseDate, setPhaseDate] = useState("");
+  const [phaseDropdownOpen, setPhaseDropdownOpen] = useState(false);
+  const phaseDropdownRef = useRef(null);
 
   const [goalsList, setGoalsList] = useState([]);
   const [goalInput, setGoalInput] = useState("");
@@ -62,6 +66,9 @@ const CreateProjectModal = ({ onClose }) => {
       if (teamRolesRef.current && !teamRolesRef.current.contains(e.target)) {
         setTeamRolesOpen(false);
       }
+      if (phaseDropdownRef.current && !phaseDropdownRef.current.contains(e.target)) {
+        setPhaseDropdownOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -82,8 +89,8 @@ const CreateProjectModal = ({ onClose }) => {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       skipLoader: true,
     })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setAllUsers(Array.isArray(data) ? data : []))
+      .then((res) => (res.ok ? res.json() : { users: [] }))
+      .then((data) => setAllUsers(Array.isArray(data) ? data : (data.users || [])))
       .catch(() => {});
   }, []);
 
@@ -255,7 +262,6 @@ const CreateProjectModal = ({ onClose }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
 
     if (!validateForm()) return;
 
@@ -291,6 +297,7 @@ const CreateProjectModal = ({ onClose }) => {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(body),
+        _notifHandled: true,
       });
 
       const data = await response.json();
@@ -310,7 +317,7 @@ const CreateProjectModal = ({ onClose }) => {
       publish('data:changed', { type: 'project', action: 'created' });
       onClose(true);
     } catch (err) {
-      setError(err.message);
+      notify.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -368,12 +375,18 @@ const CreateProjectModal = ({ onClose }) => {
             <div className="cp-grid-2">
               <div className="cp-field">
                 <label>Category (Optional)</label>
-                <select name="category" value={form.category} onChange={handleChange}>
-                  <option value="">Select category</option>
-                  <option value="Web Development">Web Development</option>
-                  <option value="Mobile App">Mobile App</option>
-                  <option value="UI/UX Design">UI/UX Design</option>
-                </select>
+                <CustomSelect
+                  name="category"
+                  value={form.category}
+                  onChange={(val) => handleChange({ target: { name: "category", value: val } })}
+                  placeholder="Select category"
+                  options={[
+                    { value: "", label: "Select category" },
+                    { value: "Web Development", label: "Web Development" },
+                    { value: "Mobile App", label: "Mobile App" },
+                    { value: "UI/UX Design", label: "UI/UX Design" },
+                  ]}
+                />
               </div>
 
               <div className="cp-field">
@@ -568,11 +581,16 @@ const CreateProjectModal = ({ onClose }) => {
               <div className="cp-card-top">
                 <span>Priority</span>
               </div>
-              <select name="priority" value={form.priority} onChange={handleChange}>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-                <option value="High">High</option>
-              </select>
+              <CustomSelect
+                name="priority"
+                value={form.priority}
+                onChange={(val) => handleChange({ target: { name: "priority", value: val } })}
+                options={[
+                  { value: "Medium", label: "Medium" },
+                  { value: "Low", label: "Low" },
+                  { value: "High", label: "High" },
+                ]}
+              />
             </div>
 
             {/* DEADLINES - PHASE SYSTEM */}
@@ -588,23 +606,36 @@ const CreateProjectModal = ({ onClose }) => {
                     type="text"
                     placeholder="Enter phase name"
                     value={phaseName}
-                    onChange={(e) => setPhaseName(e.target.value)}
+                    onChange={(e) => {
+                      setPhaseName(e.target.value);
+                      setPhaseDropdownOpen(false);
+                    }}
+                    onFocus={() => { if (!phaseName) setPhaseDropdownOpen(true); }}
                     onKeyDown={handlePhaseKeyDown}
-                    list="phase-presets"
                   />
-                  <datalist id="phase-presets">
-                    {PRESET_PHASES.map((p) => (
-                      <option key={p} value={p} />
-                    ))}
-                  </datalist>
+                  {phaseDropdownOpen && (
+                    <div className="cp-dropdown-menu" style={{ position: "relative", top: "4px", boxShadow: "0 8px 24px rgba(0,0,0,0.1)" }}>
+                      {PRESET_PHASES.map((p) => (
+                        <div
+                          key={p}
+                          className="cp-dropdown-item"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setPhaseName(p);
+                            setPhaseDropdownOpen(false);
+                          }}
+                        >
+                          {p}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="cp-field">
                   <label style={{ fontSize: "13px" }}>Due Date & Time</label>
-                  <input
-                    type="datetime-local"
+                  <CustomDateTimePicker
                     value={phaseDate}
-                    onChange={(e) => setPhaseDate(e.target.value)}
-                    onKeyDown={handlePhaseKeyDown}
+                    onChange={setPhaseDate}
                   />
                 </div>
               </div>
@@ -666,11 +697,9 @@ const CreateProjectModal = ({ onClose }) => {
                 </div>
                 <div className="cp-field">
                   <label style={{ fontSize: "13px" }}>Due Date & Time</label>
-                  <input
-                    type="datetime-local"
+                  <CustomDateTimePicker
                     value={deliverableProjInput.due_datetime}
-                    onChange={(e) => setDeliverableProjInput((prev) => ({ ...prev, due_datetime: e.target.value }))}
-                    onKeyDown={handleDeliverableProjKeyDown}
+                    onChange={(val) => setDeliverableProjInput((prev) => ({ ...prev, due_datetime: val }))}
                   />
                 </div>
               </div>

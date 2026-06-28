@@ -218,6 +218,7 @@ class ProjectController extends Controller
         }
 
         return response()->json([
+            'success' => true,
             'message' => 'Project created successfully',
             'project' => $project,
         ], 201);
@@ -240,7 +241,7 @@ class ProjectController extends Controller
             $isTeamLead = $user->role === 'team_lead';
 
             if (!$isCreator && !$isAssigned && !$isTeamMember && !$hasTasksUnderProject && !$isManuallyVisible && !$isTeamLead) {
-                return response()->json(['message' => 'Unauthorized'], 403);
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             }
         }
 
@@ -258,7 +259,7 @@ class ProjectController extends Controller
             'rejectedBy:id,name',
             'reopenedBy:id,name',
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
-            'deliverables' => fn ($q) => $q->with(['assignee:id,name', 'creator:id,name'])->orderBy('sort_order'),
+            'deliverables' => fn ($q) => $q->with(['assignee:id,name,role', 'creator:id,name,role'])->orderBy('sort_order'),
             'tasks' => fn ($q) => $q->with(['assignees:id,name', 'assigner:id,name,role'])->withCount([
                 'deliverables as total_deliverables',
                 'deliverables as approved_deliverables' => fn ($q) => $q->where('status', 'approved'),
@@ -309,7 +310,7 @@ class ProjectController extends Controller
         $payload['unviewed_changes'] = $project->unviewedChanges;
         $payload['unviewed_changes_count'] = $project->unviewedChanges->count();
 
-        return response()->json(['project' => $payload]);
+        return response()->json(['success' => true, 'project' => $payload]);
     }
 
     public function update(Request $request, Project $project)
@@ -318,7 +319,7 @@ class ProjectController extends Controller
         $isCreator = $project->created_by === $user->id;
 
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
         $validated = $request->validate([
@@ -458,6 +459,7 @@ class ProjectController extends Controller
         }
 
         return response()->json([
+            'success' => true,
             'message' => $changeCount > 0 ? 'Project updated — ' . $changeCount . ' change(s) made' : 'Project updated successfully',
             'project' => $project->fresh(),
             'changes_count' => $changeCount,
@@ -470,7 +472,7 @@ class ProjectController extends Controller
         $isCreator = $project->created_by === $user->id;
 
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
         $validated = $request->validate([
@@ -493,6 +495,7 @@ class ProjectController extends Controller
         }
 
         return response()->json([
+            'success' => true,
             'message' => 'Project updated',
             'project' => $project->fresh()->only(array_keys($validated)),
         ]);
@@ -505,7 +508,7 @@ class ProjectController extends Controller
         $isAssigned = in_array($user->id, $project->assigned_users ?? []);
 
         if (!$isCreator && !$isAssigned && !in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
         $project->update(['status' => 'completed']);
@@ -521,6 +524,7 @@ class ProjectController extends Controller
         ]);
 
         return response()->json([
+            'success' => true,
             'message' => 'Project marked as completed',
             'project' => $project->fresh(),
             'deliverable' => $deliverable,
@@ -533,12 +537,12 @@ class ProjectController extends Controller
         $isCreator = $project->created_by === $user->id;
 
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
         $project->delete();
 
-        return response()->json(['message' => 'Project deleted successfully']);
+        return response()->json(['success' => true, 'message' => 'Project deleted successfully']);
     }
 
     public function uploadFile(Request $request, Project $project)
@@ -552,7 +556,7 @@ class ProjectController extends Controller
             'url' => '/storage/' . $path,
         ]);
 
-        return response()->json(['message' => 'File uploaded successfully', 'file' => $attachment], 201);
+        return response()->json(['success' => true, 'message' => 'File uploaded successfully', 'file' => $attachment], 201);
     }
 
     public function addLink(Request $request, Project $project)
@@ -567,14 +571,14 @@ class ProjectController extends Controller
             'url' => $validated['url'],
         ]);
 
-        return response()->json(['message' => 'Link added successfully', 'file' => $attachment], 201);
+        return response()->json(['success' => true, 'message' => 'Link added successfully', 'file' => $attachment], 201);
     }
 
     public function getVisibility(Project $project)
     {
         $user = request()->user();
         if (!in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['message' => 'Forbidden'], 403);
+            return response()->json(['success' => false, 'message' => 'Forbidden'], 403);
         }
 
         $users = User::where('active', true)
@@ -593,14 +597,14 @@ class ProjectController extends Controller
             ];
         });
 
-        return response()->json(['users' => $result]);
+        return response()->json(['success' => true, 'users' => $result]);
     }
 
     public function setVisibility(Request $request, Project $project)
     {
         $user = $request->user();
         if (!in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['message' => 'Forbidden'], 403);
+            return response()->json(['success' => false, 'message' => 'Forbidden'], 403);
         }
 
         $validated = $request->validate([
@@ -667,7 +671,7 @@ class ProjectController extends Controller
             $this->activityService->log($user->id, 'project_visibility_updated', 'You ' . implode(' and ', $parts) . ' on project "' . $project->title . '"', 'project', $project->id);
         }
 
-        return response()->json(['message' => 'Visibility updated successfully']);
+        return response()->json(['success' => true, 'message' => 'Visibility updated successfully']);
     }
 
     public function deleteFile(Project $project, ProjectFile $file)
@@ -678,7 +682,7 @@ class ProjectController extends Controller
             if (file_exists($fullPath)) unlink($fullPath);
         }
         $file->delete();
-        return response()->json(['message' => 'File deleted successfully']);
+        return response()->json(['success' => true, 'message' => 'File deleted successfully']);
     }
 
     public function submit(Request $request, Project $project)
@@ -687,21 +691,21 @@ class ProjectController extends Controller
         $isAssigned = in_array($user->id, $project->assigned_users ?? []);
 
         if (!$isAssigned) {
-            return response()->json(['message' => 'Only assigned users can submit this project'], 403);
+            return response()->json(['success' => false, 'message' => 'Only assigned users can submit this project'], 403);
         }
 
         if (!in_array($project->status, ['pending', 'Planned', 'in_progress', 'In Progress', 'reopened'])) {
-            return response()->json(['message' => 'This project cannot be submitted in its current status'], 422);
+            return response()->json(['success' => false, 'message' => 'This project cannot be submitted in its current status'], 422);
         }
 
         $unapprovedTasks = $project->tasks()->where('status', '!=', 'approved')->count();
         if ($unapprovedTasks > 0) {
-            return response()->json(['message' => 'All project tasks must be approved before submitting'], 422);
+            return response()->json(['success' => false, 'message' => 'All project tasks must be approved before submitting'], 422);
         }
 
         $unapprovedDeliverables = $project->deliverables()->where('status', '!=', 'approved')->count();
         if ($unapprovedDeliverables > 0) {
-            return response()->json(['message' => 'All deliverables must be approved before submitting'], 422);
+            return response()->json(['success' => false, 'message' => 'All deliverables must be approved before submitting'], 422);
         }
 
         $validated = $request->validate([
@@ -793,6 +797,7 @@ class ProjectController extends Controller
         $this->activityService->log($user->id, 'project_' . $isResubmitLabel, 'You ' . $isResubmitLabel . ' project "' . $project->title . '" for review', 'project', $project->id);
 
         return response()->json([
+            'success' => true,
             'message' => 'Project submitted successfully',
             'project' => $project->fresh()->load([
                 'creator:id,name,email,role', 'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
@@ -809,11 +814,11 @@ class ProjectController extends Controller
         $isCreator = $project->created_by === $user->id;
 
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
         if ($project->status !== 'submitted') {
-            return response()->json(['message' => 'Can only approve submitted projects'], 422);
+            return response()->json(['success' => false, 'message' => 'Can only approve submitted projects'], 422);
         }
 
         $project->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id]);
@@ -836,6 +841,7 @@ class ProjectController extends Controller
         $this->activityService->log($user->id, 'project_approved', 'You approved project "' . $project->title . '"', 'project', $project->id);
 
         return response()->json([
+            'success' => true,
             'message' => 'Project approved successfully',
             'project' => $project->fresh()->load([
                 'creator:id,name,email,role', 'approvedBy:id,name',
@@ -852,11 +858,11 @@ class ProjectController extends Controller
         $isCreator = $project->created_by === $user->id;
 
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
         if ($project->status !== 'submitted') {
-            return response()->json(['message' => 'Can only reject submitted projects'], 422);
+            return response()->json(['success' => false, 'message' => 'Can only reject submitted projects'], 422);
         }
 
         $validated = $request->validate(['comment' => 'nullable|string|max:2000']);
@@ -890,6 +896,7 @@ class ProjectController extends Controller
         $this->activityService->log($user->id, 'project_rejected', 'You rejected project "' . $project->title . '"', 'project', $project->id);
 
         return response()->json([
+            'success' => true,
             'message' => 'Project rejected',
             'project' => $project->fresh()->load([
                 'creator:id,name,email,role', 'rejectedBy:id,name',
@@ -906,11 +913,11 @@ class ProjectController extends Controller
         $isCreator = $project->created_by === $user->id;
 
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
         if ($project->status !== 'submitted') {
-            return response()->json(['message' => 'Can only reopen submitted projects'], 422);
+            return response()->json(['success' => false, 'message' => 'Can only reopen submitted projects'], 422);
         }
 
         $validated = $request->validate([
@@ -972,6 +979,7 @@ class ProjectController extends Controller
         $this->activityService->log($user->id, 'project_reopened', 'You reopened project "' . $project->title . '" for revision', 'project', $project->id);
 
         return response()->json([
+            'success' => true,
             'message' => 'Project reopened successfully',
             'project' => $project->fresh()->load([
                 'creator:id,name,email,role', 'reopenedBy:id,name',
@@ -989,7 +997,7 @@ class ProjectController extends Controller
         $isAssigned = in_array($user->id, $project->assigned_users ?? []);
 
         if (!$isCreator && !$isAssigned && !in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
         $submission = ProjectSubmission::where('project_id', $project->id)
@@ -997,7 +1005,7 @@ class ProjectController extends Controller
             ->latest()
             ->first();
 
-        return response()->json(['submission' => $submission]);
+        return response()->json(['success' => true, 'submission' => $submission]);
     }
 
     public function downloadSubmissionFile(ProjectSubmission $submission)
@@ -1008,11 +1016,11 @@ class ProjectController extends Controller
         $isAssigned = in_array($user->id, $project->assigned_users ?? []);
 
         if (!$isCreator && !$isAssigned && !in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
         if (!$submission->file_path || !Storage::disk('public')->exists($submission->file_path)) {
-            return response()->json(['message' => 'File not found'], 404);
+            return response()->json(['success' => false, 'message' => 'File not found'], 404);
         }
 
         return Storage::disk('public')->download($submission->file_path, $submission->file_name);
@@ -1061,7 +1069,7 @@ class ProjectController extends Controller
     public function markChangesRead(Project $project)
     {
         $project->changes()->where('is_viewed', false)->update(['is_viewed' => true]);
-        return response()->json(['message' => 'Changes marked as read']);
+        return response()->json(['success' => true, 'message' => 'Changes marked as read']);
     }
 
     private function sendProjectAssignmentNotification(Project $project, User $sender): void

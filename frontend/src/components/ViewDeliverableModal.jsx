@@ -4,6 +4,7 @@ import { FileText, Download, ExternalLink } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { formatDateTime } from "../utils/formatDateTime";
+import { notify } from "../utils/notify";
 import "./ViewDeliverableModal.css";
 
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
@@ -30,7 +31,6 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([""]);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
 
   useEffect(() => {
@@ -57,11 +57,10 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
   const handleResubmit = async () => {
     const validLinks = links.filter((l) => l.trim()).map(normalizeUrl);
     if (!comment.trim() && files.length === 0 && validLinks.length === 0) {
-      setError("Please add a comment, attach files, or add links.");
+      notify.error("Please add a comment, attach files, or add links.");
       return;
     }
     setSubmitting(true);
-    setError("");
     try {
       const token = authToken();
       const formData = new FormData();
@@ -73,6 +72,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
         method: "POST",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         body: formData,
+        _notifHandled: true,
       });
 
       const data = await res.json();
@@ -80,10 +80,10 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
         if (onSubmitSuccess) onSubmitSuccess(data.deliverable);
         onClose();
       } else {
-        setError(data.message || "Failed to resubmit deliverable.");
+        notify.error(data.message || "Failed to resubmit deliverable.");
       }
     } catch {
-      setError("An error occurred. Please try again.");
+      notify.error("An error occurred. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -298,7 +298,6 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
                       ))}
                     </div>
                   </div>
-                  {error && <div className="vd-error">{error}</div>}
                 </div>
               )}
 

@@ -96,7 +96,7 @@ function TaskSubmissionPanel({
     file_name: e.file_name,
     file_path: e.file_path,
     type: e.action === "submitted" || e.action === "resubmitted" ? "submission" : "event",
-  }));
+  })).reverse();
 
   return (
     <div className="td-submission-panel">

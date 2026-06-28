@@ -40,10 +40,12 @@ import ConfirmModal from "../components/ConfirmModal";
 import SubmitProjectModal from "../components/SubmitProjectModal";
 import ProjectSubmissionPanel from "../components/ProjectSubmissionPanel";
 import SubmitTaskModal from "../components/SubmitTaskModal";
-import { formatDateTimeShort } from "../utils/formatDateTime";
+import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useNotification } from "../context/NotificationContext";
 import "./ProjectDetails.css";
 import "./TaskDetails.css";
+import "./Deliveries.css";
 
 import { authToken, rolePath, getUser } from "../utils/auth";
 import API_URL from "../config/api";
@@ -156,6 +158,7 @@ function sanitizeHtml(html) {
 function ProjectDetails() {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const notify = useNotification();
   const [projectIds, setProjectIds] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('projectIds') || '[]'); } catch { return []; }
   });
@@ -173,8 +176,6 @@ function ProjectDetails() {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("overview");
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("");
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [deleteProjectConfirmOpen, setDeleteProjectConfirmOpen] = useState(false);
@@ -198,16 +199,6 @@ function ProjectDetails() {
     (project.members || []).forEach((m) => ids.add(m.id));
     return ids.size;
   }, [project]);
-
-  const showMessage = useCallback((text, type = "success") => {
-    setMessage(text);
-    setMessageType(type);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    setTimeout(() => {
-      setMessage("");
-      setMessageType("");
-    }, 4000);
-  }, []);
 
   const authHeadersLocal = () => {
     const token = authToken();
@@ -273,6 +264,7 @@ function ProjectDetails() {
         Accept: "application/json",
         Authorization: `Bearer ${token}`,
       },
+      _notifHandled: true,
     });
     if (!res.ok) {
       throw new Error("Failed to load project");
@@ -293,7 +285,7 @@ function ProjectDetails() {
       } catch (e) {
         if (!cancelled) {
           console.error(e);
-          showMessage("Unable to load project details.", "error");
+          notify.error("Unable to load project details.");
           setTimeout(() => navigate(rolePath("projects")), 2000);
         }
       } finally {
@@ -303,7 +295,7 @@ function ProjectDetails() {
     return () => {
       cancelled = true;
     };
-  }, [loadProject, navigate, showMessage]);
+  }, [loadProject, navigate, notify]);
 
   useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted', 'project:updated', 'project:deleted', 'deliverable:updated'], loadProject);
 
@@ -333,13 +325,14 @@ function ProjectDetails() {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
         },
+        _notifHandled: true,
       });
       if (!res.ok) throw new Error("Failed to delete task");
       await loadProject();
-      showMessage("Task deleted.");
+      notify.success("Task deleted.");
     } catch (err) {
       console.error(err);
-      showMessage("Failed to delete task.", "error");
+      notify.error("Failed to delete task.");
     }
   };
 
@@ -357,13 +350,14 @@ function ProjectDetails() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ goals_checklist: list }),
+        _notifHandled: true,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Update failed");
       setProject((prev) => ({ ...prev, ...data.project }));
     } catch (err) {
       console.error(err);
-      showMessage("Could not update goals.", "error");
+      notify.error("Could not update goals.");
     }
   };
 
@@ -381,15 +375,16 @@ function ProjectDetails() {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
         },
+        _notifHandled: true,
       });
       if (!res.ok) throw new Error("Delete failed");
       publish('project:deleted', { id: projectId });
       publish('data:changed', { type: 'project', action: 'deleted' });
-      showMessage("Project deleted.");
+      notify.success("Project deleted.");
       setTimeout(() => navigate(rolePath("projects")), 800);
     } catch (err) {
       console.error(err);
-      showMessage("Could not delete project.", "error");
+      notify.error("Could not delete project.");
     }
   };
 
@@ -436,7 +431,7 @@ function ProjectDetails() {
   const renderRail = () => (
     <div className="pd-rail">
       <section className="pd-rail-card">
-        <h1 className="pd-rail-card__title" style={{ fontSize: "17px" }}>Deadlines</h1>
+        <h1 className="pd-rail-card__title">Deadlines</h1>
         <ul className="pd-milestones">
           {milestones.length === 0 ? (
             <li className="pd-muted">No milestones.</li>
@@ -455,7 +450,7 @@ function ProjectDetails() {
       </section>
 
       <section className="pd-rail-card">
-        <h1 className="pd-rail-card__title" style={{ fontSize: "17px" }}>Tasks</h1>
+        <h1 className="pd-rail-card__title">Tasks</h1>
         {tasks.length === 0 ? (
           <p className="pd-muted" style={{ margin: 0 }}>
             No tasks yet.
@@ -463,11 +458,11 @@ function ProjectDetails() {
         ) : (
           <ul className="pd-rail-tasks">
             {tasks.map((t) => (
-              <li key={t.id} style={{ padding: "8px 0", borderBottom: "1px solid #f1f5f9" }}>
-                <div style={{ fontWeight: 600, fontSize: "14px", color: "#0f172a" }}>
+              <li key={t.id} className="pd-rail-tasks__row">
+                <div className="pd-rail-tasks__name">
                   {t.title}
                 </div>
-                <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                <div className="pd-rail-tasks__due">
                   {t.end_date ? new Date(t.end_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                 </div>
               </li>
@@ -628,8 +623,6 @@ function ProjectDetails() {
       <DashboardLayout hideRightSidebar={true}>
         <div className="pd-main-layout">
           <div className="pd-page pd-page--tx">
-            {message && <div className={`pd-toast pd-toast--${messageType}`}>{message}</div>}
-
             <Breadcrumb items={[
               { label: "Projects", path: rolePath("projects") },
               { label: project.title },
@@ -783,7 +776,7 @@ function ProjectDetails() {
                           <div className="pd-table-wrap">
                             <div className="project-task-table">
                               <div className="ptt-header">
-                                <div>Assigned To</div>
+                                <div>{isCreator || isAdminOrManager ? "Assigned To" : "Assigned By"}</div>
                                 <div className="ptt-col-name">Task Name</div>
                                 <div>Status</div>
                                 <div>Progress</div>
@@ -799,7 +792,7 @@ function ProjectDetails() {
                                     const statusKey = (t.status || "").toLowerCase();
                                     return (
                                       <div className="ptt-row" key={t.id}>
-                                        <div>{(t.assignees || []).map((a) => a.name).join(", ") || "—"}</div>
+                                        <div>{isCreator || isAdminOrManager ? ((t.assignees || []).map((a) => a.name).join(", ") || "—") : (t.assigner?.name || "—")}</div>
                                         <div className="ptt-col-name">
                                           <Link to={rolePath(`tasks/task-details/${t.id}`)} className="ptt-task-link">
                                             {t.title}
@@ -830,7 +823,7 @@ function ProjectDetails() {
                                             {t.priority}
                                           </span>
                                         </div>
-                                        <div>{formatShortDate(t.end_date)}</div>
+                                        <div style={{ whiteSpace: "pre-line" }}>{formatDateTime(t.end_date)}</div>
                                         <div>
                                           <div className="action-btns">
                                             <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${t.id}`), { state: { from: 'project-details' } })}><IoEyeOutline /></button>
@@ -880,94 +873,69 @@ function ProjectDetails() {
                             <h2 className="pd-block-title pd-block-title--inline">Deliverables</h2>
                           </div>
                           <div className="pd-table-wrap">
-                            <table className="pd-table">
-                              <thead>
-                                <tr>
-                                  <th style={{ width: '25%' }}>DELIVERABLE</th>
-                                  <th style={{ width: '20%' }}>ASSIGNED TO</th>
-                                  <th style={{ width: '15%' }}>DUE DATE</th>
-                                  <th style={{ width: '15%' }}>STATUS</th>
-                                  <th style={{ width: '25%' }}>ACTION</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {(orderedDeliverables.length === 0 && (project.deliverables || []).length === 0) ? (
-                                  <tr>
-                                    <td colSpan={5} className="pd-muted pd-table-empty">No deliverables.</td>
-                                  </tr>
-                                ) : (
-                                  (orderedDeliverables.length ? orderedDeliverables : (project.deliverables || [])).map((d, idx) => {
-                                    // Get deliverable name from various possible fields
-                                    const deliverableName = d.deliverable_name || d.name || d.title || d.label || d.description || '';
-                                    // Use deliverable name or fallback to "Deliverable #"
-                                    const displayName = deliverableName || `Deliverable ${idx + 1}`;
-                                    
-                                    return (
-                                      <tr key={d.id || idx}>
-                                        <td className="pd-table-strong">
-                                          <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                            <span style={{ fontWeight: 600 }}>{displayName}</span>
-                                            {d.id && (
-                                              <span style={{ fontSize: '10px', color: '#94a3b8' }}>
-                                                ID: {d.id}
-                                              </span>
-                                            )}
-                                          </div>
-                                        </td>
-                                        <td>{d.assignee?.name || d.assigned_to?.name || "—"}</td>
-                                        <td>{formatShortDate(d.due_date || d.dueDate)}</td>
-                                        <td>
-                                          <span className={`pd-pill pd-pill--task-${statusSlug(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status)}`}>
-                                            {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}
-                                          </span>
-                                        </td>
-                                        <td>
-                                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                                            {(() => {
-                                              const isAssigner = d.created_by && d.created_by === currentUserId;
-                                              const isAssignee = d.assignee?.id && d.assignee.id === currentUserId;
-                                              const isSubmittable = d.status === "pending" || d.status === "rejected" || d.status === "reopened";
-                                              const showSubmit = isSubmittable && isAssignee;
-                                              const showView = !isSubmittable || isAssigner || isAdminOrManager;
-                                              return (
-                                                <>
-                                                  {showSubmit && (
-                                                    <button 
-                                                      type="button" 
-                                                      className="pd-btn-tx pd-btn-tx--outline" 
-                                                      style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }} 
-                                                      onClick={() => setSubmitModal({ open: true, deliverable: d })}
-                                                    >
-                                                      <Send size={12} /> Submit
-                                                    </button>
-                                                  )}
-                                                  {showView && (
-                                                    <button 
-                                                      type="button" 
-                                                      className="pd-btn-tx pd-btn-tx--outline" 
-                                                      style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }} 
-                                                      onClick={() => { 
-                                                        if (isAssigner || isAdminOrManager) { 
-                                                          setAssignerModal({ open: true, deliverable: d }); 
-                                                        } else { 
-                                                          setViewModal({ open: true, deliverable: d }); 
-                                                        } 
-                                                      }}
-                                                    >
-                                                      <Eye size={12} /> View
-                                                    </button>
-                                                  )}
-                                                </>
-                                              );
-                                            })()}
-                                          </div>
-                                        </td>
-                                      </tr>
-                                    );
-                                  })
-                                )}
-                              </tbody>
-                            </table>
+                            <div className="deliveries-table-header pd-deliverables-grid">
+                              <div>Deliverable</div>
+                              <div>{isAdminOrManager || isCreator ? "Assigned To" : "Assigned By"}</div>
+                              <div>Due Date</div>
+                              <div>Status</div>
+                              <div>Action</div>
+                            </div>
+                            {(orderedDeliverables.length === 0 && (project.deliverables || []).length === 0) ? (
+                              <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>No deliverables.</div>
+                            ) : (
+                              (orderedDeliverables.length ? orderedDeliverables : (project.deliverables || [])).map((d, idx) => {
+                                const deliverableName = d.deliverable_name || d.name || d.title || d.label || d.description || '';
+                                const displayName = deliverableName || `Deliverable ${idx + 1}`;
+                                const isAssigner = d.created_by && d.created_by === currentUserId;
+                                const isAssignee = d.assignee?.id && d.assignee.id === currentUserId;
+                                const isSubmittable = d.status === "pending" || d.status === "rejected" || d.status === "reopened";
+                                const showSubmit = isSubmittable && isAssignee;
+                                const showView = !isSubmittable || isAssigner || isAdminOrManager;
+                                const statusKey = (d.status || '').toLowerCase();
+
+                                return (
+                                  <div className="deliveries-table-row pd-deliverables-grid" key={d.id || idx}>
+                                    <div className="user-box">
+                                      <div className="avatar" style={{ background: '#EEF2FF', color: '#4F46E5', width: '42px', height: '42px', fontSize: '14px' }}>
+                                        {initials(displayName)}
+                                      </div>
+                                      <div>
+                                        <div className="user-name">{displayName}</div>
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="user-name">{isAdminOrManager || isCreator ? (d.assignee?.name || d.assigned_to?.name || "—") : (d.creator?.name || "—")}</div>
+                                      <div className="user-role">{isAdminOrManager || isCreator ? (d.assignee?.role ? d.assignee.role.replace("_", " ") : "") : (d.creator?.role ? d.creator.role.replace("_", " ") : "")}</div>
+                                    </div>
+                                    <div className="date-box" style={{ whiteSpace: "pre-line" }}>{formatDateTime(d.due_date || d.dueDate)}</div>
+                                    <div>
+                                      <span className="badge" style={{ background: STATUS_COLORS[statusKey] || "#F3F4F6", color: STATUS_TEXT_COLORS[statusKey] || "#374151" }}>
+                                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[statusKey] || "#374151" }}></span>
+                                        {formatStatus(d.status)}
+                                      </span>
+                                    </div>
+                                    <div className="action-btns">
+                                      {showSubmit && (
+                                        <button className="action-icon-btn action-submit" title="Submit" onClick={() => setSubmitModal({ open: true, deliverable: d })}>
+                                          <LuSend size={16} />
+                                        </button>
+                                      )}
+                                      {showView && (
+                                        <button className="action-icon-btn action-view" title="View" onClick={() => {
+                                          if (isAssigner || isAdminOrManager) {
+                                            setAssignerModal({ open: true, deliverable: d });
+                                          } else {
+                                            setViewModal({ open: true, deliverable: d });
+                                          }
+                                        }}>
+                                          <IoEyeOutline size={16} />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
                           </div>
                         </section>
                       </div>

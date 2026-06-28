@@ -45,6 +45,15 @@ function Sidebar() {
     });
   };
 
+  const [reportsOpen, setReportsOpen] = useState(() => sessionStorage.getItem("reportsOpen") === "true");
+  const toggleReports = () => {
+    setReportsOpen((prev) => {
+      const next = !prev;
+      sessionStorage.setItem("reportsOpen", next);
+      return next;
+    });
+  };
+
   const [user, setUserState] = useState(() => {
     const stored = getUser();
     return {
@@ -124,6 +133,20 @@ function Sidebar() {
     } else {
       setDeliverablesOpen(false);
       sessionStorage.setItem("deliverablesOpen", false);
+    }
+
+    const isReportsRoute =
+      isActive("reports") ||
+      isActive("self-report") ||
+      isActive("team-members-report") ||
+      (user.role === "team_lead" || user.role === "teamlead") && location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`);
+
+    if (isReportsRoute) {
+      setReportsOpen(true);
+      sessionStorage.setItem("reportsOpen", true);
+    } else {
+      setReportsOpen(false);
+      sessionStorage.setItem("reportsOpen", false);
     }
   }, [location.pathname]);
 
@@ -316,13 +339,51 @@ function Sidebar() {
             </Link>
           )}
 
-          <Link
-            to={user.role === "admin" || user.role === "manager" ? rolePath("reports") : rolePath("reports/user-performance/me")}
-            className={`sidebar-link ${isActive("reports") || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`) ? "active" : ""}`}
-          >
-            <MdBarChart />
-            Reports
-          </Link>
+          {/* REPORTS - Dropdown for Team Lead, Simple Link for others */}
+          {(user.role === "team_lead" || user.role === "teamlead") ? (
+            <div className={`sidebar-link ${isActive("reports") || isActive("team-members-report") || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/me`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+              <div
+                onClick={toggleReports}
+                style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
+              >
+                <MdBarChart />
+                <span style={{ flex: 1 }}>Reports</span>
+                <MdKeyboardArrowDown
+                  size={18}
+                  style={{
+                    transition: "transform 0.2s",
+                    transform: reportsOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  }}
+                />
+              </div>
+              {reportsOpen && (
+                <div className="sidebar-sub-links">
+                  <Link
+                    to={rolePath("reports/user-performance/me")}
+                    className={`sidebar-sub-link ${location.pathname.startsWith(`${rolePrefix}/reports/user-performance/me`) ? "active" : ""}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Self Report
+                  </Link>
+                  <Link
+                    to={rolePath("team-members-report")}
+                    className={`sidebar-sub-link ${isActive("team-members-report") ? "active" : ""}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Team Members Reports
+                  </Link>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link
+              to={user.role === "member" ? rolePath("reports/user-performance/me") : rolePath("reports")}
+              className={`sidebar-link ${isActive("reports") || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`) ? "active" : ""}`}
+            >
+              <MdBarChart />
+              Reports
+            </Link>
+          )}
 
         </div>
 

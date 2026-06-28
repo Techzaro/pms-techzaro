@@ -1,10 +1,8 @@
 import { getCurrentRole, getToken, clearSession } from "../utils/auth";
+import { notify } from "../utils/notify";
 
 const rawApiUrl = import.meta.env.VITE_API_URL || "";
 const API_URL = rawApiUrl.replace(/\/+$/g, "");
-
-// No response cache here — React Query handles caching.
-// The fetch wrapper only handles 401 session expiry.
 
 const originalFetch = window.fetch;
 window.fetch = async function (...args) {
@@ -23,14 +21,28 @@ window.fetch = async function (...args) {
       }
     }
 
+    if (!config._notifHandled && res.status !== 204) {
+      const url = typeof resource === "string" ? resource : resource?.url || "";
+      const isApiCall = url.includes("/api") || url.includes("techxaro.com");
+      if (isApiCall) {
+        try {
+          const clone = res.clone();
+          const data = await clone.json();
+          if (data?.success === true && data?.message) {
+            notify.success(data.message);
+          } else if (data?.success === false && data?.message) {
+            notify.error(data.message);
+          }
+        } catch {}
+      }
+    }
+
     return res;
   } catch (e) {
     throw e;
   }
 };
 
-// Cache removed — React Query handles caching.
-// These are kept as no-ops for backward compatibility.
 export function invalidateCache() {}
 export function onMutation() {}
 

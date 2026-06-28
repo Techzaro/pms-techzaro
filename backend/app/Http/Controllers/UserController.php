@@ -50,6 +50,7 @@ class UserController extends Controller
         });
 
         return response()->json([
+            'success' => true,
             'users' => $users,
         ]);
     }
@@ -60,6 +61,7 @@ class UserController extends Controller
     public function show(User $user)
     {
         return response()->json([
+            'success' => true,
             'user' => $user,
         ]);
     }
@@ -86,7 +88,6 @@ class UserController extends Controller
             'emergency_contact_relation' => 'nullable|string|max:255',
             'emergency_contact_phone' => 'nullable|string|max:32',
             'personal_email' => 'nullable|email|max:255',
-            'professional_email_password' => 'nullable|string|max:255',
             'recovery_email' => 'nullable|email|max:255',
             'department' => 'required|string|max:255',
             'designation' => 'required|string|max:255',
@@ -99,6 +100,14 @@ class UserController extends Controller
             'bank_name' => 'nullable|string|max:255',
             'bank_account_number' => 'nullable|string|max:64',
             'bank_account_title' => 'nullable|string|max:255',
+            'employment_contract' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'offer_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'latest_education_cert' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'cv' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'previous_exp_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'previous_salary_slip' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'other_document' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
         ]);
 
         $plainPassword = Str::random(10);
@@ -108,7 +117,7 @@ class UserController extends Controller
 
         if ($authUser->role === 'manager' && in_array($role, ['admin', 'manager'])) {
             return response()->json([
-                'status' => false,
+                'success' => false,
                 'message' => 'Managers cannot create administrators or other managers.',
             ], 403);
         }
@@ -139,7 +148,6 @@ class UserController extends Controller
 
             // Emails
             'personal_email' => $request->input('personal_email'),
-            'professional_email_password' => $request->input('professional_email_password'),
             'recovery_email' => $request->input('recovery_email'),
 
             // Employment
@@ -161,7 +169,7 @@ class UserController extends Controller
         // Handle file uploads
         $this->handleFileUploads($request, $user);
 
-        $loginUrl = config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:5173'));
+        $loginUrl = config('app.frontend_url');
 
         $emailSent = false;
         $emailError = null;
@@ -187,7 +195,7 @@ class UserController extends Controller
             : 'User created successfully. Email sending failed: ' . $emailError;
 
         return response()->json([
-            'status' => true,
+            'success' => true,
             'message' => $message,
             'user' => $user,
             'email_sent' => $emailSent,
@@ -217,7 +225,6 @@ class UserController extends Controller
             'emergency_contact_relation' => 'nullable|string|max:255',
             'emergency_contact_phone' => 'nullable|string|max:32',
             'personal_email' => 'nullable|email|max:255',
-            'professional_email_password' => 'nullable|string|max:255',
             'recovery_email' => 'nullable|email|max:255',
             'department' => 'sometimes|required|string|max:255',
             'designation' => 'sometimes|required|string|max:255',
@@ -230,34 +237,42 @@ class UserController extends Controller
             'bank_name' => 'nullable|string|max:255',
             'bank_account_number' => 'nullable|string|max:64',
             'bank_account_title' => 'nullable|string|max:255',
+            'employment_contract' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'offer_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'latest_education_cert' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'cv' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'previous_exp_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'previous_salary_slip' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'other_document' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
         ]);
 
         $authUser = $request->user();
 
         if ($authUser->id === $user->id) {
             return response()->json([
-                'status' => false,
+                'success' => false,
                 'message' => 'You cannot modify your own account.',
             ], 403);
         }
 
         if ($user->active === false) {
             return response()->json([
-                'status' => false,
+                'success' => false,
                 'message' => 'Resigned users cannot be modified.',
             ], 403);
         }
 
         if ($authUser->role === 'manager' && in_array($user->role, ['admin', 'manager'])) {
             return response()->json([
-                'status' => false,
+                'success' => false,
                 'message' => 'Managers cannot modify administrators or other managers.',
             ], 403);
         }
 
         if ($authUser->role === 'manager' && $request->has('role') && in_array($request->input('role'), ['admin', 'manager'])) {
             return response()->json([
-                'status' => false,
+                'success' => false,
                 'message' => 'Managers cannot assign admin or manager roles.',
             ], 403);
         }
@@ -267,7 +282,7 @@ class UserController extends Controller
             'father_name', 'id_card_number', 'phone_number',
             'present_address', 'permanent_address',
             'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
-            'personal_email', 'professional_email_password', 'recovery_email',
+            'personal_email', 'recovery_email',
             'department', 'designation', 'hired_for', 'employee_code',
             'job_started_date', 'job_ended_date',
             'gross_salary', 'applied_via',
@@ -299,7 +314,7 @@ class UserController extends Controller
         $this->handleFileUploads($request, $user);
 
         return response()->json([
-            'status' => true,
+            'success' => true,
             'message' => 'User updated successfully',
             'user' => $user,
         ]);
@@ -322,7 +337,7 @@ class UserController extends Controller
             $ph = implode(',', array_fill(0, count($ids), '?'));
             DB::statement("UPDATE users SET sort_order = CASE id " . implode(' ', array_fill(0, count($ids), 'WHEN ? THEN ?')) . " END WHERE id IN ($ph)", [...$bindings, ...$ids]);
         }
-        return response()->json(['message' => 'Users reordered successfully']);
+        return response()->json(['success' => true, 'message' => 'Users reordered successfully']);
     }
 
     /**
@@ -333,11 +348,11 @@ class UserController extends Controller
         $authUser = request()->user();
 
         if ($authUser->id === $user->id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
         if ($authUser->role === 'manager' && in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
         // Delete associated files
@@ -346,7 +361,7 @@ class UserController extends Controller
         $user->delete();
 
         return response()->json([
-            'status' => true,
+            'success' => true,
             'message' => 'User deleted successfully',
         ]);
     }
@@ -361,21 +376,21 @@ class UserController extends Controller
 
             if ($authUser->id === $user->id) {
                 return response()->json([
-                    'status' => false,
+                    'success' => false,
                     'message' => 'You cannot resign yourself.',
                 ], 403);
             }
 
             if ($user->active === false) {
                 return response()->json([
-                    'status' => false,
+                    'success' => false,
                     'message' => 'This user is already resigned.',
                 ], 422);
             }
 
             if ($authUser->role === 'manager' && in_array($user->role, ['admin', 'manager'])) {
                 return response()->json([
-                    'status' => false,
+                    'success' => false,
                     'message' => 'Managers cannot resign administrators or other managers.',
                 ], 403);
             }
@@ -408,7 +423,7 @@ class UserController extends Controller
             }
 
             return response()->json([
-                'status' => true,
+                'success' => true,
                 'message' => $message,
                 'user' => $user,
                 'email_sent' => $emailSent,
@@ -417,7 +432,7 @@ class UserController extends Controller
         } catch (\Throwable $e) {
             Log::error("Resignation failed for user {$user->id}: " . $e->getMessage());
             return response()->json([
-                'status' => false,
+                'success' => false,
                 'message' => 'Failed to resign user. Please try again.',
             ], 500);
         }
@@ -433,7 +448,7 @@ class UserController extends Controller
             ->orderBy('name')
             ->get();
 
-        return response()->json($users);
+        return response()->json(['success' => true, 'users' => $users]);
     }
 
     /**
@@ -481,6 +496,7 @@ class UserController extends Controller
         $daysSinceCreation = $user->created_at->diffInDays(now());
 
         return response()->json([
+            'success' => true,
             'user' => $user->only([
                 'id', 'name', 'email', 'role', 'active',
                 'father_name', 'id_card_number', 'phone_number', 'contact_no',
@@ -519,19 +535,19 @@ class UserController extends Controller
     public function downloadDocument(Request $request, User $user, string $document)
     {
         if (!in_array($document, $this->documentFields)) {
-            return response()->json(['message' => 'Invalid document field.'], 404);
+            return response()->json(['success' => false, 'message' => 'Invalid document field.'], 404);
         }
 
         $path = $user->$document;
 
         if (!$path) {
-            return response()->json(['message' => 'Document not found.'], 404);
+            return response()->json(['success' => false, 'message' => 'Document not found.'], 404);
         }
 
         $fullPath = storage_path('app/public/' . $path);
 
         if (!file_exists($fullPath)) {
-            return response()->json(['message' => 'File not found on disk.'], 404);
+            return response()->json(['success' => false, 'message' => 'File not found on disk.'], 404);
         }
 
         $mimeType = mime_content_type($fullPath);
@@ -564,12 +580,17 @@ class UserController extends Controller
     {
         foreach ($this->documentFields as $field) {
             if ($request->hasFile($field)) {
+                $file = $request->file($field);
+
+                if (!$file->isValid()) {
+                    continue;
+                }
+
                 // Delete old file if exists
                 if ($user->$field && Storage::disk('public')->exists($user->$field)) {
                     Storage::disk('public')->delete($user->$field);
                 }
 
-                $file = $request->file($field);
                 $filename = $field . '_' . time() . '_' . $file->getClientOriginalName();
                 $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
 
@@ -600,19 +621,19 @@ class UserController extends Controller
         $user = $request->user();
 
         if (!in_array($document, $this->documentFields)) {
-            return response()->json(['message' => 'Invalid document field.'], 404);
+            return response()->json(['success' => false, 'message' => 'Invalid document field.'], 404);
         }
 
         $path = $user->$document;
 
         if (!$path) {
-            return response()->json(['message' => 'Document not found.'], 404);
+            return response()->json(['success' => false, 'message' => 'Document not found.'], 404);
         }
 
         $fullPath = storage_path('app/public/' . $path);
 
         if (!file_exists($fullPath)) {
-            return response()->json(['message' => 'File not found on disk.'], 404);
+            return response()->json(['success' => false, 'message' => 'File not found on disk.'], 404);
         }
 
         $mimeType = mime_content_type($fullPath);
@@ -640,14 +661,14 @@ class UserController extends Controller
         $testUser->email = $request->input('email');
 
         $plainPassword = 'TestPass123';
-        $loginUrl = config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:5173'));
+        $loginUrl = config('app.frontend_url');
 
         try {
             Mail::to($testUser->email)->send(new UserCreated($testUser, $plainPassword, $loginUrl));
             Log::info("Test email sent successfully to {$testUser->email}");
 
             return response()->json([
-                'status' => true,
+                'success' => true,
                 'message' => 'Test email sent successfully. Check your inbox.',
             ]);
         } catch (\Throwable $e) {
@@ -658,7 +679,7 @@ class UserController extends Controller
             ]);
 
             return response()->json([
-                'status' => false,
+                'success' => false,
                 'message' => 'Email sending failed: ' . $e->getMessage(),
             ], 500);
         }

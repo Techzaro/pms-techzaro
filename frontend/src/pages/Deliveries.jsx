@@ -181,7 +181,7 @@ function Deliveries() {
       <div className="projects-page">
         <div className="projects-header">
           <div>
-            <h1>Deliverables</h1>
+            <h1>Deliverables Assigned To You</h1>
             <p>Manage and track your deliverables</p>
           </div>
           <div className="header-actions">
@@ -197,7 +197,7 @@ function Deliveries() {
         <div className="task-progress">
           <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
           <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#EF4444" /> Deliverables Due Today
+            <GoDotFill color="#EF4444" /> Due Today
           </p>
           <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Pending
@@ -250,7 +250,7 @@ function Deliveries() {
                       </div>
                     </div>
                      <div>
-                       <div className="task-title" style={{ paddingLeft: "40px" }}>{item.task?.title || item.project?.title || "-"}</div>
+                       <div className="task-title">{item.task?.title || item.project?.title || "-"}</div>
                      </div>
                     <div className="user-box">
                       <div className="avatar" style={{ background: colors.bg, color: colors.text }}>

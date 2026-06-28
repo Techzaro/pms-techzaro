@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
+import { notify } from "../utils/notify";
 import "../components/ProfileModal.css";
 
 function ProfileModal({
@@ -24,16 +25,14 @@ function ProfileModal({
 
     if (!newPassword || !confirmPassword) {
 
-      alert(
-        "Please enter and confirm your password."
-      );
+      notify.error("Please enter and confirm your password.");
 
       return;
     }
 
     if (newPassword !== confirmPassword) {
 
-      alert("Passwords do not match.");
+      notify.error("Passwords do not match.");
 
       return;
     }
@@ -61,6 +60,7 @@ function ProfileModal({
           body: JSON.stringify({
             password: newPassword,
           }),
+          _notifHandled: true,
         }
       );
 
@@ -75,10 +75,7 @@ function ProfileModal({
         );
       }
 
-      alert(
-        data.message ||
-          "Password changed successfully."
-      );
+      notify.success(data.message || "Password changed successfully.");
 
       onClose();
 
@@ -86,10 +83,7 @@ function ProfileModal({
 
       console.error(error);
 
-      alert(
-        error.message ||
-          "Failed to change password."
-      );
+      notify.error(error.message || "Failed to change password.");
     }
   };
 

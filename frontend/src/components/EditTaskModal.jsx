@@ -2,8 +2,11 @@ import { useState, useEffect } from "react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
+import CustomSelect from "./CustomSelect";
+import CustomDateTimePicker from "./CustomDateTimePicker";
 import { formatDateTime, toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
+import { notify } from "../utils/notify";
 import "./layout/CreateTaskModal.css";
 
 export default function EditTaskModal({ task, onClose }) {
@@ -24,7 +27,6 @@ export default function EditTaskModal({ task, onClose }) {
   const [deliverables, setDeliverables] = useState([]);
   const [deliverableInput, setDeliverableInput] = useState({ title: "", due_datetime: "" });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   const isSelfTask = currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10) && selectedAssigneeIds.length === 1 && selectedAssigneeIds[0] === parseInt(currentUser.id, 10);
 
@@ -34,9 +36,9 @@ export default function EditTaskModal({ task, onClose }) {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       skipLoader: true,
     })
-      .then((res) => (res.ok ? res.json() : []))
+      .then((res) => (res.ok ? res.json() : { users: [] }))
       .then((data) => {
-        const users = Array.isArray(data) ? data : [];
+        const users = Array.isArray(data) ? data : (data.users || []);
         setAllUsers(users);
         setDisplayUsers(users);
       })
@@ -69,7 +71,6 @@ export default function EditTaskModal({ task, onClose }) {
 
   const handleSubmit = async (e) => {
     if (e?.preventDefault) e.preventDefault();
-    setError("");
     setLoading(true);
     try {
       const body = {
@@ -89,6 +90,7 @@ export default function EditTaskModal({ task, onClose }) {
           Authorization: `Bearer ${authToken()}`,
         },
         body: JSON.stringify(body),
+        _notifHandled: true,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to update task");
@@ -96,7 +98,7 @@ export default function EditTaskModal({ task, onClose }) {
       publish('data:changed', { type: 'task', action: 'updated' });
       onClose(true);
     } catch (err) {
-      setError(err.message);
+      notify.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -186,11 +188,16 @@ export default function EditTaskModal({ task, onClose }) {
 
             <div className="task-card">
               <label>Priority <span style={{ color: "#ef4444" }}>*</span></label>
-              <select name="priority" value={form.priority} onChange={handleChange}>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-                <option value="High">High</option>
-              </select>
+              <CustomSelect
+                name="priority"
+                value={form.priority}
+                onChange={(val) => setForm((prev) => ({ ...prev, priority: val }))}
+                options={[
+                  { value: "Medium", label: "Medium" },
+                  { value: "Low", label: "Low" },
+                  { value: "High", label: "High" },
+                ]}
+              />
             </div>
 
             <div className="task-card">
@@ -198,11 +205,17 @@ export default function EditTaskModal({ task, onClose }) {
               <div className="task-deadline-grid">
                 <div>
                   <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
-                  <input type="datetime-local" name="start_date" value={form.start_date} onChange={handleChange} />
+                  <CustomDateTimePicker
+                    value={form.start_date}
+                    onChange={(val) => setForm((prev) => ({ ...prev, start_date: val }))}
+                  />
                 </div>
                 <div>
                   <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
-                  <input type="datetime-local" name="end_date" value={form.end_date} onChange={handleChange} />
+                  <CustomDateTimePicker
+                    value={form.end_date}
+                    onChange={(val) => setForm((prev) => ({ ...prev, end_date: val }))}
+                  />
                 </div>
               </div>
             </div>
@@ -225,11 +238,9 @@ export default function EditTaskModal({ task, onClose }) {
                 </div>
                 <div className="task-field">
                   <label style={{ fontSize: "13px" }}>Due Date & Time</label>
-                  <input
-                    type="datetime-local"
+                  <CustomDateTimePicker
                     value={deliverableInput.due_datetime}
-                    onChange={(e) => setDeliverableInput((prev) => ({ ...prev, due_datetime: e.target.value }))}
-                    onKeyDown={handleDeliverableKeyDown}
+                    onChange={(val) => setDeliverableInput((prev) => ({ ...prev, due_datetime: val }))}
                   />
                 </div>
               </div>
@@ -259,7 +270,7 @@ export default function EditTaskModal({ task, onClose }) {
 
           </div>
 
-          {error && <div className="task-error-banner" style={{ margin: "0 28px" }}>{error}</div>}
+
 
         </form>
 

@@ -242,17 +242,17 @@ class EventController extends Controller
 
         if (!in_array($user->role, ['admin', 'manager'])) {
             if (!$event->is_global && !$event->assignedUsers->contains('id', $user->id)) {
-                return response()->json(['message' => 'Unauthorized'], 403);
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             }
         }
 
-        return response()->json(['event' => $this->formatEventResponse($event)]);
+        return response()->json(['success' => true, 'event' => $this->formatEventResponse($event)]);
     }
 
     public function store(Request $request)
     {
         $user = $request->user();
-        if (!in_array($user->role, ['admin', 'manager'])) return response()->json(['message' => 'Unauthorized'], 403);
+        if (!in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
 
         $validated = $request->validate([
             'title' => 'required|string|max:255', 'description' => 'nullable|string',
@@ -284,13 +284,13 @@ class EventController extends Controller
             : 'You created event "' . $event->title . '"';
         $this->activityService->log($user->id, 'event_created', $activityDesc, 'event', $event->id);
 
-        return response()->json(['message' => 'Event created successfully', 'event' => $this->formatEventResponse($event->fresh())], 201);
+        return response()->json(['success' => true, 'message' => 'Event created successfully', 'event' => $this->formatEventResponse($event->fresh())], 201);
     }
 
     public function update(Request $request, Event $event)
     {
         $user = $request->user();
-        if (!in_array($user->role, ['admin', 'manager'])) return response()->json(['message' => 'Unauthorized'], 403);
+        if (!in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
 
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255', 'description' => 'sometimes|nullable|string',
@@ -318,13 +318,13 @@ class EventController extends Controller
         // Log activity
         $this->activityService->log($user->id, 'event_updated', 'You updated event "' . $event->title . '"', 'event', $event->id);
 
-        return response()->json(['message' => 'Event updated successfully', 'event' => $this->formatEventResponse($event->fresh())]);
+        return response()->json(['success' => true, 'message' => 'Event updated successfully', 'event' => $this->formatEventResponse($event->fresh())]);
     }
 
     public function destroy(Event $event)
     {
         $user = request()->user();
-        if (!in_array($user->role, ['admin', 'manager'])) return response()->json(['message' => 'Unauthorized'], 403);
+        if (!in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
 
         $this->sendBulkEventNotification($event, $user, 'event_cancelled', 'Event Cancelled');
 
@@ -333,7 +333,7 @@ class EventController extends Controller
 
         $event->delete();
 
-        return response()->json(['message' => 'Event deleted successfully']);
+        return response()->json(['success' => true, 'message' => 'Event deleted successfully']);
     }
 
     private function sendBulkEventNotification(Event $event, User $sender, string $type, string $title): void

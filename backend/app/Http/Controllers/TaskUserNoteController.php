@@ -41,7 +41,7 @@ class TaskUserNoteController extends Controller
     public function destroy(Task $task, TaskUserNote $note)
     {
         if ((int) $note->user_id !== (int) auth()->id()) {
-            return response()->json(['message' => 'Forbidden.'], 403);
+            return response()->json(['success' => false, 'message' => 'Forbidden.'], 403);
         }
 
         $note->delete();

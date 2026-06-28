@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
+import { useNotification } from "../context/NotificationContext";
 import {
   Calendar,
   CheckCircle2,
@@ -7,17 +8,13 @@ import {
   ChevronRight,
   FolderOpen,
   Pencil,
-  Plus,
   Trash2,
-  Upload,
-  Link as LinkIcon,
   Users,
 } from "lucide-react";
 import { IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
-import CreateSubtaskModal from "../components/CreateSubtaskModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import EditTaskModal from "../components/EditTaskModal";
 import ConfirmModal from "../components/ConfirmModal";
@@ -40,6 +37,7 @@ import { publish } from "../utils/eventBus";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
 import "./TaskDetails.css";
+import "./Deliveries.css";
 
 function timeAgo(iso) {
   if (!iso) return "";
@@ -113,6 +111,7 @@ function TaskDetails() {
   const { taskId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const notify = useNotification();
   const taskIds = location.state?.taskIds || [];
   const sourcePages = {
     tasks: { label: "My Tasks", path: rolePath("tasks") },
@@ -122,10 +121,7 @@ function TaskDetails() {
 
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("");
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showSubtaskModal, setShowSubtaskModal] = useState(false);
   const [deleteTaskConfirmOpen, setDeleteTaskConfirmOpen] = useState(false);
   const [tab, setTab] = useState("deliverables");
   const [submitModal, setSubmitModal] = useState({ open: false, deliverable: null });
@@ -151,13 +147,14 @@ function TaskDetails() {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${taskId}`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
       });
       if (res.ok) {
         const data = await res.json();
         setTask(data.task);
       } else if (res.status === 404) {
         setTask(null);
-        showMessage("Task not found", "error");
+        notify.error("Task not found");
       } else {
         setTask(null);
       }
@@ -235,13 +232,6 @@ function TaskDetails() {
   const files = task?.files || [];
   const progress = typeof task?.deliverables_progress === "number" ? task.deliverables_progress : 0;
 
-  const showMessage = useCallback((text, type = "success") => {
-    setMessage(text);
-    setMessageType(type);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    setTimeout(() => { setMessage(""); setMessageType(""); }, 4000);
-  }, []);
-
   useEffect(() => {
     if (!task?.id) return;
     const token = authToken();
@@ -271,6 +261,7 @@ function TaskDetails() {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ note: noteInput }),
+        _notifHandled: true,
       });
       if (res.ok) {
         const data = await res.json();
@@ -278,7 +269,7 @@ function TaskDetails() {
         setNoteInput("");
       }
     } catch {
-      showMessage("Could not save note.", "error");
+      notify.error("Could not save note.");
     }
     setNoteSaving(false);
   };
@@ -290,13 +281,14 @@ function TaskDetails() {
       const res = await fetch(`${API_URL}/tasks/${task.id}/my-note/${noteId}`, {
         method: "DELETE",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
       });
       if (res.ok) {
         const data = await res.json();
         setNotes(data.notes || []);
       }
     } catch {
-      showMessage("Could not delete note.", "error");
+      notify.error("Could not delete note.");
     }
   };
 
@@ -334,7 +326,7 @@ function TaskDetails() {
 
   const handleTaskActionSuccess = (updatedTask) => {
     setTask((prev) => ({ ...prev, ...updatedTask }));
-    showMessage("Task updated successfully.");
+    notify.success("Task updated successfully.");
     publish('task:updated', updatedTask);
     publish('data:changed', { type: 'task', action: 'updated' });
   };
@@ -350,10 +342,11 @@ function TaskDetails() {
       const res = await fetch(`${API_URL}/tasks/${taskId}`, {
         method: "DELETE",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
       });
-      if (res.ok) { publish('task:deleted', { id: taskId }); publish('data:changed', { type: 'task', action: 'deleted' }); showMessage("Task deleted."); setTimeout(() => navigate(rolePath("tasks")), 800); }
-      else showMessage("Failed to delete task.", "error");
-    } catch { showMessage("Failed to delete task.", "error"); }
+      if (res.ok) { publish('task:deleted', { id: taskId }); publish('data:changed', { type: 'task', action: 'deleted' }); notify.success("Task deleted."); setTimeout(() => navigate(rolePath("tasks")), 800); }
+      else notify.error("Failed to delete task.");
+    } catch { notify.error("Failed to delete task."); }
   };
 
   const handleStatusChange = async (newStatus) => {
@@ -363,9 +356,10 @@ function TaskDetails() {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ status: newStatus }),
+        _notifHandled: true,
       });
-      if (res.ok) { publish('task:updated', { id: taskId, status: newStatus }); publish('data:changed', { type: 'task', action: 'updated' }); setTask((p) => p ? { ...p, status: newStatus } : p); showMessage("Status updated."); }
-    } catch { showMessage("Failed to update status.", "error"); }
+      if (res.ok) { publish('task:updated', { id: taskId, status: newStatus }); publish('data:changed', { type: 'task', action: 'updated' }); setTask((p) => p ? { ...p, status: newStatus } : p); notify.success("Status updated."); }
+    } catch { notify.error("Failed to update status."); }
   };
 
   if (loading) return <DashboardLayout hideRightSidebar><div className="td-loading">Loading task...</div></DashboardLayout>;
@@ -375,7 +369,6 @@ function TaskDetails() {
     <>
       <DashboardLayout hideRightSidebar>
         <div className="td-page">
-          {message && <div className={`td-toast td-toast--${messageType}`}>{message}</div>}
 
           <div className="td-layout">
             {/* ===== LEFT ===== */}
@@ -421,12 +414,6 @@ function TaskDetails() {
                         Delete
                       </button>
                     </>
-                  )}
-                  {!isApproved && (
-                    <button className="td-btn-primary" onClick={() => setShowSubtaskModal(true)}>
-                      <Plus size={16} strokeWidth={2.5} />
-                      Add Subtask
-                    </button>
                   )}
                   {isAssignee && ["pending", "reopened"].includes(task?.status) && (
                     <button
@@ -608,7 +595,7 @@ function TaskDetails() {
                                       {statusLabel(t.status)}
                                     </span>
                                   </td>
-                                  <td style={{ width: "20%", textAlign: "center" }} className="td-date">{formatShortDate(t.end_date)}</td>
+                                  <td style={{ width: "20%", textAlign: "center", whiteSpace: "pre-line" }} className="td-date">{formatDateTime(t.end_date)}</td>
                                 </>
                               )}
                             </SortableTableWrapper>
@@ -627,77 +614,67 @@ function TaskDetails() {
                       {(orderedDeliverables.length === 0 && (task.deliverables || []).length === 0) ? (
                         <p className="td-empty">No deliverables linked to this task.</p>
                       ) : (
-                        <table className="td-table">
-                          <thead>
-                            <tr>
-                              <th style={{ width: "35%", textAlign: "left" }}>Deliverable</th>
-                              <th style={{ width: "20%", textAlign: "center" }}>Due Date</th>
-                              <th style={{ width: "20%", textAlign: "center" }}>Status</th>
-                              <th style={{ width: "25%", textAlign: "center" }}>Action</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <SortableTableWrapper 
-                              items={orderedDeliverables.length ? orderedDeliverables : (task.deliverables || [])} 
-                              onReorder={handleDeliverableReorder}
-                            >
-                              {(d) => (
-                                <>
-                                  <td style={{ width: "35%", textAlign: "left" }}>
-                                    <div className="td-task-name">{d.title}</div>
-                                    {d.description && <div className="td-task-sub">{d.description}</div>}
-                                  </td>
-                                  <td style={{ width: "20%", textAlign: "center" }}>
-                                    <div className="td-date">{formatShortDate(d.due_date)}</div>
-                                  </td>
-                                  <td style={{ width: "20%", textAlign: "center" }}>
-                                    <span className="td-pill" style={{ 
-                                      background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), 
-                                      color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) 
+                        <div className="pd-table-wrap">
+                          <div className="deliveries-table-header" style={{ gridTemplateColumns: "minmax(150px, 1.6fr) minmax(160px, 1.8fr) minmax(110px, 1.1fr) minmax(90px, 0.9fr) minmax(70px, 0.5fr)" }}>
+                            <div>Deliverable</div>
+                            <div>{isCreator ? "Assigned To" : "Assigned By"}</div>
+                            <div>Due Date</div>
+                            <div>Status</div>
+                            <div>Action</div>
+                          </div>
+                          <SortableTableWrapper
+                            items={orderedDeliverables.length ? orderedDeliverables : (task.deliverables || [])}
+                            onReorder={handleDeliverableReorder}
+                            as="div"
+                          >
+                            {(d) => (
+                              <div className="deliveries-table-row" style={{ gridTemplateColumns: "minmax(150px, 1.6fr) minmax(160px, 1.8fr) minmax(110px, 1.1fr) minmax(90px, 0.9fr) minmax(70px, 0.5fr)" }}>
+                                <div className="user-box">
+                                  <div className="avatar" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), width: '42px', height: '42px', fontSize: '14px' }}>
+                                    {initials(d.title)}
+                                  </div>
+                                  <div>
+                                    <div className="user-name">{d.title}</div>
+                                    {d.description && <div className="user-role">{d.description.length > 40 ? d.description.slice(0, 40) + '...' : d.description}</div>}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="user-name">{isCreator ? (d.assignee?.name || "—") : (d.creator?.name || "—")}</div>
+                                  <div className="user-role">{isCreator ? (d.assignee?.role ? d.assignee.role.replace("_", " ") : "") : (d.creator?.role ? d.creator.role.replace("_", " ") : "")}</div>
+                                </div>
+                                <div className="date-box" style={{ whiteSpace: "pre-line" }}>{formatDateTime(d.due_date)}</div>
+                                <div>
+                                  <span className="badge" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }}>
+                                    <span className="dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }} />
+                                    {statusLabel(d.status)}
+                                  </span>
+                                </div>
+                                <div className="action-btns">
+                                  {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
+                                    <button className="action-icon-btn action-submit" title="Submit" onClick={() => setSubmitModal({ open: true, deliverable: d })}>
+                                      <LuSend size={16} />
+                                    </button>
+                                  ) : (
+                                    <button className="action-icon-btn action-view" title="View" onClick={() => {
+                                      if (isCreator) {
+                                        setAssignerModal({ open: true, deliverable: d });
+                                      } else {
+                                        setViewModal({ open: true, deliverable: d });
+                                      }
                                     }}>
-                                      <span className="td-pill-dot" style={{ 
-                                        background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) 
-                                      }} />
-                                      {(d.status || "").charAt(0).toUpperCase() + (d.status || "").slice(1)}
-                                    </span>
-                                  </td>
-                                  <td style={{ width: "25%", textAlign: "center" }}>
-                                    <div style={{ display: "flex", gap: "6px", justifyContent: "center" }}>
-                                      {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
-                                        <button
-                                          className="td-btn-outline"
-                                          style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
-                                          onClick={() => setSubmitModal({ open: true, deliverable: d })}
-                                        >
-                                          <LuSend size={12} /> Submit
-                                        </button>
-                                      ) : (
-                                        <button
-                                          className="td-btn-outline"
-                                          style={{ padding: "4px 12px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
-                                          onClick={() => {
-                                            if (isCreator) {
-                                              setAssignerModal({ open: true, deliverable: d });
-                                            } else {
-                                              setViewModal({ open: true, deliverable: d });
-                                            }
-                                          }}
-                                        >
-                                          <IoEyeOutline size={12} /> View
-                                        </button>
-                                      )}
-                                    </div>
-                                  </td>
-                                </>
-                              )}
-                            </SortableTableWrapper>
-                          </tbody>
-                        </table>
+                                      <IoEyeOutline size={16} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </SortableTableWrapper>
+                        </div>
                       )}
                     </div>
                   )}
 
-                  {tab === "files" && <FileUploadSection taskId={task.id} files={files} isCreator={isCreator} isAssignee={isAssignee} isApproved={isApproved} onFileChange={() => fetchTask(false)} />}
+                  {tab === "files" && <FileUploadSection taskId={task.id} files={files} />}
 
                 </div>
               </div>
@@ -795,13 +772,6 @@ function TaskDetails() {
           />
         )}
 
-        {showSubtaskModal && (
-          <CreateSubtaskModal
-            parentId={task.id}
-            projectId={task.project_id}
-            onClose={(refresh) => { setShowSubtaskModal(false); if (refresh) fetchTask(false); }}
-          />
-        )}
       </DashboardLayout>
 
       <SubmitDeliverableModal
@@ -851,109 +821,12 @@ function TaskDetails() {
 }
 
 /* ── File Upload Section Component ── */
-function FileUploadSection({ taskId, files, isCreator, isAssignee, isApproved, onFileChange }) {
-  const fileRef = useRef(null);
-  const [uploading, setUploading] = useState(false);
-  const [addingLink, setAddingLink] = useState(false);
-  const [linkUrl, setLinkUrl] = useState("");
-  const [linkName, setLinkName] = useState("");
-  const [message, setMessage] = useState("");
-
-  const canManage = (isCreator || isAssignee) && !isApproved;
-
-  const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    setMessage("");
-    try {
-      const token = authToken();
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch(`${API_URL}/tasks/${taskId}/files`, {
-        method: "POST",
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: form,
-      });
-      if (res.ok) {
-        setMessage("File uploaded.");
-        onFileChange();
-      } else {
-        const d = await res.json();
-        setMessage(d.message || "Upload failed.");
-      }
-    } catch {
-      setMessage("Upload failed.");
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
-  };
-
-  const handleAddLink = async () => {
-    if (!linkUrl) return;
-    setAddingLink(true);
-    setMessage("");
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/links`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ url: linkUrl, name: linkName || undefined }),
-      });
-      if (res.ok) {
-        setMessage("Link added.");
-        setLinkUrl("");
-        setLinkName("");
-        onFileChange();
-      } else {
-        const d = await res.json();
-        setMessage(d.message || "Failed to add link.");
-      }
-    } catch {
-      setMessage("Failed to add link.");
-    } finally {
-      setAddingLink(false);
-    }
-  };
-
-  const handleDelete = async (fileId) => {
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/files/${fileId}`, {
-        method: "DELETE",
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        setMessage("File deleted.");
-        onFileChange();
-      }
-    } catch {
-      setMessage("Failed to delete file.");
-    }
-  };
-
+function FileUploadSection({ taskId, files }) {
   return (
     <div>
       <div className="td-section-header">
         <h2 className="td-section-title">Files & Attachments</h2>
       </div>
-      {message && <p style={{ fontSize: "13px", margin: "0 0 12px", color: message.includes("failed") || message.includes("Failed") ? "#dc2626" : "#16a34a" }}>{message}</p>}
-      {canManage && (
-        <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
-          <button className="td-btn-outline" style={{ display: "flex", alignItems: "center", gap: "6px" }} disabled={uploading} onClick={() => fileRef.current?.click()}>
-            <Upload size={14} /> {uploading ? "Uploading..." : "Upload File"}
-          </button>
-          <input ref={fileRef} type="file" style={{ display: "none" }} onChange={handleFileUpload} />
-          <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
-            <input type="url" placeholder="Link URL" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} style={{ padding: "6px 10px", fontSize: "13px", border: "1px solid #d1d5db", borderRadius: "6px", width: "200px", maxWidth: "100%" }} />
-            <input type="text" placeholder="Name (optional)" value={linkName} onChange={(e) => setLinkName(e.target.value)} style={{ padding: "6px 10px", fontSize: "13px", border: "1px solid #d1d5db", borderRadius: "6px", width: "140px", maxWidth: "100%" }} />
-            <button className="td-btn-outline" style={{ display: "flex", alignItems: "center", gap: "6px" }} disabled={addingLink || !linkUrl} onClick={handleAddLink}>
-              <LinkIcon size={14} /> {addingLink ? "Adding..." : "Add Link"}
-            </button>
-          </div>
-        </div>
-      )}
       {files.length === 0 ? (
         <p className="td-empty">No files attached to this task.</p>
       ) : (
@@ -962,11 +835,6 @@ function FileUploadSection({ taskId, files, isCreator, isAssignee, isApproved, o
             <li key={f.id}>
               <FolderOpen size={18} />
               {f.url ? <a href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer">{f.name}</a> : <span>{f.name}</span>}
-              {canManage && (
-                <button className="td-btn-danger" style={{ marginLeft: "auto", padding: "2px 8px", fontSize: "12px" }} onClick={() => handleDelete(f.id)}>
-                  <Trash2 size={12} />
-                </button>
-              )}
             </li>
           ))}
         </ul>

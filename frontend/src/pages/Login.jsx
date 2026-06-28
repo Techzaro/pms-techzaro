@@ -7,22 +7,22 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import API_URL from "../config/api";
 import { saveSession, clearAllSessions, authToken } from "../utils/auth";
+import { useNotification } from "../context/NotificationContext";
 import "./Login.css";
 
 function Login() {
+  const notify = useNotification();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({ email: "", password: "", form: "" });
 
   useEffect(() => {
     const urlMessage = searchParams.get("message");
     if (urlMessage) {
-      setMessage(urlMessage);
-      setMessageType("error");
+      notify.error(urlMessage);
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
@@ -31,34 +31,24 @@ function Login() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
-  const [passwordMessage, setPasswordMessage] = useState("");
-  const [passwordMessageType, setPasswordMessageType] = useState("");
-
-  const showMessage = (text, type = "success") => {
-    setMessage(text);
-    setMessageType(type);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    setTimeout(() => {
-      setMessage("");
-      setMessageType("");
-    }, 4000);
-  };
-
-  const showPasswordMessage = (text, type = "success") => {
-    setPasswordMessage(text);
-    setPasswordMessageType(type);
-  };
 
   const handleLogin = async () => {
+    const errors = { email: "", password: "", form: "" };
+
     if (!email.trim()) {
-      showMessage("Please enter your email address.", "error");
-      return;
+      errors.email = "Please enter your email address.";
     }
 
     if (!password.trim()) {
-      showMessage("Please enter your password.", "error");
+      errors.password = "Please enter your password.";
+    }
+
+    if (errors.email || errors.password) {
+      setFieldErrors(errors);
       return;
     }
+
+    setFieldErrors({ email: "", password: "", form: "" });
 
     try {
       setLoading(true);
@@ -69,6 +59,7 @@ function Login() {
           "Accept": "application/json",
           "Content-Type": "application/json"
         },
+        _notifHandled: true,
         body: JSON.stringify({
           email,
           password
@@ -85,18 +76,21 @@ function Login() {
       }
 
       if (!res.ok) {
+        let msg = "";
         if (res.status === 401) {
-          throw new Error("Incorrect email or password. Please try again.");
+          msg = "Incorrect email or password. Please try again.";
         } else if (res.status === 403) {
-          throw new Error(data.message || "Your account has been deactivated. Please contact admin.");
+          msg = data.message || "Your account has been deactivated. Please contact admin.";
         } else if (res.status === 422) {
-          throw new Error(data.message || "Please enter valid email and password.");
+          msg = data.message || "Please enter valid email and password.";
         } else {
-          throw new Error(data.message || "Something went wrong. Please try again.");
+          msg = data.message || "Something went wrong. Please try again.";
         }
+        setFieldErrors({ email: "", password: "", form: msg });
+        return;
       }
 
-      if (data.status) {
+      if (data.success) {
         saveSession(data.role, data.token, data.user || {});
 
         if (data.must_change_password) {
@@ -106,11 +100,11 @@ function Login() {
           redirectToDashboard(data.role);
         }
       } else {
-        showMessage(data.message || "Incorrect email or password. Please try again.", "error");
+        setFieldErrors({ email: "", password: "", form: data.message || "Incorrect email or password. Please try again." });
       }
     } catch (error) {
       console.log(error);
-      showMessage(error.message || "Something went wrong. Please try again.", "error");
+      setFieldErrors({ email: "", password: "", form: error.message || "Something went wrong. Please try again." });
     } finally {
       setLoading(false);
     }
@@ -129,20 +123,18 @@ function Login() {
   };
 
   const handleFirstTimePasswordChange = async () => {
-    showPasswordMessage("", "");
-
     if (!newPassword.trim()) {
-      showPasswordMessage("Please enter a new password.", "error");
+      notify.error("Please enter a new password.");
       return;
     }
 
     if (newPassword.length < 6) {
-      showPasswordMessage("Password must be at least 6 characters long.", "error");
+      notify.error("Password must be at least 6 characters long.");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      showPasswordMessage("Passwords do not match. Please re-enter.", "error");
+      notify.error("Passwords do not match. Please re-enter.");
       return;
     }
 
@@ -161,6 +153,7 @@ function Login() {
         body: JSON.stringify({
           new_password: newPassword,
         }),
+        _notifHandled: true,
       });
 
       const data = await res.json();
@@ -171,7 +164,7 @@ function Login() {
 
       clearAllSessions();
 
-      showMessage("Password changed successfully. Please login with your new password.", "success");
+      notify.success("Password changed successfully. Please login with your new password.");
       setMustChangePassword(false);
       setNewPassword("");
       setConfirmPassword("");
@@ -179,7 +172,7 @@ function Login() {
       setPassword("");
 
     } catch (error) {
-      showPasswordMessage(error.message || "Failed to change password. Please try again.", "error");
+      notify.error(error.message || "Failed to change password. Please try again.");
     } finally {
       setChangingPassword(false);
     }
@@ -206,18 +199,6 @@ function Login() {
             <p className="subtitle">
               This is your first login. Please change your password to continue.
             </p>
-
-            {message && (
-              <div className={`message ${messageType}`}>
-                {message}
-              </div>
-            )}
-
-            {passwordMessage && (
-              <div className={`message ${passwordMessageType}`}>
-                {passwordMessage}
-              </div>
-            )}
 
             <input
               type="password"
@@ -266,25 +247,25 @@ function Login() {
           <h2>Welcome</h2>
           <p className="subtitle">Login to continue your work</p>
 
-          {message && (
-            <div className={`message ${messageType}`}>
-              {message}
-            </div>
-          )}
+          {fieldErrors.form && <span className="field-error-text form-error">{fieldErrors.form}</span>}
 
           <input
             type="email"
             placeholder="Enter Email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => { setEmail(e.target.value); setFieldErrors(prev => ({ ...prev, email: "", form: "" })); }}
+            className={fieldErrors.email ? "field-error" : ""}
           />
+          {fieldErrors.email && <span className="field-error-text">{fieldErrors.email}</span>}
 
           <input
             type="password"
             placeholder="Enter Password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => { setPassword(e.target.value); setFieldErrors(prev => ({ ...prev, password: "", form: "" })); }}
+            className={fieldErrors.password ? "field-error" : ""}
           />
+          {fieldErrors.password && <span className="field-error-text">{fieldErrors.password}</span>}
 
           <div className="bottom-area">
             <div className="options">

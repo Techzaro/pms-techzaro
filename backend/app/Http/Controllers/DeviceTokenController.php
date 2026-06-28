@@ -27,7 +27,7 @@ class DeviceTokenController extends Controller
             ]
         );
 
-        return response()->json(['message' => 'Device token saved']);
+        return response()->json(['success' => true, 'message' => 'Device token saved']);
     }
 
     public function destroy(Request $request)
@@ -40,6 +40,6 @@ class DeviceTokenController extends Controller
             ->where('device_token', $validated['device_token'])
             ->delete();
 
-        return response()->json(['message' => 'Device token removed']);
+        return response()->json(['success' => true, 'message' => 'Device token removed']);
     }
 }

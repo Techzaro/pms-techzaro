@@ -15,6 +15,7 @@
   padding: 24px;
 
   backdrop-filter: blur(4px);
+  overflow: hidden;
 }
 
 /* MODAL */
@@ -28,11 +29,20 @@
   border-radius: 24px;
 
   overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-width: none;
 
   box-shadow: 0 25px 80px rgba(0, 0, 0, 0.18);
 
   max-height: 95vh;
+}
+
+.task-modal select,
+.task-modal input,
+.task-modal textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .task-modal::-webkit-scrollbar {
@@ -131,6 +141,7 @@
   gap: 24px;
 
   padding: 28px;
+  min-width: 0;
 }
 
 /* LEFT */
@@ -139,6 +150,7 @@
   display: flex;
   flex-direction: column;
   gap: 22px;
+  min-width: 0;
 }
 
 .task-grid-2 {
@@ -357,6 +369,7 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
+  min-width: 0;
 }
 
 .task-card {

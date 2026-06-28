@@ -117,6 +117,21 @@ class TeamController extends Controller
             ], 422);
         }
 
+        // Check if the user's role is team_lead
+        $user = \App\Models\User::find($validated['leader_id']);
+        if (!$user) {
+            return response()->json([
+                'message' => 'User not found.',
+            ], 404);
+        }
+
+        $userRole = $user->role === 'teamlead' ? 'team_lead' : $user->role;
+        if ($userRole !== 'team_lead') {
+            return response()->json([
+                'message' => 'This user cannot be assigned as Team Lead. First update this user\'s role to "Team Lead" from Edit User, then you can assign them as Team Lead.',
+            ], 422);
+        }
+
         $team->leader_id = $validated['leader_id'];
         $team->save();
 

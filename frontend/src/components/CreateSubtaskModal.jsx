@@ -3,14 +3,16 @@ import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
+import CustomSelect from "./CustomSelect";
+import CustomDateTimePicker from "./CustomDateTimePicker";
 import { toUTCIso } from "../utils/formatDateTime";
+import { notify } from "../utils/notify";
 import "./layout/CreateTaskModal.css";
 
 const padNum = (n) => String(n).padStart(2, "0");
 
 const CreateSubtaskModal = ({ parentId, projectId, onClose }) => {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [formErrors, setFormErrors] = useState({});
   const [allUsers, setAllUsers] = useState([]);
 
@@ -42,9 +44,9 @@ const CreateSubtaskModal = ({ parentId, projectId, onClose }) => {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       skipLoader: true,
     })
-      .then((res) => (res.ok ? res.json() : []))
+      .then((res) => (res.ok ? res.json() : { users: [] }))
       .then((data) => {
-        let users = Array.isArray(data) ? data : [];
+        let users = Array.isArray(data) ? data : (data.users || []);
         if (currentUser && !users.some((u) => u.id === currentUser.id)) {
           users = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role }, ...users];
         }
@@ -134,7 +136,6 @@ const CreateSubtaskModal = ({ parentId, projectId, onClose }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
 
     if (!validateForm()) return;
 
@@ -160,6 +161,7 @@ const CreateSubtaskModal = ({ parentId, projectId, onClose }) => {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(body),
+        _notifHandled: true,
       });
 
       const data = await response.json();
@@ -172,7 +174,7 @@ const CreateSubtaskModal = ({ parentId, projectId, onClose }) => {
 
       onClose(true);
     } catch (err) {
-      setError(err.message);
+      notify.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -344,16 +346,16 @@ const CreateSubtaskModal = ({ parentId, projectId, onClose }) => {
             {/* PRIORITY */}
             <div className="task-card">
               <label>Priority <span style={{ color: "#ef4444" }}>*</span></label>
-              <select
+              <CustomSelect
                 name="priority"
                 value={form.priority}
-                onChange={handleChange}
-                className={formErrors.priority ? "field-error" : ""}
-              >
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-                <option value="High">High</option>
-              </select>
+                onChange={(val) => setForm((prev) => ({ ...prev, priority: val }))}
+                options={[
+                  { value: "Medium", label: "Medium" },
+                  { value: "Low", label: "Low" },
+                  { value: "High", label: "High" },
+                ]}
+              />
               {formErrors.priority && <span className="field-error-text">{formErrors.priority}</span>}
             </div>
 
@@ -363,18 +365,17 @@ const CreateSubtaskModal = ({ parentId, projectId, onClose }) => {
               <div className="task-date-grid">
                 <div>
                   <span>Start Date</span>
-                  <input
-                    type="date"
+                  <CustomDateTimePicker
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={setStartDate}
+                    dateOnly
                   />
                 </div>
                 <div>
                   <span>Due Date & Time</span>
-                  <input
-                    type="datetime-local"
+                  <CustomDateTimePicker
                     value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
+                    onChange={setEndDate}
                   />
                 </div>
               </div>
@@ -383,8 +384,6 @@ const CreateSubtaskModal = ({ parentId, projectId, onClose }) => {
           </div>
 
         </form>
-
-        {error && <div className="task-error-banner">{error}</div>}
 
         {/* FOOTER */}
         <div className="task-footer">

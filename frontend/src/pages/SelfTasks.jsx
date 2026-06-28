@@ -15,7 +15,7 @@ import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal"; /
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
-import { formatDateOnly } from "../utils/formatDateTime";
+import { formatDateTime } from "../utils/formatDateTime";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
@@ -62,6 +62,10 @@ const SelfTasks = () => {
   const [statusFilter, setStatusFilter] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
   const [orderedItems, setOrderedItems] = useState([]);
+
+  const selectStatusFilter = (filter) => {
+    setStatusFilter(filter);
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -131,7 +135,7 @@ const SelfTasks = () => {
   };
 
   const formatDate = (dateStr) => {
-    return formatDateOnly(dateStr);
+    return formatDateTime(dateStr);
   };
 
   const formatStatus = (status) => {
@@ -154,7 +158,7 @@ const SelfTasks = () => {
 
   const baseItems = orderedItems.length ? orderedItems : items;
   const pendingStatuses = ["pending", "in_progress", "In Progress", "Planned", "submitted", "reopened", "rejected"];
-  const filteredItems = statusFilter
+  const filteredItems = statusFilter && statusFilter !== "due_today"
     ? baseItems.filter((item) => {
         if (item.item_type === "project") {
           if (statusFilter === "pending") {
@@ -219,20 +223,23 @@ const SelfTasks = () => {
       </div>
 
       <div className="task-progress">
-        <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
-        <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => setStatusFilter("pending")} style={{ cursor: "pointer" }}>
+        <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
+        <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
+          <GoDotFill color="#EF4444" /> Due Today
+        </p>
+        <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Pending
         </p>
-        <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => setStatusFilter("submitted")} style={{ cursor: "pointer" }}>
+        <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Submitted
         </p>
-        <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => setStatusFilter("reopened")} style={{ cursor: "pointer" }}>
+        <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Reopened
         </p>
-        <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => setStatusFilter("approved")} style={{ cursor: "pointer" }}>
+        <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Approved
         </p>
-        <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => setStatusFilter("rejected")} style={{ cursor: "pointer" }}>
+        <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Rejected
         </p>
       </div>
@@ -286,7 +293,7 @@ const SelfTasks = () => {
                     <div>
                       <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{calculateProgress(item)}%</div>
                       <div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: `${calculateProgress(item)}%` }}></div></div>
-                      <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.completed_tasks || 0}/{item.total_tasks || 0} tasks</div>
+                      <div className="deliverables-approved-text">{item.completed_tasks || 0}/{item.total_tasks || 0} tasks</div>
                     </div>
                     <div>
                       <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
@@ -295,7 +302,6 @@ const SelfTasks = () => {
                       </span>
                     </div>
                     <div className="date-box">
-                      <div>{formatDate(item.start_date)}</div>
                       <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
                     </div>
                     <div className="action-btns">
@@ -332,7 +338,7 @@ const SelfTasks = () => {
                   <div>
                     <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{item.deliverables_progress || 0}%</div>
                     <div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div></div>
-                    <div style={{ fontSize: "11px", color: "#6b7280" }}>{item.approved_deliverables || 0}/{item.total_deliverables || 0} Deliverables Approved</div>
+                    <div className="deliverables-approved-text">{item.approved_deliverables || 0}/{item.total_deliverables || 0} Deliverables Approved</div>
                   </div>
                   <div>
                     <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
@@ -341,7 +347,6 @@ const SelfTasks = () => {
                     </span>
                   </div>
                   <div className="date-box">
-                    <div>{formatDate(item.start_date)}</div>
                     <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
                   </div>
                   <div className="action-btns">

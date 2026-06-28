@@ -64,12 +64,12 @@ class NotificationController extends Controller
     public function markAsRead(Request $request, Notification $notification)
     {
         if ($notification->user_id !== $request->user()->id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
         $notification->update(['is_read' => true]);
 
-        return response()->json(['message' => 'Notification marked as read']);
+        return response()->json(['success' => true, 'message' => 'Notification marked as read']);
     }
 
     public function markAllAsRead(Request $request)
@@ -83,6 +83,6 @@ class NotificationController extends Controller
             })
             ->update(['is_read' => true]);
 
-        return response()->json(['message' => 'All notifications marked as read']);
+        return response()->json(['success' => true, 'message' => 'All notifications marked as read']);
     }
 }

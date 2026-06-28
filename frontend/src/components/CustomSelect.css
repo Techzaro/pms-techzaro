@@ -1,0 +1,99 @@
+.cs-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.cs-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+  cursor: pointer;
+  text-align: left;
+  box-sizing: border-box;
+  min-height: 42px;
+}
+
+.cs-trigger:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.cs-placeholder {
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+.cs-arrow {
+  flex-shrink: 0;
+  transition: transform 0.2s;
+  color: #6b7280;
+}
+
+.cs-arrow-open {
+  transform: rotate(180deg);
+}
+
+.cs-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.cs-dropdown::-webkit-scrollbar {
+  width: 4px;
+}
+
+.cs-dropdown::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+.cs-option {
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cs-option:first-child {
+  border-radius: 12px 12px 0 0;
+}
+
+.cs-option:last-child {
+  border-radius: 0 0 12px 12px;
+}
+
+.cs-option:hover {
+  background: #f3f4f6;
+}
+
+.cs-selected {
+  background: #eef2ff;
+  color: #4f46e5;
+  font-weight: 600;
+}
+
+.cs-selected:hover {
+  background: #e0e7ff;
+}

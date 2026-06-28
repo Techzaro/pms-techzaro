@@ -4,6 +4,7 @@ import { FileText, Upload, X, Image } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { formatDateTimeShort } from "../utils/formatDateTime";
+import { notify } from "../utils/notify";
 import SubmissionLinkSection from "./SubmissionLinkSection";
 import "./SubmitDeliverableModal.css";
 import "./layout/CreateTaskModal.css";
@@ -13,7 +14,6 @@ function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
 
   useEffect(() => {
     if (isOpen) {
@@ -21,7 +21,6 @@ function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
       setComment("");
       setFiles([]);
       setLinks([]);
-      setError("");
     } else {
       document.body.style.overflow = "";
     }
@@ -47,11 +46,10 @@ function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
   const handleSubmit = async () => {
     const validLinks = links.map((l) => l.url);
     if (!comment.trim() && files.length === 0 && validLinks.length === 0) {
-      setError("Please add a comment, attach files, or add links.");
+      notify.error("Please add a comment, attach files, or add links.");
       return;
     }
     setSubmitting(true);
-    setError("");
     try {
       const token = authToken();
       const formData = new FormData();
@@ -63,6 +61,7 @@ function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
         method: "POST",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         body: formData,
+        _notifHandled: true,
       });
 
       const data = await res.json();
@@ -70,10 +69,10 @@ function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
         onSubmitSuccess(data.task);
         onClose();
       } else {
-        setError(data.message || "Failed to submit task.");
+        notify.error(data.message || "Failed to submit task.");
       }
     } catch {
-      setError("An error occurred. Please try again.");
+      notify.error("An error occurred. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -170,8 +169,6 @@ function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
           <SubmissionLinkSection
             onLinksChange={setLinks}
           />
-
-          {error && <div className="sd-error">{error}</div>}
         </div>
 
         <div className="sd-footer">

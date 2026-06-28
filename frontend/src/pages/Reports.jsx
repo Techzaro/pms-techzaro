@@ -1,7 +1,7 @@
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useCallback, memo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import CompanyEmployeeReport from "./CompanyEmployeeReport";
 import { getUser, rolePath } from "../utils/auth";
 import { useApiQuery } from "../hooks/useApi";
@@ -119,11 +119,19 @@ function Reports() {
   const stored = getUser();
   const currentRole = stored?.role || "member";
   const isAdminOrManager = currentRole === "admin" || currentRole === "manager";
+  const isTeamLead = currentRole === "team_lead" || currentRole === "teamlead";
+
+  // Determine view based on URL path
+  const location = useLocation();
+  const isTeamMembersView = location.pathname.includes("team-members-report");
+  
+  // For team_lead, determine view based on URL
+  const view = isTeamLead ? (isTeamMembersView ? "team" : "self") : "self";
 
   const { data: summary, isLoading } = useApiQuery(
-    ["report-summary-cards", period],
+    ["report-summary-cards", period, view],
     "/reports/summary-cards",
-    { period },
+    { period, view },
     { staleTime: 0, refetchOnMount: true, refetchInterval: 30000 }
   );
 
@@ -131,7 +139,7 @@ function Reports() {
     ["report-user-table", period],
     "/reports/user-performance-table",
     { period },
-    { staleTime: 0, refetchOnMount: true, refetchInterval: 30000, enabled: isAdminOrManager }
+    { staleTime: 0, refetchOnMount: true, refetchInterval: 30000, enabled: isAdminOrManager || isTeamMembersView }
   );
 
   const refetchSummary = useCallback(() => {
@@ -156,6 +164,9 @@ function Reports() {
     navigate(`${basePath}${qs}`);
   }, [navigate, isAdminOrManager]);
 
+  // Determine if we should show the user table
+  const showUserTable = isAdminOrManager || isTeamMembersView;
+
   const breadcrumbs = [
     { label: "Reports" },
   ];
@@ -165,14 +176,11 @@ function Reports() {
       <Breadcrumb items={breadcrumbs} />
       <div className="reports-page">
 
-        {/* WELCOME HEADER */}
-       
-
         {/* REPORT HEADER */}
         <div className="reports-header">
           <div>
-            <h1>Performance Report</h1>
-            <p>Track progress, tasks, and performance across your team</p>
+            <h1>{isTeamMembersView ? "Team Members Performance" : "Performance Report"}</h1>
+            <p>{isTeamMembersView ? "Track progress and performance of your team members" : "Track progress, tasks, and performance across your team"}</p>
           </div>
           <div className="reports-header-actions">
             <select
@@ -219,8 +227,8 @@ function Reports() {
           })}
         </div>
 
-        {/* TABLE - Admin & Manager only */}
-        {isAdminOrManager && (
+        {/* TABLE - Admin, Manager & Team Lead (on team members view) */}
+        {showUserTable && (
           <div className="reports-table-wrapper">
             <div className="reports-table">
               <div className="table-header">

@@ -6,6 +6,7 @@ import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { publish } from "../utils/eventBus";
+import { useNotification } from "../context/NotificationContext";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import "./TaskDetails.css";
 import { formatDateTimeShort } from "../utils/formatDateTime";
@@ -53,17 +54,10 @@ function DeliverableDetails() {
   const [submitting, setSubmitting] = useState(false);
   const [rejectComment, setRejectComment] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("success");
   const fileInputRef = useRef(null);
   const filesInputRef = useRef(null);
 
-  const showToast = useCallback((text, type = "success") => {
-    setMessage(text);
-    setMessageType(type);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    setTimeout(() => { setMessage(""); setMessageType(""); }, 4000);
-  }, []);
+  const notify = useNotification();
 
   const fetchDeliverable = useCallback(() => {
     setLoading(true);
@@ -119,7 +113,7 @@ function DeliverableDetails() {
 
   const handleSubmit = async () => {
     if (!submitComment.trim() && !submitFile) {
-      showToast("Please add a comment or attach a file.", "error");
+      notify.error("Please add a comment or attach a file.");
       return;
     }
     setSubmitting(true);
@@ -135,13 +129,14 @@ function DeliverableDetails() {
         method: "POST",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         body: formData,
+        _notifHandled: true,
       });
 
       const data = await res.json();
       if (res.ok) {
         publish('deliverable:updated', data.deliverable || data);
         publish('data:changed', { type: 'deliverable', action: 'updated' });
-        showToast("Deliverable submitted successfully!");
+        notify.success("Deliverable submitted successfully!");
         setShowSubmitForm(false);
         setSubmitComment("");
         setSubmitFile(null);
@@ -150,10 +145,10 @@ function DeliverableDetails() {
         setLinkInput("");
         fetchDeliverable();
       } else {
-        showToast(data.message || "Failed to submit", "error");
+        notify.error(data.message || "Failed to submit");
       }
     } catch {
-      showToast("An error occurred", "error");
+      notify.error("An error occurred");
     } finally {
       setSubmitting(false);
     }
@@ -165,18 +160,19 @@ function DeliverableDetails() {
       const res = await fetch(`${API_URL}/deliverables/${deliverableId}/approve`, {
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
       });
       const data = await res.json();
       if (res.ok) {
         publish('deliverable:updated', data.deliverable || data);
         publish('data:changed', { type: 'deliverable', action: 'updated' });
-        showToast("Deliverable approved!");
+        notify.success("Deliverable approved!");
         fetchDeliverable();
       } else {
-        showToast(data.message || "Failed to approve", "error");
+        notify.error(data.message || "Failed to approve");
       }
     } catch {
-      showToast("An error occurred", "error");
+      notify.error("An error occurred");
     }
   };
 
@@ -187,20 +183,21 @@ function DeliverableDetails() {
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ comment: rejectComment }),
+        _notifHandled: true,
       });
       const data = await res.json();
       if (res.ok) {
         publish('deliverable:updated', data.deliverable || data);
         publish('data:changed', { type: 'deliverable', action: 'updated' });
-        showToast("Deliverable rejected");
+        notify.success("Deliverable rejected");
         setShowRejectForm(false);
         setRejectComment("");
         fetchDeliverable();
       } else {
-        showToast(data.message || "Failed to reject", "error");
+        notify.error(data.message || "Failed to reject");
       }
     } catch {
-      showToast("An error occurred", "error");
+      notify.error("An error occurred");
     }
   };
 
@@ -221,7 +218,7 @@ function DeliverableDetails() {
   }
 
   const ss = statusStyle(deliverable.status);
-  const submissions = deliverable.submissions || [];
+  const submissions = (deliverable.submissions || []).slice().reverse();
   const canSubmit = isAssignee && (deliverable.status === "pending" || deliverable.status === "rejected");
   const isApproved = deliverable.status === "approved";
   const isSubmitted = deliverable.status === "submitted";
@@ -230,7 +227,6 @@ function DeliverableDetails() {
   return (
     <DashboardLayout hideRightSidebar>
       <div className="td-page">
-        {message && <div className={`td-toast td-toast--${messageType}`}>{message}</div>}
 
         <div className="td-layout">
           <div className="td-main">

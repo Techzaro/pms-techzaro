@@ -5,10 +5,12 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole } from "../utils/auth";
+import { useNotification } from "../context/NotificationContext";
 import "./UserProfile.css";
 
 function MyProfile() {
   const navigate = useNavigate();
+  const notify = useNotification();
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -20,8 +22,6 @@ function MyProfile() {
   });
   const [passwordErrors, setPasswordErrors] = useState({});
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("");
 
   const authHeaders = () => {
     const token = authToken();
@@ -29,15 +29,6 @@ function MyProfile() {
       "Content-Type": "application/json",
       Authorization: token ? `Bearer ${token}` : "",
     };
-  };
-
-  const showMessage = (text, type = "success") => {
-    setMessage(text);
-    setMessageType(type);
-    setTimeout(() => {
-      setMessage("");
-      setMessageType("");
-    }, 4000);
   };
 
   const fetchProfile = async () => {
@@ -124,15 +115,16 @@ function MyProfile() {
           old_password: passwordForm.old_password,
           new_password: passwordForm.new_password,
         }),
+        _notifHandled: true,
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to change password");
 
       setIsPasswordModalOpen(false);
-      showMessage("Password changed successfully.");
+      notify.success("Password changed successfully.");
     } catch (err) {
-      showMessage(err.message || "Password change failed.", "error");
+      notify.error(err.message || "Password change failed.");
     } finally {
       setSaving(false);
     }
@@ -181,8 +173,6 @@ function MyProfile() {
           <h1>My Profile</h1>
           <p>View and manage your personal information and account settings.</p>
         </div>
-
-        {message && <div className={`profile-message ${messageType}`}>{message}</div>}
 
         <div className="profile-layout">
           {/* LEFT SIDE */}
@@ -285,16 +275,12 @@ function MyProfile() {
               </div>
               <div className="info-card-body">
                 <div className="info-row">
-                  <span className="info-label">Personal Email Address</span>
+                  <span className="info-label">Email Address</span>
                   <span className="info-value">{user.email || "---"}</span>
                 </div>
                 <div className="info-row">
-                  <span className="info-label">Professional Email Address</span>
-                  <span className="info-value">{user.professional_email || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Password of Professional Email</span>
-                  <span className="info-value">{user.professional_email_password ? "••••••••" : "---"}</span>
+                  <span className="info-label">Personal Email Address</span>
+                  <span className="info-value">{user.personal_email || "---"}</span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Recovery Email</span>

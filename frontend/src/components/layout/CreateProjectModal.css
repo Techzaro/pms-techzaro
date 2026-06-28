@@ -11,6 +11,7 @@
   padding: 20px;
 
   backdrop-filter: blur(4px);
+  overflow: hidden;
 }
 
 .cp-modal {
@@ -19,6 +20,7 @@
   max-height: 95vh;
 
   overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-width: none;
 
   background: #ffffff;
@@ -28,6 +30,14 @@
   border: 1px solid #e5e7eb;
 
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+}
+
+.cp-modal select,
+.cp-modal input,
+.cp-modal textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .cp-modal::-webkit-scrollbar {
@@ -103,6 +113,7 @@
   gap: 24px;
 
   padding: 28px;
+  min-width: 0;
 }
 
 /* LEFT */
@@ -111,6 +122,7 @@
   display: flex;
   flex-direction: column;
   gap: 22px;
+  min-width: 0;
 }
 
 .cp-field {
@@ -653,6 +665,7 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
+  min-width: 0;
 }
 
 .cp-card {
@@ -939,11 +952,11 @@
   }
 
   .cp-body {
-    padding: 20px;
+    padding: 16px;
   }
 
   .cp-footer {
-    padding: 20px;
+    padding: 16px;
     flex-direction: column;
   }
 
@@ -952,24 +965,123 @@
   }
 
   .cp-header h2 {
-    font-size: 22px;
+    font-size: 20px;
+  }
+
+  .cp-card {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .cp-field input,
+  .cp-field textarea,
+  .cp-field select,
+  .cp-card select,
+  .cp-card input {
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+
+  .cp-field label {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+
+  .cp-goals-input-row {
+    flex-direction: column;
+  }
+
+  .cp-link-input-row {
+    flex-direction: column;
+  }
+
+  .cp-drop-zone {
+    padding: 20px 16px;
+  }
+
+  .cp-phase-item {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .cp-add-phase-btn {
+    padding: 10px;
+    font-size: 12px;
   }
 }
 
 @media (max-width: 480px) {
   .cp-modal {
     max-height: 100vh;
-    border-radius: 16px;
+    border-radius: 12px;
+    max-width: 100%;
   }
+
+  .cp-overlay {
+    padding: 8px;
+  }
+
   .cp-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
+    padding: 16px;
   }
+
   .cp-close-btn {
     align-self: flex-end;
   }
+
   .cp-field textarea {
-    min-height: 160px;
+    min-height: 120px;
+  }
+
+  .cp-body {
+    padding: 14px;
+    gap: 16px;
+  }
+
+  .cp-card {
+    padding: 12px;
+  }
+
+  .cp-deadline-grid {
+    gap: 10px;
+  }
+
+  .cp-deadline-summary {
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+
+  .cp-phase-item-info {
+    min-width: 0;
+  }
+
+  .cp-phase-item-title {
+    font-size: 12px;
+    word-break: break-word;
+  }
+
+  .cp-phase-item-date {
+    font-size: 11px;
+  }
+
+  .cp-icon-box {
+    width: 42px;
+    height: 42px;
+    font-size: 18px;
+  }
+
+  .cp-header p {
+    font-size: 12px;
+  }
+
+  .cp-attachment-item {
+    padding: 8px 10px;
+  }
+
+  .cp-attachment-name {
+    font-size: 12px;
   }
 }

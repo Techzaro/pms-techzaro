@@ -187,7 +187,7 @@ function DeliveriesByYou() {
         <div className="task-progress">
           <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
           <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#EF4444" /> Deliverables Due Today
+            <GoDotFill color="#EF4444" /> Due Today
           </p>
           <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Pending
@@ -216,9 +216,9 @@ function DeliveriesByYou() {
           <div className="deliveries-table-header">
             <div>Deliverable</div>
             <div>Task</div>
-            <div style={{ paddingLeft: "60px" }}>Assigned By</div>
+            <div>Assigned To</div>
             <div>Status</div>
-            <div style={{ textAlign: "left", paddingRight: "20px" }}>Due Date</div>
+            <div>Due Date</div>
             <div>Action</div>
           </div>
 
@@ -245,7 +245,7 @@ function DeliveriesByYou() {
                     <div>
                       <div className="task-title">{item.task?.title || item.project?.title || "-"}</div>
                     </div>
-                    <div style={{ paddingLeft: "20px" }}>
+                    <div>
                       <div className="user-box">
                         <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                           {getInitials(item.assignee?.name)}

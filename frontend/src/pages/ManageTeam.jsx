@@ -18,6 +18,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import API_URL from "../config/api";
+import { useNotification } from "../context/NotificationContext";
 import "./ManageTeam.css";
 
 const AVATAR_COLORS = [
@@ -51,12 +52,11 @@ function getAvatarColor(name) {
 }
 
 function ManageTeam() {
+  const notify = useNotification();
+
   const [users, setUsers] = useState([]);
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
@@ -84,15 +84,6 @@ function ManageTeam() {
 
   const navigate = useNavigate();
 
-  const showMessage = (text, type = "success") => {
-    setMessage(text);
-    setMessageType(type);
-    setTimeout(() => {
-      setMessage("");
-      setMessageType("");
-    }, 4000);
-  };
-
   // ✅ Define fetchUsers first
   const fetchUsers = async () => {
     const token = authToken();
@@ -101,13 +92,14 @@ function ManageTeam() {
     try {
       const response = await fetch(`${API_URL}/team-users`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
       });
       const data = await response.json();
-      setUsers(Array.isArray(data) ? data : []);
+      setUsers(Array.isArray(data) ? data : (data.users || []));
     } catch (error) {
       console.error("Failed to load users", error);
       setUsers([]);
-      showMessage("Unable to load users.", "error");
+      notify.error("Unable to load users.");
     } finally {
       setLoading(false);
     }
@@ -148,6 +140,14 @@ function ManageTeam() {
 
   const handleSetLeader = async (teamId, memberId) => {
     const member = teams.flatMap(t => t.members).find(m => Number(m.id) === Number(memberId));
+    
+    // Check if member's role is team_lead
+    const memberRole = member?.role === 'teamlead' ? 'team_lead' : member?.role;
+    if (memberRole !== 'team_lead') {
+      notify.error(`"${member?.name || 'This user'}" cannot be assigned as Team Lead. First update this user's role to "Team Lead" from Edit User, then you can assign them as Team Lead.`);
+      return;
+    }
+    
     setLeaderConfirmData({ teamId, memberId, memberName: member?.name || "this member" });
     setLeaderConfirmOpen(true);
   };
@@ -166,14 +166,15 @@ function ManageTeam() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ leader_id: memberId }),
+        _notifHandled: true,
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Could not update team leader.");
       await fetchTeams();
-      showMessage("New Leader Appointed!");
+      notify.success("New Leader Appointed!");
     } catch (error) {
       console.error(error);
-      showMessage(error.message || "Failed to set team leader.", "error");
+      notify.error(error.message || "Failed to set team leader.");
     }
   };
 
@@ -192,14 +193,15 @@ function ManageTeam() {
       const response = await fetch(`${API_URL}/teams/${teamId}/members/${memberId}`, {
         method: "DELETE",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Could not remove member.");
       await fetchTeams();
-      showMessage("Member removed from team.");
+      notify.success("Member removed from team.");
     } catch (error) {
       console.error(error);
-      showMessage(error.message || "Failed to remove member.", "error");
+      notify.error(error.message || "Failed to remove member.");
     }
   };
 
@@ -217,14 +219,15 @@ function ManageTeam() {
       const response = await fetch(`${API_URL}/teams/${teamId}`, {
         method: "DELETE",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Could not delete team.");
       await fetchTeams();
-      showMessage("Team deleted successfully.");
+      notify.success("Team deleted successfully.");
     } catch (error) {
       console.error(error);
-      showMessage(error.message || "Failed to delete team.", "error");
+      notify.error(error.message || "Failed to delete team.");
     }
   };
 
@@ -304,22 +307,23 @@ function ManageTeam() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ name: teamName, description: teamDescription, member_ids: selectedMemberIds }),
+        _notifHandled: true,
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Failed to create team");
-      showMessage("Team created successfully");
+      notify.success("Team created successfully");
       fetchTeams();
       closeModal();
     } catch (error) {
       console.error(error);
-      showMessage(error.message || "Failed to create team", "error");
+      notify.error(error.message || "Failed to create team");
     }
   };
 
   const handleAddMembers = async (e) => {
     e.preventDefault();
     if (selectedUserIds.length === 0) {
-      showMessage("Please select at least one user.", "error");
+      notify.error("Please select at least one user.");
       return;
     }
     try {
@@ -332,15 +336,16 @@ function ManageTeam() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ user_ids: selectedUserIds }),
+        _notifHandled: true,
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Failed to add members");
-      showMessage(data.message || "Members added successfully");
+      notify.success(data.message || "Members added successfully");
       fetchTeams();
       closeModal();
     } catch (error) {
       console.error(error);
-      showMessage(error.message || "Failed to add members", "error");
+      notify.error(error.message || "Failed to add members");
     }
   };
 
@@ -367,15 +372,16 @@ function ManageTeam() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ name: teamName, description: teamDescription, member_ids: selectedMemberIds }),
+        _notifHandled: true,
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Failed to update team");
-      showMessage("Team updated successfully");
+      notify.success("Team updated successfully");
       fetchTeams();
       closeModal();
     } catch (error) {
       console.error(error);
-      showMessage(error.message || "Failed to update team", "error");
+      notify.error(error.message || "Failed to update team");
     }
   };
 
@@ -417,13 +423,6 @@ function ManageTeam() {
             Create Team
           </button>
         </div>
-
-        {/* MESSAGE */}
-        {message && (
-          <div className={`mt-message ${messageType === "error" ? "mt-msg-error" : "mt-msg-success"}`}>
-            {message}
-          </div>
-        )}
 
         {/* SEARCH & SORT */}
         <div className="mt-toolbar">

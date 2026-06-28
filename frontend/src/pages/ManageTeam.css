@@ -2,6 +2,7 @@
 .mt-page {
   padding: 0;
   min-height: 100%;
+  overflow-x: hidden;
 }
 
 /* ===== Header ===== */
@@ -138,6 +139,8 @@
   font-weight: 500;
   position: relative;
   cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .mt-sort-box select {
@@ -759,6 +762,16 @@
   .mt-sort-box {
     width: 100%;
     justify-content: space-between;
+    max-width: 100%;
+  }
+  .mt-sort-box select {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    font-size: 14px;
+    width: 100%;
+    max-width: 100%;
   }
   .mt-modal-actions {
     flex-direction: column;

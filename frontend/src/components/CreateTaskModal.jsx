@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
+import CustomSelect from "./CustomSelect";
+import CustomDateTimePicker from "./CustomDateTimePicker";
 import { formatDateTime, toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
+import { notify } from "../utils/notify";
 import "./layout/CreateTaskModal.css";
 
 const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [formErrors, setFormErrors] = useState({});
   const [projects, setProjects] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
@@ -70,9 +72,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
               headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
               skipLoader: true,
             })
-              .then((res) => (res.ok ? res.json() : []))
+              .then((res) => (res.ok ? res.json() : { users: [] }))
               .then((data) => {
-                const users = ensureCurrentUser(Array.isArray(data) ? data : []);
+                const users = ensureCurrentUser(Array.isArray(data) ? data : (data.users || []));
                 setAllUsers(users);
                 setDisplayUsers(users);
               })
@@ -96,9 +98,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         skipLoader: true,
       })
-        .then((res) => (res.ok ? res.json() : []))
+        .then((res) => (res.ok ? res.json() : { users: [] }))
         .then((data) => {
-          const users = Array.isArray(data) ? data : [];
+          const users = Array.isArray(data) ? data : (data.users || []);
           setAllUsers(users);
           setDisplayUsers(users);
         })
@@ -273,7 +275,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
 
   const handleSubmit = async (e) => {
     if (e?.preventDefault) e.preventDefault();
-    setError("");
 
     if (!validateForm()) {
       console.log("CreateTaskModal: form validation failed");
@@ -309,6 +310,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(body),
+        _notifHandled: true,
       });
 
       console.log("CreateTaskModal: response status", response.status);
@@ -331,7 +333,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
       onClose(true);
     } catch (err) {
       console.error("CreateTaskModal: error", err);
-      setError(err.message);
+      notify.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -368,16 +370,16 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
               {!projectId ? (
                 <div className="task-field">
                   <label>Projects</label>
-                  <select
+                  <CustomSelect
                     name="project_id"
                     value={form.project_id}
-                    onChange={handleChange}
-                  >
-                    <option value="">Select project</option>
-                    {projects.map((project) => (
-                      <option key={project.id} value={project.id}>{project.title}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => handleChange({ target: { name: "project_id", value: val } })}
+                    placeholder="Select project"
+                    options={[
+                      { value: "", label: "Select project" },
+                      ...projects.map((project) => ({ value: project.id, label: project.title })),
+                    ]}
+                  />
                 </div>
               ) : (
                 <div className="task-field">
@@ -525,16 +527,16 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
             {/* PRIORITY */}
             <div className="task-card">
               <label>Priority <span style={{ color: "#ef4444" }}>*</span></label>
-              <select
+              <CustomSelect
                 name="priority"
                 value={form.priority}
-                onChange={handleChange}
-                className={formErrors.priority ? "field-error" : ""}
-              >
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-                <option value="High">High</option>
-              </select>
+                onChange={(val) => handleChange({ target: { name: "priority", value: val } })}
+                options={[
+                  { value: "Medium", label: "Medium" },
+                  { value: "Low", label: "Low" },
+                  { value: "High", label: "High" },
+                ]}
+              />
               {formErrors.priority && <span className="field-error-text">{formErrors.priority}</span>}
             </div>
 
@@ -543,11 +545,17 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
               <div className="task-deadline-grid">
                 <div>
                   <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
-                  <input type="datetime-local" name="start_date" value={form.start_date} onChange={handleChange} />
+                  <CustomDateTimePicker
+                    value={form.start_date}
+                    onChange={(val) => setForm((prev) => ({ ...prev, start_date: val }))}
+                  />
                 </div>
                 <div>
                   <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
-                  <input type="datetime-local" name="end_date" value={form.end_date} onChange={handleChange} />
+                  <CustomDateTimePicker
+                    value={form.end_date}
+                    onChange={(val) => setForm((prev) => ({ ...prev, end_date: val }))}
+                  />
                 </div>
               </div>
             </div>
@@ -609,11 +617,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 </div>
                 <div className="task-field">
                   <label style={{ fontSize: "13px" }}>Due Date & Time</label>
-                  <input
-                    type="datetime-local"
+                  <CustomDateTimePicker
                     value={deliverableInput.due_datetime}
-                    onChange={(e) => setDeliverableInput((prev) => ({ ...prev, due_datetime: e.target.value }))}
-                    onKeyDown={handleDeliverableKeyDown}
+                    onChange={(val) => setDeliverableInput((prev) => ({ ...prev, due_datetime: val }))}
                   />
                 </div>
               </div>
@@ -651,7 +657,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         
           </div>
 
-          {error && <div className="task-error-banner">{error}</div>}
+
 
 
 

@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
+import CustomSelect from "./CustomSelect";
+import CustomDateTimePicker from "./CustomDateTimePicker";
 import { formatDateTime, toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
+import { notify } from "../utils/notify";
 import "./layout/CreateProjectModal.css";
 
 const PRESET_PHASES = [
@@ -15,7 +18,6 @@ const PRESET_PHASES = [
 
 const EditProjectModal = ({ project, onClose }) => {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [formErrors, setFormErrors] = useState({});
   const [teams, setTeams] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
@@ -85,8 +87,8 @@ const EditProjectModal = ({ project, onClose }) => {
     fetch(`${API_URL}/team-users`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
     })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setAllUsers(Array.isArray(data) ? data : []))
+      .then((res) => (res.ok ? res.json() : { users: [] }))
+      .then((data) => setAllUsers(Array.isArray(data) ? data : (data.users || [])))
       .catch(() => {});
   }, []);
 
@@ -258,7 +260,6 @@ const EditProjectModal = ({ project, onClose }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
 
     if (!validateForm()) return;
 
@@ -293,6 +294,7 @@ const EditProjectModal = ({ project, onClose }) => {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(body),
+        _notifHandled: true,
       });
 
       const data = await response.json();
@@ -311,7 +313,7 @@ const EditProjectModal = ({ project, onClose }) => {
       publish('data:changed', { type: 'project', action: 'updated' });
       onClose(true);
     } catch (err) {
-      setError(err.message);
+      notify.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -365,12 +367,18 @@ const EditProjectModal = ({ project, onClose }) => {
             <div className="cp-grid-2">
               <div className="cp-field">
                 <label>Category (Optional)</label>
-                <select name="category" value={form.category} onChange={handleChange}>
-                  <option value="">Select category</option>
-                  <option value="Web Development">Web Development</option>
-                  <option value="Mobile App">Mobile App</option>
-                  <option value="UI/UX Design">UI/UX Design</option>
-                </select>
+                <CustomSelect
+                  name="category"
+                  value={form.category}
+                  onChange={(val) => handleChange({ target: { name: "category", value: val } })}
+                  placeholder="Select category"
+                  options={[
+                    { value: "", label: "Select category" },
+                    { value: "Web Development", label: "Web Development" },
+                    { value: "Mobile App", label: "Mobile App" },
+                    { value: "UI/UX Design", label: "UI/UX Design" },
+                  ]}
+                />
               </div>
 
               <div className="cp-field">
@@ -415,12 +423,16 @@ const EditProjectModal = ({ project, onClose }) => {
             <div className="cp-grid-2">
               <div className="cp-field">
                 <label>Team (Optional)</label>
-                <select name="team_id" value={form.team_id} onChange={handleChange}>
-                  <option value="">Select team</option>
-                  {teams.map((team) => (
-                    <option key={team.id} value={team.id}>{team.name}</option>
-                  ))}
-                </select>
+                <CustomSelect
+                  name="team_id"
+                  value={form.team_id}
+                  onChange={(val) => handleChange({ target: { name: "team_id", value: val } })}
+                  placeholder="Select team"
+                  options={[
+                    { value: "", label: "Select team" },
+                    ...teams.map((team) => ({ value: team.id, label: team.name })),
+                  ]}
+                />
               </div>
 
               <div className="cp-field">
@@ -534,11 +546,16 @@ const EditProjectModal = ({ project, onClose }) => {
               <div className="cp-card-top">
                 <span>Priority</span>
               </div>
-              <select name="priority" value={form.priority} onChange={handleChange}>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-                <option value="High">High</option>
-              </select>
+              <CustomSelect
+                name="priority"
+                value={form.priority}
+                onChange={(val) => handleChange({ target: { name: "priority", value: val } })}
+                options={[
+                  { value: "Medium", label: "Medium" },
+                  { value: "Low", label: "Low" },
+                  { value: "High", label: "High" },
+                ]}
+              />
             </div>
 
             {/* DEADLINES - PHASE SYSTEM */}
@@ -566,11 +583,9 @@ const EditProjectModal = ({ project, onClose }) => {
                 </div>
                 <div className="cp-field">
                   <label style={{ fontSize: "13px" }}>Due Date & Time</label>
-                  <input
-                    type="datetime-local"
+                  <CustomDateTimePicker
                     value={phaseDate}
-                    onChange={(e) => setPhaseDate(e.target.value)}
-                    onKeyDown={handlePhaseKeyDown}
+                    onChange={setPhaseDate}
                   />
                 </div>
               </div>
@@ -632,11 +647,9 @@ const EditProjectModal = ({ project, onClose }) => {
                 </div>
                 <div className="cp-field">
                   <label style={{ fontSize: "13px" }}>Due Date & Time</label>
-                  <input
-                    type="datetime-local"
+                  <CustomDateTimePicker
                     value={deliverableProjInput.due_datetime}
-                    onChange={(e) => setDeliverableProjInput((prev) => ({ ...prev, due_datetime: e.target.value }))}
-                    onKeyDown={handleDeliverableProjKeyDown}
+                    onChange={(val) => setDeliverableProjInput((prev) => ({ ...prev, due_datetime: val }))}
                   />
                 </div>
               </div>
@@ -691,7 +704,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
         </form>
 
-        {error && <div className="cp-error-banner">{error}</div>}
+
 
         {/* FOOTER */}
         <div className="cp-footer">

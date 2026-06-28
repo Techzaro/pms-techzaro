@@ -20,11 +20,13 @@ class ReportController extends Controller
         $cacheKey = "report_team_perf_{$user->id}_{$timeFilter}";
 
         return Cache::remember($cacheKey, 300, function () use ($user, $timeFilter) {
+            $isTeamLead = $user->role === 'team_lead' || $user->role === 'teamlead';
+            
             $query = User::select('id', 'name', 'email', 'role')
                 ->where('active', true)
                 ->orderBy('name');
 
-            if ($user->role === 'team_lead') {
+            if ($isTeamLead) {
                 $teamIds = DB::table('team_user')
                     ->join('teams', 'teams.id', '=', 'team_user.team_id')
                     ->where('teams.leader_id', $user->id)
@@ -40,24 +42,38 @@ class ReportController extends Controller
             $members = $query->get();
             $memberIds = $members->pluck('id');
 
-            // Bulk load task stats per user
-            $taskStats = Task::selectRaw('
+            // Bulk load task stats per user - only tasks assigned BY the team lead
+            $taskStatsQuery = Task::selectRaw('
                 assignees_users.user_id,
                 COUNT(*) as assigned,
                 SUM(CASE WHEN tasks.status IN ("completed","done") THEN 1 ELSE 0 END) as completed
             ')
                 ->join('task_user as assignees_users', 'tasks.id', '=', 'assignees_users.task_id')
-                ->whereIn('assignees_users.user_id', $memberIds)
+                ->whereIn('assignees_users.user_id', $memberIds);
+
+            // For team_lead, only count tasks they assigned
+            if ($isTeamLead) {
+                $taskStatsQuery->where('tasks.assigned_by', $user->id);
+            }
+
+            $taskStats = $taskStatsQuery
                 ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter))
                 ->groupBy('assignees_users.user_id')
                 ->get()
                 ->keyBy('user_id');
 
-            // Bulk load project names per user
-            $userProjects = Task::select('assignees_users.user_id', 'projects.title')
+            // Bulk load project names per user - only projects created BY the team lead
+            $userProjectsQuery = Task::select('assignees_users.user_id', 'projects.title')
                 ->join('task_user as assignees_users', 'tasks.id', '=', 'assignees_users.task_id')
                 ->join('projects', 'tasks.project_id', '=', 'projects.id')
-                ->whereIn('assignees_users.user_id', $memberIds)
+                ->whereIn('assignees_users.user_id', $memberIds);
+
+            // For team_lead, only count tasks from projects they created
+            if ($isTeamLead) {
+                $userProjectsQuery->where('projects.created_by', $user->id);
+            }
+
+            $userProjects = $userProjectsQuery
                 ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter))
                 ->distinct()
                 ->get()
@@ -94,10 +110,19 @@ class ReportController extends Controller
 
     public function userPerformance(Request $request, User $user)
     {
+        $requestingUser = $request->user();
         $timeFilter = $request->query('period', 'all');
+        $isTeamLeadViewingMember = ($requestingUser->role === 'team_lead' || $requestingUser->role === 'teamlead') 
+            && $requestingUser->id !== $user->id;
 
         // --- TASKS ASSIGNED TO USER ---
         $taskBase = Task::whereHas('assignees', fn ($q) => $q->where('users.id', $user->id));
+        
+        // If team lead is viewing member, only show tasks assigned BY the team lead
+        if ($isTeamLeadViewingMember) {
+            $taskBase->where('tasks.assigned_by', $requestingUser->id);
+        }
+        
         if ($timeFilter !== 'all') $taskBase = $this->applyTimeFilter($taskBase, $timeFilter);
 
         $taskIds = (clone $taskBase)->pluck('id');
@@ -121,6 +146,12 @@ class ReportController extends Controller
         // --- PROJECTS ASSIGNED AS TASKS ---
         $projectQuery = Project::whereJsonContains('assigned_users', $user->id)
             ->whereNotNull('assigned_users');
+        
+        // If team lead is viewing member, only show projects created BY the team lead
+        if ($isTeamLeadViewingMember) {
+            $projectQuery->where('projects.created_by', $requestingUser->id);
+        }
+        
         if ($timeFilter !== 'all') {
             $this->applyTimeFilter($projectQuery, $timeFilter);
         }
@@ -207,8 +238,15 @@ class ReportController extends Controller
             ]);
 
         // Also include projects assigned directly as tasks (not via tasks table)
-        $directProjectStats = Project::whereJsonContains('assigned_users', $user->id)
-            ->whereNotNull('assigned_users')
+        $directProjectStatsQuery = Project::whereJsonContains('assigned_users', $user->id)
+            ->whereNotNull('assigned_users');
+        
+        // If team lead is viewing member, only show projects created BY the team lead
+        if ($isTeamLeadViewingMember) {
+            $directProjectStatsQuery->where('projects.created_by', $requestingUser->id);
+        }
+        
+        $directProjectStats = $directProjectStatsQuery
             ->select('id', 'title', 'status', 'start_date', 'end_date')
             ->get()
             ->filter(fn ($p) => !$projectStats->contains('id', $p->id))
@@ -250,7 +288,14 @@ class ReportController extends Controller
         $team = $user->teams()->first();
 
         // --- DELIVERABLES ---
-        $deliverableStats = Deliverable::where('assigned_to', $user->id)
+        $deliverableQuery = Deliverable::where('assigned_to', $user->id);
+        
+        // If team lead is viewing member, only show deliverables created BY the team lead
+        if ($isTeamLeadViewingMember) {
+            $deliverableQuery->where('deliverables.created_by', $requestingUser->id);
+        }
+        
+        $deliverableStats = (clone $deliverableQuery)
             ->selectRaw("
                 COUNT(*) as total,
                 SUM(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END) as submitted,
@@ -260,7 +305,7 @@ class ReportController extends Controller
                 SUM(CASE WHEN status = 'reopened' THEN 1 ELSE 0 END) as reopened
             ")->first();
 
-        $deliverables = Deliverable::where('assigned_to', $user->id)
+        $deliverables = (clone $deliverableQuery)
             ->with('task:id,title', 'project:id,title')
             ->latest()
             ->get()
@@ -551,7 +596,24 @@ class ReportController extends Controller
     {
         $user = $request->user();
         $timeFilter = $request->query('period', 'all');
+        $view = $request->query('view', 'self'); // 'self' or 'team'
         $role = $user->role === 'teamlead' ? 'team_lead' : $user->role;
+
+        // For team_lead viewing 'team' tab, get stats for team members
+        $isTeamView = ($role === 'team_lead' && $view === 'team');
+        
+        if ($isTeamView) {
+            // Get team member IDs for team_lead
+            $teamIds = DB::table('team_user')
+                ->join('teams', 'teams.id', '=', 'team_user.team_id')
+                ->where('teams.leader_id', $user->id)
+                ->pluck('team_user.team_id');
+
+            $memberIds = DB::table('team_user')
+                ->whereIn('team_id', $teamIds)
+                ->pluck('user_id')
+                ->toArray();
+        }
 
         // --- TASKS ---
         $taskQuery = Task::query();
@@ -560,6 +622,14 @@ class ReportController extends Controller
             case 'manager':
                 break;
             case 'team_lead':
+                if ($isTeamView) {
+                    // Get tasks assigned BY team lead TO team members
+                    $taskQuery->whereIn('assigned_to', $memberIds)
+                        ->where('assigned_by', $user->id);
+                } else {
+                    $taskQuery->where('assigned_to', $user->id);
+                }
+                break;
             case 'member':
                 $taskQuery->where('assigned_to', $user->id);
                 break;
@@ -581,6 +651,18 @@ class ReportController extends Controller
                 $projectQuery->whereRaw('JSON_LENGTH(assigned_users) > 0');
                 break;
             case 'team_lead':
+                if ($isTeamView) {
+                    // Get projects created BY team lead where team members are assigned
+                    $projectQuery->where('created_by', $user->id)
+                        ->where(function ($q) use ($memberIds) {
+                            foreach ($memberIds as $memberId) {
+                                $q->orWhereJsonContains('assigned_users', $memberId);
+                            }
+                        });
+                } else {
+                    $projectQuery->whereJsonContains('assigned_users', $user->id);
+                }
+                break;
             case 'member':
                 $projectQuery->whereJsonContains('assigned_users', $user->id);
                 break;
@@ -610,9 +692,28 @@ class ReportController extends Controller
 
     public function userPerformanceTable(Request $request)
     {
+        $user = $request->user();
         $timeFilter = $request->query('period', 'all');
 
+        // For team_lead, only show members from their teams
+        if ($user->role === 'team_lead' || $user->role === 'teamlead') {
+            $teamIds = DB::table('team_user')
+                ->join('teams', 'teams.id', '=', 'team_user.team_id')
+                ->where('teams.leader_id', $user->id)
+                ->pluck('team_user.team_id');
+
+            $memberIds = DB::table('team_user')
+                ->whereIn('team_id', $teamIds)
+                ->pluck('user_id')
+                ->toArray();
+            
+            // Exclude team lead themselves from the list
+            $memberIds = array_filter($memberIds, fn($id) => $id != $user->id);
+        }
+
         // --- TASK STATS PER USER (from tasks table via task_user pivot) ---
+        $isTeamLead = $user->role === 'team_lead' || $user->role === 'teamlead';
+        
         $taskQuery = User::query()
             ->select('users.id', 'users.name', 'users.role')
             ->where('users.active', true)
@@ -621,6 +722,12 @@ class ReportController extends Controller
 
         if ($timeFilter !== 'all') {
             $this->applyTimeFilter($taskQuery, $timeFilter);
+        }
+
+        // Filter by team members for team_lead
+        if ($isTeamLead) {
+            $taskQuery->whereIn('users.id', $memberIds)
+                ->where('tasks.assigned_by', $user->id);
         }
 
         $taskStats = $taskQuery->addSelect(DB::raw("
@@ -633,8 +740,15 @@ class ReportController extends Controller
             ->keyBy('id');
 
         // --- PROJECT-AS-TASK STATS PER USER — single query instead of N+1 ---
-        $allUsers = User::where('active', true)->select('id', 'name', 'role')->orderBy('name')->get();
-        $projectStats = $this->getProjectAsTaskStats($allUsers->pluck('id'), $timeFilter);
+        $allUsers = User::where('active', true)->select('id', 'name', 'role');
+        
+        // Filter by team members for team_lead
+        if ($isTeamLead) {
+            $allUsers->whereIn('users.id', $memberIds);
+        }
+        
+        $allUsers = $allUsers->orderBy('name')->get();
+        $projectStats = $this->getProjectAsTaskStatsForTeamLead($allUsers->pluck('id'), $timeFilter, $isTeamLead ? $user->id : null);
 
         // --- MERGE TASK + PROJECT-AS-TASK COUNTS ---
         $stats = $allUsers->map(function ($user) use ($taskStats, $projectStats) {
@@ -794,6 +908,39 @@ class ReportController extends Controller
     {
         $results = collect();
         $allProjects = Project::whereNotNull('assigned_users')
+            ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter))
+            ->select('id', 'assigned_users', 'status', 'end_date', 'created_at')
+            ->get();
+
+        foreach ($userIds as $uid) {
+            $assigned = 0; $completed = 0; $overdue = 0;
+            foreach ($allProjects as $p) {
+                $ids = is_string($p->assigned_users) ? json_decode($p->assigned_users, true) ?? [] : ($p->assigned_users ?? []);
+                if (!in_array((int) $uid, array_map('intval', $ids), true)) continue;
+                $assigned++;
+                if (in_array(strtolower((string) $p->status), ['approved', 'completed', 'done'])) $completed++;
+                if ($p->end_date && now()->greaterThan($p->end_date) && !in_array(strtolower((string) $p->status), ['completed', 'done', 'abandoned', 'approved'])) $overdue++;
+            }
+            $results->put($uid, (object)['assigned' => $assigned, 'completed' => $completed, 'overdue' => $overdue]);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Bulk compute project-as-task stats for team lead - only projects created by the team lead.
+     */
+    private function getProjectAsTaskStatsForTeamLead($userIds, string $timeFilter, ?int $teamLeadId = null): \Illuminate\Support\Collection
+    {
+        $results = collect();
+        
+        if (!$teamLeadId) {
+            return $this->getProjectAsTaskStats($userIds, $timeFilter);
+        }
+        
+        // Only get projects created by the team lead
+        $allProjects = Project::whereNotNull('assigned_users')
+            ->where('created_by', $teamLeadId)
             ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter))
             ->select('id', 'assigned_users', 'status', 'end_date', 'created_at')
             ->get();

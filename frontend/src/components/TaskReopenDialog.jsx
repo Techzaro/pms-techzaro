@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
+import { notify } from "../utils/notify";
 import "./ReopenDialog.css";
 import { toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
 
@@ -11,7 +12,6 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
   const [newDeadline, setNewDeadline] = useState("");
   const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -21,7 +21,6 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
       setInstructions("");
       setNewDeadline(task?.end_date ? toDatetimeLocal(task.end_date) : "");
       setFile(null);
-      setError("");
     } else {
       document.body.style.overflow = "";
     }
@@ -30,11 +29,10 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
 
   const handleSubmit = async () => {
     if (!comment.trim() && !instructions.trim()) {
-      setError("Please provide a comment or instructions.");
+      notify.error("Please provide a comment or instructions.");
       return;
     }
     setSubmitting(true);
-    setError("");
     try {
       const token = authToken();
       const formData = new FormData();
@@ -47,6 +45,7 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
         method: "POST",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         body: formData,
+        _notifHandled: true,
       });
 
       const data = await res.json();
@@ -54,10 +53,10 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
         onReopenSuccess(data.task);
         onClose();
       } else {
-        setError(data.message || "Failed to reopen task.");
+        notify.error(data.message || "Failed to reopen task.");
       }
     } catch {
-      setError("An error occurred. Please try again.");
+      notify.error("An error occurred. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -130,8 +129,6 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
               onChange={(e) => { if (e.target.files.length) setFile(e.target.files[0]); }}
             />
           </div>
-
-          {error && <div className="rd-error">{error}</div>}
         </div>
 
         <div className="rd-footer">

@@ -2,9 +2,9 @@
   width: 220px;
   background: #ffffff;
   height: calc(100vh - 90px);
-  margin-top: 15px;
+  margin-top: 0;
   position: sticky;
-  top: 75px;
+  top: 90px;
   padding: 20px;
   border-radius: 0 22px 22px 0;
   display: flex;
@@ -17,6 +17,7 @@
   transition: transform 0.3s ease;
   flex-shrink: 0;
   z-index: 100;
+  align-self: flex-start;
 }
 
 .sidebar::-webkit-scrollbar {
@@ -262,7 +263,7 @@
     left: auto;
     width: 68px;
     height: calc(100vh - 90px);
-    margin-top: 15px;
+    margin-top: 0px;
     border-radius: 0 16px 16px 0;
     transform: none;
     padding: 12px 8px;

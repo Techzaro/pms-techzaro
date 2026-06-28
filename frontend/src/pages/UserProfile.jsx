@@ -4,13 +4,15 @@ import { MdEdit, MdArrowBack } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
-import { authToken, getCurrentRole, rolePath } from "../utils/auth";
+import { authToken, getCurrentRole, rolePath, getUser } from "../utils/auth";
+import { useNotification } from "../context/NotificationContext";
 import "./UserProfile.css";
 import "./ManageUsers.css";
 
 function UserProfile() {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const notify = useNotification();
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -45,8 +47,6 @@ function UserProfile() {
   });
   const [editErrors, setEditErrors] = useState({});
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("");
   const [editFiles, setEditFiles] = useState({});
   const [filePreviews, setFilePreviews] = useState({});
   const [currentUserRole] = useState(() => getCurrentRole());
@@ -79,15 +79,6 @@ function UserProfile() {
       "Content-Type": "application/json",
       Authorization: token ? `Bearer ${token}` : "",
     };
-  };
-
-  const showMessage = (text, type = "success") => {
-    setMessage(text);
-    setMessageType(type);
-    setTimeout(() => {
-      setMessage("");
-      setMessageType("");
-    }, 4000);
   };
 
   const fetchProfile = async () => {
@@ -152,8 +143,8 @@ function UserProfile() {
       designationCustom: isCustomDesg ? desgVal : "",
       hired_for: u.hired_for || "",
       employee_code: u.employee_code || "",
-      job_started_date: u.job_started_date || "",
-      job_ended_date: u.job_ended_date || "",
+      job_started_date: u.job_started_date ? u.job_started_date.substring(0, 10) : "",
+      job_ended_date: u.job_ended_date ? u.job_ended_date.substring(0, 10) : "",
       role: u.role || "member",
       gross_salary: u.gross_salary || "",
       applied_via: u.applied_via || "",
@@ -181,20 +172,37 @@ function UserProfile() {
 
   const validateEditForm = () => {
     const errors = {};
-    if (!editUser.name.trim()) errors.name = "Full Name is required.";
-    if (!editUser.father_name.trim()) errors.father_name = "Father Name is required.";
-    if (!editUser.id_card_number.trim()) errors.id_card_number = "ID Card Number is required.";
+    if (!editUser.name.trim()) {
+      errors.name = "Full Name is required.";
+    } else if (!/^[a-zA-Z\s]+$/.test(editUser.name.trim())) {
+      errors.name = "Full Name must contain only letters and spaces.";
+    }
+    if (!editUser.father_name.trim()) {
+      errors.father_name = "Father Name is required.";
+    } else if (!/^[a-zA-Z\s]+$/.test(editUser.father_name.trim())) {
+      errors.father_name = "Father Name must contain only letters and spaces.";
+    }
+    if (!editUser.id_card_number.trim()) {
+      errors.id_card_number = "ID Card Number is required.";
+    } else if (!/^\d{13}$/.test(editUser.id_card_number.trim())) {
+      errors.id_card_number = "CNIC must be exactly 13 digits.";
+    }
     if (!editUser.present_address.trim()) errors.present_address = "Present Address is required.";
-    if (!editUser.phone_number.trim()) errors.phone_number = "Phone Number is required.";
-    if (!editUser.personal_email.trim()) {
-      errors.personal_email = "Personal Email is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editUser.personal_email.trim())) {
-      errors.personal_email = "Please enter a valid email address.";
+    if (!editUser.phone_number.trim()) {
+      errors.phone_number = "Phone Number is required.";
+    } else if (!/^0\d{10}$/.test(editUser.phone_number.trim())) {
+      errors.phone_number = "Phone Number must be 11 digits starting with 0.";
+    }
+    if (editUser.emergency_contact_phone.trim() && !/^0\d{10}$/.test(editUser.emergency_contact_phone.trim())) {
+      errors.emergency_contact_phone = "Emergency Phone must be 11 digits starting with 0.";
     }
     if (!editUser.email.trim()) {
-      errors.email = "Professional Email is required.";
+      errors.email = "Email Address is required.";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editUser.email.trim())) {
       errors.email = "Please enter a valid email address.";
+    }
+    if (editUser.personal_email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editUser.personal_email.trim())) {
+      errors.personal_email = "Please enter a valid email address.";
     }
     if (!editUser.department) {
       errors.department = "Department is required.";
@@ -208,6 +216,12 @@ function UserProfile() {
     }
     if (!editUser.employee_code.trim()) errors.employee_code = "Employee Code is required.";
     if (!editUser.job_started_date) errors.job_started_date = "Job Start Date is required.";
+    if (editUser.gross_salary && (isNaN(editUser.gross_salary) || Number(editUser.gross_salary) < 0)) {
+      errors.gross_salary = "Gross Salary must be a valid positive number.";
+    }
+    if (editUser.bank_account_number.trim() && !/^\d+$/.test(editUser.bank_account_number.trim())) {
+      errors.bank_account_number = "Bank Account Number must contain only digits.";
+    }
     return errors;
   };
 
@@ -224,6 +238,7 @@ function UserProfile() {
 
     setSaving(true);
     try {
+      const isOwnProfile = String(getUser()?.id) === String(userId);
       const formData = new FormData();
       formData.append("name", editUser.name);
       formData.append("father_name", editUser.father_name);
@@ -261,13 +276,23 @@ function UserProfile() {
         }
       });
 
-      const res = await fetch(`${API_URL}/auth/update-profile`, {
-        method: "POST",
+      let url, method;
+      if (isOwnProfile) {
+        url = `${API_URL}/auth/update-profile`;
+        method = "POST";
+      } else {
+        url = `${API_URL}/users/${userId}`;
+        method = "PUT";
+      }
+
+      const res = await fetch(url, {
+        method,
         headers: {
           Accept: "application/json",
           Authorization: `Bearer ${authToken()}`,
         },
         body: formData,
+        _notifHandled: true,
       });
 
       const data = await res.json();
@@ -276,18 +301,27 @@ function UserProfile() {
       setIsEditModalOpen(false);
       setEditFiles({});
       setFilePreviews({});
-      showMessage("User updated successfully.");
 
-      fetch(`${API_URL}/users/${userId}/profile`, {
-        headers: { Accept: "application/json", ...authHeaders() },
-      })
-        .then((r) => r.json())
-        .then((profile) => {
+      if (data.user) {
+        setProfileData((prev) => ({ ...prev, user: { ...prev.user, ...data.user } }));
+      }
+
+      notify.success("User updated successfully.");
+
+      try {
+        const profileRes = await fetch(`${API_URL}/users/${userId}/profile`, {
+          headers: { Accept: "application/json", ...authHeaders() },
+          _notifHandled: true,
+        });
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
           setProfileData(profile);
-        })
-        .catch(() => {});
+        }
+      } catch (reFetchErr) {
+        console.error("Profile re-fetch failed:", reFetchErr);
+      }
     } catch (err) {
-      showMessage(err.message || "User update failed.", "error");
+      notify.error(err.message || "User update failed.");
     } finally {
       setSaving(false);
     }
@@ -335,7 +369,6 @@ function UserProfile() {
           <p>View and manage your personal information and account settings.</p>
         </div>
 
-        {message && <div className={`profile-message ${messageType}`}>{message}</div>}
         <div className="profile-layout">
           {/* LEFT SIDE */}
           <div className="profile-left">
@@ -427,12 +460,12 @@ function UserProfile() {
               </div>
               <div className="info-card-body">
                 <div className="info-row">
-                  <span className="info-label">Personal Email</span>
-                  <span className="info-value">{user.personal_email || "---"}</span>
+                  <span className="info-label">Email</span>
+                  <span className="info-value">{user.email || "---"}</span>
                 </div>
                 <div className="info-row">
-                  <span className="info-label">Professional Email</span>
-                  <span className="info-value">{user.email || "---"}</span>
+                  <span className="info-label">Personal Email</span>
+                  <span className="info-value">{user.personal_email || "---"}</span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Recovery Email</span>
@@ -634,12 +667,12 @@ function UserProfile() {
                   </div>
                   <div className="form-row">
                     <label htmlFor="edit-id_card_number">ID Card Number *</label>
-                    <input type="text" id="edit-id_card_number" name="id_card_number" value={editUser.id_card_number} onChange={handleEditChange} placeholder="Enter ID card number" className={editErrors.id_card_number ? "field-error" : ""} />
+                    <input type="text" id="edit-id_card_number" name="id_card_number" value={editUser.id_card_number} onChange={handleEditChange} placeholder="Enter ID card number" maxLength={13} className={editErrors.id_card_number ? "field-error" : ""} />
                     {editErrors.id_card_number && <span className="field-error-text">{editErrors.id_card_number}</span>}
                   </div>
                   <div className="form-row">
                     <label htmlFor="edit-phone_number">Phone Number *</label>
-                    <input type="text" id="edit-phone_number" name="phone_number" value={editUser.phone_number} onChange={handleEditChange} placeholder="Enter phone number" className={editErrors.phone_number ? "field-error" : ""} />
+                    <input type="text" id="edit-phone_number" name="phone_number" value={editUser.phone_number} onChange={handleEditChange} placeholder="Enter phone number" maxLength={11} className={editErrors.phone_number ? "field-error" : ""} />
                     {editErrors.phone_number && <span className="field-error-text">{editErrors.phone_number}</span>}
                   </div>
                 </div>
@@ -671,7 +704,8 @@ function UserProfile() {
                   </div>
                   <div className="form-row">
                     <label htmlFor="edit-emergency_contact_phone">Phone</label>
-                    <input type="text" id="edit-emergency_contact_phone" name="emergency_contact_phone" value={editUser.emergency_contact_phone} onChange={handleEditChange} placeholder="Emergency contact phone" />
+                    <input type="text" id="edit-emergency_contact_phone" name="emergency_contact_phone" value={editUser.emergency_contact_phone} onChange={handleEditChange} placeholder="Emergency contact phone" maxLength={11} className={editErrors.emergency_contact_phone ? "field-error" : ""} />
+                    {editErrors.emergency_contact_phone && <span className="field-error-text">{editErrors.emergency_contact_phone}</span>}
                   </div>
                 </div>
 
@@ -679,18 +713,14 @@ function UserProfile() {
                 <h3 className="form-section-title">Email Accounts</h3>
                 <div className="user-form-grid">
                   <div className="form-row">
-                    <label htmlFor="edit-personal_email">Personal Email *</label>
-                    <input type="email" id="edit-personal_email" name="personal_email" value={editUser.personal_email} onChange={handleEditChange} placeholder="Enter personal email" className={editErrors.personal_email ? "field-error" : ""} />
-                    {editErrors.personal_email && <span className="field-error-text">{editErrors.personal_email}</span>}
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="edit-email">Professional Email *</label>
-                    <input type="email" id="edit-email" name="email" value={editUser.email} onChange={handleEditChange} placeholder="Enter professional email" className={editErrors.email ? "field-error" : ""} />
+                    <label htmlFor="edit-email">Email *</label>
+                    <input type="email" id="edit-email" name="email" value={editUser.email} onChange={handleEditChange} placeholder="Enter email address" className={editErrors.email ? "field-error" : ""} />
                     {editErrors.email && <span className="field-error-text">{editErrors.email}</span>}
                   </div>
                   <div className="form-row">
-                    <label htmlFor="edit-recovery_email">Recovery Email</label>
-                    <input type="email" id="edit-recovery_email" name="recovery_email" value={editUser.recovery_email} onChange={handleEditChange} placeholder="Email for recovery" />
+                    <label htmlFor="edit-personal_email">Personal Email</label>
+                    <input type="email" id="edit-personal_email" name="personal_email" value={editUser.personal_email} onChange={handleEditChange} placeholder="Enter personal email" className={editErrors.personal_email ? "field-error" : ""} />
+                    {editErrors.personal_email && <span className="field-error-text">{editErrors.personal_email}</span>}
                   </div>
                 </div>
 
@@ -773,7 +803,8 @@ function UserProfile() {
                 <div className="user-form-grid">
                   <div className="form-row">
                     <label htmlFor="edit-gross_salary">Gross Salary</label>
-                    <input type="number" id="edit-gross_salary" name="gross_salary" value={editUser.gross_salary} onChange={handleEditChange} placeholder="Enter gross salary" />
+                    <input type="number" id="edit-gross_salary" name="gross_salary" value={editUser.gross_salary} onChange={handleEditChange} placeholder="Enter gross salary" className={editErrors.gross_salary ? "field-error" : ""} />
+                    {editErrors.gross_salary && <span className="field-error-text">{editErrors.gross_salary}</span>}
                   </div>
                   <div className="form-row">
                     <label htmlFor="edit-applied_via">Applied Via</label>
@@ -785,7 +816,8 @@ function UserProfile() {
                   </div>
                   <div className="form-row">
                     <label htmlFor="edit-bank_account_number">Bank Account Number</label>
-                    <input type="text" id="edit-bank_account_number" name="bank_account_number" value={editUser.bank_account_number} onChange={handleEditChange} placeholder="Enter account number" />
+                    <input type="text" id="edit-bank_account_number" name="bank_account_number" value={editUser.bank_account_number} onChange={handleEditChange} placeholder="Enter account number" className={editErrors.bank_account_number ? "field-error" : ""} />
+                    {editErrors.bank_account_number && <span className="field-error-text">{editErrors.bank_account_number}</span>}
                   </div>
                   <div className="form-row">
                     <label htmlFor="edit-bank_account_title">Bank Account Title</label>
@@ -797,15 +829,15 @@ function UserProfile() {
                 <h3 className="form-section-title">Documents</h3>
                 <div className="user-form-grid">
                   {[
-                    { label: "Employment Contract", key: "employment_contract", accept: ".pdf,.doc,.docx" },
-                    { label: "Offer Letter", key: "offer_letter", accept: ".pdf,.doc,.docx" },
-                    { label: "Techxaro Regulations", key: "techxaro_regulations", accept: ".pdf,.doc,.docx" },
-                    { label: "Latest Educational Certificate", key: "latest_education_cert", accept: ".pdf,.doc,.docx,.jpg,.png" },
-                    { label: "CV", key: "cv", accept: ".pdf,.doc,.docx" },
-                    { label: "Previous Job Experience Letter", key: "previous_exp_letter", accept: ".pdf,.doc,.docx" },
-                    { label: "Previous Salary Slip", key: "previous_salary_slip", accept: ".pdf,.doc,.docx,.jpg,.png" },
-                    { label: "Other Document", key: "other_document", accept: ".pdf,.doc,.docx,.jpg,.png" },
-                  ].map(({ label, key, accept }) => (
+                    { label: "Employment Contract", key: "employment_contract" },
+                    { label: "Offer Letter", key: "offer_letter" },
+                    { label: "Techxaro Regulations", key: "techxaro_regulations" },
+                    { label: "Latest Educational Certificate", key: "latest_education_cert" },
+                    { label: "CV", key: "cv" },
+                    { label: "Previous Job Experience Letter", key: "previous_exp_letter" },
+                    { label: "Previous Salary Slip", key: "previous_salary_slip" },
+                    { label: "Other Document", key: "other_document" },
+                  ].map(({ label, key }) => (
                     <div className="form-row" key={key}>
                       <label htmlFor={`edit-${key}`}>{label}</label>
                       {user[key] && !editFiles[key] && (
@@ -816,9 +848,14 @@ function UserProfile() {
                       <input
                         type="file"
                         id={`edit-${key}`}
-                        accept={accept}
+                        accept=".pdf,.jpg,.jpeg,.png,.webp"
                         onChange={(e) => {
                           const file = e.target.files[0];
+                          if (file && !["application/pdf","image/jpeg","image/png","image/webp"].includes(file.type)) {
+                            notify.error("Only PDF and image files are allowed.");
+                            e.target.value = "";
+                            return;
+                          }
                           if (file) {
                             setEditFiles((prev) => ({ ...prev, [key]: file }));
                             setFilePreviews((prev) => ({ ...prev, [key]: file.name }));

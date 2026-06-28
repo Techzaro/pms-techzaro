@@ -17,6 +17,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, getUser, setUser, rolePath } from "../utils/auth";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useNotification } from "../context/NotificationContext";
 import "./ManageUsers.css";
 
 const DEPARTMENTS = [
@@ -42,8 +43,10 @@ const DESIGNATIONS = [
 ];
 
 function ManageUsers() {
+  const notify = useNotification();
   const [users, setUsers] = useState([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
   const [newUser, setNewUser] = useState({
     fullName: "",
     fatherName: "",
@@ -54,10 +57,8 @@ function ManageUsers() {
     emergencyContactName: "",
     emergencyContactRelation: "",
     emergencyContactPhone: "",
+    email: "",
     personalEmail: "",
-    professionalEmail: "",
-    professionalEmailPassword: "",
-    recoveryEmail: "",
     department: "",
     departmentCustom: "",
     designation: "",
@@ -83,8 +84,6 @@ function ManageUsers() {
   });
   const [loading, setLoading] = useState(false);
   const [savingUserId, setSavingUserId] = useState(null);
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("");
   const [addErrors, setAddErrors] = useState({});
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -130,16 +129,6 @@ function ManageUsers() {
     </span>
   );
 
-  const showMessage = (text, type = "success") => {
-    setMessage(text);
-    setMessageType(type);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    setTimeout(() => {
-      setMessage("");
-      setMessageType("");
-    }, 4000);
-  };
-
   const authHeaders = () => {
     const token = authToken();
     return {
@@ -153,6 +142,7 @@ function ManageUsers() {
     try {
       const res = await fetch(`${API_URL}/users`, {
         headers: { Accept: "application/json", ...authHeaders() },
+        _notifHandled: true,
       });
       if (!res.ok) throw new Error("Unable to load users");
       const data = await res.json();
@@ -163,7 +153,7 @@ function ManageUsers() {
       setUsers(usersData);
     } catch (error) {
       console.error(error);
-      showMessage("Unable to load users. Please login again if required.", "error");
+      notify.error("Unable to load users. Please login again if required.");
     } finally {
       setLoading(false);
     }
@@ -240,10 +230,97 @@ function ManageUsers() {
     setActiveDragId(null);
   }, []);
 
-  const openModal = () => setIsAddModalOpen(true);
+  const openModal = () => {
+    setEditingUser(null);
+    setNewUser({
+      fullName: "",
+      fatherName: "",
+      idCardNumber: "",
+      presentAddress: "",
+      permanentAddress: "",
+      phoneNumber: "",
+      emergencyContactName: "",
+      emergencyContactRelation: "",
+      emergencyContactPhone: "",
+      email: "",
+      personalEmail: "",
+      recoveryEmail: "",
+      department: "",
+      departmentCustom: "",
+      designation: "",
+      designationCustom: "",
+      hiredFor: "",
+      employeeCode: "",
+      jobStartedDate: "",
+      jobEndedDate: "",
+      role: "member",
+      grossSalary: "",
+      appliedVia: "",
+      bankName: "",
+      bankAccountNumber: "",
+      bankAccountTitle: "",
+      employmentContract: null,
+      offerLetter: null,
+      techxaroRegulations: null,
+      latestEducationCert: null,
+      cv: null,
+      previousExpLetter: null,
+      previousSalarySlip: null,
+      otherDocument: null,
+    });
+    setAddErrors({});
+    setIsAddModalOpen(true);
+  };
+
+  const openEditModal = (user) => {
+    setEditingUser(user);
+    const deptVal = user.department || "";
+    const isCustomDept = !DEPARTMENTS.slice(0, -1).includes(deptVal) && deptVal !== "";
+    const desgVal = user.designation || "";
+    const isCustomDesg = !DESIGNATIONS.slice(0, -1).includes(desgVal) && desgVal !== "";
+
+    setNewUser({
+      fullName: user.name || "",
+      fatherName: user.father_name || "",
+      idCardNumber: user.id_card_number || "",
+      presentAddress: user.present_address || user.address || "",
+      permanentAddress: user.permanent_address || "",
+      phoneNumber: user.phone_number || user.contact_no || "",
+      emergencyContactName: user.emergency_contact_name || "",
+      emergencyContactRelation: user.emergency_contact_relation || "",
+      emergencyContactPhone: user.emergency_contact_phone || "",
+      email: user.email || "",
+      personalEmail: user.personal_email || "",
+      department: isCustomDept ? "__custom__" : deptVal,
+      departmentCustom: isCustomDept ? deptVal : "",
+      designation: isCustomDesg ? "__custom__" : desgVal,
+      designationCustom: isCustomDesg ? desgVal : "",
+      hiredFor: user.hired_for || "",
+      employeeCode: user.employee_code || "",
+      jobStartedDate: user.job_started_date ? user.job_started_date.substring(0, 10) : "",
+      jobEndedDate: user.job_ended_date ? user.job_ended_date.substring(0, 10) : "",
+      role: user.role || "member",
+      grossSalary: user.gross_salary || "",
+      appliedVia: user.applied_via || "",
+      bankName: user.bank_name || "",
+      bankAccountNumber: user.bank_account_number || "",
+      bankAccountTitle: user.bank_account_title || "",
+      employmentContract: null,
+      offerLetter: null,
+      techxaroRegulations: null,
+      latestEducationCert: null,
+      cv: null,
+      previousExpLetter: null,
+      previousSalarySlip: null,
+      otherDocument: null,
+    });
+    setAddErrors({});
+    setIsAddModalOpen(true);
+  };
 
   const closeModal = () => {
     setIsAddModalOpen(false);
+    setEditingUser(null);
     setAddErrors({});
     setNewUser({
       fullName: "",
@@ -255,9 +332,8 @@ function ManageUsers() {
       emergencyContactName: "",
       emergencyContactRelation: "",
       emergencyContactPhone: "",
+      email: "",
       personalEmail: "",
-      professionalEmail: "",
-      professionalEmailPassword: "",
       recoveryEmail: "",
       department: "",
       departmentCustom: "",
@@ -286,22 +362,38 @@ function ManageUsers() {
 
   const validateAddForm = () => {
     const errors = {};
-    if (!newUser.fullName.trim()) errors.fullName = "Full Name is required.";
-    if (!newUser.fatherName.trim()) errors.fatherName = "Father Name is required.";
-    if (!newUser.idCardNumber.trim()) errors.idCardNumber = "ID Card Number is required.";
+    if (!newUser.fullName.trim()) {
+      errors.fullName = "Full Name is required.";
+    } else if (!/^[a-zA-Z\s]+$/.test(newUser.fullName.trim())) {
+      errors.fullName = "Full Name must contain only letters and spaces.";
+    }
+    if (!newUser.fatherName.trim()) {
+      errors.fatherName = "Father Name is required.";
+    } else if (!/^[a-zA-Z\s]+$/.test(newUser.fatherName.trim())) {
+      errors.fatherName = "Father Name must contain only letters and spaces.";
+    }
+    if (!newUser.idCardNumber.trim()) {
+      errors.idCardNumber = "ID Card Number is required.";
+    } else if (!/^\d{13}$/.test(newUser.idCardNumber.trim())) {
+      errors.idCardNumber = "CNIC must be exactly 13 digits.";
+    }
     if (!newUser.presentAddress.trim()) errors.presentAddress = "Present Address is required.";
-    if (!newUser.phoneNumber.trim()) errors.phoneNumber = "Phone Number is required.";
-    if (!newUser.personalEmail.trim()) {
-      errors.personalEmail = "Personal Email is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.personalEmail.trim())) {
+    if (!newUser.phoneNumber.trim()) {
+      errors.phoneNumber = "Phone Number is required.";
+    } else if (!/^0\d{10}$/.test(newUser.phoneNumber.trim())) {
+      errors.phoneNumber = "Phone Number must be 11 digits starting with 0.";
+    }
+    if (newUser.emergencyContactPhone.trim() && !/^0\d{10}$/.test(newUser.emergencyContactPhone.trim())) {
+      errors.emergencyContactPhone = "Emergency Phone must be 11 digits starting with 0.";
+    }
+    if (!newUser.email.trim()) {
+      errors.email = "Email Address is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.email.trim())) {
+      errors.email = "Please enter a valid email address.";
+    }
+    if (newUser.personalEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.personalEmail.trim())) {
       errors.personalEmail = "Please enter a valid email address.";
     }
-    if (!newUser.professionalEmail.trim()) {
-      errors.professionalEmail = "Professional Email is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.professionalEmail.trim())) {
-      errors.professionalEmail = "Please enter a valid email address.";
-    }
-    if (!newUser.professionalEmailPassword.trim()) errors.professionalEmailPassword = "Professional Email Password is required.";
     if (!newUser.department) {
       errors.department = "Department is required.";
     } else if (newUser.department === "__custom__" && !newUser.departmentCustom.trim()) {
@@ -314,6 +406,12 @@ function ManageUsers() {
     }
     if (!newUser.employeeCode.trim()) errors.employeeCode = "Employee Code is required.";
     if (!newUser.jobStartedDate) errors.jobStartedDate = "Job Start Date is required.";
+    if (newUser.grossSalary && (isNaN(newUser.grossSalary) || Number(newUser.grossSalary) < 0)) {
+      errors.grossSalary = "Gross Salary must be a valid positive number.";
+    }
+    if (newUser.bankAccountNumber.trim() && !/^\d+$/.test(newUser.bankAccountNumber.trim())) {
+      errors.bankAccountNumber = "Bank Account Number must contain only digits.";
+    }
     return errors;
   };
 
@@ -331,7 +429,7 @@ function ManageUsers() {
 
   const handleUpdateUser = async (user) => {
     if (!user.active) {
-      showMessage("Resigned users cannot be updated.", "error");
+      notify.error("Resigned users cannot be updated.");
       return;
     }
     setSavingUserId(user.id);
@@ -340,6 +438,7 @@ function ManageUsers() {
         method: "PUT",
         headers: { Accept: "application/json", ...authHeaders() },
         body: JSON.stringify({ role: user.role }),
+        _notifHandled: true,
       });
       if (!res.ok) throw new Error("Unable to update user");
       const data = await res.json();
@@ -350,10 +449,10 @@ function ManageUsers() {
             : item
         )
       );
-      showMessage("User role updated successfully.");
+      notify.success("User role updated successfully.");
     } catch (error) {
       console.error(error);
-      showMessage("Failed to update user role.", "error");
+      notify.error("Failed to update user role.");
     } finally {
       setSavingUserId(null);
     }
@@ -373,6 +472,7 @@ function ManageUsers() {
       const res = await fetch(`${API_URL}/users/${userId}/resign`, {
         method: "PUT",
         headers: { Accept: "application/json", ...authHeaders() },
+        _notifHandled: true,
       });
 
       const data = await res.json();
@@ -386,10 +486,10 @@ function ManageUsers() {
           item.id === userId ? { ...item, active: false } : item
         )
       );
-      showMessage(data.message || "User resigned successfully.");
+      notify.success(data.message || "User resigned successfully.");
     } catch (error) {
       console.error(error);
-      showMessage(error.message || "Failed to resign user.", "error");
+      notify.error(error.message || "Failed to resign user.");
     }
   };
 
@@ -410,7 +510,7 @@ function ManageUsers() {
 
     return (
       <tr key={user.id} className={!isActive ? "resigned-row" : ""}>
-        <td style={{ textAlign: "left" }}>
+        <td style={{ width: "40%", textAlign: "left" }}>
           <div className="user-info">
             <span className="user-avatar">{getInitials(user.name)}</span>
             <div className="user-details">
@@ -419,17 +519,17 @@ function ManageUsers() {
             </div>
           </div>
         </td>
-        <td>
+        <td style={{ width: "20%" }}>
           <span className={`role-badge role-${user.role}`}>
             {user.role === "team_lead"
               ? "Team Lead"
               : user.role.charAt(0).toUpperCase() + user.role.slice(1)}
           </span>
         </td>
-        <td>
+        <td style={{ width: "20%" }}>
           <StatusBadge active={isActive} />
         </td>
-        <td>
+        <td style={{ width: "20%" }}>
           <div className="action-buttons">
             <button
               className="btn-view"
@@ -481,7 +581,7 @@ function ManageUsers() {
     };
     return (
       <tr ref={setNodeRef} className={!isActive ? "resigned-row" : ""} style={rowStyle} {...listeners} {...attributes}>
-        <td style={{ textAlign: "left" }}>
+        <td style={{ width: "40%", textAlign: "left" }}>
           <div className="user-info">
             <span className="user-avatar">{getInitials(user.name)}</span>
             <div className="user-details">
@@ -490,13 +590,13 @@ function ManageUsers() {
             </div>
           </div>
         </td>
-        <td>
+        <td style={{ width: "20%" }}>
           <span className={`role-badge role-${user.role}`}>
             {user.role === "team_lead" ? "Team Lead" : user.role.charAt(0).toUpperCase() + user.role.slice(1)}
           </span>
         </td>
-        <td><StatusBadge active={isActive} /></td>
-        <td>
+        <td style={{ width: "20%" }}><StatusBadge active={isActive} /></td>
+        <td style={{ width: "20%" }}>
           <div className="action-buttons">
             <button className="btn-view" onClick={() => navigate(rolePath(`manage-users/user-profile/${user.id}`))} aria-label="View user profile"><MdVisibility size={24} /></button>
             <button className="btn-resign" onClick={() => handleResignUser(user.id)} disabled={!canModifyUser} aria-label="Resign user"><ResignIcon className="resign-icon" /></button>
@@ -520,7 +620,8 @@ function ManageUsers() {
       newUser.designation === "__custom__" ? newUser.designationCustom : newUser.designation;
 
     const formData = new FormData();
-    formData.append("name", newUser.fullName);
+    formData.append("name", newUser.fullName.trim());
+    formData.append("email", newUser.email.trim());
     formData.append("father_name", newUser.fatherName);
     formData.append("id_card_number", newUser.idCardNumber);
     formData.append("present_address", newUser.presentAddress);
@@ -530,9 +631,7 @@ function ManageUsers() {
     formData.append("emergency_contact_relation", newUser.emergencyContactRelation);
     formData.append("emergency_contact_phone", newUser.emergencyContactPhone);
     formData.append("personal_email", newUser.personalEmail);
-    formData.append("email", newUser.professionalEmail);
-    formData.append("professional_email_password", newUser.professionalEmailPassword);
-    formData.append("recovery_email", newUser.recoveryEmail);
+    formData.append("recovery_email", newUser.recoveryEmail || "");
     formData.append("department", finalDepartment || "");
     formData.append("designation", finalDesignation || "");
     formData.append("hired_for", newUser.hiredFor);
@@ -562,21 +661,31 @@ function ManageUsers() {
 
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/users`, {
-        method: "POST",
+      const isEdit = !!editingUser;
+      const url = isEdit ? `${API_URL}/users/${editingUser.id}` : `${API_URL}/users`;
+      const method = isEdit ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
         body: formData,
+        _notifHandled: true,
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Unable to create user");
+      if (!res.ok) throw new Error(data.message || (isEdit ? "Unable to update user" : "Unable to create user"));
 
-      setUsers((prev) => [data.user, ...prev]);
+      if (isEdit) {
+        setUsers((prev) => prev.map((item) => item.id === editingUser.id ? { ...item, ...data.user } : item));
+        notify.success(data.message || "User updated successfully.");
+      } else {
+        setUsers((prev) => [data.user, ...prev]);
+        notify.success(data.message || "User created successfully.");
+      }
       closeModal();
-      showMessage(data.message || "User created successfully.");
     } catch (error) {
       console.error(error);
-      showMessage(error.message || "User creation failed.", "error");
+      notify.error(error.message || "Operation failed.");
     }
   };
 
@@ -629,8 +738,6 @@ function ManageUsers() {
           </select>
         </div>
 
-        {message && <div className={`message ${messageType}`}>{message}</div>}
-
         <div className="manage-users-table-card">
           <div className="table-card-header">
             <h2>Existing Users</h2>
@@ -639,10 +746,10 @@ function ManageUsers() {
             <table className="manage-user-table">
               <thead>
                 <tr>
-                  <th>User</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Action</th>
+                  <th style={{ width: "40%" }}>User</th>
+                  <th style={{ width: "20%" }}>Role</th>
+                  <th style={{ width: "20%" }}>Status</th>
+                  <th style={{ width: "20%" }}>Action</th>
                 </tr>
               </thead>
               <SortableContext items={sortedUsers.map((u) => u.id)} strategy={verticalListSortingStrategy}>
@@ -691,9 +798,9 @@ function ManageUsers() {
             >
               <div className="user-modal-header">
                 <div>
-                  <h2>Add New User</h2>
+                  <h2>{editingUser ? "Edit User" : "Add New User"}</h2>
                   <p className="modal-subtitle">
-                    Register a new user and automatically send login credentials via email.
+                    {editingUser ? "Update user information and documents." : "Register a new user and automatically send login credentials via email."}
                   </p>
                 </div>
                 <button className="user-modal-close" onClick={closeModal}>
@@ -717,12 +824,12 @@ function ManageUsers() {
                   </div>
                   <div className="form-row">
                     <label htmlFor="idCardNumber">ID Card Number *</label>
-                    <input type="text" id="idCardNumber" name="idCardNumber" value={newUser.idCardNumber} onChange={handleChange} placeholder="Enter ID card number" className={addErrors.idCardNumber ? "field-error" : ""} />
+                    <input type="text" id="idCardNumber" name="idCardNumber" value={newUser.idCardNumber} onChange={handleChange} placeholder="Enter ID card number" maxLength={13} className={addErrors.idCardNumber ? "field-error" : ""} />
                     {addErrors.idCardNumber && <span className="field-error-text">{addErrors.idCardNumber}</span>}
                   </div>
                   <div className="form-row">
                     <label htmlFor="phoneNumber">Phone Number *</label>
-                    <input type="text" id="phoneNumber" name="phoneNumber" value={newUser.phoneNumber} onChange={handleChange} placeholder="Enter phone number" className={addErrors.phoneNumber ? "field-error" : ""} />
+                    <input type="text" id="phoneNumber" name="phoneNumber" value={newUser.phoneNumber} onChange={handleChange} placeholder="Enter phone number" maxLength={11} className={addErrors.phoneNumber ? "field-error" : ""} />
                     {addErrors.phoneNumber && <span className="field-error-text">{addErrors.phoneNumber}</span>}
                   </div>
                 </div>
@@ -754,7 +861,8 @@ function ManageUsers() {
                   </div>
                   <div className="form-row">
                     <label htmlFor="emergencyContactPhone">Phone</label>
-                    <input type="text" id="emergencyContactPhone" name="emergencyContactPhone" value={newUser.emergencyContactPhone} onChange={handleChange} placeholder="Emergency contact phone" />
+                    <input type="text" id="emergencyContactPhone" name="emergencyContactPhone" value={newUser.emergencyContactPhone} onChange={handleChange} placeholder="Emergency contact phone" maxLength={11} className={addErrors.emergencyContactPhone ? "field-error" : ""} />
+                    {addErrors.emergencyContactPhone && <span className="field-error-text">{addErrors.emergencyContactPhone}</span>}
                   </div>
                 </div>
 
@@ -762,23 +870,14 @@ function ManageUsers() {
                 <h3 className="form-section-title">Email Accounts</h3>
                 <div className="user-form-grid">
                   <div className="form-row">
-                    <label htmlFor="personalEmail">Personal Email Address *</label>
+                    <label htmlFor="email">Email Address *</label>
+                    <input type="email" id="email" name="email" value={newUser.email} onChange={handleChange} placeholder="Enter email address" className={addErrors.email ? "field-error" : ""} />
+                    {addErrors.email && <span className="field-error-text">{addErrors.email}</span>}
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="personalEmail">Personal Email Address</label>
                     <input type="email" id="personalEmail" name="personalEmail" value={newUser.personalEmail} onChange={handleChange} placeholder="Enter personal email" className={addErrors.personalEmail ? "field-error" : ""} />
                     {addErrors.personalEmail && <span className="field-error-text">{addErrors.personalEmail}</span>}
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="professionalEmail">Professional Email Address *</label>
-                    <input type="email" id="professionalEmail" name="professionalEmail" value={newUser.professionalEmail} onChange={handleChange} placeholder="Enter professional email" className={addErrors.professionalEmail ? "field-error" : ""} />
-                    {addErrors.professionalEmail && <span className="field-error-text">{addErrors.professionalEmail}</span>}
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="professionalEmailPassword">Password of Professional Email *</label>
-                    <input type="password" id="professionalEmailPassword" name="professionalEmailPassword" value={newUser.professionalEmailPassword} onChange={handleChange} placeholder="Enter password" className={addErrors.professionalEmailPassword ? "field-error" : ""} />
-                    {addErrors.professionalEmailPassword && <span className="field-error-text">{addErrors.professionalEmailPassword}</span>}
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="recoveryEmail">Recovery Email</label>
-                    <input type="email" id="recoveryEmail" name="recoveryEmail" value={newUser.recoveryEmail} onChange={handleChange} placeholder="Email for recovery" />
                   </div>
                 </div>
 
@@ -861,7 +960,8 @@ function ManageUsers() {
                 <div className="user-form-grid">
                   <div className="form-row">
                     <label htmlFor="grossSalary">Gross Salary</label>
-                    <input type="number" id="grossSalary" name="grossSalary" value={newUser.grossSalary} onChange={handleChange} placeholder="Enter gross salary" />
+                    <input type="number" id="grossSalary" name="grossSalary" value={newUser.grossSalary} onChange={handleChange} placeholder="Enter gross salary" className={addErrors.grossSalary ? "field-error" : ""} />
+                    {addErrors.grossSalary && <span className="field-error-text">{addErrors.grossSalary}</span>}
                   </div>
                   <div className="form-row">
                     <label htmlFor="appliedVia">Applied Via</label>
@@ -873,7 +973,8 @@ function ManageUsers() {
                   </div>
                   <div className="form-row">
                     <label htmlFor="bankAccountNumber">Bank Account Number</label>
-                    <input type="text" id="bankAccountNumber" name="bankAccountNumber" value={newUser.bankAccountNumber} onChange={handleChange} placeholder="Enter account number" />
+                    <input type="text" id="bankAccountNumber" name="bankAccountNumber" value={newUser.bankAccountNumber} onChange={handleChange} placeholder="Enter account number" className={addErrors.bankAccountNumber ? "field-error" : ""} />
+                    {addErrors.bankAccountNumber && <span className="field-error-text">{addErrors.bankAccountNumber}</span>}
                   </div>
                   <div className="form-row">
                     <label htmlFor="bankAccountTitle">Bank Account Title</label>
@@ -884,38 +985,39 @@ function ManageUsers() {
                 {/* ===== Documents ===== */}
                 <h3 className="form-section-title">Documents</h3>
                 <div className="user-form-grid">
-                  <div className="form-row">
-                    <label htmlFor="employmentContract">Employment Contract</label>
-                    <input type="file" id="employmentContract" onChange={(e) => setNewUser((p) => ({ ...p, employmentContract: e.target.files[0] || null }))} accept=".pdf,.doc,.docx" />
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="offerLetter">Offer Letter</label>
-                    <input type="file" id="offerLetter" onChange={(e) => setNewUser((p) => ({ ...p, offerLetter: e.target.files[0] || null }))} accept=".pdf,.doc,.docx" />
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="techxaroRegulations">Techxaro Regulations</label>
-                    <input type="file" id="techxaroRegulations" onChange={(e) => setNewUser((p) => ({ ...p, techxaroRegulations: e.target.files[0] || null }))} accept=".pdf,.doc,.docx" />
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="latestEducationCert">Latest Educational Certificate</label>
-                    <input type="file" id="latestEducationCert" onChange={(e) => setNewUser((p) => ({ ...p, latestEducationCert: e.target.files[0] || null }))} accept=".pdf,.doc,.docx,.jpg,.png" />
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="cv">CV</label>
-                    <input type="file" id="cv" onChange={(e) => setNewUser((p) => ({ ...p, cv: e.target.files[0] || null }))} accept=".pdf,.doc,.docx" />
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="previousExpLetter">Previous Job Experience Letter</label>
-                    <input type="file" id="previousExpLetter" onChange={(e) => setNewUser((p) => ({ ...p, previousExpLetter: e.target.files[0] || null }))} accept=".pdf,.doc,.docx" />
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="previousSalarySlip">Previous Salary Slip</label>
-                    <input type="file" id="previousSalarySlip" onChange={(e) => setNewUser((p) => ({ ...p, previousSalarySlip: e.target.files[0] || null }))} accept=".pdf,.doc,.docx,.jpg,.png" />
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="otherDocument">Revised / Other Document</label>
-                    <input type="file" id="otherDocument" onChange={(e) => setNewUser((p) => ({ ...p, otherDocument: e.target.files[0] || null }))} accept=".pdf,.doc,.docx,.jpg,.png" />
-                  </div>
+                  {[
+                    { label: "Employment Contract", key: "employmentContract", api: "employment_contract" },
+                    { label: "Offer Letter", key: "offerLetter", api: "offer_letter" },
+                    { label: "Techxaro Regulations", key: "techxaroRegulations", api: "techxaro_regulations" },
+                    { label: "Latest Educational Certificate", key: "latestEducationCert", api: "latest_education_cert" },
+                    { label: "CV", key: "cv", api: "cv" },
+                    { label: "Previous Job Experience Letter", key: "previousExpLetter", api: "previous_exp_letter" },
+                    { label: "Previous Salary Slip", key: "previousSalarySlip", api: "previous_salary_slip" },
+                    { label: "Revised / Other Document", key: "otherDocument", api: "other_document" },
+                  ].map(({ label, key, api }) => (
+                    <div className="form-row" key={key}>
+                      <label htmlFor={key}>{label}</label>
+                      {editingUser && editingUser[api] && !newUser[key] && (
+                        <div style={{ marginBottom: 6, fontSize: 13, color: "#64748b" }}>
+                          Current: <a href={`${API_URL}/users/${editingUser.id}/documents/${api}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>View uploaded file</a>
+                        </div>
+                      )}
+                      <input
+                        type="file"
+                        id={key}
+                        accept=".pdf,.jpg,.jpeg,.png,.webp"
+                        onChange={(e) => {
+                          const f = e.target.files[0];
+                          if (f && !["application/pdf","image/jpeg","image/png","image/webp"].includes(f.type)) {
+                            notify.error("Only PDF and image files are allowed.");
+                            e.target.value = "";
+                            return;
+                          }
+                          setNewUser((p) => ({ ...p, [key]: f || null }));
+                        }}
+                      />
+                    </div>
+                  ))}
                 </div>
 
                 <div className="user-form-actions">
@@ -923,7 +1025,7 @@ function ManageUsers() {
                     Cancel
                   </button>
                   <button type="submit" className="primary-button">
-                    Create User
+                    {editingUser ? "Update User" : "Create User"}
                   </button>
                 </div>
               </form>

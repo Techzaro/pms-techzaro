@@ -243,6 +243,14 @@ function Projects() {
     if (searchQuery && !project.title?.toLowerCase().includes(searchQuery.toLowerCase())) {
       return false;
     }
+    if (statusFilter === "due_today") {
+      if (!project.end_date) return false;
+      const today = new Date();
+      const end = new Date(project.end_date);
+      return end.getFullYear() === today.getFullYear() &&
+        end.getMonth() === today.getMonth() &&
+        end.getDate() === today.getDate();
+    }
     if (statusFilter) {
       if (statusFilter === "active") return true;
       if (statusFilter === "pending" && project.status !== "pending" && project.status !== "Planned" && project.status !== "in_progress") return false;
@@ -304,6 +312,9 @@ function Projects() {
         {/* STATUS FILTERS */}
         <div className="task-progress">
           <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
+          <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
+            <GoDotFill color="#EF4444" /> Due Today
+          </p>
           <p className={`Active ${statusFilter === "active" ? "active" : ""}`} onClick={() => selectStatusFilter("active")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Active Projects
           </p>

@@ -4,6 +4,7 @@
   min-width: 0;
   padding: 0;
   box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .manage-users-page * {
@@ -97,6 +98,9 @@
   outline: 0;
   cursor: pointer;
   min-width: 130px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .search-bar input {
@@ -519,6 +523,7 @@
   padding: 20px;
   z-index: 10002;
   backdrop-filter: blur(4px);
+  overflow: hidden;
 }
 
 .user-modal-content {
@@ -526,10 +531,18 @@
   max-width: 760px;
   max-height: 90vh;
   overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-width: none;
   background: #fff;
   border-radius: 24px;
   padding: 30px;
+}
+
+.user-modal-content select,
+.user-modal-content input {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .user-modal-content::-webkit-scrollbar {
@@ -638,11 +651,14 @@
 .user-form input,
 .user-form select {
   width: 100%;
+  max-width: 100%;
   border: 1px solid #d1d5db;
   border-radius: 14px;
   padding: 15px 16px;
   background: #f9fafb;
   font-size: 14px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .user-form input:focus,
@@ -766,6 +782,7 @@
     width: auto;
     flex: 1;
     min-width: 0;
+    max-width: 100%;
     padding: 8px 10px;
     font-size: 13px;
   }

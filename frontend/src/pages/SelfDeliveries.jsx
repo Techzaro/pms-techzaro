@@ -164,7 +164,7 @@ function SelfDeliveries() {
         <div className="task-progress">
           <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
           <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#EF4444" /> Deliverables Due Today
+            <GoDotFill color="#EF4444" /> Due Today
           </p>
           <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Draft

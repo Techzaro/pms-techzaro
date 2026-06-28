@@ -38,7 +38,7 @@ class AuthController extends Controller
             // check login
             if (!Auth::attempt($credentials)) {
                 return response()->json([
-                    'status' => false,
+                    'success' => false,
                     'message' => 'Invalid Email or Password'
                 ], 401);
             }
@@ -48,7 +48,7 @@ class AuthController extends Controller
 
             if ($user->active === false) {
                 return response()->json([
-                    'status' => false,
+                    'success' => false,
                     'message' => 'Your account has been resigned. You no longer have access to the system. Please contact your administrator.'
                 ], 403);
             }
@@ -63,7 +63,7 @@ class AuthController extends Controller
             $role = $user->role === 'teamlead' ? 'team_lead' : $user->role;
 
             return response()->json([
-                'status' => true,
+                'success' => true,
                 'message' => 'Login successful',
                 'token' => $token,
                 'role' => $role,
@@ -78,7 +78,7 @@ class AuthController extends Controller
             ]);
         } catch (\Throwable $e) {
             return response()->json([
-                'status' => false,
+                'success' => false,
                 'message' => $e->getMessage() ?: 'Server Error'
             ], 500);
         }
@@ -92,7 +92,7 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()->delete();
 
         return response()->json([
-            'status' => true,
+            'success' => true,
             'message' => 'Logout successful'
         ]);
     }
@@ -114,12 +114,12 @@ class AuthController extends Controller
             $user->save();
 
             return response()->json([
-                'status' => true,
+                'success' => true,
                 'message' => 'Password changed successfully. Please login with your new password.'
             ]);
         } catch (\Throwable $e) {
             return response()->json([
-                'status' => false,
+                'success' => false,
                 'message' => $e->getMessage() ?: 'Server Error'
             ], 500);
         }
@@ -149,6 +149,7 @@ class AuthController extends Controller
         }
 
         return response()->json([
+            'success' => true,
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -168,7 +169,6 @@ class AuthController extends Controller
                 'emergency_contact_relation' => $user->emergency_contact_relation,
                 'emergency_contact_phone' => $user->emergency_contact_phone,
                 'personal_email' => $user->personal_email,
-                'professional_email_password' => $user->professional_email_password,
                 'recovery_email' => $user->recovery_email,
                 'hired_for' => $user->hired_for,
                 'job_started_date' => $user->job_started_date,
@@ -221,6 +221,8 @@ class AuthController extends Controller
 
         $request->validate([
             'name' => 'sometimes|required|string|max:255',
+            'email' => 'sometimes|required|email|max:255',
+            'role' => ['sometimes', 'required', \Illuminate\Validation\Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member'])],
             'father_name' => 'nullable|string|max:255',
             'id_card_number' => 'nullable|string|max:32',
             'phone_number' => 'nullable|string|max:32',
@@ -231,7 +233,6 @@ class AuthController extends Controller
             'emergency_contact_relation' => 'nullable|string|max:255',
             'emergency_contact_phone' => 'nullable|string|max:32',
             'personal_email' => 'nullable|email|max:255',
-            'professional_email_password' => 'nullable|string|max:255',
             'recovery_email' => 'nullable|email|max:255',
             'department' => 'nullable|string|max:255',
             'designation' => 'nullable|string|max:255',
@@ -244,13 +245,22 @@ class AuthController extends Controller
             'bank_name' => 'nullable|string|max:255',
             'bank_account_number' => 'nullable|string|max:64',
             'bank_account_title' => 'nullable|string|max:255',
+            'employment_contract' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'offer_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'latest_education_cert' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'cv' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'previous_exp_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'previous_salary_slip' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'other_document' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
         ]);
 
         $fields = [
-            'name', 'father_name', 'id_card_number',
+            'name', 'email', 'role',
+            'father_name', 'id_card_number',
             'phone_number', 'present_address', 'permanent_address',
             'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
-            'personal_email', 'professional_email_password', 'recovery_email',
+            'personal_email', 'recovery_email',
             'department', 'designation', 'hired_for', 'employee_code',
             'job_started_date', 'job_ended_date',
             'gross_salary', 'applied_via',
@@ -268,6 +278,10 @@ class AuthController extends Controller
         }
         if ($request->has('present_address')) {
             $user->address = $request->input('present_address');
+        }
+
+        if ($user->role === 'teamlead') {
+            $user->role = 'team_lead';
         }
 
         $user->save();
@@ -293,7 +307,7 @@ class AuthController extends Controller
         $user->save();
 
         return response()->json([
-            'status' => true,
+            'success' => true,
             'message' => 'Profile updated successfully',
             'user' => $user,
         ]);
@@ -314,7 +328,7 @@ class AuthController extends Controller
 
             if (!Hash::check($request->old_password, $user->password)) {
                 return response()->json([
-                    'status' => false,
+                    'success' => false,
                     'message' => 'Current password is incorrect.'
                 ], 422);
             }
@@ -326,12 +340,12 @@ class AuthController extends Controller
             $user->tokens()->where('id', '!=', $request->user()->currentAccessToken()->id)->delete();
 
             return response()->json([
-                'status' => true,
+                'success' => true,
                 'message' => 'Password changed successfully'
             ]);
         } catch (\Throwable $e) {
             return response()->json([
-                'status' => false,
+                'success' => false,
                 'message' => $e->getMessage() ?: 'Server Error'
             ], 500);
         }
