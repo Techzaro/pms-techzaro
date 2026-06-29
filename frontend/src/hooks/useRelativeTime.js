@@ -1,13 +1,21 @@
+/**
+ * @file useRelativeTime.js
+ * @description Hook that provides a shared timer for updating relative timestamps.
+ * All components using this hook share the same 30-second interval.
+ */
+
 import { useState, useEffect } from "react";
 import { timeAgo } from "../utils/formatDateTime";
 
 /**
- * Single 30-second tick timer shared by all components on the page.
- * Returns the current tick count — pass to timeAgo() to force re-render.
+ * Returns a tick counter that updates every 30 seconds.
+ * Use with timeAgo() to auto-update relative timestamps.
  *
- * Usage:
- *   const tick = useRelativeTime();
- *   <span>{timeAgo(item.created_at)}</span>   // will auto-update every 30s
+ * @example
+ * const tick = useRelativeTime();
+ * <span>{timeAgo(item.created_at)}</span> // updates every 30s
+ *
+ * @returns {number} Current tick count
  */
 export function useRelativeTime() {
   const [tick, setTick] = useState(0);

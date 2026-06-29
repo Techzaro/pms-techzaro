@@ -1,7 +1,24 @@
+/**
+ * UserSelectDropdown.jsx
+ * Multi-select dropdown component for selecting team members. Supports
+ * select-all functionality, view-only mode, and displays user roles.
+ * Closes automatically when clicking outside the dropdown.
+ */
+
 import { useRef, useState, useEffect } from "react";
 import { MdExpandMore } from "react-icons/md";
 import "./UserSelectDropdown.css";
 
+/**
+ * Multi-select dropdown for team member selection.
+ * @param {Array} users - Array of user objects (id, name, role).
+ * @param {Array} selectedIds - Array of currently selected user IDs.
+ * @param {Function} onChange - Callback with updated array of selected IDs.
+ * @param {string} [placeholder='Click to select members'] - Placeholder text.
+ * @param {boolean} [disabled] - Disables the dropdown when true.
+ * @param {boolean} [viewOnly] - Shows members as read-only without selection.
+ * @param {boolean} [error] - Applies error styling to the trigger.
+ */
 const UserSelectDropdown = ({
   users = [],
   selectedIds = [],
@@ -14,6 +31,7 @@ const UserSelectDropdown = ({
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
+  // Close dropdown when clicking outside the component
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (ref.current && !ref.current.contains(e.target)) {
@@ -24,6 +42,7 @@ const UserSelectDropdown = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  /** Toggles selection of all users or deselects all */
   const toggleAll = () => {
     if (selectedIds.length === users.length) {
       onChange([]);
@@ -32,6 +51,7 @@ const UserSelectDropdown = ({
     }
   };
 
+  /** Toggles a single user in/out of the selected list */
   const toggleUser = (userId) => {
     if (selectedIds.includes(userId)) {
       onChange(selectedIds.filter((id) => id !== userId));

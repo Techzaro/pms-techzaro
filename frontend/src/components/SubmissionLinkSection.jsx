@@ -1,15 +1,32 @@
+/**
+ * SubmissionLinkSection.jsx
+ * Reusable component for managing a list of URLs during submission forms.
+ * Supports adding links via text input, removing them, and automatic URL normalization.
+ * Used in SubmitDeliverableModal, SubmitProjectModal, and SubmitTaskModal.
+ */
+
 import { useState } from "react";
 
+/**
+ * Link management section with add/remove functionality.
+ * @param {Function} onLinksChange - Callback with the updated array of link objects.
+ */
 function SubmissionLinkSection({ onLinksChange }) {
   const [links, setLinks] = useState([]);
   const [linkInput, setLinkInput] = useState("");
 
+  /**
+   * Normalizes a URL by trimming whitespace and prepending https:// if missing.
+   * @param {string} url - The raw URL string.
+   * @returns {string} The normalized URL.
+   */
   const normalizeUrl = (url) => {
     url = url.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     return url;
   };
 
+  /** Adds a new link after validation and normalization */
   const handleAddLink = () => {
     if (!linkInput.trim()) return;
     const url = normalizeUrl(linkInput);
@@ -20,12 +37,14 @@ function SubmissionLinkSection({ onLinksChange }) {
     onLinksChange?.(updated);
   };
 
+  /** Removes a link at the given index and notifies parent */
   const handleRemoveLink = (index) => {
     const updated = links.filter((_, i) => i !== index);
     setLinks(updated);
     onLinksChange?.(updated);
   };
 
+  // Submit link on Enter key press
   const handleLinkKeyDown = (e) => {
     if (e.key === "Enter") {
       e.preventDefault();

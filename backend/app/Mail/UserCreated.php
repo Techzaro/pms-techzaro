@@ -9,14 +9,31 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
+/**
+ * Mailable sent to newly created users with their account credentials.
+ *
+ * Contains the user's login details, platform URL, and security notices.
+ */
 class UserCreated extends Mailable
 {
     use Queueable, SerializesModels;
 
+    /** @var \App\Models\User The newly created user */
     public User $user;
+
+    /** @var string The user's initial password */
     public string $password;
+
+    /** @var string The platform login URL */
     public string $loginUrl;
 
+    /**
+     * Create a new mail instance.
+     *
+     * @param \App\Models\User $user      The new user
+     * @param string           $password  Initial account password
+     * @param string           $loginUrl  Platform login URL
+     */
     public function __construct(User $user, string $password, string $loginUrl)
     {
         $this->user = $user;
@@ -24,6 +41,11 @@ class UserCreated extends Mailable
         $this->loginUrl = $loginUrl;
     }
 
+    /**
+     * Build the message envelope.
+     *
+     * @return \Illuminate\Mail\Mailables\Envelope
+     */
     public function envelope(): Envelope
     {
         return new Envelope(
@@ -31,6 +53,11 @@ class UserCreated extends Mailable
         );
     }
 
+    /**
+     * Define the message content using inline HTML.
+     *
+     * @return \Illuminate\Mail\Mailables\Content
+     */
     public function content(): Content
     {
         return new Content(
@@ -38,6 +65,11 @@ class UserCreated extends Mailable
         );
     }
 
+    /**
+     * Build the full HTML email body.
+     *
+     * @return string Complete HTML document
+     */
     private function buildHtml(): string
     {
         $name = e($this->user->name);

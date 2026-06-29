@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Activity;
 use App\Models\Deliverable;
 use App\Models\DeliverableSubmission;
 use App\Models\DeliverableWorkflowEvent;
@@ -14,11 +15,30 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Controller for the main dashboard.
+ * Provides aggregated summary statistics, today's workload, active projects,
+ * recent activity feed, upcoming deadlines, and notifications for the authenticated user.
+ * Results are cached to reduce database load on repeated requests.
+ */
 class DashboardController extends Controller
 {
+    /** @var int Cache time-to-live in seconds (5 minutes). */
     const CACHE_TTL = 300;
+
+    /** @var string Cache key for admin/manager user IDs. */
     const ADMIN_MANAGER_CACHE_KEY = 'admin_manager_ids';
 
+    /**
+     * Retrieve the full dashboard data for the authenticated user.
+     *
+     * Aggregates summary stats, today's workload, active projects,
+     * recent activity, upcoming deadlines, today's completed items,
+     * and today's notifications into a single cached response.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @return \Illuminate\Http\JsonResponse  JSON response with dashboard data.
+     */
     public function index(Request $request)
     {
         $user = $request->user();
@@ -43,6 +63,11 @@ class DashboardController extends Controller
         });
     }
 
+    /**
+     * Get cached IDs of all admin and manager users.
+     *
+     * @return array  Array of user IDs with admin or manager roles.
+     */
     private function getAdminManagerIds(): array
     {
         return Cache::remember(self::ADMIN_MANAGER_CACHE_KEY, 3600, fn () =>
@@ -50,6 +75,14 @@ class DashboardController extends Controller
         );
     }
 
+    /**
+     * Get cached dashboard summary stats for the user.
+     *
+     * @param  \App\Models\User  $user  The authenticated user.
+     * @param  string  $role  The user's role.
+     * @param  array  $projectIds  IDs of projects visible to the user.
+     * @return array  Summary stats: active_projects, tasks_due_today, completed/approved/pending/total_tasks.
+     */
     private function getCachedSummary(User $user, string $role, array $projectIds): array
     {
         $cacheKey = "dashboard_summary_{$user->id}";
@@ -58,6 +91,17 @@ class DashboardController extends Controller
         });
     }
 
+    /**
+     * Compute dashboard summary stats (not cached).
+     *
+     * Admin/manager users see stats across all projects/tasks they created.
+     * Regular users see stats for their assigned tasks and visible projects.
+     *
+     * @param  \App\Models\User  $user  The authenticated user.
+     * @param  string  $role  The user's role.
+     * @param  array  $projectIds  IDs of projects visible to the user.
+     * @return array  Summary stats.
+     */
     private function computeSummary(User $user, string $role, array $projectIds): array
     {
         $isAdminOrManager = in_array($role, ['admin', 'manager']);
@@ -122,6 +166,13 @@ class DashboardController extends Controller
         ];
     }
 
+    /**
+     * Get cached list of tasks due today for the user's workload display.
+     *
+     * @param  \App\Models\User  $user  The authenticated user.
+     * @param  string  $role  The user's role.
+     * @return array  Array of task objects due today (up to 10).
+     */
     private function getCachedTodayWorkload(User $user, string $role): array
     {
         $cacheKey = "dashboard_workload_{$user->id}";
@@ -160,6 +211,13 @@ class DashboardController extends Controller
         });
     }
 
+    /**
+     * Get cached list of active projects for the dashboard.
+     *
+     * @param  \App\Models\User  $user  The authenticated user.
+     * @param  array  $projectIds  IDs of projects visible to the user.
+     * @return array  Array of project data with progress percentages and team info.
+     */
     private function getCachedActiveProjects(User $user, array $projectIds): array
     {
         $cacheKey = "dashboard_active_projects_{$user->id}";
@@ -168,6 +226,13 @@ class DashboardController extends Controller
         });
     }
 
+    /**
+     * Compute active projects with progress, task counts, and assigned users.
+     *
+     * @param  \App\Models\User  $user  The authenticated user.
+     * @param  array  $projectIds  IDs of projects visible to the user.
+     * @return array  Array of project data with progress percentages and assigned users.
+     */
     private function computeActiveProjects(User $user, array $projectIds): array
     {
         $projects = Project::with(['creator:id,name', 'team:id,name'])
@@ -207,26 +272,43 @@ class DashboardController extends Controller
         })->toArray();
     }
 
+    /**
+     * Get the most recent activity feed entries (cached for 60 seconds).
+     *
+     * Non-admin/manager users only see activities related to their visible projects.
+     *
+     * @param  \App\Models\User  $user  The authenticated user.
+     * @param  string  $role  The user's role.
+     * @param  array  $projectIds  IDs of projects visible to the user.
+     * @return array  Array of recent activity entries (up to 10).
+     */
     private function getRecentActivity(User $user, string $role, array $projectIds): array
     {
         $cacheKey = "dashboard_recent_activity_{$user->id}";
         return Cache::remember($cacheKey, 60, function () use ($user, $role, $projectIds) {
-            $query = DB::table('project_activities')
-                ->join('users', 'project_activities.user_id', '=', 'users.id')
-                ->join('projects', 'project_activities.project_id', '=', 'projects.id')
+            $query = Activity::join('users', 'activities.user_id', '=', 'users.id')
                 ->where('users.active', true)
-                ->select('project_activities.summary', 'project_activities.created_at', 'users.name as user_name', 'projects.title as project_title')
-                ->latest('project_activities.created_at')
+                ->select('activities.description as summary', 'activities.created_at', 'users.name as user_name')
+                ->latest('activities.created_at')
                 ->limit(10);
 
             if (!in_array($role, ['admin', 'manager'])) {
-                $query->whereIn('project_activities.project_id', $projectIds);
+                $query->whereIn('activities.related_id', $projectIds)
+                      ->where('activities.related_module', 'project');
             }
 
             return $query->get()->toArray();
         });
     }
 
+    /**
+     * Get cached list of tasks with upcoming deadlines (within 7 days).
+     *
+     * @param  \App\Models\User  $user  The authenticated user.
+     * @param  string  $role  The user's role.
+     * @param  array  $projectIds  IDs of projects visible to the user.
+     * @return array  Array of tasks sorted by end date (up to 10).
+     */
     private function getCachedUpcomingDeadlines(User $user, string $role, array $projectIds): array
     {
         $cacheKey = "dashboard_upcoming_deadlines_{$user->id}";
@@ -262,6 +344,17 @@ class DashboardController extends Controller
     // Loads all workflow events ONCE and splits into my-activity / notifications
     // ──────────────────────────────────────────────────────────────────
 
+    /**
+     * Load today's activity feed and notifications in a single merged pass.
+     *
+     * Loads all workflow events (tasks, projects, deliverables) once and splits them
+     * into user-activity items and notification items based on whether the user is the actor.
+     *
+     * @param  \App\Models\User  $user  The authenticated user.
+     * @param  string  $role  The user's role.
+     * @param  array  $projectIds  IDs of projects visible to the user.
+     * @return array  Two-element array: [activities[], notifications[]], each limited to 20 items.
+     */
     private function getTodayActivityFeedAndNotifications(User $user, string $role, array $projectIds): array
     {
         $isAdminOrManager = in_array($role, ['admin', 'manager']);
@@ -347,6 +440,12 @@ class DashboardController extends Controller
         return [array_slice($activities, 0, 20), array_slice($notifications, 0, 20)];
     }
 
+    /**
+     * Load the latest submitter for each task ID from workflow events.
+     *
+     * @param  array  $taskIds  Array of task IDs to look up submitters for.
+     * @return array  Associative array of task_id => User model of the latest submitter.
+     */
     private function loadTaskSubmitters(array $taskIds): array
     {
         if (empty($taskIds)) return [];
@@ -361,6 +460,12 @@ class DashboardController extends Controller
         return $submitters;
     }
 
+    /**
+     * Load the latest submitter for each project ID from workflow events.
+     *
+     * @param  array  $projectIds  Array of project IDs to look up submitters for.
+     * @return array  Associative array of project_id => User model of the latest submitter.
+     */
     private function loadProjectSubmitters(array $projectIds): array
     {
         if (empty($projectIds)) return [];
@@ -375,6 +480,12 @@ class DashboardController extends Controller
         return $submitters;
     }
 
+    /**
+     * Load the latest submitter for each deliverable ID from submission records.
+     *
+     * @param  array  $dlvIds  Array of deliverable IDs to look up submitters for.
+     * @return array  Associative array of deliverable_id => User model of the latest submitter.
+     */
     private function loadDeliverableSubmitters(array $dlvIds): array
     {
         if (empty($dlvIds)) return [];
@@ -393,6 +504,15 @@ class DashboardController extends Controller
     // USER-RELATION HELPERS
     // ──────────────────────────────────────────────────────────────────
 
+    /**
+     * Check if a user is related to a task (assignee, assigner, or admin/manager).
+     *
+     * @param  \App\Models\User  $user  The user to check.
+     * @param  object  $task  The task to check relation for.
+     * @param  array  $myTaskIds  Array of task IDs the user is assigned to.
+     * @param  bool  $isAdminOrManager  Whether the user has admin/manager role.
+     * @return bool  True if the user is related to the task.
+     */
     private function isUserRelatedToTask(User $user, $task, array $myTaskIds, bool $isAdminOrManager): bool
     {
         // Assignee via pivot
@@ -406,6 +526,14 @@ class DashboardController extends Controller
         return false;
     }
 
+    /**
+     * Check if a user is related to a project (creator, assigned, or admin/manager).
+     *
+     * @param  \App\Models\User  $user  The user to check.
+     * @param  object  $project  The project to check relation for.
+     * @param  bool  $isAdminOrManager  Whether the user has admin/manager role.
+     * @return bool  True if the user is related to the project.
+     */
     private function isUserRelatedToProject(User $user, $project, bool $isAdminOrManager): bool
     {
         // Creator
@@ -418,6 +546,13 @@ class DashboardController extends Controller
         return false;
     }
 
+    /**
+     * Check if a user is related to a deliverable (assignee or creator).
+     *
+     * @param  \App\Models\User  $user  The user to check.
+     * @param  object  $dlv  The deliverable to check relation for.
+     * @return bool  True if the user is related to the deliverable.
+     */
     private function isUserRelatedToDeliverable(User $user, $dlv): bool
     {
         // Assignee
@@ -431,6 +566,21 @@ class DashboardController extends Controller
     // FORMAT + UTILITIES
     // ──────────────────────────────────────────────────────────────────
 
+    /**
+     * Format an activity/notification item into a standardized array structure.
+     *
+     * @param  string  $module  The module type (task, project, deliverable).
+     * @param  mixed  $eventId  The workflow event ID.
+     * @param  int  $entityId  The entity ID (task, project, or deliverable).
+     * @param  string  $title  The entity title.
+     * @param  string  $action  The action performed (created, submitted, approved, etc.).
+     * @param  object  $actor  The user who performed the action.
+     * @param  bool  $isActor  Whether the current user is the actor.
+     * @param  object|null  $submitter  The user who submitted the entity (for approve/reject actions).
+     * @param  string|null  $comment  Optional comment on the event.
+     * @param  mixed  $createdAt  The timestamp of the event.
+     * @return array  Formatted activity item.
+     */
     private function formatActivity(string $module, $eventId, int $entityId, string $title, string $action, $actor, bool $isActor, $submitter = null, ?string $comment = null, $createdAt = null): array
     {
         $result = [
@@ -454,6 +604,15 @@ class DashboardController extends Controller
         return $result;
     }
 
+    /**
+     * Get all project IDs visible to the authenticated user.
+     *
+     * Admin/manager users see all projects. Other users see projects they created,
+     * are team members/leaders of, are assigned to, or have manual visibility access.
+     *
+     * @param  \App\Models\User  $user  The authenticated user.
+     * @return array  Array of visible project IDs.
+     */
     private function getUserProjectIds(User $user): array
     {
         if (in_array($user->role, ['admin', 'manager'])) {
@@ -473,10 +632,35 @@ class DashboardController extends Controller
         })->pluck('id')->toArray();
     }
 
+    /**
+     * Get the list of statuses considered as inactive for tasks.
+     *
+     * @return array  Array of inactive task status strings.
+     */
     private function inactiveTaskStatuses(): array { return ['completed', 'done', 'approved', 'abandoned']; }
+
+    /**
+     * Get the list of statuses that mean a task due today is already completed.
+     *
+     * @return array  Array of completed status strings.
+     */
     private function dueTodayCompletedStatuses(): array { return ['approved', 'completed', 'done']; }
+
+    /**
+     * Get the list of statuses considered as inactive for projects.
+     *
+     * @return array  Array of inactive project status strings.
+     */
     private function inactiveProjectStatuses(): array { return ['completed','Completed','done','Done','approved','Approved','rejected','Rejected','cancelled','Cancelled','canceled','Canceled','abandoned','Abandoned','closed','Closed','archived','Archived']; }
 
+    /**
+     * Normalize assigned_users value to an array of integer IDs.
+     *
+     * Handles both JSON string and array inputs.
+     *
+     * @param  mixed  $assignedUsers  The assigned_users value (string, array, or null).
+     * @return array  Array of integer user IDs.
+     */
     private function normalizeAssignedUserIds($assignedUsers): array
     {
         if (is_string($assignedUsers)) {

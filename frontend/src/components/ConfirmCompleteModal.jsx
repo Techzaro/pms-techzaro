@@ -1,5 +1,19 @@
+/**
+ * ConfirmCompleteModal.jsx
+ * Confirmation modal for marking a task or project as completed.
+ * Displays a success icon, the item title, and explains that the item
+ * will be moved to the Deliverables tab upon confirmation.
+ */
+
 import { IoCheckmarkCircle, IoClose } from "react-icons/io5";
 
+/**
+ * Modal to confirm completing a task or project.
+ * @param {string} taskTitle - Title of the task or project being completed
+ * @param {boolean} isProject - Whether this is a project (true) or task (false)
+ * @param {Function} onConfirm - Callback when the user confirms completion
+ * @param {Function} onCancel - Callback when the user cancels
+ */
 export default function ConfirmCompleteModal({ taskTitle, isProject, onConfirm, onCancel }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>

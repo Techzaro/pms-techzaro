@@ -1,3 +1,13 @@
+/**
+ * UserProfile page component — admin/manager view of another user's profile.
+ *
+ * Displays the selected user's personal information, employment details,
+ * email accounts, salary/bank data, uploaded documents and account status.
+ * Provides an edit modal (accessible to admins and managers) for updating
+ * user fields, uploading documents and changing system role.  Read-only for
+ * non-admin roles unless editing their own profile.
+ */
+
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { MdEdit, MdArrowBack } from "react-icons/md";
@@ -10,6 +20,7 @@ import { useNotification } from "../context/NotificationContext";
 import "./UserProfile.css";
 import "./ManageUsers.css";
 
+/** Main UserProfile page — fetches and displays another user's full profile. */
 function UserProfile() {
   const { userId } = useParams();
   const navigate = useNavigate();
@@ -73,6 +84,7 @@ function UserProfile() {
     "__custom__",
   ];
 
+  /** Build auth headers for API requests. */
   const authHeaders = () => {
     const token = authToken();
     return {
@@ -81,6 +93,7 @@ function UserProfile() {
     };
   };
 
+  /** Fetch the target user's profile data from the API. */
   const fetchProfile = async () => {
     setLoading(true);
     setError("");
@@ -117,6 +130,7 @@ function UserProfile() {
       .join("");
   };
 
+  /** Populate the edit form with current user data and open the modal. */
   const openEditModal = () => {
     const u = profileData.user;
     const deptVal = u.department || "";
@@ -169,6 +183,7 @@ function UserProfile() {
     }
   };
 
+  /** Validate the edit form fields and return an errors object. */
   const validateEditForm = () => {
     const errors = {};
     if (!editUser.name.trim()) {
@@ -221,6 +236,7 @@ function UserProfile() {
     return errors;
   };
 
+  /** Submit the updated user data (with optional file uploads) to the API. */
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     const errors = validateEditForm();

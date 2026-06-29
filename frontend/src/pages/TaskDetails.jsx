@@ -1,3 +1,13 @@
+/**
+ * TaskDetails page component.
+ *
+ * Full detail view for a single task.  Shows task metadata (status, priority,
+ * assignees, dates), deliverables table (sortable, with submit/view actions),
+ * task submission workflow panel, file attachments, a sidebar with task info
+ * and a personal notes section.  Supports navigation between tasks via
+ * previous/next buttons and tracks which tasks have been viewed.
+ */
+
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { useNotification } from "../context/NotificationContext";
@@ -27,6 +37,7 @@ import { authToken, getUser, rolePath } from "../utils/auth";
 
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
 
+/** Build a full URL for a relative file path, or return absolute URLs as-is. */
 function fileUrl(url) {
   if (!url) return null;
   if (/^https?:\/\//i.test(url)) return url;
@@ -38,6 +49,7 @@ import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
 import "./TaskDetails.css";
 import "./Deliveries.css";
 
+/** Convert an ISO timestamp to a human-friendly "X time ago" string. */
 function timeAgo(iso) {
   if (!iso) return "";
   const then = new Date(iso).getTime();
@@ -48,6 +60,7 @@ function timeAgo(iso) {
   return `${Math.floor(sec / 86400)} days ago`;
 }
 
+/** Map a raw status string to a display-friendly label. */
 function statusLabel(status) {
   const s = (status || "").toLowerCase();
   if (s === "pending") return "Pending";
@@ -58,6 +71,7 @@ function statusLabel(status) {
   return status || "Pending";
 }
 
+/** Return text colour for a given task status. */
 function statusColor(status) {
   const s = (status || "").toLowerCase();
   if (s === "approved") return "#166534";
@@ -67,6 +81,7 @@ function statusColor(status) {
   return "#374151";
 }
 
+/** Return background colour for a given task status badge. */
 function statusBgColor(status) {
   const s = (status || "").toLowerCase();
   if (s === "approved") return "#DCFCE7";
@@ -76,6 +91,7 @@ function statusBgColor(status) {
   return "#F3F4F6";
 }
 
+/** Return text colour for a priority level. */
 function priorityColor(priority) {
   const p = (priority || "").toLowerCase();
   if (p === "high") return "#991B1B";
@@ -84,6 +100,7 @@ function priorityColor(priority) {
   return "#374151";
 }
 
+/** Return background colour for a priority badge. */
 function priorityBgColor(priority) {
   const p = (priority || "").toLowerCase();
   if (p === "high") return "#FEE2E2";
@@ -92,6 +109,7 @@ function priorityBgColor(priority) {
   return "#F3F4F6";
 }
 
+/** Extract up to 2 uppercase initials from a name for avatar display. */
 function initials(name) {
   if (!name) return "?";
   const parts = name.trim().split(/\s+/);
@@ -100,12 +118,17 @@ function initials(name) {
   return (a + b).toUpperCase() || a.toUpperCase();
 }
 
+/** Format a date string to a short "Mon DD, YYYY" display. */
 function formatShortDate(dateString) {
   if (!dateString) return "—";
   const date = new Date(dateString);
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+/**
+ * Main TaskDetails component — renders the full task detail view with
+ * sidebar, tabs, deliverables table and submission workflow.
+ */
 function TaskDetails() {
   const { taskId } = useParams();
   const navigate = useNavigate();
@@ -741,6 +764,7 @@ function TaskDetails() {
 }
 
 /* ── File Upload Section Component ── */
+/** Renders the list of files attached to a task, with download links. */
 function FileUploadSection({ taskId, files }) {
   return (
     <div>

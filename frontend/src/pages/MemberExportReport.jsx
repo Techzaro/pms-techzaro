@@ -1,9 +1,24 @@
+/**
+ * MemberExportReport — modal component for generating and exporting a user/member
+ * performance report as a styled PDF.  Used on both the user-performance page
+ * (admin/manager viewing another user) and the self-performance page (member
+ * viewing own data).
+ *
+ * The component accepts user data, summary statistics, task/project lists and
+ * deliverable information, then renders a configuration modal (date-range
+ * picker) followed by a full preview modal.  The "Export PDF" button triggers
+ * jsPDF to build a multi-section A4 document containing header, profile,
+ * summary cards, status breakdown, workload chart, tasks table, deliverables
+ * summary and a manager-remarks section.
+ */
+
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import "../pages/ExportReport.css";
 
+/** Mapping of status strings to RGB colour triples used when drawing PDF cells. */
 const STATUS_COLORS_PDF = {
   completed: [22, 101, 52], done: [22, 101, 52], approved: [22, 101, 52],
   pending: [146, 64, 14], "in_progress": [30, 64, 175], "in progress": [30, 64, 175],
@@ -11,6 +26,7 @@ const STATUS_COLORS_PDF = {
   failed: [153, 27, 27], overdue: [153, 27, 27],
 };
 
+/** Format a date string to a short "DD Mon YYYY" display. */
 function formatDateShort(dateStr) {
   if (!dateStr) return "-";
   const d = new Date(dateStr);
@@ -18,11 +34,17 @@ function formatDateShort(dateStr) {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+/** Capitalise and map raw status keys to display-friendly labels. */
 function formatStatus(status) {
   const map = { pending: "Pending", submitted: "Submitted", reopened: "Reopened", approved: "Approved", rejected: "Rejected" };
   return map[status] || status || "-";
 }
 
+/**
+ * Calculate the progress percentage for a task/project item.
+ * For projects it uses completed_tasks/total_tasks; for tasks it
+ * falls back to the deliverables_progress field.
+ */
 function calculateProgress(item) {
   if (item.item_type === "project") {
     const t = item.total_tasks ?? 0, c = item.completed_tasks ?? 0;
@@ -31,6 +53,7 @@ function calculateProgress(item) {
   return item.deliverables_progress || 0;
 }
 
+/** Reusable style presets used for status/priority pills in the review UI. */
 const S = {
   green: { bg: "#dcfce7", text: "#166534" },
   red: { bg: "#fee2e2", text: "#991b1b" },
@@ -41,6 +64,7 @@ const S = {
   gray: { bg: "#f3f4f6", text: "#6b7280" },
 };
 
+/** Return the background/text style pair for a given status string. */
 function getStatusStyle(s) {
   const m = {
     approved: S.green, completed: S.green, done: S.green,
@@ -51,11 +75,22 @@ function getStatusStyle(s) {
   return m[s?.toLowerCase()] || S.gray;
 }
 
+/** Return the background/text style pair for a given priority level. */
 function getPriStyle(p) {
   const m = { High: S.red, Medium: S.amber, Low: S.green };
   return m[p] || S.amber;
 }
 
+/**
+ * MemberExportReport — renders a portal-based modal for exporting a user
+ * performance report.  Manages date-range selection, preview display and
+ * PDF generation.
+ *
+ * @param {boolean}  isOpen     - Whether the modal is visible.
+ * @param {function} onClose    - Callback to close the modal.
+ * @param {object}   userData   - Full user report data (user, summary, tasks, etc.).
+ * @param {boolean}  isOwnPage  - True when the logged-in user is viewing their own report.
+ */
 function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
   const [dateRange, setDateRange] = useState("all");
   const [customStart, setCustomStart] = useState("");
@@ -136,6 +171,11 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
   const chartVals = [60, 75, 100, 85, 95, 40, 80];
 
   // ═══════════════════════════ PDF GENERATION ═══════════════════════════
+  /**
+   * Build and download the full performance-report PDF using jsPDF.
+   * Sections: header, profile, summary cards, status breakdown, workload
+   * chart, tasks/projects table, deliverables, manager remarks, footer.
+   */
   const generatePDF = () => {
     setGenerating(true);
     try {

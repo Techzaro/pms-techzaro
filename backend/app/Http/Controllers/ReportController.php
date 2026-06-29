@@ -11,8 +11,23 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Controller for generating various reports and analytics.
+ * Provides team performance, individual user performance, project reports,
+ * summary cards, detailed breakdowns, and company-wide employee reports.
+ * Results are cached to reduce database load on repeated requests.
+ */
 class ReportController extends Controller
 {
+    /**
+     * Get team performance report with task stats per member.
+     *
+     * Team leads only see members from their teams and tasks they assigned.
+     * Supports time period filtering (today, week, month, all).
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameter: period (today|week|month|all).
+     * @return \Illuminate\Http\JsonResponse  JSON response with team summary and per-member stats.
+     */
     public function teamPerformance(Request $request)
     {
         $user = $request->user();
@@ -108,6 +123,17 @@ class ReportController extends Controller
         });
     }
 
+    /**
+     * Get detailed performance report for a specific user.
+     *
+     * Includes task stats, project-as-task stats, deliverable summary,
+     * recent tasks, and project breakdowns. Team leads viewing members
+     * only see tasks they assigned and projects they created.
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameter: period (today|week|month|all).
+     * @param  \App\Models\User  $user  The user to generate the report for.
+     * @return \Illuminate\Http\JsonResponse  JSON response with user profile, stats, deliverables, and projects.
+     */
     public function userPerformance(Request $request, User $user)
     {
         $requestingUser = $request->user();
@@ -358,6 +384,12 @@ class ReportController extends Controller
         ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     }
 
+    /**
+     * Get a report for a specific project including task completion and per-assignee breakdown.
+     *
+     * @param  \App\Models\Project  $project  The project to generate the report for.
+     * @return \Illuminate\Http\JsonResponse  JSON response with project summary, per-assignee stats, and tasks.
+     */
     public function projectReport(Project $project)
     {
         $cacheKey = "report_project_{$project->id}";
@@ -391,6 +423,15 @@ class ReportController extends Controller
         });
     }
 
+    /**
+     * Get an organization-wide summary report.
+     *
+     * Returns total teams, active projects, task completion stats, overdue tasks,
+     * and the top 10 projects by recency.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @return \Illuminate\Http\JsonResponse  JSON response with summary stats and top projects.
+     */
     public function summaryReport(Request $request)
     {
         return Cache::remember('report_summary', 300, function () {
@@ -440,6 +481,12 @@ class ReportController extends Controller
         });
     }
 
+    /**
+     * Get a detailed report including project breakdown, team stats, overdue tasks, and recent tasks.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @return \Illuminate\Http\JsonResponse  JSON response with detailed stats, projects, teams, and overdue list.
+     */
     public function detailedReport(Request $request)
     {
         return Cache::remember('report_detailed', 300, function () {
@@ -483,6 +530,12 @@ class ReportController extends Controller
         });
     }
 
+    /**
+     * Get a performance report with team stats, member completion rates, and open overdue tasks.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @return \Illuminate\Http\JsonResponse  JSON response with overview, teams, members, and open tasks.
+     */
     public function performanceReport(Request $request)
     {
         return Cache::remember('report_performance', 300, function () {
@@ -533,6 +586,12 @@ class ReportController extends Controller
         });
     }
 
+    /**
+     * Get a progress report with top project overview, member workload, milestones, and overdue tasks.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @return \Illuminate\Http\JsonResponse  JSON response with overview, project details, members, and milestones.
+     */
     public function progressReport(Request $request)
     {
         return Cache::remember('report_progress', 300, function () {
@@ -592,6 +651,15 @@ class ReportController extends Controller
         });
     }
 
+    /**
+     * Get summary card data (total assigned, approved, pending, overdue) for the dashboard.
+     *
+     * Supports role-based filtering and team view for team leads.
+     * Merges task and project-as-task counts.
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameters: period, view (self|team).
+     * @return \Illuminate\Http\JsonResponse  JSON response with summary card stats.
+     */
     public function summaryCards(Request $request)
     {
         $user = $request->user();
@@ -690,6 +758,14 @@ class ReportController extends Controller
         ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     }
 
+    /**
+     * Get a table of user performance stats (assigned, completed, pending, overdue) for all active users.
+     *
+     * Team leads only see members from their teams. Merges task and project-as-task counts.
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameter: period.
+     * @return \Illuminate\Http\JsonResponse  JSON response with per-user performance stats.
+     */
     public function userPerformanceTable(Request $request)
     {
         $user = $request->user();
@@ -775,6 +851,12 @@ class ReportController extends Controller
             ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     }
 
+    /**
+     * Get a company-wide employee report with per-employee stats, team summaries, status distribution, and weekly trend.
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameter: period.
+     * @return \Illuminate\Http\JsonResponse  JSON response with overview, employees, teams, distribution, and trend data.
+     */
     public function companyEmployeesReport(Request $request)
     {
         $timeFilter = $request->query('period', 'all');
@@ -890,6 +972,13 @@ class ReportController extends Controller
         ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     }
 
+    /**
+     * Apply a time period filter to a query.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder  $query  The query to filter.
+     * @param  string  $period  The period filter: 'today', 'week', 'month', or 'all'.
+     * @return mixed  The filtered query.
+     */
     private function applyTimeFilter($query, string $period)
     {
         return match ($period) {

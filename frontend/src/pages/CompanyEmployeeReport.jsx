@@ -1,3 +1,14 @@
+/**
+ * CompanyEmployeeReport.jsx — Company Employee Report Modal
+ *
+ * A modal component that generates a company-wide employee performance report.
+ * Features:
+ * - Timeline filter (All Time, Today, This Week, This Month, Custom Range)
+ * - Report preview with company overview, summary cards, status breakdown,
+ *   tasks trend chart, employee performance table, team-wise summary, and status distribution
+ * - PDF export using jsPDF with branded header/footer, charts, and tables
+ * - Rendered via React portal to body
+ */
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { jsPDF } from "jspdf";
@@ -5,19 +16,24 @@ import autoTable from "jspdf-autotable";
 import { useApiQuery } from "../hooks/useApi";
 import "../pages/ExportReport.css";
 
+/** Color palette for user avatar backgrounds */
 const AVATAR_COLORS = ["#f59e0b", "#3b82f6", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
+/** Display labels for user roles */
 const ROLE_LABEL = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member" };
+/** RGB color values for task statuses, used in PDF generation */
 const STATUS_COLORS_PDF = {
   completed: [22, 101, 52], done: [22, 101, 52], approved: [22, 101, 52],
   pending: [146, 64, 14], "in_progress": [30, 64, 175], submitted: [30, 64, 175],
   reopened: [91, 33, 182], rejected: [153, 27, 27], failed: [153, 27, 27], overdue: [153, 27, 27],
 };
 
+/** Extracts up to 2 initials from a name */
 function getInitials(name) {
   if (!name) return "?";
   return name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
 }
 
+/** Returns a deterministic avatar color based on the name hash */
 function getAvatarColor(name) {
   if (!name) return AVATAR_COLORS[0];
   let hash = 0;
@@ -25,6 +41,7 @@ function getAvatarColor(name) {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
+/** Formats a date string to short format like "29 Jun 2026" */
 function formatDateShort(d) {
   if (!d) return "-";
   return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
@@ -32,6 +49,11 @@ function formatDateShort(d) {
 
 const PERIOD_MAP = { "All Time": "all", "Today": "today", "This Week": "week", "This Month": "month" };
 
+/**
+ * CompanyEmployeeReport — Modal component for generating company-wide employee reports.
+ * Fetches report data from /reports/company-employees API and provides
+ * both a visual preview and PDF export.
+ */
 function CompanyEmployeeReport({ isOpen, onClose }) {
   const [dateRange, setDateRange] = useState("all");
   const [customStart, setCustomStart] = useState("");
@@ -41,6 +63,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
 
   const period = PERIOD_MAP[dateRange] || "all";
 
+  // Fetch company employee report data filtered by selected time period
   const { data: reportData, isLoading } = useApiQuery(
     ["company-employees-report", period],
     "/reports/company-employees",
@@ -81,6 +104,8 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
   const totalStatusItems = statusDist.total || totalAssigned || 1;
 
   // ═══════════════════════════ PDF GENERATION ═══════════════════════════
+  // Generates a branded PDF report with header, summary cards, status breakdown,
+  // tasks trend chart, employee performance table, team summary, and footer
   const generatePDF = () => {
     setGenerating(true);
     try {

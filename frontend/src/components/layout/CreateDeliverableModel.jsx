@@ -1,8 +1,18 @@
+/**
+ * CreateDeliverableTask - Modal form for creating a new deliverable task.
+ * Provides fields for task selection, assignment, description, status,
+ * priority, and date range. Dispatches a modal-state custom event to
+ * coordinate with other layout components (e.g., hiding toggles).
+ */
+
 import { useEffect, useState } from "react";
 import CustomSelect from "../CustomSelect";
 import CustomDateTimePicker from "../CustomDateTimePicker";
 import "../layout/CreateDeliverableModel.css";
 
+/**
+ * @param {{ onClose: () => void }} props - Callback to close the modal
+ */
 const CreateDeliverableTask = ({ onClose }) => {
   const [form, setForm] = useState({
     task: "",
@@ -13,6 +23,7 @@ const CreateDeliverableTask = ({ onClose }) => {
     due_date: "",
   });
 
+  // Notify layout that a modal is open so toggles can be hidden
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: true } }));
     return () => window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: false } }));
@@ -23,8 +34,7 @@ const CreateDeliverableTask = ({ onClose }) => {
 
       <div className="deliverable-modal">
 
-        {/* HEADER */}
-
+        {/* ── Header: Title and close button ── */}
         <div className="deliverable-header">
 
           <div className="deliverable-header-left">
@@ -49,12 +59,10 @@ const CreateDeliverableTask = ({ onClose }) => {
 
         </div>
 
-        {/* BODY */}
-
+        {/* ── Body: Left (form fields) + Right (status/priority/dates) ── */}
         <div className="deliverable-body">
 
-          {/* LEFT */}
-
+          {/* Left column – task, assignment, description */}
           <div className="deliverable-left">
 
             <div className="deliverable-grid-2">
@@ -109,11 +117,10 @@ const CreateDeliverableTask = ({ onClose }) => {
 
           </div>
 
-          {/* RIGHT */}
-
+          {/* Right column – status, priority, date pickers */}
           <div className="deliverable-right">
 
-            {/* STATUS */}
+            {/* Status selection card */}
 
             <div className="deliverable-card">
 
@@ -135,7 +142,7 @@ const CreateDeliverableTask = ({ onClose }) => {
 
             </div>
 
-            {/* PRIORITY */}
+            {/* Priority selection card */}
 
             <div className="deliverable-card">
 
@@ -155,7 +162,7 @@ const CreateDeliverableTask = ({ onClose }) => {
 
             </div>
 
-            {/* DATE */}
+            {/* Date range pickers card */}
 
             <div className="deliverable-card">
 
@@ -195,8 +202,7 @@ const CreateDeliverableTask = ({ onClose }) => {
 
         </div>
 
-        {/* FOOTER */}
-
+        {/* ── Footer: Cancel and Create buttons ── */}
         <div className="deliverable-footer">
 
           <button

@@ -1,3 +1,10 @@
+/**
+ * CreateTaskModal.jsx
+ * Modal form for creating a new task within a project or standalone.
+ * Supports multi-user assignment, requirements, deliverables, attachments,
+ * and date ranges. Fetches project-specific team members when a project is preselected.
+ */
+
 import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
@@ -9,6 +16,12 @@ import { publish } from "../utils/eventBus";
 import { notify } from "../utils/notify";
 import "./layout/CreateTaskModal.css";
 
+/**
+ * Modal form for creating a new task.
+ * @param {Function} onClose - Callback to close modal; receives boolean (true if created)
+ * @param {number|null} projectId - Pre-selected project ID (hides project dropdown)
+ * @param {string} [projectName=""] - Display name of the pre-selected project
+ */
 const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   const [loading, setLoading] = useState(false);
   const [formErrors, setFormErrors] = useState({});
@@ -108,12 +121,18 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     }
   }, [projectId]);
 
+  /**
+   * Handles input changes. Special-cases project_id to refresh the
+   * display user list based on the selected project's team members.
+   */
   const handleChange = (e) => {
     const { name, value } = e.target;
 
     if (name === "project_id") {
+      // Reset assigned users when project changes
       setForm((prev) => ({ ...prev, project_id: value, assigned_to: [] }));
 
+      // Fetch project-specific team members for the user dropdown
       if (value) {
         const token = authToken();
         fetch(`${API_URL}/projects/${value}`, {
@@ -236,7 +255,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     if (e.key === "Enter") { e.preventDefault(); handleAddLink(); }
   };
 
+  /**
+   * Uploads pending file attachments and links to the newly created task.
+   * @param {number} taskId - ID of the created task
+   * @param {string} token - Auth token
+   */
   const uploadAttachments = async (taskId, token) => {
+    // Upload each file as multipart/form-data
     for (const file of pendingFiles) {
       const fd = new FormData();
       fd.append("file", file);
@@ -249,6 +274,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
       } catch { }
     }
 
+    // Upload each link as JSON
     for (const link of links) {
       try {
         await fetch(`${API_URL}/tasks/${taskId}/links`, {
@@ -264,6 +290,10 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     }
   };
 
+  /**
+   * Validates required form fields (title, assigned_to, priority).
+   * @returns {boolean} True if form is valid
+   */
   const validateForm = () => {
     const errors = {};
     if (!form.title.trim()) errors.title = "Task Name is required.";
@@ -273,6 +303,10 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     return Object.keys(errors).length === 0;
   };
 
+  /**
+   * Handles form submission: validates, creates task via API,
+   * uploads attachments in parallel, and publishes events on success.
+   */
   const handleSubmit = async (e) => {
     if (e?.preventDefault) e.preventDefault();
 

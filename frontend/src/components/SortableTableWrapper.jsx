@@ -1,9 +1,17 @@
+/**
+ * SortableTableWrapper.jsx
+ * Provides drag-and-drop reordering for table rows or div lists using @dnd-kit.
+ * Manages the local item state, handles drag events, and notifies the parent
+ * of reorder changes. Includes a DragOverlay for visual feedback during drag.
+ */
+
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { DndContext, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 
+/** Visual drag handle icon component */
 function DragHandle({ style = {} }) {
   return (
     <span style={{ cursor: 'grab', display: 'inline-flex', alignItems: 'center', padding: '2px 6px', touchAction: 'none', color: '#999', ...style }}>
@@ -12,6 +20,10 @@ function DragHandle({ style = {} }) {
   );
 }
 
+/**
+ * Individual sortable item that wraps each row/div in the sortable context.
+ * Applies transform styles and passes drag listeners to children.
+ */
 function SortableItem({ id, as = 'tr', children, className = '', style = {} }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const itemStyle = {
@@ -28,6 +40,16 @@ function SortableItem({ id, as = 'tr', children, className = '', style = {} }) {
   );
 }
 
+/**
+ * Main wrapper component for sortable lists/tables.
+ * @param {Array} items - Array of items to render.
+ * @param {Function} onReorder - Callback with the reordered items array.
+ * @param {string} [idKey='id'] - Property name used as unique key for each item.
+ * @param {Function} children - Render function receiving (item, index, dndProps).
+ * @param {string} [as='tr'] - Element type for each sortable item.
+ * @param {Function} [overlayRender] - Custom render function for the drag overlay.
+ * @param {boolean} [disabled] - Disables drag-and-drop when true.
+ */
 export default function SortableTableWrapper({
   items: externalItems,
   onReorder,
@@ -55,6 +77,7 @@ export default function SortableTableWrapper({
   const handleDragEnd = useCallback((event) => {
     setActiveId(null);
     const { active, over } = event;
+    // Exit early if no valid drop target or dropped on same position
     if (!over || active.id === over.id) return;
     const items = localRef.current;
     const oldIndex = items.findIndex((i) => String(i[idKey]) === String(active.id));

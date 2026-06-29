@@ -5,6 +5,11 @@ namespace App\Http\Controllers;
 use App\Services\ActivityService;
 use Illuminate\Http\Request;
 
+/**
+ * Controller for managing user activity logs.
+ * Provides endpoints to retrieve today's activities, past activities grouped by date,
+ * and a paginated list of all activities with optional date filtering.
+ */
 class ActivityController extends Controller
 {
     public function __construct(
@@ -13,6 +18,9 @@ class ActivityController extends Controller
 
     /**
      * Get today's activities for the logged-in user.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request containing the authenticated user.
+     * @return \Illuminate\Http\JsonResponse  JSON response with today's activities and total count.
      */
     public function today(Request $request)
     {
@@ -27,6 +35,9 @@ class ActivityController extends Controller
 
     /**
      * Get past activities for the logged-in user, grouped by date.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request with optional 'limit' parameter.
+     * @return \Illuminate\Http\JsonResponse  JSON response with activities grouped by date.
      */
     public function past(Request $request)
     {
@@ -59,6 +70,9 @@ class ActivityController extends Controller
 
     /**
      * Get activities for the logged-in user with optional date filter.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request with optional 'date', 'limit', and 'offset' parameters.
+     * @return \Illuminate\Http\JsonResponse  JSON response with paginated activities and total count.
      */
     public function index(Request $request)
     {

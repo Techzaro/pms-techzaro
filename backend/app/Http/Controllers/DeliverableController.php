@@ -18,12 +18,27 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\PersonalAccessToken;
 
+/**
+ * Controller for managing deliverables within projects.
+ * Handles CRUD operations, submission/approval workflows, file management,
+ * reordering, and notifications for deliverables.
+ */
 class DeliverableController extends Controller
 {
     public function __construct(
         private NotificationService $notificationService,
         private ActivityService $activityService
     ) {}
+
+    /**
+     * List deliverables assigned to or created by the authenticated user.
+     *
+     * Supports filtering by 'assignee' or 'creator' view, status filtering
+     * (including a special 'due_today' filter), and bulk submission status checks.
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameters: 'view' (assignee|creator), 'status', and other filter params.
+     * @return \Illuminate\Http\JsonResponse  JSON response with deliverable list.
+     */
     public function index(Request $request)
     {
         $user = $request->user();
@@ -65,6 +80,13 @@ class DeliverableController extends Controller
         return response()->json(['success' => true, 'data' => $deliverables]);
     }
 
+    /**
+     * List deliverables created by the authenticated user (or by all admin/manager users for admin/manager roles).
+     * Excludes self-assigned deliverables.
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameters for filtering.
+     * @return \Illuminate\Http\JsonResponse  JSON response with deliverable list.
+     */
     public function assignedByMe(Request $request)
     {
         $user = $request->user();
@@ -95,6 +117,12 @@ class DeliverableController extends Controller
         return response()->json(['success' => true, 'data' => $query->orderBy('sort_order')->orderBy('id')->filter($filters)->get()]);
     }
 
+    /**
+     * List deliverables that are both assigned to and created by the authenticated user (self-created deliverables).
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameters for filtering.
+     * @return \Illuminate\Http\JsonResponse  JSON response with self-created deliverable list.
+     */
     public function mySelfDeliverables(Request $request)
     {
         $user = $request->user();
@@ -117,6 +145,13 @@ class DeliverableController extends Controller
         return response()->json(['success' => true, 'data' => $deliverables]);
     }
 
+    /**
+     * Retrieve a single deliverable with all related data (submissions, workflow events, changes).
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @param  int  $id  The ID of the deliverable to retrieve.
+     * @return \Illuminate\Http\JsonResponse  JSON response with full deliverable details or 403 unauthorized.
+     */
     public function show(Request $request, $id)
     {
         $deliverable = Deliverable::findOrFail($id);
@@ -145,6 +180,16 @@ class DeliverableController extends Controller
         return response()->json(['success' => true, 'deliverable' => $payload]);
     }
 
+    /**
+     * Create a new deliverable within a project.
+     *
+     * Creates workflow events for creation and assignment, and sends a notification
+     * to the assignee if the deliverable is assigned to a different user.
+     *
+     * @param  \Illuminate\Http\Request  $request  Validated input: title, description, status, priority, due_date, assigned_to, task_id.
+     * @param  \App\Models\Project  $project  The parent project.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the created deliverable.
+     */
     public function store(Request $request, Project $project)
     {
         $validated = $request->validate([
@@ -193,6 +238,16 @@ class DeliverableController extends Controller
         ], 201);
     }
 
+    /**
+     * Update an existing deliverable's properties and track field changes.
+     *
+     * Records field changes for audit trail, creates workflow events,
+     * and sends notifications to the assignee when updates are made.
+     *
+     * @param  \Illuminate\Http\Request  $request  Validated input for updatable fields.
+     * @param  \App\Models\Deliverable  $deliverable  The deliverable to update.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the updated deliverable and change count.
+     */
     public function update(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
@@ -251,6 +306,12 @@ class DeliverableController extends Controller
         ]);
     }
 
+    /**
+     * Delete a deliverable. Only the creator or admin/manager can delete.
+     *
+     * @param  \App\Models\Deliverable  $deliverable  The deliverable to delete.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming deletion.
+     */
     public function destroy(Deliverable $deliverable)
     {
         $user = request()->user();
@@ -260,6 +321,17 @@ class DeliverableController extends Controller
         return response()->json(['success' => true, 'message' => 'Deliverable deleted successfully']);
     }
 
+    /**
+     * Submit a deliverable for review by its creator.
+     *
+     * Handles file uploads (single and multiple), link attachments, and determines
+     * whether this is a first submission or a resubmission. Creates workflow events
+     * and notifications for the creator.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: comment, file, files[], links[].
+     * @param  \App\Models\Deliverable  $deliverable  The deliverable to submit.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the updated deliverable.
+     */
     public function submit(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
@@ -353,6 +425,13 @@ class DeliverableController extends Controller
         ]);
     }
 
+    /**
+     * Approve a submitted deliverable. Only the creator or admin/manager can approve.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @param  \App\Models\Deliverable  $deliverable  The deliverable to approve (must be in 'submitted' status).
+     * @return \Illuminate\Http\JsonResponse  JSON response with the approved deliverable.
+     */
     public function approve(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
@@ -387,6 +466,13 @@ class DeliverableController extends Controller
         ]);
     }
 
+    /**
+     * Reject a submitted deliverable with an optional comment.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: comment (optional).
+     * @param  \App\Models\Deliverable  $deliverable  The deliverable to reject (must be in 'submitted' status).
+     * @return \Illuminate\Http\JsonResponse  JSON response with the rejected deliverable.
+     */
     public function reject(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
@@ -428,6 +514,16 @@ class DeliverableController extends Controller
         ]);
     }
 
+    /**
+     * Reopen a submitted deliverable for revision.
+     *
+     * Allows the creator or admin/manager to reopen a deliverable with revision instructions,
+     * a new deadline, and an optional file attachment.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: comment, instructions, new_deadline, file.
+     * @param  \App\Models\Deliverable  $deliverable  The deliverable to reopen.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the reopened deliverable.
+     */
     public function reopen(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
@@ -487,6 +583,13 @@ class DeliverableController extends Controller
         ]);
     }
 
+    /**
+     * Self-approve a deliverable (user is both creator and assignee).
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @param  \App\Models\Deliverable  $deliverable  The deliverable to approve.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the approved deliverable.
+     */
     public function selfApprove(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
@@ -503,6 +606,13 @@ class DeliverableController extends Controller
         ]);
     }
 
+    /**
+     * Mark a self-created deliverable for rework (user is both creator and assignee).
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: comment, instructions, new_deadline, file.
+     * @param  \App\Models\Deliverable  $deliverable  The deliverable to mark for rework.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the rework-updated deliverable.
+     */
     public function selfRework(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
@@ -541,6 +651,12 @@ class DeliverableController extends Controller
         ]);
     }
 
+    /**
+     * Download the file attached to a deliverable submission.
+     *
+     * @param  \App\Models\DeliverableSubmission  $submission  The submission containing the file.
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse|\Illuminate\Http\JsonResponse  File download or error.
+     */
     public function downloadSubmissionFile(DeliverableSubmission $submission)
     {
         $user = request()->user();
@@ -554,6 +670,13 @@ class DeliverableController extends Controller
         return Storage::disk('public')->download($submission->file_path, $submission->file_name);
     }
 
+    /**
+     * Get the most recent submission for a deliverable.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @param  \App\Models\Deliverable  $deliverable  The deliverable to get the latest submission for.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the latest submission.
+     */
     public function latestSubmission(Request $request, Deliverable $deliverable)
     {
         $submission = DeliverableSubmission::where('deliverable_id', $deliverable->id)
@@ -561,12 +684,26 @@ class DeliverableController extends Controller
         return response()->json(['success' => true, 'submission' => $submission]);
     }
 
+    /**
+     * Mark all unviewed changes on a deliverable as read.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @param  \App\Models\Deliverable  $deliverable  The deliverable whose changes to mark.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming changes marked.
+     */
     public function markChangesRead(Request $request, Deliverable $deliverable)
     {
         $deliverable->changes()->where('is_viewed', false)->update(['is_viewed' => true]);
         return response()->json(['success' => true, 'message' => 'Changes marked as read']);
     }
 
+    /**
+     * Download or view an attachment from a submission. Supports both file and link types.
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameter 'action' can be 'download' to force download.
+     * @param  \App\Models\SubmissionAttachment  $attachment  The attachment to retrieve.
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse|\Illuminate\Http\RedirectResponse|\Illuminate\Http\JsonResponse  File, redirect, or error.
+     */
     public function downloadAttachment(Request $request, SubmissionAttachment $attachment)
     {
         $user = $this->resolveDocAuth($request);
@@ -586,6 +723,12 @@ class DeliverableController extends Controller
         return response()->file($fullPath, ['Cache-Control' => 'public, max-age=3600']);
     }
 
+    /**
+     * Reorder deliverables by updating their sort_order values in bulk.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: items[] with id and sort_order.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming reorder.
+     */
     public function reorder(Request $request)
     {
         $request->validate(['items' => 'required|array', 'items.*.id' => 'required|integer|exists:deliverables,id', 'items.*.sort_order' => 'required|integer|min:0']);
@@ -603,6 +746,15 @@ class DeliverableController extends Controller
         return response()->json(['success' => true, 'message' => 'Deliverables reordered successfully']);
     }
 
+    /**
+     * Send a notification to the deliverable assignee about assignment.
+     *
+     * @param  \App\Models\Deliverable  $deliverable  The deliverable being assigned.
+     * @param  \App\Models\User  $sender  The user who assigned the deliverable.
+     * @param  string  $type  The notification type identifier.
+     * @param  string  $title  The notification title.
+     * @return void
+     */
     private function sendDeliverableNotification(Deliverable $deliverable, User $sender, string $type, string $title): void
     {
         $deliverable->loadMissing('task:id,title');
@@ -625,6 +777,14 @@ class DeliverableController extends Controller
         );
     }
 
+    /**
+     * Send a notification about deliverable updates, or an assignment notification if assignee changed.
+     *
+     * @param  \App\Models\Deliverable  $deliverable  The updated deliverable.
+     * @param  \App\Models\User  $updater  The user who made the update.
+     * @param  array  $changes  Array of changes made to the deliverable.
+     * @return void
+     */
     private function sendDeliverableUpdateNotification(Deliverable $deliverable, User $updater, array $changes): void
     {
         if (isset($changes[0]) && $changes[0]['field_name'] === 'assigned_to') {
@@ -645,8 +805,19 @@ class DeliverableController extends Controller
         }
     }
 
+    /**
+     * Get the list of statuses to exclude when filtering deliverables due today.
+     *
+     * @return array  Array of status strings to exclude.
+     */
     private function dueTodayExcludedStatuses(): array { return ['approved']; }
 
+    /**
+     * Resolve the authenticated user from the request or a query parameter token.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @return \App\Models\User|null  The authenticated user or null if not found.
+     */
     private function resolveDocAuth(Request $request): ?User
     {
         if ($request->user()) return $request->user();

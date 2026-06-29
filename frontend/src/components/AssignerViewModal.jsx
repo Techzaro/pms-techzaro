@@ -1,3 +1,9 @@
+/**
+ * AssignerViewModal.jsx
+ * Modal component for assigners to view deliverable details, submissions,
+ * attachments (files, images, links), and take actions (approve, reject, reopen).
+ */
+
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { FileText, Download, ExternalLink } from "lucide-react";
@@ -8,6 +14,11 @@ import ReopenDialog from "./ReopenDialog";
 import { formatDateTime } from "../utils/formatDateTime";
 import "./AssignerViewModal.css";
 
+/**
+ * Formats a file size in bytes to a human-readable string (B, KB, or MB).
+ * @param {number} bytes - File size in bytes
+ * @returns {string} Formatted file size string
+ */
 function formatFileSize(bytes) {
   if (!bytes) return "";
   const mb = bytes / (1024 * 1024);
@@ -17,6 +28,13 @@ function formatFileSize(bytes) {
   return bytes + " B";
 }
 
+/**
+ * Modal for assigners to view deliverable details, submissions, and perform actions.
+ * @param {boolean} isOpen - Whether the modal is visible
+ * @param {Function} onClose - Callback to close the modal
+ * @param {Object} deliverable - The deliverable object to display
+ * @param {Function} onActionSuccess - Callback when an action (approve/reject/reopen) succeeds
+ */
 function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
   const [submission, setSubmission] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -25,8 +43,10 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
   const [acting, setActing] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
 
+  // Fetch the latest submission when modal opens or deliverable changes
   useEffect(() => {
     if (!isOpen || !deliverable) return;
+    // Prevent background scrolling while modal is open
     document.body.style.overflow = "hidden";
 
     const token = authToken();
@@ -37,15 +57,23 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
       .then((data) => { setSubmission(data.submission); setLoading(false); })
       .catch(() => { setLoading(false); });
 
+    // Restore scrolling on unmount
     return () => { document.body.style.overflow = ""; };
   }, [isOpen, deliverable]);
 
+  /**
+   * Handles approve, reject, or reopen actions on the deliverable.
+   * Uses FormData for reopen (supports file uploads), JSON for other actions.
+   * @param {string} action - The action to perform: "approve", "reject", or "reopen"
+   * @param {Object} body - Optional payload (comment, instructions, new_deadline, file)
+   */
   const handleAction = async (action, body = {}) => {
     setActing(true);
     try {
       const token = authToken();
       let res;
       if (action === "reopen") {
+        // Reopen uses FormData to support file attachments
         const formData = new FormData();
         if (body.comment) formData.append("comment", body.comment);
         if (body.instructions) formData.append("instructions", body.instructions);
@@ -57,6 +85,7 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
           body: formData,
         });
       } else {
+        // Approve/reject use JSON payload
         res = await fetch(`${API_URL}/deliverables/${deliverable.id}/${action}`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -76,12 +105,14 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
     }
   };
 
+  // Confirmation dialog messages for each action type
   const confirmMessages = {
     approve: "Are you sure you want to approve this deliverable?",
     reject: "Are you sure you want to reject this deliverable? The assignee will not be able to resubmit.",
     reopen: "Are you sure you want to reject and reopen this deliverable?",
   };
 
+  // Color codes for confirmation dialog confirm button
   const confirmColors = {
     approve: "#16A34A",
     reject: "#DC2626",
@@ -91,6 +122,13 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
   if (!isOpen || !deliverable) return null;
 
   const token = authToken();
+
+  /**
+   * Builds a download URL for a deliverable attachment.
+   * @param {number} attId - Attachment ID
+   * @param {string} [action] - Optional action parameter (e.g., "download")
+   * @returns {string} Full attachment URL with auth token
+   */
   const attachmentUrl = (attId, action) => {
     let url = `${API_URL}/deliverables/attachment/${attId}/download`;
     const params = [];
@@ -100,7 +138,9 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
     return url;
   };
 
+  // Capitalize status for display
   const statusLabel = (deliverable.status || "pending").charAt(0).toUpperCase() + (deliverable.status || "pending").slice(1);
+  // Separate attachments by type for organized display
   const attachments = submission?.attachments || [];
   const files = attachments.filter((a) => a.attachment_type === "file");
   const images = attachments.filter((a) => a.attachment_type === "image");

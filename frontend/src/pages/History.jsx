@@ -1,16 +1,16 @@
 /**
- * History page component.
- * Rendered when the user navigates to /history or related route.
+ * History.jsx — Activity History Page
+ *
+ * Placeholder page for displaying activity logs and audit trails.
+ * Currently renders a simple heading and description.
+ * May be expanded to show detailed activity history in the future.
  */
 
 import DashboardLayout from "../components/layout/DashboardLayout";
 
 /**
- * Perform the history.
- */
-
-/**
- * Page showing recent activity history.
+ * History — Activity history page component.
+ * Renders within DashboardLayout with a static message.
  */
 function History() {
   return (

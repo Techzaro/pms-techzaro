@@ -1,16 +1,36 @@
+/**
+ * DayPopup.jsx
+ * Popup modal that displays all events for a specific day in the calendar.
+ * Shows event details with type-based colors and allows edit/delete for manual events.
+ */
+
 import { createPortal } from "react-dom";
 import { Edit3, Trash2 } from "lucide-react";
 import { TYPE_COLORS, TYPE_LABELS, DEFAULT_EVENT_COLOR } from "../pages/Calender";
 import { formatEventTime } from "../utils/formatDateTime";
 
+/** Formats a date as "Month Day, Year" (e.g., "March 15, 2025"). */
 function formatDisplayDate(d) {
   return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
+/** Formats a date as the full weekday name (e.g., "Saturday"). */
 function formatWeekday(d) {
   return d.toLocaleDateString("en-US", { weekday: "long" });
 }
 
+/**
+ * Popup displaying all events for a selected day.
+ * @param {Date} date - The selected date
+ * @param {Array} events - Array of event objects for this day
+ * @param {Function} onClose - Callback to close the popup
+ * @param {Function} [onEdit] - Callback to edit a manual event
+ * @param {Function} [onDelete] - Callback to delete a manual event
+ * @param {boolean} canManageEvents - Whether the user can edit/delete events
+ * @param {Function} [onItemClick] - Callback when an event card is clicked
+ * @param {number|null} deleteLoading - ID of event currently being deleted (shows loading state)
+ * @param {Function} [onAddEvent] - Callback to add a new event
+ */
 export default function DayPopup({ date, events, onClose, onEdit, onDelete, canManageEvents, onItemClick, deleteLoading, onAddEvent }) {
   if (!date) return null;
 

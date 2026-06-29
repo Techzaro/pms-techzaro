@@ -1,3 +1,12 @@
+/**
+ * SelfDeliveries page component.
+ *
+ * Lists deliverables that the current user has assigned to themselves.
+ * Provides search, status filtering (draft, submitted, rework required,
+ * approved), time-range filtering, drag-and-drop reordering and pagination.
+ * Submit and view actions open modals for the selected deliverable.
+ */
+
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect, useCallback } from "react";
@@ -30,6 +39,7 @@ const STATUS_TEXT_COLORS = {
   rework_required: "#92400E",
 };
 
+/** Main Self Deliverables page — fetches and renders the user's own deliverables. */
 function SelfDeliveries() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [deliverables, setDeliverables] = useState([]);
@@ -57,6 +67,7 @@ function SelfDeliveries() {
     setStatusFilter(status);
   }, [searchParams]);
 
+  /** Fetch self-assigned deliverables from the API with current filters. */
   const fetchDeliverables = () => {
     setLoading(true);
     const token = authToken();

@@ -9,14 +9,31 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
+/**
+ * Mailable sent to users when their profile is updated by an admin.
+ *
+ * Displays a table of changed fields with old and new values.
+ */
 class UserProfileUpdated extends Mailable
 {
     use Queueable, SerializesModels;
 
+    /** @var \App\Models\User The user whose profile was updated */
     public User $user;
+
+    /** @var string Name of the person who made the update */
     public string $updatedBy;
+
+    /** @var array<string, array{old: mixed, new: mixed}> Changed fields with old/new values */
     public array $changes;
 
+    /**
+     * Create a new mail instance.
+     *
+     * @param \App\Models\User $user      The affected user
+     * @param string           $updatedBy Name of the admin who made changes
+     * @param array            $changes   Array of changed fields with old/new values
+     */
     public function __construct(User $user, string $updatedBy, array $changes)
     {
         $this->user = $user;
@@ -24,6 +41,11 @@ class UserProfileUpdated extends Mailable
         $this->changes = $changes;
     }
 
+    /**
+     * Build the message envelope.
+     *
+     * @return \Illuminate\Mail\Mailables\Envelope
+     */
     public function envelope(): Envelope
     {
         return new Envelope(
@@ -31,6 +53,11 @@ class UserProfileUpdated extends Mailable
         );
     }
 
+    /**
+     * Define the message content using inline HTML.
+     *
+     * @return \Illuminate\Mail\Mailables\Content
+     */
     public function content(): Content
     {
         return new Content(
@@ -38,6 +65,13 @@ class UserProfileUpdated extends Mailable
         );
     }
 
+    /**
+     * Map a database field name to a human-readable label.
+     *
+     * @param string $field Database column name
+     *
+     * @return string Display label
+     */
     private function fieldLabel(string $field): string
     {
         $labels = [
@@ -68,12 +102,18 @@ class UserProfileUpdated extends Mailable
         return $labels[$field] ?? ucwords(str_replace('_', ' ', $field));
     }
 
+    /**
+     * Build the full HTML email body with change details table.
+     *
+     * @return string Complete HTML document
+     */
     private function buildHtml(): string
     {
         $name = e($this->user->name);
         $updatedBy = e($this->updatedBy);
         $date = now()->format('F j, Y \a\t g:i A');
 
+        // Build table rows for each changed field
         $rows = '';
         foreach ($this->changes as $field => $change) {
             $label = e($this->fieldLabel($field));

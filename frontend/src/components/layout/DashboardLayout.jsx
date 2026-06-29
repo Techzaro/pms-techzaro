@@ -1,5 +1,8 @@
 /**
- * DashboardLayout component.
+ * DashboardLayout - Top-level layout shell for the authenticated dashboard.
+ * Composes Header, Sidebar, and an optional RightSidebar around main content.
+ * Listens for custom "modal-state" events so the right-sidebar toggle is
+ * hidden while any modal is open.
  */
 
 import { useState, useEffect } from "react";
@@ -9,10 +12,14 @@ import RightSidebar from "./RightSidebar";
 
 import "./DashboardLayout.css";
 
+/**
+ * @param {{ children: React.ReactNode, hideRightSidebar?: boolean }} props
+ */
 function DashboardLayout({ children, hideRightSidebar = false }) {
   const [rightOpen, setRightOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
 
+  // Sync modal-open state from child modals (e.g., CreateDeliverableTask)
   useEffect(() => {
     const handler = (e) => setModalOpen(e.detail.open);
     window.addEventListener("modal-state", handler);

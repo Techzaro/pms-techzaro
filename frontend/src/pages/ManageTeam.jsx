@@ -1,3 +1,19 @@
+/**
+ * ManageTeam.jsx — Team Management Page
+ *
+ * Admin/manager page for creating, editing, and managing teams.
+ * Features:
+ * - Create new teams with name, description, and member selection
+ * - Edit existing teams (update name, description, members)
+ * - Delete teams with confirmation
+ * - Add/remove members from teams
+ * - Set team leader (requires team_lead role)
+ * - Create project for a specific team
+ * - Search and sort teams
+ * - Paginated team list
+ *
+ * Access restricted to admin and manager roles.
+ */
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Crown } from "lucide-react";
@@ -22,6 +38,7 @@ import Pagination from "../components/Pagination";
 import { useNotification } from "../context/NotificationContext";
 import "./ManageTeam.css";
 
+/** Color palette for user avatar backgrounds */
 const AVATAR_COLORS = [
   "#f59e0b",
   "#3b82f6",
@@ -33,6 +50,7 @@ const AVATAR_COLORS = [
   "#f97316",
 ];
 
+/** Extracts up to 2 initials from a name */
 function getInitials(name) {
   if (!name) return "?";
   return name
@@ -43,6 +61,7 @@ function getInitials(name) {
     .slice(0, 2);
 }
 
+/** Returns a deterministic avatar color based on the name hash */
 function getAvatarColor(name) {
   if (!name) return AVATAR_COLORS[0];
   let hash = 0;
@@ -52,6 +71,10 @@ function getAvatarColor(name) {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
+/**
+ * ManageTeam — Main team management page component.
+ * Handles CRUD operations for teams, member management, and leader assignment.
+ */
 function ManageTeam() {
   const notify = useNotification();
 
@@ -88,6 +111,7 @@ function ManageTeam() {
   const navigate = useNavigate();
 
   // ✅ Define fetchUsers first
+  // Fetch all users for member selection dropdowns
   const fetchUsers = async () => {
     const token = authToken();
     if (!token) return;
@@ -109,6 +133,7 @@ function ManageTeam() {
   };
 
   // ✅ Define fetchTeams BEFORE the useEffect that uses it
+  // Fetch all teams with their members and leader info
   const fetchTeams = async () => {
     const token = authToken();
     if (!token) return;
@@ -124,6 +149,7 @@ function ManageTeam() {
   };
 
   // ✅ Now useEffect can safely call fetchTeams and fetchUsers
+  // Verify user has admin/manager role, then fetch initial data
   useEffect(() => {
     const role = getCurrentRole();
     const token = authToken();
@@ -135,12 +161,13 @@ function ManageTeam() {
     fetchTeams();
   }, []);
 
-  // ✅ useRefreshOnEvent with fetchTeams (now defined)
+  // Auto-refresh teams when data changes elsewhere in the app
   useRefreshOnEvent(["data:changed"], fetchTeams);
 
   // ... rest of the functions (handleSetLeader, handleRemoveMember, etc.)
   useRefreshOnEvent(["data:changed"], fetchTeams);
 
+  // Set a member as team leader (only if member has team_lead role)
   const handleSetLeader = async (teamId, memberId) => {
     const member = teams.flatMap(t => t.members).find(m => Number(m.id) === Number(memberId));
     
@@ -155,6 +182,7 @@ function ManageTeam() {
     setLeaderConfirmOpen(true);
   };
 
+  // Confirm and execute leader assignment via API
   const confirmSetLeader = async () => {
     const { teamId, memberId } = leaderConfirmData;
     setLeaderConfirmOpen(false);
@@ -181,12 +209,14 @@ function ManageTeam() {
     }
   };
 
+  // Remove a member from a team after confirmation
   const handleRemoveMember = async (teamId, memberId) => {
     const member = teams.flatMap(t => t.members).find(m => Number(m.id) === Number(memberId));
     setRemoveMemberData({ teamId, memberId, memberName: member?.name || "this member" });
     setRemoveMemberConfirmOpen(true);
   };
 
+  // Confirm and execute member removal via API
   const confirmRemoveMember = async () => {
     const { teamId, memberId } = removeMemberData;
     setRemoveMemberConfirmOpen(false);
@@ -208,11 +238,13 @@ function ManageTeam() {
     }
   };
 
+  // Delete a team after confirmation
   const handleDeleteTeam = async (teamId) => {
     setDeleteTeamId(teamId);
     setDeleteTeamConfirmOpen(true);
   };
 
+  // Confirm and execute team deletion via API
   const confirmDeleteTeam = async () => {
     const teamId = deleteTeamId;
     setDeleteTeamConfirmOpen(false);
@@ -298,6 +330,7 @@ function ManageTeam() {
     }
   };
 
+  // Create a new team with name, description, and selected members
   const handleCreateTeam = async (e) => {
     e.preventDefault();
     try {
@@ -323,6 +356,7 @@ function ManageTeam() {
     }
   };
 
+  // Add selected users to an existing team
   const handleAddMembers = async (e) => {
     e.preventDefault();
     if (selectedUserIds.length === 0) {
@@ -363,6 +397,7 @@ function ManageTeam() {
     setIsModalOpen(true);
   };
 
+  // Update an existing team's name, description, and member list
   const handleUpdateTeam = async (e) => {
     e.preventDefault();
     try {
@@ -388,6 +423,7 @@ function ManageTeam() {
     }
   };
 
+  // Compute available users for adding to a team (exclude current members)
   const currentTeamMembers = addMemberTeamId
     ? teams.find((t) => t.id === addMemberTeamId)?.members || []
     : [];
@@ -395,6 +431,7 @@ function ManageTeam() {
     (u) => !currentTeamMembers.some((m) => m.id === u.id)
   );
 
+  // Apply search filter and sorting to teams list
   const filteredTeams = teams
     .filter((t) => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {

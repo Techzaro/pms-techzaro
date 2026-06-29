@@ -1,3 +1,10 @@
+/**
+ * RightSidebar - Collapsible right-side panel showing a mini calendar and
+ * an events widget. Provides month navigation, day hover previews (via a
+ * portal), and quick access to event details. Syncs with external calendar
+ * updates through a "calendar-sync" custom event.
+ */
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -14,10 +21,14 @@ import { getCurrentRole } from "../../utils/auth";
 import "./RightSidebar.css";
 
 
+/** Abbreviated day-of-week labels for the calendar grid header. */
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const HOVER_DELAY = 200;
-const LEAVE_DELAY = 150;
+const HOVER_DELAY = 200; // ms before hover tooltip appears
+const LEAVE_DELAY = 150; // ms before hover tooltip disappears
 
+/**
+ * @param {{ isOpen: boolean, onClose: () => void }} props
+ */
 function RightSidebar({ isOpen, onClose }) {
   const navigate = useNavigate();
   const [hoverDate, setHoverDate] = useState(null);
@@ -25,7 +36,7 @@ function RightSidebar({ isOpen, onClose }) {
   const hoverTimeoutRef = useRef(null);
   const calendarRef = useRef(null);
 
-
+  // ── Calendar hook – provides month data, events, and navigation ──
   const {
     monthName,
     calendarDays,
@@ -36,12 +47,14 @@ function RightSidebar({ isOpen, onClose }) {
     refetch,
   } = useCalendarData();
 
+  // Re-fetch calendar data when other components dispatch a "calendar-sync" event
   useEffect(() => {
     const handleSync = () => refetch();
     window.addEventListener("calendar-sync", handleSync);
     return () => window.removeEventListener("calendar-sync", handleSync);
   }, [refetch]);
 
+  /** Calculate tooltip position to keep it within the viewport. */
   const getTooltipPosition = useCallback((cellRect) => {
     const tooltipWidth = 260;
     let left = cellRect.left - tooltipWidth - 8;
@@ -50,6 +63,7 @@ function RightSidebar({ isOpen, onClose }) {
     return { top, left };
   }, []);
 
+  /** Show hover tooltip after a short delay. */
   const handleCellHover = useCallback((e, date) => {
     if (!date) return;
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
@@ -60,6 +74,7 @@ function RightSidebar({ isOpen, onClose }) {
     }, HOVER_DELAY);
   }, [getTooltipPosition]);
 
+  /** Hide hover tooltip after a short delay. */
   const handleCellLeave = useCallback(() => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     hoverTimeoutRef.current = setTimeout(() => {
@@ -67,6 +82,7 @@ function RightSidebar({ isOpen, onClose }) {
     }, LEAVE_DELAY);
   }, []);
 
+  /** Open the day popup when a calendar cell is clicked. */
   const handleCellClick = useCallback((date) => {
     if (!date) return;
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
@@ -74,6 +90,7 @@ function RightSidebar({ isOpen, onClose }) {
     setSelectedPopupDay(date);
   }, []);
 
+  /** Navigate to the full calendar page and close the sidebar. */
   const handleViewAllClick = () => {
     const role = getCurrentRole() || "admin";
     onClose?.();
@@ -86,12 +103,15 @@ function RightSidebar({ isOpen, onClose }) {
   const [selectedPopupDay, setSelectedPopupDay] = useState(null);
   const [selectedPopupItem, setSelectedPopupItem] = useState(null);
 
+  /** Map event type keys to human-readable labels. */
   const getTypeLabel = (type) => TYPE_LABELS[type] || type;
 
   return (
     <>
+      {/* Backdrop overlay when sidebar is open on mobile */}
       {isOpen && <div className="right-backdrop" onClick={onClose} />}
       <aside className={`right-sidebar ${isOpen ? "right-sidebar--open" : ""}`} ref={calendarRef}>
+        {/* ── Calendar card ── */}
         <div className="right-card calendar-card">
           <div className="right-card-header">
             <div>
@@ -112,6 +132,7 @@ function RightSidebar({ isOpen, onClose }) {
             </div>
           </div>
 
+          {/* Calendar grid – 7 column layout with day labels + date cells */}
           <div className="calendar-grid">
             {DAYS.map((day) => (
               <div key={day} className="calendar-day-label">{day}</div>
@@ -144,6 +165,7 @@ function RightSidebar({ isOpen, onClose }) {
           </div>
 
         </div>
+        {/* Hover tooltip – rendered via portal so it can overflow the sidebar */}
         {hoverDate && createPortal(
           (() => {
             const dayEvents = getEventsForDate(hoverDate);
@@ -197,6 +219,7 @@ function RightSidebar({ isOpen, onClose }) {
           document.body
         )}
 
+        {/* Events widget – shows today's and upcoming events */}
         <EventsWidget
           todayEvents={widgetToday}
           upcomingEvents={widgetUpcoming}
@@ -204,7 +227,9 @@ function RightSidebar({ isOpen, onClose }) {
           currentRole={currentRole}
         />
       </aside>
+      {/* Event info popup – shown when clicking an event in the widget */}
       {selectedEvent && <EventInfoPopup event={selectedEvent} onClose={() => setSelectedEvent(null)} />}
+      {/* Day popup – shows all events for a specific date */}
       {selectedPopupDay && (
         <DayPopup
           date={selectedPopupDay}
@@ -214,6 +239,7 @@ function RightSidebar({ isOpen, onClose }) {
           onItemClick={(ev) => setSelectedPopupItem(ev)}
         />
       )}
+      {/* Item detail popup – shows full details for a hovered/clicked event */}
       {selectedPopupItem && (
         <ItemDetailPopup
           item={selectedPopupItem}

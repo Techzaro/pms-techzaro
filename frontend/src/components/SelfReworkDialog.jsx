@@ -1,3 +1,10 @@
+/**
+ * SelfReworkDialog.jsx
+ * Modal dialog allowing a team member to mark their own deliverable as needing
+ * rework. Used for self-review workflows where the submitter identifies issues
+ * and requests improvements before final approval.
+ */
+
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import API_URL from "../config/api";
@@ -6,6 +13,13 @@ import { notify } from "../utils/notify";
 import "./ReopenDialog.css";
 import { toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
 
+/**
+ * Dialog for marking a deliverable as needing rework by the assignee themselves.
+ * @param {boolean} isOpen - Whether the dialog is visible.
+ * @param {Function} onClose - Callback to close the dialog.
+ * @param {Object} deliverable - The deliverable being marked for rework.
+ * @param {Function} onReworkSuccess - Callback after successful rework, receives updated deliverable.
+ */
 function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
   const [comment, setComment] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -23,6 +37,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
     return () => { document.body.style.overflow = ""; };
   }, [isOpen]);
 
+  /** Submits the rework request with notes, instructions, new deadline, and file */
   const handleSubmit = async () => {
     if (!comment.trim() && !instructions.trim()) {
       notify.error("Please provide rework notes or improvement instructions.");

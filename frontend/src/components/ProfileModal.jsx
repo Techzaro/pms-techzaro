@@ -1,3 +1,10 @@
+/**
+ * ProfileModal.jsx
+ * Modal dialog for viewing user profile information and changing password.
+ * Displays read-only user details (name, email, role) and provides a
+ * password change form with validation.
+ */
+
 import { useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -6,6 +13,11 @@ import { authToken } from "../utils/auth";
 import { notify } from "../utils/notify";
 import "../components/ProfileModal.css";
 
+/**
+ * Profile modal showing user info and password change form.
+ * @param {Object} user - The current user object (name, email, role).
+ * @param {Function} onClose - Callback to close the modal.
+ */
 function ProfileModal({
   user,
   onClose,
@@ -21,6 +33,10 @@ function ProfileModal({
    * CHANGE PASSWORD
    */
 
+  /**
+   * Validates and submits the password change request.
+   * Shows error if fields are empty or passwords don't match.
+   */
   const handlePasswordChange = async () => {
 
     if (!newPassword || !confirmPassword) {

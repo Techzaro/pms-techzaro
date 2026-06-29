@@ -1,3 +1,10 @@
+/**
+ * ViewDeliverableModal.jsx
+ * Modal for viewing a deliverable's submission details as an admin/manager.
+ * Displays reopen info, submission notes, file/image/link attachments, and
+ * allows resubmission when the deliverable is in reopened status.
+ */
+
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { FileText, Download, ExternalLink } from "lucide-react";
@@ -9,12 +16,18 @@ import "./ViewDeliverableModal.css";
 
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
 
+/**
+ * Resolves a file URL to an absolute path, handling both relative and absolute URLs.
+ * @param {string} url - The file URL to resolve.
+ * @returns {string|null} The resolved URL or null if empty.
+ */
 function fileUrl(url) {
   if (!url) return null;
   if (/^https?:\/\//i.test(url)) return url;
   return API_BASE + url;
 }
 
+/** Formats a byte count into a human-readable file size string (B, KB, MB). */
 function formatFileSize(bytes) {
   if (!bytes) return "";
   const mb = bytes / (1024 * 1024);
@@ -24,6 +37,13 @@ function formatFileSize(bytes) {
   return bytes + " B";
 }
 
+/**
+ * Modal for viewing deliverable details and resubmitting when reopened.
+ * @param {boolean} isOpen - Whether the modal is visible.
+ * @param {Function} onClose - Callback to close the modal.
+ * @param {Object} deliverable - The deliverable to display.
+ * @param {Function} onSubmitSuccess - Callback after successful resubmission.
+ */
 function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess }) {
   const [submission, setSubmission] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -48,12 +68,18 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
     return () => { document.body.style.overflow = ""; };
   }, [isOpen, deliverable]);
 
+  /**
+   * Normalizes a URL by trimming whitespace and prepending https:// if missing.
+   * @param {string} url - The raw URL string.
+   * @returns {string} The normalized URL.
+   */
   const normalizeUrl = (url) => {
     url = url.trim();
     if (url && !/^https?:\/\//i.test(url)) return "https://" + url;
     return url;
   };
 
+  /** Handles resubmission of the deliverable with updated files, links, and comment */
   const handleResubmit = async () => {
     const validLinks = links.filter((l) => l.trim()).map(normalizeUrl);
     if (!comment.trim() && files.length === 0 && validLinks.length === 0) {
@@ -92,6 +118,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
   if (!isOpen || !deliverable) return null;
 
   const token = authToken();
+  /** Constructs download URL for a specific attachment with optional action param */
   const attachmentUrl = (attId, action) => {
     let url = `${API_URL}/deliverables/attachment/${attId}/download`;
     const params = [];

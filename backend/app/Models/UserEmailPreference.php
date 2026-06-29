@@ -5,6 +5,10 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Stores per-user notification channel preferences.
+ * Controls which notification types are enabled for email, browser, and mobile push channels.
+ */
 class UserEmailPreference extends Model
 {
     protected $fillable = [
@@ -28,6 +32,7 @@ class UserEmailPreference extends Model
         'mobile_push_notifications' => 'boolean',
     ];
 
+    /** The user these preferences belong to. */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

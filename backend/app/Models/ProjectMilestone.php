@@ -10,7 +10,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Eloquent model for a single project milestone.
+ * Represents a milestone within a project.
+ * Defines a checkpoint with a title, due date, and status, ordered by sort_order.
  */
 class ProjectMilestone extends Model
 {
@@ -26,10 +27,7 @@ class ProjectMilestone extends Model
         'due_date' => 'date:Y-m-d',
     ];
 
-    /**
-     * Perform the project.
-     */
-
+    /** The project this milestone belongs to. */
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);

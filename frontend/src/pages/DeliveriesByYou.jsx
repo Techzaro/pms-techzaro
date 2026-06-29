@@ -1,3 +1,12 @@
+/**
+ * DeliveriesByYou.jsx — Deliverables Assigned By You Page
+ *
+ * Lists all deliverables that the current user has assigned to others.
+ * Features identical to Deliveries.jsx but from the assigner's perspective:
+ * - Status filter tabs, search, time filter, sortable table, pagination
+ * - View modal to review submissions (approve/reject actions)
+ * - Deep-linking support via ?selectedDeliverable= param
+ */
 import React, { useState, useEffect, useCallback } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -14,6 +23,7 @@ import Pagination from "../components/Pagination";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
 
+/** Background colors for status badges */
 const STATUS_COLORS = {
   pending: "#FEF3C7",
   submitted: "#DBEAFE",
@@ -22,6 +32,7 @@ const STATUS_COLORS = {
   reopened: "#FEF3C7",
 };
 
+/** Text colors for status badges */
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
   submitted: "#1E40AF",
@@ -30,6 +41,10 @@ const STATUS_TEXT_COLORS = {
   reopened: "#92400E",
 };
 
+/**
+ * DeliveriesByYou — Lists deliverables assigned by the current user to others.
+ * Allows viewing submissions and performing approve/reject actions.
+ */
 function DeliveriesByYou() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [deliverables, setDeliverables] = useState([]);
@@ -47,6 +62,7 @@ function DeliveriesByYou() {
   const [showAll, setShowAll] = useState(false);
   const ITEMS_PER_PAGE = 10;
 
+  // Fetch deliverables assigned by the current user from API
   const fetchDeliverables = () => {
     setLoading(true);
     const token = authToken();
@@ -159,6 +175,7 @@ function DeliveriesByYou() {
     return map[status] || status;
   };
 
+  // Update local state after approve/reject action from the AssignerViewModal
   const handleActionSuccess = (updatedDeliverable) => {
     setDeliverables((prev) =>
       prev.map((d) => (d.id === updatedDeliverable.id ? { ...d, ...updatedDeliverable } : d))

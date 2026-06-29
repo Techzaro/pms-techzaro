@@ -18,7 +18,11 @@ use Illuminate\Support\Facades\Cache;
 class TeamController extends Controller
 {
     /**
-     * Return all teams with leaders and members.
+     * Return all teams with their leaders and members.
+     *
+     * Results are cached for 5 minutes to reduce database load.
+     *
+     * @return \Illuminate\Http\JsonResponse  JSON response with all teams.
      */
     public function index()
     {
@@ -29,9 +33,13 @@ class TeamController extends Controller
     }
 
     /**
-     * Validate request data and create a new resource.
+     * Create a new team with optional initial members.
+     *
+     * The team leader is set to null by default. Use setLeader endpoint to assign one.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: name (required), description (optional), member_ids[] (optional).
+     * @return \Illuminate\Http\JsonResponse  JSON response with the created team.
      */
-
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -60,7 +68,10 @@ class TeamController extends Controller
     }
 
     /**
-     * Return a single team with leader and members.
+     * Return a single team with its leader and members.
+     *
+     * @param  \App\Models\Team  $team  The team to retrieve.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the team.
      */
     public function show(Team $team)
     {
@@ -69,7 +80,13 @@ class TeamController extends Controller
     }
 
     /**
-     * Update the specified team's name, description, and members.
+     * Update a team's name, description, and member list.
+     *
+     * If the current leader is removed from the team, the leader is automatically cleared.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: name (required), description (optional), member_ids[] (optional).
+     * @param  \App\Models\Team  $team  The team to update.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the updated team.
      */
     public function update(Request $request, Team $team)
     {
@@ -102,9 +119,14 @@ class TeamController extends Controller
     }
 
     /**
-     * Set the team leader for a team.
+     * Set or change the team leader for a team.
+     *
+     * The leader must be an existing team member with the 'team_lead' role.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: leader_id (required, must exist in users table).
+     * @param  \App\Models\Team  $team  The team to set the leader for.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the updated team.
      */
-
     public function setLeader(Request $request, Team $team)
     {
         $validated = $request->validate([
@@ -142,9 +164,14 @@ class TeamController extends Controller
     }
 
     /**
-     * Attach a member to the specified team.
+     * Add one or more members to a team.
+     *
+     * Skips users who are already members. Accepts either a single user_id or an array of user_ids.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: user_id (single) or user_ids[] (array).
+     * @param  \App\Models\Team  $team  The team to add members to.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the updated team.
      */
-
     public function addMember(Request $request, Team $team)
     {
         $validated = $request->validate([
@@ -185,9 +212,14 @@ class TeamController extends Controller
     }
 
     /**
-     * Remove a member from the specified team.
+     * Remove a member from a team.
+     *
+     * If the removed member is the team leader, the leader is automatically cleared.
+     *
+     * @param  \App\Models\Team  $team  The team to remove the member from.
+     * @param  \App\Models\User  $user  The user to remove from the team.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the updated team.
      */
-
     public function removeMember(Team $team, User $user)
     {
         if ((int) $team->leader_id === (int) $user->id) {
@@ -204,9 +236,11 @@ class TeamController extends Controller
     }
 
     /**
-     * Delete the specified resource.
+     * Delete a team. This will remove the team and its member associations.
+     *
+     * @param  \App\Models\Team  $team  The team to delete.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming deletion.
      */
-
     public function destroy(Team $team)
     {
         $team->delete();

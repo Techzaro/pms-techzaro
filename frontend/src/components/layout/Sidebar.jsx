@@ -1,5 +1,13 @@
 /**
- * Sidebar component.
+ * Sidebar - Main navigation sidebar for the PMS dashboard.
+ * Renders role-based navigation links (dashboard, projects, tasks,
+ * deliverables, calendar, reports, users, team) with collapsible
+ * dropdowns. Supports three viewport modes:
+ *   - Desktop (>1200px): always visible, icon+text
+ *   - Tablet (769-1200px): collapsible on hover/click
+ *   - Mobile (≤768px): overlay drawer toggled via hamburger menu
+ * Persists dropdown open/closed state in sessionStorage and
+ * auto-expands relevant sections based on the current route.
  */
 
 import { Link, useLocation, useParams } from "react-router-dom";
@@ -22,11 +30,17 @@ import {
 
 import "./Sidebar.css";
 
+/**
+ * Sidebar navigation component.
+ */
 function Sidebar() {
 
+  // ── Viewport mode state ──
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const [isTabletExpanded, setIsTabletExpanded] = useState(false);
+
+  // ── Collapsible dropdown state (persisted in sessionStorage) ──
   const [tasksOpen, setTasksOpen] = useState(() => sessionStorage.getItem("tasksOpen") === "true");
   const toggleTasks = () => {
     setTasksOpen((prev) => {
@@ -54,6 +68,7 @@ function Sidebar() {
     });
   };
 
+  /** Current user info – initialised from local storage. */
   const [user, setUserState] = useState(() => {
     const stored = getUser();
     return {
@@ -67,19 +82,25 @@ function Sidebar() {
   const { role: urlRole } = useParams();
   const rolePrefix = `/${urlRole}`;
 
+  // ── Route-matching helpers ──
+  /** Exact match for a given page slug. */
   const isActive = (page) => location.pathname === `${rolePrefix}/${page}`;
+  /** Exact or prefix match (for detail pages). */
   const isActiveOrStart = (page) => location.pathname === `${rolePrefix}/${page}` || location.pathname.startsWith(`${rolePrefix}/${page}/`);
   const isTaskDetailPage = location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`);
+  /** Determine the parent task list (from URL state or query param) for active-state highlighting. */
   const getTaskFrom = () => {
     if (location.state?.from) return location.state.from;
     return new URLSearchParams(location.search).get("from");
   };
   const isDeliverableDetailPage = location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`);
+  /** Determine the parent deliverable list for active-state highlighting. */
   const getDeliverableFrom = () => {
     if (location.state?.from) return location.state.from;
     return new URLSearchParams(location.search).get("from");
   };
 
+  // Fetch user data from API on mount
   useEffect(() => {
     const token = authToken();
     if (!token) return;
@@ -102,11 +123,14 @@ function Sidebar() {
       .catch(() => {});
   }, []);
 
+  // Auto-close mobile sidebar on route change
   useEffect(() => {
     setIsMobileOpen(false);
   }, [location.pathname]);
 
+  // Auto-expand dropdowns that correspond to the current route
   useEffect(() => {
+    // Tasks dropdown
     const isTasksRoute =
       isActive("tasks") ||
       isActive("taskby") ||
@@ -150,10 +174,12 @@ function Sidebar() {
     }
   }, [location.pathname]);
 
+  // Broadcast sidebar open/close state to the Header for logo visibility
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("sidebar-state", { detail: { open: isMobileOpen } }));
   }, [isMobileOpen]);
 
+  // Listen for toggle-sidebar events dispatched by the Header hamburger button
   useEffect(() => {
     const handler = () => setIsMobileOpen(prev => !prev);
     window.addEventListener("toggle-sidebar", handler);
@@ -164,12 +190,14 @@ function Sidebar() {
 
   const toggleTablet = () => setIsTabletExpanded(prev => !prev);
 
+  /** Collapse tablet sidebar when the mouse leaves (tablet viewport only). */
   const handleMouseLeave = () => {
     if (window.innerWidth <= 1200 && window.innerWidth >= 769) {
       setIsTabletExpanded(false);
     }
   };
 
+  /** Expand tablet sidebar when clicking inside it (tablet viewport only). */
   const handleSidebarClick = (e) => {
     if (window.innerWidth <= 1200 && window.innerWidth >= 769) {
       e.stopPropagation();
@@ -185,6 +213,7 @@ function Sidebar() {
         onClick={handleSidebarClick}
       >
 
+        {/* Mobile-only header with close button and logo */}
         <div className="sidebar-mobile-header">
           <button className="sidebar-close-btn" onClick={toggleMobile} aria-label="Close sidebar">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -203,6 +232,7 @@ function Sidebar() {
 
         <div>
 
+          {/* Dashboard link */}
           <Link
             to={rolePath("dashboard")}
             className={`sidebar-link ${isActive("dashboard") ? "active" : ""}`}
@@ -212,7 +242,7 @@ function Sidebar() {
             <span>Dashboard</span>
           </Link>
 
-          {/* DELIVERABLES DROPDOWN */}
+          {/* Deliverables dropdown – sub-links for assigned/by-you/self */}
           <div className={`sidebar-link ${isActive("deliveries") || isActive("deliveries-by-you") || isActive("self-deliveries") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
             <div
               onClick={toggleDeliverables}
@@ -255,6 +285,7 @@ function Sidebar() {
             )}
           </div>
 
+          {/* Projects link */}
           <Link
             to={rolePath("projects")}
             className={`sidebar-link ${isActiveOrStart("projects") ? "active" : ""}`}
@@ -264,7 +295,7 @@ function Sidebar() {
             <span>Projects</span>
           </Link>
 
-          {/* TASKS DROPDOWN */}
+          {/* Tasks dropdown – sub-links for assigned/by-you/self */}
           <div className={`sidebar-link ${isActive("tasks") || isActive("taskby") || isActive("self-tasks") || location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
             <div
               onClick={toggleTasks}
@@ -307,6 +338,7 @@ function Sidebar() {
             )}
           </div>
 
+          {/* Calendar link */}
           <Link
             to={rolePath("calender")}
             className={`sidebar-link ${isActiveOrStart("calender") ? "active" : ""}`}
@@ -317,6 +349,7 @@ function Sidebar() {
 
           <hr />
 
+          {/* Admin/Manager only – Users link */}
           {(user.role === "admin" || user.role === "manager") && (
             <Link
               to={rolePath("manage-users")}
@@ -328,6 +361,7 @@ function Sidebar() {
             </Link>
           )}
 
+          {/* Admin/Manager only – Team link */}
           {(user.role === "admin" || user.role === "manager") && (
             <Link
               to={rolePath("manage-team")}
@@ -339,7 +373,7 @@ function Sidebar() {
             </Link>
           )}
 
-          {/* REPORTS - Dropdown for Team Lead, Simple Link for others */}
+          {/* Reports – dropdown for team_lead, simple link for others */}
           {(user.role === "team_lead" || user.role === "teamlead") ? (
             <div className={`sidebar-link ${isActive("reports") || isActive("team-members-report") || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/me`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
               <div
@@ -387,8 +421,10 @@ function Sidebar() {
 
         </div>
 
+        {/* ── Bottom section: Profile + Logout ── */}
         <div className="sidebar-bottom">
 
+          {/* Profile link */}
           <Link
             to={rolePath("my-profile")}
             className={`sidebar-link profile-link ${isActive("my-profile") ? "active" : ""}`}
@@ -398,6 +434,7 @@ function Sidebar() {
             <span>Profile</span>
           </Link>
 
+          {/* Logout link – calls the logout API then clears local session */}
           <Link
             to="/"
             className="sidebar-link logout-link"
@@ -432,7 +469,9 @@ function Sidebar() {
 
       </div>
 
+      {/* Mobile backdrop – clicking closes the sidebar */}
       {isMobileOpen && <div className="sidebar-backdrop" onClick={toggleMobile} />}
+      {/* Tablet backdrop – clicking collapses the sidebar */}
       {isTabletExpanded && <div className="sidebar-tablet-backdrop" onClick={toggleTablet} />}
     </>
   );

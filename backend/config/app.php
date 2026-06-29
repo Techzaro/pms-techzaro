@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * Application Configuration.
+ *
+ * Defines core application settings including name, environment, debug mode,
+ * URL, timezone, locale, encryption, and maintenance mode. Most values are
+ * loaded from environment variables via the env() helper.
+ */
+
 return [
 
     /*

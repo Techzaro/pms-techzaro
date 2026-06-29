@@ -1,3 +1,10 @@
+/**
+ * EditProjectModal.jsx
+ * Modal form for editing an existing project's details.
+ * Pre-populates fields from the project object and supports updating
+ * milestones, goals, deliverables, attachments, and team assignments.
+ */
+
 import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
@@ -16,6 +23,11 @@ const PRESET_PHASES = [
   "Launch",
 ];
 
+/**
+ * Modal form for editing an existing project.
+ * @param {Object} project - The project object to edit (pre-populates form fields)
+ * @param {Function} onClose - Callback to close modal; receives boolean (true if saved)
+ */
 const EditProjectModal = ({ project, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [formErrors, setFormErrors] = useState({});
@@ -249,6 +261,10 @@ const EditProjectModal = ({ project, onClose }) => {
     }
   };
 
+  /**
+   * Validates required form fields. Sets formErrors state and returns validity.
+   * @returns {boolean} True if form is valid
+   */
   const validateForm = () => {
     const errors = {};
     if (!form.title.trim()) {
@@ -258,6 +274,10 @@ const EditProjectModal = ({ project, onClose }) => {
     return Object.keys(errors).length === 0;
   };
 
+  /**
+   * Handles form submission: validates, updates project via PUT request,
+   * uploads new attachments, and publishes events on success.
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -268,9 +288,11 @@ const EditProjectModal = ({ project, onClose }) => {
     try {
       const token = authToken();
 
+      // Use the last milestone's due date as the project end date
       const lastMilestone = milestones.length > 0 ? milestones[milestones.length - 1] : null;
       const computedEndDate = lastMilestone ? lastMilestone.due_date : null;
 
+      // Build the update payload from form state
       const body = {
         title: form.title.trim(),
         description: form.description || null,

@@ -1,3 +1,12 @@
+/**
+ * Notifications page component.
+ *
+ * Displays a paginated, filterable list of the current user's notifications.
+ * Supports filtering by read/unread status and notification type, searching,
+ * bulk selection, and marking individual or all notifications as read.
+ * A right sidebar shows the user's account status summary.
+ */
+
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -8,6 +17,7 @@ import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import API_URL from "../config/api";
 import "./Notifications.css";
 
+/** Map of notification type keys to their display icon, background and colour. */
 const TYPE_ICONS = {
   project_assigned: { icon: "folder", bg: "#ede9fe", color: "#7c3aed" },
   project_updated: { icon: "edit", bg: "#dbeafe", color: "#2563eb" },
@@ -36,6 +46,7 @@ const TYPE_ICONS = {
   event_reminder: { icon: "alarm", bg: "#fef3c7", color: "#d97706" },
 };
 
+/** Renders the appropriate SVG icon for a given notification type. */
 function TypeIcon({ type }) {
   const cfg = TYPE_ICONS[type] || { icon: "bell", bg: "#f3f4f6", color: "#6b7280" };
 
@@ -124,6 +135,7 @@ function TypeIcon({ type }) {
   );
 }
 
+/** Main Notifications page — fetches, filters and renders the user's notification feed. */
 function Notifications() {
   const user = getUser();
   const [notifications, setNotifications] = useState([]);
@@ -167,6 +179,10 @@ function Notifications() {
     { value: "event_reminder", label: "Event Reminder" },
   ];
 
+  /**
+   * Fetch notifications from the API with the given page, tab filter,
+   * search query and type filter.
+   */
   const fetchNotifications = useCallback(async (p = 1, filter = activeTab, q = search, type = typeFilter) => {
     const token = authToken();
     if (!token) return;
@@ -242,6 +258,7 @@ function Notifications() {
     }
   };
 
+  /** Mark a single notification as read via the API and update local state. */
   const markAsRead = async (id) => {
     const token = authToken();
     if (!token) return;
@@ -257,6 +274,7 @@ function Notifications() {
     } catch {}
   };
 
+  /** Mark all unread notifications as read in one API call. */
   const markAllAsRead = async () => {
     const token = authToken();
     if (!token) return;

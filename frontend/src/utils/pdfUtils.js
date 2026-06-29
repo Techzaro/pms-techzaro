@@ -1,6 +1,13 @@
+/**
+ * @file pdfUtils.js
+ * @description PDF generation utilities using jsPDF library.
+ * Provides functions for creating styled PDF documents with tables, timelines, and charts.
+ */
+
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
+/** Color palette for PDF styling */
 const COLORS = {
   primary: [79, 70, 229],
   success: [22, 163, 74],
@@ -24,14 +31,29 @@ const STATUS_COLORS = {
   overdue: COLORS.danger,
 };
 
+/**
+ * Creates a new jsPDF document instance.
+ * @returns {jsPDF} New PDF document
+ */
 export function createDoc() {
   return new jsPDF();
 }
 
+/**
+ * Gets the page width of the document.
+ * @param {jsPDF} doc - PDF document instance
+ * @returns {number} Page width in points
+ */
 export function getPageWidth(doc) {
   return doc.internal.pageSize.getWidth();
 }
 
+/**
+ * Adds a logo and "PMS" text to the document header.
+ * @param {jsPDF} doc - PDF document instance
+ * @param {number} [y=20] - Y position to start at
+ * @returns {number} Y position after the logo
+ */
 export function addLogo(doc, y = 20) {
   doc.setFillColor(...COLORS.primary);
   doc.roundedRect(20, y, 8, 8, 2, 2, "F");
@@ -42,6 +64,17 @@ export function addLogo(doc, y = 20) {
   return y + 18;
 }
 
+/**
+ * Adds a centered title to the document.
+ * @param {jsPDF} doc - PDF document instance
+ * @param {string} title - Title text
+ * @param {number} y - Y position
+ * @param {Object} [opts={}] - Options
+ * @param {boolean} [opts.center=true] - Center the title
+ * @param {number} [opts.fontSize=18] - Font size
+ * @param {number} [opts.spacing=12] - Vertical spacing after title
+ * @returns {number} Y position after the title
+ */
 export function addTitle(doc, title, y, opts = {}) {
   const pageWidth = getPageWidth(doc);
   const centerX = opts.center !== false;
@@ -52,6 +85,16 @@ export function addTitle(doc, title, y, opts = {}) {
   return y + (opts.spacing || 12);
 }
 
+/**
+ * Adds a centered subtitle to the document.
+ * @param {jsPDF} doc - PDF document instance
+ * @param {string} text - Subtitle text
+ * @param {number} y - Y position
+ * @param {Object} [opts={}] - Options
+ * @param {number} [opts.fontSize=10] - Font size
+ * @param {number} [opts.spacing=8] - Vertical spacing after subtitle
+ * @returns {number} Y position after the subtitle
+ */
 export function addSubtitle(doc, text, y, opts = {}) {
   const pageWidth = getPageWidth(doc);
   doc.setFontSize(opts.fontSize || 10);
@@ -61,6 +104,12 @@ export function addSubtitle(doc, text, y, opts = {}) {
   return y + (opts.spacing || 8);
 }
 
+/**
+ * Adds a horizontal divider line.
+ * @param {jsPDF} doc - PDF document instance
+ * @param {number} y - Y position
+ * @returns {number} Y position after the divider
+ */
 export function addDivider(doc, y) {
   const pageWidth = getPageWidth(doc);
   doc.setDrawColor(...COLORS.border);
@@ -68,6 +117,13 @@ export function addDivider(doc, y) {
   return y + 8;
 }
 
+/**
+ * Adds a section title to the document.
+ * @param {jsPDF} doc - PDF document instance
+ * @param {string} title - Section title text
+ * @param {number} y - Y position
+ * @returns {number} Y position after the title
+ */
 export function addSectionTitle(doc, title, y) {
   doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
@@ -76,6 +132,13 @@ export function addSectionTitle(doc, title, y) {
   return y + 8;
 }
 
+/**
+ * Adds statistic cards in a horizontal row.
+ * @param {jsPDF} doc - PDF document instance
+ * @param {Array<Object>} stats - Array of stat objects with label, value, and optional color
+ * @param {number} y - Y position
+ * @returns {number} Y position after the cards
+ */
 export function addStatCards(doc, stats, y) {
   const pageWidth = getPageWidth(doc);
   const cardWidth = (pageWidth - 50) / stats.length;
@@ -97,6 +160,15 @@ export function addStatCards(doc, stats, y) {
   return y + 28;
 }
 
+/**
+ * Adds an auto-formatted table to the document.
+ * @param {jsPDF} doc - PDF document instance
+ * @param {Array<string>} headers - Column headers
+ * @param {Array<Array>} rows - Table rows
+ * @param {number} y - Y position
+ * @param {Object} [opts={}] - Options for table styling
+ * @returns {number} Y position after the table
+ */
 export function addAutoTable(doc, headers, rows, y, opts = {}) {
   const pageWidth = getPageWidth(doc);
   const tableWidth = opts.width || pageWidth - 40;
@@ -131,23 +203,34 @@ export function addAutoTable(doc, headers, rows, y, opts = {}) {
   return doc.lastAutoTable.finalY + 5;
 }
 
+/**
+ * Adds a vertical timeline with events.
+ * @param {jsPDF} doc - PDF document instance
+ * @param {Array<Object>} events - Array of event objects with date, action, and detail
+ * @param {number} y - Y position
+ * @returns {number} Y position after the timeline
+ */
 export function addTimeline(doc, events, y) {
   const pageWidth = getPageWidth(doc);
 
   events.forEach((ev, i) => {
+    // Add new page if near bottom
     if (y > 270) {
       doc.addPage();
       y = 20;
     }
 
+    // Draw circle indicator
     doc.setFillColor(...COLORS.primary);
     doc.circle(24, y + 2, 2, "F");
 
+    // Draw connecting line between events
     if (i < events.length - 1) {
       doc.setDrawColor(...COLORS.border);
       doc.line(24, y + 4, 24, y + 10);
     }
 
+    // Draw event details
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(...COLORS.muted);
@@ -167,6 +250,10 @@ export function addTimeline(doc, events, y) {
   return y + 3;
 }
 
+/**
+ * Adds footer to all pages with page numbers.
+ * @param {jsPDF} doc - PDF document instance
+ */
 export function addFooter(doc) {
   const totalPages = doc.internal.getNumberOfPages();
   const pageWidth = getPageWidth(doc);
@@ -183,15 +270,30 @@ export function addFooter(doc) {
   }
 }
 
+/**
+ * Saves the PDF document to file.
+ * @param {jsPDF} doc - PDF document instance
+ * @param {string} fileName - Name for the downloaded file
+ */
 export function savePdf(doc, fileName) {
   doc.save(fileName);
 }
 
+/**
+ * Gets the RGB color for a status string.
+ * @param {string} - Status string
+ * @returns {Array<number>} RGB color array
+ */
 export function getStatusColor(status) {
   const s = (status || "").toLowerCase();
   return STATUS_COLORS[s] || COLORS.muted;
 }
 
+/**
+ * Gets the hex background color for a status.
+ * @param {string} status - Status string
+ * @returns {string} Hex color code
+ */
 export function getStatusBgHex(status) {
   const s = (status || "").toLowerCase();
   const map = {
@@ -206,6 +308,11 @@ export function getStatusBgHex(status) {
   return map[s] || "#f3f4f6";
 }
 
+/**
+ * Gets the hex text color for a status.
+ * @param {string} status - Status string
+ * @returns {string} Hex color code
+ */
 export function getStatusTextHex(status) {
   const s = (status || "").toLowerCase();
   const map = {
@@ -220,6 +327,13 @@ export function getStatusTextHex(status) {
   return map[s] || "#6b7280";
 }
 
+/**
+ * Checks if content exceeds page and adds new page if needed.
+ * @param {jsPDF} doc - PDF document instance
+ * @param {number} y - Current Y position
+ * @param {number} [threshold=270] - Y threshold to trigger page break
+ * @returns {number} Y position (20 if page break, original y otherwise)
+ */
 export function checkPageBreak(doc, y, threshold = 270) {
   if (y > threshold) {
     doc.addPage();

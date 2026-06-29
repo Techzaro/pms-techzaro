@@ -1,7 +1,15 @@
+/**
+ * ItemDetailPopup.jsx
+ * Modal popup that displays detailed information about a calendar item
+ * (manual event, task, deliverable, or project). Shows metadata based on
+ * source type and provides navigation to full detail pages.
+ */
+
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { formatEventDate, formatEventTime } from "../utils/formatDateTime";
 
+/** Icon mapping for each item source type */
 const SOURCE_ICONS = {
   manual: "📅",
   task: "📋",
@@ -16,6 +24,13 @@ const SOURCE_COLORS = {
   manual: { bg: "#eef2ff", text: "#6366f1", border: "#c7d2fe" },
 };
 
+/**
+ * Displays a detail popup for a calendar item (event, task, deliverable, or project).
+ * @param {Object} item - The calendar item to display.
+ * @param {string} role - Current user role (admin, manager, etc.).
+ * @param {Function} onClose - Callback to close the popup.
+ * @param {Function} [onEdit] - Callback to edit a manual event (admin/manager only).
+ */
 function ItemDetailPopup({ item, role, onClose, onEdit }) {
   const navigate = useNavigate();
   if (!item) return null;
@@ -26,8 +41,10 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
   const typeLabel = source === "manual" ? "Event" : source.charAt(0).toUpperCase() + source.slice(1);
   const canManage = ["admin", "manager"].includes(role);
 
+  // Extract the numeric ID by stripping the type prefix (e.g. "task-123" -> "123")
   const rawId = item.id ? String(item.id).replace(/^(task|project|deliverable)-/, "") : null;
 
+  /** Navigate to the full detail page for tasks, projects, or deliverables */
   const handleViewDetails = () => {
     if (!rawId) return;
     let path;
@@ -39,6 +56,7 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
     navigate(path);
   };
 
+  /** Format a date string using the shared formatEventDate utility */
   const formatDateStr = (dateStr) => {
     if (!dateStr) return "—";
     return formatEventDate({ start_date: dateStr });
@@ -49,6 +67,7 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
     return new Date(dateStr).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   };
 
+  /** Render metadata rows specific to each source type */
   const renderMeta = () => {
     switch (source) {
       case "manual": {
@@ -211,6 +230,12 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
   );
 }
 
+/**
+ * Renders a single label/value metadata row in the popup.
+ * @param {string} label - The field label.
+ * @param {*} value - The field value to display.
+ * @param {Object} [valueStyle] - Optional inline styles for the value.
+ */
 function MetaRow({ label, value, valueStyle }) {
   if (!value) return null;
   return (

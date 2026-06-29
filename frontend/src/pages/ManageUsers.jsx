@@ -1,8 +1,20 @@
 /**
- * ManageUsers page component.
- * Rendered when the user navigates to /manageusers or related route.
+ * ManageUsers.jsx — User Management Page
+ *
+ * Admin/manager page for managing all system users.
+ * Features:
+ * - Add new users with full profile (personal info, employment, salary, bank, documents)
+ * - Edit existing users
+ * - Resign users (marks as inactive)
+ * - View user profiles
+ * - Drag-and-drop user reordering with sort order persistence
+ * - Search by name/email, filter by role/status/time, sort ascending/descending
+ * - Paginated user table
+ * - Comprehensive form validation for all fields
+ * - File upload support for employment documents
+ *
+ * Access restricted to admin and manager roles.
  */
-
 import { useState, useEffect, useCallback, useRef } from "react";
 import { MdVisibility } from "react-icons/md";
 import { IoSearchOutline } from "react-icons/io5";
@@ -21,6 +33,7 @@ import { useNotification } from "../context/NotificationContext";
 import Pagination from "../components/Pagination";
 import "./ManageUsers.css";
 
+/** Predefined department options (includes __custom__ for custom input) */
 const DEPARTMENTS = [
   "Digital Marketing",
   "Website Development",
@@ -30,6 +43,7 @@ const DEPARTMENTS = [
   "__custom__",
 ];
 
+/** Predefined designation options (includes __custom__ for custom input) */
 const DESIGNATIONS = [
   "SEO Link Builder Intern",
   "SEO Intern",
@@ -43,6 +57,10 @@ const DESIGNATIONS = [
   "__custom__",
 ];
 
+/**
+ * ManageUsers — Main user management page component.
+ * Handles CRUD operations for users, role assignment, resignation, and profile viewing.
+ */
 function ManageUsers() {
   const notify = useNotification();
   const [users, setUsers] = useState([]);
@@ -131,6 +149,7 @@ function ManageUsers() {
     </span>
   );
 
+  /** Returns auth headers for API requests */
   const authHeaders = () => {
     const token = authToken();
     return {
@@ -139,6 +158,7 @@ function ManageUsers() {
     };
   };
 
+  // Fetch all users from API and normalize active status
   const fetchUsers = async () => {
     setLoading(true);
     try {
@@ -161,6 +181,7 @@ function ManageUsers() {
     }
   };
 
+  // Fetch current user data to ensure local session info is up-to-date
   const fetchCurrentUser = async () => {
     try {
       const token = authToken();
@@ -206,10 +227,12 @@ function ManageUsers() {
     setLocalUsers(users);
   }, [users]);
 
+  // Drag-and-drop handlers for user row reordering
   const handleDragStart = useCallback((event) => {
     setActiveDragId(event.active.id);
   }, []);
 
+  // Reorder users locally and persist new sort order to API
   const handleDragEnd = useCallback((event) => {
     setActiveDragId(null);
     const { active, over } = event;
@@ -360,6 +383,7 @@ function ManageUsers() {
     });
   };
 
+  // Validates the add/edit user form and returns errors object
   const validateAddForm = () => {
     const errors = {};
     if (!newUser.fullName.trim()) {
@@ -455,11 +479,13 @@ function ManageUsers() {
     }
   };
 
+  // Mark a user as resigned (inactive) after confirmation
   const handleResignUser = async (userId) => {
     setResignUserId(userId);
     setResignConfirmOpen(true);
   };
 
+  // Confirm and execute user resignation via API
   const confirmResignUser = async () => {
     const userId = resignUserId;
     setResignConfirmOpen(false);
@@ -547,6 +573,7 @@ function ManageUsers() {
     );
   };
 
+  // Apply search, role, and status filters to users list
   const filteredUsers = localUsers.filter((user) => {
     const matchesSearch =
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -571,6 +598,10 @@ function ManageUsers() {
 
   const activeDragUser = activeDragId ? users.find((u) => u.id === activeDragId) : null;
 
+  /**
+   * SortableUserRow — A draggable user row for the users table.
+   * Wraps the standard row with @dnd-kit sortable functionality.
+   */
   function SortableUserRow({ user, isActive, canModifyUser, isSelf, isTargetProtected }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: user.id });
     const rowStyle = {
@@ -606,6 +637,7 @@ function ManageUsers() {
   }
 
 
+  // Submit new user or update existing user via API with FormData (supports file uploads)
   const handleSubmit = async (event) => {
     event.preventDefault();
 

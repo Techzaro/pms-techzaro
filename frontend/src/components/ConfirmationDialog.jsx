@@ -1,8 +1,25 @@
+/**
+ * ConfirmationDialog.jsx
+ * Generic confirmation dialog modal with customizable title, message, and confirm button.
+ * Used for confirming destructive or important user actions.
+ */
+
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import "./ConfirmationDialog.css";
 
+/**
+ * A reusable confirmation dialog with cancel and confirm buttons.
+ * @param {boolean} isOpen - Whether the dialog is visible
+ * @param {Function} onClose - Callback to close the dialog without confirming
+ * @param {Function} onConfirm - Callback when the user clicks Confirm
+ * @param {string} title - Dialog title text
+ * @param {string} message - Dialog body message
+ * @param {string} [confirmText="Confirm"] - Text for the confirm button
+ * @param {string} [confirmColor="#4F46E5"] - Background color for the confirm button
+ */
 function ConfirmationDialog({ isOpen, onClose, onConfirm, title, message, confirmText = "Confirm", confirmColor = "#4F46E5" }) {
+  // Toggle body scroll lock when dialog opens/closes
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";

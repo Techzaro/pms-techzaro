@@ -1,3 +1,10 @@
+/**
+ * ProjectReopenDialog.jsx
+ * Modal dialog for rejecting and reopening a project submission.
+ * Allows the reviewer to provide a comment, additional instructions,
+ * set a new deadline, and optionally attach a file before reopening.
+ */
+
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import API_URL from "../config/api";
@@ -6,6 +13,13 @@ import { notify } from "../utils/notify";
 import "./ReopenDialog.css";
 import { toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
 
+/**
+ * Dialog for rejecting and reopening a project with feedback.
+ * @param {boolean} isOpen - Whether the dialog is visible.
+ * @param {Function} onClose - Callback to close the dialog.
+ * @param {Object} project - The project being reopened.
+ * @param {Function} onReopenSuccess - Callback after successful reopen, receives updated project.
+ */
 function ProjectReopenDialog({ isOpen, onClose, project, onReopenSuccess }) {
   const [comment, setComment] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -14,6 +28,7 @@ function ProjectReopenDialog({ isOpen, onClose, project, onReopenSuccess }) {
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef(null);
 
+  // Lock body scroll when dialog is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -27,6 +42,7 @@ function ProjectReopenDialog({ isOpen, onClose, project, onReopenSuccess }) {
     return () => { document.body.style.overflow = ""; };
   }, [isOpen]);
 
+  /** Submits the reopen request with comment, instructions, new deadline, and file */
   const handleSubmit = async () => {
     if (!comment.trim() && !instructions.trim()) {
       notify.error("Please provide a comment or instructions.");

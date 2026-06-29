@@ -10,8 +10,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 /**
- * Eloquent model for projects.
- * Includes metadata, assigned users, and relationships to tasks and milestones.
+ * Core project model that ties together all project-related entities.
+ * Manages metadata, assigned users, workflow states, and relationships to tasks, milestones, and deliverables.
  */
 class Project extends Model
 {
@@ -64,117 +64,97 @@ class Project extends Model
         'reopen_new_deadline' => 'datetime:Y-m-d\TH:i:s',
     ];
 
-    /**
-     * Project tasks relationship.
-     */
+    /** All tasks belonging to this project. */
     public function tasks()
     {
         return $this->hasMany(Task::class);
     }
 
-    /**
-     * User who created the project.
-     */
+    /** The user who created this project. */
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
     }
 
-    /**
-     * Team assigned to the project.
-     */
+    /** The team assigned to this project. */
     public function team()
     {
         return $this->belongsTo(Team::class);
     }
 
-    /**
-     * Project milestone relationship, ordered by sort order.
-     */
+    /** Milestones for this project, ordered by sort order. */
     public function milestones()
     {
         return $this->hasMany(ProjectMilestone::class)->orderBy('sort_order')->orderBy('id');
     }
 
-    /**
-     * Project activity log relationship.
-     */
-    public function activities()
-    {
-        return $this->hasMany(ProjectActivity::class)->latest();
-    }
-
-    /**
-     * Perform the files.
-     */
-
+    /** File attachments for this project. */
     public function files()
     {
         return $this->hasMany(ProjectFile::class)->latest();
     }
 
-    /**
-     * Deliverables belonging to this project.
-     */
+    /** Deliverables belonging to this project. */
     public function deliverables()
     {
         return $this->hasMany(Deliverable::class)->latest();
     }
 
+    /** All visibility rules for this project. */
     public function visibility()
     {
         return $this->hasMany(ProjectVisibility::class);
     }
 
+    /** Users who are explicitly marked as visible for this project. */
     public function manuallyVisibleTo()
     {
         return $this->hasMany(ProjectVisibility::class)->where('is_visible', true);
     }
 
-    /**
-     * Project submissions (workflow).
-     */
+    /** All submission instances for this project. */
     public function submissions()
     {
         return $this->hasMany(ProjectSubmission::class);
     }
 
-    /**
-     * Latest submission for the project.
-     */
+    /** The most recent submission for this project. */
     public function latestSubmission()
     {
         return $this->hasOne(ProjectSubmission::class)->latestOfMany();
     }
 
-    /**
-     * Workflow events (submit, approve, reject, reopen).
-     */
+    /** Workflow events tracking state changes (submit, approve, reject, reopen). */
     public function workflowEvents()
     {
         return $this->hasMany(ProjectWorkflowEvent::class)->latest();
     }
 
+    /** The user who approved this project. */
     public function approvedBy()
     {
         return $this->belongsTo(User::class, 'approved_by');
     }
 
+    /** The user who rejected this project. */
     public function rejectedBy()
     {
         return $this->belongsTo(User::class, 'rejected_by');
     }
 
+    /** The user who reopened this project for rework. */
     public function reopenedBy()
     {
         return $this->belongsTo(User::class, 'reopened_by');
     }
 
+    /** Field-level changes made to this project. */
     public function changes()
     {
         return $this->hasMany(ProjectChange::class)->latest();
     }
 
+    /** Changes not yet viewed by the current user. */
     public function unviewedChanges()
     {
         return $this->hasMany(ProjectChange::class)->where('is_viewed', false);

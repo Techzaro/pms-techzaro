@@ -1,3 +1,9 @@
+/**
+ * Breadcrumb.jsx
+ * Reusable breadcrumb navigation component for indicating page hierarchy.
+ * Renders clickable links for parent pages and a plain label for the current page.
+ */
+
 import { Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import "./Breadcrumb.css";

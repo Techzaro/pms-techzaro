@@ -1,7 +1,15 @@
+/**
+ * Toast.jsx
+ * Global toast notification system that displays success, error, warning,
+ * and info messages. Reads notifications from the NotificationContext and
+ * renders them as auto-dismissing toast items.
+ */
+
 import { useNotification } from "../context/NotificationContext";
 import { useEffect, useState } from "react";
 import "./Toast.css";
 
+/** SVG icon components for each notification type */
 const ICONS = {
   success: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -31,9 +39,16 @@ const ICONS = {
   ),
 };
 
+/**
+ * A single toast notification item with icon, message, and close button.
+ * Supports an exit animation before removal.
+ * @param {Object} notification - The notification object (id, type, message).
+ * @param {Function} onRemove - Callback to remove the notification by id.
+ */
 function ToastItem({ notification, onRemove }) {
   const [exiting, setExiting] = useState(false);
 
+  /** Starts exit animation, then removes the notification after animation completes */
   const handleClose = () => {
     setExiting(true);
     setTimeout(() => onRemove(notification.id), 250);
@@ -53,6 +68,10 @@ function ToastItem({ notification, onRemove }) {
   );
 }
 
+/**
+ * Container component that renders all active toast notifications.
+ * Reads from NotificationContext and manages the toast stack.
+ */
 export default function ToastContainer() {
   const { notifications, removeNotification } = useNotification();
 

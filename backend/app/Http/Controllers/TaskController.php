@@ -18,12 +18,26 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * Controller for managing tasks within projects.
+ * Handles CRUD operations, status workflows (submit, approve, reject, reopen),
+ * file/link management, deliverable progress tracking, and task reordering.
+ * Supports both project-scoped and standalone tasks.
+ */
 class TaskController extends Controller
 {
     public function __construct(
         private NotificationService $notificationService,
         private ActivityService $activityService
     ) {}
+
+    /**
+     * Get tasks assigned to the authenticated user (excluding self-assigned tasks).
+     * Also includes projects where the user is assigned but not the creator.
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameters: status (due_today, approved, pending, submitted, reopened, rejected, or custom), filter params.
+     * @return \Illuminate\Http\JsonResponse  JSON response with merged task and project list.
+     */
     public function myTasks(Request $request)
     {
         $user = $request->user();
@@ -109,6 +123,13 @@ class TaskController extends Controller
         ]);
     }
 
+    /**
+     * Get tasks that are both created by and assigned to the authenticated user (self-created tasks).
+     * Also includes projects where the user is both creator and assignee.
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameters: status filter, other filter params.
+     * @return \Illuminate\Http\JsonResponse  JSON response with merged self-created task and project list.
+     */
     public function mySelfTasks(Request $request)
     {
         $user = $request->user();
@@ -185,6 +206,15 @@ class TaskController extends Controller
         ]);
     }
 
+    /**
+     * Get tasks and projects for a specific user (for admin/manager/team_lead viewing member workloads).
+     *
+     * Team leads viewing other users only see tasks they assigned and projects they created.
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameters: status, search, filter params.
+     * @param  int  $userId  The ID of the target user.
+     * @return \Illuminate\Http\JsonResponse  JSON response with merged task and project list.
+     */
     public function userTasks(Request $request, $userId)
     {
         try {
@@ -296,6 +326,14 @@ class TaskController extends Controller
         return response()->json(['success' => true, 'data' => $allItems, 'total' => $allItems->count()]);
     }
 
+    /**
+     * Get tasks created by the authenticated user, expanded per assignee.
+     * Admin/manager users see tasks created by any admin/manager.
+     * Also includes projects created by the user with their assigned members expanded.
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameters: status, search, filter params.
+     * @return \Illuminate\Http\JsonResponse  JSON response with expanded task and project list.
+     */
     public function assignedByMe(Request $request)
     {
         $user = $request->user();
@@ -432,6 +470,15 @@ class TaskController extends Controller
         return response()->json(['success' => true, 'data' => $allItems, 'total' => $allItems->count()]);
     }
 
+    /**
+     * Retrieve a single task with all related data (project, assignees, submissions, workflow events, deliverables).
+     *
+     * Enforces authorization based on creator, assignee, project creator, team leader, or admin/manager role.
+     * Returns deliverable progress stats and unviewed changes.
+     *
+     * @param  \App\Models\Task  $task  The task to retrieve.
+     * @return \Illuminate\Http\JsonResponse  JSON response with full task details or 403.
+     */
     public function show(Task $task)
     {
         $user = request()->user();
@@ -523,6 +570,16 @@ class TaskController extends Controller
         return response()->json(['success' => true, 'task' => $payload]);
     }
 
+    /**
+     * Create tasks within a project, assigning one task per user in the assigned_to array.
+     *
+     * Creates workflow events for each task, handles deliverable creation and notifications,
+     * and sends bulk assignment notifications.
+     *
+     * @param  \Illuminate\Http\Request  $request  Validated input: title, description, requirements, start_date, end_date, assigned_to[], priority, deliverables[].
+     * @param  \App\Models\Project  $project  The parent project.
+     * @return \Illuminate\Http\JsonResponse  JSON response with created tasks.
+     */
     public function store(Request $request, Project $project)
     {
         $user = $request->user();
@@ -650,6 +707,15 @@ class TaskController extends Controller
         ], 201);
     }
 
+    /**
+     * Create standalone tasks (not associated with any project).
+     *
+     * Creates one task per user in the assigned_to array, with optional deliverables.
+     * Sends assignment notifications and logs activity.
+     *
+     * @param  \Illuminate\Http\Request  $request  Validated input: title, description, requirements, start_date, end_date, assigned_to[], priority, deliverables[].
+     * @return \Illuminate\Http\JsonResponse  JSON response with created tasks.
+     */
     public function storeStandalone(Request $request)
     {
         $user = $request->user();
@@ -766,6 +832,16 @@ class TaskController extends Controller
         ], 201);
     }
 
+    /**
+     * Update a task's properties and track field changes.
+     *
+     * Only the task creator or admin/manager can edit. Approved tasks cannot be edited.
+     * Handles assignee changes with notifications, deliverable creation, and change tracking.
+     *
+     * @param  \Illuminate\Http\Request  $request  Validated input for updatable fields.
+     * @param  \App\Models\Task  $task  The task to update.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the updated task and change count.
+     */
     public function update(Request $request, Task $task)
     {
         $user = $request->user();
@@ -876,6 +952,13 @@ class TaskController extends Controller
         ]);
     }
 
+    /**
+     * Update only the status of a task.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: status (required).
+     * @param  \App\Models\Task  $task  The task to update.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the updated task.
+     */
     public function updateStatus(Request $request, Task $task)
     {
         $user = $request->user();
@@ -899,6 +982,15 @@ class TaskController extends Controller
         return response()->json(['success' => true, 'message' => 'Task status updated', 'task' => $task->fresh()->load('assignees:id,name,email,role')]);
     }
 
+    /**
+     * Mark a task as completed and create a deliverable from it.
+     *
+     * Notifies the task creator that the task is ready for review.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @param  \App\Models\Task  $task  The task to complete.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the completed task and created deliverable.
+     */
     public function completeTask(Request $request, Task $task)
     {
         try {
@@ -947,6 +1039,16 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Submit a task for review by its creator.
+     *
+     * Only the assignee can submit. All deliverables must be submitted first.
+     * Handles file uploads, link attachments, and determines first submission vs resubmission.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: comment, file, files[], links[].
+     * @param  \App\Models\Task  $task  The task to submit.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the updated task.
+     */
     public function submit(Request $request, Task $task)
     {
         $user = $request->user();
@@ -1047,6 +1149,13 @@ class TaskController extends Controller
         ]);
     }
 
+    /**
+     * Approve a submitted task. Only the task creator or admin/manager can approve.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @param  \App\Models\Task  $task  The task to approve (must be in 'submitted' status).
+     * @return \Illuminate\Http\JsonResponse  JSON response with the approved task.
+     */
     public function approve(Request $request, Task $task)
     {
         $user = $request->user();
@@ -1084,6 +1193,13 @@ class TaskController extends Controller
         ]);
     }
 
+    /**
+     * Reject a submitted task with an optional comment.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: comment (optional).
+     * @param  \App\Models\Task  $task  The task to reject (must be in 'submitted' status).
+     * @return \Illuminate\Http\JsonResponse  JSON response with the rejected task.
+     */
     public function reject(Request $request, Task $task)
     {
         $user = $request->user();
@@ -1126,6 +1242,13 @@ class TaskController extends Controller
         ]);
     }
 
+    /**
+     * Reopen a submitted task for revision with instructions and optional new deadline.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: comment, instructions, new_deadline, file.
+     * @param  \App\Models\Task  $task  The task to reopen.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the reopened task.
+     */
     public function reopen(Request $request, Task $task)
     {
         $user = $request->user();
@@ -1191,6 +1314,13 @@ class TaskController extends Controller
         ]);
     }
 
+    /**
+     * Get the most recent submission for a task.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @param  \App\Models\Task  $task  The task to get the latest submission for.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the latest submission.
+     */
     public function latestSubmission(Request $request, Task $task)
     {
         $user = $request->user();
@@ -1203,6 +1333,12 @@ class TaskController extends Controller
         return response()->json(['success' => true, 'submission' => $submission]);
     }
 
+    /**
+     * Download the file attached to a task submission.
+     *
+     * @param  \App\Models\TaskSubmission  $submission  The submission containing the file.
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse|\Illuminate\Http\JsonResponse  File download or error.
+     */
     public function downloadSubmissionFile(TaskSubmission $submission)
     {
         $user = request()->user();
@@ -1216,12 +1352,25 @@ class TaskController extends Controller
         return Storage::disk('public')->download($submission->file_path, $submission->file_name);
     }
 
+    /**
+     * Mark all unviewed changes on a task as read.
+     *
+     * @param  \App\Models\Task  $task  The task whose changes to mark.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming changes marked.
+     */
     public function markChangesRead(Task $task)
     {
         $task->changes()->where('is_viewed', false)->update(['is_viewed' => true]);
         return response()->json(['success' => true, 'message' => 'Changes marked as read']);
     }
 
+    /**
+     * Delete a task and all its associated data (assignees, deliverables, files).
+     * Only the task creator or admin/manager can delete.
+     *
+     * @param  \App\Models\Task  $task  The task to delete.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming deletion.
+     */
     public function destroy(Task $task)
     {
         $user = request()->user();
@@ -1235,6 +1384,13 @@ class TaskController extends Controller
         return response()->json(['success' => true, 'message' => 'Task deleted successfully']);
     }
 
+    /**
+     * Upload a file to a task. Only the creator, assignee, or admin/manager can upload.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: file (required, max 10MB).
+     * @param  \App\Models\Task  $task  The task to upload the file to.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the created file record.
+     */
     public function uploadFile(Request $request, Task $task)
     {
         $user = $request->user();
@@ -1252,6 +1408,13 @@ class TaskController extends Controller
         return response()->json(['success' => true, 'message' => 'File uploaded successfully', 'file' => $task->files()->create(['name' => $file->getClientOriginalName(), 'url' => '/storage/' . $path])], 201);
     }
 
+    /**
+     * Add a URL link to a task. Only the creator, assignee, or admin/manager can add links.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: url (required), name (optional).
+     * @param  \App\Models\Task  $task  The task to add the link to.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the created file record.
+     */
     public function addLink(Request $request, Task $task)
     {
         $user = $request->user();
@@ -1267,6 +1430,13 @@ class TaskController extends Controller
         return response()->json(['success' => true, 'message' => 'Link added successfully', 'file' => $task->files()->create(['name' => $validated['name'] ?? $validated['url'], 'url' => $validated['url']])], 201);
     }
 
+    /**
+     * Delete a file or link from a task. Also removes the physical file if it exists on disk.
+     *
+     * @param  \App\Models\Task  $task  The task the file belongs to.
+     * @param  \App\Models\TaskFile  $file  The file to delete.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming deletion.
+     */
     public function deleteFile(Task $task, TaskFile $file)
     {
         $user = request()->user();
@@ -1287,6 +1457,12 @@ class TaskController extends Controller
         return response()->json(['success' => true, 'message' => 'File deleted successfully']);
     }
 
+    /**
+     * Reorder tasks by updating their sort_order values in bulk.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: items[] with id and sort_order.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming reorder.
+     */
     public function reorderTasks(Request $request)
     {
         $request->validate(['items' => 'required|array', 'items.*.id' => 'required|integer|exists:tasks,id', 'items.*.sort_order' => 'required|integer|min:0']);
@@ -1299,6 +1475,14 @@ class TaskController extends Controller
         return response()->json(['success' => true, 'message' => 'Tasks reordered successfully']);
     }
 
+    /**
+     * Send update notifications to all task assignees (excluding the updater).
+     *
+     * @param  \App\Models\Task  $task  The updated task.
+     * @param  \App\Models\User  $updater  The user who made the update.
+     * @param  int  $changeCount  Number of changes made.
+     * @return void
+     */
     private function sendTaskUpdateNotification(Task $task, User $updater, int $changeCount = 0): void
     {
         if (!$task->relationLoaded('assignees')) $task->load('assignees:id');
@@ -1322,7 +1506,25 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Get the list of statuses considered as pending/in-progress for filtering.
+     *
+     * @return array  Array of status strings.
+     */
     private function pendingTaskStatuses(): array { return ['pending', 'in_progress', 'In Progress', 'Planned', 'submitted', 'reopened', 'rejected']; }
+
+    /**
+     * Get the list of statuses that indicate a task is completed (for due-today exclusion).
+     *
+     * @return array  Array of completed status strings.
+     */
     private function incompleteDueTodayStatuses(): array { return ['approved', 'completed', 'done']; }
+
+    /**
+     * Apply a due-today filter to a query (tasks due today that are not yet completed).
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query  The query to filter.
+     * @return \Illuminate\Database\Eloquent\Builder  The filtered query.
+     */
     private function applyDueTodayFilter($query) { return $query->whereDate('end_date', today())->whereNotIn('status', $this->incompleteDueTodayStatuses()); }
 }

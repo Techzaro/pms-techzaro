@@ -1,3 +1,16 @@
+/**
+ * DeliverableDetails.jsx — Deliverable Details Page
+ *
+ * Displays full details of a single deliverable including:
+ * - Title, status badge, related task, assignee, due date, and description
+ * - Submit/resubmit form for assignees (comment + file + links)
+ * - Approve/reject actions for creators and managers
+ * - Submission history with attachments and links
+ * - Sidebar with deliverable metadata
+ * - Unviewed changes panel (auto-marked as read on view)
+ *
+ * Supports deep-linking from Deliveries, DeliveriesByYou, or SelfDeliveries pages.
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { Download } from "lucide-react";
@@ -13,6 +26,7 @@ import { formatDateTimeShort } from "../utils/formatDateTime";
 import "./DeliverableDetails.css";
 import "../components/layout/CreateTaskModal.css";
 
+/** Converts an ISO timestamp to relative time string (e.g. "5 min ago") */
 function timeAgo(iso) {
   if (!iso) return "";
   const then = new Date(iso).getTime();
@@ -23,6 +37,7 @@ function timeAgo(iso) {
   return `${Math.floor(sec / 86400)} days ago`;
 }
 
+/** Returns background and text color pair based on deliverable status */
 function statusStyle(status) {
   const s = (status || "").toLowerCase();
   if (s === "approved") return { bg: "#DCFCE7", text: "#166534" };
@@ -31,11 +46,16 @@ function statusStyle(status) {
   return { bg: "#FEF3C7", text: "#92400E" };
 }
 
+/**
+ * DeliverableDetails — Main page component for viewing a single deliverable.
+ * Manages fetching, submission, approval, rejection, and display of deliverable data.
+ */
 function DeliverableDetails() {
   const params = useParams();
   const location = useLocation();
   const deliverableId = params.deliverable;
 
+  // Map of source page keys to breadcrumb labels and paths (for back navigation)
   const deliverableSourcePages = {
     deliveries: { label: "Deliverables Assigned To You", path: rolePath("deliveries") },
     "deliveries-by-you": { label: "Deliverables Assigned By You", path: rolePath("deliveries-by-you") },
@@ -59,6 +79,7 @@ function DeliverableDetails() {
 
   const notify = useNotification();
 
+  // Fetch deliverable data from API
   const fetchDeliverable = useCallback(() => {
     setLoading(true);
     const token = authToken();
@@ -89,12 +110,14 @@ function DeliverableDetails() {
     }).catch(() => {});
   }, [deliverable?.id, deliverable?.unviewed_changes_count]);
 
+  // Determine user permissions for this deliverable
   const currentUser = getUser();
   const isCreator = deliverable && currentUser && parseInt(deliverable.created_by, 10) === parseInt(currentUser.id, 10);
   const isAdminManager = currentUser && ["admin", "manager"].includes(currentUser.role);
   const isAssignee = deliverable && currentUser && deliverable.assigned_to && parseInt(deliverable.assigned_to, 10) === parseInt(currentUser.id, 10);
   const canApproveReject = isCreator || isAdminManager;
 
+  /** Adds a URL link to the submission links list */
   const handleAddLink = () => {
     if (!linkInput.trim()) return;
     let url = linkInput.trim();
@@ -111,6 +134,7 @@ function DeliverableDetails() {
     if (e.key === "Enter") { e.preventDefault(); handleAddLink(); }
   };
 
+  // Submit deliverable with comment, files, and links via FormData POST
   const handleSubmit = async () => {
     if (!submitComment.trim() && !submitFile) {
       notify.error("Please add a comment or attach a file.");
@@ -154,6 +178,7 @@ function DeliverableDetails() {
     }
   };
 
+  // Approve the deliverable (creator/admin/manager only)
   const handleApprove = async () => {
     try {
       const token = authToken();
@@ -176,6 +201,7 @@ function DeliverableDetails() {
     }
   };
 
+  // Reject the deliverable with optional comment (creator/admin/manager only)
   const handleReject = async () => {
     try {
       const token = authToken();
@@ -217,8 +243,10 @@ function DeliverableDetails() {
     );
   }
 
+  // Derive display properties from deliverable status
   const ss = statusStyle(deliverable.status);
   const submissions = (deliverable.submissions || []).slice().reverse();
+  // Only assignee can submit if status is pending or rejected
   const canSubmit = isAssignee && (deliverable.status === "pending" || deliverable.status === "rejected");
   const isApproved = deliverable.status === "approved";
   const isSubmitted = deliverable.status === "submitted";

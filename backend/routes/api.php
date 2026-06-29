@@ -21,56 +21,74 @@ use App\Http\Controllers\EventController;
 use App\Http\Controllers\ActivityController;
 
 /*
-| PUBLIC ROUTES
+| Public Routes
+| These routes are accessible without authentication.
 */
 
-// Login (no auth required)
+// User login (no auth required)
 Route::post('/login', [AuthController::class, 'login']);
 
 
 /*
-| PROTECTED ROUTES (Need Token)
+| Protected Routes (require valid Sanctum token)
+| These routes require authentication via Sanctum middleware.
 */
 
 Route::middleware('auth:sanctum')->group(function () {
 
-    // Logout
+    /*
+    | Authentication & Profile Routes
+    | Routes for user authentication, profile management, and password changes.
+    */
+
+    // User logout
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    // Get logged in user
+    // Get current authenticated user
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
 
-    // My profile (current user)
+    // View own profile
     Route::get('/auth/my-profile', [AuthController::class, 'myProfile']);
 
-    // Update own profile (any authenticated user)
+    // Update own profile
     Route::post('/auth/update-profile', [AuthController::class, 'updateProfile']);
 
-    // Change password
+    // Change password (requires old password)
     Route::put('/user/change-password', [AuthController::class, 'changePassword']);
 
     // First-time password change (no old password required)
     Route::put('/user/first-time-change-password', [AuthController::class, 'firstTimeChangePassword']);
 
     /*
-    | DASHBOARD
+    | Dashboard Routes
+    | Main dashboard data for authenticated users.
     */
     Route::get('/dashboard', [DashboardController::class, 'index']);
 
     /*
-    | USER MANAGEMENT (admin and manager)
+    | User Management Routes
+    | Admin and manager only: CRUD operations for managing users.
     */
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
+        // List all users
         Route::get('/users', [UserController::class, 'index']);
+        // Create new user
         Route::post('/users', [UserController::class, 'store']);
+        // View user details
         Route::get('/users/{user}', [UserController::class, 'show']);
+        // Update user information
         Route::put('/users/{user}', [UserController::class, 'update']);
+        // Delete user
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
+        // Mark user as resigned
         Route::put('/users/{user}/resign', [UserController::class, 'resign']);
+        // View user profile
         Route::get('/users/{id}/profile', [UserController::class, 'profile']);
+        // Test email functionality
         Route::post('/test-email', [UserController::class, 'testEmail']);
+        // Reorder users list
         Route::post('/users/reorder', [UserController::class, 'reorder']);
     });
 
@@ -78,182 +96,214 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/team-users', [UserController::class, 'getTeamUsers']);
 
     /*
-    | TEAM MANAGEMENT (admin and manager)
+    | Team Management Routes
+    | Admin and manager only: CRUD operations for managing teams and members.
     */
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
+        // List all teams
         Route::get('/teams', [TeamController::class, 'index']);
+        // Create new team
         Route::post('/teams', [TeamController::class, 'store']);
+        // View team details
         Route::get('/teams/{team}', [TeamController::class, 'show']);
+        // Update team information
         Route::put('/teams/{team}', [TeamController::class, 'update']);
+        // Set team leader
         Route::put('/teams/{team}/leader', [TeamController::class, 'setLeader']);
+        // Add member to team
         Route::post('/teams/{team}/members', [TeamController::class, 'addMember']);
+        // Remove member from team
         Route::delete('/teams/{team}/members/{user}', [TeamController::class, 'removeMember']);
+        // Delete team
         Route::delete('/teams/{team}', [TeamController::class, 'destroy']);
     });
 
     /*
-    | PROJECT MANAGEMENT - READ (all authenticated users)
+    | Project Management Routes (Read)
+    | All authenticated users can view projects and mark changes as read.
     */
     Route::get('/projects', [ProjectController::class, 'index']);
     Route::get('/projects/{project}', [ProjectController::class, 'show']);
     Route::post('/projects/{project}/changes/mark-read', [ProjectController::class, 'markChangesRead']);
 
     /*
-    | PROJECT MANAGEMENT - WRITE (admin and manager only)
+    | Project Management Routes (Write)
+    | Admin and manager only: create, update, delete projects and manage files.
     */
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
+        // Create new project
         Route::post('/projects', [ProjectController::class, 'store']);
+        // Update project
         Route::put('/projects/{project}', [ProjectController::class, 'update']);
+        // Partial update project
         Route::patch('/projects/{project}', [ProjectController::class, 'patch']);
+        // Delete project
         Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
+        // Upload project file
         Route::post('/projects/{project}/files', [ProjectController::class, 'uploadFile']);
+        // Add link to project
         Route::post('/projects/{project}/links', [ProjectController::class, 'addLink']);
+        // Delete project file
         Route::delete('/projects/{project}/files/{file}', [ProjectController::class, 'deleteFile']);
     });
 
-    // Project visibility (admin and manager only)
+    // Project visibility settings (admin and manager only)
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
+        // Get project visibility settings
         Route::get('/projects/{project}/visibility', [ProjectController::class, 'getVisibility']);
+        // Update project visibility settings
         Route::post('/projects/{project}/visibility', [ProjectController::class, 'setVisibility']);
     });
 
-    // Project completion (any assigned user can mark it complete)
+    // Mark project as complete (any assigned user)
     Route::post('/projects/{project}/complete', [ProjectController::class, 'completeProject']);
 
     /*
-    | TASK MANAGEMENT
+    | Task Management Routes
+    | CRUD operations, submission workflows, file attachments, and personal notes for tasks.
     */
 
-    // Standalone task creation (no project required)
+    // Create standalone task (no project required)
     Route::post('/tasks', [TaskController::class, 'storeStandalone']);
 
-    // Tasks under a project (any authenticated user can create)
+    // Create task under a project (any authenticated user)
     Route::post('/projects/{project}/tasks', [TaskController::class, 'store']);
 
-    // Task CRUD (all authenticated users can read; write handled per-route)
-    Route::get('/tasks/{task}', [TaskController::class, 'show']);
-    Route::put('/tasks/{task}', [TaskController::class, 'update']);
-    Route::patch('/tasks/{task}/status', [TaskController::class, 'updateStatus']);
-    Route::post('/tasks/{task}/complete', [TaskController::class, 'completeTask']);
-    Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
-    // Task submission workflow
-    Route::post('/tasks/{task}/submit', [TaskController::class, 'submit']);
-    Route::get('/tasks/{task}/latest-submission', [TaskController::class, 'latestSubmission']);
-    Route::get('/tasks/submission-file/{submission}', [TaskController::class, 'downloadSubmissionFile']);
-    Route::post('/tasks/{task}/approve', [TaskController::class, 'approve']);
-    Route::post('/tasks/{task}/reject', [TaskController::class, 'reject']);
-    Route::post('/tasks/{task}/reopen', [TaskController::class, 'reopen']);
+    // Task CRUD operations
+    Route::get('/tasks/{task}', [TaskController::class, 'show']); // View task details
+    Route::put('/tasks/{task}', [TaskController::class, 'update']); // Update task
+    Route::patch('/tasks/{task}/status', [TaskController::class, 'updateStatus']); // Update task status
+    Route::post('/tasks/{task}/complete', [TaskController::class, 'completeTask']); // Mark task as complete
+    Route::delete('/tasks/{task}', [TaskController::class, 'destroy']); // Delete task
 
-    // Project submission workflow
-    Route::post('/projects/{project}/submit', [ProjectController::class, 'submit']);
-    Route::get('/projects/{project}/latest-submission', [ProjectController::class, 'latestSubmission']);
-    Route::get('/projects/submission-file/{submission}', [ProjectController::class, 'downloadSubmissionFile']);
-    Route::post('/projects/{project}/approve', [ProjectController::class, 'approve']);
-    Route::post('/projects/{project}/reject', [ProjectController::class, 'reject']);
-    Route::post('/projects/{project}/reopen', [ProjectController::class, 'reopen']);
+    // Task submission workflow (submit for review, approve, reject, reopen)
+    Route::post('/tasks/{task}/submit', [TaskController::class, 'submit']); // Submit task for review
+    Route::get('/tasks/{task}/latest-submission', [TaskController::class, 'latestSubmission']); // Get latest submission
+    Route::get('/tasks/submission-file/{submission}', [TaskController::class, 'downloadSubmissionFile']); // Download submission file
+    Route::post('/tasks/{task}/approve', [TaskController::class, 'approve']); // Approve submitted task
+    Route::post('/tasks/{task}/reject', [TaskController::class, 'reject']); // Reject submitted task
+    Route::post('/tasks/{task}/reopen', [TaskController::class, 'reopen']); // Reopen rejected task
 
-    // Task reordering
+    // Project submission workflow (similar to task submission)
+    Route::post('/projects/{project}/submit', [ProjectController::class, 'submit']); // Submit project for review
+    Route::get('/projects/{project}/latest-submission', [ProjectController::class, 'latestSubmission']); // Get latest submission
+    Route::get('/projects/submission-file/{submission}', [ProjectController::class, 'downloadSubmissionFile']); // Download submission file
+    Route::post('/projects/{project}/approve', [ProjectController::class, 'approve']); // Approve submitted project
+    Route::post('/projects/{project}/reject', [ProjectController::class, 'reject']); // Reject submitted project
+    Route::post('/projects/{project}/reopen', [ProjectController::class, 'reopen']); // Reopen rejected project
+
+    // Reorder tasks within a project
     Route::post('/tasks/reorder', [TaskController::class, 'reorderTasks']);
 
-    // Mark task changes as read
+    // Mark task changes as read (for notification tracking)
     Route::post('/tasks/{task}/changes/mark-read', [TaskController::class, 'markChangesRead']);
 
-    // Task file attachments
-    Route::post('/tasks/{task}/files', [TaskController::class, 'uploadFile']);
-    Route::post('/tasks/{task}/links', [TaskController::class, 'addLink']);
-    Route::delete('/tasks/{task}/files/{file}', [TaskController::class, 'deleteFile']);
+    // Task file attachments and links
+    Route::post('/tasks/{task}/files', [TaskController::class, 'uploadFile']); // Upload file to task
+    Route::post('/tasks/{task}/links', [TaskController::class, 'addLink']); // Add link to task
+    Route::delete('/tasks/{task}/files/{file}', [TaskController::class, 'deleteFile']); // Delete task file
 
     // Personal user notes on tasks (private per user)
-    Route::get('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'show']);
-    Route::post('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'store']);
-    Route::delete('/tasks/{task}/my-note/{note}', [\App\Http\Controllers\TaskUserNoteController::class, 'destroy']);
+    Route::get('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'show']); // View own note
+    Route::post('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'store']); // Create/update own note
+    Route::delete('/tasks/{task}/my-note/{note}', [\App\Http\Controllers\TaskUserNoteController::class, 'destroy']); // Delete own note
 
-    // My tasks / Assigned by me / Self tasks
-    Route::get('/my-tasks', [TaskController::class, 'myTasks']);
-    Route::get('/assigned-tasks', [TaskController::class, 'assignedByMe']);
-    Route::get('/self-tasks', [TaskController::class, 'mySelfTasks']);
-    Route::get('/user-tasks/{userId}', [TaskController::class, 'userTasks']);
+    // Task filtering routes
+    Route::get('/my-tasks', [TaskController::class, 'myTasks']); // Tasks assigned to me
+    Route::get('/assigned-tasks', [TaskController::class, 'assignedByMe']); // Tasks I assigned to others
+    Route::get('/self-tasks', [TaskController::class, 'mySelfTasks']); // Tasks I created for myself
+    Route::get('/user-tasks/{userId}', [TaskController::class, 'userTasks']); // Tasks assigned to specific user
 
     /*
-    | DELIVERABLES
+    | Deliverable Management Routes
+    | CRUD operations, submission workflows, and review actions for deliverables.
     */
-    Route::get('/deliverables', [DeliverableController::class, 'index']);
-    Route::get('/deliverables/assigned-by-me', [DeliverableController::class, 'assignedByMe']);
-    Route::get('/deliverables/submission-file/{submission}', [DeliverableController::class, 'downloadSubmissionFile']);
-    Route::get('/deliverables/{deliverable}', [DeliverableController::class, 'show']);
-    Route::post('/deliverables/{deliverable}/changes/mark-read', [DeliverableController::class, 'markChangesRead']);
-    Route::get('/self-deliverables', [DeliverableController::class, 'mySelfDeliverables']);
-    Route::post('/deliverables/reorder', [DeliverableController::class, 'reorder']);
+    // Read routes (all authenticated users)
+    Route::get('/deliverables', [DeliverableController::class, 'index']); // List all deliverables
+    Route::get('/deliverables/assigned-by-me', [DeliverableController::class, 'assignedByMe']); // Deliverables I assigned
+    Route::get('/deliverables/submission-file/{submission}', [DeliverableController::class, 'downloadSubmissionFile']); // Download submission file
+    Route::get('/deliverables/{deliverable}', [DeliverableController::class, 'show']); // View deliverable details
+    Route::post('/deliverables/{deliverable}/changes/mark-read', [DeliverableController::class, 'markChangesRead']); // Mark changes as read
+    Route::get('/self-deliverables', [DeliverableController::class, 'mySelfDeliverables']); // Deliverables I created for myself
+    Route::post('/deliverables/reorder', [DeliverableController::class, 'reorder']); // Reorder deliverables
 
+    // Write routes (admin, manager, team lead only)
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
-        Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']);
-        Route::put('/deliverables/{deliverable}', [DeliverableController::class, 'update']);
-        Route::delete('/deliverables/{deliverable}', [DeliverableController::class, 'destroy']);
-        Route::post('/deliverables/{deliverable}/approve', [DeliverableController::class, 'approve']);
-        Route::post('/deliverables/{deliverable}/reject', [DeliverableController::class, 'reject']);
-        Route::post('/deliverables/{deliverable}/reopen', [DeliverableController::class, 'reopen']);
+        Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']); // Create deliverable
+        Route::put('/deliverables/{deliverable}', [DeliverableController::class, 'update']); // Update deliverable
+        Route::delete('/deliverables/{deliverable}', [DeliverableController::class, 'destroy']); // Delete deliverable
+        Route::post('/deliverables/{deliverable}/approve', [DeliverableController::class, 'approve']); // Approve deliverable
+        Route::post('/deliverables/{deliverable}/reject', [DeliverableController::class, 'reject']); // Reject deliverable
+        Route::post('/deliverables/{deliverable}/reopen', [DeliverableController::class, 'reopen']); // Reopen deliverable
     });
 
-    // Assignee can submit
-    Route::post('/deliverables/{deliverable}/submit', [DeliverableController::class, 'submit']);
-    // Get latest submission for a deliverable (assigner view)
-    Route::get('/deliverables/{deliverable}/latest-submission', [DeliverableController::class, 'latestSubmission']);
-    // Self-deliverable review actions
-    Route::post('/deliverables/{deliverable}/self-approve', [DeliverableController::class, 'selfApprove']);
-    Route::post('/deliverables/{deliverable}/self-rework', [DeliverableController::class, 'selfRework']);
+    // Deliverable submission workflow
+    Route::post('/deliverables/{deliverable}/submit', [DeliverableController::class, 'submit']); // Submit deliverable for review
+    Route::get('/deliverables/{deliverable}/latest-submission', [DeliverableController::class, 'latestSubmission']); // Get latest submission
+
+    // Self-deliverable review actions (assignee reviews their own work)
+    Route::post('/deliverables/{deliverable}/self-approve', [DeliverableController::class, 'selfApprove']); // Self-approve deliverable
+    Route::post('/deliverables/{deliverable}/self-rework', [DeliverableController::class, 'selfRework']); // Mark for rework
 
     /*
-    | NOTIFICATIONS + DEVICE TOKENS
+    | Notification Routes
+    | Manage user notifications and device tokens for push notifications.
     */
-    Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index']);
-    Route::get('/notifications/unread-count', [\App\Http\Controllers\NotificationController::class, 'unreadCount']);
-    Route::post('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead']);
-    Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead']);
+    Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index']); // List notifications
+    Route::get('/notifications/unread-count', [\App\Http\Controllers\NotificationController::class, 'unreadCount']); // Get unread count
+    Route::post('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead']); // Mark notification as read
+    Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead']); // Mark all as read
 
     // Device tokens for push notifications (all authenticated users)
-    Route::post('/device-tokens', [\App\Http\Controllers\DeviceTokenController::class, 'store']);
-    Route::delete('/device-tokens', [\App\Http\Controllers\DeviceTokenController::class, 'destroy']);
+    Route::post('/device-tokens', [\App\Http\Controllers\DeviceTokenController::class, 'store']); // Register device token
+    Route::delete('/device-tokens', [\App\Http\Controllers\DeviceTokenController::class, 'destroy']); // Remove device token
 
     /*
-    | ACTIVITIES (Today's Activity + Past Activity)
+    | Activity Routes
+    | Track user activities and work logs.
     */
-    Route::get('/activities/today', [ActivityController::class, 'today']);
-    Route::get('/activities/past', [ActivityController::class, 'past']);
-    Route::get('/activities', [ActivityController::class, 'index']);
+    Route::get('/activities/today', [ActivityController::class, 'today']); // Today's activities
+    Route::get('/activities/past', [ActivityController::class, 'past']); // Past activities
+    Route::get('/activities', [ActivityController::class, 'index']); // All activities
 
     /*
-    | CALENDAR / EVENTS
+    | Calendar / Event Routes
+    | CRUD operations for calendar events.
     */
-    Route::get('/events', [EventController::class, 'index']);
-    Route::get('/events/{event}', [EventController::class, 'show']);
-    Route::post('/events', [EventController::class, 'store']);
-    Route::put('/events/{event}', [EventController::class, 'update']);
-    Route::delete('/events/{event}', [EventController::class, 'destroy']);
+    Route::get('/events', [EventController::class, 'index']); // List all events
+    Route::get('/events/{event}', [EventController::class, 'show']); // View event details
+    Route::post('/events', [EventController::class, 'store']); // Create new event
+    Route::put('/events/{event}', [EventController::class, 'update']); // Update event
+    Route::delete('/events/{event}', [EventController::class, 'destroy']); // Delete event
 
     /*
-    | UNIFIED CALENDAR - TASKS, PROJECTS, DELIVERABLES & EVENTS
+    | Unified Calendar Routes
+    | Aggregate view of tasks, projects, deliverables, and events.
     */
-    Route::get('/unified-calendar', [EventController::class, 'unifiedCalendar']);
-    Route::get('/unified-summary', [EventController::class, 'unifiedSummary']);
+    Route::get('/unified-calendar', [EventController::class, 'unifiedCalendar']); // Get unified calendar data
+    Route::get('/unified-summary', [EventController::class, 'unifiedSummary']); // Get unified summary
 
     /*
-    | REPORTS
+    | Report Routes
+    | Various reporting endpoints for analytics and performance tracking.
     */
-    Route::get('/reports/team-performance', [ReportController::class, 'teamPerformance']);
-    Route::get('/reports/summary', [ReportController::class, 'summaryReport']);
-    Route::get('/reports/detailed', [ReportController::class, 'detailedReport']);
-    Route::get('/reports/performance', [ReportController::class, 'performanceReport']);
-    Route::get('/reports/progress', [ReportController::class, 'progressReport']);
-    Route::get('/reports/user/{user}', [ReportController::class, 'userPerformance']);
-    Route::get('/reports/project/{project}', [ReportController::class, 'projectReport']);
-    Route::get('/reports/summary-cards', [ReportController::class, 'summaryCards']);
-    Route::get('/reports/user-performance-table', [ReportController::class, 'userPerformanceTable']);
-    Route::get('/reports/company-employees', [ReportController::class, 'companyEmployeesReport']);
+    Route::get('/reports/team-performance', [ReportController::class, 'teamPerformance']); // Team performance report
+    Route::get('/reports/summary', [ReportController::class, 'summaryReport']); // Summary report
+    Route::get('/reports/detailed', [ReportController::class, 'detailedReport']); // Detailed report
+    Route::get('/reports/performance', [ReportController::class, 'performanceReport']); // Performance report
+    Route::get('/reports/progress', [ReportController::class, 'progressReport']); // Progress report
+    Route::get('/reports/user/{user}', [ReportController::class, 'userPerformance']); // User performance report
+    Route::get('/reports/project/{project}', [ReportController::class, 'projectReport']); // Project report
+    Route::get('/reports/summary-cards', [ReportController::class, 'summaryCards']); // Summary cards data
+    Route::get('/reports/user-performance-table', [ReportController::class, 'userPerformanceTable']); // User performance table
+    Route::get('/reports/company-employees', [ReportController::class, 'companyEmployeesReport']); // Company employees report
 
     /*
-    | ROLE BASED DASHBOARD INFO (all roles)
+    | Role-Based Dashboard Routes
+    | Personalized dashboard information based on user role.
     */
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead,member')->group(function () {
+        // Get role-specific welcome message and dashboard data
         Route::get('/role-dashboard', function (Request $request) {
             return response()->json([
                 'message' => 'Welcome ' . ucfirst(str_replace('_', ' ', $request->user()->role)),
@@ -264,7 +314,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
 });
 
-// Document routes outside auth:sanctum so <a> tags can access them with ?token= query param
-Route::get('/deliverables/attachment/{attachment}/download', [DeliverableController::class, 'downloadAttachment']);
-Route::get('/auth/my-documents/{document}', [UserController::class, 'downloadMyDocument']);
-Route::get('/users/{user}/documents/{document}', [UserController::class, 'downloadDocument']);
+/*
+| Document Download Routes
+| These routes are outside auth:sanctum so <a> tags can access them with ?token= query param.
+*/
+Route::get('/deliverables/attachment/{attachment}/download', [DeliverableController::class, 'downloadAttachment']); // Download deliverable attachment
+Route::get('/auth/my-documents/{document}', [UserController::class, 'downloadMyDocument']); // Download own document
+Route::get('/users/{user}/documents/{document}', [UserController::class, 'downloadDocument']); // Download user document

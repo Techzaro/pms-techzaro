@@ -19,6 +19,12 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * Controller for managing projects.
+ * Handles CRUD operations, file/link management, visibility controls,
+ * milestone management, and the full submission/approval/rejection/reopen workflow.
+ * Sends notifications for assignment, updates, and workflow state changes.
+ */
 class ProjectController extends Controller
 {
     private const CACHE_TTL = 300;
@@ -28,6 +34,15 @@ class ProjectController extends Controller
         private ActivityService $activityService
     ) {}
 
+    /**
+     * List all projects visible to the authenticated user.
+     *
+     * Admin/manager users see all projects. Other users see projects they created,
+     * are assigned to, are team members of, or have manual visibility access.
+     * Supports 'active' filter to exclude completed/archived projects.
+     *
+     * @return \Illuminate\Http\JsonResponse  JSON response with project list and submission eligibility flags.
+     */
     public function index()
     {
         $user = request()->user();
@@ -90,6 +105,16 @@ class ProjectController extends Controller
         });
     }
 
+    /**
+     * Create a new project with optional milestones and deliverables.
+     *
+     * Automatically assigns the team leader if a team is provided without explicit users.
+     * Creates workflow events, sends assignment notifications, and logs activity.
+     * Deliverables are created for each assigned user.
+     *
+     * @param  \Illuminate\Http\Request  $request  Validated input: title, description, goals, client_name, priority, team_id, assigned_users[], milestones[], deliverables[], etc.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the created project.
+     */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -227,6 +252,15 @@ class ProjectController extends Controller
         ], 201);
     }
 
+    /**
+     * Retrieve a single project with all related data (tasks, deliverables, milestones, submissions, workflow events).
+     *
+     * Enforces authorization based on visibility, team membership, task assignment, or admin/manager role.
+     * Returns submission eligibility flags and unviewed changes.
+     *
+     * @param  \App\Models\Project  $project  The project to retrieve.
+     * @return \Illuminate\Http\JsonResponse  JSON response with full project details or 403.
+     */
     public function show(Project $project)
     {
         $user = request()->user();
@@ -316,6 +350,16 @@ class ProjectController extends Controller
         return response()->json(['success' => true, 'project' => $payload]);
     }
 
+    /**
+     * Update a project's properties and track field changes.
+     *
+     * Records field changes for audit trail, creates workflow events, handles milestone replacement,
+     * deliverable creation, and sends notifications to assigned users.
+     *
+     * @param  \Illuminate\Http\Request  $request  Validated input for updatable fields.
+     * @param  \App\Models\Project  $project  The project to update.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the updated project and change count.
+     */
     public function update(Request $request, Project $project)
     {
         $user = $request->user();
@@ -470,6 +514,13 @@ class ProjectController extends Controller
         ]);
     }
 
+    /**
+     * Partially update a project (sidebar notes, goals checklist, or status only).
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: sidebar_notes, goals_checklist, or status.
+     * @param  \App\Models\Project  $project  The project to patch.
+     * @return \Illuminate\Http\JsonResponse  JSON response with updated fields.
+     */
     public function patch(Request $request, Project $project)
     {
         $user = $request->user();
@@ -505,6 +556,12 @@ class ProjectController extends Controller
         ]);
     }
 
+    /**
+     * Mark a project as completed and create a final deliverable from it.
+     *
+     * @param  \App\Models\Project  $project  The project to complete.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the completed project and created deliverable.
+     */
     public function completeProject(Project $project)
     {
         $user = request()->user();
@@ -535,6 +592,12 @@ class ProjectController extends Controller
         ]);
     }
 
+    /**
+     * Delete a project. Only the creator or admin/manager can delete.
+     *
+     * @param  \App\Models\Project  $project  The project to delete.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming deletion.
+     */
     public function destroy(Project $project)
     {
         $user = request()->user();
@@ -549,6 +612,13 @@ class ProjectController extends Controller
         return response()->json(['success' => true, 'message' => 'Project deleted successfully']);
     }
 
+    /**
+     * Upload a file attachment to a project.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: file (required, max 10MB).
+     * @param  \App\Models\Project  $project  The project to upload the file to.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the created file record.
+     */
     public function uploadFile(Request $request, Project $project)
     {
         $request->validate(['file' => 'required|file|max:10240']);
@@ -563,6 +633,13 @@ class ProjectController extends Controller
         return response()->json(['success' => true, 'message' => 'File uploaded successfully', 'file' => $attachment], 201);
     }
 
+    /**
+     * Add a URL link attachment to a project.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: url (required), name (optional).
+     * @param  \App\Models\Project  $project  The project to add the link to.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the created file record.
+     */
     public function addLink(Request $request, Project $project)
     {
         $validated = $request->validate([
@@ -578,6 +655,12 @@ class ProjectController extends Controller
         return response()->json(['success' => true, 'message' => 'Link added successfully', 'file' => $attachment], 201);
     }
 
+    /**
+     * Get the visibility settings for a project. Admin/manager only.
+     *
+     * @param  \App\Models\Project  $project  The project to get visibility for.
+     * @return \Illuminate\Http\JsonResponse  JSON response with user visibility list.
+     */
     public function getVisibility(Project $project)
     {
         $user = request()->user();
@@ -604,6 +687,16 @@ class ProjectController extends Controller
         return response()->json(['success' => true, 'users' => $result]);
     }
 
+    /**
+     * Update project visibility for specific users. Admin/manager only.
+     *
+     * Grants or revokes view access for the specified user IDs. Sends notifications
+     * for access granted/revoked and logs the activity.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: user_ids[].
+     * @param  \App\Models\Project  $project  The project to update visibility for.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming visibility update.
+     */
     public function setVisibility(Request $request, Project $project)
     {
         $user = $request->user();
@@ -681,6 +774,13 @@ class ProjectController extends Controller
         return response()->json(['success' => true, 'message' => 'Visibility updated successfully']);
     }
 
+    /**
+     * Delete a file or link attachment from a project.
+     *
+     * @param  \App\Models\Project  $project  The project the file belongs to.
+     * @param  \App\Models\ProjectFile  $file  The file to delete.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming deletion.
+     */
     public function deleteFile(Project $project, ProjectFile $file)
     {
         if ($file->url && str_starts_with($file->url, '/storage/')) {
@@ -692,6 +792,16 @@ class ProjectController extends Controller
         return response()->json(['success' => true, 'message' => 'File deleted successfully']);
     }
 
+    /**
+     * Submit a project for review by its creator.
+     *
+     * Only assigned users can submit. All tasks and deliverables must be approved first.
+     * Handles file uploads, link attachments, and determines first submission vs resubmission.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: comment, file, files[], links[].
+     * @param  \App\Models\Project  $project  The project to submit.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the updated project.
+     */
     public function submit(Request $request, Project $project)
     {
         $user = $request->user();
@@ -815,6 +925,13 @@ class ProjectController extends Controller
         ]);
     }
 
+    /**
+     * Approve a submitted project. Only the creator or admin/manager can approve.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @param  \App\Models\Project  $project  The project to approve (must be in 'submitted' status).
+     * @return \Illuminate\Http\JsonResponse  JSON response with the approved project.
+     */
     public function approve(Request $request, Project $project)
     {
         $user = $request->user();
@@ -859,6 +976,13 @@ class ProjectController extends Controller
         ]);
     }
 
+    /**
+     * Reject a submitted project with an optional comment.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: comment (optional).
+     * @param  \App\Models\Project  $project  The project to reject (must be in 'submitted' status).
+     * @return \Illuminate\Http\JsonResponse  JSON response with the rejected project.
+     */
     public function reject(Request $request, Project $project)
     {
         $user = $request->user();
@@ -914,6 +1038,13 @@ class ProjectController extends Controller
         ]);
     }
 
+    /**
+     * Reopen a submitted project for revision with instructions and optional new deadline.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: comment, instructions, new_deadline, file.
+     * @param  \App\Models\Project  $project  The project to reopen.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the reopened project.
+     */
     public function reopen(Request $request, Project $project)
     {
         $user = $request->user();
@@ -997,6 +1128,13 @@ class ProjectController extends Controller
         ]);
     }
 
+    /**
+     * Get the most recent submission for a project.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @param  \App\Models\Project  $project  The project to get the latest submission for.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the latest submission.
+     */
     public function latestSubmission(Request $request, Project $project)
     {
         $user = $request->user();
@@ -1015,6 +1153,12 @@ class ProjectController extends Controller
         return response()->json(['success' => true, 'submission' => $submission]);
     }
 
+    /**
+     * Download the file attached to a project submission.
+     *
+     * @param  \App\Models\ProjectSubmission  $submission  The submission containing the file.
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse|\Illuminate\Http\JsonResponse  File download or error.
+     */
     public function downloadSubmissionFile(ProjectSubmission $submission)
     {
         $user = request()->user();
@@ -1033,6 +1177,13 @@ class ProjectController extends Controller
         return Storage::disk('public')->download($submission->file_path, $submission->file_name);
     }
 
+    /**
+     * Replace all milestones for a project with a new set.
+     *
+     * @param  \App\Models\Project  $project  The project to update milestones for.
+     * @param  array|null  $rows  Array of milestone data (title, due_date, status), or null to skip.
+     * @return void
+     */
     private function replaceProjectMilestones(Project $project, ?array $rows): void
     {
         if ($rows === null) return;
@@ -1053,6 +1204,14 @@ class ProjectController extends Controller
         }
     }
 
+    /**
+     * Send update notifications to all assigned users (excluding the updater).
+     *
+     * @param  \App\Models\Project  $project  The updated project.
+     * @param  \App\Models\User  $updater  The user who made the update.
+     * @param  int  $changeCount  Number of changes made.
+     * @return void
+     */
     private function sendProjectUpdateNotification(Project $project, User $updater, int $changeCount = 0): void
     {
         $assignedUserIds = $project->assigned_users ?? [];
@@ -1075,12 +1234,25 @@ class ProjectController extends Controller
         }
     }
 
+    /**
+     * Mark all unviewed changes on a project as read.
+     *
+     * @param  \App\Models\Project  $project  The project whose changes to mark.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming changes marked.
+     */
     public function markChangesRead(Project $project)
     {
         $project->changes()->where('is_viewed', false)->update(['is_viewed' => true]);
         return response()->json(['success' => true, 'message' => 'Changes marked as read']);
     }
 
+    /**
+     * Send assignment notifications to all assigned users (excluding the sender).
+     *
+     * @param  \App\Models\Project  $project  The assigned project.
+     * @param  \App\Models\User  $sender  The user who assigned the project.
+     * @return void
+     */
     private function sendProjectAssignmentNotification(Project $project, User $sender): void
     {
         $assignedUserIds = $project->assigned_users ?? [];
@@ -1098,14 +1270,31 @@ class ProjectController extends Controller
         );
     }
 
+    /**
+     * Get the list of statuses considered as completed for tasks.
+     *
+     * @return array  Array of completed status strings.
+     */
     private function completedTaskStatuses(): array { return ['approved', 'completed', 'done']; }
 
+    /**
+     * Get the list of statuses considered as inactive for projects (completed, rejected, etc.).
+     *
+     * @return array  Array of inactive status strings.
+     */
     private function inactiveProjectStatuses(): array
     {
         return ['completed','Completed','done','Done','approved','Approved','rejected','Rejected',
                 'cancelled','Cancelled','canceled','Canceled','abandoned','Abandoned','closed','Closed','archived','Archived'];
     }
 
+    /**
+     * Format a change record into a human-readable workflow comment.
+     *
+     * @param  array  $change  The change record with label, old_value, new_value.
+     * @param  \App\Models\User  $user  The user who made the change.
+     * @return string  The formatted workflow comment.
+     */
     private function formatWorkflowComment(array $change, User $user): string
     {
         $label = $change['label'];

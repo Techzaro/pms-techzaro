@@ -4,8 +4,21 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/**
+ * API resource for Deliverable Submission models.
+ *
+ * Formats submission data including file info, submitter details,
+ * and associated attachments.
+ */
 class SubmissionResource extends JsonResource
 {
+    /**
+     * Transform the submission into an array.
+     *
+     * @param \Illuminate\Http\Request $request
+     *
+     * @return array|null Null if the underlying resource is null
+     */
     public function toArray($request)
     {
         if (!$this->resource) return null;

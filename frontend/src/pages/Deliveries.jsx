@@ -1,3 +1,15 @@
+/**
+ * Deliveries.jsx — Deliverables Assigned To You Page
+ *
+ * Lists all deliverables assigned to the current user with:
+ * - Status filter tabs (Due Today, Pending, Submitted, Reopened, Approved, Rejected)
+ * - Search by deliverable name
+ * - Time filter (All Time, Last 7/30 Days, Last 6 Months)
+ * - Sortable table with drag-and-drop reordering
+ * - Pagination
+ * - Submit/View modals for deliverable actions
+ * - Deep-linking support via ?selectedDeliverable= param
+ */
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect, useCallback } from "react";
@@ -15,6 +27,7 @@ import "../pages/Deliveries.css";
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 
+/** Background colors for status badges */
 const STATUS_COLORS = {
   pending: "#FEF3C7",
   submitted: "#DBEAFE",
@@ -23,6 +36,7 @@ const STATUS_COLORS = {
   reopened: "#FEF3C7",
 };
 
+/** Text colors for status badges */
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
   submitted: "#1E40AF",
@@ -31,6 +45,10 @@ const STATUS_TEXT_COLORS = {
   reopened: "#92400E",
 };
 
+/**
+ * Deliveries — Lists deliverables assigned to the current user.
+ * Supports filtering, searching, pagination, sortable reordering, and submit/view modals.
+ */
 function Deliveries() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [deliverables, setDeliverables] = useState([]);
@@ -49,6 +67,7 @@ function Deliveries() {
   const [showAll, setShowAll] = useState(false);
   const ITEMS_PER_PAGE = 10;
 
+  // Fetch deliverables from API with search and status filters
   const fetchDeliverables = () => {
     setLoading(true);
     const token = authToken();
@@ -74,16 +93,19 @@ function Deliveries() {
 
   useRefreshOnEvent(['deliverable:updated', 'deliverable:created', 'deliverable:deleted'], fetchDeliverables);
 
+  // Deep linking: auto-open submit/view modal when ?selectedDeliverable= is in URL
   useEffect(() => {
     const selectedId = searchParams.get("selectedDeliverable");
     if (!selectedId) return;
 
+    // Remove the param from URL without navigation
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete("selectedDeliverable");
       return next;
     }, { replace: true });
 
+    // Fetch the specific deliverable and open appropriate modal
     const token = authToken();
     fetch(`${API_URL}/deliverables/${selectedId}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -122,6 +144,7 @@ function Deliveries() {
     }
   };
 
+  // Handle drag-and-drop reorder and persist sort order to API
   const handleDeliverableReorder = useCallback((reordered) => {
     setOrderedDeliverables(reordered);
     const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
@@ -165,6 +188,7 @@ function Deliveries() {
     return map[status] || status;
   };
 
+  // Update local state after successful submission to reflect new status
   const handleSubmissionSuccess = (updatedDeliverable) => {
     setDeliverables((prev) =>
       prev.map((d) =>

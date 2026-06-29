@@ -6,6 +6,12 @@
  */
 use Illuminate\Support\Facades\Route;
 
+/*
+| Web Routes
+| Routes for web pages and views.
+*/
+
+// Welcome page (landing page)
 Route::get('/', function () {
     return view('welcome');
 });

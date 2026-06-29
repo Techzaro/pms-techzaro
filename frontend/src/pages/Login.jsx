@@ -1,7 +1,14 @@
 /**
- * Login page component.
- * Handles user authentication and redirects based on role.
- * Shows first-time password change popup if required.
+ * Login.jsx — Login Page Component
+ *
+ * Handles user authentication with email/password credentials.
+ * Features:
+ * - Form validation for email and password fields
+ * - Role-based redirect after login (admin, manager, teamlead, member)
+ * - First-time password change flow for new users
+ * - Error handling with field-level and form-level error display
+ * - URL message parameter support for post-logout messages
+ * - Session persistence via saveSession utility
  */
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -10,6 +17,11 @@ import { saveSession, clearAllSessions, authToken } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import "./Login.css";
 
+/**
+ * Login — Main login page component.
+ * Manages login form state, authentication API call, password change flow,
+ * and role-based redirection.
+ */
 function Login() {
   const notify = useNotification();
 
@@ -19,6 +31,7 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({ email: "", password: "", form: "" });
 
+  // Display URL message (e.g. from logout redirect) as error notification
   useEffect(() => {
     const urlMessage = searchParams.get("message");
     if (urlMessage) {
@@ -27,11 +40,17 @@ function Login() {
     }
   }, [searchParams, setSearchParams]);
 
+  // First-time password change state
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
 
+  /**
+   * handleLogin — Validates form fields and sends login request to API.
+   * On success: saves session and redirects based on role.
+   * On first login with must_change_password flag: shows password change form.
+   */
   const handleLogin = async () => {
     const errors = { email: "", password: "", form: "" };
 
@@ -110,6 +129,10 @@ function Login() {
     }
   };
 
+  /**
+   * redirectToDashboard — Navigates to the appropriate dashboard based on user role.
+   * Uses window.location.href for full page reload to ensure clean session state.
+   */
   const redirectToDashboard = (role) => {
     if (role === "admin") {
       window.location.href = "/admin/dashboard";
@@ -122,6 +145,10 @@ function Login() {
     }
   };
 
+  /**
+   * handleFirstTimePasswordChange — Validates and submits new password for first-time login.
+   * Clears all sessions after successful change and prompts user to login again.
+   */
   const handleFirstTimePasswordChange = async () => {
     if (!newPassword.trim()) {
       notify.error("Please enter a new password.");

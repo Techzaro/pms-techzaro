@@ -26,7 +26,9 @@ use Laravel\Sanctum\PersonalAccessToken;
 
 /**
  * User management controller.
- * Handles listing, creating, updating, and deleting users.
+ * Handles listing, creating, updating, resigning, and deleting users.
+ * Supports document uploads, profile viewing, and email notifications.
+ * Enforces role-based access control (managers cannot modify admin/manager accounts).
  */
 class UserController extends Controller
 {
@@ -42,7 +44,11 @@ class UserController extends Controller
     ];
 
     /**
-     * Return a list of all users with full profile fields.
+     * Return a list of all users with key profile fields.
+     *
+     * Results are cached for 5 minutes. Ordered by sort_order then ID.
+     *
+     * @return \Illuminate\Http\JsonResponse  JSON response with the user list.
      */
     public function index()
     {
@@ -60,6 +66,9 @@ class UserController extends Controller
 
     /**
      * Return a single user by ID.
+     *
+     * @param  \App\Models\User  $user  The user to retrieve.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the user.
      */
     public function show(User $user)
     {
@@ -70,7 +79,13 @@ class UserController extends Controller
     }
 
     /**
-     * Create a new user account with auto-generated password and file uploads.
+     * Create a new user account with an auto-generated password and optional document uploads.
+     *
+     * Sends a welcome email with login credentials. Managers cannot create admin/manager accounts.
+     * The must_change_password flag is set to true for new users.
+     *
+     * @param  \Illuminate\Http\Request  $request  Validated input: name, email, role, department, designation, employee_code, and optional profile/document fields.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the created user and email status.
      */
     public function store(Request $request)
     {
@@ -204,7 +219,15 @@ class UserController extends Controller
     }
 
     /**
-     * Update user details and handle file uploads.
+     * Update a user's profile details, role, and document uploads.
+     *
+     * Enforces role-based restrictions: managers cannot modify admin/manager accounts,
+     * and users cannot modify their own account via this endpoint.
+     * Sends a profile update email notification when changes are detected.
+     *
+     * @param  \Illuminate\Http\Request  $request  Validated input for updatable fields.
+     * @param  \App\Models\User  $user  The user to update.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the updated user.
      */
     public function update(Request $request, User $user)
     {
@@ -346,7 +369,10 @@ class UserController extends Controller
     }
 
     /**
-     * Reorder users by updating sort_order values.
+     * Reorder users by updating their sort_order values in bulk.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: items[] with id and sort_order.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming reorder.
      */
     public function reorder(Request $request)
     {
@@ -366,7 +392,12 @@ class UserController extends Controller
     }
 
     /**
-     * Delete a user from the system.
+     * Delete a user from the system along with all associated files.
+     *
+     * Users cannot delete their own account. Managers cannot delete admin/manager accounts.
+     *
+     * @param  \App\Models\User  $user  The user to delete.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming deletion.
      */
     public function destroy(User $user)
     {
@@ -392,7 +423,14 @@ class UserController extends Controller
     }
 
     /**
-     * Resign a user - set active to false and send notification email.
+     * Resign a user by setting their active status to false.
+     *
+     * Revokes all API tokens and sends a resignation notification email.
+     * Managers cannot resign admin/manager accounts. Users cannot resign themselves.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @param  \App\Models\User  $user  The user to resign.
+     * @return \Illuminate\Http\JsonResponse  JSON response with resignation status and email status.
      */
     public function resign(Request $request, User $user)
     {
@@ -464,7 +502,10 @@ class UserController extends Controller
     }
 
     /**
-     * Return a simplified user list for team assignment.
+     * Return a simplified list of active users for team assignment dropdowns.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @return \Illuminate\Http\JsonResponse  JSON response with active user list (id, name, email, role).
      */
     public function getTeamUsers(Request $request)
     {
@@ -477,7 +518,10 @@ class UserController extends Controller
     }
 
     /**
-     * Return full user profile with statistics and metadata.
+     * Get a user's full profile with task/project statistics, login history, and account metadata.
+     *
+     * @param  int  $id  The ID of the user to get the profile for.
+     * @return \Illuminate\Http\JsonResponse  JSON response with user profile, stats, projects, and account info.
      */
     public function profile($id)
     {
@@ -555,7 +599,15 @@ class UserController extends Controller
     }
 
     /**
-     * Serve a user document file for viewing/downloading.
+     * Serve a user document file for viewing or downloading.
+     *
+     * Supports both direct file viewing and forced download via 'action=download' query param.
+     * Authenticates via Bearer token or query parameter token.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request with optional token and action params.
+     * @param  \App\Models\User  $user  The user whose document to retrieve.
+     * @param  string  $document  The document field name (e.g., 'cv', 'employment_contract').
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse|\Illuminate\Http\JsonResponse  File response or error.
      */
     public function downloadDocument(Request $request, User $user, string $document)
     {
@@ -589,7 +641,10 @@ class UserController extends Controller
     }
 
     /**
-     * Try to authenticate via Bearer token header or ?token= query param.
+     * Try to authenticate the user via Bearer token header or ?token= query param.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @return \App\Models\User|null  The authenticated user or null if not found.
      */
     private function resolveAuth(Request $request): ?User
     {
@@ -610,7 +665,10 @@ class UserController extends Controller
     }
 
     /**
-     * Convert empty strings to null for proper nullable validation.
+     * Convert empty string values in the request to null for proper nullable validation.
+     *
+     * @param  \Illuminate\Http\Request  $request  The request to normalize.
+     * @return void
      */
     private function normalizeEmptyStrings(Request $request): void
     {
@@ -622,7 +680,13 @@ class UserController extends Controller
     }
 
     /**
-     * Handle file uploads for a user and store paths in database.
+     * Handle file uploads for all document fields and store paths in the database.
+     *
+     * Deletes existing files before uploading new ones. Only processes valid uploads.
+     *
+     * @param  \Illuminate\Http\Request  $request  The request containing file uploads.
+     * @param  \App\Models\User  $user  The user to upload files for.
+     * @return void
      */
     private function handleFileUploads(Request $request, User $user): void
     {
@@ -650,7 +714,10 @@ class UserController extends Controller
     }
 
     /**
-     * Delete all files associated with a user.
+     * Delete all document files associated with a user from storage.
+     *
+     * @param  \App\Models\User  $user  The user whose files to delete.
+     * @return void
      */
     private function deleteAllFiles(User $user): void
     {
@@ -662,7 +729,11 @@ class UserController extends Controller
     }
 
     /**
-     * Download a document for the authenticated user (self-access).
+     * Download or view a document belonging to the authenticated user (self-access only).
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request with optional action=download.
+     * @param  string  $document  The document field name (e.g., 'cv', 'offer_letter').
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse|\Illuminate\Http\JsonResponse  File response or error.
      */
     public function downloadMyDocument(Request $request, string $document)
     {
@@ -698,7 +769,10 @@ class UserController extends Controller
     }
 
     /**
-     * Test email sending functionality.
+     * Test email sending functionality by sending a test email to the specified address.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: email (required).
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming email sent or reporting failure.
      */
     public function testEmail(Request $request)
     {
