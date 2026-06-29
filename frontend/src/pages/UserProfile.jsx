@@ -354,17 +354,16 @@ function UserProfile() {
 
   return (
     <DashboardLayout hideRightSidebar={true}>
-      <Breadcrumb items={breadcrumbs} />
-<div className="flex">
-      <div className="user-profile-page">
+   
+<div className="user-profile-container" >
+     
+          <div className="profile-left">
+             <div className="user-profile-page">
+               <Breadcrumb items={breadcrumbs} />
         <div className="profile-header">
           <h1>User Profile</h1>
           <p>View and manage your personal information and account settings.</p>
         </div>
-
-        <div className="profile-layout">
-          {/* LEFT SIDE */}
-          <div className="profile-left">
             {/* User Card */}
             <div className="profile-user-card">
               <div className="profile-user-left">
@@ -377,7 +376,7 @@ function UserProfile() {
                 </div>
               </div>
             </div>
-
+           <br />
             {/* Personal Information */}
             <div className="profile-info-card">
               <div className="info-card-header">
@@ -407,7 +406,7 @@ function UserProfile() {
                 </div>
               </div>
             </div>
-
+            <br />
             {/* Address */}
             <div className="profile-info-card">
               <div className="info-card-header">
@@ -424,7 +423,7 @@ function UserProfile() {
                 </div>
               </div>
             </div>
-
+            <br />
             {/* Emergency Contact */}
             <div className="profile-info-card">
               <div className="info-card-header">
@@ -445,7 +444,7 @@ function UserProfile() {
                 </div>
               </div>
             </div>
-
+            <br />
             {/* Email Accounts */}
             <div className="profile-info-card">
               <div className="info-card-header">
@@ -466,7 +465,7 @@ function UserProfile() {
                 </div>
               </div>
             </div>
-
+            <br />
             {/* Employment Details */}
             <div className="profile-info-card">
               <div className="info-card-header">
@@ -505,7 +504,7 @@ function UserProfile() {
                 </div>
               </div>
             </div>
-
+            <br />
             {/* Salary & Bank Details */}
             <div className="profile-info-card">
               <div className="info-card-header">
@@ -534,7 +533,7 @@ function UserProfile() {
                 </div>
               </div>
             </div>
-
+            <br/>
             {/* Documents */}
             <div className="profile-info-card">
               <div className="info-card-header">
@@ -570,59 +569,7 @@ function UserProfile() {
               </div>
             </div>
           </div>
-
-          {/* RIGHT SIDE - Account Status */}
-          <div className="profile-right">
-            <div className="account-status-card">
-              <h3>Account Status</h3>
-              <div className="status-list">
-                <div className="status-item">
-                  <span className={`status-dot ${user.active ? "dot-active" : "dot-inactive"}`}></span>
-                  <span className="status-text">{user.active ? "Active" : "Resigned"}</span>
-                </div>
-                <div className="status-item">
-                  <span className="status-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                  </span>
-                  <div className="status-info">
-                    <span className="status-label">Member Since</span>
-                    <span className="status-value">
-                      {user.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "---"}
-                    </span>
-                  </div>
-                </div>
-                <div className="status-item">
-                  <span className="status-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                  </span>
-                  <div className="status-info">
-                    <span className="status-label">Last Login</span>
-                    <span className="status-value">
-                      {user.last_login_at
-                        ? new Date(user.last_login_at).toLocaleString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                            hour12: true,
-                          })
-                        : "Never logged in"}
-                    </span>
-                  </div>
-                </div>
-                <div className="status-item">
-                  <span className="status-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 21h18"></path><path d="M9 8h1"></path><path d="M9 12h1"></path><path d="M9 16h1"></path><path d="M14 8h1"></path><path d="M14 12h1"></path><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"></path></svg>
-                  </span>
-                  <div className="status-info">
-                    <span className="status-label">Account Type</span>
-                    <span className="status-value">Employee</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        
 </div>
         {/* EDIT MODAL */}
         {isEditModalOpen && (
@@ -869,6 +816,57 @@ function UserProfile() {
             </div>
           </div>
         )}
+          {/* RIGHT SIDE - Account Status */}
+          <div className="profile-right">
+            <div className="account-status-card">
+              <h3>Account Status</h3>
+              <div className="status-list">
+                <div className="status-item">
+                  <span className={`status-dot ${user.active ? "dot-active" : "dot-inactive"}`}></span>
+                  <span className="status-text">{user.active ? "Active" : "Resigned"}</span>
+                </div>
+                <div className="status-item">
+                  <span className="status-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                  </span>
+                  <div className="status-info">
+                    <span className="status-label">Member Since</span>
+                    <span className="status-value">
+                      {user.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "---"}
+                    </span>
+                  </div>
+                </div>
+                <div className="status-item">
+                  <span className="status-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  </span>
+                  <div className="status-info">
+                    <span className="status-label">Last Login</span>
+                    <span className="status-value">
+                      {user.last_login_at
+                        ? new Date(user.last_login_at).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                            hour12: true,
+                          })
+                        : "Never logged in"}
+                    </span>
+                  </div>
+                </div>
+                <div className="status-item">
+                  <span className="status-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 21h18"></path><path d="M9 8h1"></path><path d="M9 12h1"></path><path d="M9 16h1"></path><path d="M14 8h1"></path><path d="M14 12h1"></path><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"></path></svg>
+                  </span>
+                  <div className="status-info">
+                    <span className="status-label">Account Type</span>
+                    <span className="status-value">Employee</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
       </div>
     </DashboardLayout>
   );

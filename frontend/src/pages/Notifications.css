@@ -1,19 +1,14 @@
 /* ── Notifications Page ── */
 
 .notif-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+  display: grid;
+  grid-template-columns: 1fr 250px;
+  gap: 20px;
   margin-top: -30px;
   padding-top: 0;
 }
 
-.notif-layout-row {
-  display: flex;
-  gap: 24px;
-  align-items: flex-start;
-  margin-top: 0;
-}
+
 
 .notif-page {
   flex: 1;

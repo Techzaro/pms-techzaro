@@ -165,16 +165,17 @@ function MyProfile() {
 
   return (
     <DashboardLayout hideRightSidebar={true}>
-      <Breadcrumb items={breadcrumbs} />
+      <div className="user-profile-container">
       <div className="user-profile-page">
-        <div className="profile-header">
+      <Breadcrumb items={breadcrumbs} />
+      
+
+          {/* LEFT SIDE */}
+          <div className="profile-left">
+              <div className="profile-header">
           <h1>My Profile</h1>
           <p>View and manage your personal information and account settings.</p>
         </div>
-
-        <div className="profile-layout">
-          {/* LEFT SIDE */}
-          <div className="profile-left">
             {/* User Card */}
             <div className="profile-user-card">
               <div className="profile-user-left">
@@ -199,7 +200,7 @@ function MyProfile() {
               </div>
               <div className="info-card-body">
                 <div className="info-row">
-                  <span className="info-label">Employee Full Name</span>
+                  <span className="info-label">Full Name</span>
                   <span className="info-value">{user.name || "---"}</span>
                 </div>
                 <div className="info-row">
@@ -211,16 +212,67 @@ function MyProfile() {
                   <span className="info-value">{user.id_card_number || "---"}</span>
                 </div>
                 <div className="info-row">
+                  <span className="info-label">Phone Number</span>
+                  <span className="info-value">{user.phone_number || user.contact_no || "---"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Address */}
+            <div className="profile-info-card">
+              <div className="info-card-header">
+                <h3>Address</h3>
+              </div>
+              <div className="info-card-body">
+                <div className="info-row">
                   <span className="info-label">Present Address</span>
-                  <span className="info-value">{user.present_address || "---"}</span>
+                  <span className="info-value">{user.present_address || user.address || "---"}</span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Permanent Address</span>
                   <span className="info-value">{user.permanent_address || "---"}</span>
                 </div>
+              </div>
+            </div>
+
+            {/* Emergency Contact */}
+            <div className="profile-info-card">
+              <div className="info-card-header">
+                <h3>Emergency Contact</h3>
+              </div>
+              <div className="info-card-body">
                 <div className="info-row">
-                  <span className="info-label">Phone Number</span>
-                  <span className="info-value">{user.contact_no || "---"}</span>
+                  <span className="info-label">Name</span>
+                  <span className="info-value">{user.emergency_contact_name || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Relation</span>
+                  <span className="info-value">{user.emergency_contact_relation || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Phone</span>
+                  <span className="info-value">{user.emergency_contact_phone || "---"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Email Accounts */}
+            <div className="profile-info-card">
+              <div className="info-card-header">
+                <h3>Email Accounts</h3>
+              </div>
+              <div className="info-card-body">
+                <div className="info-row">
+                  <span className="info-label">Email</span>
+                  <span className="info-value">{user.email || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Personal Email</span>
+                  <span className="info-value">{user.personal_email || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Recovery Email</span>
+                  <span className="info-value">{user.recovery_email || "---"}</span>
                 </div>
               </div>
             </div>
@@ -232,8 +284,8 @@ function MyProfile() {
               </div>
               <div className="info-card-body">
                 <div className="info-row">
-                  <span className="info-label">Designation / Role</span>
-                  <span className="info-value">{user.designation || roleDisplay}</span>
+                  <span className="info-label">Designation</span>
+                  <span className="info-value">{user.designation || "---"}</span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Department</span>
@@ -248,10 +300,14 @@ function MyProfile() {
                   <span className="info-value">{user.employee_code || "---"}</span>
                 </div>
                 <div className="info-row">
+                  <span className="info-label">Role</span>
+                  <span className="info-value">{roleDisplay}</span>
+                </div>
+                <div className="info-row">
                   <span className="info-label">Job Started Date</span>
                   <span className="info-value">
                     {user.job_started_date
-                      ? new Date(user.job_started_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      ? new Date(user.job_started_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
                       : "---"}
                   </span>
                 </div>
@@ -259,30 +315,38 @@ function MyProfile() {
                   <span className="info-label">Job Ended Date</span>
                   <span className="info-value">
                     {user.job_ended_date
-                      ? new Date(user.job_ended_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      ? new Date(user.job_ended_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
                       : "---"}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Email */}
+            {/* Salary & Bank Details */}
             <div className="profile-info-card">
               <div className="info-card-header">
-                <h3>Email</h3>
+                <h3>Salary & Bank Details</h3>
               </div>
               <div className="info-card-body">
                 <div className="info-row">
-                  <span className="info-label">Email Address</span>
-                  <span className="info-value">{user.email || "---"}</span>
+                  <span className="info-label">Gross Salary</span>
+                  <span className="info-value">{user.gross_salary ? `USD ${Number(user.gross_salary).toLocaleString()}` : "---"}</span>
                 </div>
                 <div className="info-row">
-                  <span className="info-label">Personal Email Address</span>
-                  <span className="info-value">{user.personal_email || "---"}</span>
+                  <span className="info-label">Applied Via</span>
+                  <span className="info-value">{user.applied_via || "---"}</span>
                 </div>
                 <div className="info-row">
-                  <span className="info-label">Recovery Email</span>
-                  <span className="info-value">{user.recovery_email || "---"}</span>
+                  <span className="info-label">Bank Name</span>
+                  <span className="info-value">{user.bank_name || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Bank Account Number</span>
+                  <span className="info-value">{user.bank_account_number || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Bank Account Title</span>
+                  <span className="info-value">{user.bank_account_title || "---"}</span>
                 </div>
               </div>
             </div>
@@ -301,7 +365,7 @@ function MyProfile() {
                   { label: "CV", key: "cv" },
                   { label: "Previous Job Experience Letter", key: "previous_exp_letter" },
                   { label: "Previous Salary Slip", key: "previous_salary_slip" },
-                  { label: "Revised / Other Document", key: "other_document" },
+                  { label: "Other Document", key: "other_document" },
                 ].map(({ label, key }) => (
                   <div className="info-row" key={key}>
                     <span className="info-label">{label}</span>
@@ -311,13 +375,11 @@ function MyProfile() {
                           href={`${API_URL}/auth/my-documents/${key}?token=${authToken()}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ color: "#4f6ef7", textDecoration: "underline" }}
+                          style={{ color: "#2563eb", textDecoration: "underline" }}
                         >
                           View File
                         </a>
-                      ) : (
-                        "---"
-                      )}
+                      ) : "---"}
                     </span>
                   </div>
                 ))}
@@ -325,59 +387,9 @@ function MyProfile() {
             </div>
           </div>
 
-          {/* RIGHT SIDE - Account Status */}
-          <div className="profile-right">
-            <div className="account-status-card">
-              <h3>Account Status</h3>
-              <div className="status-list">
-                <div className="status-item">
-                  <span className={`status-dot ${user.active ? "dot-active" : "dot-inactive"}`}></span>
-                  <span className="status-text">{user.active ? "Active" : "Resigned"}</span>
-                </div>
-                <div className="status-item">
-                  <span className="status-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                  </span>
-                  <div className="status-info">
-                    <span className="status-label">Member Since</span>
-                    <span className="status-value">
-                      {user.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "---"}
-                    </span>
-                  </div>
-                </div>
-                <div className="status-item">
-                  <span className="status-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                  </span>
-                  <div className="status-info">
-                    <span className="status-label">Last Login</span>
-                    <span className="status-value">
-                      {user.last_login_at
-                        ? new Date(user.last_login_at).toLocaleString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                            hour12: true,
-                          })
-                        : "Never logged in"}
-                    </span>
-                  </div>
-                </div>
-                <div className="status-item">
-                  <span className="status-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 21h18"></path><path d="M9 8h1"></path><path d="M9 12h1"></path><path d="M9 16h1"></path><path d="M14 8h1"></path><path d="M14 12h1"></path><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"></path></svg>
-                  </span>
-                  <div className="status-info">
-                    <span className="status-label">Account Type</span>
-                    <span className="status-value">Employee</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
+        
+        
+</div>
         {/* PASSWORD CHANGE MODAL */}
         {isPasswordModalOpen && (
           <div className="user-modal-overlay" onClick={() => setIsPasswordModalOpen(false)}>
@@ -459,6 +471,57 @@ function MyProfile() {
             </div>
           </div>
         )}
+          {/* RIGHT SIDE - Account Status */}
+          <div className="profile-right">
+            <div className="account-status-card">
+              <h3>Account Status</h3>
+              <div className="status-list">
+                <div className="status-item">
+                  <span className={`status-dot ${user.active ? "dot-active" : "dot-inactive"}`}></span>
+                  <span className="status-text">{user.active ? "Active" : "Resigned"}</span>
+                </div>
+                <div className="status-item">
+                  <span className="status-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                  </span>
+                  <div className="status-info">
+                    <span className="status-label">Member Since</span>
+                    <span className="status-value">
+                      {user.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "---"}
+                    </span>
+                  </div>
+                </div>
+                <div className="status-item">
+                  <span className="status-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  </span>
+                  <div className="status-info">
+                    <span className="status-label">Last Login</span>
+                    <span className="status-value">
+                      {user.last_login_at
+                        ? new Date(user.last_login_at).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                            hour12: true,
+                          })
+                        : "Never logged in"}
+                    </span>
+                  </div>
+                </div>
+                <div className="status-item">
+                  <span className="status-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 21h18"></path><path d="M9 8h1"></path><path d="M9 12h1"></path><path d="M9 16h1"></path><path d="M14 8h1"></path><path d="M14 12h1"></path><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"></path></svg>
+                  </span>
+                  <div className="status-info">
+                    <span className="status-label">Account Type</span>
+                    <span className="status-value">Employee</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
       </div>
     </DashboardLayout>
   );

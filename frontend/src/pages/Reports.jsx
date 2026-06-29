@@ -234,7 +234,7 @@ function Reports() {
               <div className="table-header">
                 <span className="th-member">User</span>
                 <span className="th-stat">Assigned</span>
-                <span className="th-stat">Completed</span>
+                <span className="th-stat">Approved</span>
                 <span className="th-stat">Pending</span>
                 <span className="th-tasks">Overdue</span>
                 <span className="th-action">Action</span>

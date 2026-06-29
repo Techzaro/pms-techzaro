@@ -39,7 +39,7 @@ html, body, #root {
 
 .dashboard-content {
   flex: 1;
-  padding: 25px;
+  padding: 10px 25px;
   background: #f5f7fb;
   min-height: 100vh;
   min-width: 0;

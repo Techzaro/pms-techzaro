@@ -283,7 +283,9 @@ function Notifications() {
       <br />
       <div className="notif-layout">
         {/* Header - spans full width */}
-        <div className="notif-header">
+  
+        <div className="notif-layout-row">
+              <div className="notif-header">
           <div className="notif-header-left">
             <div className="notif-header-icon">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -297,8 +299,6 @@ function Notifications() {
             </div>
           </div>
         </div>
-
-        <div className="notif-layout-row">
         <div className="notif-page">
           {/* Search + Type Filter */}
           <div className="notif-search-wrap">
@@ -451,8 +451,8 @@ function Notifications() {
             </div>
           )}
         </div>
-
-        {/* Account Status Sidebar */}
+        </div>
+         {/* Account Status Sidebar */}
         <aside className="notif-sidebar">
           <div className="notif-sidebar-card">
             <h3 className="notif-sidebar-title">Account Status</h3>
@@ -484,7 +484,6 @@ function Notifications() {
             </div>
           </div>
         </aside>
-        </div>
       </div>
     </DashboardLayout>
   );
