@@ -291,7 +291,6 @@ class ProjectController extends Controller
             'team.leader:id,name,email,role',
             'team.members:id,name,email,role',
             'milestones',
-            'activities' => fn ($q) => $q->with('user:id,name')->latest()->limit(30),
             'files',
             'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
             'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
@@ -475,6 +474,13 @@ class ProjectController extends Controller
                             ];
                         }
                     }
+                    $addedDeliverables[] = $del['title'];
+                }
+                if (!empty($bulkDeliverables)) {
+                    $createdDeliverables =  $project->deliverables()->createMany($bulkDeliverables);
+                }
+                if (!empty($bulkNotifications)) {
+                    $this->notificationService->createBulk($bulkNotifications);
                     if (!empty($bulkNotifications)) {
                         $this->notificationService->createBulk($bulkNotifications);
                     }

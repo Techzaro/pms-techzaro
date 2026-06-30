@@ -825,3 +825,54 @@
   text-decoration: underline;
 }
 
+/* ── Activity Log ── */
+.td-activity-empty {
+  color: #9ca3af;
+  font-size: 13px;
+  padding: 8px 0;
+  margin: 0;
+}
+.td-activity-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.td-activity-item {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+.td-activity-item:last-child {
+  border-bottom: none;
+}
+.td-activity-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.td-activity-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.4;
+}
+.td-activity-text {
+  font-size: 12px;
+  color: #374151;
+}
+.td-activity-comment {
+  font-size: 11px;
+  color: #6b7280;
+  font-style: italic;
+}
+.td-activity-time {
+  font-size: 10px;
+  color: #9ca3af;
+  margin-top: 1px;
+}
+.td-change-detail {
+  font-size: 11px;
+  color: #6b7280;
+}
+

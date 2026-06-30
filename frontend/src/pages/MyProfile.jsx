@@ -186,17 +186,16 @@ function MyProfile() {
 
   return (
     <DashboardLayout hideRightSidebar={true}>
-      <div className="user-profile-container">
       <div className="user-profile-page">
-      <Breadcrumb items={breadcrumbs} />
-      
-
-          {/* LEFT SIDE */}
-          <div className="profile-left">
-              <div className="profile-header">
+        <Breadcrumb items={breadcrumbs} />
+        <div className="profile-header">
           <h1>My Profile</h1>
           <p>View and manage your personal information and account settings.</p>
         </div>
+
+        <div className="profile-layout">
+          {/* LEFT SIDE */}
+          <div className="profile-left">
             {/* User Card */}
             <div className="profile-user-card">
               <div className="profile-user-left">
@@ -415,90 +414,6 @@ function MyProfile() {
             </div>
           </div>
 
-        
-        
-</div>
-        {/* PASSWORD CHANGE MODAL */}
-        {isPasswordModalOpen && (
-          <div className="user-modal-overlay" onClick={() => setIsPasswordModalOpen(false)}>
-            <div
-              className="user-modal-content"
-              style={{ maxWidth: "480px", width: "100%" }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="user-modal-header">
-                <div>
-                  <h2>Change Password</h2>
-                  <p className="modal-subtitle">Update your account password.</p>
-                </div>
-                <button className="user-modal-close" onClick={() => setIsPasswordModalOpen(false)}>
-                  &#10005;
-                </button>
-              </div>
-
-              <form className="user-form" onSubmit={handlePasswordSubmit}>
-                <div className="user-form-grid" style={{ gridTemplateColumns: "1fr" }}>
-                  <div className="form-row">
-                    <label htmlFor="old-password">Current Password</label>
-                    <input
-                      type="password"
-                      id="old-password"
-                      name="old_password"
-                      value={passwordForm.old_password}
-                      onChange={handlePasswordChange}
-                      placeholder="Enter current password"
-                      className={passwordErrors.old_password ? "field-error" : ""}
-                    />
-                    {passwordErrors.old_password && <span className="field-error-text">{passwordErrors.old_password}</span>}
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="new-password">New Password</label>
-                    <input
-                      type="password"
-                      id="new-password"
-                      name="new_password"
-                      value={passwordForm.new_password}
-                      onChange={handlePasswordChange}
-                      placeholder="Enter new password"
-                      className={passwordErrors.new_password ? "field-error" : ""}
-                    />
-                    {passwordErrors.new_password && <span className="field-error-text">{passwordErrors.new_password}</span>}
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="confirm-password">Confirm New Password</label>
-                    <input
-                      type="password"
-                      id="confirm-password"
-                      name="confirm_password"
-                      value={passwordForm.confirm_password}
-                      onChange={handlePasswordChange}
-                      placeholder="Confirm new password"
-                      className={passwordErrors.confirm_password ? "field-error" : ""}
-                    />
-                    {passwordErrors.confirm_password && <span className="field-error-text">{passwordErrors.confirm_password}</span>}
-                  </div>
-                </div>
-
-                <div className="user-form-actions">
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => setIsPasswordModalOpen(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="primary-button"
-                    disabled={saving}
-                  >
-                    {saving ? "Saving..." : "Change Password"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
           {/* RIGHT SIDE - Account Status */}
           <div className="profile-right">
             <div className="account-status-card">
@@ -550,7 +465,90 @@ function MyProfile() {
               </div>
             </div>
           </div>
+        </div>
       </div>
+
+      {/* PASSWORD CHANGE MODAL */}
+      {isPasswordModalOpen && (
+        <div className="user-modal-overlay" onClick={() => setIsPasswordModalOpen(false)}>
+          <div
+            className="user-modal-content"
+            style={{ maxWidth: "480px", width: "100%" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="user-modal-header">
+              <div>
+                <h2>Change Password</h2>
+                <p className="modal-subtitle">Update your account password.</p>
+              </div>
+              <button className="user-modal-close" onClick={() => setIsPasswordModalOpen(false)}>
+                &#10005;
+              </button>
+            </div>
+
+            <form className="user-form" onSubmit={handlePasswordSubmit}>
+              <div className="user-form-grid" style={{ gridTemplateColumns: "1fr" }}>
+                <div className="form-row">
+                  <label htmlFor="old-password">Current Password</label>
+                  <input
+                    type="password"
+                    id="old-password"
+                    name="old_password"
+                    value={passwordForm.old_password}
+                    onChange={handlePasswordChange}
+                    placeholder="Enter current password"
+                    className={passwordErrors.old_password ? "field-error" : ""}
+                  />
+                  {passwordErrors.old_password && <span className="field-error-text">{passwordErrors.old_password}</span>}
+                </div>
+                <div className="form-row">
+                  <label htmlFor="new-password">New Password</label>
+                  <input
+                    type="password"
+                    id="new-password"
+                    name="new_password"
+                    value={passwordForm.new_password}
+                    onChange={handlePasswordChange}
+                    placeholder="Enter new password"
+                    className={passwordErrors.new_password ? "field-error" : ""}
+                  />
+                  {passwordErrors.new_password && <span className="field-error-text">{passwordErrors.new_password}</span>}
+                </div>
+                <div className="form-row">
+                  <label htmlFor="confirm-password">Confirm New Password</label>
+                  <input
+                    type="password"
+                    id="confirm-password"
+                    name="confirm_password"
+                    value={passwordForm.confirm_password}
+                    onChange={handlePasswordChange}
+                    placeholder="Confirm new password"
+                    className={passwordErrors.confirm_password ? "field-error" : ""}
+                  />
+                  {passwordErrors.confirm_password && <span className="field-error-text">{passwordErrors.confirm_password}</span>}
+                </div>
+              </div>
+
+              <div className="user-form-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setIsPasswordModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={saving}
+                >
+                  {saving ? "Saving..." : "Change Password"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

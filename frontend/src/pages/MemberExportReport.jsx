@@ -168,7 +168,11 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
   const empId = user.employee_id || "EMP-" + String(user.id || 0).padStart(4, "0");
 
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const chartVals = [60, 75, 100, 85, 95, 40, 80];
+  const workloadData = userData?.workload || [];
+  const chartVals = days.map((d) => {
+    const match = workloadData.find((w) => w.day === d);
+    return match ? match.percent : 0;
+  });
 
   // ═══════════════════════════ PDF GENERATION ═══════════════════════════
   /**

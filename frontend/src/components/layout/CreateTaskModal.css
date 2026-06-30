@@ -425,6 +425,18 @@
   gap: 12px;
 }
 
+.task-deadline-grid > div {
+  min-width: 0;
+}
+
+.task-card input[type="datetime-local"],
+.task-field input[type="datetime-local"] {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 .task-date-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -908,6 +920,18 @@
     height: 38px;
     font-size: 16px;
   }
+
+  .task-card input[type="datetime-local"] {
+    font-size: 13px;
+    padding: 11px 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .task-card input[type="datetime-local"] {
+    font-size: 12px;
+    padding: 10px 10px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -938,11 +962,20 @@
   .task-link-box {
     flex-direction: column;
   }
+
+  .task-card {
+    padding: 14px;
+  }
+
+  .task-card input[type="datetime-local"] {
+    font-size: 11px;
+    padding: 9px 8px;
+  }
 }
 
 @media (max-width: 360px) {
   .task-overlay {
-    padding: 8px;
+    padding: 6px;
   }
 
   .task-modal {
@@ -950,16 +983,16 @@
   }
 
   .task-header {
-    padding: 12px 14px;
+    padding: 10px 12px;
   }
 
   .task-header h2 {
-    font-size: 18px;
+    font-size: 16px;
   }
 
   .task-body {
-    padding: 12px;
-    gap: 16px;
+    padding: 10px;
+    gap: 12px;
   }
 
   .task-field input,
@@ -969,14 +1002,23 @@
     font-size: 13px;
   }
 
+  .task-card {
+    padding: 10px;
+  }
+
+  .task-card input[type="datetime-local"] {
+    font-size: 10px;
+    padding: 7px 6px;
+  }
+
   .task-footer {
-    padding: 14px;
-    gap: 12px;
+    padding: 12px;
+    gap: 10px;
   }
 
   .task-footer-btns button {
-    padding: 10px 14px;
-    font-size: 13px;
+    padding: 8px 12px;
+    font-size: 12px;
   }
 }
 
