@@ -4,6 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * Represents a file or link attachment for a submission.
+ * Supports both uploaded files and external URLs, scoped by submission_type (project, task, deliverable).
+ */
 class SubmissionAttachment extends Model
 {
     protected $fillable = [
@@ -20,6 +24,10 @@ class SubmissionAttachment extends Model
 
     protected $appends = ['full_url'];
 
+    /**
+     * Get the full URL for this attachment.
+     * Returns the external URL for link types, or the storage path for uploaded files.
+     */
     public function getFullUrlAttribute(): ?string
     {
         if ($this->attachment_type === 'link') {

@@ -1,3 +1,12 @@
+/**
+ * Taskby page component — "Tasks Assigned By You".
+ *
+ * Lists tasks and projects that the current user (typically admin, manager
+ * or team lead) has assigned to other team members.  Provides search with
+ * debounce, status filtering, time-range filtering, drag-and-drop reordering,
+ * pagination and a modal for creating new tasks.
+ */
+
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -43,6 +52,7 @@ const PRIORITY_TEXT_COLORS = {
   Low: "#166534",
 };
 
+/** Main Taskby page — renders tasks/projects assigned by the current user. */
 const Taskby = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -68,6 +78,7 @@ const Taskby = () => {
     return () => clearTimeout(timer);
   }, [search]);
 
+  /** Fetch tasks/projects assigned by the current user from the API. */
   const fetchTasks = () => {
     setLoading(true);
     const token = authToken();

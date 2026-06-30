@@ -1,3 +1,11 @@
+/**
+ * Header - Application header bar for the PMS dashboard.
+ * Contains: logo, global search (pages/projects/tasks/users), quick-create
+ * buttons (+ Task, + Project), notification bell with unread badge, and a
+ * user profile dropdown. Handles responsive behaviour (logo visibility,
+ * sidebar toggle) and real-time notification polling.
+ */
+
 import { useEffect, useState, useRef, useCallback } from "react";
 import { MdKeyboardArrowDown, MdNotifications } from "react-icons/md";
 import { Link, useNavigate } from "react-router-dom";
@@ -12,11 +20,15 @@ import "./Header.css";
 import CreateTaskModal from "../CreateTaskModal";
 import CreateProjectModal from "../CreateProjectModal";
 
+/**
+ * Header component – renders the top navigation bar.
+ */
 function Header() {
   const navigate = useNavigate();
   const searchRef = useRef(null);
   const notifRef = useRef(null);
 
+  // ── State ──
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showProjectModal, setShowProjectModal] = useState(false);
@@ -27,16 +39,19 @@ function Header() {
   const prevCountRef = useRef(0);
   const [showNotifications, setShowNotifications] = useState(false);
 
+  // Request browser notification permission and initialise Firebase on mount
   useEffect(() => {
     requestNotificationPermission();
     initFirebase();
   }, []);
 
+  // ── Search state & debounce ──
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [searchResults, setSearchResults] = useState({ pages: [], projects: [], tasks: [], users: [] });
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
 
+  /** Returns the list of navigable pages with keywords for local search. */
   const getPageLinks = () => [
     { name: "Dashboard", path: rolePath("dashboard"), keywords: "dashboard home" },
     { name: "Projects", path: rolePath("projects"), keywords: "projects list" },
@@ -50,24 +65,28 @@ function Header() {
     { name: "History", path: rolePath("history"), keywords: "history activity log" },
   ];
 
+  // Listen for sidebar open/close to control logo visibility
   useEffect(() => {
     const handler = (e) => setSidebarOpen(e.detail.open);
     window.addEventListener("sidebar-state", handler);
     return () => window.removeEventListener("sidebar-state", handler);
   }, []);
 
+  // Track viewport width for responsive behaviour
   useEffect(() => {
     const onResize = () => setIsSmallScreen(window.innerWidth <= 1200);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // Broadcast profile dropdown state so other components can react
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: isProfileOpen } }));
   }, [isProfileOpen]);
 
   const showFullLogo = sidebarOpen || !isSmallScreen;
 
+  /** User info loaded from local storage on first render. */
   const [user, setUserState] = useState(() => {
     const stored = getUser();
     return {
@@ -80,6 +99,7 @@ function Header() {
   const toggleProfileModal = () =>
     setIsProfileOpen((prev) => !prev);
 
+  // Debounce search input – only trigger after 300ms of inactivity
   useEffect(() => {
     if (searchQuery.trim().length < 2) {
       setDebouncedQuery("");
@@ -89,6 +109,7 @@ function Header() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Fire search when debounced value changes
   useEffect(() => {
     if (debouncedQuery.trim().length < 2) {
       setSearchResults({ pages: [], projects: [], tasks: [], users: [] });
@@ -98,10 +119,15 @@ function Header() {
     handleSearch(debouncedQuery);
   }, [debouncedQuery]);
 
+  /**
+   * Performs a combined search across local page links and remote APIs
+   * (projects, tasks, users). Results are limited to 5 per category.
+   */
   const handleSearch = async (query) => {
 
     const q = query.toLowerCase();
 
+    // 1. Match navigable pages locally
     const matchedPages = getPageLinks().filter(
       (p) => p.name.toLowerCase().includes(q) || p.keywords.includes(q)
     );
@@ -110,6 +136,7 @@ function Header() {
     let matchedTasks = [];
     let matchedUsers = [];
 
+    // 2. Fetch and filter remote data in parallel
     try {
       const token = authToken();
       const headers = { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" };
@@ -154,12 +181,14 @@ function Header() {
     setShowSearchDropdown(true);
   };
 
+  /** Navigate to the selected result and reset the search bar. */
   const handleSearchSelect = (path) => {
     setShowSearchDropdown(false);
     setSearchQuery("");
     navigate(path);
   };
 
+  // Close search dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
@@ -170,6 +199,7 @@ function Header() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Fetch current user data from the API on mount
   useEffect(() => {
 
     const token = authToken();
@@ -203,6 +233,7 @@ function Header() {
       .catch(() => {});
   }, []);
 
+  /** Fetch unread notification count; triggers a browser notification on increase. */
   const fetchNotifications = useCallback(() => {
     const token = authToken();
     if (!token) return;
@@ -226,6 +257,7 @@ function Header() {
       .catch(() => {});
   }, []);
 
+  // Poll for unread notifications every 10 seconds + subscribe to data-change events
   useEffect(() => {
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 10000);
@@ -233,6 +265,7 @@ function Header() {
     return () => { clearInterval(interval); unsub(); };
   }, [fetchNotifications]);
 
+  /** Toggle the notification panel and fetch the full list when opening. */
   const openNotifications = async () => {
     const token = authToken();
     if (!token) return;
@@ -250,6 +283,7 @@ function Header() {
     });
   };
 
+  /** Mark a single notification as read and update local state. */
   const markAsRead = async (id) => {
     const token = authToken();
     if (!token) return;
@@ -262,6 +296,7 @@ function Header() {
     setUnreadCount((prev) => Math.max(0, prev - 1));
   };
 
+  /** Mark all notifications as read. */
   const markAllAsRead = async () => {
     const token = authToken();
     if (!token) return;
@@ -274,6 +309,7 @@ function Header() {
     setUnreadCount(0);
   };
 
+  // Close notification panel when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) {
@@ -287,10 +323,10 @@ function Header() {
   return (
     <>
 
+      {/* ── Left: Menu toggle + Logo ── */}
       <div className="header-container">
 
         {/* LEFT */}
-
         <div className="header-left">
 
           <button
@@ -316,8 +352,7 @@ function Header() {
 
         </div>
 
-        {/* SEARCH */}
-
+        {/* ── Search bar with dropdown results ── */}
         <div className="header-search" ref={searchRef}>
 
           <i className="fa-solid fa-magnifying-glass search-icon"></i>
@@ -391,11 +426,10 @@ function Header() {
 
         </div>
 
-        {/* RIGHT */}
-
+        {/* ── Right: Create buttons, notifications, user menu ── */}
         <div className="header-right">
 
-          {/* TASK BUTTON */}
+          {/* Quick-create task button */}
 
           <button
             className="task-btn1"
@@ -406,7 +440,7 @@ function Header() {
             + Task
           </button>
 
-          {/* PROJECT BUTTON */}
+          {/* Quick-create project button – visible to admin/manager only */}
 
           {["admin", "manager"].includes(getCurrentRole()) && (
           <button
@@ -419,7 +453,7 @@ function Header() {
           </button>
           )}
 
-          {/* NOTIFICATIONS */}
+          {/* Notification bell with unread badge */}
           <div className="header-notif">
             <Link to={rolePath("notifications")} className="header-notif-link">
               <div className="header-notif-icon-wrap">
@@ -433,7 +467,7 @@ function Header() {
 
           <hr />
 
-          {/* USER */}
+          {/* User info + profile dropdown */}
 
           <div
             className="user-info"
@@ -512,7 +546,9 @@ function Header() {
 
       </div>
 
-      {/* TASK MODAL */}
+      {/* ── Modals ── */}
+
+      {/* Task creation modal */}
 
       {showTaskModal && (
 
@@ -523,7 +559,7 @@ function Header() {
         />
       )}
 
-      {/* PROJECT MODAL */}
+      {/* Project creation modal – admin/manager only */}
 
       {showProjectModal && (
         <div className="modal-overlay" onClick={() => setShowProjectModal(false)}>

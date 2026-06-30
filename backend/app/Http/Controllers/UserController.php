@@ -8,12 +8,14 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Task;
+use App\Services\ActivityService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use App\Models\Project;
 use App\Mail\UserCreated;
 use App\Mail\UserResigned;
 use App\Mail\UserProfileUpdated;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -26,10 +28,17 @@ use Laravel\Sanctum\PersonalAccessToken;
 
 /**
  * User management controller.
- * Handles listing, creating, updating, and deleting users.
+ * Handles listing, creating, updating, resigning, and deleting users.
+ * Supports document uploads, profile viewing, and email notifications.
+ * Enforces role-based access control (managers cannot modify admin/manager accounts).
  */
 class UserController extends Controller
 {
+    public function __construct(
+        private ActivityService $activityService,
+        private NotificationService $notificationService
+    ) {}
+
     private array $documentFields = [
         'employment_contract',
         'offer_letter',
@@ -42,15 +51,17 @@ class UserController extends Controller
     ];
 
     /**
-     * Return a list of all users with full profile fields.
+     * Return a list of all users with key profile fields.
+     *
+     * Ordered by sort_order then most recently updated first.
+     *
+     * @return \Illuminate\Http\JsonResponse  JSON response with the user list.
      */
     public function index()
     {
-        $users = Cache::remember('all_users_list', 300, function () {
-            return User::select('id', 'name', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order')
-                ->orderBy('sort_order')->orderBy('id')
-                ->get();
-        });
+        $users = User::select('id', 'name', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password')
+            ->orderBy('sort_order')->latest('updated_at')
+            ->get();
 
         return response()->json([
             'success' => true,
@@ -60,6 +71,9 @@ class UserController extends Controller
 
     /**
      * Return a single user by ID.
+     *
+     * @param  \App\Models\User  $user  The user to retrieve.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the user.
      */
     public function show(User $user)
     {
@@ -70,7 +84,13 @@ class UserController extends Controller
     }
 
     /**
-     * Create a new user account with auto-generated password and file uploads.
+     * Create a new user account with an auto-generated password and optional document uploads.
+     *
+     * Sends a welcome email with login credentials. Managers cannot create admin/manager accounts.
+     * The must_change_password flag is set to true for new users.
+     *
+     * @param  \Illuminate\Http\Request  $request  Validated input: name, email, role, department, designation, employee_code, and optional profile/document fields.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the created user and email status.
      */
     public function store(Request $request)
     {
@@ -129,7 +149,7 @@ class UserController extends Controller
             'email' => $request->input('email'),
             'password' => Hash::make($plainPassword),
             'role' => $role,
-            'active' => true,
+            'active' => false,
             'must_change_password' => true,
 
             // Contact
@@ -170,6 +190,20 @@ class UserController extends Controller
         // Handle file uploads
         $this->handleFileUploads($request, $user);
 
+        Cache::forget('all_users_list');
+        Cache::forget('admin_manager_ids');
+
+        $this->activityService->log(
+            $authUser->id,
+            'user_created',
+            "You created user {$user->name}",
+            'user',
+            $user->id,
+            'created',
+            $user->name,
+            $user->id,
+        );
+
         $loginUrl = config('app.frontend_url');
 
         $emailSent = false;
@@ -204,7 +238,15 @@ class UserController extends Controller
     }
 
     /**
-     * Update user details and handle file uploads.
+     * Update a user's profile details, role, and document uploads.
+     *
+     * Enforces role-based restrictions: managers cannot modify admin/manager accounts,
+     * and users cannot modify their own account via this endpoint.
+     * Sends a profile update email notification when changes are detected.
+     *
+     * @param  \Illuminate\Http\Request  $request  Validated input for updatable fields.
+     * @param  \App\Models\User  $user  The user to update.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the updated user.
      */
     public function update(Request $request, User $user)
     {
@@ -256,7 +298,7 @@ class UserController extends Controller
             ], 403);
         }
 
-        if ($user->active === false) {
+        if ($user->active === false && !$user->must_change_password) {
             return response()->json([
                 'success' => false,
                 'message' => 'Resigned users cannot be modified.',
@@ -291,22 +333,22 @@ class UserController extends Controller
 
         $oldValues = [];
         foreach ($fields as $field) {
-            if ($request->has($field)) {
+            if ($request->exists($field)) {
                 $oldValues[$field] = $user->$field;
             }
         }
 
         foreach ($fields as $field) {
-            if ($request->has($field)) {
+            if ($request->exists($field)) {
                 $user->$field = $request->input($field);
             }
         }
 
         // Sync legacy fields
-        if ($request->has('phone_number')) {
+        if ($request->exists('phone_number')) {
             $user->contact_no = $request->input('phone_number');
         }
-        if ($request->has('present_address')) {
+        if ($request->exists('present_address')) {
             $user->address = $request->input('present_address');
         }
 
@@ -327,26 +369,70 @@ class UserController extends Controller
             }
         }
 
+        $emailSent = null;
+        $emailError = null;
         if (!empty($changes)) {
             try {
                 Mail::to($user->email)->send(new UserProfileUpdated($user, $authUser->name, $changes));
+                $emailSent = true;
             } catch (\Exception $e) {
+                $emailError = $e->getMessage();
                 \Illuminate\Support\Facades\Log::error('Failed to send profile update email: ' . $e->getMessage());
+                $emailSent = false;
             }
+
+            $this->notificationService->notify(
+                $user->id,
+                $authUser->id,
+                'user_updated',
+                'user',
+                $user->id,
+                'Profile Updated',
+                'Your information has been changed. Please check your email for further information.'
+            );
         }
 
         // Handle file uploads
         $this->handleFileUploads($request, $user);
 
+        Cache::forget('all_users_list');
+        if (in_array($user->role, ['admin', 'manager']) || isset($oldValues['role'])) {
+            Cache::forget('admin_manager_ids');
+        }
+
+        if (!empty($changes)) {
+            $this->activityService->log(
+                $authUser->id,
+                'user_updated',
+                "You updated user {$user->name}",
+                'user',
+                $user->id,
+                'updated',
+                $user->name,
+                $user->id,
+                ['changes' => $changes]
+            );
+        }
+
+        $message = 'User updated successfully';
+        if ($emailSent === true) {
+            $message .= '. Notification email sent to ' . $user->email;
+        } elseif ($emailSent === false) {
+            $message .= '. Failed to send notification email: ' . $emailError;
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'User updated successfully',
+            'message' => $message,
             'user' => $user,
         ]);
     }
 
     /**
-     * Reorder users by updating sort_order values.
+     * Reorder users by updating their sort_order values in bulk.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: items[] with id and sort_order.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming reorder.
      */
     public function reorder(Request $request)
     {
@@ -362,11 +448,17 @@ class UserController extends Controller
             $ph = implode(',', array_fill(0, count($ids), '?'));
             DB::statement("UPDATE users SET sort_order = CASE id " . implode(' ', array_fill(0, count($ids), 'WHEN ? THEN ?')) . " END WHERE id IN ($ph)", [...$bindings, ...$ids]);
         }
+        Cache::forget('all_users_list');
         return response()->json(['success' => true, 'message' => 'Users reordered successfully']);
     }
 
     /**
-     * Delete a user from the system.
+     * Delete a user from the system along with all associated files.
+     *
+     * Users cannot delete their own account. Managers cannot delete admin/manager accounts.
+     *
+     * @param  \App\Models\User  $user  The user to delete.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming deletion.
      */
     public function destroy(User $user)
     {
@@ -385,6 +477,9 @@ class UserController extends Controller
 
         $user->delete();
 
+        Cache::forget('all_users_list');
+        Cache::forget('admin_manager_ids');
+
         return response()->json([
             'success' => true,
             'message' => 'User deleted successfully',
@@ -392,7 +487,14 @@ class UserController extends Controller
     }
 
     /**
-     * Resign a user - set active to false and send notification email.
+     * Resign a user by setting their active status to false.
+     *
+     * Revokes all API tokens and sends a resignation notification email.
+     * Managers cannot resign admin/manager accounts. Users cannot resign themselves.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @param  \App\Models\User  $user  The user to resign.
+     * @return \Illuminate\Http\JsonResponse  JSON response with resignation status and email status.
      */
     public function resign(Request $request, User $user)
     {
@@ -421,11 +523,26 @@ class UserController extends Controller
             }
 
             $user->active = false;
+            $user->must_change_password = false;
             $user->save();
 
-            $user->tokens()->delete();
+            Cache::forget('all_users_list');
+            if (in_array($user->role, ['admin', 'manager'])) {
+                Cache::forget('admin_manager_ids');
+            }
 
             Log::info("User {$user->id} ({$user->email}) resigned by {$authUser->id} ({$authUser->email})");
+
+            $this->activityService->log(
+                $authUser->id,
+                'user_resigned',
+                "You resigned user {$user->name}",
+                'user',
+                $user->id,
+                'resigned',
+                $user->name,
+                $user->id,
+            );
 
             $emailSent = false;
             $emailError = null;
@@ -464,7 +581,10 @@ class UserController extends Controller
     }
 
     /**
-     * Return a simplified user list for team assignment.
+     * Return a simplified list of active users for team assignment dropdowns.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @return \Illuminate\Http\JsonResponse  JSON response with active user list (id, name, email, role).
      */
     public function getTeamUsers(Request $request)
     {
@@ -477,7 +597,10 @@ class UserController extends Controller
     }
 
     /**
-     * Return full user profile with statistics and metadata.
+     * Get a user's full profile with task/project statistics, login history, and account metadata.
+     *
+     * @param  int  $id  The ID of the user to get the profile for.
+     * @return \Illuminate\Http\JsonResponse  JSON response with user profile, stats, projects, and account info.
      */
     public function profile($id)
     {
@@ -535,7 +658,7 @@ class UserController extends Controller
                 'employment_contract', 'offer_letter', 'techxaro_regulations',
                 'latest_education_cert', 'cv', 'previous_exp_letter',
                 'previous_salary_slip', 'other_document',
-                'last_login_at', 'created_at', 'updated_at',
+                'last_login_at', 'created_at', 'updated_at', 'must_change_password',
             ]),
             'stats' => [
                 'total_assigned_tasks' => (int) $taskStats->total_assigned,
@@ -548,14 +671,22 @@ class UserController extends Controller
             'account' => [
                 'account_age' => $accountAge,
                 'days_since_creation' => $daysSinceCreation,
-                'status' => $user->active ? 'Active' : 'Resigned',
+                'status' => $user->active ? 'Active' : ($user->must_change_password ? 'Inactive' : 'Resigned'),
                 'last_login' => $user->last_login_at?->toDateTimeString() ?? 'Never logged in',
             ],
         ]);
     }
 
     /**
-     * Serve a user document file for viewing/downloading.
+     * Serve a user document file for viewing or downloading.
+     *
+     * Supports both direct file viewing and forced download via 'action=download' query param.
+     * Authenticates via Bearer token or query parameter token.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request with optional token and action params.
+     * @param  \App\Models\User  $user  The user whose document to retrieve.
+     * @param  string  $document  The document field name (e.g., 'cv', 'employment_contract').
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse|\Illuminate\Http\JsonResponse  File response or error.
      */
     public function downloadDocument(Request $request, User $user, string $document)
     {
@@ -589,7 +720,10 @@ class UserController extends Controller
     }
 
     /**
-     * Try to authenticate via Bearer token header or ?token= query param.
+     * Try to authenticate the user via Bearer token header or ?token= query param.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @return \App\Models\User|null  The authenticated user or null if not found.
      */
     private function resolveAuth(Request $request): ?User
     {
@@ -610,7 +744,10 @@ class UserController extends Controller
     }
 
     /**
-     * Convert empty strings to null for proper nullable validation.
+     * Convert empty string values in the request to null for proper nullable validation.
+     *
+     * @param  \Illuminate\Http\Request  $request  The request to normalize.
+     * @return void
      */
     private function normalizeEmptyStrings(Request $request): void
     {
@@ -622,7 +759,13 @@ class UserController extends Controller
     }
 
     /**
-     * Handle file uploads for a user and store paths in database.
+     * Handle file uploads for all document fields and store paths in the database.
+     *
+     * Deletes existing files before uploading new ones. Only processes valid uploads.
+     *
+     * @param  \Illuminate\Http\Request  $request  The request containing file uploads.
+     * @param  \App\Models\User  $user  The user to upload files for.
+     * @return void
      */
     private function handleFileUploads(Request $request, User $user): void
     {
@@ -650,7 +793,10 @@ class UserController extends Controller
     }
 
     /**
-     * Delete all files associated with a user.
+     * Delete all document files associated with a user from storage.
+     *
+     * @param  \App\Models\User  $user  The user whose files to delete.
+     * @return void
      */
     private function deleteAllFiles(User $user): void
     {
@@ -662,7 +808,11 @@ class UserController extends Controller
     }
 
     /**
-     * Download a document for the authenticated user (self-access).
+     * Download or view a document belonging to the authenticated user (self-access only).
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request with optional action=download.
+     * @param  string  $document  The document field name (e.g., 'cv', 'offer_letter').
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse|\Illuminate\Http\JsonResponse  File response or error.
      */
     public function downloadMyDocument(Request $request, string $document)
     {
@@ -698,7 +848,10 @@ class UserController extends Controller
     }
 
     /**
-     * Test email sending functionality.
+     * Test email sending functionality by sending a test email to the specified address.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: email (required).
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming email sent or reporting failure.
      */
     public function testEmail(Request $request)
     {

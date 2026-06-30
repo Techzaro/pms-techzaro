@@ -4,8 +4,21 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/**
+ * API resource for Deliverable models.
+ *
+ * Transforms deliverable data into a consistent JSON structure,
+ * including nested related resources (project, assignee, submissions, etc.).
+ */
 class DeliverableResource extends JsonResource
 {
+    /**
+     * Transform the deliverable into an array.
+     *
+     * @param \Illuminate\Http\Request $request
+     *
+     * @return array
+     */
     public function toArray($request)
     {
         return [

@@ -1,16 +1,29 @@
+/**
+ * ExportReport.jsx — Performance Report Export Modal
+ *
+ * A modal component for generating and exporting a team performance report as PDF.
+ * Features:
+ * - Timeline filter (All Time, Today, This Week, This Month, Custom Range)
+ * - Report preview with summary cards and user performance table
+ * - PDF export using jsPDF with branded header/footer and auto-generated tables
+ * - Rendered via React portal to body
+ */
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import "../pages/ExportReport.css";
 
+/** Color palette for user avatar backgrounds */
 const AVATAR_COLORS = ["#f59e0b", "#3b82f6", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
 
+/** Extracts up to 2 initials from a name */
 function getInitials(name) {
   if (!name) return "?";
   return name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
 }
 
+/** Returns a deterministic avatar color based on the name hash */
 function getAvatarColor(name) {
   if (!name) return AVATAR_COLORS[0];
   let hash = 0;
@@ -18,7 +31,9 @@ function getAvatarColor(name) {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
+/** Display labels for user roles */
 const ROLE_LABEL = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member" };
+/** RGB color values for task statuses in PDF */
 const STATUS_COLORS_PDF = {
   completed: [22, 101, 52], done: [22, 101, 52], approved: [22, 101, 52],
   pending: [146, 64, 14],
@@ -26,11 +41,17 @@ const STATUS_COLORS_PDF = {
   overdue: [153, 27, 27],
 };
 
+/** Formats a status string to display label */
 function formatStatus(status) {
   const map = { pending: "Pending", approved: "Approved", assigned: "Assigned", completed: "Completed" };
   return map[status] || status || "-";
 }
 
+/**
+ * ExportReport — Modal for generating and exporting a performance report as PDF.
+ * Accepts summary data and users array as props, provides timeline filtering,
+ * report preview, and PDF generation.
+ */
 function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
   const [showReview, setShowReview] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -57,6 +78,7 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
     return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   };
 
+  // Generates a branded PDF with summary cards and user performance table
   const generatePDF = () => {
     setGenerating(true);
     try {

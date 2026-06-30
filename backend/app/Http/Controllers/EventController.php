@@ -13,12 +13,29 @@ use App\Services\ActivityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
+/**
+ * Controller for managing calendar events.
+ * Provides CRUD operations for manual events, a unified calendar view
+ * aggregating tasks, projects, deliverables, and manual events,
+ * and a summary endpoint for today's and upcoming events.
+ * Sends notifications to assigned users on event creation, update, and deletion.
+ */
 class EventController extends Controller
 {
     public function __construct(
         private NotificationService $notificationService,
         private ActivityService $activityService
     ) {}
+
+    /**
+     * List all events visible to the authenticated user with pagination.
+     *
+     * Non-admin/manager users only see events they are assigned to.
+     * Supports 'all' query param to return all events without pagination.
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameters: 'all', filter params.
+     * @return \Illuminate\Http\JsonResponse  JSON response with paginated or full event list.
+     */
     public function index(Request $request)
     {
         $user = $request->user();
@@ -42,6 +59,15 @@ class EventController extends Controller
         return response()->json($events);
     }
 
+    /**
+     * Get a unified calendar view combining tasks, projects, deliverables, and manual events.
+     *
+     * Filters by date range (from/to) and optional search term. Returns all items
+     * relevant to the authenticated user in a normalized calendar event format.
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameters: from, to, search.
+     * @return \Illuminate\Http\JsonResponse  JSON response with unified event list and metadata counts.
+     */
     public function unifiedCalendar(Request $request)
     {
         $user = $request->user();
@@ -131,13 +157,21 @@ class EventController extends Controller
         ]);
     }
 
+    /**
+     * Get a summary of today's and upcoming events from the unified calendar.
+     *
+     * Returns events split into 'today' and 'upcoming' categories, cached for 60 seconds.
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameter: local_date (YYYY-MM-DD, defaults to today).
+     * @return \Illuminate\Http\JsonResponse  JSON response with today and upcoming event arrays.
+     */
     public function unifiedSummary(Request $request)
     {
         $user = $request->user();
         $today = $request->input('local_date', date('Y-m-d'));
 
         $cacheKey = "unified_summary_{$user->id}_{$today}";
-        return Cache::remember($cacheKey, 60, function () use ($user, $today) {
+        return Cache::remember($cacheKey, 30, function () use ($user, $today) {
             $events = collect();
 
             $tasks = Task::where(function ($q) use ($user) {
@@ -235,6 +269,14 @@ class EventController extends Controller
         ];
     }
 
+    /**
+     * Retrieve a single event by ID.
+     *
+     * Non-admin/manager users can only view global events or events they are assigned to.
+     *
+     * @param  \App\Models\Event  $event  The event to retrieve.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the formatted event or 403.
+     */
     public function show(Event $event)
     {
         $user = request()->user();
@@ -249,6 +291,14 @@ class EventController extends Controller
         return response()->json(['success' => true, 'event' => $this->formatEventResponse($event)]);
     }
 
+    /**
+     * Create a new calendar event. Only admin/manager roles can create events.
+     *
+     * Sends notifications to all assigned users (or all active users for global events).
+     *
+     * @param  \Illuminate\Http\Request  $request  Validated input: title, description, type, color, start_date, end_date, all_day, is_global, assigned_user_ids.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the created event.
+     */
     public function store(Request $request)
     {
         $user = $request->user();
@@ -287,6 +337,15 @@ class EventController extends Controller
         return response()->json(['success' => true, 'message' => 'Event created successfully', 'event' => $this->formatEventResponse($event->fresh())], 201);
     }
 
+    /**
+     * Update an existing calendar event. Only admin/manager roles can update events.
+     *
+     * Syncs assigned user relationships and sends notifications to affected users.
+     *
+     * @param  \Illuminate\Http\Request  $request  Validated input for updatable fields.
+     * @param  \App\Models\Event  $event  The event to update.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the updated event.
+     */
     public function update(Request $request, Event $event)
     {
         $user = $request->user();
@@ -321,6 +380,14 @@ class EventController extends Controller
         return response()->json(['success' => true, 'message' => 'Event updated successfully', 'event' => $this->formatEventResponse($event->fresh())]);
     }
 
+    /**
+     * Delete a calendar event. Only admin/manager roles can delete events.
+     *
+     * Sends cancellation notifications to all assigned users before deletion.
+     *
+     * @param  \App\Models\Event  $event  The event to delete.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming deletion.
+     */
     public function destroy(Event $event)
     {
         $user = request()->user();
@@ -336,6 +403,15 @@ class EventController extends Controller
         return response()->json(['success' => true, 'message' => 'Event deleted successfully']);
     }
 
+    /**
+     * Send bulk notifications to all event recipients, avoiding duplicates within 5 minutes.
+     *
+     * @param  \App\Models\Event  $event  The event triggering the notification.
+     * @param  \App\Models\User  $sender  The user who performed the action.
+     * @param  string  $type  The notification type (event_created, event_updated, event_cancelled).
+     * @param  string  $title  The notification title.
+     * @return void
+     */
     private function sendBulkEventNotification(Event $event, User $sender, string $type, string $title): void
     {
         $recipientIds = $this->getEventRecipientIds($event);
@@ -362,6 +438,14 @@ class EventController extends Controller
         $this->notificationService->createBulk($notifications);
     }
 
+    /**
+     * Get all user IDs that should receive notifications for an event.
+     *
+     * Returns all active users for global events, or the assigned user IDs for non-global events.
+     *
+     * @param  \App\Models\Event  $event  The event to get recipients for.
+     * @return array  Array of user IDs.
+     */
     private function getEventRecipientIds(Event $event): array
     {
         if ($event->is_global) return User::where('active', true)->pluck('id')->toArray();
@@ -369,6 +453,12 @@ class EventController extends Controller
         return !empty($assignedIds) ? $assignedIds : [$event->user_id];
     }
 
+    /**
+     * Format an event model into a standardized API response array.
+     *
+     * @param  \App\Models\Event  $event  The event to format.
+     * @return array  Formatted event data.
+     */
     private function formatEventResponse(Event $event): array
     {
         $event->loadMissing('user:id,name', 'assignedUsers:id,name');
@@ -387,8 +477,20 @@ class EventController extends Controller
         ];
     }
 
+    /**
+     * Format a date value to ISO 8601 format, or return null if empty.
+     *
+     * @param  mixed  $date  A Carbon instance or date string.
+     * @return string|null  Formatted date string or null.
+     */
     private function fmtDate($date): ?string { return $date ? (is_string($date) ? $date : $date->format('Y-m-d\TH:i:s')) : null; }
 
+    /**
+     * Get a human-readable label for an event type.
+     *
+     * @param  string  $type  The event type key.
+     * @return string  The display label for the event type.
+     */
     private function getEventTypeLabel(string $type): string
     {
         return ['Meeting'=>'Meeting','Training'=>'Training','Workshop'=>'Workshop','Client Meeting'=>'Client Meeting',
@@ -396,6 +498,14 @@ class EventController extends Controller
             'Project Milestone'=>'Project Milestone','Internship Activity'=>'Internship Activity','Other'=>'Other'][$type] ?? $type;
     }
 
+    /**
+     * Build a notification message based on the event type and sender.
+     *
+     * @param  \App\Models\Event  $event  The event.
+     * @param  \App\Models\User  $sender  The user who triggered the event.
+     * @param  string  $type  The notification type.
+     * @return string  The formatted notification message.
+     */
     private function buildEventMessage(Event $event, User $sender, string $type): string
     {
         return match ($type) {

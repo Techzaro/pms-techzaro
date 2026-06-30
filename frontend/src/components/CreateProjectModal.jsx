@@ -1,3 +1,10 @@
+/**
+ * CreateProjectModal.jsx
+ * Full-featured modal form for creating a new project.
+ * Includes fields for title, description, category, team assignment, milestones,
+ * goals, deliverables, attachments (files & links), client info, and priority.
+ */
+
 import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
@@ -18,6 +25,10 @@ const PRESET_PHASES = [
 
 const TEAM_ROLES = ["Solution", "Tech", "Developer"];
 
+/**
+ * Modal form for creating a new project with all associated metadata.
+ * @param {Function} onClose - Callback to close the modal; receives boolean (true if created)
+ */
 const CreateProjectModal = ({ onClose }) => {
   const [loading, setLoading] = useState(false);
   const [formErrors, setFormErrors] = useState({});
@@ -223,7 +234,14 @@ const CreateProjectModal = ({ onClose }) => {
     if (e.key === "Enter") { e.preventDefault(); handleAddDeliverableProj(); }
   };
 
+  /**
+   * Uploads pending file attachments and links to the newly created project.
+   * Runs sequentially; failures are silently caught per-item.
+   * @param {number} projectId - ID of the created project
+   * @param {string} token - Auth token
+   */
   const uploadAttachments = async (projectId, token) => {
+    // Upload each file as multipart/form-data
     for (const file of pendingFiles) {
       const fd = new FormData();
       fd.append("file", file);
@@ -236,6 +254,7 @@ const CreateProjectModal = ({ onClose }) => {
       } catch {}
     }
 
+    // Upload each link as JSON
     for (const link of links) {
       try {
         await fetch(`${API_URL}/projects/${projectId}/links`, {
@@ -251,6 +270,10 @@ const CreateProjectModal = ({ onClose }) => {
     }
   };
 
+  /**
+   * Validates required form fields. Sets formErrors state and returns validity.
+   * @returns {boolean} True if form is valid
+   */
   const validateForm = () => {
     const errors = {};
     if (!form.title.trim()) {
@@ -260,6 +283,10 @@ const CreateProjectModal = ({ onClose }) => {
     return Object.keys(errors).length === 0;
   };
 
+  /**
+   * Handles form submission: validates, creates project via API,
+   * uploads attachments, and publishes events on success.
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -270,9 +297,11 @@ const CreateProjectModal = ({ onClose }) => {
     try {
       const token = authToken();
 
+      // Use the last milestone's due date as the project end date
       const lastMilestone = milestones.length > 0 ? milestones[milestones.length - 1] : null;
       const computedEndDate = lastMilestone ? lastMilestone.due_date : null;
 
+      // Build the request payload from form state
       const body = {
         title: form.title.trim(),
         description: form.description || null,

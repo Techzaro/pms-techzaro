@@ -1,3 +1,12 @@
+/**
+ * MyProfile page component.
+ *
+ * Displays the currently logged-in user's profile information including
+ * personal details, employment data, email addresses, uploaded documents
+ * and account status.  Provides an inline password-change modal so the
+ * user can update their credentials without leaving the page.
+ */
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { MdEdit } from "react-icons/md";
@@ -8,6 +17,11 @@ import { authToken, getCurrentRole, normalizeRole } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import "./UserProfile.css";
 
+/**
+ * MyProfile — self-service profile page for the logged-in user.
+ * Fetches profile data on mount and renders read-only sections with a
+ * password-change modal.
+ */
 function MyProfile() {
   const navigate = useNavigate();
   const notify = useNotification();
@@ -23,6 +37,7 @@ function MyProfile() {
   const [passwordErrors, setPasswordErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
+  /** Build auth headers for API requests. */
   const authHeaders = () => {
     const token = authToken();
     return {
@@ -31,6 +46,7 @@ function MyProfile() {
     };
   };
 
+  /** Fetch the current user's profile from the API. */
   const fetchProfile = async () => {
     setLoading(true);
     setError("");
@@ -57,6 +73,7 @@ function MyProfile() {
     fetchProfile();
   }, [navigate]);
 
+  /** Extract up to 2 uppercase initials from a full name for the avatar. */
   const getInitials = (name) => {
     if (!name) return "?";
     return name
@@ -66,6 +83,7 @@ function MyProfile() {
       .join("");
   };
 
+  /** Reset the password form and open the modal. */
   const openPasswordModal = () => {
     setPasswordForm({ old_password: "", new_password: "", confirm_password: "" });
     setPasswordErrors({});
@@ -84,6 +102,7 @@ function MyProfile() {
     }
   };
 
+  /** Validate the password-change form and return an errors object. */
   const validatePasswordForm = () => {
     const errors = {};
     if (!passwordForm.old_password) errors.old_password = "Current password is required.";
@@ -100,6 +119,7 @@ function MyProfile() {
     return errors;
   };
 
+  /** Submit the password change to the API. */
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     const errors = validatePasswordForm();

@@ -1,13 +1,31 @@
+/**
+ * Pagination.jsx
+ * Reusable pagination component with Previous/Next buttons and smart page number
+ * display. Shows ellipsis for large page counts to keep the UI compact.
+ */
+
 import React from "react";
 
+/**
+ * Renders pagination controls for navigating between pages.
+ * @param {number} currentPage - The currently active page (1-indexed).
+ * @param {number} totalPages - Total number of pages.
+ * @param {Function} onPageChange - Callback invoked with the target page number.
+ */
 export default function Pagination({ currentPage, totalPages, onPageChange }) {
   if (totalPages <= 1) return null;
 
+  /** Generate array of all page numbers */
   const pages = [];
   for (let i = 1; i <= totalPages; i++) {
     pages.push(i);
   }
 
+  /**
+   * Determine which page numbers to display.
+   * Shows all pages if <= 7, otherwise shows a window around the current page
+   * with ellipsis markers for skipped ranges.
+   */
   const getVisiblePages = () => {
     if (totalPages <= 7) return pages;
     const start = Math.max(1, currentPage - 2);
@@ -55,6 +73,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
 
       {getVisiblePages().map((page, idx) =>
         page === "..." ? (
+          /* Ellipsis marker for skipped page ranges */
           <span key={`dots-${idx}`} style={{ padding: "0 4px", color: "#9ca3af", fontSize: "13px" }}>
             ...
           </span>

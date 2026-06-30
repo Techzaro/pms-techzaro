@@ -4,8 +4,21 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/**
+ * Full API resource for Task models.
+ *
+ * Includes all task fields, related resources (project, assignees,
+ * deliverables, submissions, workflow events), and loaded relationships.
+ */
 class TaskResource extends JsonResource
 {
+    /**
+     * Transform the task into a complete array representation.
+     *
+     * @param \Illuminate\Http\Request $request
+     *
+     * @return array
+     */
     public function toArray($request)
     {
         return [

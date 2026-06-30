@@ -1,3 +1,10 @@
+/**
+ * Event.jsx
+ * Multi-step modal for creating or editing calendar events.
+ * Step 1: Title and description. Step 2: Date/time, type, and user assignment.
+ * Supports both single-date and multi-day events, all-day mode, and global assignment.
+ */
+
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { authToken } from "../utils/auth";
@@ -46,6 +53,13 @@ const COLOR_MAP = {
   "Other": "#6b7280",
 };
 
+/**
+ * Multi-step modal for creating or editing calendar events.
+ * @param {boolean} isOpen - Whether the modal is visible
+ * @param {Function} onClose - Callback to close the modal
+ * @param {Function} [onEventCreated] - Callback when an event is created or updated
+ * @param {Object|null} [editEvent=null] - Event object to edit (null for creation mode)
+ */
 function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -154,6 +168,10 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
     onClose();
   };
 
+  /**
+   * Handles event creation or update. Validates title, builds the payload
+   * with date/time logic, and sends POST (create) or PUT (edit) request.
+   */
   const handleCreate = async () => {
     if (!formData.title.trim()) {
       notify.error("Event title is required");
@@ -162,13 +180,16 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
 
     setLoading(true);
 
+    // Build start datetime; all-day events use 00:00
     const startDateTime = formData.startDate + "T" + (formData.allDay ? "00:00" : formData.startTime) + ":00";
 
+    // Use end date if enabled, otherwise fall back to start date
     const endDateToUse = formData.hasEndDate ? formData.endDate : formData.startDate;
     const endTimeToUse = formData.hasEndDate ? formData.endTime : (formData.allDay ? "23:59" : formData.startTime);
 
     const endDateTime = endDateToUse + "T" + endTimeToUse + ":00";
 
+    // Build request payload
     const payload = {
       title: formData.title.trim(),
       description: formData.description.trim() || null,

@@ -1,3 +1,12 @@
+/**
+ * SelfTasks page component.
+ *
+ * Displays tasks and projects that the current user assigned to themselves.
+ * Includes search with debounce, status filtering, time-range filtering,
+ * drag-and-drop reordering and pagination.  Modals are available for
+ * creating new tasks, submitting deliverables and submitting projects.
+ */
+
 import { useState, useEffect, useCallback } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -47,6 +56,7 @@ const PRIORITY_TEXT_COLORS = {
   Low: "#166534",
 };
 
+/** Main Self Tasks page — renders tasks and projects assigned by the current user to themselves. */
 const SelfTasks = () => {
   const navigate = useNavigate();
   
@@ -78,6 +88,7 @@ const SelfTasks = () => {
     return () => clearTimeout(timer);
   }, [search]);
 
+  /** Fetch self-assigned tasks/projects from the API with current filters. */
   const fetchTasks = () => {
     setLoading(true);
     const token = authToken();

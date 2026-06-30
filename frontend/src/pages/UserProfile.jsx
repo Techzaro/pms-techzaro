@@ -1,3 +1,13 @@
+/**
+ * UserProfile page component — admin/manager view of another user's profile.
+ *
+ * Displays the selected user's personal information, employment details,
+ * email accounts, salary/bank data, uploaded documents and account status.
+ * Provides an edit modal (accessible to admins and managers) for updating
+ * user fields, uploading documents and changing system role.  Read-only for
+ * non-admin roles unless editing their own profile.
+ */
+
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { MdEdit, MdArrowBack } from "react-icons/md";
@@ -10,6 +20,7 @@ import { useNotification } from "../context/NotificationContext";
 import "./UserProfile.css";
 import "./ManageUsers.css";
 
+/** Main UserProfile page — fetches and displays another user's full profile. */
 function UserProfile() {
   const { userId } = useParams();
   const navigate = useNavigate();
@@ -73,6 +84,7 @@ function UserProfile() {
     "__custom__",
   ];
 
+  /** Build auth headers for API requests. */
   const authHeaders = () => {
     const token = authToken();
     return {
@@ -81,6 +93,7 @@ function UserProfile() {
     };
   };
 
+  /** Fetch the target user's profile data from the API. */
   const fetchProfile = async () => {
     setLoading(true);
     setError("");
@@ -117,6 +130,7 @@ function UserProfile() {
       .join("");
   };
 
+  /** Populate the edit form with current user data and open the modal. */
   const openEditModal = () => {
     const u = profileData.user;
     const deptVal = u.department || "";
@@ -169,6 +183,7 @@ function UserProfile() {
     }
   };
 
+  /** Validate the edit form fields and return an errors object. */
   const validateEditForm = () => {
     const errors = {};
     if (!editUser.name.trim()) {
@@ -221,6 +236,7 @@ function UserProfile() {
     return errors;
   };
 
+  /** Submit the updated user data (with optional file uploads) to the API. */
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     const errors = validateEditForm();
@@ -382,7 +398,7 @@ function UserProfile() {
               <div className="info-card-header">
                 <h3>Personal Information</h3>
                 {(!["admin", "manager"].includes(user.role) || currentUserRole === "admin") && (
-                <button className="btn-edit" onClick={openEditModal} disabled={!user.active} style={!user.active ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
+                <button className="btn-edit" onClick={openEditModal} disabled={account?.status === "Resigned" || (!account && !user.active)} style={account?.status === "Resigned" || (!account && !user.active) ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
                   <MdEdit size={16} /> Edit
                 </button>
                 )}
@@ -570,6 +586,59 @@ function UserProfile() {
             </div>
           </div>
         
+
+          {/* RIGHT SIDE - Account Status */}
+          <div className="profile-right">
+            <div className="account-status-card">
+              <h3>Account Status</h3>
+              <div className="status-list">
+                <div className="status-item">
+                  <span className={`status-dot ${account?.status === "Active" ? "dot-active" : "dot-inactive"}`}></span>
+                  <span className="status-text">{account?.status || (user.active ? "Active" : user.must_change_password ? "Inactive" : "Resigned")}</span>
+                </div>
+                <div className="status-item">
+                  <span className="status-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                  </span>
+                  <div className="status-info">
+                    <span className="status-label">Member Since</span>
+                    <span className="status-value">
+                      {user.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "---"}
+                    </span>
+                  </div>
+                </div>
+                <div className="status-item">
+                  <span className="status-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  </span>
+                  <div className="status-info">
+                    <span className="status-label">Last Login</span>
+                    <span className="status-value">
+                      {user.last_login_at
+                        ? new Date(user.last_login_at).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                            hour12: true,
+                          })
+                        : "Never logged in"}
+                    </span>
+                  </div>
+                </div>
+                <div className="status-item">
+                  <span className="status-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 21h18"></path><path d="M9 8h1"></path><path d="M9 12h1"></path><path d="M9 16h1"></path><path d="M14 8h1"></path><path d="M14 12h1"></path><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"></path></svg>
+                  </span>
+                  <div className="status-info">
+                    <span className="status-label">Account Type</span>
+                    <span className="status-value">Employee</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 </div>
         {/* EDIT MODAL */}
         {isEditModalOpen && (

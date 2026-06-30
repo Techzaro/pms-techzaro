@@ -1,3 +1,10 @@
+/**
+ * SelfDeliverableViewModal.jsx
+ * Modal for a team member to view their own deliverable details, including
+ * submission history, rework instructions, and approval status. Supports
+ * self-approval and requesting rework on submitted deliverables.
+ */
+
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { FileText } from "lucide-react";
@@ -8,20 +15,32 @@ import SelfReworkDialog from "./SelfReworkDialog";
 import { formatDateTime } from "../utils/formatDateTime";
 import "./SelfDeliverableViewModal.css";
 
+/**
+ * Resolves a storage file path to a full URL.
+ * @param {string} path - The relative storage path.
+ * @returns {string|null} The full URL or null.
+ */
 function fileUrl(path) {
   if (!path) return null;
   return `${API_URL.replace("/api", "")}/storage/${path}`;
 }
 
+/**
+ * Builds a chronological timeline of submissions and workflow events
+ * for display in the submission history section.
+ * @param {Object} deliverable - The deliverable with submissions and workflow events.
+ * @returns {Array} Sorted array of timeline items.
+ */
 function buildHistoryTimeline(deliverable) {
   if (!deliverable) return [];
 
   const items = [];
 
-  (deliverable.submissions || [])
-    .slice()
-    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-    .forEach((sub, index) => {
+    (deliverable.submissions || [])
+      .slice()
+      // Sort submissions chronologically before indexing
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      .forEach((sub, index) => {
     items.push({
       id: `submission-${sub.id}`,
       type: index === 0 ? "submission" : "resubmission",
@@ -50,9 +69,18 @@ function buildHistoryTimeline(deliverable) {
     });
   });
 
+  // Combine submissions and workflow events into a single sorted timeline
   return items.sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 
+/**
+ * Modal for viewing own deliverable with full submission history and actions.
+ * @param {boolean} isOpen - Whether the modal is visible.
+ * @param {Function} onClose - Callback to close the modal.
+ * @param {Object} deliverable - The initial deliverable data.
+ * @param {Function} onActionSuccess - Callback after a successful action (approve/rework).
+ * @param {Function} [onResubmit] - Callback to open the resubmit form.
+ */
 function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliverable, onActionSuccess, onResubmit }) {
   const [deliverable, setDeliverable] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -82,6 +110,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
     return () => { document.body.style.overflow = ""; };
   }, [isOpen, initialDeliverable]);
 
+  /** Self-approves the deliverable via the API */
   const handleSelfApprove = async () => {
     setActing(true);
     try {
@@ -102,11 +131,13 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
     }
   };
 
+  /** Handles successful rework submission by updating and closing the modal */
   const handleReworkSuccess = (updated) => {
     onActionSuccess(updated);
     onClose();
   };
 
+  /** Builds the memoized history timeline from deliverable data */
   const historyTimeline = useMemo(() => buildHistoryTimeline(deliverable), [deliverable]);
 
   if (!isOpen || !initialDeliverable) return null;
@@ -119,6 +150,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
   const isApproved = status === "approved";
 
   const token = authToken();
+  /** Constructs download URL for a specific attachment with optional action param */
   const attachmentUrl = (attId, action) => {
     let url = `${API_URL}/deliverables/attachment/${attId}/download`;
     const params = [];

@@ -6,10 +6,23 @@ use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Service for creating, managing, and querying user notifications.
+ *
+ * Supports single and bulk notification creation, read-status
+ * management, and unread count retrieval.
+ */
 class NotificationService
 {
     /**
      * Create a single notification for a user.
+     *
+     * Returns null if user_id is missing or the sender is notifying
+     * themselves (self-notifications are suppressed).
+     *
+     * @param array $data Notification attributes
+     *
+     * @return \App\Models\Notification|null
      */
     public function create(array $data): ?Notification
     {
@@ -20,12 +33,20 @@ class NotificationService
     }
 
     /**
-     * Create notifications for multiple users at once.
+     * Create multiple notifications in a single database insert.
+     *
+     * Filters out entries with missing user_id and self-notifications
+     * before performing the bulk insert.
+     *
+     * @param array $notifications Array of notification data arrays
+     *
+     * @return void
      */
     public function createBulk(array $notifications): void
     {
         if (empty($notifications)) return;
 
+        // Filter out invalid entries and self-notifications
         $filtered = array_filter($notifications, function ($n) {
             return !empty($n['user_id']) && (!isset($n['sender_user_id']) || (int) $n['user_id'] !== (int) $n['sender_user_id']);
         });
@@ -42,7 +63,18 @@ class NotificationService
     }
 
     /**
-     * Notify a single user about an action.
+     * Convenience method to notify a single user about an action.
+     *
+     * @param int         $userId    Recipient user ID
+     * @param int         $senderId  Sender user ID
+     * @param string      $type      Notification type identifier
+     * @param string      $module    Related module name
+     * @param int         $relatedId ID of the related entity
+     * @param string      $title     Notification title
+     * @param string      $message   Notification body text
+     * @param string|null $link      Optional deep-link URL
+     *
+     * @return \App\Models\Notification|null
      */
     public function notify(int $userId, int $senderId, string $type, string $module, int $relatedId, string $title, string $message, ?string $link = null): ?Notification
     {
@@ -59,7 +91,18 @@ class NotificationService
     }
 
     /**
-     * Notify multiple users about an action.
+     * Notify multiple users about the same action in bulk.
+     *
+     * @param array       $userIds   Array of recipient user IDs
+     * @param int         $senderId  Sender user ID
+     * @param string      $type      Notification type identifier
+     * @param string      $module    Related module name
+     * @param int         $relatedId ID of the related entity
+     * @param string      $title     Notification title
+     * @param string      $message   Notification body text
+     * @param string|null $link      Optional deep-link URL
+     *
+     * @return void
      */
     public function notifyMultiple(array $userIds, int $senderId, string $type, string $module, int $relatedId, string $title, string $message, ?string $link = null): void
     {
@@ -78,7 +121,14 @@ class NotificationService
     }
 
     /**
-     * Mark a notification as read.
+     * Mark a single notification as read.
+     *
+     * Only succeeds if the notification belongs to the specified user.
+     *
+     * @param int $notificationId Notification ID
+     * @param int $userId         Owner user ID
+     *
+     * @return bool True if marked as read, false if not found
      */
     public function markAsRead(int $notificationId, int $userId): bool
     {
@@ -90,7 +140,11 @@ class NotificationService
     }
 
     /**
-     * Mark all notifications for a user as read.
+     * Mark all unread notifications for a user as read.
+     *
+     * @param int $userId Owner user ID
+     *
+     * @return void
      */
     public function markAllAsRead(int $userId): void
     {
@@ -100,13 +154,20 @@ class NotificationService
     }
 
     /**
-     * Get unread count for a user.
+     * Get the count of unread notifications for a user.
+     *
+     * Excludes self-notifications (where sender_user_id matches user_id).
+     *
+     * @param int $userId Owner user ID
+     *
+     * @return int
      */
     public function getUnreadCount(int $userId): int
     {
         return Notification::where('user_id', $userId)
             ->where('is_read', false)
             ->where(function ($q) use ($userId) {
+                // Exclude self-notifications from unread count
                 $q->whereNull('sender_user_id')
                   ->orWhere('sender_user_id', '!=', $userId);
             })

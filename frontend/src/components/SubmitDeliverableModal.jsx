@@ -1,3 +1,10 @@
+/**
+ * SubmitDeliverableModal.jsx
+ * Modal form for submitting a deliverable. Supports file uploads via drag-and-drop,
+ * link attachments, and submission notes. Handles both initial submissions and
+ * resubmissions for rework-required status.
+ */
+
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { FileText, Upload, X, Image } from "lucide-react";
@@ -9,12 +16,20 @@ import SubmissionLinkSection from "./SubmissionLinkSection";
 import "./SubmitDeliverableModal.css";
 import "./layout/CreateTaskModal.css";
 
+/**
+ * Modal form for submitting or resubmitting a deliverable.
+ * @param {boolean} isOpen - Whether the modal is visible.
+ * @param {Function} onClose - Callback to close the modal.
+ * @param {Object} deliverable - The deliverable being submitted.
+ * @param {Function} onSubmitSuccess - Callback after successful submission, receives updated deliverable.
+ */
 function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess }) {
   const [comment, setComment] = useState("");
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const [submitting, setSubmitting] = useState(false);
 
+  // Lock body scroll and reset form state when modal opens/closes
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -27,6 +42,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
     return () => { document.body.style.overflow = ""; };
   }, [isOpen]);
 
+  /** Appends newly selected files to the existing file list */
   const handleFileSelect = (e) => {
     const selected = Array.from(e.target.files || []);
     setFiles((prev) => [...prev, ...selected]);
@@ -35,11 +51,16 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
 
   const removeFile = (index) => setFiles((prev) => prev.filter((_, i) => i !== index));
 
+  /** Handles file drops onto the dropzone area */
   const handleDrop = (e) => {
     e.preventDefault();
     setFiles((prev) => [...prev, ...Array.from(e.dataTransfer.files || [])]);
   };
 
+  /**
+   * Validates form data and submits the deliverable with files, links, and notes.
+   * Shows error if no content (comment, files, or links) is provided.
+   */
   const handleSubmit = async () => {
     const validLinks = links.map((l) => l.url);
     if (!comment.trim() && files.length === 0 && validLinks.length === 0) {

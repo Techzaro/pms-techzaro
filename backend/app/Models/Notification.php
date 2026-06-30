@@ -10,6 +10,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
+/**
+ * In-app notification sent to users.
+ * Automatically dispatches email and/or push notifications based on user preferences.
+ */
 class Notification extends Model
 {
     protected $fillable = [
@@ -28,6 +32,10 @@ class Notification extends Model
         'is_read' => 'boolean',
     ];
 
+    /**
+     * Boot the model and trigger email/push notifications on creation.
+     * Checks user email preferences before dispatching each channel.
+     */
     protected static function booted(): void
     {
         static::created(function (self $notification) {
@@ -65,6 +73,10 @@ class Notification extends Model
         });
     }
 
+    /**
+     * Determine if the user has opted in for a given notification channel.
+     * Falls back to enabled if no preference record exists.
+     */
     private static function wantsChannel(self $notification, string $channel): bool
     {
         $preference = $notification->user->emailPreference;
@@ -96,11 +108,13 @@ class Notification extends Model
         return true;
     }
 
+    /** The user receiving this notification. */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** The user who triggered this notification (optional). */
     public function sender(): BelongsTo
     {
         return $this->belongsTo(User::class, 'sender_user_id');

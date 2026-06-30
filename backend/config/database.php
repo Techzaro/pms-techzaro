@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * Database Configuration.
+ *
+ * Defines all database connections (SQLite, MySQL, MariaDB, PostgreSQL, SQL Server),
+ * migration repository settings, and Redis client configuration. The default
+ * connection is controlled by the DB_CONNECTION environment variable.
+ */
+
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 

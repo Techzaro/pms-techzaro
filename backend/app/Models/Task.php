@@ -7,6 +7,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Builder;
 
+/**
+ * Represents a task within a project.
+ * Tracks individual work items through their lifecycle (draft, submitted, approved, rejected, reopened).
+ */
 class Task extends Model
 {
     protected $fillable = [
@@ -47,6 +51,7 @@ class Task extends Model
         'reopen_new_deadline' => 'datetime:Y-m-d\TH:i:s',
     ];
 
+    /** Apply filters for querying tasks. */
     public function scopeFilter(Builder $query, array $filters): Builder
     {
         if (!empty($filters['status'])) {
@@ -73,71 +78,85 @@ class Task extends Model
         return $query;
     }
 
+    /** The project this task belongs to. */
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
     }
 
+    /** The user assigned to complete this task. */
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
     }
 
+    /** The user who assigned this task. */
     public function assigner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_by');
     }
 
+    /** All users assigned to this task (many-to-many). */
     public function assignees(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'task_user')->withTimestamps();
     }
 
+    /** Deliverables belonging to this task, ordered by sort order. */
     public function deliverables()
     {
-        return $this->hasMany(\App\Models\Deliverable::class)->orderBy('sort_order')->orderBy('id');
+        return $this->hasMany(\App\Models\Deliverable::class)->orderBy('sort_order')->latest('updated_at');
     }
 
+    /** File attachments for this task. */
     public function files()
     {
         return $this->hasMany(\App\Models\TaskFile::class)->latest();
     }
 
+    /** All submissions for this task. */
     public function submissions()
     {
         return $this->hasMany(TaskSubmission::class);
     }
 
+    /** The most recent submission for this task. */
     public function latestSubmission()
     {
         return $this->hasOne(TaskSubmission::class)->latestOfMany();
     }
 
+    /** Workflow events tracking state changes for this task. */
     public function workflowEvents()
     {
         return $this->hasMany(TaskWorkflowEvent::class)->latest();
     }
 
+    /** The user who approved this task. */
     public function approvedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
     }
 
+    /** The user who rejected this task. */
     public function rejectedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'rejected_by');
     }
 
+    /** The user who reopened this task for rework. */
     public function reopenedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reopened_by');
     }
 
+    /** Field-level changes made to this task. */
     public function changes()
     {
         return $this->hasMany(TaskChange::class)->latest();
     }
 
+    /** Changes not yet viewed by the current user. */
     public function unviewedChanges()
     {
         return $this->hasMany(TaskChange::class)->where('is_viewed', false);

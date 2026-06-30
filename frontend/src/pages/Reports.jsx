@@ -1,3 +1,13 @@
+/**
+ * Reports page component.
+ *
+ * Displays summary cards (total assigned, approved, pending, overdue) and a
+ * user-performance table for admins/managers.  Team leads see their own
+ * summary by default but can switch to a team-members view via the URL.
+ * Time-period filtering and an "Export Report" action (opens
+ * CompanyEmployeeReport modal) are available to privileged roles.
+ */
+
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useCallback, memo } from "react";
@@ -9,6 +19,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import "./Reports.css";
 
+/** Map human-readable period labels to API query parameters. */
 const PERIOD_MAP = {
   "All Time": "all",
   "Last 7 Days": "week",
@@ -16,13 +27,16 @@ const PERIOD_MAP = {
   "Last 6 Months": "month",
 };
 
+/** Palette used to generate deterministic avatar colours from user names. */
 const AVATAR_COLORS = ["#f59e0b", "#3b82f6", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
 
+/** Extract up to 2 uppercase initials from a full name. */
 function getInitials(name) {
   if (!name) return "?";
   return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 }
 
+/** Deterministic avatar colour derived from a name hash. */
 function getAvatarColor(name) {
   if (!name) return AVATAR_COLORS[0];
   let hash = 0;
@@ -65,6 +79,7 @@ const CARD_META = {
   },
 };
 
+/** Memoised summary card used for the KPI row at the top of the reports page. */
 const SummaryCard = memo(function SummaryCard({ card, onClick }) {
   return (
     <div
@@ -110,6 +125,7 @@ const SummaryCard = memo(function SummaryCard({ card, onClick }) {
   );
 });
 
+/** Main Reports page — fetches summary data and renders KPI cards + user table. */
 function Reports() {
   const [timeFilter, setTimeFilter] = useState("All Time");
   const [showCompanyReport, setShowCompanyReport] = useState(false);

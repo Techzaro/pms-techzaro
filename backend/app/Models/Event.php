@@ -7,6 +7,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Builder;
 
+/**
+ * Calendar event within the project management system.
+ * Can be personal (created by a user) or global, and supports multi-day events.
+ */
 class Event extends Model
 {
     protected $fillable = [
@@ -28,6 +32,7 @@ class Event extends Model
         'is_global' => 'boolean',
     ];
 
+    /** Apply filters for querying events (type, date range, search). */
     public function scopeFilter(Builder $query, array $filters): Builder
     {
         if (!empty($filters['type'])) {
@@ -69,11 +74,13 @@ class Event extends Model
         return $query;
     }
 
+    /** The user who created this event. */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** Users assigned to this event. */
     public function assignedUsers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'event_users')->withTimestamps();

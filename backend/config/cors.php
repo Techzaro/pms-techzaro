@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * CORS (Cross-Origin Resource Sharing) Configuration.
+ *
+ * Controls which origins, methods, and headers are allowed for API requests
+ * from the frontend. Enables credentials support for cookie-based auth
+ * (Sanctum CSRF). The allowed origin is read from FRONTEND_URL env var.
+ */
+
 return [
 
     /*

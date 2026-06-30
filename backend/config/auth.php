@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * Authentication Configuration.
+ *
+ * Defines authentication guards, user providers, password reset settings,
+ * and password confirmation timeout. Uses Eloquent with the User model
+ * by default for user retrieval and session-based authentication.
+ */
+
 use App\Models\User;
 
 return [

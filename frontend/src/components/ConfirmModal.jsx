@@ -1,8 +1,27 @@
+/**
+ * ConfirmModal.jsx
+ * Generic confirmation modal with an info icon, customizable colors, and danger mode.
+ * Similar to ConfirmationDialog but with an icon and more styling options.
+ */
+
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import "./ConfirmModal.css";
 
+/**
+ * A reusable confirmation modal with an info icon and customizable appearance.
+ * @param {boolean} isOpen - Whether the modal is visible
+ * @param {Function} onClose - Callback to close the modal
+ * @param {Function} onConfirm - Callback when the user confirms
+ * @param {string} title - Modal title text
+ * @param {string} message - Modal body message
+ * @param {string} [confirmText="Confirm"] - Text for the confirm button
+ * @param {string} [cancelText="Cancel"] - Text for the cancel button
+ * @param {string} [confirmColor] - Custom confirm button color (overrides danger default)
+ * @param {boolean} [danger=false] - If true, uses red color scheme for destructive actions
+ */
 function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText = "Confirm", cancelText = "Cancel", confirmColor, danger = false }) {
+  // Resolve the confirm button color: explicit color > danger red > default blue
   const resolvedColor = confirmColor || (danger ? "#ef4444" : "#3b82f6");
 
   useEffect(() => {

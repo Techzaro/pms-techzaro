@@ -1,6 +1,17 @@
+/**
+ * EventInfoPopup.jsx
+ * Read-only popup modal that displays detailed information about a calendar event.
+ * Shows title, description, date/time, assigned users, creator, and creation date.
+ */
+
 import { createPortal } from "react-dom";
 import { formatEventDate, formatEventTime } from "../utils/formatDateTime";
 
+/**
+ * Popup displaying event details in a read-only format.
+ * @param {Object} event - The event object to display
+ * @param {Function} onClose - Callback to close the popup
+ */
 function EventInfoPopup({ event, onClose }) {
   if (!event) return null;
 

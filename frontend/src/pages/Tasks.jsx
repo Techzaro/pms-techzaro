@@ -1,3 +1,12 @@
+/**
+ * Tasks page component — "Tasks Assigned To You".
+ *
+ * Displays tasks and projects that have been assigned to the current user
+ * by others.  Provides search with debounce, status filtering, time-range
+ * filtering, drag-and-drop reordering and pagination.  Submit actions open
+ * modals for task or project submission.
+ */
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -44,6 +53,7 @@ const PRIORITY_TEXT_COLORS = {
   Low: "#166534",
 };
 
+/** Main Tasks page — renders tasks/projects assigned to the current user by others. */
 function Tasks() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -71,6 +81,7 @@ function Tasks() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  /** Fetch tasks assigned to the current user from the API. */
   const fetchTasks = () => {
     setLoading(true);
     const token = authToken();

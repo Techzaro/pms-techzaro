@@ -1,3 +1,10 @@
+/**
+ * EditTaskModal.jsx
+ * Modal form for editing an existing task's details.
+ * Supports updating title, description, priority, dates, assignees, and deliverables.
+ * Includes special handling for self-assigned tasks.
+ */
+
 import { useState, useEffect } from "react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
@@ -9,6 +16,11 @@ import { publish } from "../utils/eventBus";
 import { notify } from "../utils/notify";
 import "./layout/CreateTaskModal.css";
 
+/**
+ * Modal form for editing an existing task.
+ * @param {Object} task - The task object to edit (pre-populates form fields)
+ * @param {Function} onClose - Callback to close modal; receives boolean (true if saved)
+ */
 export default function EditTaskModal({ task, onClose }) {
   const currentUser = getUser();
 
@@ -28,6 +40,7 @@ export default function EditTaskModal({ task, onClose }) {
   const [deliverableInput, setDeliverableInput] = useState({ title: "", due_datetime: "" });
   const [loading, setLoading] = useState(false);
 
+  // Determine if this is a self-assigned task (created by current user and assigned only to themselves)
   const isSelfTask = currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10) && selectedAssigneeIds.length === 1 && selectedAssigneeIds[0] === parseInt(currentUser.id, 10);
 
   useEffect(() => {
@@ -69,10 +82,14 @@ export default function EditTaskModal({ task, onClose }) {
     if (e.key === "Enter") { e.preventDefault(); handleAddDeliverable(); }
   };
 
+  /**
+   * Handles form submission: updates the task via PUT request and publishes events on success.
+   */
   const handleSubmit = async (e) => {
     if (e?.preventDefault) e.preventDefault();
     setLoading(true);
     try {
+      // Build update payload with converted dates and selected assignees
       const body = {
         ...form,
         start_date: toUTCIso(form.start_date),

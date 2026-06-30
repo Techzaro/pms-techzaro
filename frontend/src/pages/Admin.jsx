@@ -1,3 +1,17 @@
+/**
+ * Admin.jsx — Admin/Manager Dashboard Page
+ *
+ * Main dashboard component for admin and manager roles. Displays:
+ * - Welcome greeting with user name
+ * - Summary cards (active projects, tasks due today, approved/pending tasks)
+ * - Today's tasks workload with assignee avatars
+ * - Active projects carousel with progress bars
+ * - Today's activity feed (actions performed by the current user)
+ * - Expandable past activity section
+ *
+ * Fetches data from /dashboard API and uses real-time relative time updates.
+ * Summary cards are clickable and navigate to filtered list views.
+ */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -8,6 +22,7 @@ import { useApiQuery } from "../hooks/useApi";
 import { useRelativeTime } from "../hooks/useRelativeTime";
 import "./Admin.css";
 
+/** Extracts up to 2 initials from a name string (e.g. "John Doe" → "JD") */
 const getInitials = (name) => {
   if (!name) return "?";
   const parts = name.trim().split(/\s+/);
@@ -15,6 +30,10 @@ const getInitials = (name) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
+/**
+ * Returns an interpolated RGB color transitioning from grey (0%) to indigo (100%)
+ * using an ease-in-out curve for smooth progress bar visual.
+ */
 const getProgressColor = (percent) => {
   const grey = [107, 114, 128];
   const blue = [79, 70, 229];
@@ -26,10 +45,15 @@ const getProgressColor = (percent) => {
   return `rgb(${r}, ${g}, ${b})`;
 };
 
+/** Returns a human-readable role label, defaulting to "User" if no role provided */
 const getRoleLabel = (role) => {
   return role ? normalizeRole(role) : "User";
 };
 
+/**
+ * SummaryCard — Displays a single summary metric (e.g. Active Projects, Tasks Due Today).
+ * Clicking a card with a filter navigates to the corresponding filtered list view.
+ */
 const SummaryCard = memo(function SummaryCard({ card, onClick }) {
   return (
     <div className="summary-card" style={{
@@ -72,6 +96,11 @@ const SummaryCard = memo(function SummaryCard({ card, onClick }) {
   );
 });
 
+/**
+ * WorkloadItem — Renders a single task in today's workload list.
+ * Shows task time, title, assignee role labels, assignee avatars, and priority status.
+ * Clicking an avatar navigates to the task or project details page.
+ */
 const WorkloadItem = memo(function WorkloadItem({ item, index, total, navigate, getInitials, rolePath }) {
   return (
     <div className="workload-item" style={{
@@ -122,6 +151,11 @@ const WorkloadItem = memo(function WorkloadItem({ item, index, total, navigate, 
   );
 });
 
+/**
+ * ProjectCard — Displays a single active project in the carousel.
+ * Shows project name, client, progress bar, assigned user avatars, and deadline.
+ * Supports responsive sizing via cardWidth prop for the slider layout.
+ */
 const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, getInitials, getProgressColor, rolePath, PROJECTS_PER_VIEW, GAP }) {
   return (
     <div className="project-card" style={{
@@ -217,12 +251,18 @@ const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, ge
   );
 });
 
+/**
+ * Admin — Main dashboard page component.
+ * Renders welcome box, summary cards, today's tasks, active projects carousel,
+ * and activity feeds (today's activity + expandable past activity).
+ */
 function Admin() {
   const navigate = useNavigate();
   const [greeting, setGreeting] = useState("Welcome");
   const [modalOpen, setModalOpen] = useState(false);
   const currentRole = getCurrentRole() || "member";
 
+  // Fetch dashboard summary data (active projects, tasks due today, etc.)
   const { data: dashboard, isLoading } = useApiQuery(
     "dashboard",
     "/dashboard",
@@ -230,19 +270,24 @@ function Admin() {
     { staleTime: 120000, refetchOnMount: false, refetchOnWindowFocus: false, refetchInterval: false }
   );
 
+  // Listen for modal open/close events from child components
   useEffect(() => {
     const handler = (e) => setModalOpen(e.detail.open);
     window.addEventListener("modal-state", handler);
+    // Set greeting with current user's name
     const stored = getUser();
     const name = stored?.name || "User";
     setGreeting(`Welcome, ${name}`);
     return () => window.removeEventListener("modal-state", handler);
   }, []);
 
+  // Tick every second to update relative time displays (e.g. "5 min ago")
   const tick = useRelativeTime();
 
+  // Extract summary data from dashboard response
   const summaryData = dashboard?.summary || {};
 
+  // Build summary card configs from API data
   const summaryCards = useMemo(() => [
     { title: "Active Projects", value: String(summaryData.active_projects ?? 0), icon: "/Vector-5.svg", valueColor: "#2563EB", bgColor: "#EEF2FF", filter: "active-projects" },
     { title: "Tasks Due Today", value: String(summaryData.tasks_due_today ?? 0), icon: "/Vector-1%20(3).svg", valueColor: "#EF4444", bgColor: "#FEF2F2", filter: "tasks-due-today" },
@@ -250,6 +295,7 @@ function Admin() {
     { title: "Pending Tasks", value: String(summaryData.pending_tasks ?? 0), icon: "/Vector-3.svg", valueColor: "#F59E0B", bgColor: "#FEF3C7", filter: "pending-tasks" },
   ], [summaryData.active_projects, summaryData.tasks_due_today, summaryData.approved_tasks, summaryData.pending_tasks]);
 
+  // Navigate to filtered list when a summary card is clicked
   const handleSummaryCardClick = useCallback((card) => {
     if (card.filter === "active-projects") {
       navigate(`${rolePath("projects")}?filter=active`);
@@ -262,6 +308,7 @@ function Admin() {
     }
   }, [navigate, currentRole]);
 
+  // Transform raw today's workload data into display-ready format with role labels
   const todayWorkload = useMemo(() =>
     (dashboard?.todayWorkload || []).map((w) => {
       const assignees = w.assignees || w.assigned_users || [];
@@ -280,6 +327,7 @@ function Admin() {
     [dashboard?.todayWorkload]
   );
 
+  // Normalize active projects data from API response
   const activeProjects = useMemo(() =>
     (dashboard?.activeProjects || []).map((p) => ({
       id: p.id, name: p.name, client: p.client || '\u2014',
@@ -289,6 +337,7 @@ function Admin() {
     [dashboard?.activeProjects]
   );
 
+  // Filter today's activity to only show actions performed by the current user
   const completedToday = useMemo(() =>
     (dashboard?.completedToday || [])
       .filter((item) => item.is_actor)
@@ -310,6 +359,7 @@ function Admin() {
     [dashboard?.completedToday]
   );
 
+  // Icon/color config for each activity action type (created, assigned, submitted, etc.)
   const activityActionConfig = {
     created:      { icon: "★", color: "#3B82F6", bg: "#EFF6FF" },
     assigned:     { icon: "→", color: "#8B5CF6", bg: "#F5F3FF" },
@@ -324,13 +374,19 @@ function Admin() {
     field_changed:   { icon: "✎", color: "#6B7280", bg: "#F3F4F6" },
   };
 
+  /** Returns a human-readable label for the activity module (task, project, deliverable) */
   const getModuleLabel = (module) => {
     if (module === "task") return "Task";
     if (module === "project") return "Project";
     if (module === "deliverable") return "Deliverable";
+    if (module === "user") return "User";
     return module;
   };
 
+  /**
+   * Builds a JSX message describing an activity item.
+   * e.g. "You created Task "Login Page" — Assigned to you"
+   */
   const getActivityMessage = (item) => {
     const moduleLabel = getModuleLabel(item.module);
     const titleSpan = <span style={{ fontWeight: 600 }}>"{item.title}"</span>;
@@ -348,6 +404,8 @@ function Admin() {
       completed: "completed",
       status_updated: "updated status of",
       field_changed: "updated",
+      updated: "updated",
+      resigned: "resigned",
     };
     const verb = verbMap[item.action] || "updated";
 
@@ -371,9 +429,11 @@ function Admin() {
     return <>{actorLabel} {verb} {moduleLabel} {titleSpan}{suffix}</>;
   };
 
+  // Project carousel state management
   const [projectSlide, setProjectSlide] = useState(0);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [pastActivityOpen, setPastActivityOpen] = useState(false);
+  // Fetch past activity data only when the section is expanded
   const { data: pastActivityData, isLoading: pastLoading } = useApiQuery(
     ["activities", "past"],
     "/activities/past",
@@ -386,12 +446,14 @@ function Admin() {
   const totalProjectSlides = Math.max(0, activeProjects.length - PROJECTS_PER_VIEW);
   const GAP = isMobile ? 0 : 20;
 
+  // Update mobile breakpoint on window resize
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Measure slider container width and compute individual card width for the carousel
   useEffect(() => {
     const measure = () => {
       if (sliderRef.current) {
@@ -549,7 +611,10 @@ function Admin() {
                   <div
                     key={item.id || index}
                     onClick={() => {
-                      if (item.module === "task") {
+                      if (item.module === "user") {
+                        const userId = item.entity_id;
+                        if (userId) navigate(rolePath(`manage-users/user-profile/${userId}`));
+                      } else if (item.module === "task") {
                         const taskId = item.entity_id || String(item.id).replace("task_event_", "").replace("task_sub_", "");
                         navigate(rolePath(`tasks/task-details/${taskId}`), { state: { from: "admin" } });
                       } else if (item.module === "project") {
@@ -649,13 +714,33 @@ function Admin() {
                       return (
                         <div
                           key={item.id || index}
+                          onClick={() => {
+                            if (item.module === "user") {
+                              const userId = item.entity_id;
+                              if (userId) navigate(rolePath(`manage-users/user-profile/${userId}`));
+                            } else if (item.module === "task") {
+                              const taskId = item.entity_id || String(item.id).replace("task_event_", "").replace("task_sub_", "");
+                              navigate(rolePath(`tasks/task-details/${taskId}`));
+                            } else if (item.module === "project") {
+                              const projectId = item.entity_id || String(item.id).replace("project_event_", "");
+                              navigate(rolePath(`projects/project-details/${projectId}`));
+                            } else if (item.module === "deliverable") {
+                              const dlvId = item.entity_id || String(item.id).replace("dlv_event_", "").replace("dlv_sub_", "");
+                              navigate(rolePath(`deliveries/deliverable-details/${dlvId}`));
+                            }
+                          }}
                           style={{
                             display: "flex",
                             alignItems: "center",
                             gap: "14px",
                             padding: "12px 0",
                             borderBottom: index < group.activities.length - 1 ? "1px solid #F3F4F6" : "none",
+                            cursor: "pointer",
+                            borderRadius: "8px",
+                            transition: "background 0.15s",
                           }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "#F9FAFB"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
                           <div style={{
                             width: "36px", height: "36px", borderRadius: "50%",

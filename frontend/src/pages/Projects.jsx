@@ -1,3 +1,14 @@
+/**
+ * Projects page component.
+ *
+ * Lists all projects accessible to the current user in a card-based layout.
+ * Supports searching by name, filtering by status (pending, submitted,
+ * approved, rejected, due-today, active), time-range filtering, visibility
+ * management (admin/manager only) and inline project submission.  Each card
+ * shows progress, deadline and quick actions.  Projects are paginated and
+ * can be reordered via drag-and-drop.
+ */
+
 import { useEffect, useState, useRef } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -15,6 +26,7 @@ import { formatDateTime } from "../utils/formatDateTime";
 import Pagination from "../components/Pagination";
 import "../pages/Task.css";
 
+/** Main Projects page — renders project cards with search, filters and pagination. */
 function Projects() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -58,6 +70,7 @@ function Projects() {
   const currentRole = getCurrentRole();
   const isAdminOrManager = ["admin", "manager"].includes(String(currentRole || "").toLowerCase());
 
+  /** Fetch all projects from the API, applying the current status filter. */
   const fetchProjects = async () => {
     try {
       setLoading(true);
@@ -117,6 +130,7 @@ function Projects() {
     }
   };
 
+  /** Open the visibility management modal for a specific project. */
   const openVisibility = async (project, e) => {
     e.stopPropagation();
     setVisibilityProject(project);
@@ -148,6 +162,7 @@ function Projects() {
     setVisibilitySelected((prev) => ({ ...prev, [userId]: !prev[userId] }));
   };
 
+  /** Persist the selected user-visibility settings for a project. */
   const saveVisibility = async () => {
     if (!visibilityProject) return;
     setVisibilitySaving(true);
@@ -168,6 +183,7 @@ function Projects() {
     }
   };
 
+  /** Derive the display status (Completed / Failed / In Progress) from progress and dates. */
   const calculateStatus = (project) => {
     const progress = calculateProgress(project);
     const endDate = project.end_date ? new Date(project.end_date) : null;
@@ -226,6 +242,7 @@ function Projects() {
     return map[status] || status;
   };
 
+  /** Compute project completion percentage from total/completed task counts. */
   const calculateProgress = (project) => {
     const total = project.total_tasks ?? project.total_deliverables ?? 0;
     const completed = project.completed_tasks ?? project.completed_deliverables ?? 0;

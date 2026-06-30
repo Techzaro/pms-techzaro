@@ -10,8 +10,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 /**
- * Eloquent model for project teams.
- * Manages members and optional team leader.
+ * Represents a team of users within the system.
+ * Teams can own projects and have an optional designated leader.
  */
 class Team extends Model
 {
@@ -24,28 +24,19 @@ class Team extends Model
         'created_by'
     ];
 
-    /**
-     * Perform the projects.
-     */
-
+    /** Projects owned by this team. */
     public function projects()
     {
         return $this->hasMany(Project::class);
     }
 
-    /**
-     * Perform the leader.
-     */
-
+    /** The user designated as team leader. */
     public function leader()
     {
         return $this->belongsTo(User::class, 'leader_id');
     }
 
-    /**
-     * Perform the members.
-     */
-
+    /** Active members of this team. */
     public function members()
     {
         return $this->belongsToMany(User::class, 'team_user')

@@ -1,8 +1,20 @@
 /**
- * ManageUsers page component.
- * Rendered when the user navigates to /manageusers or related route.
+ * ManageUsers.jsx — User Management Page
+ *
+ * Admin/manager page for managing all system users.
+ * Features:
+ * - Add new users with full profile (personal info, employment, salary, bank, documents)
+ * - Edit existing users
+ * - Resign users (marks as inactive)
+ * - View user profiles
+ * - Drag-and-drop user reordering with sort order persistence
+ * - Search by name/email, filter by role/status/time, sort ascending/descending
+ * - Paginated user table
+ * - Comprehensive form validation for all fields
+ * - File upload support for employment documents
+ *
+ * Access restricted to admin and manager roles.
  */
-
 import { useState, useEffect, useCallback, useRef } from "react";
 import { MdVisibility } from "react-icons/md";
 import { IoSearchOutline } from "react-icons/io5";
@@ -17,10 +29,12 @@ import ConfirmModal from "../components/ConfirmModal";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, getUser, setUser, rolePath, normalizeRole } from "../utils/auth";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
 import Pagination from "../components/Pagination";
 import "./ManageUsers.css";
 
+/** Predefined department options (includes __custom__ for custom input) */
 const DEPARTMENTS = [
   "Digital Marketing",
   "Website Development",
@@ -30,6 +44,7 @@ const DEPARTMENTS = [
   "__custom__",
 ];
 
+/** Predefined designation options (includes __custom__ for custom input) */
 const DESIGNATIONS = [
   "SEO Link Builder Intern",
   "SEO Intern",
@@ -43,6 +58,10 @@ const DESIGNATIONS = [
   "__custom__",
 ];
 
+/**
+ * ManageUsers — Main user management page component.
+ * Handles CRUD operations for users, role assignment, resignation, and profile viewing.
+ */
 function ManageUsers() {
   const notify = useNotification();
   const [users, setUsers] = useState([]);
@@ -125,12 +144,22 @@ function ManageUsers() {
     </svg>
   );
 
-  const StatusBadge = ({ active }) => (
-    <span className={`status-badge ${active ? "status-active" : "status-resigned"}`}>
-      {active ? "Active" : "Resigned"}
-    </span>
-  );
+  const StatusBadge = ({ active, mustChangePassword }) => {
+    let label, className;
+    if (active) {
+      label = "Active";
+      className = "status-active";
+    } else if (mustChangePassword) {
+      label = "Inactive";
+      className = "status-inactive";
+    } else {
+      label = "Resigned";
+      className = "status-resigned";
+    }
+    return <span className={`status-badge ${className}`}>{label}</span>;
+  };
 
+  /** Returns auth headers for API requests */
   const authHeaders = () => {
     const token = authToken();
     return {
@@ -139,6 +168,7 @@ function ManageUsers() {
     };
   };
 
+  // Fetch all users from API and normalize active status
   const fetchUsers = async () => {
     setLoading(true);
     try {
@@ -161,6 +191,7 @@ function ManageUsers() {
     }
   };
 
+  // Fetch current user data to ensure local session info is up-to-date
   const fetchCurrentUser = async () => {
     try {
       const token = authToken();
@@ -206,10 +237,12 @@ function ManageUsers() {
     setLocalUsers(users);
   }, [users]);
 
+  // Drag-and-drop handlers for user row reordering
   const handleDragStart = useCallback((event) => {
     setActiveDragId(event.active.id);
   }, []);
 
+  // Reorder users locally and persist new sort order to API
   const handleDragEnd = useCallback((event) => {
     setActiveDragId(null);
     const { active, over } = event;
@@ -360,6 +393,7 @@ function ManageUsers() {
     });
   };
 
+  // Validates the add/edit user form and returns errors object
   const validateAddForm = () => {
     const errors = {};
     if (!newUser.fullName.trim()) {
@@ -447,6 +481,7 @@ function ManageUsers() {
         )
       );
       notify.success("User role updated successfully.");
+      publish('data:changed', { type: 'user', action: 'updated' });
     } catch (error) {
       console.error(error);
       notify.error("Failed to update user role.");
@@ -455,11 +490,13 @@ function ManageUsers() {
     }
   };
 
+  // Mark a user as resigned (inactive) after confirmation
   const handleResignUser = async (userId) => {
     setResignUserId(userId);
     setResignConfirmOpen(true);
   };
 
+  // Confirm and execute user resignation via API
   const confirmResignUser = async () => {
     const userId = resignUserId;
     setResignConfirmOpen(false);
@@ -484,6 +521,7 @@ function ManageUsers() {
         )
       );
       notify.success(data.message || "User resigned successfully.");
+      publish('data:changed', { type: 'user', action: 'resigned' });
     } catch (error) {
       console.error(error);
       notify.error(error.message || "Failed to resign user.");
@@ -501,12 +539,12 @@ function ManageUsers() {
   const renderUserRow = (user) => {
     const isSelf = currentUserId === user.id;
     const isTargetProtected = user.role === "admin" || user.role === "manager";
-    const isActive = user.active !== false;
+    const isResigned = user.active === false && user.must_change_password === false;
     const canModifyUser =
-      isActive && !isSelf && !(currentUserRole === "manager" && isTargetProtected);
+      user.active !== false && !isSelf && !(currentUserRole === "manager" && isTargetProtected);
 
     return (
-      <tr key={user.id} className={!isActive ? "resigned-row" : ""}>
+      <tr key={user.id} className={isResigned ? "resigned-row" : ""}>
         <td style={{ width: "40%", textAlign: "left" }}>
           <div className="user-info">
             <span className="user-avatar">{getInitials(user.name)}</span>
@@ -522,7 +560,7 @@ function ManageUsers() {
           </span>
         </td>
         <td style={{ width: "20%" }}>
-          <StatusBadge active={isActive} />
+          <StatusBadge active={user.active} mustChangePassword={user.must_change_password} />
         </td>
         <td style={{ width: "20%" }}>
           <div className="action-buttons">
@@ -547,6 +585,7 @@ function ManageUsers() {
     );
   };
 
+  // Apply search, role, and status filters to users list
   const filteredUsers = localUsers.filter((user) => {
     const matchesSearch =
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -571,6 +610,10 @@ function ManageUsers() {
 
   const activeDragUser = activeDragId ? users.find((u) => u.id === activeDragId) : null;
 
+  /**
+   * SortableUserRow — A draggable user row for the users table.
+   * Wraps the standard row with @dnd-kit sortable functionality.
+   */
   function SortableUserRow({ user, isActive, canModifyUser, isSelf, isTargetProtected }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: user.id });
     const rowStyle = {
@@ -578,8 +621,9 @@ function ManageUsers() {
       transition,
       opacity: isDragging ? 0.4 : 1,
     };
+    const isResigned = user.active === false && user.must_change_password === false;
     return (
-      <tr ref={setNodeRef} className={!isActive ? "resigned-row" : ""} style={rowStyle} {...listeners} {...attributes}>
+      <tr ref={setNodeRef} className={isResigned ? "resigned-row" : ""} style={rowStyle} {...listeners} {...attributes}>
         <td style={{ width: "40%", textAlign: "left" }}>
           <div className="user-info">
             <span className="user-avatar">{getInitials(user.name)}</span>
@@ -594,7 +638,7 @@ function ManageUsers() {
             {normalizeRole(user.role)}
           </span>
         </td>
-        <td style={{ width: "20%" }}><StatusBadge active={isActive} /></td>
+        <td style={{ width: "20%" }}><StatusBadge active={user.active} mustChangePassword={user.must_change_password} /></td>
         <td style={{ width: "20%" }}>
           <div className="action-buttons">
             <button className="btn-view" onClick={() => navigate(rolePath(`manage-users/user-profile/${user.id}`))} aria-label="View user profile"><MdVisibility size={24} /></button>
@@ -606,6 +650,7 @@ function ManageUsers() {
   }
 
 
+  // Submit new user or update existing user via API with FormData (supports file uploads)
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -701,9 +746,11 @@ function ManageUsers() {
       if (isEdit) {
         setUsers((prev) => prev.map((item) => item.id === editingUser.id ? { ...item, ...data.user } : item));
         notify.success(data.message || "User updated successfully.");
+        publish('data:changed', { type: 'user', action: 'updated' });
       } else {
         setUsers((prev) => [data.user, ...prev]);
         notify.success(data.message || "User created successfully.");
+        publish('data:changed', { type: 'user', action: 'created' });
       }
       closeModal();
     } catch (error) {
@@ -786,10 +833,9 @@ function ManageUsers() {
                         paginatedUsers.map((user) => {
                         const isSelf = currentUserId === user.id;
                         const isTargetProtected = user.role === "admin" || user.role === "manager";
-                        const isActive = user.active !== false;
-                        const canModifyUser = isActive && !isSelf && !(currentUserRole === "manager" && isTargetProtected);
+                        const canModifyUser = user.active !== false && !isSelf && !(currentUserRole === "manager" && isTargetProtected);
                         return (
-                          <SortableUserRow key={user.id} user={user} isActive={isActive} canModifyUser={canModifyUser} isSelf={isSelf} isTargetProtected={isTargetProtected} />
+                          <SortableUserRow key={user.id} user={user} isActive={user.active !== false} canModifyUser={canModifyUser} isSelf={isSelf} isTargetProtected={isTargetProtected} />
                         );
                       })
                     ) : (

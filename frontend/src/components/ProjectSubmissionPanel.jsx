@@ -1,3 +1,10 @@
+/**
+ * ProjectSubmissionPanel.jsx
+ * Displays the submission workflow panel for a project. Shows submission details,
+ * attachments (files, images, links), approval/rejection actions for the creator,
+ * and a chronological history of all workflow events.
+ */
+
 import { FileText, Download, ExternalLink } from "lucide-react";
 import ConfirmationDialog from "./ConfirmationDialog";
 import ProjectReopenDialog from "./ProjectReopenDialog";
@@ -7,12 +14,18 @@ import { formatDateTime } from "../utils/formatDateTime";
 
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
 
+/**
+ * Resolves a file URL to an absolute path, handling both relative and absolute URLs.
+ * @param {string} url - The file URL to resolve.
+ * @returns {string|null} The resolved URL or null if empty.
+ */
 function fileUrl(url) {
   if (!url) return null;
   if (/^https?:\/\//i.test(url)) return url;
   return API_BASE + url;
 }
 
+/** Formats a byte count into a human-readable file size string (B, KB, MB). */
 function formatFileSize(bytes) {
   if (!bytes) return "";
   const mb = bytes / (1024 * 1024);
@@ -26,6 +39,7 @@ function formatDateShort(value) {
   return formatDateTime(value);
 }
 
+/** Maps workflow action keys to display-friendly labels */
 function actionLabel(action) {
   const map = {
     submitted: "Submitted",
@@ -37,6 +51,20 @@ function actionLabel(action) {
   return map[action] || action;
 }
 
+/**
+ * Renders the full submission workflow panel for a project.
+ * @param {Object} project - The project object with submission data.
+ * @param {boolean} isCreator - Whether the current user is the project creator.
+ * @param {boolean} isAssignee - Whether the current user is the project assignee.
+ * @param {Function} onProjectUpdate - Callback when project data changes.
+ * @param {Function} onSubmitClick - Callback to open the submission form.
+ * @param {Object} confirmDialog - State for the confirmation dialog.
+ * @param {Function} setConfirmDialog - Setter for confirmation dialog state.
+ * @param {boolean} reopenDialog - Whether the reopen dialog is visible.
+ * @param {Function} setReopenDialog - Setter for reopen dialog visibility.
+ * @param {boolean} acting - Whether an action is currently in progress.
+ * @param {Function} setActing - Setter for the acting state.
+ */
 function ProjectSubmissionPanel({
   project,
   isCreator,
@@ -54,6 +82,7 @@ function ProjectSubmissionPanel({
   const workflowEvents = project.workflow_events || project.workflowEvents || [];
   const status = project.status;
 
+  /** Sends an approve/reject action to the API and updates the project state */
   const handleAction = async (action, body = {}) => {
     setActing(true);
     try {
@@ -83,6 +112,7 @@ function ProjectSubmissionPanel({
     reject: "Are you sure you want to reject this project? The assignee will not be able to resubmit.",
   };
 
+  // Build chronological history of workflow events (newest first), excluding field changes
   const historyItems = workflowEvents
     .filter((e) => e.action !== 'field_changed')
     .map((e) => ({

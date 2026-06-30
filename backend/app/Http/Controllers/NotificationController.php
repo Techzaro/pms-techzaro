@@ -6,8 +6,23 @@ use App\Http\Resources\NotificationResource;
 use App\Models\Notification;
 use Illuminate\Http\Request;
 
+/**
+ * Controller for managing user notifications.
+ * Provides endpoints to list notifications with filtering/search,
+ * get unread counts, and mark notifications as read individually or in bulk.
+ * Excludes notifications triggered by the user themselves.
+ */
 class NotificationController extends Controller
 {
+    /**
+     * Get paginated notifications for the authenticated user.
+     *
+     * Excludes notifications the user triggered themselves. Supports search
+     * by title/message, filtering by type, and read/unread filtering.
+     *
+     * @param  \Illuminate\Http\Request  $request  Query parameters: search, type, filter (unread|read).
+     * @return \Illuminate\Http\Resources\Json\AnonymousResourceCollection  Paginated notification resources.
+     */
     public function index(Request $request)
     {
         $user = $request->user();
@@ -45,6 +60,12 @@ class NotificationController extends Controller
         return NotificationResource::collection($query->paginate(20));
     }
 
+    /**
+     * Get the count of unread notifications for the authenticated user.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @return \Illuminate\Http\JsonResponse  JSON response with unread_count.
+     */
     public function unreadCount(Request $request)
     {
         $user = $request->user();
@@ -59,6 +80,13 @@ class NotificationController extends Controller
         return response()->json(['unread_count' => $count]);
     }
 
+    /**
+     * Mark a single notification as read.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @param  \App\Models\Notification  $notification  The notification to mark as read.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming the notification was marked.
+     */
     public function markAsRead(Request $request, Notification $notification)
     {
         if ($notification->user_id !== $request->user()->id) {
@@ -70,6 +98,12 @@ class NotificationController extends Controller
         return response()->json(['success' => true, 'message' => 'Notification marked as read']);
     }
 
+    /**
+     * Mark all unread notifications as read for the authenticated user.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming all notifications marked.
+     */
     public function markAllAsRead(Request $request)
     {
         $user = $request->user();

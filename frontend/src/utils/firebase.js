@@ -1,8 +1,20 @@
+/**
+ * @file firebase.js
+ * @description Firebase Cloud Messaging (FCM) initialization and token management.
+ * Handles push notification setup and device token registration with the backend.
+ */
+
 import { authToken } from "./auth";
 import API_URL from "../config/api";
 
+/** @type {Object|null} Firebase Cloud Messaging instance */
 let messaging = null;
 
+/**
+ * Initializes Firebase and requests FCM token for push notifications.
+ * Dynamically imports Firebase SDK to reduce initial bundle size.
+ * Skips initialization if Firebase config is not provided.
+ */
 export async function initFirebase() {
   try {
     const { initializeApp } = await import("firebase/app");
@@ -17,6 +29,7 @@ export async function initFirebase() {
       appId: import.meta.env.VITE_FIREBASE_APP_ID,
     };
 
+    // Exit early if Firebase is not configured
     if (!firebaseConfig.apiKey) {
       return;
     }
@@ -24,6 +37,7 @@ export async function initFirebase() {
     const app = initializeApp(firebaseConfig);
     messaging = getMessaging(app);
 
+    // Get FCM registration token
     const token = await getToken(messaging, {
       vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
     });
@@ -32,6 +46,7 @@ export async function initFirebase() {
       await sendDeviceToken(token);
     }
 
+    // Handle foreground messages
     onMessage(messaging, (payload) => {
       console.log("FCM foreground message received:", payload);
     });
@@ -40,6 +55,10 @@ export async function initFirebase() {
   }
 }
 
+/**
+ * Sends the FCM device token to the backend server.
+ * @param {string} token - FCM registration token
+ */
 async function sendDeviceToken(token) {
   try {
     const t = authToken();
@@ -54,6 +73,6 @@ async function sendDeviceToken(token) {
       body: JSON.stringify({ device_token: token }),
     });
   } catch {
-    // silently fail
+    // Silently fail - token registration is not critical
   }
 }

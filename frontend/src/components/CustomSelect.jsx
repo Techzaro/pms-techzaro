@@ -1,6 +1,20 @@
+/**
+ * CustomSelect.jsx
+ * Custom dropdown select component with click-outside detection.
+ * Replaces native <select> for consistent styling across the app.
+ */
+
 import { useState, useRef, useEffect } from "react";
 import "./CustomSelect.css";
 
+/**
+ * Custom dropdown select component.
+ * @param {*} value - Currently selected value
+ * @param {Function} onChange - Callback when selection changes, receives the option value
+ * @param {Array<{value: *, label: string}>} options - Array of selectable options
+ * @param {string} [placeholder="Select..."] - Placeholder text when nothing is selected
+ * @param {string} [name] - Optional name attribute for the hidden input
+ */
 const CustomSelect = ({ value, onChange, options, placeholder = "Select...", name }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);

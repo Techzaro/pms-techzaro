@@ -1,3 +1,13 @@
+/**
+ * UserPerformance page component.
+ *
+ * Shows detailed performance metrics for a single user (or the current user
+ * when the route uses "me").  Displays summary cards, task status breakdown
+ * with bar chart, a weekly workload chart and a sortable task/project table
+ * with search and status filtering.  Admins/managers can export a PDF report
+ * and assign new tasks from this page.
+ */
+
 import { useState, useMemo, memo, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -15,6 +25,7 @@ import API_URL from "../config/api";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 
+/** Configuration for the four summary KPI cards shown at the top. */
 const CARD_META = {
   total_assigned: {
     title: "Total Assigned",
@@ -42,6 +53,7 @@ const CARD_META = {
   },
 };
 
+/** Memoised summary card used for the KPI row on the user performance page. */
 const SummaryCard = memo(function SummaryCard({ card }) {
   return (
     <div style={{
@@ -100,6 +112,10 @@ const PRIORITY_TEXT_COLORS = {
   Low: "#166534",
 };
 
+/**
+ * Main UserPerformance component — renders summary cards, charts and a
+ * task table for the selected user.
+ */
 function UserPerformance() {
   const { userId: urlUserId } = useParams();
   const navigate = useNavigate();
@@ -165,6 +181,7 @@ function UserPerformance() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  /** Fetch tasks/projects for the target user from the API. */
   const fetchTasks = useCallback(() => {
     if (!userId) return;
     setTasksLoading(true);

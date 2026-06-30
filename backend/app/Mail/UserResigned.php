@@ -9,14 +9,30 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
+/**
+ * Mailable sent to users when their account is marked as resigned.
+ *
+ * Notifies the user that their PMS access has been revoked.
+ */
 class UserResigned extends Mailable
 {
     use Queueable, SerializesModels;
 
+    /** @var \App\Models\User The user who was resigned */
     public User $user;
+
+    /** @var string Name of the person who processed the resignation */
     public string $resignedBy;
+
+    /** @var string Formatted date/time of the resignation */
     public string $resignationDate;
 
+    /**
+     * Create a new mail instance.
+     *
+     * @param \App\Models\User $user       The resigned user
+     * @param string           $resignedBy Name of the admin who processed resignation
+     */
     public function __construct(User $user, string $resignedBy)
     {
         $this->user = $user;
@@ -24,6 +40,11 @@ class UserResigned extends Mailable
         $this->resignationDate = now()->format('F j, Y \a\t g:i A');
     }
 
+    /**
+     * Build the message envelope.
+     *
+     * @return \Illuminate\Mail\Mailables\Envelope
+     */
     public function envelope(): Envelope
     {
         return new Envelope(
@@ -31,6 +52,11 @@ class UserResigned extends Mailable
         );
     }
 
+    /**
+     * Define the message content using inline HTML.
+     *
+     * @return \Illuminate\Mail\Mailables\Content
+     */
     public function content(): Content
     {
         return new Content(
@@ -38,6 +64,11 @@ class UserResigned extends Mailable
         );
     }
 
+    /**
+     * Build the full HTML email body.
+     *
+     * @return string Complete HTML document
+     */
     private function buildHtml(): string
     {
         $name = e($this->user->name);

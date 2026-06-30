@@ -1,9 +1,5 @@
 <?php
 
-/**
- * Controller responsible for authentication actions such as login, logout, and password changes.
- */
-
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
@@ -14,14 +10,19 @@ use App\Models\Project;
 
 /**
  * Controller responsible for authentication actions.
- * Handles login, logout, and password update operations.
+ * Handles user login, logout, first-time password changes, password updates,
+ * and authenticated user profile retrieval/update.
  */
 class AuthController extends Controller
 {
     /**
-     * LOGIN
+     * Authenticate a user and return a Sanctum API token.
      *
-     * Validate user credentials and generate a Sanctum token.
+     * Validates credentials, checks account active status, generates a token,
+     * tracks last login time, and normalizes the role format.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: email (required), password (required).
+     * @return \Illuminate\Http\JsonResponse  JSON response with token, role, and user data on success.
      */
     public function login(Request $request)
     {
@@ -46,12 +47,14 @@ class AuthController extends Controller
             // logged in user
             $user = Auth::user();
 
-            if ($user->active === false) {
+            if ($user->active === false && !$user->must_change_password) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Your account has been resigned. You no longer have access to the system. Please contact your administrator.'
                 ], 403);
             }
+
+            // New users (inactive + must_change_password) login allowed
 
             // generate token
             $token = $user->createToken('auth_token')->plainTextToken;
@@ -74,6 +77,7 @@ class AuthController extends Controller
                     'email' => $user->email,
                     'role' => $role,
                     'active' => $user->active,
+                    'must_change_password' => $user->must_change_password,
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -85,7 +89,10 @@ class AuthController extends Controller
     }
 
     /**
-     * LOGOUT
+     * Log out the authenticated user by revoking the current access token.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request with the authenticated user.
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming logout.
      */
     public function logout(Request $request)
     {
@@ -98,7 +105,13 @@ class AuthController extends Controller
     }
 
     /**
-     * FIRST-TIME PASSWORD CHANGE - No old password required.
+     * Handle first-time password change (no old password required).
+     *
+     * Used when a newly created user must set their password on first login.
+     * Clears the must_change_password flag after successful update.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: new_password (required, min 6 chars).
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming password change.
      */
     public function firstTimeChangePassword(Request $request)
     {
@@ -111,6 +124,7 @@ class AuthController extends Controller
 
             $user->password = bcrypt($request->new_password);
             $user->must_change_password = false;
+            $user->active = true;
             $user->save();
 
             return response()->json([
@@ -126,7 +140,13 @@ class AuthController extends Controller
     }
 
     /**
-     * MY PROFILE - Return current user's full profile with stats.
+     * Get the authenticated user's full profile with task/project stats and login history.
+     *
+     * Returns all profile fields, document references, task statistics (assigned/completed/pending),
+     * total projects created, account metadata, and last login information.
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request with the authenticated user.
+     * @return \Illuminate\Http\JsonResponse  JSON response with full user profile, stats, and account info.
      */
     public function myProfile(Request $request)
     {
@@ -189,6 +209,7 @@ class AuthController extends Controller
                 'last_login_at' => $user->last_login_at?->toDateTimeString(),
                 'created_at' => $user->created_at->toDateTimeString(),
                 'updated_at' => $user->updated_at->toDateTimeString(),
+                'must_change_password' => $user->must_change_password,
             ],
             'stats' => [
                 'total_assigned_tasks' => (int) $taskStats->total_assigned,
@@ -200,14 +221,21 @@ class AuthController extends Controller
             'account' => [
                 'account_age' => $user->created_at->diffForHumans(),
                 'days_since_creation' => $user->created_at->diffInDays(now()),
-                'status' => $user->active ? 'Active' : 'Resigned',
+                'status' => !$user->active ? 'Resigned' : ($user->must_change_password ? 'Inactive' : 'Active'),
                 'last_login' => $user->last_login_at?->toDateTimeString() ?? 'Never logged in',
             ],
         ]);
     }
 
     /**
-     * UPDATE OWN PROFILE - Any authenticated user can update their own profile.
+     * Update the authenticated user's own profile.
+     *
+     * Supports updating personal info, contact details, employment info, and document uploads.
+     * Empty strings are converted to null for proper nullable field handling.
+     * Legacy fields (phone_number, present_address) are synced to their modern equivalents.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: various profile fields and optional file uploads.
+     * @return \Illuminate\Http\JsonResponse  JSON response with the updated user profile.
      */
     public function updateProfile(Request $request)
     {
@@ -314,7 +342,12 @@ class AuthController extends Controller
     }
 
     /**
-     * CHANGE PASSWORD - Verify old password then update.
+     * Change the authenticated user's password after verifying the current password.
+     *
+     * Revokes all other tokens on password change for security.
+     *
+     * @param  \Illuminate\Http\Request  $request  Input: old_password (required), new_password (required, min 6 chars).
+     * @return \Illuminate\Http\JsonResponse  JSON response confirming password change.
      */
     public function changePassword(Request $request)
     {

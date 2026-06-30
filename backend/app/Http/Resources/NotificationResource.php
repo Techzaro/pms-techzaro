@@ -4,8 +4,21 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/**
+ * API resource for Notification models.
+ *
+ * Formats notification data with human-readable timestamps
+ * and sender information for the frontend notification feed.
+ */
 class NotificationResource extends JsonResource
 {
+    /**
+     * Transform the notification into an array.
+     *
+     * @param \Illuminate\Http\Request $request
+     *
+     * @return array
+     */
     public function toArray($request)
     {
         return [

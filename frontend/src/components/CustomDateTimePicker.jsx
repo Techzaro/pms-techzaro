@@ -1,12 +1,28 @@
+/**
+ * CustomDateTimePicker.jsx
+ * Custom date/time picker with dropdown selects for day, month, year, hour, and minute.
+ * Supports minimum date constraints and date-only mode.
+ */
+
 import { useState, useRef, useEffect } from "react";
 import "./CustomDateTimePicker.css";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+/** Returns the number of days in a given month (0-indexed). */
 const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
 
+/** Pads a number with leading zero to 2 digits. */
 const padNum = (n) => String(n).padStart(2, "0");
 
+/**
+ * Custom date/time picker with dropdown selects.
+ * @param {string} value - Current value in ISO format (e.g., "2025-03-15T14:30") or date-only ("2025-03-15")
+ * @param {Function} onChange - Callback when value changes, receives formatted string
+ * @param {string} [label] - Optional label text
+ * @param {boolean} [dateOnly=false] - If true, hides time selectors
+ * @param {string|null} [min=null] - Minimum selectable date/time in ISO format
+ */
 const CustomDateTimePicker = ({ value, onChange, label, dateOnly = false, min = null }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -83,6 +99,10 @@ const CustomDateTimePicker = ({ value, onChange, label, dateOnly = false, min = 
   const startMin = minMinutes !== null ? minMinutes : 0;
   for (let m = startMin; m < 60; m += 5) minutesList.push(m);
 
+  /**
+   * Formats the selected date/time components into an ISO-style string
+   * and calls onChange. Clamps the day to the valid range for the month.
+   */
   const applyValue = (y, mo, d, h, m) => {
     const safeD = Math.min(d, getDaysInMonth(y, mo));
     if (dateOnly) {
@@ -92,6 +112,10 @@ const CustomDateTimePicker = ({ value, onChange, label, dateOnly = false, min = 
     }
   };
 
+  /**
+   * Returns a human-readable display string for the current value.
+   * @returns {string} Formatted date/time string or empty if no value
+   */
   const displayValue = () => {
     if (!value) return "";
     if (dateOnly) {

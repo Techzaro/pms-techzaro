@@ -4,8 +4,21 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/**
+ * Full API resource for Project models.
+ *
+ * Includes all project fields, related resources (tasks, deliverables,
+ * team, submissions), and computed progress statistics.
+ */
 class ProjectResource extends JsonResource
 {
+    /**
+     * Transform the project into a complete array representation.
+     *
+     * @param \Illuminate\Http\Request $request
+     *
+     * @return array
+     */
     public function toArray($request)
     {
         return [
@@ -48,6 +61,7 @@ class ProjectResource extends JsonResource
             'reopened_by' => $this->whenLoaded('reopenedBy')?->name,
             'total_tasks' => $this->total_tasks ?? $this->tasks_count ?? 0,
             'completed_tasks' => $this->completed_tasks ?? 0,
+            // Compute progress percentage only when total_tasks is available
             'progress_percent' => $this->when($this->total_tasks ?? $this->tasks_count, function () {
                 $total = $this->total_tasks ?? $this->tasks_count ?? 0;
                 if ($total === 0) return 0;

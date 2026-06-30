@@ -17,6 +17,17 @@ class RoleMiddleware
 {
     /**
      * Validate authenticated user role before route execution.
+     *
+     * Accepts one or more role names as variadic arguments. Supports
+     * comma-separated role lists and normalizes the 'teamlead' alias
+     * to 'team_lead'. Returns 401 if unauthenticated, 403 if role
+     * is not permitted.
+     *
+     * @param \Illuminate\Http\Request $request
+     * @param \Closure                 $next
+     * @param string                   ...$roles One or more allowed roles
+     *
+     * @return \Symfony\Component\HttpFoundation\Response
      */
     public function handle(Request $request, Closure $next, ...$roles)
     {
@@ -24,6 +35,7 @@ class RoleMiddleware
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        // Build list of allowed roles, normalizing comma-separated values
         $allowed = [];
 
         foreach ($roles as $role) {
@@ -36,6 +48,7 @@ class RoleMiddleware
             }
         }
 
+        // Deny access if user's role is not in the allowed list
         if (!in_array($request->user()->role, $allowed)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }

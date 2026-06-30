@@ -1,3 +1,15 @@
+/**
+ * Calender.jsx — Calendar Page Component
+ *
+ * Unified calendar view for the PMS that displays events, tasks, projects,
+ * and deliverables in Month/Week/Day views. Features:
+ * - Month/Week/Day view toggle with navigation (prev/next/today)
+ * - Event creation/editing modal (admin/manager only)
+ * - Day popup showing events for a specific date (supports deep-linking via ?date= param)
+ * - Sidebar with today's events and upcoming events
+ * - Event search and color-coded event type legend
+ * - Auto-refreshes on event CRUD via event bus
+ */
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
@@ -15,8 +27,10 @@ import { authToken, getCurrentRole, getUser } from "../utils/auth";
 import API_URL from "../config/api";
 import { publish } from "../utils/eventBus";
 
+/** Default color scheme for events without a specific type */
 export const DEFAULT_EVENT_COLOR = { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" };
 
+/** Color schemes for each event type, used for background, text, and dot indicators */
 export const TYPE_COLORS = {
   Meeting: { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" },
   Training: { bg: "#eff6ff", text: "#3b82f6", dot: "#3b82f6" },
@@ -33,6 +47,7 @@ export const TYPE_COLORS = {
   deliverable: { bg: "#f0fdf4", text: "#16a34a", dot: "#16a34a" },
 };
 
+/** Display labels for event types, shown in the calendar footer legend */
 export const TYPE_LABELS = {
   Meeting: "Meeting",
   Training: "Training",
@@ -49,10 +64,12 @@ export const TYPE_LABELS = {
   deliverable: "Deliverable",
 };
 
+/** Formats a Date to YYYY-MM-DD for API parameters */
 function formatDate(d) {
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
+/** Formats a Date to a display string like "June 29, 2026" */
 function formatDisplayDate(d) {
   return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
@@ -88,6 +105,11 @@ function isToday(d) {
   return isSameDay(d, new Date());
 }
 
+/**
+ * Calender — Main calendar page component.
+ * Manages view mode (Month/Week/Day), event fetching, date navigation,
+ * and renders the calendar grid, sidebar, and modals.
+ */
 function Calender() {
   const [viewMode, setViewMode] = useState("Month");
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -106,8 +128,10 @@ function Calender() {
   const [searchParams] = useSearchParams();
   const currentRole = getCurrentRole();
   const currentUser = getUser(currentRole);
+  // Only admins and managers can create/edit/delete events
   const canManageEvents = ["admin", "manager"].includes(currentRole);
 
+  // Compute the date range (from/to) based on current view mode and date
   const getDateRange = useCallback(() => {
     if (viewMode === "Month") {
       const start = getMonthStart(currentDate);
@@ -123,6 +147,7 @@ function Calender() {
     return { from: d, to: d };
   }, [currentDate, viewMode]);
 
+  // Fetch events from unified calendar API with date range and search params
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
@@ -163,8 +188,10 @@ function Calender() {
     setSelectedDay(parsed);
     setShowDayPopup(true);
   }, [searchParams]);
+  // Re-fetch events when events are created, updated, or deleted
   useRefreshOnEvent(['event:created', 'event:updated', 'event:deleted'], fetchEvents);
 
+  // Navigate to previous month/week/day
   const handlePrev = () => {
     const d = new Date(currentDate);
     if (viewMode === "Month") d.setMonth(d.getMonth() - 1);
@@ -185,11 +212,13 @@ function Calender() {
     setCurrentDate(new Date());
   };
 
+  // Callback after event creation/update — refresh list and publish change event
   const handleEventCreated = (event) => {
     fetchEvents();
     publish('data:changed', { type: 'event', action: event?.id ? 'updated' : 'created' });
   };
 
+  // Delete an event after confirmation, then refresh and close popups
   const handleDelete = async (eventId) => {
     if (!window.confirm("Are you sure you want to delete this event?")) return;
     setDeleteLoading(eventId);
@@ -219,6 +248,7 @@ function Calender() {
     setShowEventModal(true);
   };
 
+  // Filter events that fall within a given date (handles multi-day events)
   const getEventsForDate = (date) => {
     const dateStr = formatDate(date);
     return events.filter((ev) => {
@@ -240,6 +270,7 @@ function Calender() {
     return formatDisplayDate(currentDate);
   };
 
+  // Generate calendar grid cells based on view mode (Month: full month grid, Week: 7 days, Day: single date)
   const calendarDays = useMemo(() => {
     if (viewMode === "Month") {
       const start = getMonthStart(currentDate);
