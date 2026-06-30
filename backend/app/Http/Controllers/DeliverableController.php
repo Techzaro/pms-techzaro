@@ -231,6 +231,30 @@ class DeliverableController extends Controller
             $this->sendDeliverableNotification($deliverable, $user, 'deliverable_assigned', 'Deliverable Assigned');
         }
 
+        // Notify project assignees about new deliverable
+        if ($deliverable->project_id) {
+            $projectAssignees = $project->assigned_users ?? [];
+            if (!empty($projectAssignees)) {
+                $this->notificationService->notifyDeliverableAdded($deliverable, $user, $projectAssignees, 'project');
+            }
+        }
+
+        // Notify task assignees about new deliverable (if assigned to a task)
+        if ($deliverable->task_id) {
+            $task = \App\Models\Task::with('assignees:id')->find($deliverable->task_id);
+            if ($task) {
+                $taskAssigneeIds = $task->assignees->pluck('id')->toArray();
+                $this->notificationService->notifyDeliverableAdded($deliverable, $user, $taskAssigneeIds, 'task');
+            }
+        }
+
+        // Send confirmation email to performer
+        $this->notificationService->confirmAction($user, 'Created', 'deliverable', $deliverable->title, [
+            'Project' => $project->title,
+            'Task' => $deliverable->task_id ? ($deliverable->task->title ?? 'N/A') : 'N/A',
+            'Assigned To' => $deliverable->assignee?->name ?? 'N/A',
+        ]);
+
         return response()->json([
             'success' => true,
             'message' => 'Deliverable created successfully',
@@ -297,6 +321,16 @@ class DeliverableController extends Controller
         }
 
         $this->sendDeliverableUpdateNotification($deliverable, $user, $changes);
+
+        // Send confirmation email to performer
+        if (count($changes) > 0) {
+            $fieldNames = array_column($changes, 'label');
+            $this->notificationService->confirmAction($user, 'Updated', 'deliverable', $deliverable->title, [
+                'Project' => $deliverable->project?->title ?? 'N/A',
+                'Task' => $deliverable->task?->title ?? 'N/A',
+                'Changes Made' => implode(', ', array_slice($fieldNames, 0, 5)) . (count($fieldNames) > 5 ? ' and more' : ''),
+            ]);
+        }
 
         return response()->json([
             'success' => true,
@@ -410,6 +444,13 @@ class DeliverableController extends Controller
             );
         }
 
+        // Send confirmation email to performer
+        $this->notificationService->confirmAction($user, $isResubmit ? 'Resubmitted' : 'Submitted', 'deliverable', $deliverable->title, [
+            'Project' => $deliverable->project?->title ?? 'N/A',
+            'Task' => $deliverable->task?->title ?? 'N/A',
+            'Submitted To' => User::find($deliverable->created_by)?->name ?? 'N/A',
+        ]);
+
         // Log activity
         $isResubmitLabel = $isResubmit ? 'resubmitted' : 'submitted';
         $this->activityService->log($user->id, 'deliverable_' . $isResubmitLabel, 'You ' . $isResubmitLabel . ' deliverable "' . $deliverable->title . '" for review', 'deliverable', $deliverable->id);
@@ -455,6 +496,13 @@ class DeliverableController extends Controller
                 '/deliveries?selectedDeliverable=' . $deliverable->id
             );
         }
+
+        // Send confirmation email to performer
+        $this->notificationService->confirmAction($user, 'Approved', 'deliverable', $deliverable->title, [
+            'Project' => $deliverable->project?->title ?? 'N/A',
+            'Task' => $deliverable->task?->title ?? 'N/A',
+            'Assigned To' => $deliverable->assignee?->name ?? 'N/A',
+        ]);
 
         // Log activity
         $this->activityService->log($user->id, 'deliverable_approved', 'You approved deliverable "' . $deliverable->title . '"', 'deliverable', $deliverable->id);
@@ -503,6 +551,14 @@ class DeliverableController extends Controller
                 '/deliveries?selectedDeliverable=' . $deliverable->id
             );
         }
+
+        // Send confirmation email to performer
+        $this->notificationService->confirmAction($user, 'Rejected', 'deliverable', $deliverable->title, [
+            'Project' => $deliverable->project?->title ?? 'N/A',
+            'Task' => $deliverable->task?->title ?? 'N/A',
+            'Assigned To' => $deliverable->assignee?->name ?? 'N/A',
+            'Reason' => $validated['comment'] ?? 'N/A',
+        ]);
 
         // Log activity
         $this->activityService->log($user->id, 'deliverable_rejected', 'You rejected deliverable "' . $deliverable->title . '"', 'deliverable', $deliverable->id);
@@ -572,6 +628,14 @@ class DeliverableController extends Controller
                 '/deliveries?selectedDeliverable=' . $deliverable->id
             );
         }
+
+        // Send confirmation email to performer
+        $this->notificationService->confirmAction($user, 'Reopened', 'deliverable', $deliverable->title, [
+            'Project' => $deliverable->project?->title ?? 'N/A',
+            'Task' => $deliverable->task?->title ?? 'N/A',
+            'Assigned To' => $deliverable->assignee?->name ?? 'N/A',
+            'Instructions' => $validated['instructions'] ?? 'N/A',
+        ]);
 
         // Log activity
         $this->activityService->log($user->id, 'deliverable_reopened', 'You reopened deliverable "' . $deliverable->title . '" for revision', 'deliverable', $deliverable->id);
@@ -760,8 +824,9 @@ class DeliverableController extends Controller
         $deliverable->loadMissing('task:id,title');
         $taskTitle = $deliverable->task->title ?? '';
         $dueDate = $deliverable->due_date ? $deliverable->due_date->format('d-M-Y') : '';
-        $message = 'A new deliverable "' . $deliverable->title . '" has been assigned to you.';
-        if ($sender->name) $message .= ' by ' . $sender->name . '.';
+        $message = 'A new deliverable "' . $deliverable->title . '" has been assigned to you';
+        if ($sender->name) $message .= ' by ' . $sender->name;
+        $message .= '.';
         if ($taskTitle) $message .= ' Task: ' . $taskTitle . '.';
         if ($dueDate) $message .= ' Due Date: ' . $dueDate . '.';
 
@@ -787,11 +852,17 @@ class DeliverableController extends Controller
      */
     private function sendDeliverableUpdateNotification(Deliverable $deliverable, User $updater, array $changes): void
     {
+        $formattedChanges = array_map(fn($c) => [
+            'field' => $c['label'] ?? ucwords(str_replace('_', ' ', $c['field_name'])),
+            'old' => $c['old_value'] ?? '',
+            'new' => $c['new_value'] ?? '',
+        ], $changes);
+
         if (isset($changes[0]) && $changes[0]['field_name'] === 'assigned_to') {
             $this->sendDeliverableNotification($deliverable, $updater, 'deliverable_assigned', 'Deliverable Assigned');
         } elseif ($deliverable->assigned_to && $deliverable->assigned_to !== $updater->id) {
             $changeMsg = 'The deliverable "' . $deliverable->title . '" has been updated by ' . $updater->name . '.';
-            if (count($changes) > 0) $changeMsg .= ' ' . count($changes) . ' change(s) were made. Click to review changes.';
+            if (count($changes) > 0) $changeMsg .= ' ' . count($changes) . ' change(s) were made.';
             $this->notificationService->notify(
                 $deliverable->assigned_to,
                 $updater->id,
@@ -800,7 +871,8 @@ class DeliverableController extends Controller
                 $deliverable->id,
                 'Deliverable Updated',
                 $changeMsg,
-                '/deliveries?selectedDeliverable=' . $deliverable->id
+                '/deliveries?selectedDeliverable=' . $deliverable->id,
+                !empty($formattedChanges) ? $formattedChanges : null
             );
         }
     }

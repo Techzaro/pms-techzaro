@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Deliverable;
 use App\Models\DeliverableSubmission;
-use App\Models\Notification;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TaskFile;
@@ -656,22 +655,34 @@ class TaskController extends Controller
 
         if (!empty($deliverablesToCreate)) {
             Deliverable::insert($deliverablesToCreate);
-            // Collect notification data using the inserted data (IDs not needed for link)
-            foreach ($deliverablesToCreate as $d) {
-                if ((int) $d['assigned_to'] !== (int) $user->id) {
+            $insertedDeliverables = Deliverable::where('created_by', $user->id)
+                ->where('created_at', '>=', now()->subSeconds(5))
+                ->get(['id', 'title', 'assigned_to', 'task_id']);
+            foreach ($insertedDeliverables as $dlv) {
+                if ((int) $dlv->assigned_to !== (int) $user->id) {
                     $deliverableNotifications[] = [
-                        'user_id' => $d['assigned_to'], 'sender_user_id' => $user->id,
+                        'user_id' => $dlv->assigned_to, 'sender_user_id' => $user->id,
                         'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
+                        'related_id' => $dlv->id,
                         'title' => 'Deliverable Assigned',
-                        'message' => 'A new deliverable "' . $d['title'] . '" has been assigned to you by ' . $user->name . '.',
-                        'link' => '/deliveries',
+                        'message' => 'A new deliverable "' . $dlv->title . '" has been assigned to you by ' . $user->name . '.',
+                        'link' => '/deliveries?selectedDeliverable=' . $dlv->id,
                     ];
                 }
             }
         }
         if (!empty($deliverableNotifications)) {
-            $now = now()->toDateTimeString();
-            Notification::insert(array_map(fn ($n) => $n + ['created_at' => $now, 'updated_at' => $now], $deliverableNotifications));
+            $this->notificationService->createBulk($deliverableNotifications);
+        }
+
+        // Notify project assignees about new deliverables added under tasks
+        if (!empty($insertedDeliverables)) {
+            $projectAssignees = $project->assigned_users ?? [];
+            if (!empty($projectAssignees)) {
+                foreach ($insertedDeliverables as $dlv) {
+                    $this->notificationService->notifyDeliverableAdded($dlv, $user, $projectAssignees, 'project');
+                }
+            }
         }
 
         // Bulk notifications
@@ -692,8 +703,15 @@ class TaskController extends Controller
         }
         $this->notificationService->createBulk($notifications);
 
-        // Log activity
+        // Send confirmation email to performer
         $taskCount = count($createdTasks);
+        $this->notificationService->confirmAction($user, 'Assigned', 'task', $createdTasks[0]->title, [
+            'Project' => $project->title,
+            'Assigned To' => User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', '),
+            'Tasks Created' => (string) $taskCount,
+        ]);
+
+        // Log activity
         $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
         $this->activityService->log($user->id, 'task_created', 'You created ' . $taskCount . ' task(s) and assigned them to ' . $assigneeNames, 'task', $createdTasks[0]->id);
 
@@ -775,15 +793,16 @@ class TaskController extends Controller
                     'assigned_to' => $userId, 'created_by' => $user->id,
                     'created_at' => now(), 'updated_at' => now(),
                 ])->toArray();
-                $task->deliverables()->createMany($deliverableData);
-                foreach ($deliverableData as $d) {
-                    if ((int) $d['assigned_to'] !== (int) $user->id) {
+                $createdDeliverables = $task->deliverables()->createMany($deliverableData);
+                foreach ($createdDeliverables as $dlv) {
+                    if ((int) $dlv->assigned_to !== (int) $user->id) {
                         $deliverableNotifications[] = [
-                            'user_id' => $d['assigned_to'], 'sender_user_id' => $user->id,
+                            'user_id' => $dlv->assigned_to, 'sender_user_id' => $user->id,
                             'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
+                            'related_id' => $dlv->id,
                             'title' => 'Deliverable Assigned',
-                            'message' => 'A new deliverable "' . $d['title'] . '" has been assigned to you by ' . $user->name . '.',
-                            'link' => '/deliveries',
+                            'message' => 'A new deliverable "' . $dlv->title . '" has been assigned to you by ' . $user->name . '.',
+                            'link' => '/deliveries?selectedDeliverable=' . $dlv->id,
                         ];
                     }
                 }
@@ -796,8 +815,7 @@ class TaskController extends Controller
             DB::table('task_workflow_events')->insert($workflowRecords);
         }
         if (!empty($deliverableNotifications)) {
-            $now = now()->toDateTimeString();
-            Notification::insert(array_map(fn ($n) => $n + ['created_at' => $now, 'updated_at' => $now], $deliverableNotifications));
+            $this->notificationService->createBulk($deliverableNotifications);
         }
 
         $sent = [];
@@ -817,8 +835,14 @@ class TaskController extends Controller
         }
         $this->notificationService->createBulk($notifications);
 
-        // Log activity
+        // Send confirmation email to performer
         $taskCount = count($createdTasks);
+        $this->notificationService->confirmAction($user, 'Assigned', 'task', $createdTasks[0]->title, [
+            'Assigned To' => User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', '),
+            'Tasks Created' => (string) $taskCount,
+        ]);
+
+        // Log activity
         $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
         $this->activityService->log($user->id, 'task_created', 'You created ' . $taskCount . ' task(s) and assigned them to ' . $assigneeNames, 'task', $createdTasks[0]->id);
 
@@ -921,9 +945,16 @@ class TaskController extends Controller
                 'due_date' => $del['due_date'] ?? null, 'assigned_to' => $task->assigned_to,
                 'created_by' => $user->id,
             ])->toArray();
-            $task->deliverables()->createMany($delData);
+            $createdDeliverables = $task->deliverables()->createMany($delData);
             $addedDeliverables = array_column($delData, 'title');
             $changes[] = ['field_name' => 'deliverables', 'label' => 'Deliverable Added', 'old_value' => '', 'new_value' => implode(', ', $addedDeliverables)];
+
+            // Notify task assignees about new deliverables
+            if (!$task->relationLoaded('assignees')) $task->load('assignees:id');
+            $taskAssigneeIds = $task->assignees->pluck('id')->toArray();
+            foreach ($createdDeliverables as $dlv) {
+                $this->notificationService->notifyDeliverableAdded($dlv, $user, $taskAssigneeIds, 'task');
+            }
         }
 
         // Bulk create changes and workflow events
@@ -942,7 +973,16 @@ class TaskController extends Controller
             );
         }
 
-        $this->sendTaskUpdateNotification($task, $user, count($changes));
+        $this->sendTaskUpdateNotification($task, $user, $changes);
+
+        // Send confirmation email to performer
+        if (count($changes) > 0) {
+            $fieldNames = array_column($changes, 'label');
+            $this->notificationService->confirmAction($user, 'Updated', 'task', $task->title, [
+                'Project' => $task->project?->title ?? 'N/A',
+                'Changes Made' => implode(', ', array_slice($fieldNames, 0, 5)) . (count($fieldNames) > 5 ? ' and more' : ''),
+            ]);
+        }
 
         return response()->json([
             'success' => true,
@@ -1024,6 +1064,12 @@ class TaskController extends Controller
                     '/tasks/task-details/' . $task->id . '?from=taskby'
                 );
             }
+
+            // Send confirmation email to performer
+            $this->notificationService->confirmAction($user, 'Completed', 'task', $task->title, [
+                'Project' => $task->project?->title ?? 'N/A',
+                'Status' => 'Submitted for review',
+            ]);
 
             // Log activity
             $this->activityService->log($user->id, 'task_completed', 'You completed task "' . $task->title . '"', 'task', $task->id);
@@ -1132,6 +1178,12 @@ class TaskController extends Controller
             );
         }
 
+        // Send confirmation email to performer
+        $this->notificationService->confirmAction($user, $isResubmit ? 'Resubmitted' : 'Submitted', 'task', $task->title, [
+            'Project' => $task->project?->title ?? 'N/A',
+            'Submitted To' => User::find($task->assigned_by)?->name ?? 'N/A',
+        ]);
+
         // Log activity
         $isResubmitLabel = $isResubmit ? 'resubmitted' : 'submitted';
         $this->activityService->log($user->id, 'task_' . $isResubmitLabel, 'You ' . $isResubmitLabel . ' task "' . $task->title . '" for review', 'task', $task->id);
@@ -1180,8 +1232,13 @@ class TaskController extends Controller
             '/tasks/task-details/' . $task->id . '?from=tasks'
         );
 
+        // Send confirmation email to performer
+        $this->notificationService->confirmAction($user, 'Approved', 'task', $task->title, [
+            'Project' => $task->project?->title ?? 'N/A',
+            'Assigned To' => $task->assignees->pluck('name')->implode(', '),
+        ]);
+
         // Log activity
-        $this->activityService->log($user->id, 'task_approved', 'You approved task "' . $task->title . '"', 'task', $task->id);
 
         return response()->json([
             'success' => true,
@@ -1215,6 +1272,7 @@ class TaskController extends Controller
         TaskWorkflowEvent::create(['task_id' => $task->id, 'user_id' => $user->id, 'action' => 'rejected', 'comment' => $validated['comment'] ?? null]);
 
         $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+        $assigneeIds = array_values(array_filter($assigneeIds, fn($id) => (int) $id !== (int) $user->id));
         $rejectMsg = 'Your task "' . $task->title . '" has been rejected. Please make the required changes.';
         if (!empty($validated['comment'])) $rejectMsg .= ' Reason: ' . $validated['comment'];
 
@@ -1228,6 +1286,13 @@ class TaskController extends Controller
             $rejectMsg,
             '/tasks/task-details/' . $task->id . '?from=tasks'
         );
+
+        // Send confirmation email to performer
+        $this->notificationService->confirmAction($user, 'Rejected', 'task', $task->title, [
+            'Project' => $task->project?->title ?? 'N/A',
+            'Assigned To' => $task->assignees->pluck('name')->implode(', '),
+            'Reason' => $validated['comment'] ?? 'N/A',
+        ]);
 
         // Log activity
         $this->activityService->log($user->id, 'task_rejected', 'You rejected task "' . $task->title . '"', 'task', $task->id);
@@ -1286,6 +1351,7 @@ class TaskController extends Controller
         ]);
 
         $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+        $assigneeIds = array_values(array_filter($assigneeIds, fn($id) => (int) $id !== (int) $user->id));
         $reopenMsg = 'Your task "' . $task->title . '" has been reopened for revision.';
         if (!empty($validated['comment'])) $reopenMsg .= ' Comment: ' . $validated['comment'];
         if (!empty($validated['instructions'])) $reopenMsg .= ' Instructions: ' . $validated['instructions'];
@@ -1300,6 +1366,13 @@ class TaskController extends Controller
             $reopenMsg,
             '/tasks/task-details/' . $task->id . '?from=tasks'
         );
+
+        // Send confirmation email to performer
+        $this->notificationService->confirmAction($user, 'Reopened', 'task', $task->title, [
+            'Project' => $task->project?->title ?? 'N/A',
+            'Assigned To' => $task->assignees->pluck('name')->implode(', '),
+            'Instructions' => $validated['instructions'] ?? 'N/A',
+        ]);
 
         // Log activity
         $this->activityService->log($user->id, 'task_reopened', 'You reopened task "' . $task->title . '" for revision', 'task', $task->id);
@@ -1483,14 +1556,19 @@ class TaskController extends Controller
      * @param  int  $changeCount  Number of changes made.
      * @return void
      */
-    private function sendTaskUpdateNotification(Task $task, User $updater, int $changeCount = 0): void
+    private function sendTaskUpdateNotification(Task $task, User $updater, array $changes = []): void
     {
         if (!$task->relationLoaded('assignees')) $task->load('assignees:id');
         $assigneeIds = $task->assignees->pluck('id')->toArray();
 
         $msg = 'The task "' . $task->title . '" has been updated by ' . $updater->name . '.';
-        if ($changeCount > 0) $msg .= ' ' . $changeCount . ' change(s) were made.';
-        $msg .= ' Click to review changes.';
+        if (count($changes) > 0) $msg .= ' ' . count($changes) . ' change(s) were made.';
+
+        $formattedChanges = array_map(fn($c) => [
+            'field' => $c['label'] ?? ucwords(str_replace('_', ' ', $c['field_name'])),
+            'old' => $c['old_value'] ?? '',
+            'new' => $c['new_value'] ?? '',
+        ], $changes);
 
         foreach (array_filter($assigneeIds, fn($id) => (int) $id !== (int) $updater->id) as $assigneeId) {
             $this->notificationService->notify(
@@ -1501,7 +1579,8 @@ class TaskController extends Controller
                 $task->id,
                 'Task Updated',
                 $msg,
-                '/tasks/task-details/' . $task->id . '?from=tasks'
+                '/tasks/task-details/' . $task->id . '?from=tasks',
+                !empty($formattedChanges) ? $formattedChanges : null
             );
         }
     }

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Deliverable;
-use App\Models\Notification;
 use App\Models\Project;
 use App\Models\ProjectVisibility;
 use App\Models\ProjectFile;
@@ -216,7 +215,7 @@ class ProjectController extends Controller
         if (!empty($deliverables)) {
             $assignedUsers = $validated['assigned_users'] ?? [];
             if (!empty($assignedUsers)) {
-                $project->deliverables()->createMany(
+                $createdDeliverables = $project->deliverables()->createMany(
                     collect($deliverables)->flatMap(fn ($del) => collect($assignedUsers)->map(fn ($userId) => [
                         'title' => $del['title'], 'description' => $del['description'] ?? null,
                         'status' => 'pending', 'priority' => $validated['priority'] ?? 'Medium',
@@ -225,25 +224,30 @@ class ProjectController extends Controller
                     ]))->toArray()
                 );
                 $dlvNotifications = [];
-                foreach ($deliverables as $del) {
-                    foreach ($assignedUsers as $userId) {
-                        if ((int) $userId !== (int) $request->user()->id) {
-                            $dlvNotifications[] = [
-                                'user_id' => $userId, 'sender_user_id' => $request->user()->id,
-                                'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
-                                'title' => 'Deliverable Assigned',
-                                'message' => 'A new deliverable "' . $del['title'] . '" has been assigned to you by ' . $request->user()->name . '.',
-                                'link' => '/deliveries',
-                            ];
-                        }
+                foreach ($createdDeliverables as $dlv) {
+                    if ((int) $dlv->assigned_to !== (int) $request->user()->id) {
+                        $dlvNotifications[] = [
+                            'user_id' => $dlv->assigned_to, 'sender_user_id' => $request->user()->id,
+                            'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
+                            'related_id' => $dlv->id,
+                            'title' => 'Deliverable Assigned',
+                            'message' => 'A new deliverable "' . $dlv->title . '" has been assigned to you by ' . $request->user()->name . '.',
+                            'link' => '/deliveries?selectedDeliverable=' . $dlv->id,
+                        ];
                     }
                 }
                 if (!empty($dlvNotifications)) {
-                    $now = now()->toDateTimeString();
-                    Notification::insert(array_map(fn ($n) => $n + ['created_at' => $now, 'updated_at' => $now], $dlvNotifications));
+                    $this->notificationService->createBulk($dlvNotifications);
                 }
             }
         }
+
+        // Send confirmation email to performer
+        $assigneeNames = User::whereIn('id', $validated['assigned_users'] ?? [])->pluck('name')->implode(', ');
+        $this->notificationService->confirmAction($user, 'Created & Assigned', 'project', $project->title, [
+            'Assigned To' => $assigneeNames ?: 'N/A',
+            'Deliverables' => !empty($deliverables) ? (string) count($deliverables) . ' added' : 'None',
+        ]);
 
         return response()->json([
             'success' => true,
@@ -445,7 +449,6 @@ class ProjectController extends Controller
             $assignedUsers = $project->assigned_users ?? [];
             if (!empty($assignedUsers)) {
                 $bulkDeliverables = [];
-                $bulkNotifications = [];
                 foreach ($deliverables as $del) {
                     foreach ($assignedUsers as $userId) {
                         $bulkDeliverables[] = [
@@ -454,24 +457,32 @@ class ProjectController extends Controller
                             'due_date' => $del['due_date'] ?? null, 'assigned_to' => $userId,
                             'created_by' => $request->user()->id,
                         ];
-                        if ((int) $userId !== (int) $user->id) {
-                            $bulkNotifications[] = [
-                                'user_id' => $userId, 'sender_user_id' => $user->id,
-                                'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
-                                'title' => 'Deliverable Assigned',
-                                'message' => 'A new deliverable "' . $del['title'] . '" has been assigned to you by ' . $user->name . '.',
-                                'link' => '/deliveries?selectedDeliverable=0',
-                            ];
-                        }
                     }
                     $addedDeliverables[] = $del['title'];
                 }
                 if (!empty($bulkDeliverables)) {
-                    $project->deliverables()->createMany($bulkDeliverables);
-                }
-                if (!empty($bulkNotifications)) {
-                    $now = now()->toDateTimeString();
-                    Notification::insert(array_map(fn ($n) => $n + ['created_at' => $now, 'updated_at' => $now], $bulkNotifications));
+                    $createdDeliverables = $project->deliverables()->createMany($bulkDeliverables);
+                    $bulkNotifications = [];
+                    foreach ($createdDeliverables as $dlv) {
+                        if ((int) $dlv->assigned_to !== (int) $user->id) {
+                            $bulkNotifications[] = [
+                                'user_id' => $dlv->assigned_to, 'sender_user_id' => $user->id,
+                                'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
+                                'related_id' => $dlv->id,
+                                'title' => 'Deliverable Assigned',
+                                'message' => 'A new deliverable "' . $dlv->title . '" has been assigned to you by ' . $user->name . '.',
+                                'link' => '/deliveries?selectedDeliverable=' . $dlv->id,
+                            ];
+                        }
+                    }
+                    if (!empty($bulkNotifications)) {
+                        $this->notificationService->createBulk($bulkNotifications);
+                    }
+
+                    // Notify project assignees about new deliverables
+                    foreach ($createdDeliverables as $dlv) {
+                        $this->notificationService->notifyDeliverableAdded($dlv, $user, $assignedUsers, 'project');
+                    }
                 }
             }
         }
@@ -495,10 +506,18 @@ class ProjectController extends Controller
             );
         }
 
-        $changeCount = count($changes);
-        $this->sendProjectUpdateNotification($project, $user, $changeCount);
+        $this->sendProjectUpdateNotification($project, $user, $changes);
+
+        // Send confirmation email to performer
+        if (count($changes) > 0) {
+            $fieldNames = array_column($changes, 'label');
+            $this->notificationService->confirmAction($user, 'Updated', 'project', $project->title, [
+                'Changes Made' => implode(', ', array_slice($fieldNames, 0, 5)) . (count($fieldNames) > 5 ? ' and more' : ''),
+            ]);
+        }
 
         // Log activity
+        $changeCount = count($changes);
         if ($changeCount > 0) {
             $fieldNames = array_column($changes, 'label');
             $activityDesc = 'You updated project "' . $project->title . '" — changed: ' . implode(', ', array_slice($fieldNames, 0, 3));
@@ -757,8 +776,15 @@ class ProjectController extends Controller
             }
         }
         if (!empty($notifications)) {
-            $now = now()->toDateTimeString();
-            Notification::insert(array_map(fn ($n) => $n + ['created_at' => $now, 'updated_at' => $now], $notifications));
+            $this->notificationService->createBulk($notifications);
+        }
+
+        // Send confirmation email to performer
+        if (count($grantedUsers) > 0 || count($removedIds) > 0) {
+            $details = [];
+            if (count($grantedUsers) > 0) $details['Access Granted To'] = User::whereIn('id', $grantedUsers)->pluck('name')->implode(', ');
+            if (count($removedIds) > 0) $details['Access Removed From'] = User::whereIn('id', $removedIds)->pluck('name')->implode(', ');
+            $this->notificationService->confirmAction($user, 'Updated Visibility', 'project', $project->title, $details);
         }
 
         // Log activity
@@ -909,6 +935,12 @@ class ProjectController extends Controller
             );
         }
 
+        // Send confirmation email to performer
+        $this->notificationService->confirmAction($user, $isResubmit ? 'Resubmitted' : 'Submitted', 'project', $project->title, [
+            'Assigned To' => User::whereIn('id', $project->assigned_users ?? [])->pluck('name')->implode(', ') ?: 'N/A',
+            'Submitted To' => User::find($project->created_by)?->name ?? 'N/A',
+        ]);
+
         // Log activity
         $isResubmitLabel = $isResubmit ? 'resubmitted' : 'submitted';
         $this->activityService->log($user->id, 'project_' . $isResubmitLabel, 'You ' . $isResubmitLabel . ' project "' . $project->title . '" for review', 'project', $project->id);
@@ -961,6 +993,11 @@ class ProjectController extends Controller
             '/projects/project-details/' . $project->id
         );
 
+        // Send confirmation email to performer
+        $this->notificationService->confirmAction($user, 'Approved', 'project', $project->title, [
+            'Assigned To' => User::whereIn('id', $assignedUserIds)->pluck('name')->implode(', ') ?: 'N/A',
+        ]);
+
         // Log activity
         $this->activityService->log($user->id, 'project_approved', 'You approved project "' . $project->title . '"', 'project', $project->id);
 
@@ -1009,6 +1046,7 @@ class ProjectController extends Controller
         ]);
 
         $assignedUserIds = $project->assigned_users ?? [];
+        $assignedUserIds = array_values(array_filter($assignedUserIds, fn($id) => (int) $id !== (int) $user->id));
         $rejectMsg = 'Your project "' . $project->title . '" has been rejected.';
         if (!empty($validated['comment'])) $rejectMsg .= ' Reason: ' . $validated['comment'];
 
@@ -1022,6 +1060,12 @@ class ProjectController extends Controller
             $rejectMsg,
             '/projects/project-details/' . $project->id
         );
+
+        // Send confirmation email to performer
+        $this->notificationService->confirmAction($user, 'Rejected', 'project', $project->title, [
+            'Assigned To' => User::whereIn('id', $project->assigned_users ?? [])->pluck('name')->implode(', ') ?: 'N/A',
+            'Reason' => $validated['comment'] ?? 'N/A',
+        ]);
 
         // Log activity
         $this->activityService->log($user->id, 'project_rejected', 'You rejected project "' . $project->title . '"', 'project', $project->id);
@@ -1098,6 +1142,7 @@ class ProjectController extends Controller
         ]);
 
         $assignedUserIds = $project->assigned_users ?? [];
+        $assignedUserIds = array_values(array_filter($assignedUserIds, fn($id) => (int) $id !== (int) $user->id));
         $reopenMsg = 'Your project "' . $project->title . '" has been reopened for revision.';
         if (!empty($validated['comment'])) $reopenMsg .= ' Comment: ' . $validated['comment'];
         if (!empty($validated['instructions'])) $reopenMsg .= ' Instructions: ' . $validated['instructions'];
@@ -1112,6 +1157,12 @@ class ProjectController extends Controller
             $reopenMsg,
             '/projects/project-details/' . $project->id
         );
+
+        // Send confirmation email to performer
+        $this->notificationService->confirmAction($user, 'Reopened', 'project', $project->title, [
+            'Assigned To' => User::whereIn('id', $project->assigned_users ?? [])->pluck('name')->implode(', ') ?: 'N/A',
+            'Instructions' => $validated['instructions'] ?? 'N/A',
+        ]);
 
         // Log activity
         $this->activityService->log($user->id, 'project_reopened', 'You reopened project "' . $project->title . '" for revision', 'project', $project->id);
@@ -1212,13 +1263,19 @@ class ProjectController extends Controller
      * @param  int  $changeCount  Number of changes made.
      * @return void
      */
-    private function sendProjectUpdateNotification(Project $project, User $updater, int $changeCount = 0): void
+    private function sendProjectUpdateNotification(Project $project, User $updater, array $changes = []): void
     {
         $assignedUserIds = $project->assigned_users ?? [];
         if (is_string($assignedUserIds)) $assignedUserIds = json_decode($assignedUserIds, true) ?? [];
 
         $message = 'The project "' . $project->title . '" has been updated by ' . $updater->name . '.';
-        if ($changeCount > 0) $message .= ' ' . $changeCount . ' change(s) were made. Click to review changes.';
+        if (count($changes) > 0) $message .= ' ' . count($changes) . ' change(s) were made.';
+
+        $formattedChanges = array_map(fn($c) => [
+            'field' => $c['label'] ?? ucwords(str_replace('_', ' ', $c['field_name'])),
+            'old' => $c['old_value'] ?? '',
+            'new' => $c['new_value'] ?? '',
+        ], $changes);
 
         foreach (array_filter($assignedUserIds, fn($id) => (int) $id !== (int) $updater->id) as $userId) {
             $this->notificationService->notify(
@@ -1229,7 +1286,8 @@ class ProjectController extends Controller
                 $project->id,
                 'Project Updated',
                 $message,
-                '/projects/project-details/' . $project->id
+                '/projects/project-details/' . $project->id,
+                !empty($formattedChanges) ? $formattedChanges : null
             );
         }
     }

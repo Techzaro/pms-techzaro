@@ -78,6 +78,9 @@ function ManageUsers() {
     emergencyContactRelation: "",
     emergencyContactPhone: "",
     email: "",
+    personalEmail: "",
+    professionalEmail: "",
+    professionalEmailPassword: "",
     department: "",
     departmentCustom: "",
     designation: "",
@@ -103,6 +106,7 @@ function ManageUsers() {
   });
   const [loading, setLoading] = useState(false);
   const [savingUserId, setSavingUserId] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const [addErrors, setAddErrors] = useState({});
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -279,7 +283,9 @@ function ManageUsers() {
       emergencyContactRelation: "",
       emergencyContactPhone: "",
       email: "",
-      recoveryEmail: "",
+      personalEmail: "",
+      professionalEmail: "",
+      professionalEmailPassword: "",
       department: "",
       departmentCustom: "",
       designation: "",
@@ -325,6 +331,9 @@ function ManageUsers() {
       emergencyContactRelation: user.emergency_contact_relation || "",
       emergencyContactPhone: user.emergency_contact_phone || "",
       email: user.email || "",
+      personalEmail: user.personal_email || "",
+      professionalEmail: user.professional_email || "",
+      professionalEmailPassword: user.professional_email_password || "",
       department: isCustomDept ? "__custom__" : deptVal,
       departmentCustom: isCustomDept ? deptVal : "",
       designation: isCustomDesg ? "__custom__" : desgVal,
@@ -356,6 +365,7 @@ function ManageUsers() {
     setIsAddModalOpen(false);
     setEditingUser(null);
     setAddErrors({});
+    setSubmitting(false);
     setNewUser({
       fullName: "",
       fatherName: "",
@@ -367,7 +377,9 @@ function ManageUsers() {
       emergencyContactRelation: "",
       emergencyContactPhone: "",
       email: "",
-      recoveryEmail: "",
+      personalEmail: "",
+      professionalEmail: "",
+      professionalEmailPassword: "",
       department: "",
       departmentCustom: "",
       designation: "",
@@ -420,10 +432,16 @@ function ManageUsers() {
     if (newUser.emergencyContactPhone.trim() && !/^0\d{10}$/.test(newUser.emergencyContactPhone.trim())) {
       errors.emergencyContactPhone = "Emergency Phone must be 11 digits starting with 0.";
     }
-    if (!newUser.email.trim()) {
-      errors.email = "Email Address is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.email.trim())) {
-      errors.email = "Please enter a valid email address.";
+    if (!newUser.personalEmail.trim()) {
+      errors.personalEmail = "Personal Email Address is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.personalEmail.trim())) {
+      errors.personalEmail = "Please enter a valid personal email address.";
+    }
+    if (newUser.professionalEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.professionalEmail.trim())) {
+      errors.professionalEmail = "Please enter a valid professional email address.";
+    }
+    if (newUser.professionalEmail.trim() && !newUser.professionalEmailPassword.trim()) {
+      errors.professionalEmailPassword = "Password is required when professional email is provided.";
     }
     if (!newUser.department) {
       errors.department = "Department is required.";
@@ -665,7 +683,7 @@ function ManageUsers() {
 
     const formData = new FormData();
     formData.append("name", newUser.fullName.trim());
-    formData.append("email", newUser.email.trim());
+    formData.append("email", (newUser.personalEmail || newUser.email || "").trim());
     formData.append("father_name", newUser.fatherName);
     formData.append("id_card_number", newUser.idCardNumber);
     formData.append("present_address", newUser.presentAddress);
@@ -674,7 +692,9 @@ function ManageUsers() {
     formData.append("emergency_contact_name", newUser.emergencyContactName);
     formData.append("emergency_contact_relation", newUser.emergencyContactRelation);
     formData.append("emergency_contact_phone", newUser.emergencyContactPhone);
-    formData.append("recovery_email", newUser.recoveryEmail || "");
+    formData.append("personal_email", newUser.personalEmail || "");
+    formData.append("professional_email", newUser.professionalEmail || "");
+    formData.append("professional_email_password", newUser.professionalEmailPassword || "");
     formData.append("department", finalDepartment || "");
     formData.append("designation", finalDesignation || "");
     formData.append("hired_for", newUser.hiredFor);
@@ -703,6 +723,7 @@ function ManageUsers() {
     });
 
     try {
+      setSubmitting(true);
       const token = authToken();
       const isEdit = !!editingUser;
       const url = isEdit ? `${API_URL}/users/${editingUser.id}` : `${API_URL}/users`;
@@ -739,6 +760,7 @@ function ManageUsers() {
           setAddErrors(mapped);
         }
         notify.error(data.message || (isEdit ? "Unable to update user" : "Unable to create user"));
+        setSubmitting(false);
         return;
       }
 
@@ -756,6 +778,8 @@ function ManageUsers() {
     } catch (error) {
       console.error(error);
       notify.error(error.message || "Operation failed.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -943,9 +967,19 @@ function ManageUsers() {
                 <h3 className="form-section-title">Email Accounts</h3>
                 <div className="user-form-grid">
                   <div className="form-row">
-                    <label htmlFor="email">Email Address *</label>
-                    <input type="email" id="email" name="email" value={newUser.email} onChange={handleChange} placeholder="Enter email address" className={addErrors.email ? "field-error" : ""} />
-                    {addErrors.email && <span className="field-error-text">{addErrors.email}</span>}
+                    <label htmlFor="personalEmail">Personal Email Address *</label>
+                    <input type="email" id="personalEmail" name="personalEmail" value={newUser.personalEmail} onChange={handleChange} placeholder="Enter personal email address" className={addErrors.personalEmail ? "field-error" : ""} />
+                    {addErrors.personalEmail && <span className="field-error-text">{addErrors.personalEmail}</span>}
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="professionalEmail">Professional Email *</label>
+                    <input type="email" id="professionalEmail" name="professionalEmail" value={newUser.professionalEmail} onChange={handleChange} placeholder="Enter professional email address" className={addErrors.professionalEmail ? "field-error" : ""} />
+                    {addErrors.professionalEmail && <span className="field-error-text">{addErrors.professionalEmail}</span>}
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="professionalEmailPassword">Password of Professional Email *</label>
+                    <input type="password" id="professionalEmailPassword" name="professionalEmailPassword" value={newUser.professionalEmailPassword} onChange={handleChange} placeholder="Enter professional email password" className={addErrors.professionalEmailPassword ? "field-error" : ""} />
+                    {addErrors.professionalEmailPassword && <span className="field-error-text">{addErrors.professionalEmailPassword}</span>}
                   </div>
                 </div>
 
@@ -1092,8 +1126,8 @@ function ManageUsers() {
                   <button type="button" className="secondary-button" onClick={closeModal}>
                     Cancel
                   </button>
-                  <button type="submit" className="primary-button">
-                    {editingUser ? "Update User" : "Create User"}
+                  <button type="submit" className="primary-button" disabled={submitting}>
+                    {submitting ? "Saving..." : (editingUser ? "Update User" : "Create User")}
                   </button>
                 </div>
               </form>

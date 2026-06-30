@@ -50,6 +50,8 @@ class User extends Authenticatable
 
         // Emails
         'personal_email',
+        'professional_email',
+        'professional_email_password',
         'recovery_email',
 
         // Employment details

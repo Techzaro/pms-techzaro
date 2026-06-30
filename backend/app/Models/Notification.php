@@ -24,12 +24,14 @@ class Notification extends Model
         'related_id',
         'title',
         'message',
+        'changes',
         'link',
         'is_read',
     ];
 
     protected $casts = [
         'is_read' => 'boolean',
+        'changes' => 'array',
     ];
 
     /**
@@ -41,17 +43,22 @@ class Notification extends Model
         static::created(function (self $notification) {
             $notification->loadMissing('user.emailPreference');
 
-            if (!$notification->user || !$notification->user->email) {
+            if (!$notification->user || !$notification->user->professional_email) {
                 return;
             }
 
-            // Queue email notification (async)
+            // Skip email for user_updated — dedicated UserProfileUpdated email is already sent
+            if ($notification->type === 'user_updated') {
+                return;
+            }
+
+            // Send email notification (synchronous)
             if (static::wantsChannel($notification, 'email')) {
                 try {
-                    Mail::to($notification->user->email)
-                        ->queue(new NotificationMail($notification));
+                    Mail::to($notification->user->professional_email)
+                        ->send(new NotificationMail($notification));
                 } catch (\Throwable $e) {
-                    Log::error('Failed to queue notification email', [
+                    Log::error('Failed to send notification email', [
                         'notification_id' => $notification->id,
                         'user_id' => $notification->user_id,
                         'error' => $e->getMessage(),
