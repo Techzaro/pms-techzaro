@@ -167,17 +167,15 @@ function ManageTeam() {
   // ... rest of the functions (handleSetLeader, handleRemoveMember, etc.)
   useRefreshOnEvent(["data:changed"], fetchTeams);
 
-  // Set a member as team leader (only if member has team_lead role)
   const handleSetLeader = async (teamId, memberId) => {
     const member = teams.flatMap(t => t.members).find(m => Number(m.id) === Number(memberId));
-    
-    // Check if member's role is team_lead
+
     const memberRole = member?.role === 'teamlead' ? 'team_lead' : member?.role;
     if (memberRole !== 'team_lead') {
       notify.error(`"${member?.name || 'This user'}" cannot be assigned as Team Lead. First update this user's role to "Team Lead" from Edit User, then you can assign them as Team Lead.`);
       return;
     }
-    
+
     setLeaderConfirmData({ teamId, memberId, memberName: member?.name || "this member" });
     setLeaderConfirmOpen(true);
   };

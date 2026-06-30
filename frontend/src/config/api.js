@@ -25,10 +25,19 @@ window.fetch = async function (...args) {
     // Handle session expiration (401 Unauthorized)
     if (res.status === 401) {
       const tokenNow = getToken(role);
-      // Only clear if token hasn't changed (not a different tab login)
       if (tokenNow && tokenNow === tokenAtRequest) {
         clearSession(role);
-        window.location.href = "/?message=" + encodeURIComponent("Your session has expired. Please login again.");
+        try {
+          const clone = res.clone();
+          const data = await clone.json();
+          if (data?.message === "resigned") {
+            window.location.href = "/?message=" + encodeURIComponent("Your account has been resigned. You no longer have access.");
+          } else {
+            window.location.href = "/?message=" + encodeURIComponent("Your session has expired. Please login again.");
+          }
+        } catch {
+          window.location.href = "/?message=" + encodeURIComponent("Your session has expired. Please login again.");
+        }
       }
     }
 

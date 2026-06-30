@@ -379,6 +379,7 @@ function Admin() {
     if (module === "task") return "Task";
     if (module === "project") return "Project";
     if (module === "deliverable") return "Deliverable";
+    if (module === "user") return "User";
     return module;
   };
 
@@ -403,6 +404,8 @@ function Admin() {
       completed: "completed",
       status_updated: "updated status of",
       field_changed: "updated",
+      updated: "updated",
+      resigned: "resigned",
     };
     const verb = verbMap[item.action] || "updated";
 
@@ -608,7 +611,10 @@ function Admin() {
                   <div
                     key={item.id || index}
                     onClick={() => {
-                      if (item.module === "task") {
+                      if (item.module === "user") {
+                        const userId = item.entity_id;
+                        if (userId) navigate(rolePath(`manage-users/user-profile/${userId}`));
+                      } else if (item.module === "task") {
                         const taskId = item.entity_id || String(item.id).replace("task_event_", "").replace("task_sub_", "");
                         navigate(rolePath(`tasks/task-details/${taskId}`), { state: { from: "admin" } });
                       } else if (item.module === "project") {
@@ -708,13 +714,33 @@ function Admin() {
                       return (
                         <div
                           key={item.id || index}
+                          onClick={() => {
+                            if (item.module === "user") {
+                              const userId = item.entity_id;
+                              if (userId) navigate(rolePath(`manage-users/user-profile/${userId}`));
+                            } else if (item.module === "task") {
+                              const taskId = item.entity_id || String(item.id).replace("task_event_", "").replace("task_sub_", "");
+                              navigate(rolePath(`tasks/task-details/${taskId}`));
+                            } else if (item.module === "project") {
+                              const projectId = item.entity_id || String(item.id).replace("project_event_", "");
+                              navigate(rolePath(`projects/project-details/${projectId}`));
+                            } else if (item.module === "deliverable") {
+                              const dlvId = item.entity_id || String(item.id).replace("dlv_event_", "").replace("dlv_sub_", "");
+                              navigate(rolePath(`deliveries/deliverable-details/${dlvId}`));
+                            }
+                          }}
                           style={{
                             display: "flex",
                             alignItems: "center",
                             gap: "14px",
                             padding: "12px 0",
                             borderBottom: index < group.activities.length - 1 ? "1px solid #F3F4F6" : "none",
+                            cursor: "pointer",
+                            borderRadius: "8px",
+                            transition: "background 0.15s",
                           }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "#F9FAFB"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
                           <div style={{
                             width: "36px", height: "36px", borderRadius: "50%",

@@ -27,6 +27,7 @@ const TYPE_ICONS = {
   project_reopened: { icon: "refresh", bg: "#fef3c7", color: "#d97706" },
   project_access_granted: { icon: "check", bg: "#d1fae5", color: "#059669" },
   project_access_removed: { icon: "x", bg: "#fee2e2", color: "#dc2626" },
+  user_updated: { icon: "edit", bg: "#dbeafe", color: "#2563eb" },
   task_assigned: { icon: "task", bg: "#ede9fe", color: "#7c3aed" },
   task_updated: { icon: "edit", bg: "#dbeafe", color: "#2563eb" },
   task_submitted: { icon: "upload", bg: "#dbeafe", color: "#2563eb" },
@@ -152,6 +153,7 @@ function Notifications() {
 
   const NOTIFICATION_TYPES = [
     { value: "", label: "All Types" },
+    { value: "user_updated", label: "Profile Updated" },
     { value: "project_assigned", label: "Project Assigned" },
     { value: "project_updated", label: "Project Updated" },
     { value: "project_submitted", label: "Project Submitted" },

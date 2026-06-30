@@ -399,7 +399,7 @@ function UserProfile() {
               <div className="info-card-header">
                 <h3>Personal Information</h3>
                 {(!["admin", "manager"].includes(user.role) || currentUserRole === "admin") && (
-                <button className="btn-edit" onClick={openEditModal} disabled={!user.active} style={!user.active ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
+                <button className="btn-edit" onClick={openEditModal} disabled={account?.status === "Resigned" || (!account && !user.active)} style={account?.status === "Resigned" || (!account && !user.active) ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
                   <MdEdit size={16} /> Edit
                 </button>
                 )}
@@ -593,8 +593,8 @@ function UserProfile() {
               <h3>Account Status</h3>
               <div className="status-list">
                 <div className="status-item">
-                  <span className={`status-dot ${user.active ? "dot-active" : "dot-inactive"}`}></span>
-                  <span className="status-text">{user.active ? "Active" : "Resigned"}</span>
+                  <span className={`status-dot ${account?.status === "Active" ? "dot-active" : "dot-inactive"}`}></span>
+                  <span className="status-text">{account?.status || (user.active ? "Active" : user.must_change_password ? "Inactive" : "Resigned")}</span>
                 </div>
                 <div className="status-item">
                   <span className="status-icon">

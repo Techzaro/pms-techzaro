@@ -26,9 +26,7 @@ class TeamController extends Controller
      */
     public function index()
     {
-        $teams = Cache::remember('all_teams_list', 300, function () {
-            return Team::with(['leader:id,name', 'members:id,name'])->orderBy('created_at', 'desc')->get();
-        });
+        $teams = Team::with(['leader:id,name', 'members:id,name,role'])->orderBy('created_at', 'desc')->get();
         return response()->json($teams);
     }
 
@@ -61,9 +59,11 @@ class TeamController extends Controller
             $team->members()->attach($uniqueIds);
         }
 
+        Cache::forget('all_teams_list');
+
         return response()->json([
             'message' => 'Team created successfully',
-            'team' => $team->load(['leader:id,name', 'members:id,name']),
+            'team' => $team->load(['leader:id,name', 'members:id,name,role']),
         ], 201);
     }
 
@@ -75,7 +75,7 @@ class TeamController extends Controller
      */
     public function show(Team $team)
     {
-        $team->load(['leader:id,name', 'members:id,name']);
+        $team->load(['leader:id,name', 'members:id,name,role']);
         return response()->json($team);
     }
 
@@ -112,9 +112,11 @@ class TeamController extends Controller
             }
         }
 
+        Cache::forget('all_teams_list');
+
         return response()->json([
             'message' => 'Team updated successfully',
-            'team' => $team->load(['leader:id,name', 'members:id,name']),
+            'team' => $team->load(['leader:id,name', 'members:id,name,role']),
         ]);
     }
 
@@ -139,13 +141,7 @@ class TeamController extends Controller
             ], 422);
         }
 
-        // Check if the user's role is team_lead
-        $user = \App\Models\User::find($validated['leader_id']);
-        if (!$user) {
-            return response()->json([
-                'message' => 'User not found.',
-            ], 404);
-        }
+        $user = User::findOrFail($validated['leader_id']);
 
         $userRole = $user->role === 'teamlead' ? 'team_lead' : $user->role;
         if ($userRole !== 'team_lead') {
@@ -157,9 +153,11 @@ class TeamController extends Controller
         $team->leader_id = $validated['leader_id'];
         $team->save();
 
+        Cache::forget('all_teams_list');
+
         return response()->json([
             'message' => 'Team leader updated successfully',
-            'team' => $team->load(['leader:id,name', 'members:id,name']),
+            'team' => $team->load(['leader:id,name', 'members:id,name,role']),
         ]);
     }
 
@@ -203,11 +201,13 @@ class TeamController extends Controller
 
         $team->members()->attach($newIds);
 
+        Cache::forget('all_teams_list');
+
         return response()->json([
             'message' => count($newIds) === 1
                 ? 'Member added successfully'
                 : count($newIds) . ' members added successfully',
-            'team' => $team->load(['leader:id,name', 'members:id,name']),
+            'team' => $team->load(['leader:id,name', 'members:id,name,role']),
         ]);
     }
 
@@ -229,9 +229,11 @@ class TeamController extends Controller
 
         $team->members()->detach($user->id);
 
+        Cache::forget('all_teams_list');
+
         return response()->json([
             'message' => 'Member removed successfully',
-            'team' => $team->load(['leader:id,name', 'members:id,name']),
+            'team' => $team->load(['leader:id,name', 'members:id,name,role']),
         ]);
     }
 
@@ -244,6 +246,8 @@ class TeamController extends Controller
     public function destroy(Team $team)
     {
         $team->delete();
+
+        Cache::forget('all_teams_list');
 
         return response()->json([
             'message' => 'Team deleted successfully',

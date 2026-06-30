@@ -59,7 +59,7 @@ class TaskController extends Controller
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
-            ->orderBy('sort_order', 'asc')
+            ->orderBy('sort_order')->latest('updated_at')
             ->filter($filters);
 
         $tasks = $tasksQuery->get();
@@ -148,7 +148,7 @@ class TaskController extends Controller
             })
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
-            ->orderBy('sort_order', 'asc')
+            ->orderBy('sort_order')->latest('updated_at')
             ->filter($filters)
             ->get();
 
@@ -259,7 +259,7 @@ class TaskController extends Controller
             ->when($search, fn ($q) => $q->where('title', 'like', '%' . $search . '%'))
             ->when($statusFilter && !$isDueTodayFilter && !$isPendingFilter, fn ($q) => $q->where('status', $statusFilter))
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
-            ->orderBy('sort_order', 'asc');
+            ->orderBy('sort_order')->latest('updated_at');
 
         $tasks = $tasksQuery->limit(200)->get();
 
@@ -348,7 +348,7 @@ class TaskController extends Controller
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
 
         if ($isAdminOrManager) {
-            $adminManagerIds = Cache::remember('admin_manager_ids', 3600, fn () =>
+            $adminManagerIds = Cache::remember('admin_manager_ids', 300, fn () =>
                 User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray()
             );
         }
@@ -362,7 +362,7 @@ class TaskController extends Controller
             $tasksQuery->where('assigned_by', $userId);
         }
 
-        $tasks = $tasksQuery->orderBy('sort_order', 'asc')
+        $tasks = $tasksQuery->orderBy('sort_order')->latest('updated_at')
             ->when($request->filled('search'), fn ($q) => $q->where('title', 'like', '%' . $request->input('search') . '%'))
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
@@ -525,7 +525,7 @@ class TaskController extends Controller
             'assignee:id,name,email,role', 'creator:id,name,role',
             'latestSubmission', 'latestSubmission.submittedBy:id,name,email',
             'reopenedBy:id,name',
-        ])->orderBy('sort_order', 'asc')->get();
+        ])->orderBy('sort_order')->latest('updated_at')->get();
 
         $deliverableIds = $deliverables->pluck('id');
         $submittedIds = $deliverableIds->isNotEmpty()

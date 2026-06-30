@@ -60,7 +60,7 @@ class DeliverableController extends Controller
 
         $query->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()));
 
-        $deliverables = $query->orderBy('sort_order', 'asc')->filter($filters)->get();
+        $deliverables = $query->orderBy('sort_order')->latest('updated_at')->filter($filters)->get();
 
         // Bulk has_submitted query
         $deliverableIds = $deliverables->pluck('id');
@@ -103,7 +103,7 @@ class DeliverableController extends Controller
         ]);
 
         if ($isAdminOrManager) {
-            $adminManagerIds = Cache::remember('admin_manager_ids', 3600, fn () =>
+            $adminManagerIds = Cache::remember('admin_manager_ids', 300, fn () =>
                 User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray()
             );
             $query->whereIn('created_by', $adminManagerIds);
@@ -114,7 +114,7 @@ class DeliverableController extends Controller
         $query->whereColumn('created_by', '!=', 'assigned_to');
         $query->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()));
 
-        return response()->json(['success' => true, 'data' => $query->orderBy('sort_order')->orderBy('id')->filter($filters)->get()]);
+        return response()->json(['success' => true, 'data' => $query->orderBy('sort_order')->latest('updated_at')->filter($filters)->get()]);
     }
 
     /**
@@ -138,7 +138,7 @@ class DeliverableController extends Controller
             ->where('assigned_to', $user->id)
             ->where('created_by', $user->id)
             ->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()))
-            ->orderBy('sort_order')->orderBy('id')
+            ->orderBy('sort_order')->latest('updated_at')
             ->filter($filters)
             ->get();
 

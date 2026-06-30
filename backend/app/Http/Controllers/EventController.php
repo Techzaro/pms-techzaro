@@ -171,7 +171,7 @@ class EventController extends Controller
         $today = $request->input('local_date', date('Y-m-d'));
 
         $cacheKey = "unified_summary_{$user->id}_{$today}";
-        return Cache::remember($cacheKey, 60, function () use ($user, $today) {
+        return Cache::remember($cacheKey, 30, function () use ($user, $today) {
             $events = collect();
 
             $tasks = Task::where(function ($q) use ($user) {

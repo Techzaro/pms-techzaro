@@ -29,6 +29,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, getUser, setUser, rolePath, normalizeRole } from "../utils/auth";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
 import Pagination from "../components/Pagination";
 import "./ManageUsers.css";
@@ -143,11 +144,20 @@ function ManageUsers() {
     </svg>
   );
 
-  const StatusBadge = ({ active }) => (
-    <span className={`status-badge ${active ? "status-active" : "status-resigned"}`}>
-      {active ? "Active" : "Resigned"}
-    </span>
-  );
+  const StatusBadge = ({ active, mustChangePassword }) => {
+    let label, className;
+    if (active) {
+      label = "Active";
+      className = "status-active";
+    } else if (mustChangePassword) {
+      label = "Inactive";
+      className = "status-inactive";
+    } else {
+      label = "Resigned";
+      className = "status-resigned";
+    }
+    return <span className={`status-badge ${className}`}>{label}</span>;
+  };
 
   /** Returns auth headers for API requests */
   const authHeaders = () => {
@@ -471,6 +481,7 @@ function ManageUsers() {
         )
       );
       notify.success("User role updated successfully.");
+      publish('data:changed', { type: 'user', action: 'updated' });
     } catch (error) {
       console.error(error);
       notify.error("Failed to update user role.");
@@ -510,6 +521,7 @@ function ManageUsers() {
         )
       );
       notify.success(data.message || "User resigned successfully.");
+      publish('data:changed', { type: 'user', action: 'resigned' });
     } catch (error) {
       console.error(error);
       notify.error(error.message || "Failed to resign user.");
@@ -527,12 +539,12 @@ function ManageUsers() {
   const renderUserRow = (user) => {
     const isSelf = currentUserId === user.id;
     const isTargetProtected = user.role === "admin" || user.role === "manager";
-    const isActive = user.active !== false;
+    const isResigned = user.active === false && user.must_change_password === false;
     const canModifyUser =
-      isActive && !isSelf && !(currentUserRole === "manager" && isTargetProtected);
+      user.active !== false && !isSelf && !(currentUserRole === "manager" && isTargetProtected);
 
     return (
-      <tr key={user.id} className={!isActive ? "resigned-row" : ""}>
+      <tr key={user.id} className={isResigned ? "resigned-row" : ""}>
         <td style={{ width: "40%", textAlign: "left" }}>
           <div className="user-info">
             <span className="user-avatar">{getInitials(user.name)}</span>
@@ -548,7 +560,7 @@ function ManageUsers() {
           </span>
         </td>
         <td style={{ width: "20%" }}>
-          <StatusBadge active={isActive} />
+          <StatusBadge active={user.active} mustChangePassword={user.must_change_password} />
         </td>
         <td style={{ width: "20%" }}>
           <div className="action-buttons">
@@ -609,8 +621,9 @@ function ManageUsers() {
       transition,
       opacity: isDragging ? 0.4 : 1,
     };
+    const isResigned = user.active === false && user.must_change_password === false;
     return (
-      <tr ref={setNodeRef} className={!isActive ? "resigned-row" : ""} style={rowStyle} {...listeners} {...attributes}>
+      <tr ref={setNodeRef} className={isResigned ? "resigned-row" : ""} style={rowStyle} {...listeners} {...attributes}>
         <td style={{ width: "40%", textAlign: "left" }}>
           <div className="user-info">
             <span className="user-avatar">{getInitials(user.name)}</span>
@@ -625,7 +638,7 @@ function ManageUsers() {
             {normalizeRole(user.role)}
           </span>
         </td>
-        <td style={{ width: "20%" }}><StatusBadge active={isActive} /></td>
+        <td style={{ width: "20%" }}><StatusBadge active={user.active} mustChangePassword={user.must_change_password} /></td>
         <td style={{ width: "20%" }}>
           <div className="action-buttons">
             <button className="btn-view" onClick={() => navigate(rolePath(`manage-users/user-profile/${user.id}`))} aria-label="View user profile"><MdVisibility size={24} /></button>
@@ -733,9 +746,11 @@ function ManageUsers() {
       if (isEdit) {
         setUsers((prev) => prev.map((item) => item.id === editingUser.id ? { ...item, ...data.user } : item));
         notify.success(data.message || "User updated successfully.");
+        publish('data:changed', { type: 'user', action: 'updated' });
       } else {
         setUsers((prev) => [data.user, ...prev]);
         notify.success(data.message || "User created successfully.");
+        publish('data:changed', { type: 'user', action: 'created' });
       }
       closeModal();
     } catch (error) {
@@ -818,10 +833,9 @@ function ManageUsers() {
                         paginatedUsers.map((user) => {
                         const isSelf = currentUserId === user.id;
                         const isTargetProtected = user.role === "admin" || user.role === "manager";
-                        const isActive = user.active !== false;
-                        const canModifyUser = isActive && !isSelf && !(currentUserRole === "manager" && isTargetProtected);
+                        const canModifyUser = user.active !== false && !isSelf && !(currentUserRole === "manager" && isTargetProtected);
                         return (
-                          <SortableUserRow key={user.id} user={user} isActive={isActive} canModifyUser={canModifyUser} isSelf={isSelf} isTargetProtected={isTargetProtected} />
+                          <SortableUserRow key={user.id} user={user} isActive={user.active !== false} canModifyUser={canModifyUser} isSelf={isSelf} isTargetProtected={isTargetProtected} />
                         );
                       })
                     ) : (

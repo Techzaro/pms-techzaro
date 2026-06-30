@@ -85,7 +85,7 @@ class Project extends Model
     /** Milestones for this project, ordered by sort order. */
     public function milestones()
     {
-        return $this->hasMany(ProjectMilestone::class)->orderBy('sort_order')->orderBy('id');
+        return $this->hasMany(ProjectMilestone::class)->orderBy('sort_order')->latest('updated_at');
     }
 
     /** File attachments for this project. */

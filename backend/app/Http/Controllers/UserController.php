@@ -8,12 +8,14 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Task;
+use App\Services\ActivityService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use App\Models\Project;
 use App\Mail\UserCreated;
 use App\Mail\UserResigned;
 use App\Mail\UserProfileUpdated;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -32,6 +34,11 @@ use Laravel\Sanctum\PersonalAccessToken;
  */
 class UserController extends Controller
 {
+    public function __construct(
+        private ActivityService $activityService,
+        private NotificationService $notificationService
+    ) {}
+
     private array $documentFields = [
         'employment_contract',
         'offer_letter',
@@ -46,17 +53,15 @@ class UserController extends Controller
     /**
      * Return a list of all users with key profile fields.
      *
-     * Results are cached for 5 minutes. Ordered by sort_order then ID.
+     * Ordered by sort_order then most recently updated first.
      *
      * @return \Illuminate\Http\JsonResponse  JSON response with the user list.
      */
     public function index()
     {
-        $users = Cache::remember('all_users_list', 300, function () {
-            return User::select('id', 'name', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order')
-                ->orderBy('sort_order')->orderBy('id')
-                ->get();
-        });
+        $users = User::select('id', 'name', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password')
+            ->orderBy('sort_order')->latest('updated_at')
+            ->get();
 
         return response()->json([
             'success' => true,
@@ -144,7 +149,7 @@ class UserController extends Controller
             'email' => $request->input('email'),
             'password' => Hash::make($plainPassword),
             'role' => $role,
-            'active' => true,
+            'active' => false,
             'must_change_password' => true,
 
             // Contact
@@ -184,6 +189,20 @@ class UserController extends Controller
 
         // Handle file uploads
         $this->handleFileUploads($request, $user);
+
+        Cache::forget('all_users_list');
+        Cache::forget('admin_manager_ids');
+
+        $this->activityService->log(
+            $authUser->id,
+            'user_created',
+            "You created user {$user->name}",
+            'user',
+            $user->id,
+            'created',
+            $user->name,
+            $user->id,
+        );
 
         $loginUrl = config('app.frontend_url');
 
@@ -279,7 +298,7 @@ class UserController extends Controller
             ], 403);
         }
 
-        if ($user->active === false) {
+        if ($user->active === false && !$user->must_change_password) {
             return response()->json([
                 'success' => false,
                 'message' => 'Resigned users cannot be modified.',
@@ -314,22 +333,22 @@ class UserController extends Controller
 
         $oldValues = [];
         foreach ($fields as $field) {
-            if ($request->has($field)) {
+            if ($request->exists($field)) {
                 $oldValues[$field] = $user->$field;
             }
         }
 
         foreach ($fields as $field) {
-            if ($request->has($field)) {
+            if ($request->exists($field)) {
                 $user->$field = $request->input($field);
             }
         }
 
         // Sync legacy fields
-        if ($request->has('phone_number')) {
+        if ($request->exists('phone_number')) {
             $user->contact_no = $request->input('phone_number');
         }
-        if ($request->has('present_address')) {
+        if ($request->exists('present_address')) {
             $user->address = $request->input('present_address');
         }
 
@@ -350,20 +369,61 @@ class UserController extends Controller
             }
         }
 
+        $emailSent = null;
+        $emailError = null;
         if (!empty($changes)) {
             try {
                 Mail::to($user->email)->send(new UserProfileUpdated($user, $authUser->name, $changes));
+                $emailSent = true;
             } catch (\Exception $e) {
+                $emailError = $e->getMessage();
                 \Illuminate\Support\Facades\Log::error('Failed to send profile update email: ' . $e->getMessage());
+                $emailSent = false;
             }
+
+            $this->notificationService->notify(
+                $user->id,
+                $authUser->id,
+                'user_updated',
+                'user',
+                $user->id,
+                'Profile Updated',
+                'Your information has been changed. Please check your email for further information.'
+            );
         }
 
         // Handle file uploads
         $this->handleFileUploads($request, $user);
 
+        Cache::forget('all_users_list');
+        if (in_array($user->role, ['admin', 'manager']) || isset($oldValues['role'])) {
+            Cache::forget('admin_manager_ids');
+        }
+
+        if (!empty($changes)) {
+            $this->activityService->log(
+                $authUser->id,
+                'user_updated',
+                "You updated user {$user->name}",
+                'user',
+                $user->id,
+                'updated',
+                $user->name,
+                $user->id,
+                ['changes' => $changes]
+            );
+        }
+
+        $message = 'User updated successfully';
+        if ($emailSent === true) {
+            $message .= '. Notification email sent to ' . $user->email;
+        } elseif ($emailSent === false) {
+            $message .= '. Failed to send notification email: ' . $emailError;
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'User updated successfully',
+            'message' => $message,
             'user' => $user,
         ]);
     }
@@ -388,6 +448,7 @@ class UserController extends Controller
             $ph = implode(',', array_fill(0, count($ids), '?'));
             DB::statement("UPDATE users SET sort_order = CASE id " . implode(' ', array_fill(0, count($ids), 'WHEN ? THEN ?')) . " END WHERE id IN ($ph)", [...$bindings, ...$ids]);
         }
+        Cache::forget('all_users_list');
         return response()->json(['success' => true, 'message' => 'Users reordered successfully']);
     }
 
@@ -415,6 +476,9 @@ class UserController extends Controller
         $this->deleteAllFiles($user);
 
         $user->delete();
+
+        Cache::forget('all_users_list');
+        Cache::forget('admin_manager_ids');
 
         return response()->json([
             'success' => true,
@@ -459,11 +523,26 @@ class UserController extends Controller
             }
 
             $user->active = false;
+            $user->must_change_password = false;
             $user->save();
 
-            $user->tokens()->delete();
+            Cache::forget('all_users_list');
+            if (in_array($user->role, ['admin', 'manager'])) {
+                Cache::forget('admin_manager_ids');
+            }
 
             Log::info("User {$user->id} ({$user->email}) resigned by {$authUser->id} ({$authUser->email})");
+
+            $this->activityService->log(
+                $authUser->id,
+                'user_resigned',
+                "You resigned user {$user->name}",
+                'user',
+                $user->id,
+                'resigned',
+                $user->name,
+                $user->id,
+            );
 
             $emailSent = false;
             $emailError = null;
@@ -579,7 +658,7 @@ class UserController extends Controller
                 'employment_contract', 'offer_letter', 'techxaro_regulations',
                 'latest_education_cert', 'cv', 'previous_exp_letter',
                 'previous_salary_slip', 'other_document',
-                'last_login_at', 'created_at', 'updated_at',
+                'last_login_at', 'created_at', 'updated_at', 'must_change_password',
             ]),
             'stats' => [
                 'total_assigned_tasks' => (int) $taskStats->total_assigned,
@@ -592,7 +671,7 @@ class UserController extends Controller
             'account' => [
                 'account_age' => $accountAge,
                 'days_since_creation' => $daysSinceCreation,
-                'status' => $user->active ? 'Active' : 'Resigned',
+                'status' => $user->active ? 'Active' : ($user->must_change_password ? 'Inactive' : 'Resigned'),
                 'last_login' => $user->last_login_at?->toDateTimeString() ?? 'Never logged in',
             ],
         ]);

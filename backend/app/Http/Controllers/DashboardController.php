@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\DB;
 class DashboardController extends Controller
 {
     /** @var int Cache time-to-live in seconds (5 minutes). */
-    const CACHE_TTL = 300;
+    const CACHE_TTL = 30;
 
     /** @var string Cache key for admin/manager user IDs. */
     const ADMIN_MANAGER_CACHE_KEY = 'admin_manager_ids';
@@ -70,7 +70,7 @@ class DashboardController extends Controller
      */
     private function getAdminManagerIds(): array
     {
-        return Cache::remember(self::ADMIN_MANAGER_CACHE_KEY, 3600, fn () =>
+        return Cache::remember(self::ADMIN_MANAGER_CACHE_KEY, 300, fn () =>
             User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray()
         );
     }
@@ -285,7 +285,7 @@ class DashboardController extends Controller
     private function getRecentActivity(User $user, string $role, array $projectIds): array
     {
         $cacheKey = "dashboard_recent_activity_{$user->id}";
-        return Cache::remember($cacheKey, 60, function () use ($user, $role, $projectIds) {
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($user, $role, $projectIds) {
             $query = Activity::join('users', 'activities.user_id', '=', 'users.id')
                 ->where('users.active', true)
                 ->select('activities.description as summary', 'activities.created_at', 'users.name as user_name')
@@ -420,6 +420,30 @@ class DashboardController extends Controller
             $action = $event->event_type === 'approval' ? 'approved' : $event->event_type;
             $item = $this->formatActivity('deliverable', $event->id, $dlv->id, $dlv->title, $action, $event->user, $isActor, $dlvSubmitters[$dlv->id] ?? null, $event->comment ?? null, $event->created_at);
             if ($isActor) { $activities[] = $item; } else { $notifications[] = $item; }
+        }
+
+        // ── USER MANAGEMENT (from activities table) ──
+        $userActivities = Activity::where('related_module', 'user')
+            ->whereDate('created_at', $today)
+            ->whereIn('action', ['created', 'updated', 'resigned'])
+            ->limit(50)->get();
+
+        foreach ($userActivities as $activity) {
+            if (!$activity->user) continue;
+            $isActor = (int) $activity->user_id === (int) $user->id;
+            $item = [
+                'id' => "user_activity_{$activity->id}",
+                'entity_id' => $activity->related_id,
+                'module' => 'user',
+                'action' => $activity->action,
+                'title' => $activity->entity_name ?? 'User',
+                'actor_name' => $activity->user->name,
+                'actor_role' => $activity->user->role,
+                'is_actor' => $isActor,
+                'comment' => null,
+                'created_at' => $activity->created_at->toIso8601ZuluString(),
+            ];
+            if ($isActor) { $activities[] = $item; }
         }
 
         // ── DELIVERABLE SUBMISSIONS ──

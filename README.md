@@ -183,7 +183,7 @@ Before this system, teams relied on scattered tools — spreadsheets, chat apps,
 - Full profile with 40+ fields (personal, contact, employment, bank, documents)
 - Document uploads (employment contract, offer letter, CV, education cert, etc.)
 - Login history tracking
-- Account status and age info
+- Account status
 - Task and project statistics per employee
 
 ### Other Features

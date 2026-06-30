@@ -5,7 +5,8 @@
  */
 
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import LoadingSpinner from "./components/LoadingSpinner";
 
 // Lazy-loaded page components for code splitting
@@ -43,9 +44,16 @@ import RoleProtectedRoute from "./components/RoleProtectedRoute";
  * Main App component with routing.
  * @returns {JSX.Element} Application with routes
  */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  return null;
+}
+
 function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           {/* Public route */}

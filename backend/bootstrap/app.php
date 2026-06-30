@@ -21,6 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(prepend: [
             \App\Http\Middleware\QueryLogMiddleware::class,
         ]);
+        $middleware->api(append: [
+            \App\Http\Middleware\CheckUserStatus::class,
+        ]);
         $middleware->prepend(\Illuminate\Http\Middleware\HandleCors::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

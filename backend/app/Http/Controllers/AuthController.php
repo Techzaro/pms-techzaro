@@ -1,7 +1,5 @@
 <?php
 
-<?php
-
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
@@ -49,12 +47,14 @@ class AuthController extends Controller
             // logged in user
             $user = Auth::user();
 
-            if ($user->active === false) {
+            if ($user->active === false && !$user->must_change_password) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Your account has been resigned. You no longer have access to the system. Please contact your administrator.'
                 ], 403);
             }
+
+            // New users (inactive + must_change_password) login allowed
 
             // generate token
             $token = $user->createToken('auth_token')->plainTextToken;
@@ -77,6 +77,7 @@ class AuthController extends Controller
                     'email' => $user->email,
                     'role' => $role,
                     'active' => $user->active,
+                    'must_change_password' => $user->must_change_password,
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -123,6 +124,7 @@ class AuthController extends Controller
 
             $user->password = bcrypt($request->new_password);
             $user->must_change_password = false;
+            $user->active = true;
             $user->save();
 
             return response()->json([
@@ -207,6 +209,7 @@ class AuthController extends Controller
                 'last_login_at' => $user->last_login_at?->toDateTimeString(),
                 'created_at' => $user->created_at->toDateTimeString(),
                 'updated_at' => $user->updated_at->toDateTimeString(),
+                'must_change_password' => $user->must_change_password,
             ],
             'stats' => [
                 'total_assigned_tasks' => (int) $taskStats->total_assigned,
@@ -218,7 +221,7 @@ class AuthController extends Controller
             'account' => [
                 'account_age' => $user->created_at->diffForHumans(),
                 'days_since_creation' => $user->created_at->diffInDays(now()),
-                'status' => $user->active ? 'Active' : 'Resigned',
+                'status' => !$user->active ? 'Resigned' : ($user->must_change_password ? 'Inactive' : 'Active'),
                 'last_login' => $user->last_login_at?->toDateTimeString() ?? 'Never logged in',
             ],
         ]);

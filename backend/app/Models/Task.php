@@ -105,7 +105,7 @@ class Task extends Model
     /** Deliverables belonging to this task, ordered by sort order. */
     public function deliverables()
     {
-        return $this->hasMany(\App\Models\Deliverable::class)->orderBy('sort_order')->orderBy('id');
+        return $this->hasMany(\App\Models\Deliverable::class)->orderBy('sort_order')->latest('updated_at');
     }
 
     /** File attachments for this task. */
