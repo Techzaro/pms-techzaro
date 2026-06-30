@@ -121,6 +121,7 @@ function UserPerformance() {
   const navigate = useNavigate();
   const [showExportModal, setShowExportModal] = useState(false);
   const [showCreateTask, setShowCreateTask] = useState(false);
+  const [workloadPeriod, setWorkloadPeriod] = useState("week");
 
   const stored = getUser();
   const currentRole = stored?.role || "member";
@@ -142,8 +143,8 @@ function UserPerformance() {
   }, [urlUserId, stored, userId]);
 
   const { data, isLoading } = useApiQuery(
-    ["user-performance", userId],
-    `/reports/user/${userId}`,
+    ["user-performance", userId, workloadPeriod],
+    `/reports/user/${userId}?workload_period=${workloadPeriod}`,
     null,
     { staleTime: 0, refetchOnMount: true, refetchInterval: 30000 }
   );
@@ -372,10 +373,10 @@ function UserPerformance() {
             <div className="up-chart-card">
               <div className="up-chart-header">
                 <h3>Workload & Capacity</h3>
-                <select className="up-chart-select">
-                  <option>This Week</option>
-                  <option>Last Week</option>
-                  <option>This Month</option>
+                <select className="up-chart-select" value={workloadPeriod} onChange={(e) => setWorkloadPeriod(e.target.value)}>
+                  <option value="week">This Week</option>
+                  <option value="last_week">Last Week</option>
+                  <option value="month">This Month</option>
                 </select>
               </div>
               <div className="up-workload-chart">
@@ -387,15 +388,7 @@ function UserPerformance() {
                   <span>0%</span>
                 </div>
                 <div className="up-workload-bars">
-                  {[
-                    { day: "Mon", percent: 60 },
-                    { day: "Tue", percent: 75 },
-                    { day: "Wed", percent: 100 },
-                    { day: "Thu", percent: 85 },
-                    { day: "Fri", percent: 95 },
-                    { day: "Sat", percent: 40 },
-                    { day: "Sun", percent: 80 },
-                  ].map((item) => (
+                  {(data?.workload || []).map((item) => (
                     <div key={item.day} className="up-workload-bar-col">
                       <div className="up-workload-bar-track">
                         <div

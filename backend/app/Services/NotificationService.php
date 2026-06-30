@@ -52,13 +52,9 @@ class NotificationService
         });
 
         if (!empty($filtered)) {
-            $now = now()->toDateTimeString();
-            $data = array_values(array_map(function ($n) use ($now) {
-                $n['created_at'] = $n['created_at'] ?? $now;
-                $n['updated_at'] = $n['updated_at'] ?? $now;
-                return $n;
-            }, $filtered));
-            Notification::insert($data);
+            foreach ($filtered as $n) {
+                Notification::create($n);
+            }
         }
     }
 
@@ -76,7 +72,7 @@ class NotificationService
      *
      * @return \App\Models\Notification|null
      */
-    public function notify(int $userId, int $senderId, string $type, string $module, int $relatedId, string $title, string $message, ?string $link = null): ?Notification
+    public function notify(int $userId, ?int $senderId, string $type, string $module, int $relatedId, string $title, string $message, ?string $link = null): ?Notification
     {
         return $this->create([
             'user_id' => $userId,

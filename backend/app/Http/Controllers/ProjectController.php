@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Deliverable;
-use App\Models\Notification;
 use App\Models\Project;
 use App\Models\ProjectVisibility;
 use App\Models\ProjectFile;
@@ -239,8 +238,7 @@ class ProjectController extends Controller
                     }
                 }
                 if (!empty($dlvNotifications)) {
-                    $now = now()->toDateTimeString();
-                    Notification::insert(array_map(fn ($n) => $n + ['created_at' => $now, 'updated_at' => $now], $dlvNotifications));
+                    $this->notificationService->createBulk($dlvNotifications);
                 }
             }
         }
@@ -287,7 +285,6 @@ class ProjectController extends Controller
             'team.leader:id,name,email,role',
             'team.members:id,name,email,role',
             'milestones',
-            'activities' => fn ($q) => $q->with('user:id,name')->latest()->limit(30),
             'files',
             'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
             'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
@@ -470,8 +467,7 @@ class ProjectController extends Controller
                     $project->deliverables()->createMany($bulkDeliverables);
                 }
                 if (!empty($bulkNotifications)) {
-                    $now = now()->toDateTimeString();
-                    Notification::insert(array_map(fn ($n) => $n + ['created_at' => $now, 'updated_at' => $now], $bulkNotifications));
+                    $this->notificationService->createBulk($bulkNotifications);
                 }
             }
         }
@@ -757,8 +753,7 @@ class ProjectController extends Controller
             }
         }
         if (!empty($notifications)) {
-            $now = now()->toDateTimeString();
-            Notification::insert(array_map(fn ($n) => $n + ['created_at' => $now, 'updated_at' => $now], $notifications));
+            $this->notificationService->createBulk($notifications);
         }
 
         // Log activity

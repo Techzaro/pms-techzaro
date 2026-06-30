@@ -700,6 +700,18 @@
   gap: 12px;
 }
 
+.cp-deadline-grid > div {
+  min-width: 0;
+}
+
+.cp-card input[type="datetime-local"],
+.cp-field input[type="datetime-local"] {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 .cp-add-phase-btn {
   margin-top: 12px;
   width: 100%;
@@ -945,18 +957,18 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
 
   .cp-header {
-    padding: 20px;
+    padding: 18px;
   }
 
   .cp-body {
-    padding: 16px;
+    padding: 14px;
   }
 
   .cp-footer {
-    padding: 16px;
+    padding: 14px;
     flex-direction: column;
   }
 
@@ -965,11 +977,11 @@
   }
 
   .cp-header h2 {
-    font-size: 20px;
+    font-size: 18px;
   }
 
   .cp-card {
-    padding: 14px;
+    padding: 12px;
     border-radius: 14px;
   }
 
@@ -978,8 +990,13 @@
   .cp-field select,
   .cp-card select,
   .cp-card input {
-    padding: 12px 14px;
+    padding: 10px 12px;
     font-size: 13px;
+  }
+
+  .cp-card input[type="datetime-local"] {
+    font-size: 12px;
+    padding: 9px 10px;
   }
 
   .cp-field label {
@@ -1045,6 +1062,11 @@
     padding: 12px;
   }
 
+  .cp-card input[type="datetime-local"] {
+    font-size: 11px;
+    padding: 8px 8px;
+  }
+
   .cp-deadline-grid {
     gap: 10px;
   }
@@ -1083,5 +1105,63 @@
 
   .cp-attachment-name {
     font-size: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .cp-overlay {
+    padding: 4px;
+  }
+
+  .cp-modal {
+    border-radius: 10px;
+  }
+
+  .cp-header {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .cp-header h2 {
+    font-size: 16px;
+  }
+
+  .cp-body {
+    padding: 10px;
+    gap: 12px;
+  }
+
+  .cp-card {
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .cp-card input[type="datetime-local"] {
+    font-size: 10px;
+    padding: 6px 6px;
+  }
+
+  .cp-field input,
+  .cp-field textarea,
+  .cp-field select,
+  .cp-card select,
+  .cp-card input {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .cp-footer {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .cp-footer button {
+    font-size: 13px;
+    padding: 10px 16px;
+  }
+
+  .cp-add-phase-btn {
+    font-size: 11px;
+    padding: 8px;
   }
 }

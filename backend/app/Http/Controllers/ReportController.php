@@ -7,6 +7,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Models\Team;
 use App\Models\Deliverable;
+use App\Models\TaskWorkflowEvent;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -352,6 +353,42 @@ class ReportController extends Controller
             $reportingTo = $leader ? $leader->name : null;
         }
 
+        // --- WORKLOAD BY DAY ---
+        $workloadPeriod = $request->query('workload_period', 'week');
+        if ($workloadPeriod === 'month') {
+            $workloadStart = now()->startOfMonth();
+            $workloadEnd = now()->endOfMonth();
+        } elseif ($workloadPeriod === 'last_week') {
+            $workloadStart = now()->subWeek()->startOfWeek();
+            $workloadEnd = now()->subWeek()->endOfWeek();
+        } else {
+            $workloadStart = now()->startOfWeek();
+            $workloadEnd = now()->endOfWeek();
+        }
+
+        $workloadData = [['day' => 'Mon', 'count' => 0], ['day' => 'Tue', 'count' => 0], ['day' => 'Wed', 'count' => 0], ['day' => 'Thu', 'count' => 0], ['day' => 'Fri', 'count' => 0], ['day' => 'Sat', 'count' => 0], ['day' => 'Sun', 'count' => 0]];
+
+        if ($taskIds->isNotEmpty()) {
+            $workflowEvents = TaskWorkflowEvent::whereIn('task_id', $taskIds)
+                ->whereBetween('created_at', [$workloadStart, $workloadEnd])
+                ->selectRaw("DAYNAME(created_at) as day_name, COUNT(*) as count")
+                ->groupBy('day_name')
+                ->get()
+                ->keyBy('day_name');
+
+            $dayMap = ['Mon' => 'Monday', 'Tue' => 'Tuesday', 'Wed' => 'Wednesday', 'Thu' => 'Thursday', 'Fri' => 'Friday', 'Sat' => 'Saturday', 'Sun' => 'Sunday'];
+            foreach ($workloadData as &$w) {
+                $fullDay = $dayMap[$w['day']] ?? $w['day'];
+                $w['count'] = (int) ($workflowEvents->get($fullDay)?->count ?? 0);
+            }
+        }
+
+        $counts = array_column($workloadData, 'count');
+        $maxWorkload = max($counts) > 0 ? max($counts) : 1;
+        foreach ($workloadData as &$w) {
+            $w['percent'] = (int) round(($w['count'] / $maxWorkload) * 100);
+        }
+
         return response()->json([
             'user' => [
                 'id' => $user->id,
@@ -370,6 +407,7 @@ class ReportController extends Controller
             ],
             'status_breakdown' => $mergedBreakdown,
             'status_distribution' => $statusDistribution,
+            'workload' => $workloadData,
             'deliverable_summary' => [
                 'total' => (int) $deliverableStats->total,
                 'submitted' => (int) $deliverableStats->submitted,

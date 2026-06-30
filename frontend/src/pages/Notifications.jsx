@@ -11,8 +11,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import { authToken, rolePath, getUser, normalizeRole } from "../utils/auth";
-import { timeAgo } from "../utils/formatDateTime";
-import { useRelativeTime } from "../hooks/useRelativeTime";
+import { formatDateTimeInline } from "../utils/formatDateTime";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import API_URL from "../config/api";
 import "./Notifications.css";
@@ -149,7 +148,6 @@ function Notifications() {
   const [page, setPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const tick = useRelativeTime();
 
   const NOTIFICATION_TYPES = [
     { value: "", label: "All Types" },
@@ -439,7 +437,7 @@ function Notifications() {
                     </div>
 
                     <div className="notif-meta">
-                      <span className="notif-time">{timeAgo(n.created_at_raw)}</span>
+                      <span className="notif-time">{formatDateTimeInline(n.created_at_raw)}</span>
                       {!n.is_read && <span className="notif-unread-dot"></span>}
                     </div>
                   </Link>

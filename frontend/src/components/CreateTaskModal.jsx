@@ -10,8 +10,8 @@ import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
-import CustomDateTimePicker from "./CustomDateTimePicker";
-import { formatDateTime, toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
+
+import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
 import { notify } from "../utils/notify";
 import "./layout/CreateTaskModal.css";
@@ -579,18 +579,20 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
               <div className="task-deadline-grid">
                 <div>
                   <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
-                  <CustomDateTimePicker
+                  <input
+                    type="datetime-local"
                     value={form.start_date}
-                    onChange={(val) => setForm((prev) => ({ ...prev, start_date: val }))}
-                    min={new Date().toISOString()}
+                    onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))}
+                    min={getNowDatetimeLocal()}
                   />
                 </div>
                 <div>
                   <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
-                  <CustomDateTimePicker
+                  <input
+                    type="datetime-local"
                     value={form.end_date}
-                    onChange={(val) => setForm((prev) => ({ ...prev, end_date: val }))}
-                    min={new Date().toISOString()}
+                    onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))}
+                    min={form.start_date || getNowDatetimeLocal()}
                   />
                 </div>
               </div>
@@ -653,10 +655,11 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 </div>
                 <div className="task-field">
                   <label style={{ fontSize: "13px" }}>Due Date & Time</label>
-                  <CustomDateTimePicker
+                  <input
+                    type="datetime-local"
                     value={deliverableInput.due_datetime}
-                    onChange={(val) => setDeliverableInput((prev) => ({ ...prev, due_datetime: val }))}
-                    min={new Date().toISOString()}
+                    onChange={(e) => setDeliverableInput((prev) => ({ ...prev, due_datetime: e.target.value }))}
+                    min={getNowDatetimeLocal()}
                   />
                 </div>
               </div>

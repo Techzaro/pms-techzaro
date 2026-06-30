@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Deliverable;
 use App\Models\DeliverableSubmission;
-use App\Models\Notification;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TaskFile;
@@ -501,8 +500,6 @@ class TaskController extends Controller
             'project.team.leader:id,name',
             'project.team.members:id,name,email,role',
             'project.milestones:id,project_id,title,due_date,status,sort_order',
-            'project.activities:id,project_id,user_id,summary,created_at',
-            'project.activities.user:id,name',
             'project.files:id,project_id,name,url',
             'files:id,task_id,name,url',
             'assignees:id,name,email,role',
@@ -514,6 +511,7 @@ class TaskController extends Controller
             'rejectedBy:id,name',
             'reopenedBy:id,name',
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
+            'changes' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
         ]);
 
         // Single query for deliverables with stats
@@ -670,8 +668,7 @@ class TaskController extends Controller
             }
         }
         if (!empty($deliverableNotifications)) {
-            $now = now()->toDateTimeString();
-            Notification::insert(array_map(fn ($n) => $n + ['created_at' => $now, 'updated_at' => $now], $deliverableNotifications));
+            $this->notificationService->createBulk($deliverableNotifications);
         }
 
         // Bulk notifications
@@ -692,9 +689,18 @@ class TaskController extends Controller
         }
         $this->notificationService->createBulk($notifications);
 
-        // Log activity
+        // Notify assigner (creator) about the assignment
         $taskCount = count($createdTasks);
         $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
+        $this->notificationService->notify(
+            $user->id, null,
+            'task_assigned', 'task', $createdTasks[0]->id,
+            'Task Created',
+            'You created and assigned the task "' . $createdTasks[0]->title . '" to ' . $assigneeNames . '.',
+            '/tasks/task-details/' . $createdTasks[0]->id . '?from=tasks'
+        );
+
+        // Log activity
         $this->activityService->log($user->id, 'task_created', 'You created ' . $taskCount . ' task(s) and assigned them to ' . $assigneeNames, 'task', $createdTasks[0]->id);
 
         $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');
@@ -796,8 +802,7 @@ class TaskController extends Controller
             DB::table('task_workflow_events')->insert($workflowRecords);
         }
         if (!empty($deliverableNotifications)) {
-            $now = now()->toDateTimeString();
-            Notification::insert(array_map(fn ($n) => $n + ['created_at' => $now, 'updated_at' => $now], $deliverableNotifications));
+            $this->notificationService->createBulk($deliverableNotifications);
         }
 
         $sent = [];
@@ -817,9 +822,18 @@ class TaskController extends Controller
         }
         $this->notificationService->createBulk($notifications);
 
-        // Log activity
+        // Notify assigner (creator) about the assignment
         $taskCount = count($createdTasks);
         $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
+        $this->notificationService->notify(
+            $user->id, null,
+            'task_assigned', 'task', $createdTasks[0]->id,
+            'Task Created',
+            'You created and assigned the task "' . $createdTasks[0]->title . '" to ' . $assigneeNames . '.',
+            '/tasks/task-details/' . $createdTasks[0]->id . '?from=tasks'
+        );
+
+        // Log activity
         $this->activityService->log($user->id, 'task_created', 'You created ' . $taskCount . ' task(s) and assigned them to ' . $assigneeNames, 'task', $createdTasks[0]->id);
 
         $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');

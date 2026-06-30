@@ -680,6 +680,71 @@ function TaskDetails() {
               </ul>
             </div>
 
+            {/* ACTIVITY LOG */}
+            <div className="td-card">
+              <h3 className="td-card-title">Activity</h3>
+              {(() => {
+                const events = (task?.workflowEvents || []).map(e => ({
+                  type: 'event',
+                  action: e.action,
+                  user: e.user?.name || 'Unknown',
+                  comment: e.comment,
+                  created_at: e.created_at,
+                  sort: new Date(e.created_at).getTime(),
+                }));
+                const changes = (task?.changes || []).map(c => ({
+                  type: 'change',
+                  field: c.field_name,
+                  old_value: c.old_value,
+                  new_value: c.new_value,
+                  user: c.modified_by?.name || 'Unknown',
+                  created_at: c.created_at,
+                  sort: new Date(c.created_at).getTime(),
+                }));
+                const timeline = [...events, ...changes].sort((a, b) => b.sort - a.sort);
+                if (!timeline.length) return <p className="td-activity-empty">No activity yet.</p>;
+                return (
+                  <ul className="td-activity-list">
+                    {timeline.map((item, i) => (
+                      <li key={i} className="td-activity-item">
+                        {item.type === 'event' ? (
+                          <>
+                            <span className="td-activity-icon">
+                              {item.action === 'created' && '📝'}
+                              {item.action === 'submitted' && '📤'}
+                              {item.action === 'approved' && '✅'}
+                              {item.action === 'rejected' && '❌'}
+                              {item.action === 'reopened' && '🔄'}
+                              {item.action === 'field_changed' && '✏️'}
+                              {!['created','submitted','approved','rejected','reopened','field_changed'].includes(item.action) && '📌'}
+                            </span>
+                            <div className="td-activity-body">
+                              <span className="td-activity-text">
+                                <strong>{item.user}</strong> {item.action.replace(/_/g, ' ')}
+                              </span>
+                              {item.comment && <span className="td-activity-comment">— {item.comment}</span>}
+                              <span className="td-activity-time">{formatDateTime(item.created_at)}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <span className="td-activity-icon">✏️</span>
+                            <div className="td-activity-body">
+                              <span className="td-activity-text">
+                                <strong>{item.user}</strong> changed{' '}
+                                <strong>{item.field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+                              </span>
+                              <span className="td-activity-time">{formatDateTime(item.created_at)}</span>
+                            </div>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                );
+              })()}
+            </div>
+
             <div className="td-card">
               <div className="td-card-head">
                 <h3 className="td-card-title">Notes</h3>

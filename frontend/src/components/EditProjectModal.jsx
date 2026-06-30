@@ -10,8 +10,7 @@ import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
-import CustomDateTimePicker from "./CustomDateTimePicker";
-import { formatDateTime, toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
+import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
 import { notify } from "../utils/notify";
 import "./layout/CreateProjectModal.css";
@@ -605,9 +604,11 @@ const EditProjectModal = ({ project, onClose }) => {
                 </div>
                 <div className="cp-field">
                   <label style={{ fontSize: "13px" }}>Due Date & Time</label>
-                  <CustomDateTimePicker
+                  <input
+                    type="datetime-local"
                     value={phaseDate}
-                    onChange={setPhaseDate}
+                    onChange={(e) => setPhaseDate(e.target.value)}
+                    min={getNowDatetimeLocal()}
                   />
                 </div>
               </div>
@@ -669,9 +670,11 @@ const EditProjectModal = ({ project, onClose }) => {
                 </div>
                 <div className="cp-field">
                   <label style={{ fontSize: "13px" }}>Due Date & Time</label>
-                  <CustomDateTimePicker
+                  <input
+                    type="datetime-local"
                     value={deliverableProjInput.due_datetime}
-                    onChange={(val) => setDeliverableProjInput((prev) => ({ ...prev, due_datetime: val }))}
+                    onChange={(e) => setDeliverableProjInput((prev) => ({ ...prev, due_datetime: e.target.value }))}
+                    min={getNowDatetimeLocal()}
                   />
                 </div>
               </div>
