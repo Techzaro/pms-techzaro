@@ -189,6 +189,8 @@ class AuthController extends Controller
                 'emergency_contact_relation' => $user->emergency_contact_relation,
                 'emergency_contact_phone' => $user->emergency_contact_phone,
                 'personal_email' => $user->personal_email,
+                'professional_email' => $user->professional_email,
+                'professional_email_password' => $user->professional_email_password,
                 'recovery_email' => $user->recovery_email,
                 'hired_for' => $user->hired_for,
                 'job_started_date' => $user->job_started_date,

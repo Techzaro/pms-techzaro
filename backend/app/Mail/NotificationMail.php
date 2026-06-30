@@ -3,45 +3,72 @@
 namespace App\Mail;
 
 use App\Models\Notification;
+use App\Models\Task;
+use App\Models\Project;
+use App\Models\Deliverable;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-/**
- * Mailable for sending in-app notifications via email.
- *
- * Implements ShouldQueue to send emails asynchronously.
- * Uses the 'emails.notification' Blade template.
- */
-class NotificationMail extends Mailable implements ShouldQueue
+class NotificationMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    /** @var \App\Models\Notification The notification being sent */
     public Notification $notification;
-
-    /** @var string The frontend application URL for deep links */
     public string $frontendUrl;
+    public $entity;
+    public array $deliverableContext = [];
 
-    /**
-     * Create a new mail instance.
-     *
-     * @param \App\Models\Notification $notification The notification to email
-     */
     public function __construct(Notification $notification)
     {
         $this->notification = $notification;
         $this->frontendUrl = rtrim(config('app.frontend_url'), '/');
+        $this->entity = $this->loadEntity($notification);
+
+        if ($notification->type === 'deliverable_added') {
+            $this->deliverableContext = $this->buildDeliverableContext($notification);
+        }
     }
 
-    /**
-     * Build the message envelope with subject line.
-     *
-     * @return \Illuminate\Mail\Mailables\Envelope
-     */
+    private function loadEntity(Notification $notification)
+    {
+        if (!$notification->related_module || !$notification->related_id) {
+            return null;
+        }
+
+        return match ($notification->related_module) {
+            'task' => Task::with(['project:id,title', 'assignees:id,name', 'assignee:id,name'])
+                ->where('id', $notification->related_id)
+                ->first(['id', 'title', 'description', 'status', 'priority', 'start_date', 'end_date', 'project_id', 'assigned_by']),
+            'project' => Project::where('id', $notification->related_id)
+                ->first(['id', 'title', 'description', 'status', 'priority', 'start_date', 'end_date']),
+            'deliverable' => Deliverable::with(['project:id,title', 'task:id,title'])
+                ->where('id', $notification->related_id)
+                ->first(['id', 'title', 'description', 'status', 'priority', 'due_date', 'project_id', 'task_id', 'assigned_to']),
+            default => null,
+        };
+    }
+
+    private function buildDeliverableContext(Notification $notification): array
+    {
+        $changes = $notification->changes ?? [];
+        $sender = $notification->sender;
+
+        return [
+            'userName' => $notification->user->name ?? '',
+            'projectName' => $changes['project_name'] ?? ($this->entity->project->title ?? ''),
+            'taskName' => $changes['task_name'] ?? ($this->entity->task->title ?? ''),
+            'deliverableName' => $changes['deliverable_name'] ?? ($this->entity->title ?? ''),
+            'deliverableDescription' => $changes['deliverable_description'] ?? ($this->entity->description ?? ''),
+            'addedByName' => $sender->name ?? 'System',
+            'addedAt' => $notification->created_at ? $notification->created_at->format('d M Y, g:i A') : now()->format('d M Y, g:i A'),
+            'contextType' => $changes['context_type'] ?? 'task',
+            'loginUrl' => $this->frontendUrl,
+        ];
+    }
+
     public function envelope(): Envelope
     {
         return new Envelope(
@@ -49,15 +76,14 @@ class NotificationMail extends Mailable implements ShouldQueue
         );
     }
 
-    /**
-     * Define the message content and template.
-     *
-     * @return \Illuminate\Mail\Mailables\Content
-     */
     public function content(): Content
     {
+        $view = $this->notification->type === 'deliverable_added'
+            ? 'emails.deliverable-added'
+            : 'emails.notification';
+
         return new Content(
-            view: 'emails.notification',
+            view: $view,
         );
     }
 }

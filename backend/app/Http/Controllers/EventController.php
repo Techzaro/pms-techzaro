@@ -327,6 +327,13 @@ class EventController extends Controller
 
         $this->sendBulkEventNotification($event, $user, 'event_created', 'Event Assigned');
 
+        // Send confirmation email to performer
+        $assignedCount = $event->assignedUsers()->count();
+        $this->notificationService->confirmAction($user, 'Created', 'event', $event->title, [
+            'Assigned To' => $assignedCount > 0 ? $assignedCount . ' user(s)' : 'All users (global event)',
+            'Date' => $event->start_date ? \Carbon\Carbon::parse($event->start_date)->format('d M Y, g:i A') : 'N/A',
+        ]);
+
         // Log activity
         $assignedCount = $event->assignedUsers()->count();
         $activityDesc = $assignedCount > 0
@@ -374,6 +381,11 @@ class EventController extends Controller
 
         $this->sendBulkEventNotification($event, $user, 'event_updated', 'Event Updated');
 
+        // Send confirmation email to performer
+        $this->notificationService->confirmAction($user, 'Updated', 'event', $event->title, [
+            'Date' => $event->start_date ? \Carbon\Carbon::parse($event->start_date)->format('d M Y, g:i A') : 'N/A',
+        ]);
+
         // Log activity
         $this->activityService->log($user->id, 'event_updated', 'You updated event "' . $event->title . '"', 'event', $event->id);
 
@@ -394,6 +406,11 @@ class EventController extends Controller
         if (!in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
 
         $this->sendBulkEventNotification($event, $user, 'event_cancelled', 'Event Cancelled');
+
+        // Send confirmation email to performer
+        $this->notificationService->confirmAction($user, 'Cancelled', 'event', $event->title, [
+            'Original Date' => $event->start_date ? \Carbon\Carbon::parse($event->start_date)->format('d M Y, g:i A') : 'N/A',
+        ]);
 
         // Log activity
         $this->activityService->log($user->id, 'event_cancelled', 'You cancelled event "' . $event->title . '"', 'event', $event->id);

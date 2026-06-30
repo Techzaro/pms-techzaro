@@ -59,7 +59,7 @@ class UserController extends Controller
      */
     public function index()
     {
-        $users = User::select('id', 'name', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password')
+        $users = User::select('id', 'name', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password', 'personal_email', 'professional_email', 'professional_email_password')
             ->orderBy('sort_order')->latest('updated_at')
             ->get();
 
@@ -99,6 +99,9 @@ class UserController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email',
+            'personal_email' => 'nullable|email|max:255',
+            'professional_email' => 'nullable|string|max:255',
+            'professional_email_password' => 'nullable|string|max:255',
             'role' => ['required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member'])],
             'father_name' => 'nullable|string|max:255',
             'id_card_number' => 'nullable|string|max:32',
@@ -169,6 +172,9 @@ class UserController extends Controller
             'emergency_contact_phone' => $request->input('emergency_contact_phone'),
 
             // Emails
+            'personal_email' => $request->input('personal_email'),
+            'professional_email' => $request->input('professional_email'),
+            'professional_email_password' => $request->input('professional_email_password') ?: null,
             'recovery_email' => $request->input('recovery_email'),
 
             // Employment
@@ -209,15 +215,19 @@ class UserController extends Controller
         $emailSent = false;
         $emailError = null;
 
+        $sendTo = $request->input('personal_email') ?: $user->email;
+        $profEmail = $request->input('professional_email') ?: $user->professional_email;
+        $profPassword = $request->input('professional_email_password') ?: '';
+
         try {
-            Mail::to($user->email)->send(new UserCreated($user, $plainPassword, $loginUrl));
+            Mail::to($sendTo)->send(new UserCreated($user, $plainPassword, $profEmail, $profPassword, $loginUrl));
             $emailSent = true;
-            Log::info("Email sent successfully to {$user->email} for user ID {$user->id}");
+            Log::info("Welcome email sent successfully to {$sendTo} for user ID {$user->id}");
         } catch (\Throwable $e) {
             $emailError = $e->getMessage();
-            Log::error("Failed to send email to {$user->email}: " . $e->getMessage(), [
+            Log::error("Failed to send email to {$sendTo}: " . $e->getMessage(), [
                 'user_id' => $user->id,
-                'user_email' => $user->email,
+                'user_email' => $sendTo,
                 'user_name' => $user->name,
                 'exception' => $e->getMessage(),
                 'file' => $e->getFile(),
@@ -226,7 +236,7 @@ class UserController extends Controller
         }
 
         $message = $emailSent
-            ? 'User created successfully and email sent to ' . $user->email
+            ? 'User created successfully and welcome email sent to ' . $sendTo
             : 'User created successfully. Email sending failed: ' . $emailError;
 
         return response()->json([
@@ -267,6 +277,9 @@ class UserController extends Controller
             'emergency_contact_name' => 'nullable|string|max:255',
             'emergency_contact_relation' => 'nullable|string|max:255',
             'emergency_contact_phone' => 'nullable|string|max:32',
+            'personal_email' => 'nullable|email|max:255',
+            'professional_email' => 'nullable|string|max:255',
+            'professional_email_password' => 'nullable|string|max:255',
             'recovery_email' => 'nullable|email|max:255',
             'department' => 'sometimes|required|string|max:255',
             'designation' => 'sometimes|required|string|max:255',
@@ -324,6 +337,7 @@ class UserController extends Controller
             'father_name', 'id_card_number', 'phone_number',
             'present_address', 'permanent_address',
             'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
+            'personal_email', 'professional_email', 'professional_email_password',
             'recovery_email',
             'department', 'designation', 'hired_for', 'employee_code',
             'job_started_date', 'job_ended_date',
@@ -342,6 +356,11 @@ class UserController extends Controller
             if ($request->exists($field)) {
                 $user->$field = $request->input($field);
             }
+        }
+
+        // Hash professional email password if provided
+        if ($request->exists('professional_email_password') && $request->input('professional_email_password')) {
+            $user->professional_email_password = $request->input('professional_email_password');
         }
 
         // Sync legacy fields
@@ -373,7 +392,7 @@ class UserController extends Controller
         $emailError = null;
         if (!empty($changes)) {
             try {
-                Mail::to($user->email)->send(new UserProfileUpdated($user, $authUser->name, $changes));
+                Mail::to($user->professional_email)->send(new UserProfileUpdated($user, $authUser->name, $changes));
                 $emailSent = true;
             } catch (\Exception $e) {
                 $emailError = $e->getMessage();
@@ -548,9 +567,9 @@ class UserController extends Controller
             $emailError = null;
 
             try {
-                Mail::to($user->email)->send(new UserResigned($user, $authUser->name));
+                Mail::to($user->professional_email)->send(new UserResigned($user, $authUser->name));
                 $emailSent = true;
-                Log::info("Resignation email sent to {$user->email}");
+                Log::info("Resignation email sent to {$user->professional_email}");
             } catch (\Throwable $e) {
                 $emailError = $e->getMessage();
                 Log::error("Failed to send resignation email to {$user->email}: " . $e->getMessage(), [
@@ -650,6 +669,7 @@ class UserController extends Controller
                 'father_name', 'id_card_number', 'phone_number', 'contact_no',
                 'present_address', 'permanent_address', 'address',
                 'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
+                'personal_email', 'professional_email', 'professional_email_password',
                 'recovery_email',
                 'department', 'designation', 'hired_for', 'employee_code',
                 'job_started_date', 'job_ended_date',

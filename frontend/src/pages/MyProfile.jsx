@@ -27,6 +27,7 @@ function MyProfile() {
   const notify = useNotification();
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showProfPassword, setShowProfPassword] = useState(false);
   const [error, setError] = useState("");
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
@@ -282,16 +283,23 @@ function MyProfile() {
               </div>
               <div className="info-card-body">
                 <div className="info-row">
-                  <span className="info-label">Email</span>
-                  <span className="info-value">{user.email || "---"}</span>
-                </div>
-                <div className="info-row">
                   <span className="info-label">Personal Email</span>
                   <span className="info-value">{user.personal_email || "---"}</span>
                 </div>
                 <div className="info-row">
-                  <span className="info-label">Recovery Email</span>
-                  <span className="info-value">{user.recovery_email || "---"}</span>
+                  <span className="info-label">Professional Email</span>
+                  <span className="info-value">{user.professional_email || "---"}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Password of Professional Email</span>
+                  <span className="info-value" style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                    {user.professional_email_password ? (showProfPassword ? user.professional_email_password : "********") : "---"}
+                    {user.professional_email_password && (
+                      <button type="button" onClick={() => setShowProfPassword(!showProfPassword)} style={{background:'none',border:'1px solid #d1d5db',borderRadius:'6px',padding:'2px 8px',cursor:'pointer',fontSize:'12px',color:'#6b7280'}}>
+                        {showProfPassword ? "Hide" : "Show"}
+                      </button>
+                    )}
+                  </span>
                 </div>
               </div>
             </div>

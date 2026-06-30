@@ -28,6 +28,10 @@ use App\Http\Controllers\ActivityController;
 // User login (no auth required)
 Route::post('/login', [AuthController::class, 'login']);
 
+// Password reset (no auth required)
+Route::post('/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'forgotPassword']);
+Route::post('/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'resetPassword']);
+
 
 /*
 | Protected Routes (require valid Sanctum token)

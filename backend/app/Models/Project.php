@@ -148,6 +148,13 @@ class Project extends Model
         return $this->belongsTo(User::class, 'reopened_by');
     }
 
+    /** Activities related to this project (via related_module/related_id). */
+    public function activities()
+    {
+        return $this->hasMany(Activity::class, 'related_id')
+            ->where('related_module', 'Project');
+    }
+
     /** Field-level changes made to this project. */
     public function changes()
     {

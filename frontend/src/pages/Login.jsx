@@ -11,7 +11,7 @@
  * - Session persistence via saveSession utility
  */
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import API_URL from "../config/api";
 import { saveSession, clearAllSessions, authToken } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
@@ -300,7 +300,7 @@ function Login() {
                 <input type="checkbox" />
                 Remember Me
               </label>
-              <span className="forgot-password">Forgot Password?</span>
+              <Link to="/forgot-password" className="forgot-password">Forgot Password?</Link>
             </div>
 
             <div className="button-area">

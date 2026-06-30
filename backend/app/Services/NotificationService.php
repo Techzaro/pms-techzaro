@@ -46,14 +46,13 @@ class NotificationService
     {
         if (empty($notifications)) return;
 
-        // Filter out invalid entries and self-notifications
         $filtered = array_filter($notifications, function ($n) {
             return !empty($n['user_id']) && (!isset($n['sender_user_id']) || (int) $n['user_id'] !== (int) $n['sender_user_id']);
         });
 
         if (!empty($filtered)) {
-            foreach ($filtered as $n) {
-                Notification::create($n);
+            foreach (array_values($filtered) as $data) {
+                Notification::create($data);
             }
         }
     }
@@ -72,7 +71,7 @@ class NotificationService
      *
      * @return \App\Models\Notification|null
      */
-    public function notify(int $userId, ?int $senderId, string $type, string $module, int $relatedId, string $title, string $message, ?string $link = null): ?Notification
+    public function notify(int $userId, int $senderId, string $type, string $module, int $relatedId, string $title, string $message, ?string $link = null, ?array $changes = null): ?Notification
     {
         return $this->create([
             'user_id' => $userId,
@@ -82,6 +81,7 @@ class NotificationService
             'related_id' => $relatedId,
             'title' => $title,
             'message' => $message,
+            'changes' => $changes,
             'link' => $link,
         ]);
     }
@@ -100,7 +100,7 @@ class NotificationService
      *
      * @return void
      */
-    public function notifyMultiple(array $userIds, int $senderId, string $type, string $module, int $relatedId, string $title, string $message, ?string $link = null): void
+    public function notifyMultiple(array $userIds, int $senderId, string $type, string $module, int $relatedId, string $title, string $message, ?string $link = null, ?array $changes = null): void
     {
         $notifications = array_map(fn(int $userId) => [
             'user_id' => $userId,
@@ -110,10 +110,65 @@ class NotificationService
             'related_id' => $relatedId,
             'title' => $title,
             'message' => $message,
+            'changes' => $changes,
             'link' => $link,
         ], $userIds);
 
         $this->createBulk($notifications);
+    }
+
+    /**
+     * Notify users that a new deliverable has been added to their assigned task or project.
+     *
+     * Sends both an in-app notification and triggers an email (via model boot).
+     * The notification includes context data (project name, task name, deliverable name,
+     * who added it) stored in the `changes` JSON field for the email template.
+     *
+     * @param \App\Models\Deliverable $deliverable The newly created deliverable
+     * @param \App\Models\User       $adder       The user who added the deliverable
+     * @param array                  $recipientIds User IDs to notify (task/project assignees)
+     * @param string                 $contextType  Either 'task' or 'project'
+     *
+     * @return void
+     */
+    public function notifyDeliverableAdded($deliverable, $adder, array $recipientIds, string $contextType = 'task'): void
+    {
+        $deliverable->loadMissing(['project:id,title', 'task:id,title']);
+
+        $projectName = $deliverable->project->title ?? '';
+        $taskName = $deliverable->task->title ?? '';
+        $deliverableName = $deliverable->title;
+
+        $contextLabel = $contextType === 'project' ? 'project' : 'task';
+        $message = 'A new deliverable "' . $deliverableName . '" has been added';
+        if ($taskName) $message .= ' under Task "' . $taskName . '"';
+        if ($projectName) $message .= ' in Project "' . $projectName . '"';
+        $message .= ' by ' . $adder->name . '.';
+
+        $changes = [
+            'project_name' => $projectName,
+            'task_name' => $taskName,
+            'deliverable_name' => $deliverableName,
+            'deliverable_description' => $deliverable->description ?? '',
+            'added_by_name' => $adder->name,
+            'context_type' => $contextType,
+        ];
+
+        $filteredIds = array_values(array_filter($recipientIds, fn($id) => (int) $id !== (int) $adder->id));
+
+        foreach ($filteredIds as $userId) {
+            $this->notify(
+                $userId,
+                $adder->id,
+                'deliverable_added',
+                'deliverable',
+                $deliverable->id,
+                'New Deliverable Added',
+                $message,
+                '/deliveries?selectedDeliverable=' . $deliverable->id,
+                $changes
+            );
+        }
     }
 
     /**
@@ -168,5 +223,46 @@ class NotificationService
                   ->orWhere('sender_user_id', '!=', $userId);
             })
             ->count();
+    }
+
+    /**
+     * Send a confirmation email to the user who performed an action.
+     *
+     * This provides an audit trail and confirmation that the action was completed.
+     * No in-app notification is created — only an email is sent.
+     *
+     * @param \App\Models\User $performer   The user who performed the action
+     * @param string           $actionVerb  Description of the action (e.g., "Assigned", "Approved", "Updated")
+     * @param string           $entityType  Type of entity (e.g., "project", "task", "deliverable", "event")
+     * @param string           $entityName  Name/title of the entity
+     * @param array            $details     Key-value pairs of additional details to show
+     *
+     * @return void
+     */
+    public function confirmAction($performer, string $actionVerb, string $entityType, string $entityName, array $details = []): void
+    {
+        if (!$performer || !$performer->professional_email) {
+            return;
+        }
+
+        try {
+            $loginUrl = rtrim(config('app.frontend_url'), '/');
+            \Illuminate\Support\Facades\Mail::to($performer->professional_email)
+                ->send(new \App\Mail\ActionConfirmationMail(
+                    $performer->name,
+                    $actionVerb,
+                    $entityType,
+                    $entityName,
+                    $details,
+                    $loginUrl
+                ));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to send action confirmation email', [
+                'user_id' => $performer->id,
+                'action' => $actionVerb,
+                'entity_type' => $entityType,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

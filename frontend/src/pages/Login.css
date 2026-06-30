@@ -153,10 +153,12 @@
   color: #1e90ff;
   cursor: pointer;
   transition: 0.3s;
+  text-decoration: none;
 }
 
 .forgot-password:hover {
   color: #0066d6;
+  text-decoration: underline;
 }
 
 .button-area {

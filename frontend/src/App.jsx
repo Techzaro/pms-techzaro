@@ -35,6 +35,8 @@ const SelfDeliveries = lazy(() => import("./pages/SelfDeliveries"));
 const Calender = lazy(() => import("./pages/Calender"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const UserPerformance = lazy(() => import("./pages/UserPerformance"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 
 // Route protection components
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -56,8 +58,10 @@ function App() {
       <ScrollToTop />
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
-          {/* Public route */}
+          {/* Public routes */}
           <Route path="/" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           {/* Dashboard routes - role-specific */}
           <Route path="/:role/dashboard" element={<RoleProtectedRoute><Admin /></RoleProtectedRoute>} />
