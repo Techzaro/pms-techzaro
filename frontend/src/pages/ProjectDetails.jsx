@@ -390,6 +390,12 @@ function ProjectDetails() {
     }
   };
 
+  const {
+    hasUnread: projectHasUnread,
+    isItemUnread: isProjectItemUnread,
+    markViewed: markProjectViewed,
+  } = useActivityHighlight("project", project?.id, project?.activity_max_id || 0, project?.all_changes || []);
+
   if (loading) {
     return (
       <DashboardLayout hideRightSidebar={true}>
@@ -422,12 +428,6 @@ function ProjectDetails() {
 
   const canEdit = project.can_edit;
   const canSubmitProject = tasks.length > 0 && tasks.every((t) => t.status === "approved");
-
-  const {
-    hasUnread: projectHasUnread,
-    isItemUnread: isProjectItemUnread,
-    markViewed: markProjectViewed,
-  } = useActivityHighlight("project", project?.id, project?.activity_max_id || 0, project?.all_changes || []);
 
   const tabs = [
     { id: "overview", label: "Overview", icon: ListChecks },

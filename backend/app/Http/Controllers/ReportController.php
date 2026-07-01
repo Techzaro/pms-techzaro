@@ -312,6 +312,27 @@ class ReportController extends Controller
             }
         }
 
+        // --- PRIORITY DISTRIBUTION (user's tasks + project-as-tasks) ---
+        $priorityStats = $taskIds->isNotEmpty()
+            ? Task::selectRaw("
+                SUM(CASE WHEN `priority` = 'high' THEN 1 ELSE 0 END) as p_high,
+                SUM(CASE WHEN `priority` = 'medium' THEN 1 ELSE 0 END) as p_medium,
+                SUM(CASE WHEN `priority` = 'low' THEN 1 ELSE 0 END) as p_low
+            ")->whereIn('id', $taskIds)->first()
+            : (object)['p_high' => 0, 'p_medium' => 0, 'p_low' => 0];
+
+        $projectPriorityStats = $projectQuery->selectRaw("
+            SUM(CASE WHEN `priority` = 'high' THEN 1 ELSE 0 END) as p_high,
+            SUM(CASE WHEN `priority` = 'medium' THEN 1 ELSE 0 END) as p_medium,
+            SUM(CASE WHEN `priority` = 'low' THEN 1 ELSE 0 END) as p_low
+        ")->first();
+
+        $priorityDistribution = [
+            'high' => (int) $priorityStats->p_high + (int) $projectPriorityStats->p_high,
+            'medium' => (int) $priorityStats->p_medium + (int) $projectPriorityStats->p_medium,
+            'low' => (int) $priorityStats->p_low + (int) $projectPriorityStats->p_low,
+        ];
+
         $team = $user->teams()->first();
 
         // --- DELIVERABLES ---
@@ -407,6 +428,7 @@ class ReportController extends Controller
             ],
             'status_breakdown' => $mergedBreakdown,
             'status_distribution' => $statusDistribution,
+            'priority_distribution' => $priorityDistribution,
             'workload' => $workloadData,
             'deliverable_summary' => [
                 'total' => (int) $deliverableStats->total,
@@ -746,7 +768,10 @@ class ReportController extends Controller
         $taskStats = $taskQuery->selectRaw("
             COUNT(*) as total_assigned,
             SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
-            SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
+            SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue,
+            SUM(CASE WHEN `priority` = 'high' THEN 1 ELSE 0 END) as p_high,
+            SUM(CASE WHEN `priority` = 'medium' THEN 1 ELSE 0 END) as p_medium,
+            SUM(CASE WHEN `priority` = 'low' THEN 1 ELSE 0 END) as p_low
         ")->first();
 
         // --- PROJECTS ASSIGNED AS TASKS ---
@@ -779,7 +804,10 @@ class ReportController extends Controller
         $projectStats = $projectQuery->selectRaw("
             COUNT(*) as total_assigned,
             SUM(CASE WHEN status IN ('approved','completed','done') THEN 1 ELSE 0 END) as approved,
-            SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
+            SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue,
+            SUM(CASE WHEN `priority` = 'high' THEN 1 ELSE 0 END) as p_high,
+            SUM(CASE WHEN `priority` = 'medium' THEN 1 ELSE 0 END) as p_medium,
+            SUM(CASE WHEN `priority` = 'low' THEN 1 ELSE 0 END) as p_low
         ")->first();
 
         // Merge task + project-as-task counts
@@ -787,12 +815,18 @@ class ReportController extends Controller
         $approved = (int) $taskStats->approved + (int) $projectStats->approved;
         $pending = max($totalAssigned - $approved, 0);
         $overdue = (int) $taskStats->overdue + (int) $projectStats->overdue;
+        $highPriority = (int) $taskStats->p_high + (int) $projectStats->p_high;
+        $mediumPriority = (int) $taskStats->p_medium + (int) $projectStats->p_medium;
+        $lowPriority = (int) $taskStats->p_low + (int) $projectStats->p_low;
 
         return response()->json([
             'total_assigned' => $totalAssigned,
             'approved' => $approved,
             'pending' => $pending,
             'overdue' => $overdue,
+            'high_priority' => $highPriority,
+            'medium_priority' => $mediumPriority,
+            'low_priority' => $lowPriority,
         ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     }
 
@@ -961,6 +995,13 @@ class ReportController extends Controller
             SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
         ")->first();
 
+        // --- PRIORITY DISTRIBUTION (OVERALL) ---
+        $priorityDistribution = Task::selectRaw("
+            SUM(CASE WHEN `priority` = 'high' THEN 1 ELSE 0 END) as high,
+            SUM(CASE WHEN `priority` = 'medium' THEN 1 ELSE 0 END) as medium,
+            SUM(CASE WHEN `priority` = 'low' THEN 1 ELSE 0 END) as low
+        ")->first();
+
         // --- TEAM WISE SUMMARY (bulk-loaded, 2 total queries instead of 2N) ---
         $teams = $this->getTeamsWithTaskStats($timeFilter)->map(function ($t) {
             return [
@@ -1004,6 +1045,11 @@ class ReportController extends Controller
                 'in_review' => (int) ($statusDistribution->in_review ?? 0),
                 'overdue' => (int) ($statusDistribution->overdue ?? 0),
                 'total' => $totalAssigned,
+            ],
+            'priority_distribution' => [
+                'high' => (int) ($priorityDistribution->high ?? 0),
+                'medium' => (int) ($priorityDistribution->medium ?? 0),
+                'low' => (int) ($priorityDistribution->low ?? 0),
             ],
             'teams' => $teams,
             'tasks_trend' => $trendData,

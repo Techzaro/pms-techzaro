@@ -75,6 +75,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
   const summary = reportData?.summary || {};
   const employees = reportData?.employees || [];
   const statusDist = reportData?.status_distribution || {};
+  const priorityDist = reportData?.priority_distribution || {};
   const teams = reportData?.teams || [];
   const tasksTrend = reportData?.tasks_trend || [];
 
@@ -96,10 +97,6 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
     { key: "pending", label: "Pending", value: totalPending, color: "#F59E0B", bg: "#FEF3C7", sub: "Tasks in progress" },
     { key: "overdue", label: "Overdue", value: totalOverdue, color: "#EF4444", bg: "#FEF2F2", sub: "Require attention" },
   ];
-
-  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const trendMax = Math.max(...tasksTrend, 1);
-  const trendPcts = tasksTrend.map(v => Math.round((v / trendMax) * 100));
 
   const totalStatusItems = statusDist.total || totalAssigned || 1;
 
@@ -206,33 +203,29 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
         doc.text(String(s.count), M + halfW - 20, sy + 0.5);
         doc.setTextColor(156, 163, 175); doc.text(`${pct}%`, M + halfW - 9, sy + 0.5);
       });
-      // Right: Tasks Trend
+      // Right: Priority Distribution
       const rX = M + halfW + 5;
       doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
       doc.roundedRect(rX, y, halfW, 42, 2, 2, "S");
       doc.setFontSize(8); doc.setFont("helvetica", "bold");
-      doc.setTextColor(17, 24, 39); doc.text("TASKS TREND (This Week)", rX + 5, y + 6);
-      const cL = rX + 12, cR = rX + halfW - 4, cT2 = y + 12, cB2 = y + 38;
-      const cH2 = cB2 - cT2, cW2 = cR - cL;
-      ["100%", "75%", "50%", "25%", "0%"].forEach((lbl, i) => {
-        const ly = cT2 + (i * cH2 / 4);
-        doc.setFontSize(4.5); doc.setFont("helvetica", "normal");
-        doc.setTextColor(156, 163, 175); doc.text(lbl, cL - 2, ly + 1, { align: "right" });
-        doc.setDrawColor(237, 239, 241); doc.setLineWidth(0.08);
-        doc.line(cL, ly, cR, ly);
-      });
-      const bW2 = cW2 / (days.length * 1.6);
-      const bGap2 = (cW2 - bW2 * days.length) / (days.length + 1);
-      days.forEach((day, i) => {
-        const bx = cL + bGap2 + i * (bW2 + bGap2);
-        const bh = (trendPcts[i] / 100) * cH2;
-        const by = cB2 - bh;
-        if (trendPcts[i] >= 90) doc.setFillColor(99, 102, 241);
-        else if (trendPcts[i] >= 70) doc.setFillColor(129, 140, 248);
-        else doc.setFillColor(199, 210, 254);
-        doc.roundedRect(bx, by, bW2, bh, 0.8, 0.8, "F");
-        doc.setFontSize(4.5); doc.setFont("helvetica", "normal");
-        doc.setTextColor(156, 163, 175); doc.text(day, bx + bW2 / 2, cB2 + 3, { align: "center" });
+      doc.setTextColor(17, 24, 39); doc.text("PRIORITY DISTRIBUTION", rX + 5, y + 6);
+      const totalPriority = (priorityDist.high ?? 0) + (priorityDist.medium ?? 0) + (priorityDist.low ?? 0);
+      doc.setFontSize(5.5); doc.setFont("helvetica", "normal");
+      doc.setTextColor(156, 163, 175); doc.text(`${totalPriority} Total Tasks`, rX + 5, y + 10.5);
+      const priorityItems = [
+        { label: "High", count: priorityDist.high ?? 0, color: [239, 68, 68] },
+        { label: "Medium", count: priorityDist.medium ?? 0, color: [245, 158, 11] },
+        { label: "Low", count: priorityDist.low ?? 0, color: [16, 185, 129] },
+      ];
+      priorityItems.forEach((p, i) => {
+        const sy = y + 18 + i * 9;
+        const pct = totalPriority > 0 ? Math.round((p.count / totalPriority) * 100) : 0;
+        doc.setFontSize(6); doc.setFont("helvetica", "normal");
+        doc.setTextColor(55, 65, 81); doc.text(p.label, rX + 5, sy);
+        doc.setTextColor(156, 163, 175); doc.text(`${p.count} (${pct}%)`, rX + halfW - 5, sy, { align: "right" });
+        const barX = rX + 5, barMax = halfW - 10;
+        doc.setFillColor(229, 231, 235); doc.roundedRect(barX, sy + 1.5, barMax, 3, 1, 1, "F");
+        if (pct > 0) { doc.setFillColor(...p.color); doc.roundedRect(barX, sy + 1.5, barMax * (pct / 100), 3, 1, 1, "F"); }
       });
       y += 50;
 
@@ -572,25 +565,32 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                   })}
                 </div>
 
-                {/* Right: Tasks Trend */}
+                {/* Right: Priority Distribution */}
                 <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827" }}>TASKS TREND (This Week)</div>
-                  <div style={{ display: "flex", gap: 2, marginTop: 12, alignItems: "flex-end", height: 140 }}>
-                    {["100%", "75%", "50%", "25%", "0%"].map(lbl => (
-                      <div key={lbl} style={{ display: "flex", flexDirection: "column", height: "100%", justifyContent: "flex-end", fontSize: 7, color: "#9ca3af", minWidth: 16 }}>{lbl}</div>
-                    ))}
-                    <div style={{ flex: 1, display: "flex", alignItems: "flex-end", gap: 6, height: "100%" }}>
-                      {days.map((day, i) => (
-                        <div key={day} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", height: "100%", justifyContent: "flex-end" }}>
-                          <div style={{
-                            width: "60%", borderRadius: "2px 2px 0 0",
-                            height: `${trendPcts[i]}%`,
-                            background: trendPcts[i] >= 90 ? "#6366f1" : trendPcts[i] >= 70 ? "#818cf8" : "#c7d2fe",
-                          }}></div>
-                          <div style={{ fontSize: 7, color: "#9ca3af", marginTop: 2 }}>{day}</div>
-                        </div>
-                      ))}
-                    </div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 4 }}>PRIORITY DISTRIBUTION</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                    {(() => {
+                      const totalPriority = (priorityDist.high ?? 0) + (priorityDist.medium ?? 0) + (priorityDist.low ?? 0);
+                      return [
+                        { label: "High", count: priorityDist.high ?? 0, color: "#ef4444" },
+                        { label: "Medium", count: priorityDist.medium ?? 0, color: "#f59e0b" },
+                        { label: "Low", count: priorityDist.low ?? 0, color: "#10b981" },
+                      ].map((p) => {
+                        const pct = totalPriority > 0 ? Math.round((p.count / totalPriority) * 1000) / 10 : 0;
+                        return (
+                          <div key={p.label} style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 0" }}>
+                            <span style={{ fontSize: 14, color: "#374151", fontWeight: 500, minWidth: 60 }}>{p.label}</span>
+                            <div style={{ flex: 1, height: 10, background: "#f3f4f6", borderRadius: 5, overflow: "hidden" }}>
+                              <div style={{ width: `${pct}%`, height: "100%", borderRadius: 5, background: p.color, transition: "width 0.6s ease" }}></div>
+                            </div>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: "#111827", minWidth: 80, textAlign: "right" }}>{p.count} ({Math.round(pct)}%)</span>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                  <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 8 }}>
+                    {(priorityDist.high ?? 0) + (priorityDist.medium ?? 0) + (priorityDist.low ?? 0)} Total Tasks
                   </div>
                 </div>
               </div>
