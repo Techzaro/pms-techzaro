@@ -15,9 +15,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import "../components/layout/DashboardLayout.css";
 import { getUser, getCurrentRole, rolePath, normalizeRole } from "../utils/auth";
-import { timeAgo } from "../utils/formatDateTime";
+import { getActivityDestination, getActivityFrom } from "../utils/navigation";
+import { timeAgo, formatDateTime } from "../utils/formatDateTime";
 import { useApiQuery } from "../hooks/useApi";
 import { useRelativeTime } from "../hooks/useRelativeTime";
 import "./Admin.css";
@@ -28,6 +30,13 @@ const getInitials = (name) => {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0][0].toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+/** Formats a date string to exact time (e.g. "4:15 PM") */
+const formatExactTime = (dateStr) => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
 };
 
 /**
@@ -120,11 +129,7 @@ const WorkloadItem = memo(function WorkloadItem({ item, index, total, navigate, 
           <div
             key={ai}
             onClick={() => {
-              if (item.module === "project") {
-                navigate(rolePath(`projects/project-details/${item.entity_id}`), { state: { from: "admin" } });
-              } else {
-                navigate(rolePath(`tasks/task-details/${item.entity_id}`), { state: { from: "admin" } });
-              }
+              navigate(getActivityDestination(item), { state: { from: getActivityFrom(item) } });
             }}
             title={a.name || a.email}
             style={{
@@ -262,6 +267,24 @@ function Admin() {
   const [modalOpen, setModalOpen] = useState(false);
   const currentRole = getCurrentRole() || "member";
 
+  // Track which activity items have been viewed (persisted in sessionStorage)
+  const [viewedActivities, setViewedActivities] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem("viewedActivities");
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
+
+  /** Mark an activity as viewed and persist to sessionStorage */
+  const markActivityViewed = (id) => {
+    if (!id || viewedActivities.includes(id)) return;
+    setViewedActivities((prev) => {
+      const next = [...prev, id];
+      try { sessionStorage.setItem("viewedActivities", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
   // Fetch dashboard summary data (active projects, tasks due today, etc.)
   const { data: dashboard, isLoading } = useApiQuery(
     "dashboard",
@@ -372,6 +395,10 @@ function Admin() {
     completed:       { icon: "✓", color: "#22C55E", bg: "#ECFDF5" },
     status_updated:  { icon: "⚡", color: "#8B5CF6", bg: "#F5F3FF" },
     field_changed:   { icon: "✎", color: "#6B7280", bg: "#F3F4F6" },
+    deleted:         { icon: "✕", color: "#EF4444", bg: "#FEF2F2" },
+    leader_changed:  { icon: "★", color: "#F59E0B", bg: "#FFFBEB" },
+    member_added:    { icon: "+", color: "#22C55E", bg: "#ECFDF5" },
+    member_removed:  { icon: "−", color: "#EF4444", bg: "#FEF2F2" },
   };
 
   /** Returns a human-readable label for the activity module (task, project, deliverable) */
@@ -380,14 +407,21 @@ function Admin() {
     if (module === "project") return "Project";
     if (module === "deliverable") return "Deliverable";
     if (module === "user") return "User";
+    if (module === "team") return "Team";
     return module;
   };
 
   /**
    * Builds a JSX message describing an activity item.
    * e.g. "You created Task "Login Page" — Assigned to you"
+   * For team activities, uses the backend description if available.
    */
   const getActivityMessage = (item) => {
+    // For team activities, use the backend-provided description (personalized per user)
+    if (item.module === "team" && item.description) {
+      return <>{item.description}</>;
+    }
+
     const moduleLabel = getModuleLabel(item.module);
     const titleSpan = <span style={{ fontWeight: 600 }}>"{item.title}"</span>;
     const actorLabel = item.is_actor ? "You" : item.actor_name;
@@ -406,6 +440,10 @@ function Admin() {
       field_changed: "updated",
       updated: "updated",
       resigned: "resigned",
+      deleted: "deleted",
+      leader_changed: "changed team lead for",
+      member_added: "added member(s) to",
+      member_removed: "removed member(s) from",
     };
     const verb = verbMap[item.action] || "updated";
 
@@ -469,6 +507,7 @@ function Admin() {
 
   return (
     <DashboardLayout>
+          <Breadcrumb items={[{ label: "Dashboard" }]} />
           <div className="welcome-box">
             <h1>{greeting}</h1>
             <p>Manage your projects, tasks and team activities.</p>
@@ -607,39 +646,18 @@ function Admin() {
             ) : (
               completedToday.map((item, index) => {
                 const cfg = activityActionConfig[item.action] || activityActionConfig.submitted;
+                const isViewed = viewedActivities.includes(item.id);
                 return (
                   <div
                     key={item.id || index}
+                    className={`activity-item ${isViewed ? "activity-item--read" : "activity-item--unread"}`}
                     onClick={() => {
-                      if (item.module === "user") {
-                        const userId = item.entity_id;
-                        if (userId) navigate(rolePath(`manage-users/user-profile/${userId}`));
-                      } else if (item.module === "task") {
-                        const taskId = item.entity_id || String(item.id).replace("task_event_", "").replace("task_sub_", "");
-                        navigate(rolePath(`tasks/task-details/${taskId}`), { state: { from: "admin" } });
-                      } else if (item.module === "project") {
-                        const projectId = item.entity_id || String(item.id).replace("project_event_", "");
-                        navigate(rolePath(`projects/project-details/${projectId}`), { state: { from: "admin" } });
-                      } else {
-                        const dlvId = item.entity_id || String(item.id).replace("dlv_event_", "").replace("dlv_sub_", "");
-                        navigate(rolePath(`deliveries/deliverable-details/${dlvId}`), { state: { from: "admin" } });
-                      }
+                      markActivityViewed(item.id);
+                      navigate(getActivityDestination(item), { state: { from: getActivityFrom(item) } });
                     }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "14px 0",
-                      borderBottom: index < completedToday.length - 1 ? "1px solid #F3F4F6" : "none",
-                      cursor: "pointer",
-                      borderRadius: "8px",
-                      transition: "background 0.15s",
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "#F9FAFB"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "14px", flex: 1, minWidth: 0 }}>
-                      <div style={{
+                      <div className="activity-icon-circle" style={{
                         width: "40px",
                         height: "40px",
                         borderRadius: "50%",
@@ -652,7 +670,7 @@ function Admin() {
                         <span style={{ fontSize: "16px", color: cfg.color }}>{cfg.icon}</span>
                       </div>
                       <div style={{ minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: "14px", color: "#374151", lineHeight: "1.4" }}>
+                        <p className="activity-text" style={{ margin: 0, fontSize: "14px", lineHeight: "1.4" }}>
                           {getActivityMessage(item)}
                         </p>
                       </div>
@@ -677,7 +695,7 @@ function Admin() {
                       >
                         {getInitials(item.actor_name)}
                       </div>
-                      <span style={{ color: "#9CA3AF", fontSize: "13px", whiteSpace: "nowrap" }}>
+                      <span className="activity-time" style={{ fontSize: "13px", whiteSpace: "nowrap" }}>
                         {timeAgo(item.created_at)}
                       </span>
                     </div>
@@ -711,38 +729,17 @@ function Admin() {
                     </h4>
                     {group.activities.map((item, index) => {
                       const cfg = activityActionConfig[item.action] || activityActionConfig.submitted;
+                      const isViewed = viewedActivities.includes(item.id);
                       return (
                         <div
                           key={item.id || index}
+                          className={`activity-item ${isViewed ? "activity-item--read" : "activity-item--unread"}`}
                           onClick={() => {
-                            if (item.module === "user") {
-                              const userId = item.entity_id;
-                              if (userId) navigate(rolePath(`manage-users/user-profile/${userId}`));
-                            } else if (item.module === "task") {
-                              const taskId = item.entity_id || String(item.id).replace("task_event_", "").replace("task_sub_", "");
-                              navigate(rolePath(`tasks/task-details/${taskId}`));
-                            } else if (item.module === "project") {
-                              const projectId = item.entity_id || String(item.id).replace("project_event_", "");
-                              navigate(rolePath(`projects/project-details/${projectId}`));
-                            } else if (item.module === "deliverable") {
-                              const dlvId = item.entity_id || String(item.id).replace("dlv_event_", "").replace("dlv_sub_", "");
-                              navigate(rolePath(`deliveries/deliverable-details/${dlvId}`));
-                            }
+                            markActivityViewed(item.id);
+                            navigate(getActivityDestination(item), { state: { from: getActivityFrom(item) } });
                           }}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "14px",
-                            padding: "12px 0",
-                            borderBottom: index < group.activities.length - 1 ? "1px solid #F3F4F6" : "none",
-                            cursor: "pointer",
-                            borderRadius: "8px",
-                            transition: "background 0.15s",
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = "#F9FAFB"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
-                          <div style={{
+                          <div className="activity-icon-circle" style={{
                             width: "36px", height: "36px", borderRadius: "50%",
                             background: cfg.bg, display: "flex", alignItems: "center",
                             justifyContent: "center", flexShrink: 0,
@@ -750,12 +747,12 @@ function Admin() {
                             <span style={{ fontSize: "14px", color: cfg.color }}>{cfg.icon}</span>
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ margin: 0, fontSize: "14px", color: "#374151", lineHeight: "1.4" }}>
-                              {item.description}
+                            <p className="activity-text" style={{ margin: 0, fontSize: "14px", lineHeight: "1.4" }}>
+                              {getActivityMessage(item)}
                             </p>
                           </div>
-                          <span style={{ color: "#9CA3AF", fontSize: "13px", whiteSpace: "nowrap" }}>
-                            {timeAgo(item.created_at)}
+                          <span className="activity-time" style={{ fontSize: "13px", whiteSpace: "nowrap" }}>
+                            {formatExactTime(item.created_at)}
                           </span>
                         </div>
                       );

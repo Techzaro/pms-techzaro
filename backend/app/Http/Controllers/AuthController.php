@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use App\Models\Task;
 use App\Models\Project;
 use App\Models\User;
@@ -116,10 +117,25 @@ class AuthController extends Controller
     {
         try {
             $request->validate([
-                'new_password' => 'required|min:6',
+                'new_password' => [
+                    'required',
+                    'string',
+                    'min:8',
+                    'regex:/[A-Z]/',
+                    'regex:/[a-z]/',
+                    'regex:/[0-9]/',
+                    'regex:/[@$!%*?&#]/',
+                ],
             ]);
 
             $user = $request->user();
+
+            if (Hash::check($request->new_password, $user->password)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'New password must be different from your temporary password.'
+                ], 422);
+            }
 
             $user->password = bcrypt($request->new_password);
             $user->must_change_password = false;
@@ -130,6 +146,12 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Password changed successfully. Please login with your new password.'
             ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character (@$!%*?&#).',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
@@ -391,7 +413,15 @@ class AuthController extends Controller
         try {
             $request->validate([
                 'old_password' => 'required',
-                'new_password' => 'required|min:6',
+                'new_password' => [
+                    'required',
+                    'string',
+                    'min:8',
+                    'regex:/[A-Z]/',
+                    'regex:/[a-z]/',
+                    'regex:/[0-9]/',
+                    'regex:/[@$!%*?&#]/',
+                ],
             ]);
 
             $user = $request->user();
@@ -403,16 +433,53 @@ class AuthController extends Controller
                 ], 422);
             }
 
+            if (Hash::check($request->new_password, $user->password)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'New password must be different from your current password.'
+                ], 422);
+            }
+
             $user->password = bcrypt($request->new_password);
             $user->save();
 
             // Revoke all other tokens on password change for security
             $user->tokens()->where('id', '!=', $request->user()->currentAccessToken()->id)->delete();
 
+            // Send confirmation email to professional email
+            if ($user->professional_email) {
+                try {
+                    Mail::to($user->professional_email)->send(new \App\Mail\PasswordChangedMail($user));
+                } catch (\Throwable $e) {
+                    \Log::error('Failed to send password changed email', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+                }
+            }
+
+            // Log activity
+            try {
+                $activityService = new \App\Services\ActivityService();
+                $activityService->log(
+                    userId: $user->id,
+                    activityType: 'profile',
+                    description: 'Password changed successfully',
+                    module: 'profile',
+                    action: 'updated',
+                    entityName: 'Password'
+                );
+            } catch (\Throwable $e) {
+                \Log::error('Failed to log password change activity', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Password changed successfully'
             ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character (@$!%*?&#).',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,

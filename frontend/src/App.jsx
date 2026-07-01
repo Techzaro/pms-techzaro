@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Suspense, lazy, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import LoadingSpinner from "./components/LoadingSpinner";
+import { useInactivityTimeout } from "./utils/useInactivityTimeout";
 
 // Lazy-loaded page components for code splitting
 const Login = lazy(() => import("./pages/Login"));
@@ -29,6 +30,7 @@ const DeliveriesByYou = lazy(() => import("./pages/DeliveriesByYou"));
 const History = lazy(() => import("./pages/History"));
 const Reports = lazy(() => import("./pages/Reports"));
 const ManageTeam = lazy(() => import("./pages/ManageTeam"));
+const MemberTeam = lazy(() => import("./pages/MemberTeam"));
 const TaskDetails = lazy(() => import("./pages/TaskDetails"));
 const DeliverableDetails = lazy(() => import("./pages/DeliverableDetails"));
 const SelfDeliveries = lazy(() => import("./pages/SelfDeliveries"));
@@ -54,6 +56,8 @@ function ScrollToTop() {
 }
 
 function App() {
+  useInactivityTimeout();
+
   return (
     <BrowserRouter>
       <ScrollToTop />
@@ -89,6 +93,9 @@ function App() {
           <Route path="/:role/manage-users" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><ManageUsers /></RoleProtectedRoute>} />
           <Route path="/:role/manage-users/user-profile/:userId" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><UserProfile /></RoleProtectedRoute>} />
           <Route path="/:role/manage-team" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><ManageTeam /></RoleProtectedRoute>} />
+
+          {/* Member/Team Lead: read-only team view */}
+          <Route path="/:role/my-team" element={<ProtectedRoute><MemberTeam /></ProtectedRoute>} />
 
           {/* Other protected routes */}
           <Route path="/:role/history" element={<ProtectedRoute><History /></ProtectedRoute>} />

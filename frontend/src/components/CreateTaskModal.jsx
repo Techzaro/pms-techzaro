@@ -11,10 +11,12 @@ import { authToken, getUser } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
+import LoadingButton from "./LoadingButton";
 
 import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
 import { notify } from "../utils/notify";
+import { useSubmit } from "../hooks/useSubmit";
 import "./layout/CreateTaskModal.css";
 
 /**
@@ -27,6 +29,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   useEscapeKey(true, onClose);
 
   const [loading, setLoading] = useState(false);
+  const { submitting, run } = useSubmit();
   const [formErrors, setFormErrors] = useState({});
   const [projects, setProjects] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
@@ -314,66 +317,58 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     if (e?.preventDefault) e.preventDefault();
 
     if (!validateForm()) {
-      console.log("CreateTaskModal: form validation failed");
       return;
     }
 
-    setLoading(true);
+    await run(async () => {
+      try {
+        const token = authToken();
 
-    try {
-      const token = authToken();
-      console.log("CreateTaskModal: token ok, building body");
+        const body = {
+          title: form.title.trim(),
+          description: form.description || null,
+          requirements: requirementsList.length > 0 ? requirementsList : null,
+          start_date: toUTCIso(form.start_date),
+          end_date: toUTCIso(form.end_date),
+          assigned_to: form.assigned_to,
+          priority: form.priority,
+          deliverables: deliverables.length > 0 ? deliverables.map(d => ({ title: d.title, due_date: d.due_date || null })) : undefined,
+        };
 
-      const body = {
-        title: form.title.trim(),
-        description: form.description || null,
-        requirements: requirementsList.length > 0 ? requirementsList : null,
-        start_date: toUTCIso(form.start_date),
-        end_date: toUTCIso(form.end_date),
-        assigned_to: form.assigned_to,
-        priority: form.priority,
-        deliverables: deliverables.length > 0 ? deliverables.map(d => ({ title: d.title, due_date: d.due_date || null })) : undefined,
-      };
+        const pid = projectId || form.project_id;
+        const url = pid ? `${API_URL}/projects/${pid}/tasks` : `${API_URL}/tasks`;
 
-      const pid = projectId || form.project_id;
-      const url = pid ? `${API_URL}/projects/${pid}/tasks` : `${API_URL}/tasks`;
-      console.log("CreateTaskModal: posting to", url, body);
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
+          _notifHandled: true,
+        });
 
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-        _notifHandled: true,
-      });
+        const data = await response.json();
 
-      console.log("CreateTaskModal: response status", response.status);
-      const data = await response.json();
-      console.log("CreateTaskModal: response body", data);
+        if (!response.ok) {
+          const msg = data.message || "Failed to create task";
+          const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
+          throw new Error(errors || msg);
+        }
 
-      if (!response.ok) {
-        const msg = data.message || "Failed to create task";
-        const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
-        throw new Error(errors || msg);
+        const taskIds = data.tasks?.map(t => t.id) || (data.task?.id ? [data.task.id] : []);
+        if (taskIds.length > 0 && (pendingFiles.length > 0 || links.length > 0)) {
+          await Promise.all(taskIds.map(id => uploadAttachments(id, token)));
+        }
+
+        publish('task:created', data.task || data);
+        publish('data:changed', { type: 'task', action: 'created' });
+        onClose(true);
+      } catch (err) {
+        notify.error(err.message);
       }
-
-      const taskIds = data.tasks?.map(t => t.id) || (data.task?.id ? [data.task.id] : []);
-      if (taskIds.length > 0 && (pendingFiles.length > 0 || links.length > 0)) {
-        await Promise.all(taskIds.map(id => uploadAttachments(id, token)));
-      }
-
-      publish('task:created', data.task || data);
-      publish('data:changed', { type: 'task', action: 'created' });
-      onClose(true);
-    } catch (err) {
-      console.error("CreateTaskModal: error", err);
-      notify.error(err.message);
-    } finally {
-      setLoading(false);
-    }
+    });
   };
 
   return (
@@ -712,18 +707,17 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 type="button"
                 className="task-cancel-btn"
                 onClick={() => onClose(false)}
-                disabled={loading}
+                disabled={submitting}
               >
                 Cancel
               </button>
-              <button
-                type="submit"
+              <LoadingButton
                 className="task-create-btn"
                 onClick={handleSubmit}
-                disabled={loading}
+                loading={submitting}
               >
-                {loading ? "Creating..." : "+ Create Task"}
-              </button>
+                + Create Task
+              </LoadingButton>
             </div>
 
       </div>

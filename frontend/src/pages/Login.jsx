@@ -15,6 +15,9 @@ import { useSearchParams, Link } from "react-router-dom";
 import API_URL from "../config/api";
 import { saveSession, clearAllSessions, authToken } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
+import { PasswordInput, isPasswordValid } from "../components/PasswordInput";
+import { useSubmit } from "../hooks/useSubmit";
+import LoadingButton from "../components/LoadingButton";
 import "./Login.css";
 
 /**
@@ -30,6 +33,7 @@ function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({ email: "", password: "", form: "" });
+  const { submitting, run } = useSubmit();
 
   // Display URL message (e.g. from logout redirect) as error notification
   useEffect(() => {
@@ -69,9 +73,7 @@ function Login() {
 
     setFieldErrors({ email: "", password: "", form: "" });
 
-    try {
-      setLoading(true);
-
+    await run(async () => {
       const res = await fetch(`${API_URL}/login`, {
         method: "POST",
         headers: {
@@ -121,12 +123,7 @@ function Login() {
       } else {
         setFieldErrors({ email: "", password: "", form: data.message || "Incorrect email or password. Please try again." });
       }
-    } catch (error) {
-      console.log(error);
-      setFieldErrors({ email: "", password: "", form: error.message || "Something went wrong. Please try again." });
-    } finally {
-      setLoading(false);
-    }
+    });
   };
 
   /**
@@ -155,8 +152,8 @@ function Login() {
       return;
     }
 
-    if (newPassword.length < 6) {
-      notify.error("Password must be at least 6 characters long.");
+    if (!isPasswordValid(newPassword)) {
+      notify.error("Password does not meet all requirements.");
       return;
     }
 
@@ -227,24 +224,32 @@ function Login() {
               This is your first login. Please change your password to continue.
             </p>
 
-            <input
-              type="password"
-              placeholder="Enter New Password"
+            <PasswordInput
+              id="fp-new-password"
+              name="newPassword"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Enter New Password"
+              label="New Password"
+              showStrength={true}
+              showRules={true}
             />
 
-            <input
-              type="password"
-              placeholder="Confirm New Password"
+            <PasswordInput
+              id="fp-confirm-password"
+              name="confirmPassword"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Confirm New Password"
+              label="Confirm New Password"
+              showStrength={false}
+              showRules={false}
             />
 
             <div className="button-area">
               <button
                 onClick={handleFirstTimePasswordChange}
-                disabled={changingPassword}
+                disabled={changingPassword || !isPasswordValid(newPassword) || newPassword !== confirmPassword}
               >
                 {changingPassword ? "Changing..." : "Change Password & Login"}
               </button>
@@ -304,9 +309,9 @@ function Login() {
             </div>
 
             <div className="button-area">
-              <button onClick={handleLogin} disabled={loading}>
-                {loading ? "Loading..." : "Login"}
-              </button>
+              <LoadingButton onClick={handleLogin} loading={submitting}>
+                Login
+              </LoadingButton>
             </div>
           </div>
         </div>

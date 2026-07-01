@@ -11,9 +11,11 @@ import { authToken, getUser } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
+import LoadingButton from "./LoadingButton";
 import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
 import { notify } from "../utils/notify";
+import { useSubmit } from "../hooks/useSubmit";
 import "./layout/CreateTaskModal.css";
 
 /**
@@ -44,7 +46,7 @@ export default function EditTaskModal({ task, onClose }) {
   const [existingFiles, setExistingFiles] = useState(task.files || []);
   const [links, setLinks] = useState([]);
   const [linkInput, setLinkInput] = useState("");
-  const [loading, setLoading] = useState(false);
+  const { submitting, run } = useSubmit();
   const fileInputRef = useRef(null);
   const dropRef = useRef(null);
 
@@ -176,38 +178,37 @@ export default function EditTaskModal({ task, onClose }) {
    */
   const handleSubmit = async (e) => {
     if (e?.preventDefault) e.preventDefault();
-    setLoading(true);
-    try {
-      const body = {
-        ...form,
-        start_date: toUTCIso(form.start_date),
-        end_date: toUTCIso(form.end_date),
-        assigned_to: selectedAssigneeIds,
-      };
-      if (deliverables.length > 0) {
-        body.deliverables = deliverables.map((d) => ({ title: d.title, due_date: d.due_date || null }));
+    await run(async () => {
+      try {
+        const body = {
+          ...form,
+          start_date: toUTCIso(form.start_date),
+          end_date: toUTCIso(form.end_date),
+          assigned_to: selectedAssigneeIds,
+        };
+        if (deliverables.length > 0) {
+          body.deliverables = deliverables.map((d) => ({ title: d.title, due_date: d.due_date || null }));
+        }
+        const res = await fetch(`${API_URL}/tasks/${task.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: `Bearer ${authToken()}`,
+          },
+          body: JSON.stringify(body),
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Failed to update task");
+        await uploadAttachments();
+        publish('task:updated', data.task || data);
+        publish('data:changed', { type: 'task', action: 'updated' });
+        onClose(true);
+      } catch (err) {
+        notify.error(err.message);
       }
-      const res = await fetch(`${API_URL}/tasks/${task.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${authToken()}`,
-        },
-        body: JSON.stringify(body),
-        _notifHandled: true,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to update task");
-      await uploadAttachments();
-      publish('task:updated', data.task || data);
-      publish('data:changed', { type: 'task', action: 'updated' });
-      onClose(true);
-    } catch (err) {
-      notify.error(err.message);
-    } finally {
-      setLoading(false);
-    }
+    });
   };
 
   return (
@@ -497,10 +498,10 @@ export default function EditTaskModal({ task, onClose }) {
 
         {/* FOOTER */}
         <div className="task-footer">
-          <button type="button" className="task-cancel-btn" onClick={() => onClose(false)} disabled={loading}>Cancel</button>
-          <button type="submit" className="task-create-btn" onClick={handleSubmit} disabled={loading}>
-            {loading ? "Saving..." : "Save Changes"}
-          </button>
+          <button type="button" className="task-cancel-btn" onClick={() => onClose(false)} disabled={submitting}>Cancel</button>
+          <LoadingButton className="task-create-btn" onClick={handleSubmit} loading={submitting}>
+            Save Changes
+          </LoadingButton>
         </div>
       </div>
     </div>

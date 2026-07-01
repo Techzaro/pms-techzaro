@@ -11,6 +11,8 @@ import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { notify } from "../utils/notify";
+import { useSubmit } from "../hooks/useSubmit";
+import LoadingButton from "./LoadingButton";
 import "./ReopenDialog.css";
 import { toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
 
@@ -28,7 +30,7 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
   const [instructions, setInstructions] = useState("");
   const [newDeadline, setNewDeadline] = useState("");
   const [file, setFile] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { submitting, run } = useSubmit();
   const fileInputRef = useRef(null);
 
   // Lock body scroll when dialog is open and reset form state
@@ -51,34 +53,33 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
       notify.error("Please provide a comment or instructions.");
       return;
     }
-    setSubmitting(true);
-    try {
-      const token = authToken();
-      const formData = new FormData();
-      if (comment.trim()) formData.append("comment", comment.trim());
-      if (instructions.trim()) formData.append("instructions", instructions.trim());
-      if (newDeadline) formData.append("new_deadline", toUTCIso(newDeadline));
-      if (file) formData.append("file", file);
+    await run(async () => {
+      try {
+        const token = authToken();
+        const formData = new FormData();
+        if (comment.trim()) formData.append("comment", comment.trim());
+        if (instructions.trim()) formData.append("instructions", instructions.trim());
+        if (newDeadline) formData.append("new_deadline", toUTCIso(newDeadline));
+        if (file) formData.append("file", file);
 
-      const res = await fetch(`${API_URL}/tasks/${task.id}/reopen`, {
-        method: "POST",
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: formData,
-        _notifHandled: true,
-      });
+        const res = await fetch(`${API_URL}/tasks/${task.id}/reopen`, {
+          method: "POST",
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: formData,
+          _notifHandled: true,
+        });
 
-      const data = await res.json();
-      if (res.ok) {
-        onReopenSuccess(data.task);
-        onClose();
-      } else {
-        notify.error(data.message || "Failed to reopen task.");
+        const data = await res.json();
+        if (res.ok) {
+          onReopenSuccess(data.task);
+          onClose();
+        } else {
+          notify.error(data.message || "Failed to reopen task.");
+        }
+      } catch {
+        notify.error("An error occurred. Please try again.");
       }
-    } catch {
-      notify.error("An error occurred. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
+    });
   };
 
   if (!isOpen || !task) return null;
@@ -153,9 +154,9 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
 
         <div className="rd-footer">
           <button className="rd-cancel-btn" onClick={onClose} disabled={submitting}>Cancel</button>
-          <button className="rd-submit-btn" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Processing..." : "Reject & Reopen"}
-          </button>
+          <LoadingButton className="rd-submit-btn" onClick={handleSubmit} loading={submitting}>
+            Reject & Reopen
+          </LoadingButton>
         </div>
       </div>
     </div>,

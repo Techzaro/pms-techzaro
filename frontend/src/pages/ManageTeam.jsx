@@ -14,8 +14,8 @@
  *
  * Access restricted to admin and manager roles.
  */
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState, useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Crown } from "lucide-react";
 import {
   MdAdd,
@@ -37,6 +37,8 @@ import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import API_URL from "../config/api";
 import Pagination from "../components/Pagination";
 import { useNotification } from "../context/NotificationContext";
+import { useSubmit } from "../hooks/useSubmit";
+import LoadingButton from "../components/LoadingButton";
 import "./ManageTeam.css";
 
 /** Color palette for user avatar backgrounds */
@@ -78,6 +80,7 @@ function getAvatarColor(name) {
  */
 function ManageTeam() {
   const notify = useNotification();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [users, setUsers] = useState([]);
   const [teams, setTeams] = useState([]);
@@ -86,6 +89,7 @@ function ManageTeam() {
   const [searchQuery, setSearchQuery] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
   const [sortOption, setSortOption] = useState("newest");
+  const [selectedTeamFilter, setSelectedTeamFilter] = useState(searchParams.get("selectedTeam") || "");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [addMemberTeamId, setAddMemberTeamId] = useState(null);
@@ -110,6 +114,7 @@ function ManageTeam() {
   const ITEMS_PER_PAGE = 10;
 
   const navigate = useNavigate();
+  const { submitting, run } = useSubmit();
 
   // ✅ Define fetchUsers first
   // Fetch all users for member selection dropdowns
@@ -165,6 +170,14 @@ function ManageTeam() {
   // Auto-refresh teams when data changes elsewhere in the app
   useRefreshOnEvent(["data:changed"], fetchTeams);
 
+  // Sync selectedTeam from URL search params
+  useEffect(() => {
+    const teamId = searchParams.get("selectedTeam");
+    if (teamId) {
+      setSelectedTeamFilter(teamId);
+    }
+  }, [searchParams]);
+
   // ... rest of the functions (handleSetLeader, handleRemoveMember, etc.)
   useRefreshOnEvent(["data:changed"], fetchTeams);
 
@@ -186,7 +199,7 @@ function ManageTeam() {
     const { teamId, memberId } = leaderConfirmData;
     setLeaderConfirmOpen(false);
     setLeaderConfirmData({ teamId: null, memberId: null, memberName: "" });
-    try {
+    await run(async () => {
       const token = authToken();
       const response = await fetch(`${API_URL}/teams/${teamId}/leader`, {
         method: "PUT",
@@ -202,10 +215,7 @@ function ManageTeam() {
       if (!response.ok) throw new Error(data.message || "Could not update team leader.");
       await fetchTeams();
       notify.success("New Leader Appointed!");
-    } catch (error) {
-      console.error(error);
-      notify.error(error.message || "Failed to set team leader.");
-    }
+    });
   };
 
   // Remove a member from a team after confirmation
@@ -220,7 +230,7 @@ function ManageTeam() {
     const { teamId, memberId } = removeMemberData;
     setRemoveMemberConfirmOpen(false);
     setRemoveMemberData({ teamId: null, memberId: null, memberName: "" });
-    try {
+    await run(async () => {
       const token = authToken();
       const response = await fetch(`${API_URL}/teams/${teamId}/members/${memberId}`, {
         method: "DELETE",
@@ -231,10 +241,7 @@ function ManageTeam() {
       if (!response.ok) throw new Error(data.message || "Could not remove member.");
       await fetchTeams();
       notify.success("Member removed from team.");
-    } catch (error) {
-      console.error(error);
-      notify.error(error.message || "Failed to remove member.");
-    }
+    });
   };
 
   // Delete a team after confirmation
@@ -248,7 +255,7 @@ function ManageTeam() {
     const teamId = deleteTeamId;
     setDeleteTeamConfirmOpen(false);
     setDeleteTeamId(null);
-    try {
+    await run(async () => {
       const token = authToken();
       const response = await fetch(`${API_URL}/teams/${teamId}`, {
         method: "DELETE",
@@ -259,10 +266,7 @@ function ManageTeam() {
       if (!response.ok) throw new Error(data.message || "Could not delete team.");
       await fetchTeams();
       notify.success("Team deleted successfully.");
-    } catch (error) {
-      console.error(error);
-      notify.error(error.message || "Failed to delete team.");
-    }
+    });
   };
 
   const handleProjectForTeam = (teamId) => {
@@ -334,7 +338,7 @@ function ManageTeam() {
   // Create a new team with name, description, and selected members
   const handleCreateTeam = async (e) => {
     e.preventDefault();
-    try {
+    await run(async () => {
       const token = authToken();
       const response = await fetch(`${API_URL}/teams`, {
         method: "POST",
@@ -351,10 +355,7 @@ function ManageTeam() {
       notify.success("Team created successfully");
       fetchTeams();
       closeModal();
-    } catch (error) {
-      console.error(error);
-      notify.error(error.message || "Failed to create team");
-    }
+    });
   };
 
   // Add selected users to an existing team
@@ -364,7 +365,7 @@ function ManageTeam() {
       notify.error("Please select at least one user.");
       return;
     }
-    try {
+    await run(async () => {
       const token = authToken();
       const response = await fetch(`${API_URL}/teams/${addMemberTeamId}/members`, {
         method: "POST",
@@ -381,10 +382,7 @@ function ManageTeam() {
       notify.success(data.message || "Members added successfully");
       fetchTeams();
       closeModal();
-    } catch (error) {
-      console.error(error);
-      notify.error(error.message || "Failed to add members");
-    }
+    });
   };
 
   const openEditTeamModal = (team) => {
@@ -401,7 +399,7 @@ function ManageTeam() {
   // Update an existing team's name, description, and member list
   const handleUpdateTeam = async (e) => {
     e.preventDefault();
-    try {
+    await run(async () => {
       const token = authToken();
       const response = await fetch(`${API_URL}/teams/${editTeamId}`, {
         method: "PUT",
@@ -418,10 +416,7 @@ function ManageTeam() {
       notify.success("Team updated successfully");
       fetchTeams();
       closeModal();
-    } catch (error) {
-      console.error(error);
-      notify.error(error.message || "Failed to update team");
-    }
+    });
   };
 
   // Compute available users for adding to a team (exclude current members)
@@ -432,9 +427,13 @@ function ManageTeam() {
     (u) => !currentTeamMembers.some((m) => m.id === u.id)
   );
 
-  // Apply search filter and sorting to teams list
+  // Apply search filter, team filter, and sorting to teams list
   const filteredTeams = teams
-    .filter((t) => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .filter((t) => {
+      const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesTeam = !selectedTeamFilter || String(t.id) === String(selectedTeamFilter);
+      return matchesSearch && matchesTeam;
+    })
     .sort((a, b) => {
       if (sortOption === "newest") return new Date(b.created_at) - new Date(a.created_at);
       if (sortOption === "oldest") return new Date(a.created_at) - new Date(b.created_at);
@@ -447,9 +446,18 @@ function ManageTeam() {
   const totalTeamPages = Math.ceil(filteredTeams.length / ITEMS_PER_PAGE);
   const paginatedTeams = filteredTeams.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
-  const breadcrumbs = [
-    { label: "Teams" },
-  ];
+  const selectedTeamName = useMemo(() => {
+    if (!selectedTeamFilter) return "";
+    const found = teams.find((t) => String(t.id) === String(selectedTeamFilter));
+    return found?.name || "";
+  }, [selectedTeamFilter, teams]);
+
+  const breadcrumbs = selectedTeamName
+    ? [
+        { label: "Teams", onClick: () => { setSelectedTeamFilter(""); setSearchParams({}); } },
+        { label: selectedTeamName },
+      ]
+    : [{ label: "Teams" }];
 
   return (
     <>
@@ -479,6 +487,24 @@ function ManageTeam() {
               onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
             />
           </div>
+          {selectedTeamFilter && (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <button
+                onClick={() => { setSelectedTeamFilter(""); setSearchParams({}); setPage(1); }}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: "6px",
+                  padding: "6px 14px", borderRadius: "8px", border: "1px solid #e5e7eb",
+                  background: "#f9fafb", color: "#374151", fontSize: "13px", fontWeight: 500,
+                  cursor: "pointer",
+                }}
+              >
+                All Teams
+              </button>
+              <span style={{ fontSize: "13px", color: "#6b7280" }}>
+                Filtered: <strong style={{ color: "#111827" }}>{selectedTeamName}</strong>
+              </span>
+            </div>
+          )}
           <select className="reports-filter" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
             <option value="">All Time</option>
             <option value="7">Last 7 Days</option>
@@ -718,9 +744,9 @@ function ManageTeam() {
                     <button type="button" className="mt-btn-cancel" onClick={closeModal}>
                       Cancel
                     </button>
-                    <button type="submit" className="mt-btn-primary" disabled={selectedUserIds.length === 0}>
+                    <LoadingButton type="submit" className="mt-btn-primary" loading={submitting} disabled={selectedUserIds.length === 0}>
                       Add Member{selectedUserIds.length > 1 ? "s" : ""}
-                    </button>
+                    </LoadingButton>
                   </div>
                 </form>
               ) : (
@@ -842,9 +868,9 @@ function ManageTeam() {
                     <button type="button" className="mt-btn-cancel" onClick={closeModal}>
                       Cancel
                     </button>
-                    <button type="submit" className="mt-btn-primary">
+                    <LoadingButton type="submit" className="mt-btn-primary" loading={submitting}>
                       {editTeamId ? "Update Team" : "Create Team"}
-                    </button>
+                    </LoadingButton>
                   </div>
                 </form>
               )}

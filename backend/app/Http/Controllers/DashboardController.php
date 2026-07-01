@@ -345,6 +345,178 @@ class DashboardController extends Controller
     // ──────────────────────────────────────────────────────────────────
 
     /**
+     * Retrieve past activity feed (all days before today) for the authenticated user.
+     *
+     * Queries the same four tables as today's feed (TaskWorkflowEvent, ProjectWorkflowEvent,
+     * DeliverableWorkflowEvent, Activity) but for all dates strictly before today.
+     * Only activities where the current user is the actor are included.
+     *
+     * @param  \App\Models\User  $user  The authenticated user.
+     * @param  string  $role  The user's role.
+     * @param  array  $projectIds  IDs of projects visible to the user.
+     * @param  int  $limit  Maximum total number of activities to return.
+     * @return array  Activities grouped by date (Y-m-d), sorted descending by date then time.
+     */
+    public function getPastActivityFeed(User $user, string $role, array $projectIds, int $limit = 100): array
+    {
+        $isAdminOrManager = in_array($role, ['admin', 'manager']);
+        $yesterday = today()->subDay();
+        $activities = [];
+
+        $myTaskIds = DB::table('task_user')->where('user_id', $user->id)->pluck('task_id')->toArray();
+
+        // ── TASKS (past) ──
+        $taskEvents = TaskWorkflowEvent::with(['task:id,title,assigned_by,assigned_to', 'user:id,name,role'])
+            ->whereDate('created_at', '<=', $yesterday)
+            ->whereIn('action', ['created', 'assigned', 'submitted', 'resubmitted', 'approved', 'rejected', 'reopened', 'completed', 'field_changed', 'status_updated'])
+            ->latest()
+            ->limit($limit)->get();
+
+        $taskIdsNeedingSub = $taskEvents->filter(fn($e) => in_array($e->action, ['approved', 'rejected', 'reopened']))->pluck('task.id')->filter()->unique()->toArray();
+        $taskSubmitters = $this->loadTaskSubmitters($taskIdsNeedingSub);
+
+        foreach ($taskEvents as $event) {
+            $task = $event->task;
+            if (!$task || !$event->user) continue;
+            $isActor = (int) $event->user->id === (int) $user->id;
+            if (!$isActor) continue;
+            $isRelated = $this->isUserRelatedToTask($user, $task, $myTaskIds, $isAdminOrManager);
+            if (!$isRelated) continue;
+            $activities[] = $this->formatActivity('task', $event->id, $task->id, $task->title, $event->action, $event->user, true, $taskSubmitters[$task->id] ?? null, $event->comment ?? null, $event->created_at);
+        }
+
+        // ── PROJECTS (past) ──
+        $projectEvents = ProjectWorkflowEvent::with(['project:id,title,created_by,assigned_users', 'user:id,name,role'])
+            ->whereDate('created_at', '<=', $yesterday)
+            ->whereIn('action', ['created', 'assigned', 'submitted', 'resubmitted', 'approved', 'rejected', 'reopened', 'completed', 'field_changed', 'status_updated'])
+            ->latest()
+            ->limit($limit)->get();
+
+        $projectIdsNeedingSub = $projectEvents->filter(fn($e) => in_array($e->action, ['approved', 'rejected', 'reopened']))->pluck('project.id')->filter()->unique()->toArray();
+        $projectSubmitters = $this->loadProjectSubmitters($projectIdsNeedingSub);
+
+        foreach ($projectEvents as $event) {
+            $project = $event->project;
+            if (!$project || !$event->user) continue;
+            $isActor = (int) $event->user->id === (int) $user->id;
+            if (!$isActor) continue;
+            $isRelated = $this->isUserRelatedToProject($user, $project, $isAdminOrManager);
+            if (!$isRelated) continue;
+            $activities[] = $this->formatActivity('project', $event->id, $project->id, $project->title, $event->action, $event->user, true, $projectSubmitters[$project->id] ?? null, $event->comment ?? null, $event->created_at);
+        }
+
+        // ── DELIVERABLES (past) ──
+        $dlvEvents = DeliverableWorkflowEvent::with(['deliverable:id,title,created_by,assigned_to', 'user:id,name,role'])
+            ->whereDate('created_at', '<=', $yesterday)
+            ->whereIn('event_type', ['created', 'assigned', 'submitted', 'resubmitted', 'approved', 'rejected', 'reopened', 'completed', 'status_updated', 'field_changed', 'approval', 'rework'])
+            ->latest()
+            ->limit($limit)->get();
+
+        $dlvIdsNeedingSub = $dlvEvents->pluck('deliverable.id')->filter()->unique()->toArray();
+        $dlvSubmitters = $this->loadDeliverableSubmitters($dlvIdsNeedingSub);
+
+        foreach ($dlvEvents as $event) {
+            $dlv = $event->deliverable;
+            if (!$dlv || !$event->user) continue;
+            $isActor = (int) $event->user->id === (int) $user->id;
+            if (!$isActor) continue;
+            $isRelated = $this->isUserRelatedToDeliverable($user, $dlv);
+            if (!$isRelated) continue;
+            $action = $event->event_type === 'approval' ? 'approved' : $event->event_type;
+            $activities[] = $this->formatActivity('deliverable', $event->id, $dlv->id, $dlv->title, $action, $event->user, true, $dlvSubmitters[$dlv->id] ?? null, $event->comment ?? null, $event->created_at);
+        }
+
+        // ── USER MANAGEMENT (past, from activities table) ──
+        $userActivities = Activity::where('related_module', 'user')
+            ->whereDate('created_at', '<=', $yesterday)
+            ->whereIn('action', ['created', 'updated', 'resigned'])
+            ->latest()
+            ->limit($limit)->get();
+
+        foreach ($userActivities as $activity) {
+            if (!$activity->user) continue;
+            $isActor = (int) $activity->user_id === (int) $user->id;
+            if (!$isActor) continue;
+            $activities[] = [
+                'id' => "user_activity_{$activity->id}",
+                'entity_id' => $activity->related_id,
+                'module' => 'user',
+                'action' => $activity->action,
+                'title' => $activity->entity_name ?? 'User',
+                'actor_name' => $activity->user->name,
+                'actor_role' => $activity->user->role,
+                'is_actor' => true,
+                'comment' => null,
+                'created_at' => $activity->created_at->toIso8601ZuluString(),
+            ];
+        }
+
+        // ── TEAM MANAGEMENT (past, from activities table) ──
+        $teamActivities = Activity::where('related_module', 'team')
+            ->whereDate('created_at', '<=', $yesterday)
+            ->whereIn('action', ['created', 'updated', 'deleted', 'leader_changed', 'member_added', 'member_removed'])
+            ->latest()
+            ->limit($limit)->get();
+
+        foreach ($teamActivities as $activity) {
+            if (!$activity->user) continue;
+            $isActor = (int) $activity->user_id === (int) $user->id;
+            if (!$isActor) continue;
+            $activities[] = [
+                'id' => "team_activity_{$activity->id}",
+                'entity_id' => $activity->related_id,
+                'module' => 'team',
+                'action' => $activity->action,
+                'title' => $activity->entity_name ?? 'Team',
+                'actor_name' => $activity->user->name,
+                'actor_role' => $activity->user->role,
+                'is_actor' => true,
+                'comment' => null,
+                'description' => $activity->description,
+                'created_at' => $activity->created_at->toIso8601ZuluString(),
+            ];
+        }
+
+        // ── DELIVERABLE SUBMISSIONS (past) ──
+        $dlvSubmissions = DeliverableSubmission::with(['deliverable:id,title,created_by,assigned_to', 'submittedBy:id,name,role'])
+            ->whereDate('created_at', '<=', $yesterday)->latest()->limit($limit)->get();
+
+        foreach ($dlvSubmissions as $sub) {
+            $dlv = $sub->deliverable;
+            if (!$dlv || !$sub->submittedBy) continue;
+            $isActor = (int) $sub->submittedBy->id === (int) $user->id;
+            if (!$isActor) continue;
+            $isRelated = $this->isUserRelatedToDeliverable($user, $dlv);
+            if (!$isRelated) continue;
+            $activities[] = $this->formatActivity('deliverable', "sub_{$sub->id}", $dlv->id, $dlv->title, 'submitted', $sub->submittedBy, true, null, null, $sub->created_at);
+        }
+
+        // Sort all activities newest-first
+        usort($activities, fn ($a, $b) => strcmp($b['created_at'], $a['created_at']));
+        $activities = array_slice($activities, 0, $limit);
+
+        // Group by date (Y-m-d), descending
+        $grouped = [];
+        foreach ($activities as $item) {
+            $dateKey = \Carbon\Carbon::parse($item['created_at'])->format('Y-m-d');
+            $grouped[$dateKey][] = $item;
+        }
+        krsort($grouped);
+
+        // Format as [{date, label, activities: [...]}]
+        $result = [];
+        foreach ($grouped as $date => $items) {
+            $result[] = [
+                'date' => $date,
+                'label' => \Carbon\Carbon::parse($date)->format('d M Y'),
+                'activities' => $items,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
      * Load today's activity feed and notifications in a single merged pass.
      *
      * Loads all workflow events (tasks, projects, deliverables) once and splits them
@@ -441,6 +613,31 @@ class DashboardController extends Controller
                 'actor_role' => $activity->user->role,
                 'is_actor' => $isActor,
                 'comment' => null,
+                'created_at' => $activity->created_at->toIso8601ZuluString(),
+            ];
+            if ($isActor) { $activities[] = $item; }
+        }
+
+        // ── TEAM MANAGEMENT (from activities table) ──
+        $teamActivities = Activity::where('related_module', 'team')
+            ->whereDate('created_at', $today)
+            ->whereIn('action', ['created', 'updated', 'deleted', 'leader_changed', 'member_added', 'member_removed'])
+            ->limit(50)->get();
+
+        foreach ($teamActivities as $activity) {
+            if (!$activity->user) continue;
+            $isActor = (int) $activity->user_id === (int) $user->id;
+            $item = [
+                'id' => "team_activity_{$activity->id}",
+                'entity_id' => $activity->related_id,
+                'module' => 'team',
+                'action' => $activity->action,
+                'title' => $activity->entity_name ?? 'Team',
+                'actor_name' => $activity->user->name,
+                'actor_role' => $activity->user->role,
+                'is_actor' => $isActor,
+                'comment' => null,
+                'description' => $activity->description,
                 'created_at' => $activity->created_at->toIso8601ZuluString(),
             ];
             if ($isActor) { $activities[] = $item; }
@@ -637,7 +834,7 @@ class DashboardController extends Controller
      * @param  \App\Models\User  $user  The authenticated user.
      * @return array  Array of visible project IDs.
      */
-    private function getUserProjectIds(User $user): array
+    public function getUserProjectIds(User $user): array
     {
         if (in_array($user->role, ['admin', 'manager'])) {
             return Project::pluck('id')->toArray();

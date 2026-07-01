@@ -91,13 +91,19 @@ function Sidebar() {
   /** Determine the parent task list (from URL state or query param) for active-state highlighting. */
   const getTaskFrom = () => {
     if (location.state?.from) return location.state.from;
-    return new URLSearchParams(location.search).get("from");
+    const queryFrom = new URLSearchParams(location.search).get("from");
+    if (queryFrom) return queryFrom;
+    // Default to "tasks" (Assigned To You) when no from state is available
+    return "tasks";
   };
   const isDeliverableDetailPage = location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`);
   /** Determine the parent deliverable list for active-state highlighting. */
   const getDeliverableFrom = () => {
     if (location.state?.from) return location.state.from;
-    return new URLSearchParams(location.search).get("from");
+    const queryFrom = new URLSearchParams(location.search).get("from");
+    if (queryFrom) return queryFrom;
+    // Default to "deliveries" (Assigned To You) when no from state is available
+    return "deliveries";
   };
 
   // Fetch user data from API on mount
@@ -373,9 +379,21 @@ function Sidebar() {
             </Link>
           )}
 
+          {/* Member/Team Lead – read-only Team link */}
+          {(user.role === "member" || user.role === "team_lead" || user.role === "teamlead") && (
+            <Link
+              to={rolePath("my-team")}
+              className={`sidebar-link ${isActive("my-team") ? "active" : ""}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MdPeople />
+              <span>Team</span>
+            </Link>
+          )}
+
           {/* Reports – dropdown for team_lead, simple link for others */}
           {(user.role === "team_lead" || user.role === "teamlead") ? (
-            <div className={`sidebar-link ${isActive("reports") || isActive("team-members-report") || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/me`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+            <div className={`sidebar-link ${isActive("reports") || isActive("team-members-report") || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
               <div
                 onClick={toggleReports}
                 style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}

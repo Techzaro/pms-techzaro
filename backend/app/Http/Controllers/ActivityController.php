@@ -36,6 +36,10 @@ class ActivityController extends Controller
     /**
      * Get past activities for the logged-in user, grouped by date.
      *
+     * Uses DashboardController::getPastActivityFeed() to query all four workflow
+     * tables (tasks, projects, deliverables, user management) for past dates,
+     * returning the same rich data format as today's activity feed.
+     *
      * @param  \Illuminate\Http\Request  $request  The incoming HTTP request with optional 'limit' parameter.
      * @return \Illuminate\Http\JsonResponse  JSON response with activities grouped by date.
      */
@@ -43,25 +47,10 @@ class ActivityController extends Controller
     {
         $user = $request->user();
         $limit = $request->input('limit', 100);
-        $grouped = $this->activityService->getPastActivities($user->id, $limit);
 
-        $result = [];
-        foreach ($grouped as $date => $activities) {
-            $result[] = [
-                'date' => $date,
-                'label' => \Carbon\Carbon::parse($date)->format('d M Y'),
-                'activities' => $activities->map(fn ($a) => [
-                    'id' => $a->id,
-                    'activity_type' => $a->activity_type,
-                    'action' => $a->action,
-                    'related_module' => $a->related_module,
-                    'related_id' => $a->related_id,
-                    'entity_name' => $a->entity_name,
-                    'description' => $a->description,
-                    'created_at' => $a->created_at->toIso8601String(),
-                ])->toArray(),
-            ];
-        }
+        $dashboard = app(\App\Http\Controllers\DashboardController::class);
+        $projectIds = $dashboard->getUserProjectIds($user);
+        $result = $dashboard->getPastActivityFeed($user, $user->role, $projectIds, $limit);
 
         return response()->json([
             'data' => $result,

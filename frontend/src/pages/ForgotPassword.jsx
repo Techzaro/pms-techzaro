@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import API_URL from "../config/api";
+import { useSubmit } from "../hooks/useSubmit";
+import LoadingButton from "../components/LoadingButton";
 import "./ForgotPassword.css";
 
 function ForgotPassword() {
@@ -8,6 +10,7 @@ function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [fieldError, setFieldError] = useState("");
+  const { submitting, run } = useSubmit();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,8 +27,7 @@ function ForgotPassword() {
       return;
     }
 
-    try {
-      setLoading(true);
+    await run(async () => {
       const res = await fetch(`${API_URL}/forgot-password`, {
         method: "POST",
         headers: {
@@ -44,11 +46,7 @@ function ForgotPassword() {
       }
 
       setSent(true);
-    } catch (error) {
-      setFieldError(error.message || "Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    });
   };
 
   if (sent) {
@@ -161,8 +159,8 @@ function ForgotPassword() {
               </div>
             </div>
 
-            <button type="submit" className="forgot-submit-btn" disabled={loading}>
-              {loading ? (
+            <LoadingButton type="submit" className="forgot-submit-btn" loading={submitting}>
+              {submitting ? (
                 <>
                   <span className="forgot-spinner"></span>
                   Sending...
@@ -176,7 +174,7 @@ function ForgotPassword() {
                   Send Reset Link
                 </>
               )}
-            </button>
+            </LoadingButton>
 
             <p className="forgot-note">
               We will send you an email with instructions to reset your password.

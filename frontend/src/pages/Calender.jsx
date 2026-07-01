@@ -18,6 +18,7 @@ import "../pages/Calender.css";
 import "../components/Event.css";
 import { ChevronLeft, ChevronRight, Search, Plus } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import Event from "../components/Event";
 import EventInfoPopup from "../components/EventInfoPopup";
 import ItemDetailPopup from "../components/ItemDetailPopup";
@@ -305,6 +306,7 @@ function Calender() {
 
   return (
     <DashboardLayout hideRightSidebar={true}>
+      <Breadcrumb items={[{ label: "Calendar" }]} />
       <div className="calender-layout">
 
         <div className="calendar-main">

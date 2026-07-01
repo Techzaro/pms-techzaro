@@ -11,9 +11,11 @@ import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
+import LoadingButton from "./LoadingButton";
 import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
 import { notify } from "../utils/notify";
+import { useSubmit } from "../hooks/useSubmit";
 import "./layout/CreateProjectModal.css";
 
 const PRESET_PHASES = [
@@ -32,6 +34,7 @@ const EditProjectModal = ({ project, onClose }) => {
   useEscapeKey(true, onClose);
 
   const [loading, setLoading] = useState(false);
+  const { submitting, run } = useSubmit();
   const [formErrors, setFormErrors] = useState({});
   const [teams, setTeams] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
@@ -285,62 +288,60 @@ const EditProjectModal = ({ project, onClose }) => {
 
     if (!validateForm()) return;
 
-    setLoading(true);
+    await run(async () => {
+      try {
+        const token = authToken();
 
-    try {
-      const token = authToken();
+        // Use the last milestone's due date as the project end date
+        const lastMilestone = milestones.length > 0 ? milestones[milestones.length - 1] : null;
+        const computedEndDate = lastMilestone ? lastMilestone.due_date : null;
 
-      // Use the last milestone's due date as the project end date
-      const lastMilestone = milestones.length > 0 ? milestones[milestones.length - 1] : null;
-      const computedEndDate = lastMilestone ? lastMilestone.due_date : null;
+        // Build the update payload from form state
+        const body = {
+          title: form.title.trim(),
+          description: form.description || null,
+          category: form.category || null,
+          goals_checklist: goalsList.length > 0 ? goalsList : [],
+          team_id: form.team_id ? parseInt(form.team_id) : null,
+          assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
+          priority: form.priority,
+          end_date: computedEndDate,
+          client_name: form.client_name || null,
+          budget: form.budget ? parseFloat(form.budget) : null,
+          milestones: milestones.length > 0 ? milestones : [],
+          deliverables: deliverablesProj.length > 0 ? deliverablesProj.map(d => ({ title: d.title, due_date: d.due_date || null })) : undefined,
+        };
 
-      // Build the update payload from form state
-      const body = {
-        title: form.title.trim(),
-        description: form.description || null,
-        category: form.category || null,
-        goals_checklist: goalsList.length > 0 ? goalsList : [],
-        team_id: form.team_id ? parseInt(form.team_id) : null,
-        assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
-        priority: form.priority,
-        end_date: computedEndDate,
-        client_name: form.client_name || null,
-        budget: form.budget ? parseFloat(form.budget) : null,
-        milestones: milestones.length > 0 ? milestones : [],
-        deliverables: deliverablesProj.length > 0 ? deliverablesProj.map(d => ({ title: d.title, due_date: d.due_date || null })) : undefined,
-      };
+        const response = await fetch(`${API_URL}/projects/${project.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
+          _notifHandled: true,
+        });
 
-      const response = await fetch(`${API_URL}/projects/${project.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-        _notifHandled: true,
-      });
+        const data = await response.json();
 
-      const data = await response.json();
+        if (!response.ok) {
+          const msg = data.message || "Failed to update project";
+          const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
+          throw new Error(errors || msg);
+        }
 
-      if (!response.ok) {
-        const msg = data.message || "Failed to update project";
-        const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
-        throw new Error(errors || msg);
+        if (pendingFiles.length > 0 || links.length > 0) {
+          await uploadAttachments(project.id, token);
+        }
+
+        publish('project:updated', data.project || data);
+        publish('data:changed', { type: 'project', action: 'updated' });
+        onClose(true);
+      } catch (err) {
+        notify.error(err.message);
       }
-
-      if (pendingFiles.length > 0 || links.length > 0) {
-        await uploadAttachments(project.id, token);
-      }
-
-      publish('project:updated', data.project || data);
-      publish('data:changed', { type: 'project', action: 'updated' });
-      onClose(true);
-    } catch (err) {
-      notify.error(err.message);
-    } finally {
-      setLoading(false);
-    }
+    });
   };
 
   return (
@@ -736,10 +737,10 @@ const EditProjectModal = ({ project, onClose }) => {
 
         {/* FOOTER */}
         <div className="cp-footer">
-          <button className="cp-cancel-btn" onClick={() => onClose(false)} disabled={loading}>Cancel</button>
-          <button className="cp-create-btn" onClick={handleSubmit} disabled={loading}>
-            {loading ? "Saving..." : "Save Changes"}
-          </button>
+          <button className="cp-cancel-btn" onClick={() => onClose(false)} disabled={submitting}>Cancel</button>
+          <LoadingButton className="cp-create-btn" onClick={handleSubmit} loading={submitting}>
+            Save Changes
+          </LoadingButton>
         </div>
 
       </div>

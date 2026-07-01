@@ -97,6 +97,7 @@ class Notification extends Model
             'deliverable' => 'deliverable_notifications',
             'project' => 'project_notifications',
             'event' => 'event_notifications',
+            'team' => 'team_notifications',
         ];
         $typeField = $moduleField[$notification->related_module] ?? 'system_notifications';
 

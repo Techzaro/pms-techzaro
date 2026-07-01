@@ -33,6 +33,8 @@ import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
 import Pagination from "../components/Pagination";
+import { useSubmit } from "../hooks/useSubmit";
+import LoadingButton from "../components/LoadingButton";
 import "./ManageUsers.css";
 
 /** Predefined department options (includes __custom__ for custom input) */
@@ -108,6 +110,7 @@ function ManageUsers() {
   const [loading, setLoading] = useState(false);
   const [savingUserId, setSavingUserId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const { run } = useSubmit();
   const [addErrors, setAddErrors] = useState({});
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -366,7 +369,6 @@ function ManageUsers() {
     setIsAddModalOpen(false);
     setEditingUser(null);
     setAddErrors({});
-    setSubmitting(false);
     setNewUser({
       fullName: "",
       fatherName: "",
@@ -523,7 +525,7 @@ function ManageUsers() {
     setResignConfirmOpen(false);
     setResignUserId(null);
 
-    try {
+    await run(async () => {
       const res = await fetch(`${API_URL}/users/${userId}/resign`, {
         method: "PUT",
         headers: { Accept: "application/json", ...authHeaders() },
@@ -543,10 +545,7 @@ function ManageUsers() {
       );
       notify.success(data.message || "User resigned successfully.");
       publish('data:changed', { type: 'user', action: 'resigned' });
-    } catch (error) {
-      console.error(error);
-      notify.error(error.message || "Failed to resign user.");
-    }
+    });
   };
 
   const getInitials = (name) => {
@@ -725,8 +724,7 @@ function ManageUsers() {
       if (newUser[field]) formData.append(fileApiNames[i], newUser[field]);
     });
 
-    try {
-      setSubmitting(true);
+    await run(async () => {
       const token = authToken();
       const isEdit = !!editingUser;
       const url = isEdit ? `${API_URL}/users/${editingUser.id}` : `${API_URL}/users`;
@@ -763,7 +761,6 @@ function ManageUsers() {
           setAddErrors(mapped);
         }
         notify.error(data.message || (isEdit ? "Unable to update user" : "Unable to create user"));
-        setSubmitting(false);
         return;
       }
 
@@ -778,12 +775,7 @@ function ManageUsers() {
         publish('data:changed', { type: 'user', action: 'created' });
       }
       closeModal();
-    } catch (error) {
-      console.error(error);
-      notify.error(error.message || "Operation failed.");
-    } finally {
-      setSubmitting(false);
-    }
+    });
   };
 
   const breadcrumbs = [
@@ -1129,9 +1121,9 @@ function ManageUsers() {
                   <button type="button" className="secondary-button" onClick={closeModal}>
                     Cancel
                   </button>
-                  <button type="submit" className="primary-button" disabled={submitting}>
+                  <LoadingButton type="submit" className="primary-button" loading={submitting}>
                     {submitting ? "Saving..." : (editingUser ? "Update User" : "Create User")}
-                  </button>
+                  </LoadingButton>
                 </div>
               </form>
             </div>

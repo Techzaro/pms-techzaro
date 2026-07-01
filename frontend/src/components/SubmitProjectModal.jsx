@@ -13,7 +13,9 @@ import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { formatDateTimeShort } from "../utils/formatDateTime";
 import { notify } from "../utils/notify";
+import { useSubmit } from "../hooks/useSubmit";
 import SubmissionLinkSection from "./SubmissionLinkSection";
+import LoadingButton from "./LoadingButton";
 import "./SubmitDeliverableModal.css";
 import "./layout/CreateTaskModal.css";
 
@@ -30,7 +32,7 @@ function SubmitProjectModal({ isOpen, onClose, project, onSubmitSuccess }) {
   const [comment, setComment] = useState("");
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
-  const [submitting, setSubmitting] = useState(false);
+  const { submitting, run } = useSubmit();
 
   // Lock body scroll and reset form state when modal opens/closes
   useEffect(() => {
@@ -70,33 +72,32 @@ function SubmitProjectModal({ isOpen, onClose, project, onSubmitSuccess }) {
       notify.error("Please add a comment, attach files, or add links.");
       return;
     }
-    setSubmitting(true);
-    try {
-      const token = authToken();
-      const formData = new FormData();
-      if (comment.trim()) formData.append("comment", comment.trim());
-      files.forEach((f) => formData.append("files[]", f));
-      validLinks.forEach((l) => formData.append("links[]", l));
+    await run(async () => {
+      try {
+        const token = authToken();
+        const formData = new FormData();
+        if (comment.trim()) formData.append("comment", comment.trim());
+        files.forEach((f) => formData.append("files[]", f));
+        validLinks.forEach((l) => formData.append("links[]", l));
 
-      const res = await fetch(`${API_URL}/projects/${project.id}/submit`, {
-        method: "POST",
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: formData,
-        _notifHandled: true,
-      });
+        const res = await fetch(`${API_URL}/projects/${project.id}/submit`, {
+          method: "POST",
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: formData,
+          _notifHandled: true,
+        });
 
-      const data = await res.json();
-      if (res.ok) {
-        onSubmitSuccess(data.project);
-        onClose();
-      } else {
-        notify.error(data.message || "Failed to submit project.");
+        const data = await res.json();
+        if (res.ok) {
+          onSubmitSuccess(data.project);
+          onClose();
+        } else {
+          notify.error(data.message || "Failed to submit project.");
+        }
+      } catch {
+        notify.error("An error occurred. Please try again.");
       }
-    } catch {
-      notify.error("An error occurred. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
+    });
   };
 
   if (!isOpen || !project) return null;
@@ -182,9 +183,9 @@ function SubmitProjectModal({ isOpen, onClose, project, onSubmitSuccess }) {
 
         <div className="sd-footer">
           <button className="sd-cancel-btn" onClick={onClose} disabled={submitting}>Cancel</button>
-          <button className="sd-submit-btn" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Submitting..." : isResubmit ? "Resubmit Project" : "Submit Project"}
-          </button>
+          <LoadingButton className="sd-submit-btn" onClick={handleSubmit} loading={submitting}>
+            {isResubmit ? "Resubmit Project" : "Submit Project"}
+          </LoadingButton>
         </div>
       </div>
     </div>,

@@ -36,7 +36,26 @@
                         <td style="padding:20px 34px 0;">
                             <p style="color:#6b7280;font-size:14px;line-height:1.6;margin:0 0 6px;">Dear <strong style="color:#111827;">{{ $performerName }}</strong>,</p>
 
-                            <p style="color:#374151;font-size:14px;line-height:1.7;margin:16px 0 20px;">Your action has been completed successfully. This email confirms that the following operation was executed:</p>
+                            @php
+                                $actionMap = [
+                                    'Created' => 'You have successfully created',
+                                    'Created & Assigned' => 'You have successfully created and assigned',
+                                    'Updated' => 'You have successfully updated',
+                                    'Updated Visibility' => 'You have successfully updated visibility for',
+                                    'Deleted' => 'You have successfully deleted',
+                                    'Assigned' => 'You have successfully assigned',
+                                    'Submitted' => 'You have successfully submitted',
+                                    'Resubmitted' => 'You have successfully resubmitted',
+                                    'Approved' => 'You have successfully approved',
+                                    'Rejected' => 'You have successfully rejected',
+                                    'Reopened' => 'You have successfully reopened',
+                                    'Completed' => 'You have successfully completed',
+                                    'Cancelled' => 'You have successfully cancelled',
+                                ];
+                                $verb = $actionMap[$actionVerb] ?? 'You have successfully ' . strtolower($actionVerb);
+                            @endphp
+
+                            <p style="color:#374151;font-size:14px;line-height:1.7;margin:16px 0 20px;">{{ $verb }} {{ $entityType }}: <strong style="color:#111827;">{{ $entityName }}</strong></p>
 
                             <!-- Action Summary Card -->
                             <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;margin-bottom:20px;">
@@ -71,7 +90,7 @@
                                 </table>
                             @endif
 
-                            <p style="color:#374151;font-size:14px;line-height:1.7;margin:0 0 24px;">This email serves as a confirmation that your action was completed successfully.</p>
+                            <p style="color:#374151;font-size:14px;line-height:1.7;margin:0 0 24px;">This is a confirmation email from TechXaro PMS for the action you performed.</p>
 
                             @if ($loginUrl)
                                 <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">

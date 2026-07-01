@@ -1,10 +1,10 @@
 /**
  * ConfirmModal.jsx
  * Generic confirmation modal with an info icon, customizable colors, and danger mode.
- * Similar to ConfirmationDialog but with an icon and more styling options.
+ * Includes built-in double-click prevention: onConfirm is disabled while processing.
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import "./ConfirmModal.css";
@@ -13,7 +13,7 @@ import "./ConfirmModal.css";
  * A reusable confirmation modal with an info icon and customizable appearance.
  * @param {boolean} isOpen - Whether the modal is visible
  * @param {Function} onClose - Callback to close the modal
- * @param {Function} onConfirm - Callback when the user confirms
+ * @param {Function} onConfirm - Callback when the user confirms (receives a done() callback to reset state)
  * @param {string} title - Modal title text
  * @param {string} message - Modal body message
  * @param {string} [confirmText="Confirm"] - Text for the confirm button
@@ -26,17 +26,42 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText 
 
   // Resolve the confirm button color: explicit color > danger red > default blue
   const resolvedColor = confirmColor || (danger ? "#ef4444" : "#3b82f6");
+  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
+      setProcessing(false);
     } else {
       document.body.style.overflow = "";
+      setProcessing(false);
     }
     return () => { document.body.style.overflow = ""; };
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const handleConfirm = async () => {
+    if (processing) return;
+    setProcessing(true);
+    try {
+      if (onConfirm.length > 0) {
+        // onConfirm expects a done() callback
+        await new Promise((resolve) => {
+          onConfirm(() => { setProcessing(false); resolve(); });
+        });
+      } else {
+        await onConfirm();
+      }
+    } catch {
+      setProcessing(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (processing) return;
+    onClose();
+  };
 
   return createPortal(
     <div className="cm-overlay">
@@ -51,8 +76,15 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText 
         <h3 id="cm-title">{title}</h3>
         <p id="cm-message">{message}</p>
         <div className="cm-actions">
-          <button className="cm-cancel-btn" onClick={onClose}>{cancelText}</button>
-          <button className={`cm-confirm-btn ${danger ? "cm-confirm-btn--danger" : ""}`} style={{ background: resolvedColor }} onClick={onConfirm}>{confirmText}</button>
+          <button className="cm-cancel-btn" onClick={handleClose} disabled={processing}>{cancelText}</button>
+          <button
+            className={`cm-confirm-btn ${danger ? "cm-confirm-btn--danger" : ""} ${processing ? "cm-confirm-btn--processing" : ""}`}
+            style={{ background: resolvedColor }}
+            onClick={handleConfirm}
+            disabled={processing}
+          >
+            {processing ? "Processing..." : confirmText}
+          </button>
         </div>
       </div>
     </div>,

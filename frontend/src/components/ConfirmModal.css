@@ -90,6 +90,15 @@
   opacity: 0.9;
 }
 
+.cm-confirm-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.cm-confirm-btn--processing {
+  pointer-events: none;
+}
+
 .cm-confirm-btn--danger:hover {
   background: #dc2626 !important;
 }

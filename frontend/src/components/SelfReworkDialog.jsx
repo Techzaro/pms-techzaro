@@ -11,6 +11,8 @@ import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { notify } from "../utils/notify";
+import { useSubmit } from "../hooks/useSubmit";
+import LoadingButton from "./LoadingButton";
 import "./ReopenDialog.css";
 import { toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
 
@@ -28,7 +30,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
   const [instructions, setInstructions] = useState("");
   const [newDeadline, setNewDeadline] = useState("");
   const [file, setFile] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { submitting, run } = useSubmit();
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -46,34 +48,33 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
       notify.error("Please provide rework notes or improvement instructions.");
       return;
     }
-    setSubmitting(true);
-    try {
-      const token = authToken();
-      const formData = new FormData();
-      if (comment.trim()) formData.append("comment", comment.trim());
-      if (instructions.trim()) formData.append("instructions", instructions.trim());
-      if (newDeadline) formData.append("new_deadline", toUTCIso(newDeadline));
-      if (file) formData.append("file", file);
+    await run(async () => {
+      try {
+        const token = authToken();
+        const formData = new FormData();
+        if (comment.trim()) formData.append("comment", comment.trim());
+        if (instructions.trim()) formData.append("instructions", instructions.trim());
+        if (newDeadline) formData.append("new_deadline", toUTCIso(newDeadline));
+        if (file) formData.append("file", file);
 
-      const res = await fetch(`${API_URL}/deliverables/${deliverable.id}/self-rework`, {
-        method: "POST",
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: formData,
-        _notifHandled: true,
-      });
+        const res = await fetch(`${API_URL}/deliverables/${deliverable.id}/self-rework`, {
+          method: "POST",
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: formData,
+          _notifHandled: true,
+        });
 
-      const data = await res.json();
-      if (res.ok) {
-        onReworkSuccess(data.deliverable);
-        onClose();
-      } else {
-        notify.error(data.message || "Failed to mark deliverable for rework.");
+        const data = await res.json();
+        if (res.ok) {
+          onReworkSuccess(data.deliverable);
+          onClose();
+        } else {
+          notify.error(data.message || "Failed to mark deliverable for rework.");
+        }
+      } catch {
+        notify.error("An error occurred. Please try again.");
       }
-    } catch {
-      notify.error("An error occurred. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
+    });
   };
 
   if (!isOpen || !deliverable) return null;
@@ -148,9 +149,9 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
 
         <div className="rd-footer">
           <button className="rd-cancel-btn" onClick={onClose} disabled={submitting}>Cancel</button>
-          <button className="rd-submit-btn" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Processing..." : "Confirm Rework"}
-          </button>
+          <LoadingButton className="rd-submit-btn" onClick={handleSubmit} loading={submitting}>
+            Confirm Rework
+          </LoadingButton>
         </div>
       </div>
     </div>,

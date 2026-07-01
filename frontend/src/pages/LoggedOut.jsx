@@ -1,8 +1,16 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import "./Login.css";
 import "./LoggedOut.css";
 
 function LoggedOut() {
+  const [searchParams] = useSearchParams();
+  const reason = searchParams.get("reason");
+
+  const title = reason === "inactivity" ? "Session Expired" : "Logged Out";
+  const message = reason === "inactivity"
+    ? "Your session has expired due to 30 minutes of inactivity. Please log in again to continue."
+    : "You have been successfully logged out of your account.";
+
   return (
     <div className="login-page">
       <div className="login-left">
@@ -19,10 +27,8 @@ function LoggedOut() {
 
       <div className="login-right">
         <div className="login-box">
-          <h2>Logged Out</h2>
-          <p className="subtitle">You have been successfully logged out of your account.</p>
-
-          <p className="loggedout-message">Thank you for using TechXaro PMS. Your session has ended.</p>
+          <h2>{title}</h2>
+          <p className="subtitle">{message}</p>
 
           <div className="loggedout-divider"></div>
 
