@@ -71,7 +71,7 @@ class NotificationService
      *
      * @return \App\Models\Notification|null
      */
-    public function notify(int $userId, int $senderId, string $type, string $module, int $relatedId, string $title, string $message, ?string $link = null, ?array $changes = null): ?Notification
+    public function notify(int $userId, ?int $senderId, string $type, string $module, int $relatedId, string $title, string $message, ?string $link = null, ?array $changes = null): ?Notification
     {
         return $this->create([
             'user_id' => $userId,

@@ -6,6 +6,7 @@
  */
 
 import { IoCheckmarkCircle, IoClose } from "react-icons/io5";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 /**
  * Modal to confirm completing a task or project.
@@ -15,9 +16,11 @@ import { IoCheckmarkCircle, IoClose } from "react-icons/io5";
  * @param {Function} onCancel - Callback when the user cancels
  */
 export default function ConfirmCompleteModal({ taskTitle, isProject, onConfirm, onCancel }) {
+  useEscapeKey(true, onCancel);
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
-      <div style={{ background: "white", borderRadius: "16px", padding: "32px", maxWidth: "440px", width: "90%", position: "relative" }}>
+      <div style={{ background: "white", borderRadius: "16px", padding: "32px", maxWidth: "440px", width: "90%", position: "relative" }} onClick={(e) => e.stopPropagation()}>
         <button onClick={onCancel} style={{ position: "absolute", top: "12px", right: "12px", background: "none", border: "none", cursor: "pointer", fontSize: "20px", color: "#9CA3AF" }}>
           <IoClose />
         </button>

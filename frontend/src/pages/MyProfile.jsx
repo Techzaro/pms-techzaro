@@ -13,8 +13,14 @@ import { MdEdit } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { authToken, getCurrentRole, normalizeRole } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
+import { formatDateTimeInline } from "../utils/formatDateTime";
+import { useActivityHighlight } from "../hooks/useActivityHighlight";
+import "../components/layout/ActivityHighlight.css";
+import "./UserProfile.css";
+import "./TaskDetails.css";
 import { PasswordInput, isPasswordValid } from "../components/PasswordInput";
 import "./UserProfile.css";
 import "./ManageUsers.css";
@@ -40,6 +46,15 @@ function MyProfile() {
   const [passwordErrors, setPasswordErrors] = useState({});
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [changes, setChanges] = useState([]);
+
+  const {
+    hasUnread: myHasUnread,
+    isItemUnread: isMyItemUnread,
+    markViewed: markMyViewed,
+  } = useActivityHighlight("user", profileData?.user?.id, profileData?.activity_max_id || 0, changes);
+
+  useEscapeKey(isPasswordModalOpen, () => setIsPasswordModalOpen(false));
 
   /** Build auth headers for API requests. */
   const authHeaders = () => {
@@ -68,6 +83,16 @@ function MyProfile() {
     }
   };
 
+  const fetchChanges = async () => {
+    try {
+      const res = await fetch(`${API_URL}/auth/my-changes`, {
+        headers: { Accept: "application/json", ...authHeaders() },
+      });
+      const data = await res.json();
+      if (data.success) setChanges(data.changes || []);
+    } catch {}
+  };
+
   useEffect(() => {
     const token = authToken();
     if (!token) {
@@ -75,6 +100,7 @@ function MyProfile() {
       return;
     }
     fetchProfile();
+    fetchChanges();
   }, [navigate]);
 
   /** Extract up to 2 uppercase initials from a full name for the avatar. */
@@ -474,11 +500,34 @@ function MyProfile() {
                 </div>
               </div>
             </div>
+            <br />
+            <div
+              className={`account-status-card${myHasUnread ? " activity-panel--unread" : ""}`}
+            >
+              <h3>Activity</h3>
+              {changes.length === 0 ? (
+                <p className="pd-muted" style={{ margin: 0 }}>No activity yet.</p>
+              ) : (
+                <ul className="td-activity-list">
+                  {changes.map((c, i) => (
+                    <li key={c.id || i} className={`td-activity-item${isMyItemUnread(c) ? " activity-item--unread" : ""}`}>
+                      <span className="td-activity-icon">✏️</span>
+                      <div className="td-activity-body">
+                        <span className="td-activity-text">
+                          <strong>{c.modified_by?.name || 'Unknown'}</strong> changed{' '}
+                          <strong>{c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+                        </span>
+                        <span className="td-activity-time">{formatDateTimeInline(c.created_at)}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* PASSWORD CHANGE MODAL */}
       {isPasswordModalOpen && (
         <div className="user-modal-overlay">
           <div

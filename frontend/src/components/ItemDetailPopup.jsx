@@ -7,6 +7,7 @@
 
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { formatEventDate, formatEventTime } from "../utils/formatDateTime";
 
 /** Icon mapping for each item source type */
@@ -32,6 +33,8 @@ const SOURCE_COLORS = {
  * @param {Function} [onEdit] - Callback to edit a manual event (admin/manager only).
  */
 function ItemDetailPopup({ item, role, onClose, onEdit }) {
+  useEscapeKey(true, onClose);
+
   const navigate = useNavigate();
   if (!item) return null;
 
@@ -143,7 +146,6 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
         display: "flex", alignItems: "center", justifyContent: "center",
         zIndex: 10003, padding: 16,
       }}
-      onClick={onClose}
     >
       <div
         style={{

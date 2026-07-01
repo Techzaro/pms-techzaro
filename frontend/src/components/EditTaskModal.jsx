@@ -8,6 +8,7 @@
 import { useState, useEffect, useRef } from "react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
 import LoadingButton from "./LoadingButton";
@@ -23,6 +24,8 @@ import "./layout/CreateTaskModal.css";
  * @param {Function} onClose - Callback to close modal; receives boolean (true if saved)
  */
 export default function EditTaskModal({ task, onClose }) {
+  useEscapeKey(true, onClose);
+
   const currentUser = getUser();
 
   const [form, setForm] = useState({
@@ -209,7 +212,7 @@ export default function EditTaskModal({ task, onClose }) {
   };
 
   return (
-    <div className="task-overlay" onClick={() => onClose(false)}>
+    <div className="task-overlay">
       <div className="task-modal" onClick={(e) => e.stopPropagation()}>
         {/* HEADER */}
         <div className="task-header">

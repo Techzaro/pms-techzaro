@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { notify } from "../utils/notify";
 import "../components/ProfileModal.css";
 
@@ -22,6 +23,7 @@ function ProfileModal({
   user,
   onClose,
 }) {
+  useEscapeKey(true, onClose);
 
   const [newPassword, setNewPassword] =
     useState("");

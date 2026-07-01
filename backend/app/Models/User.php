@@ -138,6 +138,12 @@ class User extends Authenticatable
         return $this->hasMany(\App\Models\Notification::class)->latest();
     }
 
+    /** All field changes made to this user's profile. */
+    public function changes()
+    {
+        return $this->hasMany(\App\Models\UserChange::class)->latest();
+    }
+
     /** Unread notifications for this user. */
     public function unreadNotifications(): HasMany
     {

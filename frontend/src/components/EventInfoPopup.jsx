@@ -5,6 +5,7 @@
  */
 
 import { createPortal } from "react-dom";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { formatEventDate, formatEventTime } from "../utils/formatDateTime";
 
 /**
@@ -13,6 +14,8 @@ import { formatEventDate, formatEventTime } from "../utils/formatDateTime";
  * @param {Function} onClose - Callback to close the popup
  */
 function EventInfoPopup({ event, onClose }) {
+  useEscapeKey(true, onClose);
+
   if (!event) return null;
 
   const time = formatEventTime(event);
@@ -42,7 +45,7 @@ function EventInfoPopup({ event, onClose }) {
         background: "#fff", borderRadius: 20, width: "100%",
         maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
         overflow: "hidden",
-      }}>
+      }} onClick={(e) => e.stopPropagation()}>
         <div style={{
           display: "flex", justifyContent: "space-between", alignItems: "flex-start",
           padding: "24px 24px 0",

@@ -6,6 +6,7 @@
 
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import "./ConfirmationDialog.css";
 
 /**
@@ -19,6 +20,8 @@ import "./ConfirmationDialog.css";
  * @param {string} [confirmColor="#4F46E5"] - Background color for the confirm button
  */
 function ConfirmationDialog({ isOpen, onClose, onConfirm, title, message, confirmText = "Confirm", confirmColor = "#4F46E5" }) {
+  useEscapeKey(isOpen, onClose);
+
   // Toggle body scroll lock when dialog opens/closes
   useEffect(() => {
     if (isOpen) {
@@ -32,8 +35,8 @@ function ConfirmationDialog({ isOpen, onClose, onConfirm, title, message, confir
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="cd-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="cd-modal" role="dialog" aria-modal="true">
+    <div className="cd-overlay">
+      <div className="cd-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <h3 className="cd-title">{title}</h3>
         <p className="cd-message">{message}</p>
         <div className="cd-actions">

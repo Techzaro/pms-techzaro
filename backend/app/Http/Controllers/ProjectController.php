@@ -298,6 +298,7 @@ class ProjectController extends Controller
             'approvedBy:id,name',
             'rejectedBy:id,name',
             'reopenedBy:id,name',
+            'changes' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'deliverables' => fn ($q) => $q->with(['assignee:id,name,role', 'creator:id,name,role'])->orderBy('sort_order'),
             'tasks' => fn ($q) => $q->with(['assignees:id,name', 'assigner:id,name,role'])->withCount([
@@ -349,6 +350,8 @@ class ProjectController extends Controller
         $payload['can_review'] = $project->status === 'submitted' && ($isCreator || $isAdminOrManager);
         $payload['unviewed_changes'] = $project->unviewedChanges;
         $payload['unviewed_changes_count'] = $project->unviewedChanges->count();
+        $payload['all_changes'] = $project->changes;
+        $payload['activity_max_id'] = (int) \App\Models\ProjectChange::where('project_id', $project->id)->max('id');
 
         return response()->json(['success' => true, 'project' => $payload]);
     }

@@ -40,9 +40,11 @@ import ConfirmModal from "../components/ConfirmModal";
 import SubmitProjectModal from "../components/SubmitProjectModal";
 import ProjectSubmissionPanel from "../components/ProjectSubmissionPanel";
 import SubmitTaskModal from "../components/SubmitTaskModal";
-import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
+import { formatDateTimeShort, formatDateTime, formatDateTimeInline } from "../utils/formatDateTime";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { useNotification } from "../context/NotificationContext";
+import { useActivityHighlight } from "../hooks/useActivityHighlight";
+import "../components/layout/ActivityHighlight.css";
 import "./ProjectDetails.css";
 import "./TaskDetails.css";
 import "./Deliveries.css";
@@ -421,6 +423,12 @@ function ProjectDetails() {
   const canEdit = project.can_edit;
   const canSubmitProject = tasks.length > 0 && tasks.every((t) => t.status === "approved");
 
+  const {
+    hasUnread: projectHasUnread,
+    isItemUnread: isProjectItemUnread,
+    markViewed: markProjectViewed,
+  } = useActivityHighlight("project", project?.id, project?.activity_max_id || 0, project?.all_changes || []);
+
   const tabs = [
     { id: "overview", label: "Overview", icon: ListChecks },
     { id: "tasks", label: "Tasks", icon: ClipboardList },
@@ -469,6 +477,33 @@ function ProjectDetails() {
             ))}
           </ul>
         )}
+      </section>
+
+      {/* ACTIVITY */}
+      <section
+        className={`pd-rail-card${projectHasUnread ? " activity-panel--unread" : ""}`}
+      >
+        <h1 className="pd-rail-card__title">Activity</h1>
+        {(() => {
+          const changes = project?.all_changes || [];
+          if (!changes.length) return <p className="pd-muted" style={{ margin: 0 }}>No activity yet.</p>;
+          return (
+            <ul className="td-activity-list">
+              {changes.map((c, i) => (
+                <li key={c.id || i} className={`td-activity-item${isProjectItemUnread(c) ? " activity-item--unread" : ""}`}>
+                  <span className="td-activity-icon">✏️</span>
+                  <div className="td-activity-body">
+                    <span className="td-activity-text">
+                      <strong>{c.modified_by?.name || 'Unknown'}</strong> changed{' '}
+                      <strong>{c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+                    </span>
+                    <span className="td-activity-time">{formatDateTimeInline(c.created_at)}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          );
+        })()}
       </section>
     </div>
   );

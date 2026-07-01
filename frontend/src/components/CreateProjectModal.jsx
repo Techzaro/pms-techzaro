@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
 import LoadingButton from "./LoadingButton";
@@ -32,6 +33,9 @@ const TEAM_ROLES = ["Solution", "Tech", "Developer"];
  * @param {Function} onClose - Callback to close the modal; receives boolean (true if created)
  */
 const CreateProjectModal = ({ onClose }) => {
+  useEscapeKey(true, onClose);
+
+  const [loading, setLoading] = useState(false);
   const { submitting, run } = useSubmit();
   const [formErrors, setFormErrors] = useState({});
   const [teams, setTeams] = useState([]);
@@ -353,11 +357,7 @@ const CreateProjectModal = ({ onClose }) => {
   };
 
   return (
-    <div className="cp-overlay" onClick={(e) => {
-      if (e.target === e.currentTarget) {
-        onClose(false);
-      }
-    }}>
+    <div className="cp-overlay">
       <div className="cp-modal" onClick={(e) => e.stopPropagation()}>
 
         {/* HEADER */}

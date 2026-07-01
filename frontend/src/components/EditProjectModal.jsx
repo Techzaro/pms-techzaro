@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
 import LoadingButton from "./LoadingButton";
@@ -30,6 +31,9 @@ const PRESET_PHASES = [
  * @param {Function} onClose - Callback to close modal; receives boolean (true if saved)
  */
 const EditProjectModal = ({ project, onClose }) => {
+  useEscapeKey(true, onClose);
+
+  const [loading, setLoading] = useState(false);
   const { submitting, run } = useSubmit();
   const [formErrors, setFormErrors] = useState({});
   const [teams, setTeams] = useState([]);
@@ -342,7 +346,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
   return (
     <div className="cp-overlay">
-      <div className="cp-modal">
+      <div className="cp-modal" onClick={(e) => e.stopPropagation()}>
 
         {/* HEADER */}
         <div className="cp-header">

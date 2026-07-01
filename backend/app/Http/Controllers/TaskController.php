@@ -565,6 +565,10 @@ class TaskController extends Controller
         $payload['can_edit'] = $isCreator && !$isApproved;
         $payload['can_submit'] = $isAssignee && in_array($task->status, $pendingStatuses) && $allDeliverablesSubmitted;
 
+        $taskChangeMax = (int) \App\Models\TaskChange::where('task_id', $task->id)->max('id');
+        $taskEventMax = (int) \App\Models\TaskWorkflowEvent::where('task_id', $task->id)->max('id');
+        $payload['activity_max_id'] = max($taskChangeMax, $taskEventMax);
+
         return response()->json(['success' => true, 'task' => $payload]);
     }
 

@@ -397,6 +397,18 @@ class UserController extends Controller
             }
         }
 
+        if (!empty($changes)) {
+            foreach ($changes as $field => $vals) {
+                \App\Models\UserChange::create([
+                    'user_id' => $user->id,
+                    'field_name' => $field,
+                    'old_value' => $vals['old'] ?: null,
+                    'new_value' => $vals['new'] ?: null,
+                    'modified_by' => $authUser->id,
+                ]);
+            }
+        }
+
         $emailSent = null;
         $emailError = null;
         if (!empty($changes)) {
@@ -712,7 +724,18 @@ class UserController extends Controller
                 'status' => $user->active ? 'Active' : ($user->must_change_password ? 'Inactive' : 'Resigned'),
                 'last_login' => $user->last_login_at?->toDateTimeString() ?? 'Never logged in',
             ],
+            'activity_max_id' => (int) \App\Models\UserChange::where('user_id', $id)->max('id'),
         ]);
+    }
+
+    public function changes($id)
+    {
+        $changes = \App\Models\UserChange::with('modifiedBy:id,name')
+            ->where('user_id', $id)
+            ->latest()
+            ->get();
+
+        return response()->json(['success' => true, 'changes' => $changes]);
     }
 
     /**

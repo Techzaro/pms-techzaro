@@ -14,7 +14,10 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import MemberExportReport from "./MemberExportReport";
 import CreateTaskModal from "../components/CreateTaskModal";
+import DonutChart from "../components/DonutChart";
+import PriorityBarChart from "../components/PriorityBarChart";
 import "../components/layout/DashboardLayout.css";
+import "../components/Charts.css";
 import "../pages/UserPerformance.css";
 import "../pages/Task.css";
 import { useApiQuery } from "../hooks/useApi";
@@ -121,7 +124,6 @@ function UserPerformance() {
   const navigate = useNavigate();
   const [showExportModal, setShowExportModal] = useState(false);
   const [showCreateTask, setShowCreateTask] = useState(false);
-  const [workloadPeriod, setWorkloadPeriod] = useState("week");
 
   const stored = getUser();
   const currentRole = stored?.role || "member";
@@ -143,14 +145,14 @@ function UserPerformance() {
   }, [urlUserId, stored, userId]);
 
   const { data, isLoading } = useApiQuery(
-    ["user-performance", userId, workloadPeriod],
-    `/reports/user/${userId}?workload_period=${workloadPeriod}`,
+    ["user-performance", userId],
+    `/reports/user/${userId}`,
     null,
     { staleTime: 0, refetchOnMount: true, refetchInterval: 30000 }
   );
 
   const summary = data?.summary || {};
-  const statusBreakdown = data?.status_breakdown || {};
+  const statusBreakdown = useMemo(() => data?.status_breakdown || {}, [data?.status_breakdown]);
   const userInfo = data?.user || {};
   const totalTasks = statusBreakdown.total || 0;
 
@@ -166,6 +168,23 @@ function UserPerformance() {
       percent: totalTasks > 0 ? Math.round((item.count / totalTasks) * 1000) / 10 : 0,
     }));
   }, [statusBreakdown, totalTasks]);
+
+  // Priority breakdown data
+  const priorityBreakdown = useMemo(() => data?.priority_breakdown || {}, [data?.priority_breakdown]);
+  const priorityItems = useMemo(() => {
+    const high = priorityBreakdown.high || 0;
+    const medium = priorityBreakdown.medium || 0;
+    const low = priorityBreakdown.low || 0;
+    const total = high + medium + low;
+    return {
+      bars: [
+        { label: "High", count: high, color: "#ef4444" },
+        { label: "Medium", count: medium, color: "#f59e0b" },
+        { label: "Low", count: low, color: "#10b981" },
+      ],
+      total,
+    };
+  }, [priorityBreakdown]);
 
   // --- TASKS SECTION STATE ---
   const [items, setItems] = useState([]);
@@ -344,65 +363,33 @@ function UserPerformance() {
             })}
           </div>
 
-          {/* TASK STATUS BREAKDOWN */}
+          {/* CHARTS ROW - Task Status Breakdown & Priority Distribution */}
           <div className="up-charts-row">
+            {/* Task Status Breakdown - Donut Chart */}
             <div className="up-chart-card">
               <div className="up-chart-header">
                 <h3>Task Status Breakdown</h3>
               </div>
-              <p className="up-chart-subtitle">{totalTasks} Total Task</p>
-              <div className="up-breakdown-list">
-                {breakdownItems.map((item) => (
-                  <div key={item.label} className="up-breakdown-item">
-                    <div className="up-breakdown-label">
-                      <span className="up-breakdown-dot" style={{ background: item.color }}></span>
-                      <span>{item.label}</span>
-                    </div>
-                    <div className="up-breakdown-bar-wrapper">
-                      <div className="up-breakdown-bar">
-                        <div className="up-breakdown-bar-fill" style={{ width: item.percent + "%", background: item.color }}></div>
-                      </div>
-                      <span className="up-breakdown-percent">{item.percent}%</span>
-                    </div>
-                  </div>
-                ))}
+              <div className="up-donut-section">
+                <DonutChart
+                  segments={breakdownItems}
+                  size={160}
+                  strokeWidth={28}
+                  totalLabel="Total Tasks"
+                />
               </div>
             </div>
 
-            {/* Workload & Capacity */}
+            {/* Priority Distribution - Horizontal Bar Chart */}
             <div className="up-chart-card">
               <div className="up-chart-header">
-                <h3>Workload & Capacity</h3>
-                <select className="up-chart-select" value={workloadPeriod} onChange={(e) => setWorkloadPeriod(e.target.value)}>
-                  <option value="week">This Week</option>
-                  <option value="last_week">Last Week</option>
-                  <option value="month">This Month</option>
-                </select>
+                <h3>Priority Distribution</h3>
               </div>
-              <div className="up-workload-chart">
-                <div className="up-workload-y-axis">
-                  <span>100%</span>
-                  <span>75%</span>
-                  <span>50%</span>
-                  <span>25%</span>
-                  <span>0%</span>
-                </div>
-                <div className="up-workload-bars">
-                  {(data?.workload || []).map((item) => (
-                    <div key={item.day} className="up-workload-bar-col">
-                      <div className="up-workload-bar-track">
-                        <div
-                          className="up-workload-bar-fill"
-                          style={{
-                            height: item.percent + "%",
-                            background: item.percent >= 90 ? "linear-gradient(180deg, #6366f1, #818cf8)" : item.percent >= 70 ? "linear-gradient(180deg, #6366f1, #a5b4fc)" : "linear-gradient(180deg, #6366f1, #c7d2fe)",
-                          }}
-                        ></div>
-                      </div>
-                      <span className="up-workload-day">{item.day}</span>
-                    </div>
-                  ))}
-                </div>
+              <div className="up-priority-section">
+                <PriorityBarChart
+                  bars={priorityItems.bars}
+                  totalLabel="Total Tasks"
+                />
               </div>
             </div>
           </div>

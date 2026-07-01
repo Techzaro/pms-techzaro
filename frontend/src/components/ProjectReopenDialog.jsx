@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { notify } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "./LoadingButton";
@@ -23,6 +24,8 @@ import { toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
  * @param {Function} onReopenSuccess - Callback after successful reopen, receives updated project.
  */
 function ProjectReopenDialog({ isOpen, onClose, project, onReopenSuccess }) {
+  useEscapeKey(isOpen, onClose);
+
   const [comment, setComment] = useState("");
   const [instructions, setInstructions] = useState("");
   const [newDeadline, setNewDeadline] = useState("");
@@ -82,8 +85,8 @@ function ProjectReopenDialog({ isOpen, onClose, project, onReopenSuccess }) {
   if (!isOpen || !project) return null;
 
   return createPortal(
-    <div className="rd-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="rd-modal" role="dialog" aria-modal="true">
+    <div className="rd-overlay">
+      <div className="rd-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="rd-header">
           <h2 className="rd-title">Reject & Reopen Project</h2>
           <p className="rd-subtitle">{project.title}</p>

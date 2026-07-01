@@ -562,7 +562,7 @@ function Header() {
       {/* Project creation modal – admin/manager only */}
 
       {showProjectModal && (
-        <div className="modal-overlay" onClick={() => setShowProjectModal(false)}>
+        <div className="modal-overlay">
           <CreateProjectModal
             onClose={(created) => {
               setShowProjectModal(false);
