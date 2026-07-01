@@ -37,6 +37,7 @@ const Notifications = lazy(() => import("./pages/Notifications"));
 const UserPerformance = lazy(() => import("./pages/UserPerformance"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const LoggedOut = lazy(() => import("./pages/LoggedOut"));
 
 // Route protection components
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -60,6 +61,7 @@ function App() {
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<Login />} />
+          <Route path="/logged-out" element={<LoggedOut />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 

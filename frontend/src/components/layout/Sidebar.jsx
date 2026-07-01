@@ -458,7 +458,7 @@ function Sidebar() {
                 }
               }
               clearSession(role);
-              window.location.href = "/";
+              window.location.href = "/logged-out";
             }}
           >
             <MdLogout />

@@ -47,9 +47,9 @@ class PasswordResetController extends Controller
 
             $token = Str::random(64);
 
-            // Store token against login email (used by resetPassword to find user)
+            // Store token against professional_email (login email)
             \DB::table('password_reset_tokens')->updateOrInsert(
-                ['email' => $user->email],
+                ['email' => $user->professional_email],
                 [
                     'token' => Hash::make($token),
                     'created_at' => now(),
@@ -57,9 +57,9 @@ class PasswordResetController extends Controller
             );
 
             $frontendUrl = config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:5173'));
-            $resetUrl = $frontendUrl . '/reset-password?token=' . $token . '&email=' . urlencode($user->email);
+            $resetUrl = $frontendUrl . '/reset-password?token=' . $token . '&email=' . urlencode($user->professional_email);
 
-            // Send email to the professional email they entered
+            // Send email to the professional email
             $sendTo = $user->professional_email;
 
             \Log::info('Password reset: sending email', [
@@ -115,6 +115,7 @@ class PasswordResetController extends Controller
             $token = $request->input('token');
             $password = $request->input('password');
 
+            // Look up by professional_email (login email)
             $record = \DB::table('password_reset_tokens')
                 ->where('email', $email)
                 ->first();
@@ -142,7 +143,7 @@ class PasswordResetController extends Controller
                 ], 422);
             }
 
-            $user = User::where('email', $email)->first();
+            $user = User::where('professional_email', $email)->first();
 
             if (!$user) {
                 return response()->json([

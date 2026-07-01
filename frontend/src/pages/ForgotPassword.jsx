@@ -134,7 +134,7 @@ function ForgotPassword() {
           {fieldError && <div className="forgot-error-box">{fieldError}</div>}
 
           <form onSubmit={handleSubmit}>
-            <label className="forgot-label">Email Address</label>
+            <label className="forgot-label">Professional Email Address</label>
             <div className="forgot-input-wrapper">
               <svg className="forgot-input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="2" y="4" width="20" height="16" rx="2"/>

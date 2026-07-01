@@ -55,7 +55,7 @@ function Login() {
     const errors = { email: "", password: "", form: "" };
 
     if (!email.trim()) {
-      errors.email = "Please enter your email address.";
+      errors.email = "Please enter your professional email address.";
     }
 
     if (!password.trim()) {
@@ -278,7 +278,7 @@ function Login() {
 
           <input
             type="email"
-            placeholder="Enter Email"
+            placeholder="Enter Professional Email"
             value={email}
             onChange={(e) => { setEmail(e.target.value); setFieldErrors(prev => ({ ...prev, email: "", form: "" })); }}
             className={fieldErrors.email ? "field-error" : ""}

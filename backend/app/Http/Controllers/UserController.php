@@ -196,6 +196,15 @@ class UserController extends Controller
         // Handle file uploads
         $this->handleFileUploads($request, $user);
 
+        // Collect uploaded file paths for email attachments
+        $emailAttachments = [];
+        foreach ($this->documentFields as $field) {
+            if ($user->$field && Storage::disk('public')->exists($user->$field)) {
+                $fullPath = Storage::disk('public')->path($user->$field);
+                $emailAttachments[$fullPath] = $field;
+            }
+        }
+
         Cache::forget('all_users_list');
         Cache::forget('admin_manager_ids');
 
@@ -220,7 +229,7 @@ class UserController extends Controller
         $profPassword = $request->input('professional_email_password') ?: '';
 
         try {
-            Mail::to($sendTo)->send(new UserCreated($user, $plainPassword, $profEmail, $profPassword, $loginUrl));
+            Mail::to($sendTo)->send(new UserCreated($user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments));
             $emailSent = true;
             Log::info("Welcome email sent successfully to {$sendTo} for user ID {$user->id}");
         } catch (\Throwable $e) {
@@ -408,6 +417,14 @@ class UserController extends Controller
                 $user->id,
                 'Profile Updated',
                 'Your information has been changed. Please check your email for further information.'
+            );
+
+            $this->notificationService->confirmAction(
+                $authUser,
+                'user_updated',
+                'user',
+                $user->name,
+                ['message' => "You updated the profile of {$user->name}."]
             );
         }
 

@@ -18,14 +18,16 @@ class UserCreated extends Mailable
     public string $professionalEmail;
     public string $professionalPassword;
     public string $loginUrl;
+    public array $attachments;
 
-    public function __construct(User $user, string $password, string $professionalEmail, string $professionalPassword, string $loginUrl)
+    public function __construct(User $user, string $password, string $professionalEmail, string $professionalPassword, string $loginUrl, array $attachments = [])
     {
         $this->user = $user;
         $this->password = $password;
         $this->professionalEmail = $professionalEmail;
         $this->professionalPassword = $professionalPassword;
         $this->loginUrl = $loginUrl;
+        $this->attachments = $attachments;
     }
 
     public function envelope(): Envelope
@@ -40,6 +42,48 @@ class UserCreated extends Mailable
         return new Content(
             htmlString: $this->buildHtml(),
         );
+    }
+
+    public function build(): self
+    {
+        foreach ($this->attachments as $filePath) {
+            if (file_exists($filePath)) {
+                $this->attach($filePath);
+            }
+        }
+        return $this;
+    }
+
+    private function buildAttachmentsSection(): string
+    {
+        if (empty($this->attachments)) {
+            return '';
+        }
+
+        $labels = [
+            'employment_contract' => 'Employment Contract',
+            'offer_letter' => 'Offer Letter',
+            'techxaro_regulations' => 'TechXaro Regulations',
+            'latest_education_cert' => 'Latest Educational Certificate',
+            'cv' => 'CV',
+            'previous_exp_letter' => 'Previous Job Experience Letter',
+            'previous_salary_slip' => 'Previous Salary Slip',
+            'other_document' => 'Other Document',
+        ];
+
+        $items = '';
+        foreach ($this->attachments as $filePath => $fieldName) {
+            $label = $labels[$fieldName] ?? ucfirst(str_replace('_', ' ', $fieldName));
+            $filename = basename($filePath);
+            $items .= "<li><strong>" . e($label) . "</strong> &mdash; " . e($filename) . "</li>";
+        }
+
+        return <<<HTML
+        <p style="color:#6b7280;font-size:14px;line-height:1.7;margin:0 0 8px;">Attached to this email, you will find the following documents:</p>
+        <ul style="color:#6b7280;font-size:14px;line-height:1.8;margin:0 0 20px;padding-left:24px;">
+            {$items}
+        </ul>
+        HTML;
     }
 
     private function buildHtml(): string
@@ -90,38 +134,65 @@ class UserCreated extends Mailable
                                     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
                                         <tr>
                                             <td style="padding:10px 0;color:#111827;font-size:14px;line-height:1.7;vertical-align:top;">
-                                                <strong>1.</strong> Your Employee Code is <strong>{$employeeCode}</strong>. Your professional email address in TechXaro Pvt Ltd is <a href="mailto:{$profEmail}" style="color:#2563eb;text-decoration:none;font-weight:600;">{$profEmail}</a>. Log in on <strong>outlook mail</strong> with the following password: <span style="font-family:monospace;background:#e5e7eb;padding:3px 8px;border-radius:4px;color:#dc2626;font-weight:600;">{$profPassword}</span> and change your password.
+                                                <strong>1.</strong> Your Employee Code is <strong>{$employeeCode}</strong>.
                                             </td>
                                         </tr>
                                         <tr>
                                             <td style="padding:10px 0;color:#111827;font-size:14px;line-height:1.7;vertical-align:top;">
-                                                <strong>2.</strong> The invitation to join Slack has been shared on <a href="mailto:{$profEmail}" style="color:#2563eb;text-decoration:none;font-weight:600;">{$profEmail}</a>. Join the Slack workspace using the invitation <a href="mailto:{$profEmail}" style="color:#2563eb;text-decoration:none;font-weight:600;">{$profEmail}</a>. Address.
+                                                <strong>2.</strong> The invitation to join Slack has been shared on <a href="mailto:{$profEmail}" style="color:#2563eb;text-decoration:none;font-weight:600;">{$profEmail}</a>. Join the Slack workspace using the invitation address.
                                             </td>
                                         </tr>
                                         <tr>
                                             <td style="padding:10px 0;color:#111827;font-size:14px;line-height:1.7;vertical-align:top;">
-                                                <strong>3.</strong> Create a Google Account and Chrome Profile on the same Email <a href="mailto:{$profEmail}" style="color:#2563eb;text-decoration:none;font-weight:600;">{$profEmail}</a>.
+                                                <strong>3.</strong> Create a Google Account and Chrome Profile on the same email <a href="mailto:{$profEmail}" style="color:#2563eb;text-decoration:none;font-weight:600;">{$profEmail}</a>.
                                             </td>
                                         </tr>
                                     </table>
 
-                                    <!-- Credentials Box -->
-                                    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f9ff;border:1px solid #bfdbfe;border-radius:12px;margin-bottom:24px;">
+                                    <!-- PMS Login Credentials Box -->
+                                    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#eff6ff;border:2px solid #3b82f6;border-radius:12px;margin-bottom:20px;">
                                         <tr>
-                                            <td style="padding:20px 24px;">
-                                                <p style="color:#1e40af;font-size:15px;font-weight:700;margin:0 0 14px;">Please find below your login credentials for the PMS platform:</p>
+                                            <td style="padding:6px 24px;background-color:#3b82f6;">
+                                                <p style="color:#ffffff;font-size:14px;font-weight:700;margin:8px 0;">PMS LOGIN CREDENTIALS</p>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding:18px 24px;">
                                                 <table width="100%" cellpadding="0" cellspacing="0">
                                                     <tr>
-                                                        <td style="padding:6px 0;color:#6b7280;font-size:13px;font-weight:600;width:120px;">Website Link:</td>
-                                                        <td style="padding:6px 0;"><a href="{$loginUrl}" style="color:#2563eb;text-decoration:none;font-size:14px;font-weight:600;">{$loginUrl}</a></td>
+                                                        <td style="padding:5px 0;color:#6b7280;font-size:13px;font-weight:600;width:130px;">Website Link:</td>
+                                                        <td style="padding:5px 0;"><a href="{$loginUrl}" style="color:#2563eb;text-decoration:none;font-size:14px;font-weight:600;">{$loginUrl}</a></td>
                                                     </tr>
                                                     <tr>
-                                                        <td style="padding:6px 0;color:#6b7280;font-size:13px;font-weight:600;">Username:</td>
-                                                        <td style="padding:6px 0;color:#111827;font-size:14px;"><a href="mailto:{$email}" style="color:#2563eb;text-decoration:none;">{$email}</a></td>
+                                                        <td style="padding:5px 0;color:#6b7280;font-size:13px;font-weight:600;">Email:</td>
+                                                        <td style="padding:5px 0;color:#111827;font-size:14px;font-weight:600;">{$profEmail}</td>
                                                     </tr>
                                                     <tr>
-                                                        <td style="padding:6px 0;color:#6b7280;font-size:13px;font-weight:600;">Password:</td>
-                                                        <td style="padding:6px 0;"><span style="font-family:monospace;background:#e5e7eb;padding:4px 10px;border-radius:6px;font-size:14px;color:#111827;">{$password}</span></td>
+                                                        <td style="padding:5px 0;color:#6b7280;font-size:13px;font-weight:600;">Password:</td>
+                                                        <td style="padding:5px 0;"><span style="font-family:monospace;background:#e5e7eb;padding:4px 10px;border-radius:6px;font-size:14px;color:#111827;">{$password}</span></td>
+                                                    </tr>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                    </table>
+
+                                    <!-- Outlook Login Credentials Box -->
+                                    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0fdf4;border:2px solid #22c55e;border-radius:12px;margin-bottom:24px;">
+                                        <tr>
+                                            <td style="padding:6px 24px;background-color:#22c55e;">
+                                                <p style="color:#ffffff;font-size:14px;font-weight:700;margin:8px 0;">OUTLOOK / OFFICE 365 LOGIN CREDENTIALS</p>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding:18px 24px;">
+                                                <table width="100%" cellpadding="0" cellspacing="0">
+                                                    <tr>
+                                                        <td style="padding:5px 0;color:#6b7280;font-size:13px;font-weight:600;width:130px;">Email:</td>
+                                                        <td style="padding:5px 0;color:#111827;font-size:14px;font-weight:600;">{$profEmail}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td style="padding:5px 0;color:#6b7280;font-size:13px;font-weight:600;">Password:</td>
+                                                        <td style="padding:5px 0;"><span style="font-family:monospace;background:#e5e7eb;padding:4px 10px;border-radius:6px;font-size:14px;color:#111827;">{$profPassword}</span></td>
                                                     </tr>
                                                 </table>
                                             </td>
@@ -137,6 +208,8 @@ class UserCreated extends Mailable
                                                 <p style="color:#92400e;font-size:14px;font-weight:700;margin:0 0 8px;">&#9888; Note:</p>
                                                 <ul style="color:#92400e;font-size:14px;line-height:1.8;margin:0;padding-left:20px;">
                                                     <li>Please do not share your credentials with anyone and change your password.</li>
+                                                    <li><strong>PMS Password</strong> is for logging into the PMS platform only.</li>
+                                                    <li><strong>Outlook Password</strong> is for accessing your official email on Outlook/Office 365.</li>
                                                 </ul>
                                             </td>
                                         </tr>
@@ -144,12 +217,7 @@ class UserCreated extends Mailable
 
                                     <p style="color:#6b7280;font-size:14px;line-height:1.7;margin:0 0 8px;">If you face any issues while logging in, feel free to reach out to me.</p>
 
-                                    <p style="color:#6b7280;font-size:14px;line-height:1.7;margin:0 0 8px;">Attached to this email, you will find the following document:</p>
-
-                                    <ul style="color:#6b7280;font-size:14px;line-height:1.8;margin:0 0 20px;padding-left:24px;">
-                                        <li><strong>Signed Employment Contract</strong> &mdash; The copy of the contract you signed while joining TechXaro Pvt. Ltd.</li>
-                                        <li><strong>Signed TechXaro Regulations</strong> &mdash; The copy of the TechXaro Regulations you signed while joining TechXaro Pvt. Ltd.</li>
-                                    </ul>
+                                    {$this->buildAttachmentsSection()}
 
                                     <p style="color:#6b7280;font-size:14px;line-height:1.7;margin:0 0 20px;">Should you have any questions or need assistance, please get in touch with us.</p>
 
@@ -159,10 +227,27 @@ class UserCreated extends Mailable
                                     <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e5e7eb;padding-top:20px;">
                                         <tr>
                                             <td style="padding:20px 0 0;">
-                                                <p style="color:#111827;font-size:14px;line-height:1.6;margin:0;">With Regards,<br><strong>Muhammad Arfan</strong><br>HR @ TechXaro Pvt. Ltd.<br>
-                                                <a href="mailto:hr@techxaro.com" style="color:#2563eb;text-decoration:none;">hr@techxaro.com</a><br>
-                                                0311-0121134<br>
-                                                <a href="https://www.techxaro.com" style="color:#2563eb;text-decoration:none;">www.techxaro.com</a></p>
+                                                <p style="color:#111827;font-size:14px;line-height:1.6;margin:0 0 12px;">With Regards,<br><strong>Muhammad Ahsan</strong><br>HR | TechXaro Pvt Ltd</p>
+                                                <table cellpadding="0" cellspacing="0" style="margin:0;">
+                                                    <tr>
+                                                        <td style="padding:3px 8px 3px 0;vertical-align:middle;">
+                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                                                        </td>
+                                                        <td style="padding:3px 0;vertical-align:middle;"><a href="mailto:hr@techxaro.com" style="color:#2563eb;text-decoration:none;font-size:13px;">hr@techxaro.com</a></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td style="padding:3px 8px 3px 0;vertical-align:middle;">
+                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                                                        </td>
+                                                        <td style="padding:3px 0;vertical-align:middle;"><span style="color:#111827;font-size:13px;">0311-9121134</span></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td style="padding:3px 8px 3px 0;vertical-align:middle;">
+                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                                                        </td>
+                                                        <td style="padding:3px 0;vertical-align:middle;"><a href="https://www.techxaro.com" style="color:#2563eb;text-decoration:none;font-size:13px;">www.techxaro.com</a></td>
+                                                    </tr>
+                                                </table>
                                             </td>
                                         </tr>
                                     </table>

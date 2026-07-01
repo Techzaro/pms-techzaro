@@ -719,24 +719,6 @@ function UserProfile() {
                 <div className="form-row">
                   <label htmlFor="edit-emergency_contact_name">Name</label>
                   <input type="text" id="edit-emergency_contact_name" name="emergency_contact_name" value={editUser.emergency_contact_name} onChange={handleEditChange} placeholder="Emergency contact name" />
-                {/* ===== Email Accounts ===== */}
-                <h3 className="form-section-title">Email Accounts</h3>
-                <div className="user-form-grid">
-                  <div className="form-row">
-                    <label htmlFor="edit-personal_email">Personal Email Address</label>
-                    <input type="email" id="edit-personal_email" name="personal_email" value={editUser.personal_email} onChange={handleEditChange} placeholder="Enter personal email address" className={editErrors.personal_email ? "field-error" : ""} />
-                    {editErrors.personal_email && <span className="field-error-text">{editErrors.personal_email}</span>}
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="edit-professional_email">Professional Email</label>
-                    <input type="email" id="edit-professional_email" name="professional_email" value={editUser.professional_email || ""} onChange={handleEditChange} placeholder="Enter professional email address" className={editErrors.professional_email ? "field-error" : ""} />
-                    {editErrors.professional_email && <span className="field-error-text">{editErrors.professional_email}</span>}
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="edit-professional_email_password">Password of Professional Email</label>
-                    <input type="password" id="edit-professional_email_password" name="professional_email_password" value={editUser.professional_email_password || ""} onChange={handleEditChange} placeholder="Enter professional email password" className={editErrors.professional_email_password ? "field-error" : ""} />
-                    {editErrors.professional_email_password && <span className="field-error-text">{editErrors.professional_email_password}</span>}
-                  </div>
                 </div>
                 <div className="form-row">
                   <label htmlFor="edit-emergency_contact_relation">Relation</label>
@@ -753,9 +735,19 @@ function UserProfile() {
               <h3 className="form-section-title">Email Accounts</h3>
               <div className="user-form-grid">
                 <div className="form-row">
-                  <label htmlFor="edit-email">Email *</label>
-                  <input type="email" id="edit-email" name="email" value={editUser.email} onChange={handleEditChange} placeholder="Enter email address" className={editErrors.email ? "field-error" : ""} />
-                  {editErrors.email && <span className="field-error-text">{editErrors.email}</span>}
+                  <label htmlFor="edit-personal_email">Personal Email Address</label>
+                  <input type="email" id="edit-personal_email" name="personal_email" value={editUser.personal_email} onChange={handleEditChange} placeholder="Enter personal email address" className={editErrors.personal_email ? "field-error" : ""} />
+                  {editErrors.personal_email && <span className="field-error-text">{editErrors.personal_email}</span>}
+                </div>
+                <div className="form-row">
+                  <label htmlFor="edit-professional_email">Professional Email</label>
+                  <input type="email" id="edit-professional_email" name="professional_email" value={editUser.professional_email || ""} onChange={handleEditChange} placeholder="Enter professional email address" className={editErrors.professional_email ? "field-error" : ""} />
+                  {editErrors.professional_email && <span className="field-error-text">{editErrors.professional_email}</span>}
+                </div>
+                <div className="form-row">
+                  <label htmlFor="edit-professional_email_password">Password of Professional Email</label>
+                  <input type="password" id="edit-professional_email_password" name="professional_email_password" value={editUser.professional_email_password || ""} onChange={handleEditChange} placeholder="Enter professional email password" className={editErrors.professional_email_password ? "field-error" : ""} />
+                  {editErrors.professional_email_password && <span className="field-error-text">{editErrors.professional_email_password}</span>}
                 </div>
               </div>
 

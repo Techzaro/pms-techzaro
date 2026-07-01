@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Task;
 use App\Models\Project;
+use App\Models\User;
 
 /**
  * Controller responsible for authentication actions.
@@ -33,11 +34,10 @@ class AuthController extends Controller
                 'password' => 'required'
             ]);
 
-            // credentials
-            $credentials = $request->only('email', 'password');
+            // Look up user by professional_email (not personal email)
+            $user = User::where('professional_email', $request->email)->first();
 
-            // check login
-            if (!Auth::attempt($credentials)) {
+            if (!$user || !Hash::check($request->password, $user->password)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Invalid Email or Password'
@@ -45,7 +45,6 @@ class AuthController extends Controller
             }
 
             // logged in user
-            $user = Auth::user();
 
             if ($user->active === false && !$user->must_change_password) {
                 return response()->json([
@@ -74,7 +73,7 @@ class AuthController extends Controller
                 'user' => [
                     'id' => $user->id,
                     'name' => $user->name,
-                    'email' => $user->email,
+                    'email' => $user->professional_email,
                     'role' => $role,
                     'active' => $user->active,
                     'must_change_password' => $user->must_change_password,
