@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import API_URL from "../config/api";
+import { useSubmit } from "../hooks/useSubmit";
+import LoadingButton from "../components/LoadingButton";
 import "./ResetPassword.css";
 
 function ResetPassword() {
@@ -16,6 +18,7 @@ function ResetPassword() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({ password: "", confirmPassword: "" });
+  const { submitting, run } = useSubmit();
 
   const getPasswordStrength = (pw) => {
     let score = 0;
@@ -82,8 +85,7 @@ function ResetPassword() {
       return;
     }
 
-    try {
-      setLoading(true);
+    await run(async () => {
       const res = await fetch(`${API_URL}/reset-password`, {
         method: "POST",
         headers: {
@@ -106,11 +108,7 @@ function ResetPassword() {
       }
 
       setSuccess(true);
-    } catch (err) {
-      setError(err.message || "Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    });
   };
 
   if (!token || !email) {
@@ -336,8 +334,8 @@ function ResetPassword() {
             </div>
             {fieldErrors.confirmPassword && <span className="reset-field-error">{fieldErrors.confirmPassword}</span>}
 
-            <button type="submit" className="reset-submit-btn" disabled={loading}>
-              {loading ? (
+            <LoadingButton type="submit" className="reset-submit-btn" loading={submitting}>
+              {submitting ? (
                 <>
                   <span className="reset-spinner"></span>
                   Resetting...
@@ -350,7 +348,7 @@ function ResetPassword() {
                   Reset Password
                 </>
               )}
-            </button>
+            </LoadingButton>
           </form>
         </div>
 

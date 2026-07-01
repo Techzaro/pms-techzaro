@@ -15,7 +15,9 @@ import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, normalizeRole } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
+import { PasswordInput, isPasswordValid } from "../components/PasswordInput";
 import "./UserProfile.css";
+import "./ManageUsers.css";
 
 /**
  * MyProfile — self-service profile page for the logged-in user.
@@ -36,6 +38,7 @@ function MyProfile() {
     confirm_password: "",
   });
   const [passwordErrors, setPasswordErrors] = useState({});
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [saving, setSaving] = useState(false);
 
   /** Build auth headers for API requests. */
@@ -109,8 +112,10 @@ function MyProfile() {
     if (!passwordForm.old_password) errors.old_password = "Current password is required.";
     if (!passwordForm.new_password) {
       errors.new_password = "New password is required.";
-    } else if (passwordForm.new_password.length < 6) {
-      errors.new_password = "Password must be at least 6 characters.";
+    } else if (passwordForm.new_password === passwordForm.old_password) {
+      errors.new_password = "New password must be different from current password.";
+    } else if (!isPasswordValid(passwordForm.new_password)) {
+      errors.new_password = "Password does not meet all requirements.";
     }
     if (!passwordForm.confirm_password) {
       errors.confirm_password = "Please confirm your password.";
@@ -119,6 +124,11 @@ function MyProfile() {
     }
     return errors;
   };
+
+  const canSubmitPassword = passwordForm.old_password
+    && isPasswordValid(passwordForm.new_password)
+    && passwordForm.new_password !== passwordForm.old_password
+    && passwordForm.new_password === passwordForm.confirm_password;
 
   /** Submit the password change to the API. */
   const handlePasswordSubmit = async (e) => {
@@ -470,7 +480,7 @@ function MyProfile() {
 
       {/* PASSWORD CHANGE MODAL */}
       {isPasswordModalOpen && (
-        <div className="user-modal-overlay" onClick={() => setIsPasswordModalOpen(false)}>
+        <div className="user-modal-overlay">
           <div
             className="user-modal-content"
             style={{ maxWidth: "480px", width: "100%" }}
@@ -487,46 +497,56 @@ function MyProfile() {
             </div>
 
             <form className="user-form" onSubmit={handlePasswordSubmit}>
-              <div className="user-form-grid" style={{ gridTemplateColumns: "1fr" }}>
-                <div className="form-row">
+              <div className="user-form-grid" style={{ gridTemplateColumns: "1fr", gap: "12px" }}>
+                <div className="form-row" style={{ position: "relative" }}>
                   <label htmlFor="old-password">Current Password</label>
-                  <input
-                    type="password"
-                    id="old-password"
-                    name="old_password"
-                    value={passwordForm.old_password}
-                    onChange={handlePasswordChange}
-                    placeholder="Enter current password"
-                    className={passwordErrors.old_password ? "field-error" : ""}
-                  />
+                  <div style={{ position: "relative" }}>
+                    <svg style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                    <input
+                      type={showCurrentPassword ? "text" : "password"}
+                      id="old-password"
+                      name="old_password"
+                      value={passwordForm.old_password}
+                      onChange={handlePasswordChange}
+                      placeholder="Enter current password"
+                      className={passwordErrors.old_password ? "field-error" : ""}
+                      style={{ width: "100%", padding: "8px 36px 8px 32px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "14px", outline: "none", boxSizing: "border-box" }}
+                    />
+                    <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: "2px", display: "flex", alignItems: "center" }} tabIndex={-1}>
+                      {showCurrentPassword ? (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                      ) : (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      )}
+                    </button>
+                  </div>
                   {passwordErrors.old_password && <span className="field-error-text">{passwordErrors.old_password}</span>}
                 </div>
-                <div className="form-row">
-                  <label htmlFor="new-password">New Password</label>
-                  <input
-                    type="password"
-                    id="new-password"
-                    name="new_password"
-                    value={passwordForm.new_password}
-                    onChange={handlePasswordChange}
-                    placeholder="Enter new password"
-                    className={passwordErrors.new_password ? "field-error" : ""}
-                  />
-                  {passwordErrors.new_password && <span className="field-error-text">{passwordErrors.new_password}</span>}
-                </div>
-                <div className="form-row">
-                  <label htmlFor="confirm-password">Confirm New Password</label>
-                  <input
-                    type="password"
-                    id="confirm-password"
-                    name="confirm_password"
-                    value={passwordForm.confirm_password}
-                    onChange={handlePasswordChange}
-                    placeholder="Confirm new password"
-                    className={passwordErrors.confirm_password ? "field-error" : ""}
-                  />
-                  {passwordErrors.confirm_password && <span className="field-error-text">{passwordErrors.confirm_password}</span>}
-                </div>
+
+                <PasswordInput
+                  id="new-password"
+                  name="new_password"
+                  value={passwordForm.new_password}
+                  onChange={handlePasswordChange}
+                  placeholder="Enter new password"
+                  label="New Password"
+                  error={passwordErrors.new_password}
+                />
+
+                <PasswordInput
+                  id="confirm-password"
+                  name="confirm_password"
+                  value={passwordForm.confirm_password}
+                  onChange={handlePasswordChange}
+                  placeholder="Confirm new password"
+                  label="Confirm New Password"
+                  showStrength={false}
+                  showRules={false}
+                  error={passwordErrors.confirm_password}
+                />
               </div>
 
               <div className="user-form-actions">
@@ -540,7 +560,7 @@ function MyProfile() {
                 <button
                   type="submit"
                   className="primary-button"
-                  disabled={saving}
+                  disabled={saving || !canSubmitPassword}
                 >
                   {saving ? "Saving..." : "Change Password"}
                 </button>

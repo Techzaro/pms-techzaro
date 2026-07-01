@@ -10,6 +10,8 @@ import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { notify } from "../utils/notify";
+import { useSubmit } from "../hooks/useSubmit";
+import LoadingButton from "./LoadingButton";
 import "./ReopenDialog.css";
 import { toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
 
@@ -25,7 +27,7 @@ function ProjectReopenDialog({ isOpen, onClose, project, onReopenSuccess }) {
   const [instructions, setInstructions] = useState("");
   const [newDeadline, setNewDeadline] = useState("");
   const [file, setFile] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { submitting, run } = useSubmit();
   const fileInputRef = useRef(null);
 
   // Lock body scroll when dialog is open
@@ -48,34 +50,33 @@ function ProjectReopenDialog({ isOpen, onClose, project, onReopenSuccess }) {
       notify.error("Please provide a comment or instructions.");
       return;
     }
-    setSubmitting(true);
-    try {
-      const token = authToken();
-      const formData = new FormData();
-      if (comment.trim()) formData.append("comment", comment.trim());
-      if (instructions.trim()) formData.append("instructions", instructions.trim());
-      if (newDeadline) formData.append("new_deadline", toUTCIso(newDeadline));
-      if (file) formData.append("file", file);
+    await run(async () => {
+      try {
+        const token = authToken();
+        const formData = new FormData();
+        if (comment.trim()) formData.append("comment", comment.trim());
+        if (instructions.trim()) formData.append("instructions", instructions.trim());
+        if (newDeadline) formData.append("new_deadline", toUTCIso(newDeadline));
+        if (file) formData.append("file", file);
 
-      const res = await fetch(`${API_URL}/projects/${project.id}/reopen`, {
-        method: "POST",
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: formData,
-        _notifHandled: true,
-      });
+        const res = await fetch(`${API_URL}/projects/${project.id}/reopen`, {
+          method: "POST",
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: formData,
+          _notifHandled: true,
+        });
 
-      const data = await res.json();
-      if (res.ok) {
-        onReopenSuccess(data.project);
-        onClose();
-      } else {
-        notify.error(data.message || "Failed to reopen project.");
+        const data = await res.json();
+        if (res.ok) {
+          onReopenSuccess(data.project);
+          onClose();
+        } else {
+          notify.error(data.message || "Failed to reopen project.");
+        }
+      } catch {
+        notify.error("An error occurred. Please try again.");
       }
-    } catch {
-      notify.error("An error occurred. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
+    });
   };
 
   if (!isOpen || !project) return null;
@@ -150,9 +151,9 @@ function ProjectReopenDialog({ isOpen, onClose, project, onReopenSuccess }) {
 
         <div className="rd-footer">
           <button className="rd-cancel-btn" onClick={onClose} disabled={submitting}>Cancel</button>
-          <button className="rd-submit-btn" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Processing..." : "Reject & Reopen"}
-          </button>
+          <LoadingButton className="rd-submit-btn" onClick={handleSubmit} loading={submitting}>
+            Reject & Reopen
+          </LoadingButton>
         </div>
       </div>
     </div>,

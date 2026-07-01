@@ -7,6 +7,7 @@
  */
 
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 
 /**
  * History — Activity history page component.
@@ -15,6 +16,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 function History() {
   return (
     <DashboardLayout>
+      <Breadcrumb items={[{ label: "History" }]} />
       <div>
         <h1>History</h1>
         <p>See activity logs and audit trails for your projects and tasks.</p>

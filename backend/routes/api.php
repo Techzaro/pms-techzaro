@@ -99,6 +99,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Get users for team management (all authenticated users)
     Route::get('/team-users', [UserController::class, 'getTeamUsers']);
 
+    // Member/Team Lead: view own team(s)
+    Route::get('/my-team', [TeamController::class, 'myTeam']);
+
     /*
     | Team Management Routes
     | Admin and manager only: CRUD operations for managing teams and members.

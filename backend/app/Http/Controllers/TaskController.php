@@ -712,15 +712,6 @@ class TaskController extends Controller
 
         // Log activity
         $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
-        $this->notificationService->notify(
-            $user->id, null,
-            'task_assigned', 'task', $createdTasks[0]->id,
-            'Task Created',
-            'You created and assigned the task "' . $createdTasks[0]->title . '" to ' . $assigneeNames . '.',
-            '/tasks/task-details/' . $createdTasks[0]->id . '?from=tasks'
-        );
-
-        // Log activity
         $this->activityService->log($user->id, 'task_created', 'You created ' . $taskCount . ' task(s) and assigned them to ' . $assigneeNames, 'task', $createdTasks[0]->id);
 
         $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');
@@ -734,7 +725,7 @@ class TaskController extends Controller
     }
 
     /**
-     * Create standalone tasks (not associated with any project).
+     * Store a standalone task (not assigned to any project).
      *
      * Creates one task per user in the assigned_to array, with optional deliverables.
      * Sends assignment notifications and logs activity.
@@ -852,15 +843,6 @@ class TaskController extends Controller
 
         // Log activity
         $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
-        $this->notificationService->notify(
-            $user->id, null,
-            'task_assigned', 'task', $createdTasks[0]->id,
-            'Task Created',
-            'You created and assigned the task "' . $createdTasks[0]->title . '" to ' . $assigneeNames . '.',
-            '/tasks/task-details/' . $createdTasks[0]->id . '?from=tasks'
-        );
-
-        // Log activity
         $this->activityService->log($user->id, 'task_created', 'You created ' . $taskCount . ' task(s) and assigned them to ' . $assigneeNames, 'task', $createdTasks[0]->id);
 
         $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');

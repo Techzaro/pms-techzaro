@@ -76,11 +76,13 @@ export function onMutation() {}
 
 // Cross-tab session synchronization
 // Detects when token changes in another tab and logs out this tab
+let _sessionConflictHandled = false;
 window.addEventListener("storage", (e) => {
-  if (!e.key) return;
+  if (!e.key || _sessionConflictHandled) return;
   const role = getCurrentRole();
   if (!role) return;
   if (e.key === `token_${role}` && e.oldValue && e.newValue && e.oldValue !== e.newValue) {
+    _sessionConflictHandled = true;
     clearSession(role);
     window.location.href = "/?message=" + encodeURIComponent("You have been logged in from another tab.");
   }

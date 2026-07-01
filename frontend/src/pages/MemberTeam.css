@@ -1,0 +1,140 @@
+/* ===== MemberTeam Page ===== */
+/* Reuses .mt-* classes from ManageTeam.css for consistency */
+
+/* Info Row */
+.mt-info-row {
+  display: flex;
+  gap: 40px;
+  margin-bottom: 22px;
+}
+
+.mt-info-row .mt-section {
+  margin-bottom: 0;
+}
+
+.mt-member-count {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.mt-date-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #475569;
+}
+
+/* Members Grid */
+.mt-members-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.mt-member-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.mt-member-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.mt-member-card--leader {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.mt-member-card--leader:hover {
+  border-color: #fbbf24;
+}
+
+.mt-member-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.mt-member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mt-member-card .mt-member-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.mt-lead-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.mt-member-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 44px;
+}
+
+.mt-member-detail {
+  font-size: 13px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mt-detail-label {
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.mt-member-email {
+  color: #4f46e5;
+  word-break: break-all;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .mt-info-row {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .mt-members-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mt-member-details {
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .mt-title {
+    font-size: 22px;
+  }
+}

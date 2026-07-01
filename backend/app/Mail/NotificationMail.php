@@ -6,6 +6,7 @@ use App\Models\Notification;
 use App\Models\Task;
 use App\Models\Project;
 use App\Models\Deliverable;
+use App\Models\Team;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -47,6 +48,9 @@ class NotificationMail extends Mailable
             'deliverable' => Deliverable::with(['project:id,title', 'task:id,title'])
                 ->where('id', $notification->related_id)
                 ->first(['id', 'title', 'description', 'status', 'priority', 'due_date', 'project_id', 'task_id', 'assigned_to']),
+            'team' => Team::with(['leader:id,name', 'members:id,name'])
+                ->where('id', $notification->related_id)
+                ->first(['id', 'name', 'description', 'leader_id', 'created_by']),
             default => null,
         };
     }

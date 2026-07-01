@@ -416,7 +416,8 @@ class UserController extends Controller
                 'user',
                 $user->id,
                 'Profile Updated',
-                'Your information has been changed. Please check your email for further information.'
+                'Your information has been changed. Please check your email for further information.',
+                '/manage-users/user-profile/' . $user->id
             );
 
             $this->notificationService->confirmAction(

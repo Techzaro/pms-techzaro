@@ -12,7 +12,9 @@ import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { formatDateTimeShort } from "../utils/formatDateTime";
 import { notify } from "../utils/notify";
+import { useSubmit } from "../hooks/useSubmit";
 import SubmissionLinkSection from "./SubmissionLinkSection";
+import LoadingButton from "./LoadingButton";
 import "./SubmitDeliverableModal.css";
 import "./layout/CreateTaskModal.css";
 
@@ -27,7 +29,7 @@ function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
   const [comment, setComment] = useState("");
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
-  const [submitting, setSubmitting] = useState(false);
+  const { submitting, run } = useSubmit();
 
   // Lock body scroll and reset form state when modal opens/closes
   useEffect(() => {
@@ -70,33 +72,32 @@ function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
       notify.error("Please add a comment, attach files, or add links.");
       return;
     }
-    setSubmitting(true);
-    try {
-      const token = authToken();
-      const formData = new FormData();
-      if (comment.trim()) formData.append("comment", comment.trim());
-      files.forEach((f) => formData.append("files[]", f));
-      validLinks.forEach((l) => formData.append("links[]", l));
+    await run(async () => {
+      try {
+        const token = authToken();
+        const formData = new FormData();
+        if (comment.trim()) formData.append("comment", comment.trim());
+        files.forEach((f) => formData.append("files[]", f));
+        validLinks.forEach((l) => formData.append("links[]", l));
 
-      const res = await fetch(`${API_URL}/tasks/${task.id}/submit`, {
-        method: "POST",
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: formData,
-        _notifHandled: true,
-      });
+        const res = await fetch(`${API_URL}/tasks/${task.id}/submit`, {
+          method: "POST",
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: formData,
+          _notifHandled: true,
+        });
 
-      const data = await res.json();
-      if (res.ok) {
-        onSubmitSuccess(data.task);
-        onClose();
-      } else {
-        notify.error(data.message || "Failed to submit task.");
+        const data = await res.json();
+        if (res.ok) {
+          onSubmitSuccess(data.task);
+          onClose();
+        } else {
+          notify.error(data.message || "Failed to submit task.");
+        }
+      } catch {
+        notify.error("An error occurred. Please try again.");
       }
-    } catch {
-      notify.error("An error occurred. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
+    });
   };
 
   if (!isOpen || !task) return null;
@@ -194,9 +195,9 @@ function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
 
         <div className="sd-footer">
           <button className="sd-cancel-btn" onClick={onClose} disabled={submitting}>Cancel</button>
-          <button className="sd-submit-btn" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Submitting..." : isResubmit ? "Resubmit Task" : "Submit Task"}
-          </button>
+          <LoadingButton className="sd-submit-btn" onClick={handleSubmit} loading={submitting}>
+            {isResubmit ? "Resubmit Task" : "Submit Task"}
+          </LoadingButton>
         </div>
       </div>
     </div>,

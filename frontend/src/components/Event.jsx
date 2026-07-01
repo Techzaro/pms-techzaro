@@ -9,7 +9,9 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
+import { useSubmit } from "../hooks/useSubmit";
 import UserSelectDropdown from "./UserSelectDropdown";
+import LoadingButton from "./LoadingButton";
 import { publish } from "../utils/eventBus";
 import { notify } from "../utils/notify";
 import "./Event.css";
@@ -62,7 +64,7 @@ const COLOR_MAP = {
  */
 function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
   const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const { submitting, run } = useSubmit();
   const [users, setUsers] = useState([]);
   const [assignedUserIds, setAssignedUserIds] = useState([]);
   const [isGlobal, setIsGlobal] = useState(false);
@@ -178,68 +180,66 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
       return;
     }
 
-    setLoading(true);
+    await run(async () => {
+      try {
+        // Build start datetime; all-day events use 00:00
+        const startDateTime = formData.startDate + "T" + (formData.allDay ? "00:00" : formData.startTime) + ":00";
 
-    // Build start datetime; all-day events use 00:00
-    const startDateTime = formData.startDate + "T" + (formData.allDay ? "00:00" : formData.startTime) + ":00";
+        // Use end date if enabled, otherwise fall back to start date
+        const endDateToUse = formData.hasEndDate ? formData.endDate : formData.startDate;
+        const endTimeToUse = formData.hasEndDate ? formData.endTime : (formData.allDay ? "23:59" : formData.startTime);
 
-    // Use end date if enabled, otherwise fall back to start date
-    const endDateToUse = formData.hasEndDate ? formData.endDate : formData.startDate;
-    const endTimeToUse = formData.hasEndDate ? formData.endTime : (formData.allDay ? "23:59" : formData.startTime);
+        const endDateTime = endDateToUse + "T" + endTimeToUse + ":00";
 
-    const endDateTime = endDateToUse + "T" + endTimeToUse + ":00";
+        // Build request payload
+        const payload = {
+          title: formData.title.trim(),
+          description: formData.description.trim() || null,
+          type: TYPE_MAP[formData.eventType] || "Meeting",
+          color: COLOR_MAP[TYPE_MAP[formData.eventType]] || null,
+          start_date: startDateTime,
+          end_date: endDateTime,
+          all_day: formData.allDay,
+          is_global: isGlobal,
+          assigned_user_ids: isGlobal ? [] : assignedUserIds,
+        };
 
-    // Build request payload
-    const payload = {
-      title: formData.title.trim(),
-      description: formData.description.trim() || null,
-      type: TYPE_MAP[formData.eventType] || "Meeting",
-      color: COLOR_MAP[TYPE_MAP[formData.eventType]] || null,
-      start_date: startDateTime,
-      end_date: endDateTime,
-      all_day: formData.allDay,
-      is_global: isGlobal,
-      assigned_user_ids: isGlobal ? [] : assignedUserIds,
-    };
+        const token = authToken();
+        const url = isEditing
+          ? `${API_URL}/events/${editEvent.id}`
+          : `${API_URL}/events`;
 
-    try {
-      const token = authToken();
-      const url = isEditing
-        ? `${API_URL}/events/${editEvent.id}`
-        : `${API_URL}/events`;
+        const res = await fetch(url, {
+          method: isEditing ? "PUT" : "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+          _notifHandled: true,
+        });
 
-      const res = await fetch(url, {
-        method: isEditing ? "PUT" : "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-        _notifHandled: true,
-      });
+        const data = await res.json();
 
-      const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to save event");
+        }
 
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to save event");
+        setStep(1);
+        if (isEditing) {
+          publish('event:updated', data.event || data);
+          publish('data:changed', { type: 'event', action: 'updated' });
+        } else {
+          publish('event:created', data.event || data);
+          publish('data:changed', { type: 'event', action: 'created' });
+        }
+        onEventCreated?.(data.event);
+        onClose();
+      } catch (err) {
+        notify.error(err.message || "Something went wrong");
       }
-
-      setStep(1);
-      if (isEditing) {
-        publish('event:updated', data.event || data);
-        publish('data:changed', { type: 'event', action: 'updated' });
-      } else {
-        publish('event:created', data.event || data);
-        publish('data:changed', { type: 'event', action: 'created' });
-      }
-      onEventCreated?.(data.event);
-      onClose();
-    } catch (err) {
-      notify.error(err.message || "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
+    });
   };
 
   if (!isOpen) return null;
@@ -408,14 +408,13 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
 
             <div className="event-footer">
               <button className="btn-cancel" onClick={handleBack}>Back</button>
-              <button
+              <LoadingButton
                 className="btn-primary"
                 onClick={handleCreate}
-                disabled={loading}
-                style={{ opacity: loading ? 0.6 : 1 }}
+                loading={submitting}
               >
-                {loading ? "Saving..." : isEditing ? "Update Event" : "Create Event"}
-              </button>
+                {isEditing ? "Update Event" : "Create Event"}
+              </LoadingButton>
             </div>
           </div>
         )}

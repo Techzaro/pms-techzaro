@@ -26,6 +26,7 @@
                                     'task' => ['#eff6ff', '#2563eb', 'Task'],
                                     'deliverable' => ['#f0fdf4', '#16a34a', 'Deliverable'],
                                     'project' => ['#fefce8', '#ca8a04', 'Project'],
+                                    'team' => ['#f0f9ff', '#0284c7', 'Team'],
                                     'system' => ['#f5f3ff', '#7c3aed', 'System'],
                                 ];
                                 $module = $notification->related_module ?? 'system';
@@ -127,6 +128,7 @@
                                                 @if ($module === 'task') Task Details
                                                 @elseif ($module === 'project') Project Details
                                                 @elseif ($module === 'deliverable') Deliverable Details
+                                                @elseif ($module === 'team') Team Details
                                                 @endif
                                             </span>
                                         </td>
@@ -134,10 +136,10 @@
                                     <tr>
                                         <td style="padding:16px 20px;">
                                             <table width="100%" cellpadding="0" cellspacing="0">
-                                                {{-- Title --}}
+                                                {{-- Title / Name --}}
                                                 <tr>
                                                     <td style="padding:5px 0;color:#6b7280;font-size:12px;font-weight:600;width:130px;vertical-align:top;">Name</td>
-                                                    <td style="padding:5px 0;color:#111827;font-size:13px;font-weight:600;">{{ $entity->title }}</td>
+                                                    <td style="padding:5px 0;color:#111827;font-size:13px;font-weight:600;">{{ $entity->title ?? $entity->name ?? '' }}</td>
                                                 </tr>
 
                                                 {{-- Description --}}
@@ -145,6 +147,22 @@
                                                     <tr>
                                                         <td style="padding:5px 0;color:#6b7280;font-size:12px;font-weight:600;vertical-align:top;">Description</td>
                                                         <td style="padding:5px 0;color:#374151;font-size:13px;line-height:1.5;">{{ \Illuminate\Support\Str::limit(strip_tags($entity->description), 200) }}</td>
+                                                    </tr>
+                                                @endif
+
+                                                {{-- Team Lead (for team module) --}}
+                                                @if ($module === 'team' && $entity->leader)
+                                                    <tr>
+                                                        <td style="padding:5px 0;color:#6b7280;font-size:12px;font-weight:600;">Team Lead</td>
+                                                        <td style="padding:5px 0;color:#111827;font-size:13px;font-weight:600;">{{ $entity->leader->name }}</td>
+                                                    </tr>
+                                                @endif
+
+                                                {{-- Team Members (for team module) --}}
+                                                @if ($module === 'team' && $entity->members && $entity->members->count())
+                                                    <tr>
+                                                        <td style="padding:5px 0;color:#6b7280;font-size:12px;font-weight:600;vertical-align:top;">Members</td>
+                                                        <td style="padding:5px 0;color:#111827;font-size:13px;">{{ $entity->members->pluck('name')->implode(', ') }}</td>
                                                     </tr>
                                                 @endif
 

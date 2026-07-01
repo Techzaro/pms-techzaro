@@ -10,9 +10,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
 import { authToken, rolePath, getUser, normalizeRole } from "../utils/auth";
+import { getNotificationDestination } from "../utils/navigation";
 import { formatDateTimeInline } from "../utils/formatDateTime";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { publish } from "../utils/eventBus";
 import API_URL from "../config/api";
 import "./Notifications.css";
 
@@ -40,6 +43,7 @@ const TYPE_ICONS = {
   deliverable_approved: { icon: "check", bg: "#d1fae5", color: "#059669" },
   deliverable_rejected: { icon: "x", bg: "#fee2e2", color: "#dc2626" },
   deliverable_reopened: { icon: "refresh", bg: "#fef3c7", color: "#d97706" },
+  deliverable_added: { icon: "deliverable", bg: "#ede9fe", color: "#7c3aed" },
   event_created: { icon: "calendar", bg: "#ede9fe", color: "#7c3aed" },
   event_updated: { icon: "calendar", bg: "#dbeafe", color: "#2563eb" },
   event_cancelled: { icon: "calendar", bg: "#fee2e2", color: "#dc2626" },
@@ -173,6 +177,7 @@ function Notifications() {
     { value: "deliverable_approved", label: "Deliverable Approved" },
     { value: "deliverable_rejected", label: "Deliverable Rejected" },
     { value: "deliverable_reopened", label: "Deliverable Reopened" },
+    { value: "deliverable_added", label: "Deliverable Added" },
     { value: "event_created", label: "Event Created" },
     { value: "event_updated", label: "Event Updated" },
     { value: "event_cancelled", label: "Event Cancelled" },
@@ -271,6 +276,7 @@ function Notifications() {
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       );
+      publish("data:changed");
     } catch {}
   };
 
@@ -285,19 +291,17 @@ function Notifications() {
         skipLoader: true,
       });
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      publish("data:changed");
     } catch {}
   };
 
   const getLinkPath = (n) => {
-    if (n.link) {
-      const role = user?.role || "admin";
-      return rolePath(n.link.replace(/^\//, ""));
-    }
-    return "#";
+    return getNotificationDestination(n);
   };
 
   return (
     <DashboardLayout hideRightSidebar={true}>
+      <Breadcrumb items={[{ label: "Notifications" }]} />
       <br />
       <div className="notif-layout">
         {/* Header - spans full width */}
@@ -414,7 +418,7 @@ function Notifications() {
               filtered.map((n) => (
                 <div
                   key={n.id}
-                  className={`notif-item ${n.is_read ? "notif-item--read" : ""} ${selected.has(n.id) ? "notif-item--selected" : ""}`}
+                  className={`notif-item ${n.is_read ? "notif-item--read" : "notif-item--unread"} ${selected.has(n.id) ? "notif-item--selected" : ""}`}
                 >
                   <label className="notif-checkbox" onClick={(e) => e.stopPropagation()}>
                     <input

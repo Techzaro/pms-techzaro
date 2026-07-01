@@ -26,6 +26,7 @@
                                     'task' => ['#eff6ff', '#2563eb', 'Task'],
                                     'deliverable' => ['#f0fdf4', '#16a34a', 'Deliverable'],
                                     'project' => ['#fefce8', '#ca8a04', 'Project'],
+                                    'team' => ['#f0f9ff', '#0284c7', 'Team'],
                                     'system' => ['#f5f3ff', '#7c3aed', 'System'],
                                 ];
                                 $module = $notification->related_module ?? 'system';
@@ -127,6 +128,7 @@
                                                 <?php if($module === 'task'): ?> Task Details
                                                 <?php elseif($module === 'project'): ?> Project Details
                                                 <?php elseif($module === 'deliverable'): ?> Deliverable Details
+                                                <?php elseif($module === 'team'): ?> Team Details
                                                 <?php endif; ?>
                                             </span>
                                         </td>
@@ -137,7 +139,7 @@
                                                 
                                                 <tr>
                                                     <td style="padding:5px 0;color:#6b7280;font-size:12px;font-weight:600;width:130px;vertical-align:top;">Name</td>
-                                                    <td style="padding:5px 0;color:#111827;font-size:13px;font-weight:600;"><?php echo e($entity->title); ?></td>
+                                                    <td style="padding:5px 0;color:#111827;font-size:13px;font-weight:600;"><?php echo e($entity->title ?? $entity->name ?? ''); ?></td>
                                                 </tr>
 
                                                 
@@ -145,6 +147,22 @@
                                                     <tr>
                                                         <td style="padding:5px 0;color:#6b7280;font-size:12px;font-weight:600;vertical-align:top;">Description</td>
                                                         <td style="padding:5px 0;color:#374151;font-size:13px;line-height:1.5;"><?php echo e(\Illuminate\Support\Str::limit(strip_tags($entity->description), 200)); ?></td>
+                                                    </tr>
+                                                <?php endif; ?>
+
+                                                
+                                                <?php if($module === 'team' && $entity->leader): ?>
+                                                    <tr>
+                                                        <td style="padding:5px 0;color:#6b7280;font-size:12px;font-weight:600;">Team Lead</td>
+                                                        <td style="padding:5px 0;color:#111827;font-size:13px;font-weight:600;"><?php echo e($entity->leader->name); ?></td>
+                                                    </tr>
+                                                <?php endif; ?>
+
+                                                
+                                                <?php if($module === 'team' && $entity->members && $entity->members->count()): ?>
+                                                    <tr>
+                                                        <td style="padding:5px 0;color:#6b7280;font-size:12px;font-weight:600;vertical-align:top;">Members</td>
+                                                        <td style="padding:5px 0;color:#111827;font-size:13px;"><?php echo e($entity->members->pluck('name')->implode(', ')); ?></td>
                                                     </tr>
                                                 <?php endif; ?>
 

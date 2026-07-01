@@ -18,6 +18,8 @@ import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath, getUser, normalizeRole } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import "./UserProfile.css";
+import { useSubmit } from "../hooks/useSubmit";
+import LoadingButton from "../components/LoadingButton";
 import "./ManageUsers.css";
 
 /** Main UserProfile page — fetches and displays another user's full profile. */
@@ -60,6 +62,7 @@ function UserProfile() {
   });
   const [editErrors, setEditErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const { submitting, run } = useSubmit();
   const [editFiles, setEditFiles] = useState({});
   const [filePreviews, setFilePreviews] = useState({});
   const [currentUserRole] = useState(() => getCurrentRole());
@@ -255,8 +258,7 @@ function UserProfile() {
     const finalDesignation =
       editUser.designation === "__custom__" ? editUser.designationCustom : editUser.designation;
 
-    setSaving(true);
-    try {
+    await run(async () => {
       const isOwnProfile = String(getUser()?.id) === String(userId);
       const formData = new FormData();
       formData.append("name", editUser.name);
@@ -337,11 +339,7 @@ function UserProfile() {
       } catch (reFetchErr) {
         console.error("Profile re-fetch failed:", reFetchErr);
       }
-    } catch (err) {
-      notify.error(err.message || "User update failed.");
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   if (loading) {
@@ -902,9 +900,9 @@ function UserProfile() {
                 <button type="button" className="secondary-button" onClick={() => setIsEditModalOpen(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="primary-button" disabled={saving}>
-                  {saving ? "Saving..." : "Update User"}
-                </button>
+                <LoadingButton type="submit" className="primary-button" loading={submitting}>
+                  {submitting ? "Saving..." : "Update User"}
+                </LoadingButton>
               </div>
             </form>
           </div>

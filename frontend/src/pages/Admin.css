@@ -347,3 +347,65 @@
 
 .calender-sidebar { width: 320px; }
 
+/* ── Activity Item Unread/Read Styling ── */
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  border-left: 3px solid transparent;
+  margin-bottom: 2px;
+}
+
+.activity-item:last-child {
+  margin-bottom: 0;
+}
+
+/* Unread activity */
+.activity-item--unread {
+  background: #fef2f2;
+  border-left-color: #ef4444;
+}
+
+.activity-item--unread:hover {
+  background: #fee2e2;
+}
+
+.activity-item--unread .activity-text {
+  color: #dc2626 !important;
+  font-weight: 600;
+}
+
+.activity-item--unread .activity-time {
+  color: #b91c1c !important;
+  font-weight: 600;
+}
+
+.activity-item--unread .activity-icon-circle {
+  box-shadow: 0 0 0 2px #fecaca;
+}
+
+/* Read/viewed activity */
+.activity-item--read {
+  background: transparent;
+  border-left-color: transparent;
+}
+
+.activity-item--read:hover {
+  background: #F9FAFB;
+}
+
+.activity-item--read .activity-text {
+  color: #6b7280 !important;
+  font-weight: 400;
+}
+
+.activity-item--read .activity-time {
+  color: #9CA3AF !important;
+  font-weight: 400;
+}
+
