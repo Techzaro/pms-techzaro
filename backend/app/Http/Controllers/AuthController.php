@@ -225,7 +225,19 @@ class AuthController extends Controller
                 'status' => !$user->active ? 'Resigned' : ($user->must_change_password ? 'Inactive' : 'Active'),
                 'last_login' => $user->last_login_at?->toDateTimeString() ?? 'Never logged in',
             ],
+            'activity_max_id' => (int) \App\Models\UserChange::where('user_id', $user->id)->max('id'),
         ]);
+    }
+
+    public function myChanges(Request $request)
+    {
+        $user = $request->user();
+        $changes = \App\Models\UserChange::with('modifiedBy:id,name')
+            ->where('user_id', $user->id)
+            ->latest()
+            ->get();
+
+        return response()->json(['success' => true, 'changes' => $changes]);
     }
 
     /**
@@ -296,6 +308,13 @@ class AuthController extends Controller
             'bank_name', 'bank_account_number', 'bank_account_title',
         ];
 
+        $oldValues = [];
+        foreach ($fields as $field) {
+            if ($request->has($field)) {
+                $oldValues[$field] = $user->$field;
+            }
+        }
+
         foreach ($fields as $field) {
             if ($request->has($field)) {
                 $user->$field = $request->input($field);
@@ -314,6 +333,23 @@ class AuthController extends Controller
         }
 
         $user->save();
+
+        if (!empty($oldValues)) {
+            foreach ($oldValues as $field => $oldVal) {
+                $newVal = $user->$field;
+                $oldStr = $oldVal === null ? '' : (string) $oldVal;
+                $newStr = $newVal === null ? '' : (string) $newVal;
+                if ($oldStr !== $newStr) {
+                    \App\Models\UserChange::create([
+                        'user_id' => $user->id,
+                        'field_name' => $field,
+                        'old_value' => $oldStr ?: null,
+                        'new_value' => $newStr ?: null,
+                        'modified_by' => $user->id,
+                    ]);
+                }
+            }
+        }
 
         $documentFields = [
             'employment_contract', 'offer_letter', 'techxaro_regulations',

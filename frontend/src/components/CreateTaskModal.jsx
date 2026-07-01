@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
 
@@ -23,6 +24,8 @@ import "./layout/CreateTaskModal.css";
  * @param {string} [projectName=""] - Display name of the pre-selected project
  */
 const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
+  useEscapeKey(true, onClose);
+
   const [loading, setLoading] = useState(false);
   const [formErrors, setFormErrors] = useState({});
   const [projects, setProjects] = useState([]);
@@ -375,7 +378,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
 
   return (
     <div className="task-overlay">
-      <div className="task-modal">
+      <div className="task-modal" onClick={(e) => e.stopPropagation()}>
 
         {/* HEADER */}
         <div className="task-header">

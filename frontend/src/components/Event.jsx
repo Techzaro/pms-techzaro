@@ -9,6 +9,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import UserSelectDropdown from "./UserSelectDropdown";
 import { publish } from "../utils/eventBus";
 import { notify } from "../utils/notify";
@@ -61,6 +62,8 @@ const COLOR_MAP = {
  * @param {Object|null} [editEvent=null] - Event object to edit (null for creation mode)
  */
 function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
+  useEscapeKey(isOpen, onClose);
+
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]);

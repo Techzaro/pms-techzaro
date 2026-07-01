@@ -487,7 +487,7 @@ function Projects() {
 
       {/* VISIBILITY MODAL */}
       {visibilityProject && (
-        <div className="modal-overlay" onClick={closeVisibility}>
+        <div className="modal-overlay">
           <div className="sv-modal" onClick={(e) => e.stopPropagation()}>
             <div className="sv-modal-header">
               <h3>Show To — {visibilityProject.title}</h3>
@@ -521,11 +521,7 @@ function Projects() {
       )}
 
       {showModal && (
-        <div className="modal-overlay" onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            setShowModal(false);
-          }
-        }}>
+        <div className="modal-overlay">
           <CreateProjectModal
             onClose={(created) => {
               setShowModal(false);

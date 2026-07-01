@@ -6,6 +6,7 @@
 
 import { createPortal } from "react-dom";
 import { Edit3, Trash2 } from "lucide-react";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { TYPE_COLORS, TYPE_LABELS, DEFAULT_EVENT_COLOR } from "../pages/Calender";
 import { formatEventTime } from "../utils/formatDateTime";
 
@@ -32,12 +33,13 @@ function formatWeekday(d) {
  * @param {Function} [onAddEvent] - Callback to add a new event
  */
 export default function DayPopup({ date, events, onClose, onEdit, onDelete, canManageEvents, onItemClick, deleteLoading, onAddEvent }) {
+  useEscapeKey(true, onClose);
+
   if (!date) return null;
 
   return createPortal(
     <div
       className="event-overlay"
-      onClick={onClose}
       style={{ zIndex: 10001 }}
     >
       <div

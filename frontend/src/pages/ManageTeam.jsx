@@ -31,6 +31,7 @@ import {
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import API_URL from "../config/api";
@@ -298,6 +299,8 @@ function ManageTeam() {
     setIsMemberDropdownOpen(false);
     setIsUserDropdownOpen(false);
   };
+
+  useEscapeKey(isModalOpen, closeModal);
 
   const toggleMemberSelection = (userId) => {
     setSelectedMemberIds((prev) =>
@@ -621,7 +624,7 @@ function ManageTeam() {
         {/* MODAL */}
         {isModalOpen && (
           <div className="mt-modal-overlay">
-            <div className="mt-modal">
+            <div className="mt-modal" onClick={(e) => e.stopPropagation()}>
               <div className="mt-modal-header">
                 <div>
                   <h2>{editTeamId ? "Edit Team" : addMemberTeamId ? "Add Member" : "Add New Team"}</h2>

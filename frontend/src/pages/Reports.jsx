@@ -10,13 +10,16 @@
 
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
-import { useState, useCallback, memo } from "react";
+import DonutChart from "../components/DonutChart";
+import PriorityBarChart from "../components/PriorityBarChart";
+import { useState, useCallback, memo, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import CompanyEmployeeReport from "./CompanyEmployeeReport";
 import { getUser, rolePath } from "../utils/auth";
 import { useApiQuery } from "../hooks/useApi";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import "../components/Charts.css";
 import "./Reports.css";
 
 /** Map human-readable period labels to API query parameters. */
@@ -158,6 +161,27 @@ function Reports() {
     { staleTime: 0, refetchOnMount: true, refetchInterval: 30000, enabled: isAdminOrManager || isTeamMembersView }
   );
 
+  // Status breakdown for donut chart — API returns flat summary fields
+  const totalTasks = summary?.total_assigned || 0;
+
+  const statusItems = useMemo(() => {
+    return [
+      { label: "Completed", count: summary?.approved || 0, color: "#10b981" },
+      { label: "Pending", count: summary?.pending || 0, color: "#f59e0b" },
+      { label: "In Review", count: summary?.in_review || 0, color: "#6366f1" },
+      { label: "Overdue", count: summary?.overdue || 0, color: "#ef4444" },
+    ];
+  }, [summary?.approved, summary?.pending, summary?.in_review, summary?.overdue]);
+
+  // Priority breakdown for bar chart — API returns flat summary fields
+  const priorityItems = useMemo(() => {
+    return [
+      { label: "High", count: summary?.high_priority || 0, color: "#ef4444" },
+      { label: "Medium", count: summary?.medium_priority || 0, color: "#f59e0b" },
+      { label: "Low", count: summary?.low_priority || 0, color: "#10b981" },
+    ];
+  }, [summary?.high_priority, summary?.medium_priority, summary?.low_priority]);
+
   const refetchSummary = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["report-summary-cards"] });
     queryClient.invalidateQueries({ queryKey: ["report-user-table"] });
@@ -241,6 +265,45 @@ function Reports() {
               />
             );
           })}
+        </div>
+
+        {/* CHARTS ROW - Task Status Breakdown & Priority Distribution */}
+        <div className="reports-charts-row">
+          {/* Task Status Breakdown - Donut Chart */}
+          <div className="reports-chart-card">
+            <div className="reports-chart-header">
+              <h3>Task Status Breakdown</h3>
+            </div>
+            <div className="reports-donut-section">
+              {isLoading ? (
+                <div style={{ padding: "40px", textAlign: "center", color: "#9ca3af" }}>Loading...</div>
+              ) : (
+                <DonutChart
+                  segments={statusItems}
+                  size={160}
+                  strokeWidth={28}
+                  totalLabel="Total Tasks"
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Priority Distribution - Horizontal Bar Chart */}
+          <div className="reports-chart-card">
+            <div className="reports-chart-header">
+              <h3>Priority Distribution</h3>
+            </div>
+            <div className="reports-priority-section">
+              {isLoading ? (
+                <div style={{ padding: "40px", textAlign: "center", color: "#9ca3af" }}>Loading...</div>
+              ) : (
+                <PriorityBarChart
+                  bars={priorityItems}
+                  totalLabel="Total Tasks"
+                />
+              )}
+            </div>
+          </div>
         </div>
 
         {/* TABLE - Admin, Manager & Team Lead (on team members view) */}

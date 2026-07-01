@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import { FileText, Download, ExternalLink } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { formatDateTime } from "../utils/formatDateTime";
 import { notify } from "../utils/notify";
 import "./ViewDeliverableModal.css";
@@ -45,6 +46,8 @@ function formatFileSize(bytes) {
  * @param {Function} onSubmitSuccess - Callback after successful resubmission.
  */
 function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess }) {
+  useEscapeKey(isOpen, onClose);
+
   const [submission, setSubmission] = useState(null);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState("");
@@ -136,8 +139,8 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
   const viewLinks = attachments.filter((a) => a.attachment_type === "link");
 
   return createPortal(
-    <div className="vd-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="vd-modal" role="dialog" aria-modal="true">
+    <div className="vd-overlay">
+      <div className="vd-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="vd-header">
           <div>
             <h2 className="vd-title">{deliverable.title}</h2>

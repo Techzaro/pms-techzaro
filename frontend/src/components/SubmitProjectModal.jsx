@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import { FileText, Upload, X, Image } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { formatDateTimeShort } from "../utils/formatDateTime";
 import { notify } from "../utils/notify";
 import SubmissionLinkSection from "./SubmissionLinkSection";
@@ -24,6 +25,8 @@ import "./layout/CreateTaskModal.css";
  * @param {Function} onSubmitSuccess - Callback after successful submission, receives updated project.
  */
 function SubmitProjectModal({ isOpen, onClose, project, onSubmitSuccess }) {
+  useEscapeKey(isOpen, onClose);
+
   const [comment, setComment] = useState("");
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
@@ -103,8 +106,8 @@ function SubmitProjectModal({ isOpen, onClose, project, onSubmitSuccess }) {
   const isImageFile = (f) => f.type?.startsWith("image/");
 
   return createPortal(
-    <div className="sd-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="sd-modal" role="dialog" aria-modal="true">
+    <div className="sd-overlay">
+      <div className="sd-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="sd-header">
           <div>
             <h2 className="sd-title">{project.title}</h2>

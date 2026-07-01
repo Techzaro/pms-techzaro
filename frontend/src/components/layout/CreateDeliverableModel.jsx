@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useEscapeKey } from "../../hooks/useEscapeKey";
 import CustomSelect from "../CustomSelect";
 import CustomDateTimePicker from "../CustomDateTimePicker";
 import "../layout/CreateDeliverableModel.css";
@@ -14,6 +15,8 @@ import "../layout/CreateDeliverableModel.css";
  * @param {{ onClose: () => void }} props - Callback to close the modal
  */
 const CreateDeliverableTask = ({ onClose }) => {
+  useEscapeKey(true, onClose);
+
   const [form, setForm] = useState({
     task: "",
     assign_to: "",
@@ -32,7 +35,7 @@ const CreateDeliverableTask = ({ onClose }) => {
   return (
     <div className="deliverable-overlay">
 
-      <div className="deliverable-modal">
+      <div className="deliverable-modal" onClick={(e) => e.stopPropagation()}>
 
         {/* ── Header: Title and close button ── */}
         <div className="deliverable-header">

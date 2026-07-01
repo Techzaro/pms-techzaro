@@ -46,6 +46,8 @@ function fileUrl(url) {
 import { publish } from "../utils/eventBus";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
+import { useActivityHighlight } from "../hooks/useActivityHighlight";
+import "../components/layout/ActivityHighlight.css";
 import "./TaskDetails.css";
 import "./Deliveries.css";
 
@@ -157,6 +159,16 @@ function TaskDetails() {
   const [notes, setNotes] = useState([]);
   const [noteSaving, setNoteSaving] = useState(false);
   const [orderedDeliverables, setOrderedDeliverables] = useState([]);
+
+  const {
+    hasUnread: taskHasUnread,
+    isItemUnread: isTaskItemUnread,
+    markViewed: markTaskViewed,
+  } = useActivityHighlight("task", task?.id, task?.activity_max_id || 0, (() => {
+    const events = (task?.workflowEvents || []).map((e) => ({ ...e, id: e.id || `e-${e.created_at}` }));
+    const changes = (task?.changes || []).map((c) => ({ ...c, id: c.id || 0 }));
+    return [...events, ...changes].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  })());
 
   const source = sourcePages[location.state?.from] || null;
 
@@ -681,10 +693,11 @@ function TaskDetails() {
             </div>
 
             {/* ACTIVITY LOG */}
-            <div className="td-card">
+            <div className={`td-card${taskHasUnread ? " activity-panel--unread" : ""}`}>
               <h3 className="td-card-title">Activity</h3>
               {(() => {
                 const events = (task?.workflowEvents || []).map(e => ({
+                  id: e.id,
                   type: 'event',
                   action: e.action,
                   user: e.user?.name || 'Unknown',
@@ -693,6 +706,7 @@ function TaskDetails() {
                   sort: new Date(e.created_at).getTime(),
                 }));
                 const changes = (task?.changes || []).map(c => ({
+                  id: c.id,
                   type: 'change',
                   field: c.field_name,
                   old_value: c.old_value,
@@ -706,7 +720,7 @@ function TaskDetails() {
                 return (
                   <ul className="td-activity-list">
                     {timeline.map((item, i) => (
-                      <li key={i} className="td-activity-item">
+                      <li key={i} className={`td-activity-item${isTaskItemUnread(item) ? " activity-item--unread" : ""}`}>
                         {item.type === 'event' ? (
                           <>
                             <span className="td-activity-icon">

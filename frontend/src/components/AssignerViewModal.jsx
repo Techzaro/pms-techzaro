@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { FileText, Download, ExternalLink } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import ConfirmationDialog from "./ConfirmationDialog";
 import ReopenDialog from "./ReopenDialog";
 import { formatDateTime } from "../utils/formatDateTime";
@@ -36,6 +37,8 @@ function formatFileSize(bytes) {
  * @param {Function} onActionSuccess - Callback when an action (approve/reject/reopen) succeeds
  */
 function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
+  useEscapeKey(isOpen, onClose);
+
   const [submission, setSubmission] = useState(null);
   const [loading, setLoading] = useState(true);
   const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null });
@@ -147,8 +150,8 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
   const links = attachments.filter((a) => a.attachment_type === "link");
 
   return createPortal(
-    <div className="avm-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="avm-modal" role="dialog" aria-modal="true">
+    <div className="avm-overlay">
+      <div className="avm-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="avm-header">
           <div className="avm-header-top">
             <h2 className="avm-title">{deliverable.title}</h2>

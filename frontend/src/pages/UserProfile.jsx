@@ -15,10 +15,15 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { publish } from "../utils/eventBus";
 import API_URL from "../config/api";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { authToken, getCurrentRole, rolePath, getUser, normalizeRole } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
+import { formatDateTimeInline } from "../utils/formatDateTime";
+import { useActivityHighlight } from "../hooks/useActivityHighlight";
+import "../components/layout/ActivityHighlight.css";
 import "./UserProfile.css";
 import "./ManageUsers.css";
+import "./TaskDetails.css";
 
 /** Main UserProfile page — fetches and displays another user's full profile. */
 function UserProfile() {
@@ -63,6 +68,15 @@ function UserProfile() {
   const [editFiles, setEditFiles] = useState({});
   const [filePreviews, setFilePreviews] = useState({});
   const [currentUserRole] = useState(() => getCurrentRole());
+  const [changes, setChanges] = useState([]);
+
+  const {
+    hasUnread: userHasUnread,
+    isItemUnread: isUserItemUnread,
+    markViewed: markUserViewed,
+  } = useActivityHighlight("user", userId, profileData?.activity_max_id || 0, changes);
+
+  useEscapeKey(isEditModalOpen, () => setIsEditModalOpen(false));
 
   const DEPARTMENTS = [
     "Digital Marketing",
@@ -113,6 +127,16 @@ function UserProfile() {
     }
   };
 
+  const fetchChanges = async () => {
+    try {
+      const res = await fetch(`${API_URL}/users/${userId}/changes`, {
+        headers: { Accept: "application/json", ...authHeaders() },
+      });
+      const data = await res.json();
+      if (data.success) setChanges(data.changes || []);
+    } catch {}
+  };
+
   useEffect(() => {
     const role = getCurrentRole();
     const token = authToken();
@@ -121,6 +145,7 @@ function UserProfile() {
       return;
     }
     fetchProfile();
+    fetchChanges();
   }, [userId, navigate]);
 
   const getInitials = (name) => {
@@ -651,13 +676,37 @@ function UserProfile() {
                 </div>
               </div>
             </div>
+            <br />
+            <div
+              className={`account-status-card${userHasUnread ? " activity-panel--unread" : ""}`}
+            >
+              <h3>Activity</h3>
+              {changes.length === 0 ? (
+                <p className="pd-muted" style={{ margin: 0 }}>No activity yet.</p>
+              ) : (
+                <ul className="td-activity-list">
+                  {changes.map((c, i) => (
+                    <li key={c.id || i} className={`td-activity-item${isUserItemUnread(c) ? " activity-item--unread" : ""}`}>
+                      <span className="td-activity-icon">✏️</span>
+                      <div className="td-activity-body">
+                        <span className="td-activity-text">
+                          <strong>{c.modified_by?.name || 'Unknown'}</strong> changed{' '}
+                          <strong>{c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+                        </span>
+                        <span className="td-activity-time">{formatDateTimeInline(c.created_at)}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       {/* EDIT MODAL */}
       {isEditModalOpen && (
-        <div className="user-modal-overlay" onClick={() => setIsEditModalOpen(false)}>
+        <div className="user-modal-overlay">
           <div
             className="user-modal-content"
             style={{ maxWidth: "1100px", width: "100%" }}

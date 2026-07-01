@@ -416,7 +416,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
     <>
       {/* ── CONFIG MODAL ── */}
       {!showReview && (
-        <div className="er-overlay" onClick={onClose}>
+        <div className="er-overlay">
           <div className="er-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
             <div className="er-header">
               <div>
@@ -468,7 +468,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
 
       {/* ── REVIEW MODAL ── */}
       {showReview && (
-        <div className="er-overlay" onClick={() => setShowReview(false)}>
+        <div className="er-overlay">
           <div className="er-review-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 860 }}>
             <button className="er-close-btn" style={{ position: "absolute", top: 16, right: 16, zIndex: 10 }} onClick={() => setShowReview(false)}>
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

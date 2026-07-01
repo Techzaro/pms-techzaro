@@ -27,6 +27,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
 import API_URL from "../config/api";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { authToken, getCurrentRole, getUser, setUser, rolePath, normalizeRole } from "../utils/auth";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { publish } from "../utils/eventBus";
@@ -404,6 +405,8 @@ function ManageUsers() {
       otherDocument: null,
     });
   };
+
+  useEscapeKey(isAddModalOpen, closeModal);
 
   // Validates the add/edit user form and returns errors object
   const validateAddForm = () => {
@@ -887,7 +890,7 @@ function ManageUsers() {
 
         {/* ===================== ADD USER MODAL ===================== */}
         {isAddModalOpen && (
-          <div className="user-modal-overlay" onClick={closeModal}>
+          <div className="user-modal-overlay">
             <div
               className="user-modal-content"
               style={{ maxWidth: "1100px", width: "100%" }}

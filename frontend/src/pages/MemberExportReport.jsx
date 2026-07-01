@@ -491,7 +491,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
     <>
       {/* ── CONFIG MODAL ── */}
       {!showReview && (
-        <div className="er-overlay" onClick={onClose}>
+        <div className="er-overlay">
           <div className="er-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
             <div className="er-header">
               <div>
@@ -543,7 +543,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
 
       {/* ── REVIEW POPUP ── */}
       {showReview && (
-        <div className="er-overlay" onClick={() => { setShowReview(false); }}>
+        <div className="er-overlay">
           <div className="er-review-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 820 }}>
             {/* Close */}
             <button className="er-close-btn" style={{ position: "absolute", top: 16, right: 16, zIndex: 10 }} onClick={() => setShowReview(false)}>

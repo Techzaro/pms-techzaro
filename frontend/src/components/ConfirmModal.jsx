@@ -6,6 +6,7 @@
 
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import "./ConfirmModal.css";
 
 /**
@@ -21,6 +22,8 @@ import "./ConfirmModal.css";
  * @param {boolean} [danger=false] - If true, uses red color scheme for destructive actions
  */
 function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText = "Confirm", cancelText = "Cancel", confirmColor, danger = false }) {
+  useEscapeKey(isOpen, onClose);
+
   // Resolve the confirm button color: explicit color > danger red > default blue
   const resolvedColor = confirmColor || (danger ? "#ef4444" : "#3b82f6");
 
@@ -37,7 +40,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText 
 
   return createPortal(
     <div className="cm-overlay">
-      <div className="cm-modal" role="dialog" aria-modal="true" aria-labelledby="cm-title" aria-describedby="cm-message">
+      <div className="cm-modal" role="dialog" aria-modal="true" aria-labelledby="cm-title" aria-describedby="cm-message" onClick={(e) => e.stopPropagation()}>
         <div className="cm-icon" style={{ background: resolvedColor + "15" }}>
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={resolvedColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10"/>

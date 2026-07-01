@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import { FileText } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import ConfirmationDialog from "./ConfirmationDialog";
 import SelfReworkDialog from "./SelfReworkDialog";
 import { formatDateTime } from "../utils/formatDateTime";
@@ -82,6 +83,8 @@ function buildHistoryTimeline(deliverable) {
  * @param {Function} [onResubmit] - Callback to open the resubmit form.
  */
 function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliverable, onActionSuccess, onResubmit }) {
+  useEscapeKey(isOpen, onClose);
+
   const [deliverable, setDeliverable] = useState(null);
   const [loading, setLoading] = useState(true);
   const [confirmApprove, setConfirmApprove] = useState(false);
@@ -161,8 +164,8 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
   };
 
   return createPortal(
-    <div className="sdvm-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="sdvm-modal" role="dialog" aria-modal="true">
+    <div className="sdvm-overlay">
+      <div className="sdvm-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="sdvm-header">
           <div className="sdvm-header-top">
             <h2 className="sdvm-title">{deliverable?.title || initialDeliverable.title}</h2>

@@ -55,6 +55,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // View own profile
     Route::get('/auth/my-profile', [AuthController::class, 'myProfile']);
+    Route::get('/auth/my-changes', [AuthController::class, 'myChanges']);
 
     // Update own profile
     Route::post('/auth/update-profile', [AuthController::class, 'updateProfile']);
@@ -64,6 +65,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // First-time password change (no old password required)
     Route::put('/user/first-time-change-password', [AuthController::class, 'firstTimeChangePassword']);
+
+    // Activity view tracking
+    Route::post('/activity-views/check', [\App\Http\Controllers\ActivityviewController::class, 'check']);
+    Route::post('/activity-views/mark-viewed', [\App\Http\Controllers\ActivityviewController::class, 'markViewed']);
 
     /*
     | Dashboard Routes
@@ -90,6 +95,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/users/{user}/resign', [UserController::class, 'resign']);
         // View user profile
         Route::get('/users/{id}/profile', [UserController::class, 'profile']);
+        Route::get('/users/{id}/changes', [UserController::class, 'changes']);
         // Test email functionality
         Route::post('/test-email', [UserController::class, 'testEmail']);
         // Reorder users list

@@ -562,6 +562,18 @@
   text-align: right;
 }
 
+/* ── Donut & Priority Chart Sections ── */
+
+.up-donut-section {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+}
+
+.up-priority-section {
+  padding: 24px 0 8px;
+}
+
 /* ── Workload & Capacity ── */
 
 .up-workload-chart {
