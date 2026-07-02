@@ -100,7 +100,7 @@
 
 /* ── Responsive ── */
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   .donut-chart-container {
     flex-direction: column;
     align-items: center;
@@ -109,6 +109,15 @@
 
   .donut-chart-legend {
     width: 100%;
+  }
+
+  .donut-legend-item {
+    padding: 8px 0;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  .donut-legend-item:last-child {
+    border-bottom: none;
   }
 
   .priority-bar-item {
@@ -120,5 +129,43 @@
     order: 3;
     width: 100%;
     flex: none;
+  }
+
+  .priority-bar-label {
+    min-width: 50px;
+    font-size: 13px;
+  }
+
+  .priority-bar-value {
+    font-size: 13px;
+    min-width: 60px;
+  }
+}
+
+@media (max-width: 480px) {
+  .donut-chart-container {
+    gap: 20px;
+  }
+
+  .donut-legend-label {
+    font-size: 13px;
+  }
+
+  .donut-legend-count {
+    font-size: 13px;
+  }
+
+  .priority-bar-item {
+    gap: 6px;
+  }
+
+  .priority-bar-label {
+    min-width: 45px;
+    font-size: 12px;
+  }
+
+  .priority-bar-value {
+    font-size: 12px;
+    min-width: 50px;
   }
 }

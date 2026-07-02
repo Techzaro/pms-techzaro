@@ -97,29 +97,20 @@ const SummaryCard = memo(function SummaryCard({ card, onClick }) {
         }
       }}
       style={{
-        background: "#fff", borderRadius: "16px", padding: "20px",
-        boxShadow: "0 2px 10px rgba(0,0,0,0.05)", display: "flex",
-        flexDirection: "column", gap: "18px",
         cursor: card.filter ? "pointer" : "default",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-        <div style={{
-          width: "56px", height: "56px", borderRadius: "14px",
-          background: card.bgColor, display: "flex", alignItems: "center",
-          justifyContent: "center",
-        }}>
-          <img src={card.icon} alt={card.title} style={{ width: "26px", height: "26px" }} />
+      <div className="summary-card-top">
+        <div className="summary-icon" style={{ background: card.bgColor }}>
+          <img src={card.icon} alt={card.title} />
         </div>
         <div>
-          <h4 style={{
-            margin: 0, fontSize: "15px",
+          <h4 className="summary-title" style={{
             color: card.filter ? "#2563EB" : "#6b7280",
-            cursor: card.filter ? "pointer" : "default",
           }}>
             {card.title}
           </h4>
-          <div style={{ marginTop: "5px", fontSize: "36px", fontWeight: "700", color: card.valueColor }}>
+          <div className="summary-value" style={{ color: card.valueColor }}>
             {card.value}
           </div>
         </div>
@@ -246,12 +237,7 @@ function Reports() {
         </div>
 
         {/* SUMMARY CARDS */}
-        <div className="summary-cards-grid" style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
-          gap: "20px",
-          marginBottom: "32px",
-        }}>
+        <div className="summary-cards-grid">
           {["total_assigned", "approved", "pending", "overdue"].map((key) => {
             const meta = CARD_META[key];
             return (
@@ -308,25 +294,79 @@ function Reports() {
 
         {/* TABLE - Admin, Manager & Team Lead (on team members view) */}
         {showUserTable && (
-          <div className="reports-table-wrapper">
-            <div className="reports-table">
-              <div className="table-header">
-                <span className="th-member">User</span>
-                <span className="th-stat">Assigned</span>
-                <span className="th-stat">Approved</span>
-                <span className="th-stat">Pending</span>
-                <span className="th-tasks">Overdue</span>
-                <span className="th-action">Action</span>
-              </div>
+          <>
+            {/* Desktop Table */}
+            <div className="reports-table-wrapper">
+              <div className="reports-table">
+                <div className="table-header">
+                  <span className="th-member">User</span>
+                  <span className="th-stat">Assigned</span>
+                  <span className="th-stat">Approved</span>
+                  <span className="th-stat">Pending</span>
+                  <span className="th-tasks">Overdue</span>
+                  <span className="th-action">Action</span>
+                </div>
 
+                {isTableLoading ? (
+                  <div style={{ padding: "24px", textAlign: "center", color: "#9ca3af" }}>Loading...</div>
+                ) : (userTableData || []).length === 0 ? (
+                  <div style={{ padding: "24px", textAlign: "center", color: "#9ca3af" }}>No data available</div>
+                ) : (
+                  (userTableData || []).map((member) => (
+                    <div key={member.id} className="table-row">
+                      <div className="table-member">
+                        <div
+                          className="member-avatar"
+                          style={{ background: getAvatarColor(member.name), color: "#fff" }}
+                        >
+                          {getInitials(member.name)}
+                        </div>
+                        <div className="member-info">
+                          <div className="member-name">{member.name}</div>
+                          <div className="member-role">{ROLE_LABEL[member.role] || member.role}</div>
+                        </div>
+                      </div>
+
+                      <div className="stat-cell">
+                        <span className="stat-badge assigned">{member.assigned}</span>
+                      </div>
+                      <div className="stat-cell">
+                        <span className="stat-badge completed">{member.completed}</span>
+                      </div>
+                      <div className="stat-cell">
+                        <span className="stat-badge pending">{member.pending}</span>
+                      </div>
+                      <div className="stat-cell">
+                        <span className="stat-badge overdue">{member.overdue}</span>
+                      </div>
+
+                      <div className="action-cell">
+                        <button
+                          className="table-action-btn"
+                          onClick={() => navigate(rolePath(`reports/user-performance/${member.id}`))}
+                        >
+                          Profile
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M5 3L9 7L5 11" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Mobile Card Layout */}
+            <div className="reports-table-cards">
               {isTableLoading ? (
                 <div style={{ padding: "24px", textAlign: "center", color: "#9ca3af" }}>Loading...</div>
               ) : (userTableData || []).length === 0 ? (
                 <div style={{ padding: "24px", textAlign: "center", color: "#9ca3af" }}>No data available</div>
               ) : (
                 (userTableData || []).map((member) => (
-                  <div key={member.id} className="table-row">
-                    <div className="table-member">
+                  <div key={member.id} className="report-member-card">
+                    <div className="report-member-card-header">
                       <div
                         className="member-avatar"
                         style={{ background: getAvatarColor(member.name), color: "#fff" }}
@@ -338,26 +378,30 @@ function Reports() {
                         <div className="member-role">{ROLE_LABEL[member.role] || member.role}</div>
                       </div>
                     </div>
-
-                    <div className="stat-cell">
-                      <span className="stat-badge assigned">{member.assigned}</span>
+                    <div className="report-member-stats">
+                      <div className="report-member-stat">
+                        <span className="report-member-stat-label">Assigned</span>
+                        <span className="stat-badge assigned">{member.assigned}</span>
+                      </div>
+                      <div className="report-member-stat">
+                        <span className="report-member-stat-label">Approved</span>
+                        <span className="stat-badge completed">{member.completed}</span>
+                      </div>
+                      <div className="report-member-stat">
+                        <span className="report-member-stat-label">Pending</span>
+                        <span className="stat-badge pending">{member.pending}</span>
+                      </div>
+                      <div className="report-member-stat">
+                        <span className="report-member-stat-label">Overdue</span>
+                        <span className="stat-badge overdue">{member.overdue}</span>
+                      </div>
                     </div>
-                    <div className="stat-cell">
-                      <span className="stat-badge completed">{member.completed}</span>
-                    </div>
-                    <div className="stat-cell">
-                      <span className="stat-badge pending">{member.pending}</span>
-                    </div>
-                    <div className="stat-cell">
-                      <span className="stat-badge overdue">{member.overdue}</span>
-                    </div>
-
-                    <div className="action-cell">
+                    <div className="report-member-card-actions">
                       <button
                         className="table-action-btn"
                         onClick={() => navigate(rolePath(`reports/user-performance/${member.id}`))}
                       >
-                        Profile
+                        View Profile
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M5 3L9 7L5 11" />
                         </svg>
@@ -367,7 +411,7 @@ function Reports() {
                 ))
               )}
             </div>
-          </div>
+          </>
         )}
 
       </div>
