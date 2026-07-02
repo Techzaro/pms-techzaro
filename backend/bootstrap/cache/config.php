@@ -306,6 +306,27 @@
     ),
     'prefix' => 'pms-techxaro-cache-',
   ),
+  'company' => 
+  array (
+    'documents' => 
+    array (
+      'company_logo' => 'company_docs/company_logo.png',
+      'qr_code' => 'company_docs/qr_code.png',
+      'employment_contract' => 'company_docs/employment_contract.pdf',
+      'offer_letter' => 'company_docs/offer_letter.pdf',
+      'techxaro_regulations' => 'company_docs/techxaro_regulations.pdf',
+    ),
+    'document_labels' => 
+    array (
+      'company_logo' => 'TechXaro Company Logo',
+      'qr_code' => 'Company QR Code',
+      'employment_contract' => 'Employment Contract',
+      'offer_letter' => 'Offer Letter',
+      'techxaro_regulations' => 'TechXaro Regulations',
+    ),
+    'disk' => 'public',
+    'upload_dir' => 'company_docs',
+  ),
   'cors' => 
   array (
     'paths' => 
@@ -526,14 +547,14 @@
       array (
         'driver' => 'single',
         'path' => 'C:\\xampp\\htdocs\\PMS-project\\backend\\storage\\logs/laravel.log',
-        'level' => 'error',
+        'level' => 'debug',
         'replace_placeholders' => true,
       ),
       'daily' => 
       array (
         'driver' => 'daily',
         'path' => 'C:\\xampp\\htdocs\\PMS-project\\backend\\storage\\logs/laravel.log',
-        'level' => 'error',
+        'level' => 'debug',
         'days' => 14,
         'replace_placeholders' => true,
       ),
@@ -543,13 +564,13 @@
         'url' => NULL,
         'username' => 'PMS Techxaro',
         'emoji' => ':boom:',
-        'level' => 'error',
+        'level' => 'debug',
         'replace_placeholders' => true,
       ),
       'papertrail' => 
       array (
         'driver' => 'monolog',
-        'level' => 'error',
+        'level' => 'debug',
         'handler' => 'Monolog\\Handler\\SyslogUdpHandler',
         'handler_with' => 
         array (
@@ -565,7 +586,7 @@
       'stderr' => 
       array (
         'driver' => 'monolog',
-        'level' => 'error',
+        'level' => 'debug',
         'handler' => 'Monolog\\Handler\\StreamHandler',
         'handler_with' => 
         array (
@@ -580,14 +601,14 @@
       'syslog' => 
       array (
         'driver' => 'syslog',
-        'level' => 'error',
+        'level' => 'debug',
         'facility' => 8,
         'replace_placeholders' => true,
       ),
       'errorlog' => 
       array (
         'driver' => 'errorlog',
-        'level' => 'error',
+        'level' => 'debug',
         'replace_placeholders' => true,
       ),
       'null' => 
@@ -668,7 +689,7 @@
     ),
     'from' => 
     array (
-      'address' => 'noreply@techxaro.com',
+      'address' => 'sufyan.sufyan1029@gmail.com',
       'name' => 'PMS Techxaro',
     ),
     'markdown' => 
