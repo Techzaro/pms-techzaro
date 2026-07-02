@@ -73,6 +73,7 @@ function DeliveriesByYou() {
 
     fetch(`${API_URL}/deliverables/assigned-by-me?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
     })
       .then((res) => (res.ok ? res.json() : { data: [] }))
       .then((data) => {

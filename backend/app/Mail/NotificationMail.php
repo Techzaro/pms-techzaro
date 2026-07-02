@@ -21,12 +21,16 @@ class NotificationMail extends Mailable
     public string $frontendUrl;
     public $entity;
     public array $deliverableContext = [];
+    public string $senderEmail;
+    public string $senderName;
 
-    public function __construct(Notification $notification)
+    public function __construct(Notification $notification, string $senderEmail = '', string $senderName = 'PMS Techxaro')
     {
         $this->notification = $notification;
         $this->frontendUrl = rtrim(config('app.frontend_url'), '/');
         $this->entity = $this->loadEntity($notification);
+        $this->senderEmail = $senderEmail ?: config('mail.from.address');
+        $this->senderName = $senderName ?: config('mail.from.name');
 
         if ($notification->type === 'deliverable_added') {
             $this->deliverableContext = $this->buildDeliverableContext($notification);
@@ -76,6 +80,7 @@ class NotificationMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
+            from: new \Illuminate\Mail\Mailables\Address($this->senderEmail, $this->senderName),
             subject: $this->notification->title ?: 'PMS Notification',
         );
     }

@@ -55,8 +55,12 @@ class Notification extends Model
             // Send email notification (synchronous)
             if (static::wantsChannel($notification, 'email')) {
                 try {
-                    Mail::to($notification->user->professional_email)
-                        ->send(new NotificationMail($notification));
+                    $mail = new NotificationMail($notification, $notification->sender->professional_email ?? '', $notification->sender->name ?? 'PMS Techxaro');
+                    if (config('queue.default') !== 'sync') {
+                        Mail::to($notification->user->professional_email)->queue($mail);
+                    } else {
+                        Mail::to($notification->user->professional_email)->send($mail);
+                    }
                 } catch (\Throwable $e) {
                     Log::error('Failed to send notification email', [
                         'notification_id' => $notification->id,
@@ -84,7 +88,7 @@ class Notification extends Model
      * Determine if the user has opted in for a given notification channel.
      * Falls back to enabled if no preference record exists.
      */
-    private static function wantsChannel(self $notification, string $channel): bool
+    public static function wantsChannel(self $notification, string $channel): bool
     {
         $preference = $notification->user->emailPreference;
 

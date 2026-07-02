@@ -99,6 +99,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
     const token = authToken();
     fetch(`${API_URL}/deliverables/${initialDeliverable.id}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {

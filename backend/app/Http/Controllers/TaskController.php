@@ -61,7 +61,7 @@ class TaskController extends Controller
             ->orderBy('sort_order')->latest('updated_at')
             ->filter($filters);
 
-        $tasks = $tasksQuery->get();
+        $tasks = $tasksQuery->limit(200)->get();
 
         // Bulk load deliverable counts for all tasks
         $taskIds = $tasks->pluck('id');
@@ -100,6 +100,7 @@ class TaskController extends Controller
             ->when($statusFilter && !$isDueTodayFilter && !in_array($statusFilter, ['approved', 'pending', 'submitted', 'reopened', 'rejected']), fn ($q) => $q->where('status', $statusFilter))
             ->with(['creator:id,name,role', 'team:id,name'])
             ->latest()
+            ->limit(100)
             ->get();
 
         $projects = $projects->map(function ($project) use ($user) {
@@ -149,6 +150,7 @@ class TaskController extends Controller
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
             ->orderBy('sort_order')->latest('updated_at')
             ->filter($filters)
+            ->limit(200)
             ->get();
 
         // Bulk load deliverable counts
@@ -482,11 +484,11 @@ class TaskController extends Controller
     {
         $user = request()->user();
         $task->load('project:id,created_by,team_id', 'project.team:id,leader_id', 'assignees:id');
-        $isCreator = $task->assigned_by === $user->id;
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees->contains('id', $user->id);
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
-        $isProjectCreator = $task->project && $task->project->created_by === $user->id;
-        $isTeamLeader = $task->project && $task->project->team && $task->project->team->leader_id === $user->id;
+        $isProjectCreator = $task->project && (int) $task->project->created_by === (int) $user->id;
+        $isTeamLeader = $task->project && $task->project->team && (int) $task->project->team->leader_id === (int) $user->id;
         $isTeamMember = $task->project && $task->project->team && $task->project->team->members && $task->project->team->members->contains('id', $user->id);
 
         if (!$isCreator && !$isAssignee && !$isAdminOrManager && !$isProjectCreator && !$isTeamLeader && !$isTeamMember) {
@@ -1000,7 +1002,7 @@ class TaskController extends Controller
     public function updateStatus(Request $request, Task $task)
     {
         $user = $request->user();
-        $isCreator = $task->assigned_by === $user->id;
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
 
@@ -1049,6 +1051,8 @@ class TaskController extends Controller
                 'due_date' => $task->end_date, 'assigned_to' => $user->id,
                 'created_by' => $task->assigned_by,
             ]);
+
+            $task->load('project:id,title');
 
             if ($task->assigned_by && $task->assigned_by !== $user->id) {
                 $this->notificationService->notify(
@@ -1164,6 +1168,8 @@ class TaskController extends Controller
 
         $task->update($updateData);
 
+        $task->load('project:id,title');
+
         if ($task->assigned_by && $task->assigned_by !== $user->id) {
             $this->notificationService->notify(
                 $task->assigned_by,
@@ -1211,7 +1217,7 @@ class TaskController extends Controller
     public function approve(Request $request, Task $task)
     {
         $user = $request->user();
-        $isCreator = $task->assigned_by === $user->id;
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
 
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         if ($task->status !== 'submitted') return response()->json(['success' => false, 'message' => 'Can only approve submitted tasks'], 422);
@@ -1262,7 +1268,7 @@ class TaskController extends Controller
     public function reject(Request $request, Task $task)
     {
         $user = $request->user();
-        $isCreator = $task->assigned_by === $user->id;
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
 
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         if ($task->status !== 'submitted') return response()->json(['success' => false, 'message' => 'Can only reject submitted tasks'], 422);
@@ -1320,7 +1326,7 @@ class TaskController extends Controller
     public function reopen(Request $request, Task $task)
     {
         $user = $request->user();
-        $isCreator = $task->assigned_by === $user->id;
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
 
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         if ($task->status !== 'submitted') return response()->json(['success' => false, 'message' => 'Can only reopen submitted tasks'], 422);
@@ -1401,7 +1407,7 @@ class TaskController extends Controller
     public function latestSubmission(Request $request, Task $task)
     {
         $user = $request->user();
-        $isCreator = $task->assigned_by === $user->id;
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
 
         if (!$isCreator && !$isAssignee && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -1420,7 +1426,7 @@ class TaskController extends Controller
     {
         $user = request()->user();
         $task = $submission->task;
-        $isCreator = $task->assigned_by === $user->id;
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
 
         if (!$isCreator && !$isAssignee && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -1471,7 +1477,7 @@ class TaskController extends Controller
     public function uploadFile(Request $request, Task $task)
     {
         $user = $request->user();
-        $isCreator = $task->assigned_by === $user->id;
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
 
@@ -1495,7 +1501,7 @@ class TaskController extends Controller
     public function addLink(Request $request, Task $task)
     {
         $user = $request->user();
-        $isCreator = $task->assigned_by === $user->id;
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
 
@@ -1517,7 +1523,7 @@ class TaskController extends Controller
     public function deleteFile(Task $task, TaskFile $file)
     {
         $user = request()->user();
-        $isCreator = $task->assigned_by === $user->id;
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
 
@@ -1526,8 +1532,7 @@ class TaskController extends Controller
 
         if ($file->url && str_starts_with($file->url, '/storage/')) {
             $relativePath = str_replace('/storage/', '', $file->url);
-            $fullPath = storage_path('app/public/' . $relativePath);
-            if (file_exists($fullPath)) unlink($fullPath);
+            Storage::disk('public')->delete($relativePath);
         }
         $file->delete();
 
@@ -1565,7 +1570,6 @@ class TaskController extends Controller
         if (!$task->relationLoaded('assignees')) $task->load('assignees:id');
         $assigneeIds = $task->assignees->pluck('id')->toArray();
 
-        // Build a short summary of all changes
         $changeLabels = array_map(fn($c) => $c['label'] ?? ucwords(str_replace('_', ' ', $c['field_name'])), $changes);
         $summary = count($changeLabels) > 0
             ? implode(', ', array_slice($changeLabels, 0, 4)) . (count($changeLabels) > 4 ? ' and ' . (count($changeLabels) - 4) . ' more' : '')
@@ -1573,18 +1577,21 @@ class TaskController extends Controller
 
         $msg = $updater->name . ' updated task "' . $task->title . '" — changed: ' . $summary . '.';
 
+        $notifications = [];
         foreach (array_filter($assigneeIds, fn($id) => (int) $id !== (int) $updater->id) as $assigneeId) {
-            $this->notificationService->notify(
-                $assigneeId,
-                $updater->id,
-                'task_updated',
-                'task',
-                $task->id,
-                'Task Updated',
-                $msg,
-                '/tasks/task-details/' . $task->id . '?from=tasks'
-            );
+            $notifications[] = [
+                'user_id' => $assigneeId,
+                'sender_user_id' => $updater->id,
+                'type' => 'task_updated',
+                'related_module' => 'task',
+                'related_id' => $task->id,
+                'title' => 'Task Updated',
+                'message' => $msg,
+                'link' => '/tasks/task-details/' . $task->id . '?from=tasks',
+            ];
         }
+
+        $this->notificationService->createBulk($notifications);
     }
 
     /**

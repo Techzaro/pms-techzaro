@@ -94,19 +94,23 @@ const EditProjectModal = ({ project, onClose }) => {
   useEffect(() => {
     const token = authToken();
 
-    fetch(`${API_URL}/teams`, {
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-    })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setTeams(Array.isArray(data) ? data : []))
-      .catch(() => {});
+    Promise.all([
+      fetch(`${API_URL}/teams`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => setTeams(Array.isArray(data) ? data : []))
+        .catch(() => {}),
 
-    fetch(`${API_URL}/team-users`, {
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-    })
-      .then((res) => (res.ok ? res.json() : { users: [] }))
-      .then((data) => setAllUsers(Array.isArray(data) ? data : (data.users || [])))
-      .catch(() => {});
+      fetch(`${API_URL}/team-users`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      })
+        .then((res) => (res.ok ? res.json() : { users: [] }))
+        .then((data) => setAllUsers(Array.isArray(data) ? data : (data.users || [])))
+        .catch(() => {}),
+    ]);
   }, []);
 
   const displayUsers = (() => {
@@ -239,22 +243,19 @@ const EditProjectModal = ({ project, onClose }) => {
   };
 
   const uploadAttachments = async (projId, token) => {
-    for (const file of pendingFiles) {
-      const fd = new FormData();
-      fd.append("file", file);
-      try {
-        await fetch(`${API_URL}/projects/${projId}/files`, {
+    await Promise.all([
+      ...pendingFiles.map((file) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        return fetch(`${API_URL}/projects/${projId}/files`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           body: fd,
           _notifHandled: true,
-        });
-      } catch {}
-    }
-
-    for (const link of links) {
-      try {
-        await fetch(`${API_URL}/projects/${projId}/links`, {
+        }).catch(() => {});
+      }),
+      ...links.map((link) => {
+        return fetch(`${API_URL}/projects/${projId}/links`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -263,9 +264,9 @@ const EditProjectModal = ({ project, onClose }) => {
           },
           body: JSON.stringify(link),
           _notifHandled: true,
-        });
-      } catch {}
-    }
+        }).catch(() => {});
+      }),
+    ]);
   };
 
   /**

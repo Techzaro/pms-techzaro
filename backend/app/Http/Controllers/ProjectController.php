@@ -170,19 +170,22 @@ class ProjectController extends Controller
         $project = Project::create($validated);
         $this->replaceProjectMilestones($project, $milestones);
 
+        $assigneeNames = !empty($validated['assigned_users'])
+            ? User::whereIn('id', $validated['assigned_users'])->pluck('name')->implode(', ')
+            : '';
+
         // Create workflow event for project creation
         ProjectWorkflowEvent::create([
             'project_id' => $project->id,
             'user_id' => $request->user()->id,
             'action' => 'created',
             'comment' => !empty($validated['assigned_users'])
-                ? 'Created project and assigned to ' . User::whereIn('id', $validated['assigned_users'])->pluck('name')->implode(', ') . ' — gave view access'
+                ? 'Created project and assigned to ' . $assigneeNames . ' — gave view access'
                 : null,
         ]);
 
         // Create assignment events in bulk
         if (!empty($validated['assigned_users'])) {
-            $assigneeNames = User::whereIn('id', $validated['assigned_users'])->pluck('name')->implode(', ');
             $assignedEvents = [];
             foreach ($validated['assigned_users'] as $assigneeId) {
                 if ((int) $assigneeId !== (int) $request->user()->id) {
@@ -204,9 +207,6 @@ class ProjectController extends Controller
         $this->sendProjectAssignmentNotification($project, $request->user());
 
         // Log activity for the creator
-        $assigneeNames = !empty($validated['assigned_users'])
-            ? User::whereIn('id', $validated['assigned_users'])->pluck('name')->implode(', ')
-            : '';
         $activityDesc = $assigneeNames
             ? 'You created project "' . $project->title . '" and assigned it to ' . $assigneeNames
             : 'You created project "' . $project->title . '"';
@@ -244,7 +244,6 @@ class ProjectController extends Controller
         }
 
         // Send confirmation email to performer
-        $assigneeNames = User::whereIn('id', $validated['assigned_users'] ?? [])->pluck('name')->implode(', ');
         $this->notificationService->confirmAction($request->user(), 'Created & Assigned', 'project', $project->title, [
             'Assigned To' => $assigneeNames ?: 'N/A',
             'Deliverables' => !empty($deliverables) ? (string) count($deliverables) . ' added' : 'None',
@@ -271,15 +270,19 @@ class ProjectController extends Controller
         $user = request()->user();
 
         if (!in_array($user->role, ['admin', 'manager'])) {
-            $project->load('team.members:id', 'manuallyVisibleTo:user_id');
-            $isCreator = $project->created_by === $user->id;
+            try {
+                $project->load('team.members:id', 'manuallyVisibleTo:user_id');
+            } catch (\Exception $e) {
+                $project->load('team.members:id');
+            }
+            $isCreator = (int) $project->created_by === (int) $user->id;
             $isAssigned = in_array($user->id, $project->assigned_users ?? []);
             $isTeamMember = $project->team_id && $project->team && (
                 $project->team->members->contains('id', $user->id) ||
-                $project->team->leader_id === $user->id
+                (int) $project->team->leader_id === (int) $user->id
             );
             $hasTasksUnderProject = $project->tasks()->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))->exists();
-            $isManuallyVisible = $project->manuallyVisibleTo->isNotEmpty();
+            $isManuallyVisible = isset($project->manuallyVisibleTo) ? $project->manuallyVisibleTo->isNotEmpty() : false;
             $isTeamLead = $user->role === 'team_lead';
 
             if (!$isCreator && !$isAssigned && !$isTeamMember && !$hasTasksUnderProject && !$isManuallyVisible && !$isTeamLead) {
@@ -287,27 +290,36 @@ class ProjectController extends Controller
             }
         }
 
-        $project->load([
+        $baseRelations = [
             'creator:id,name,email,role',
             'team.leader:id,name,email,role',
             'team.members:id,name,email,role',
             'milestones',
             'files',
-            'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
-            'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
-            'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
             'approvedBy:id,name',
             'rejectedBy:id,name',
             'reopenedBy:id,name',
-            'changes' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
-            'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'deliverables' => fn ($q) => $q->with(['assignee:id,name,role', 'creator:id,name,role'])->orderBy('sort_order'),
             'tasks' => fn ($q) => $q->with(['assignees:id,name', 'assigner:id,name,role'])->withCount([
                 'deliverables as total_deliverables',
                 'deliverables as approved_deliverables' => fn ($q) => $q->where('status', 'approved'),
                 'deliverables as pending_deliverables' => fn ($q) => $q->whereNotIn('status', ['approved']),
             ])->orderBy('sort_order')->latest(),
-        ]);
+        ];
+
+        $optionalRelations = [
+            'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
+            'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
+            'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
+            'changes' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
+            'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
+        ];
+
+        try {
+            $project->load(array_merge($baseRelations, $optionalRelations));
+        } catch (\Exception $e) {
+            $project->load($baseRelations);
+        }
 
         $project->loadCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
             $q->whereIn('status', ['approved', 'completed', 'done']);
@@ -325,12 +337,11 @@ class ProjectController extends Controller
             ? User::whereIn('id', $memberIds)->where('active', true)->orderBy('name')->get(['id', 'name', 'email', 'role'])
             : collect();
 
-        $isCreator = $project->created_by === $user->id;
+        $isCreator = (int) $project->created_by === (int) $user->id;
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
         $isAssigned = in_array($user->id, $project->assigned_users ?? []);
         $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
 
-        // Cache approval checks since they involve sub-queries
         $approvalCacheKey = "project_approval_{$project->id}";
         $approvalStatus = Cache::remember($approvalCacheKey, 30, function () use ($project) {
             $unapprovedTasks = $project->tasks()->where('status', '!=', 'approved')->count();
@@ -349,10 +360,15 @@ class ProjectController extends Controller
         $payload['can_edit'] = $isAdminOrManager;
         $payload['can_submit'] = in_array($project->status, $submittableStatuses) && $isAssigned && $approvalStatus['all_deliverables_approved'] && $approvalStatus['all_tasks_approved'];
         $payload['can_review'] = $project->status === 'submitted' && ($isCreator || $isAdminOrManager);
-        $payload['unviewed_changes'] = $project->unviewedChanges;
-        $payload['unviewed_changes_count'] = $project->unviewedChanges->count();
-        $payload['all_changes'] = $project->changes;
-        $payload['activity_max_id'] = (int) \App\Models\ProjectChange::where('project_id', $project->id)->max('id');
+        $payload['unviewed_changes'] = $project->unviewedChanges ?? collect();
+        $payload['unviewed_changes_count'] = $payload['unviewed_changes']->count();
+        $payload['all_changes'] = $project->changes ?? collect();
+
+        try {
+            $payload['activity_max_id'] = (int) \App\Models\ProjectChange::where('project_id', $project->id)->max('id');
+        } catch (\Exception $e) {
+            $payload['activity_max_id'] = 0;
+        }
 
         return response()->json(['success' => true, 'project' => $payload]);
     }
@@ -370,7 +386,7 @@ class ProjectController extends Controller
     public function update(Request $request, Project $project)
     {
         $user = $request->user();
-        $isCreator = $project->created_by === $user->id;
+        $isCreator = (int) $project->created_by === (int) $user->id;
 
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -542,7 +558,7 @@ class ProjectController extends Controller
     public function patch(Request $request, Project $project)
     {
         $user = $request->user();
-        $isCreator = $project->created_by === $user->id;
+        $isCreator = (int) $project->created_by === (int) $user->id;
 
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -567,6 +583,8 @@ class ProjectController extends Controller
             ]);
         }
 
+        $this->clearDashboardCache($user->id);
+
         return response()->json([
             'success' => true,
             'message' => 'Project updated',
@@ -583,7 +601,7 @@ class ProjectController extends Controller
     public function completeProject(Project $project)
     {
         $user = request()->user();
-        $isCreator = $project->created_by === $user->id;
+        $isCreator = (int) $project->created_by === (int) $user->id;
         $isAssigned = in_array($user->id, $project->assigned_users ?? []);
 
         if (!$isCreator && !$isAssigned && !in_array($user->role, ['admin', 'manager'])) {
@@ -619,7 +637,7 @@ class ProjectController extends Controller
     public function destroy(Project $project)
     {
         $user = request()->user();
-        $isCreator = $project->created_by === $user->id;
+        $isCreator = (int) $project->created_by === (int) $user->id;
 
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -811,8 +829,7 @@ class ProjectController extends Controller
     {
         if ($file->url && str_starts_with($file->url, '/storage/')) {
             $relativePath = str_replace('/storage/', '', $file->url);
-            $fullPath = storage_path('app/public/' . $relativePath);
-            if (file_exists($fullPath)) unlink($fullPath);
+            Storage::disk('public')->delete($relativePath);
         }
         $file->delete();
         return response()->json(['success' => true, 'message' => 'File deleted successfully']);
@@ -968,7 +985,7 @@ class ProjectController extends Controller
     public function approve(Request $request, Project $project)
     {
         $user = $request->user();
-        $isCreator = $project->created_by === $user->id;
+        $isCreator = (int) $project->created_by === (int) $user->id;
 
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -1025,7 +1042,7 @@ class ProjectController extends Controller
     public function reject(Request $request, Project $project)
     {
         $user = $request->user();
-        $isCreator = $project->created_by === $user->id;
+        $isCreator = (int) $project->created_by === (int) $user->id;
 
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -1095,7 +1112,7 @@ class ProjectController extends Controller
     public function reopen(Request $request, Project $project)
     {
         $user = $request->user();
-        $isCreator = $project->created_by === $user->id;
+        $isCreator = (int) $project->created_by === (int) $user->id;
 
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -1193,7 +1210,7 @@ class ProjectController extends Controller
     public function latestSubmission(Request $request, Project $project)
     {
         $user = $request->user();
-        $isCreator = $project->created_by === $user->id;
+        $isCreator = (int) $project->created_by === (int) $user->id;
         $isAssigned = in_array($user->id, $project->assigned_users ?? []);
 
         if (!$isCreator && !$isAssigned && !in_array($user->role, ['admin', 'manager'])) {
@@ -1218,7 +1235,7 @@ class ProjectController extends Controller
     {
         $user = request()->user();
         $project = $submission->project;
-        $isCreator = $project->created_by === $user->id;
+        $isCreator = (int) $project->created_by === (int) $user->id;
         $isAssigned = in_array($user->id, $project->assigned_users ?? []);
 
         if (!$isCreator && !$isAssigned && !in_array($user->role, ['admin', 'manager'])) {
@@ -1272,7 +1289,6 @@ class ProjectController extends Controller
         $assignedUserIds = $project->assigned_users ?? [];
         if (is_string($assignedUserIds)) $assignedUserIds = json_decode($assignedUserIds, true) ?? [];
 
-        // Build a short summary of all changes
         $changeLabels = array_map(fn($c) => $c['label'] ?? ucwords(str_replace('_', ' ', $c['field_name'])), $changes);
         $summary = count($changeLabels) > 0
             ? implode(', ', array_slice($changeLabels, 0, 4)) . (count($changeLabels) > 4 ? ' and ' . (count($changeLabels) - 4) . ' more' : '')
@@ -1280,18 +1296,21 @@ class ProjectController extends Controller
 
         $message = $updater->name . ' updated project "' . $project->title . '" — changed: ' . $summary . '.';
 
+        $notifications = [];
         foreach (array_filter($assignedUserIds, fn($id) => (int) $id !== (int) $updater->id) as $userId) {
-            $this->notificationService->notify(
-                $userId,
-                $updater->id,
-                'project_updated',
-                'project',
-                $project->id,
-                'Project Updated',
-                $message,
-                '/projects/project-details/' . $project->id
-            );
+            $notifications[] = [
+                'user_id' => $userId,
+                'sender_user_id' => $updater->id,
+                'type' => 'project_updated',
+                'related_module' => 'project',
+                'related_id' => $project->id,
+                'title' => 'Project Updated',
+                'message' => $message,
+                'link' => '/projects/project-details/' . $project->id,
+            ];
         }
+
+        $this->notificationService->createBulk($notifications);
     }
 
     /**

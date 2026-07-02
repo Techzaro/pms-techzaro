@@ -34,6 +34,7 @@ export function useActivityHighlight(entityType, entityId, activityMaxId, activi
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ entities: [{ type: entityType, id: entityId }] }),
+      skipLoader: true,
       _notifHandled: true,
     })
       .then((r) => r.json())

@@ -135,6 +135,12 @@ class ReportController extends Controller
      * @param  \App\Models\User  $user  The user to generate the report for.
      * @return \Illuminate\Http\JsonResponse  JSON response with user profile, stats, deliverables, and projects.
      */
+    public function myPerformance(Request $request)
+    {
+        $user = $request->user();
+        return $this->userPerformance($request, $user);
+    }
+
     public function userPerformance(Request $request, User $user)
     {
         $requestingUser = $request->user();
@@ -357,6 +363,7 @@ class ReportController extends Controller
         $deliverables = (clone $deliverableQuery)
             ->with('task:id,title', 'project:id,title')
             ->latest()
+            ->limit(50)
             ->get()
             ->map(fn ($d) => [
                 'id' => $d->id,

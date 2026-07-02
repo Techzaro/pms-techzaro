@@ -43,10 +43,6 @@ class UserController extends Controller
         'employment_contract',
         'offer_letter',
         'techxaro_regulations',
-        'latest_education_cert',
-        'cv',
-        'previous_exp_letter',
-        'previous_salary_slip',
         'other_document',
     ];
 
@@ -59,7 +55,7 @@ class UserController extends Controller
      */
     public function index()
     {
-        $users = User::select('id', 'name', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password', 'personal_email', 'professional_email', 'professional_email_password')
+        $users = User::select('id', 'name', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password', 'personal_email', 'professional_email')
             ->orderBy('sort_order')->latest('updated_at')
             ->get();
 
@@ -128,11 +124,8 @@ class UserController extends Controller
             'employment_contract' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
             'offer_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
             'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'latest_education_cert' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'cv' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'previous_exp_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'previous_salary_slip' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'other_document' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'other_document' => 'nullable|array',
+            'other_document.*' => 'file|mimes:pdf,jpeg,png,webp|max:10240',
         ]);
 
         $plainPassword = Str::random(10);
@@ -199,7 +192,16 @@ class UserController extends Controller
         // Collect uploaded file paths for email attachments
         $emailAttachments = [];
         foreach ($this->documentFields as $field) {
-            if ($user->$field && Storage::disk('public')->exists($user->$field)) {
+            if ($field === 'other_document') {
+                // other_document may contain multiple files as JSON
+                $paths = $this->parseOtherDocumentPaths($user->other_document);
+                foreach ($paths as $path) {
+                    if (Storage::disk('public')->exists($path)) {
+                        $fullPath = Storage::disk('public')->path($path);
+                        $emailAttachments[$fullPath] = 'other_document';
+                    }
+                }
+            } elseif ($user->$field && Storage::disk('public')->exists($user->$field)) {
                 $fullPath = Storage::disk('public')->path($user->$field);
                 $emailAttachments[$fullPath] = $field;
             }
@@ -232,7 +234,7 @@ class UserController extends Controller
         // 1. Welcome email ONLY to new user's personal email (first time)
         if ($personalEmail) {
             try {
-                Mail::to($personalEmail)->send(new UserCreated($user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments));
+                Mail::to($personalEmail)->send(new UserCreated($user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments, false, '', $authUser->professional_email, $authUser->name));
                 $emailSent = true;
                 Log::info("Welcome email sent to personal email {$personalEmail} for user ID {$user->id}");
             } catch (\Throwable $e) {
@@ -246,15 +248,15 @@ class UserController extends Controller
             }
         }
 
-        // 2. Admin/Manager ko confirmation email on their professional email (Outlook)
-        if ($authUser && $authUser->professional_email) {
+        // 2. Confirmation email to new user's professional email (Outlook)
+        if ($profEmail) {
             try {
-                Mail::to($authUser->professional_email)->send(new UserCreated($user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments));
-                Log::info("User creation confirmation sent to admin {$authUser->professional_email}");
+                Mail::to($profEmail)->send(new UserCreated($user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments, true, $authUser->name, $authUser->professional_email, $authUser->name));
+                Log::info("User creation confirmation sent to professional email {$profEmail} for user ID {$user->id}");
             } catch (\Throwable $e) {
-                Log::error("Failed to send admin confirmation email: " . $e->getMessage(), [
-                    'admin_id' => $authUser->id,
-                    'admin_email' => $authUser->professional_email,
+                Log::error("Failed to send confirmation email to professional email {$profEmail}: " . $e->getMessage(), [
+                    'user_id' => $user->id,
+                    'user_email' => $profEmail,
                 ]);
             }
         }
@@ -319,11 +321,8 @@ class UserController extends Controller
             'employment_contract' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
             'offer_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
             'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'latest_education_cert' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'cv' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'previous_exp_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'previous_salary_slip' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'other_document' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'other_document' => 'nullable|array',
+            'other_document.*' => 'file|mimes:pdf,jpeg,png,webp|max:10240',
         ]);
 
         $authUser = $request->user();
@@ -413,22 +412,24 @@ class UserController extends Controller
         }
 
         if (!empty($changes)) {
+            $changeRecords = [];
             foreach ($changes as $field => $vals) {
-                \App\Models\UserChange::create([
+                $changeRecords[] = [
                     'user_id' => $user->id,
                     'field_name' => $field,
                     'old_value' => $vals['old'] ?: null,
                     'new_value' => $vals['new'] ?: null,
                     'modified_by' => $authUser->id,
-                ]);
+                ];
             }
+            \App\Models\UserChange::insert($changeRecords);
         }
 
         $emailSent = null;
         $emailError = null;
         if (!empty($changes)) {
             try {
-                Mail::to($user->professional_email)->send(new UserProfileUpdated($user, $authUser->name, $changes));
+                Mail::to($user->professional_email)->send(new UserProfileUpdated($user, $authUser->name, $changes, $authUser->professional_email, $authUser->name));
                 $emailSent = true;
             } catch (\Exception $e) {
                 $emailError = $e->getMessage();
@@ -612,7 +613,7 @@ class UserController extends Controller
             $emailError = null;
 
             try {
-                Mail::to($user->professional_email)->send(new UserResigned($user, $authUser->name));
+                Mail::to($user->professional_email)->send(new UserResigned($user, $authUser->name, $authUser->professional_email, $authUser->name));
                 $emailSent = true;
                 Log::info("Resignation email sent to {$user->professional_email}");
             } catch (\Throwable $e) {
@@ -714,15 +715,14 @@ class UserController extends Controller
                 'father_name', 'id_card_number', 'phone_number', 'contact_no',
                 'present_address', 'permanent_address', 'address',
                 'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
-                'personal_email', 'professional_email', 'professional_email_password',
+                'personal_email', 'professional_email',
                 'recovery_email',
                 'department', 'designation', 'hired_for', 'employee_code',
                 'job_started_date', 'job_ended_date',
                 'gross_salary', 'applied_via',
                 'bank_name', 'bank_account_number', 'bank_account_title',
                 'employment_contract', 'offer_letter', 'techxaro_regulations',
-                'latest_education_cert', 'cv', 'previous_exp_letter',
-                'previous_salary_slip', 'other_document',
+                'other_document',
                 'last_login_at', 'created_at', 'updated_at', 'must_change_password',
             ]),
             'stats' => [
@@ -778,6 +778,17 @@ class UserController extends Controller
 
         if (!$path) {
             return response()->json(['success' => false, 'message' => 'Document not found.'], 404);
+        }
+
+        // Handle multiple files stored as JSON array (other_document)
+        if ($document === 'other_document') {
+            $paths = $this->parseOtherDocumentPaths($path);
+            $index = (int) $request->query('index', 0);
+            $path = $paths[$index] ?? $paths[0] ?? null;
+
+            if (!$path) {
+                return response()->json(['success' => false, 'message' => 'Document not found.'], 404);
+            }
         }
 
         $fullPath = storage_path('app/public/' . $path);
@@ -845,7 +856,11 @@ class UserController extends Controller
      */
     private function handleFileUploads(Request $request, User $user): void
     {
-        foreach ($this->documentFields as $field) {
+        $singleFields = [
+            'employment_contract', 'offer_letter', 'techxaro_regulations',
+        ];
+
+        foreach ($singleFields as $field) {
             if ($request->hasFile($field)) {
                 $file = $request->file($field);
 
@@ -865,7 +880,51 @@ class UserController extends Controller
             }
         }
 
+        // Handle multiple other_document files
+        if ($request->hasFile('other_document')) {
+            $files = $request->file('other_document');
+
+            if (is_array($files)) {
+                // Delete old files if they exist
+                $existingPaths = $this->parseOtherDocumentPaths($user->other_document);
+                foreach ($existingPaths as $oldPath) {
+                    if (Storage::disk('public')->exists($oldPath)) {
+                        Storage::disk('public')->delete($oldPath);
+                    }
+                }
+
+                $storedPaths = [];
+                foreach ($files as $file) {
+                    if ($file->isValid()) {
+                        $filename = 'other_document_' . time() . '_' . $file->getClientOriginalName();
+                        $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+                        $storedPaths[] = $path;
+                    }
+                }
+
+                $user->other_document = !empty($storedPaths) ? json_encode($storedPaths) : null;
+            }
+        }
+
         $user->save();
+    }
+
+    /**
+     * Parse other_document value which may be a JSON array of paths or a single path.
+     */
+    private function parseOtherDocumentPaths($value): array
+    {
+        if (empty($value)) {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+
+        // Legacy single file path
+        return [$value];
     }
 
     /**
@@ -877,7 +936,14 @@ class UserController extends Controller
     private function deleteAllFiles(User $user): void
     {
         foreach ($this->documentFields as $field) {
-            if ($user->$field && Storage::disk('public')->exists($user->$field)) {
+            if ($field === 'other_document') {
+                $paths = $this->parseOtherDocumentPaths($user->other_document);
+                foreach ($paths as $path) {
+                    if (Storage::disk('public')->exists($path)) {
+                        Storage::disk('public')->delete($path);
+                    }
+                }
+            } elseif ($user->$field && Storage::disk('public')->exists($user->$field)) {
                 Storage::disk('public')->delete($user->$field);
             }
         }
@@ -906,6 +972,17 @@ class UserController extends Controller
 
         if (!$path) {
             return response()->json(['success' => false, 'message' => 'Document not found.'], 404);
+        }
+
+        // Handle multiple files stored as JSON array (other_document)
+        if ($document === 'other_document') {
+            $paths = $this->parseOtherDocumentPaths($path);
+            $index = (int) $request->query('index', 0);
+            $path = $paths[$index] ?? $paths[0] ?? null;
+
+            if (!$path) {
+                return response()->json(['success' => false, 'message' => 'Document not found.'], 404);
+            }
         }
 
         $fullPath = storage_path('app/public/' . $path);

@@ -50,7 +50,7 @@ class EventController extends Controller
         }
 
         if ($request->boolean('all')) {
-            $events = $query->get();
+            $events = $query->limit(500)->get();
             return response()->json(['data' => $events->map(fn ($event) => $this->formatEventResponse($event))]);
         }
 
@@ -93,7 +93,7 @@ class EventController extends Controller
                   ->orWhere(fn ($q2) => $q2->whereDate('start_date', '<=', $startDate)->whereDate('end_date', '>=', $endDate));
             });
         }
-        $tasks = $taskQuery->get();
+        $tasks = $taskQuery->limit(500)->get();
 
         // Projects
         $projectQuery = Project::whereJsonContains('assigned_users', $user->id)
@@ -108,7 +108,7 @@ class EventController extends Controller
             });
         }
         if ($search) $projectQuery->where('title', 'like', '%' . $search . '%');
-        $projects = $projectQuery->get();
+        $projects = $projectQuery->limit(500)->get();
 
         // Deliverables
         $deliverableQuery = Deliverable::where('assigned_to', $user->id)
@@ -117,7 +117,7 @@ class EventController extends Controller
 
         if ($search) $deliverableQuery->where('title', 'like', '%' . $search . '%');
         if ($startDate && $endDate) $deliverableQuery->whereBetween('due_date', [$startDate, $endDate]);
-        $deliverables = $deliverableQuery->get();
+        $deliverables = $deliverableQuery->limit(500)->get();
 
         // Manual Events
         $manualEventsQuery = Event::with(['user:id,name','assignedUsers:id']);
@@ -131,7 +131,7 @@ class EventController extends Controller
                   ->orWhere(fn ($q2) => $q2->whereDate('start_date', '<=', $startDate)->whereDate('end_date', '>=', $endDate));
             });
         }
-        $manualEvents = $manualEventsQuery->get();
+        $manualEvents = $manualEventsQuery->limit(500)->get();
 
         // Transform in bulk
         foreach ($tasks as $task) {

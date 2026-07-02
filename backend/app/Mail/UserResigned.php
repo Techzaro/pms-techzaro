@@ -16,17 +16,22 @@ class UserResigned extends Mailable
     public User $user;
     public string $resignedBy;
     public string $resignationDate;
+    public string $senderEmail;
+    public string $senderName;
 
-    public function __construct(User $user, string $resignedBy)
+    public function __construct(User $user, string $resignedBy, string $senderEmail = '', string $senderName = 'PMS Techxaro')
     {
         $this->user = $user;
         $this->resignedBy = $resignedBy;
         $this->resignationDate = now()->format('F j, Y \a\t g:i A');
+        $this->senderEmail = $senderEmail ?: config('mail.from.address');
+        $this->senderName = $senderName ?: config('mail.from.name');
     }
 
     public function envelope(): Envelope
     {
         return new Envelope(
+            from: new \Illuminate\Mail\Mailables\Address($this->senderEmail, $this->senderName),
             subject: 'Your PMS Account Has Been Resigned',
         );
     }

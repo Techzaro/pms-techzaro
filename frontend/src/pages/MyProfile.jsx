@@ -73,6 +73,7 @@ function MyProfile() {
     try {
       const res = await fetch(`${API_URL}/auth/my-profile`, {
         headers: { Accept: "application/json", ...authHeaders() },
+        skipLoader: true,
       });
       if (!res.ok) throw new Error("Unable to load profile");
       const data = await res.json();
@@ -425,10 +426,6 @@ function MyProfile() {
                   { label: "Employment Contract", key: "employment_contract" },
                   { label: "Offer Letter", key: "offer_letter" },
                   { label: "Techxaro Regulations", key: "techxaro_regulations" },
-                  { label: "Latest Educational Certificate", key: "latest_education_cert" },
-                  { label: "CV", key: "cv" },
-                  { label: "Previous Job Experience Letter", key: "previous_exp_letter" },
-                  { label: "Previous Salary Slip", key: "previous_salary_slip" },
                   { label: "Other Document", key: "other_document" },
                 ].map(({ label, key }) => (
                   <div className="info-row" key={key}>

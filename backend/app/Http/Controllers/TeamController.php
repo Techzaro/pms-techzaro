@@ -16,6 +16,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Team;
 use App\Models\User;
+use App\Models\Activity;
 use App\Services\NotificationService;
 use App\Services\ActivityService;
 use Illuminate\Http\Request;
@@ -113,22 +114,31 @@ class TeamController extends Controller
 
         // ── Each member: personalized activity + notification + email ──
         if (!empty($validated['member_ids'])) {
+            $now = now()->toDateTimeString();
+            $activities = [];
+            $notifications = [];
             foreach (array_values(array_unique($validated['member_ids'])) as $memberId) {
-                $this->activityService->log(
-                    $memberId, 'team_created',
-                    'You were added to team "' . $team->name . '" by ' . $user->name,
-                    'team', $team->id, 'created', $team->name
-                );
+                $activities[] = [
+                    'user_id' => $memberId, 'activity_type' => 'team_created',
+                    'description' => 'You were added to team "' . $team->name . '" by ' . $user->name,
+                    'related_module' => 'team', 'related_id' => $team->id,
+                    'action' => 'created', 'entity_name' => $team->name,
+                    'created_at' => $now, 'updated_at' => $now,
+                ];
                 $this->clearDashboardCache($memberId);
 
-                $this->notificationService->notify(
-                    $memberId, $user->id, 'team_created', 'team', $team->id,
-                    'You Have Been Added to a Team',
-                    'You have been added to the team "' . $team->name . '" by ' . $user->name . '.',
-                    $teamLink,
-                    ['team_name' => $team->name, 'team_lead' => $leaderName, 'members' => $memberNames, 'added_by' => $user->name]
-                );
+                $notifications[] = [
+                    'user_id' => $memberId, 'sender_user_id' => $user->id,
+                    'type' => 'team_created', 'related_module' => 'team',
+                    'related_id' => $team->id,
+                    'title' => 'You Have Been Added to a Team',
+                    'message' => 'You have been added to the team "' . $team->name . '" by ' . $user->name . '.',
+                    'link' => $teamLink,
+                    'changes' => json_encode(['team_name' => $team->name, 'team_lead' => $leaderName, 'members' => $memberNames, 'added_by' => $user->name]),
+                ];
             }
+            if (!empty($activities)) Activity::insert($activities);
+            if (!empty($notifications)) $this->notificationService->createBulk($notifications);
         }
 
         return response()->json([
@@ -214,38 +224,50 @@ class TeamController extends Controller
         $this->notificationService->confirmAction($user, 'Updated', 'team', $team->name, $confirmDetails);
 
         // ── Newly added members: personalized activity + notification + email ──
+        $now = now()->toDateTimeString();
+        $bulkActivities = [];
+        $bulkNotifications = [];
+
         if (!empty($newMemberIds)) {
             foreach ($newMemberIds as $memberId) {
-                $this->activityService->log(
-                    $memberId, 'team_member_added',
-                    'You were added to team "' . $team->name . '" by ' . $user->name,
-                    'team', $team->id, 'member_added', $team->name
-                );
-                $this->notificationService->notify(
-                    $memberId, $user->id, 'team_member_added', 'team', $team->id,
-                    'You Have Been Added to a Team',
-                    'You have been added to the team "' . $team->name . '" by ' . $user->name . '.',
-                    $teamLink,
-                    ['team_name' => $team->name, 'team_lead' => $leaderName, 'members' => $memberNames, 'added_by' => $user->name]
-                );
+                $bulkActivities[] = [
+                    'user_id' => $memberId, 'activity_type' => 'team_member_added',
+                    'description' => 'You were added to team "' . $team->name . '" by ' . $user->name,
+                    'related_module' => 'team', 'related_id' => $team->id,
+                    'action' => 'member_added', 'entity_name' => $team->name,
+                    'created_at' => $now, 'updated_at' => $now,
+                ];
+                $bulkNotifications[] = [
+                    'user_id' => $memberId, 'sender_user_id' => $user->id,
+                    'type' => 'team_member_added', 'related_module' => 'team',
+                    'related_id' => $team->id,
+                    'title' => 'You Have Been Added to a Team',
+                    'message' => 'You have been added to the team "' . $team->name . '" by ' . $user->name . '.',
+                    'link' => $teamLink,
+                    'changes' => json_encode(['team_name' => $team->name, 'team_lead' => $leaderName, 'members' => $memberNames, 'added_by' => $user->name]),
+                ];
             }
         }
 
         // ── Removed members: personalized activity + notification + email ──
         if (!empty($removedMemberIds)) {
             foreach ($removedMemberIds as $memberId) {
-                $this->activityService->log(
-                    $memberId, 'team_member_removed',
-                    'You were removed from team "' . $oldName . '" by ' . $user->name,
-                    'team', $team->id, 'member_removed', $oldName
-                );
-                $this->notificationService->notify(
-                    $memberId, $user->id, 'team_member_removed', 'team', $team->id,
-                    'Removed from Team',
-                    'You have been removed from the team "' . $oldName . '" by ' . $user->name . '.',
-                    '/manage-team',
-                    ['team_name' => $oldName, 'removed_by' => $user->name]
-                );
+                $bulkActivities[] = [
+                    'user_id' => $memberId, 'activity_type' => 'team_member_removed',
+                    'description' => 'You were removed from team "' . $oldName . '" by ' . $user->name,
+                    'related_module' => 'team', 'related_id' => $team->id,
+                    'action' => 'member_removed', 'entity_name' => $oldName,
+                    'created_at' => $now, 'updated_at' => $now,
+                ];
+                $bulkNotifications[] = [
+                    'user_id' => $memberId, 'sender_user_id' => $user->id,
+                    'type' => 'team_member_removed', 'related_module' => 'team',
+                    'related_id' => $team->id,
+                    'title' => 'Removed from Team',
+                    'message' => 'You have been removed from the team "' . $oldName . '" by ' . $user->name . '.',
+                    'link' => '/manage-team',
+                    'changes' => json_encode(['team_name' => $oldName, 'removed_by' => $user->name]),
+                ];
             }
         }
 
@@ -262,20 +284,27 @@ class TeamController extends Controller
             $infoMsg = implode(', ', $infoChanges);
 
             foreach ($existingMemberIds as $memberId) {
-                $this->activityService->log(
-                    $memberId, 'team_updated',
-                    'Team "' . $team->name . '" was updated by ' . $user->name . ' — ' . $infoMsg,
-                    'team', $team->id, 'updated', $team->name
-                );
-                $this->notificationService->notify(
-                    $memberId, $user->id, 'team_updated', 'team', $team->id,
-                    'Team Updated',
-                    'The team "' . $team->name . '" has been updated by ' . $user->name . '. Changes: ' . $infoMsg . '.',
-                    $teamLink,
-                    ['team_name' => $team->name, 'updated_by' => $user->name, 'changes' => $infoMsg]
-                );
+                $bulkActivities[] = [
+                    'user_id' => $memberId, 'activity_type' => 'team_updated',
+                    'description' => 'Team "' . $team->name . '" was updated by ' . $user->name . ' — ' . $infoMsg,
+                    'related_module' => 'team', 'related_id' => $team->id,
+                    'action' => 'updated', 'entity_name' => $team->name,
+                    'created_at' => $now, 'updated_at' => $now,
+                ];
+                $bulkNotifications[] = [
+                    'user_id' => $memberId, 'sender_user_id' => $user->id,
+                    'type' => 'team_updated', 'related_module' => 'team',
+                    'related_id' => $team->id,
+                    'title' => 'Team Updated',
+                    'message' => 'The team "' . $team->name . '" has been updated by ' . $user->name . '. Changes: ' . $infoMsg . '.',
+                    'link' => $teamLink,
+                    'changes' => json_encode(['team_name' => $team->name, 'updated_by' => $user->name, 'changes' => $infoMsg]),
+                ];
             }
         }
+
+        if (!empty($bulkActivities)) Activity::insert($bulkActivities);
+        if (!empty($bulkNotifications)) $this->notificationService->createBulk($bulkNotifications);
 
         return response()->json([
             'message' => 'Team updated successfully',
@@ -333,40 +362,50 @@ class TeamController extends Controller
             'Team Members' => implode(', ', $team->members->pluck('name')->toArray()),
         ]);
 
-        // ── New leader: personalized activity + notification + email ──
-        $this->activityService->log(
-            $newLeader->id, 'team_leader_changed',
-            'You have been assigned as Team Lead of "' . $team->name . '" by ' . $authUser->name,
-            'team', $team->id, 'leader_changed', $team->name
-        );
-        $this->notificationService->notify(
-            $newLeader->id, $authUser->id, 'team_leader_changed', 'team', $team->id,
-            'Team Leader Changed',
-            'You have been assigned as the Team Lead of "' . $team->name . '" by ' . $authUser->name . '.',
-            $teamLink,
-            ['team_name' => $team->name, 'previous_leader' => $oldLeaderName, 'new_leader' => $newLeader->name, 'changed_by' => $authUser->name]
-        );
+        // Batch activities and notifications for all recipients
+        $now = now()->toDateTimeString();
+        $bulkActivities = [];
+        $bulkNotifications = [];
 
-        // ── Old leader (if different): personalized activity + notification + email ──
+        // ── New leader: personalized activity + notification ──
+        $bulkActivities[] = [
+            'user_id' => $newLeader->id, 'activity_type' => 'team_leader_changed',
+            'description' => 'You have been assigned as Team Lead of "' . $team->name . '" by ' . $authUser->name,
+            'related_module' => 'team', 'related_id' => $team->id,
+            'action' => 'leader_changed', 'entity_name' => $team->name,
+            'created_at' => $now, 'updated_at' => $now,
+        ];
+        $bulkNotifications[] = [
+            'user_id' => $newLeader->id, 'sender_user_id' => $authUser->id,
+            'type' => 'team_leader_changed', 'related_module' => 'team',
+            'related_id' => $team->id,
+            'title' => 'Team Leader Changed',
+            'message' => 'You have been assigned as the Team Lead of "' . $team->name . '" by ' . $authUser->name . '.',
+            'link' => $teamLink,
+            'changes' => json_encode(['team_name' => $team->name, 'previous_leader' => $oldLeaderName, 'new_leader' => $newLeader->name, 'changed_by' => $authUser->name]),
+        ];
+
+        // ── Old leader (if different): personalized activity + notification ──
         if ($oldLeaderId && (int) $oldLeaderId !== (int) $newLeader->id) {
-            $oldLeader = User::find($oldLeaderId);
-            if ($oldLeader) {
-                $this->activityService->log(
-                    $oldLeaderId, 'team_leader_changed',
-                    'You are no longer the Team Lead of "' . $team->name . '". ' . $newLeader->name . ' has been appointed.',
-                    'team', $team->id, 'leader_changed', $team->name
-                );
-                $this->notificationService->notify(
-                    $oldLeaderId, $authUser->id, 'team_leader_changed', 'team', $team->id,
-                    'Team Leader Changed',
-                    'You are no longer the Team Lead of "' . $team->name . '". ' . $newLeader->name . ' has been appointed by ' . $authUser->name . '.',
-                    $teamLink,
-                    ['team_name' => $team->name, 'previous_leader' => $oldLeaderName, 'new_leader' => $newLeader->name, 'changed_by' => $authUser->name]
-                );
-            }
+            $bulkActivities[] = [
+                'user_id' => $oldLeaderId, 'activity_type' => 'team_leader_changed',
+                'description' => 'You are no longer the Team Lead of "' . $team->name . '". ' . $newLeader->name . ' has been appointed.',
+                'related_module' => 'team', 'related_id' => $team->id,
+                'action' => 'leader_changed', 'entity_name' => $team->name,
+                'created_at' => $now, 'updated_at' => $now,
+            ];
+            $bulkNotifications[] = [
+                'user_id' => $oldLeaderId, 'sender_user_id' => $authUser->id,
+                'type' => 'team_leader_changed', 'related_module' => 'team',
+                'related_id' => $team->id,
+                'title' => 'Team Leader Changed',
+                'message' => 'You are no longer the Team Lead of "' . $team->name . '". ' . $newLeader->name . ' has been appointed by ' . $authUser->name . '.',
+                'link' => $teamLink,
+                'changes' => json_encode(['team_name' => $team->name, 'previous_leader' => $oldLeaderName, 'new_leader' => $newLeader->name, 'changed_by' => $authUser->name]),
+            ];
         }
 
-        // ── All other members: personalized activity + notification + email ──
+        // ── All other members: personalized activity + notification ──
         $otherMemberIds = array_values(array_filter(
             $team->members->pluck('id')->toArray(),
             fn($id) => (int) $id !== (int) $newLeader->id
@@ -376,20 +415,27 @@ class TeamController extends Controller
 
         if (!empty($otherMemberIds)) {
             foreach ($otherMemberIds as $memberId) {
-                $this->activityService->log(
-                    $memberId, 'team_leader_changed',
-                    'Team Lead of "' . $team->name . '" changed from ' . $oldLeaderName . ' to ' . $newLeader->name . ' by ' . $authUser->name,
-                    'team', $team->id, 'leader_changed', $team->name
-                );
-                $this->notificationService->notify(
-                    $memberId, $authUser->id, 'team_leader_changed', 'team', $team->id,
-                    'Team Leader Changed',
-                    'The Team Lead for "' . $team->name . '" has been changed from ' . $oldLeaderName . ' to ' . $newLeader->name . ' by ' . $authUser->name . '.',
-                    $teamLink,
-                    ['team_name' => $team->name, 'previous_leader' => $oldLeaderName, 'new_leader' => $newLeader->name, 'changed_by' => $authUser->name]
-                );
+                $bulkActivities[] = [
+                    'user_id' => $memberId, 'activity_type' => 'team_leader_changed',
+                    'description' => 'Team Lead of "' . $team->name . '" changed from ' . $oldLeaderName . ' to ' . $newLeader->name . ' by ' . $authUser->name,
+                    'related_module' => 'team', 'related_id' => $team->id,
+                    'action' => 'leader_changed', 'entity_name' => $team->name,
+                    'created_at' => $now, 'updated_at' => $now,
+                ];
+                $bulkNotifications[] = [
+                    'user_id' => $memberId, 'sender_user_id' => $authUser->id,
+                    'type' => 'team_leader_changed', 'related_module' => 'team',
+                    'related_id' => $team->id,
+                    'title' => 'Team Leader Changed',
+                    'message' => 'The Team Lead for "' . $team->name . '" has been changed from ' . $oldLeaderName . ' to ' . $newLeader->name . ' by ' . $authUser->name . '.',
+                    'link' => $teamLink,
+                    'changes' => json_encode(['team_name' => $team->name, 'previous_leader' => $oldLeaderName, 'new_leader' => $newLeader->name, 'changed_by' => $authUser->name]),
+                ];
             }
         }
+
+        if (!empty($bulkActivities)) Activity::insert($bulkActivities);
+        if (!empty($bulkNotifications)) $this->notificationService->createBulk($bulkNotifications);
 
         return response()->json([
             'message' => 'Team leader updated successfully',
@@ -451,23 +497,31 @@ class TeamController extends Controller
             'Current Members' => implode(', ', $memberNames),
         ]);
 
-        // ── New members: personalized activity + notification + email ──
+        // ── New members: personalized activity + notification ──
+        $now = now()->toDateTimeString();
+        $bulkActivities = [];
+        $bulkNotifications = [];
+
         foreach ($newIds as $memberId) {
-            $this->activityService->log(
-                $memberId, 'team_member_added',
-                'You were added to team "' . $team->name . '" by ' . $authUser->name,
-                'team', $team->id, 'member_added', $team->name
-            );
-            $this->notificationService->notify(
-                $memberId, $authUser->id, 'team_member_added', 'team', $team->id,
-                'You Have Been Added to a Team',
-                'You have been added to the team "' . $team->name . '" by ' . $authUser->name . '.',
-                $teamLink,
-                ['team_name' => $team->name, 'team_lead' => $leaderName, 'members' => $memberNames, 'added_by' => $authUser->name]
-            );
+            $bulkActivities[] = [
+                'user_id' => $memberId, 'activity_type' => 'team_member_added',
+                'description' => 'You were added to team "' . $team->name . '" by ' . $authUser->name,
+                'related_module' => 'team', 'related_id' => $team->id,
+                'action' => 'member_added', 'entity_name' => $team->name,
+                'created_at' => $now, 'updated_at' => $now,
+            ];
+            $bulkNotifications[] = [
+                'user_id' => $memberId, 'sender_user_id' => $authUser->id,
+                'type' => 'team_member_added', 'related_module' => 'team',
+                'related_id' => $team->id,
+                'title' => 'You Have Been Added to a Team',
+                'message' => 'You have been added to the team "' . $team->name . '" by ' . $authUser->name . '.',
+                'link' => $teamLink,
+                'changes' => json_encode(['team_name' => $team->name, 'team_lead' => $leaderName, 'members' => $memberNames, 'added_by' => $authUser->name]),
+            ];
         }
 
-        // ── Existing members: personalized activity + notification + email ──
+        // ── Existing members: personalized activity + notification ──
         $existingMemberIds = array_values(array_filter(
             $alreadyMemberIds,
             fn($id) => (int) $id !== (int) $authUser->id
@@ -476,20 +530,27 @@ class TeamController extends Controller
         if (!empty($existingMemberIds)) {
             $addedList = implode(', ', $addedNames);
             foreach ($existingMemberIds as $memberId) {
-                $this->activityService->log(
-                    $memberId, 'team_member_added',
-                    $addedList . ' added to team "' . $team->name . '" by ' . $authUser->name,
-                    'team', $team->id, 'member_added', $team->name
-                );
-                $this->notificationService->notify(
-                    $memberId, $authUser->id, 'team_member_added', 'team', $team->id,
-                    'New Members Added',
-                    $addedList . ' added to team "' . $team->name . '" by ' . $authUser->name . '.',
-                    $teamLink,
-                    ['team_name' => $team->name, 'added_members' => $addedNames, 'added_by' => $authUser->name, 'current_members' => $memberNames]
-                );
+                $bulkActivities[] = [
+                    'user_id' => $memberId, 'activity_type' => 'team_member_added',
+                    'description' => $addedList . ' added to team "' . $team->name . '" by ' . $authUser->name,
+                    'related_module' => 'team', 'related_id' => $team->id,
+                    'action' => 'member_added', 'entity_name' => $team->name,
+                    'created_at' => $now, 'updated_at' => $now,
+                ];
+                $bulkNotifications[] = [
+                    'user_id' => $memberId, 'sender_user_id' => $authUser->id,
+                    'type' => 'team_member_added', 'related_module' => 'team',
+                    'related_id' => $team->id,
+                    'title' => 'New Members Added',
+                    'message' => $addedList . ' added to team "' . $team->name . '" by ' . $authUser->name . '.',
+                    'link' => $teamLink,
+                    'changes' => json_encode(['team_name' => $team->name, 'added_members' => $addedNames, 'added_by' => $authUser->name, 'current_members' => $memberNames]),
+                ];
             }
         }
+
+        if (!empty($bulkActivities)) Activity::insert($bulkActivities);
+        if (!empty($bulkNotifications)) $this->notificationService->createBulk($bulkNotifications);
 
         return response()->json([
             'message' => count($newIds) === 1 ? 'Member added successfully' : count($newIds) . ' members added successfully',
@@ -538,21 +599,28 @@ class TeamController extends Controller
         if ($wasLeader) $confirmDetails['Note'] = $user->name . ' was the Team Lead. The position has been cleared.';
         $this->notificationService->confirmAction($authUser, 'Updated', 'team', $team->name, $confirmDetails);
 
-        // ── Removed member: personalized activity + notification + email ──
-        $this->activityService->log(
-            $user->id, 'team_member_removed',
-            'You were removed from team "' . $team->name . '" by ' . $authUser->name,
-            'team', $team->id, 'member_removed', $team->name
-        );
-        $this->notificationService->notify(
-            $user->id, $authUser->id, 'team_member_removed', 'team', $team->id,
-            'Removed from Team',
-            'You have been removed from the team "' . $team->name . '" by ' . $authUser->name . '.',
-            '/manage-team',
-            ['team_name' => $team->name, 'previous_leader' => $oldLeaderName, 'removed_by' => $authUser->name]
-        );
+        // ── Removed member + Remaining members: batch activities + notifications ──
+        $now = now()->toDateTimeString();
+        $bulkActivities = [];
+        $bulkNotifications = [];
 
-        // ── Remaining members: personalized activity + notification + email ──
+        $bulkActivities[] = [
+            'user_id' => $user->id, 'activity_type' => 'team_member_removed',
+            'description' => 'You were removed from team "' . $team->name . '" by ' . $authUser->name,
+            'related_module' => 'team', 'related_id' => $team->id,
+            'action' => 'member_removed', 'entity_name' => $team->name,
+            'created_at' => $now, 'updated_at' => $now,
+        ];
+        $bulkNotifications[] = [
+            'user_id' => $user->id, 'sender_user_id' => $authUser->id,
+            'type' => 'team_member_removed', 'related_module' => 'team',
+            'related_id' => $team->id,
+            'title' => 'Removed from Team',
+            'message' => 'You have been removed from the team "' . $team->name . '" by ' . $authUser->name . '.',
+            'link' => '/manage-team',
+            'changes' => json_encode(['team_name' => $team->name, 'previous_leader' => $oldLeaderName, 'removed_by' => $authUser->name]),
+        ];
+
         $remainingMemberIds = array_values(array_filter(
             $remainingMemberIds,
             fn($id) => (int) $id !== (int) $authUser->id
@@ -560,27 +628,34 @@ class TeamController extends Controller
 
         if (!empty($remainingMemberIds)) {
             foreach ($remainingMemberIds as $memberId) {
-                $this->activityService->log(
-                    $memberId, 'team_member_removed',
-                    $user->name . ' was removed from team "' . $team->name . '" by ' . $authUser->name,
-                    'team', $team->id, 'member_removed', $team->name
-                );
-                $this->notificationService->notify(
-                    $memberId, $authUser->id, 'team_member_removed', 'team', $team->id,
-                    'Member Removed',
-                    $user->name . ' has been removed from the team "' . $team->name . '" by ' . $authUser->name . '.',
-                    $teamLink,
-                    [
+                $bulkActivities[] = [
+                    'user_id' => $memberId, 'activity_type' => 'team_member_removed',
+                    'description' => $user->name . ' was removed from team "' . $team->name . '" by ' . $authUser->name,
+                    'related_module' => 'team', 'related_id' => $team->id,
+                    'action' => 'member_removed', 'entity_name' => $team->name,
+                    'created_at' => $now, 'updated_at' => $now,
+                ];
+                $bulkNotifications[] = [
+                    'user_id' => $memberId, 'sender_user_id' => $authUser->id,
+                    'type' => 'team_member_removed', 'related_module' => 'team',
+                    'related_id' => $team->id,
+                    'title' => 'Member Removed',
+                    'message' => $user->name . ' has been removed from the team "' . $team->name . '" by ' . $authUser->name . '.',
+                    'link' => $teamLink,
+                    'changes' => json_encode([
                         'team_name' => $team->name,
                         'removed_member' => $user->name,
                         'team_lead' => $team->leader?->name ?? 'Not assigned',
                         'remaining_members' => $remainingMemberNames,
                         'team_size' => count($remainingMemberNames),
                         'removed_by' => $authUser->name,
-                    ]
-                );
+                    ]),
+                ];
             }
         }
+
+        if (!empty($bulkActivities)) Activity::insert($bulkActivities);
+        if (!empty($bulkNotifications)) $this->notificationService->createBulk($bulkNotifications);
 
         return response()->json([
             'message' => 'Member removed successfully',
@@ -608,22 +683,31 @@ class TeamController extends Controller
         );
         $this->notificationService->confirmAction($authUser, 'Deleted', 'team', $teamName);
 
-        // ── All members: personalized activity + notification + email ──
+        // ── All members: batch activities + notifications ──
         if (!empty($memberIds)) {
+            $now = now()->toDateTimeString();
+            $bulkActivities = [];
+            $bulkNotifications = [];
             foreach ($memberIds as $memberId) {
-                $this->activityService->log(
-                    $memberId, 'team_deleted',
-                    'Team "' . $teamName . '" was deleted by ' . $authUser->name,
-                    'team', $team->id, 'deleted', $teamName
-                );
-                $this->notificationService->notify(
-                    $memberId, $authUser->id, 'team_deleted', 'team', $team->id,
-                    'Team Deleted',
-                    'The team "' . $teamName . '" has been deleted by ' . $authUser->name . '.',
-                    '/manage-team',
-                    ['team_name' => $teamName, 'deleted_by' => $authUser->name]
-                );
+                $bulkActivities[] = [
+                    'user_id' => $memberId, 'activity_type' => 'team_deleted',
+                    'description' => 'Team "' . $teamName . '" was deleted by ' . $authUser->name,
+                    'related_module' => 'team', 'related_id' => $team->id,
+                    'action' => 'deleted', 'entity_name' => $teamName,
+                    'created_at' => $now, 'updated_at' => $now,
+                ];
+                $bulkNotifications[] = [
+                    'user_id' => $memberId, 'sender_user_id' => $authUser->id,
+                    'type' => 'team_deleted', 'related_module' => 'team',
+                    'related_id' => $team->id,
+                    'title' => 'Team Deleted',
+                    'message' => 'The team "' . $teamName . '" has been deleted by ' . $authUser->name . '.',
+                    'link' => '/manage-team',
+                    'changes' => json_encode(['team_name' => $teamName, 'deleted_by' => $authUser->name]),
+                ];
             }
+            Activity::insert($bulkActivities);
+            $this->notificationService->createBulk($bulkNotifications);
         }
 
         $team->delete();

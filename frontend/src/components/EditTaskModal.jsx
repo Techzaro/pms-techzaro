@@ -152,28 +152,26 @@ export default function EditTaskModal({ task, onClose }) {
    */
   const uploadAttachments = async () => {
     const token = authToken();
-    for (const file of pendingFiles) {
-      try {
+    await Promise.all([
+      ...pendingFiles.map((file) => {
         const fd = new FormData();
         fd.append("file", file);
-        await fetch(`${API_URL}/tasks/${task.id}/files`, {
+        return fetch(`${API_URL}/tasks/${task.id}/files`, {
           method: "POST",
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
           body: fd,
           _notifHandled: true,
-        });
-      } catch {}
-    }
-    for (const link of links) {
-      try {
-        await fetch(`${API_URL}/tasks/${task.id}/links`, {
+        }).catch(() => {});
+      }),
+      ...links.map((link) => {
+        return fetch(`${API_URL}/tasks/${task.id}/links`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ url: link.url, name: link.name }),
           _notifHandled: true,
-        });
-      } catch {}
-    }
+        }).catch(() => {});
+      }),
+    ]);
   };
 
   /**

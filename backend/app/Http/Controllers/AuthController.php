@@ -179,6 +179,8 @@ class AuthController extends Controller
             ->selectRaw("COUNT(CASE WHEN status IN ('pending', 'in_progress') THEN 1 END) as pending")
             ->first();
 
+        $taskStats = $taskStats ?? (object)['total_assigned' => 0, 'completed' => 0, 'pending' => 0];
+
         $totalProjects = Project::where('created_by', $user->id)->count();
 
         $loginHistory = [];
@@ -211,7 +213,6 @@ class AuthController extends Controller
                 'emergency_contact_phone' => $user->emergency_contact_phone,
                 'personal_email' => $user->personal_email,
                 'professional_email' => $user->professional_email,
-                'professional_email_password' => $user->professional_email_password,
                 'recovery_email' => $user->recovery_email,
                 'hired_for' => $user->hired_for,
                 'job_started_date' => $user->job_started_date,
@@ -224,10 +225,6 @@ class AuthController extends Controller
                 'employment_contract' => $user->employment_contract,
                 'offer_letter' => $user->offer_letter,
                 'techxaro_regulations' => $user->techxaro_regulations,
-                'latest_education_cert' => $user->latest_education_cert,
-                'cv' => $user->cv,
-                'previous_exp_letter' => $user->previous_exp_letter,
-                'previous_salary_slip' => $user->previous_salary_slip,
                 'other_document' => $user->other_document,
                 'last_login_at' => $user->last_login_at?->toDateTimeString(),
                 'created_at' => $user->created_at->toDateTimeString(),
@@ -311,10 +308,6 @@ class AuthController extends Controller
             'employment_contract' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
             'offer_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
             'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'latest_education_cert' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'cv' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'previous_exp_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'previous_salary_slip' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
             'other_document' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
         ]);
 
@@ -357,26 +350,29 @@ class AuthController extends Controller
         $user->save();
 
         if (!empty($oldValues)) {
+            $changeRecords = [];
             foreach ($oldValues as $field => $oldVal) {
                 $newVal = $user->$field;
                 $oldStr = $oldVal === null ? '' : (string) $oldVal;
                 $newStr = $newVal === null ? '' : (string) $newVal;
                 if ($oldStr !== $newStr) {
-                    \App\Models\UserChange::create([
+                    $changeRecords[] = [
                         'user_id' => $user->id,
                         'field_name' => $field,
                         'old_value' => $oldStr ?: null,
                         'new_value' => $newStr ?: null,
                         'modified_by' => $user->id,
-                    ]);
+                    ];
                 }
+            }
+            if (!empty($changeRecords)) {
+                \App\Models\UserChange::insert($changeRecords);
             }
         }
 
         $documentFields = [
             'employment_contract', 'offer_letter', 'techxaro_regulations',
-            'latest_education_cert', 'cv', 'previous_exp_letter',
-            'previous_salary_slip', 'other_document',
+            'other_document',
         ];
 
         foreach ($documentFields as $field) {

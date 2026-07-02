@@ -36,6 +36,7 @@ import { showSuccessMessage } from "../utils/notify";
 import Pagination from "../components/Pagination";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "../components/LoadingButton";
+import CompanyDocuments from "../components/CompanyDocuments";
 import "./ManageUsers.css";
 
 /** Predefined department options (includes __custom__ for custom input) */
@@ -102,11 +103,7 @@ function ManageUsers() {
     employmentContract: null,
     offerLetter: null,
     techxaroRegulations: null,
-    latestEducationCert: null,
-    cv: null,
-    previousExpLetter: null,
-    previousSalarySlip: null,
-    otherDocument: null,
+    otherDocument: [],
   });
   const [loading, setLoading] = useState(false);
   const [savingUserId, setSavingUserId] = useState(null);
@@ -119,6 +116,7 @@ function ManageUsers() {
   const [timeFilter, setTimeFilter] = useState("");
   const [resignConfirmOpen, setResignConfirmOpen] = useState(false);
   const [resignUserId, setResignUserId] = useState(null);
+  const [companyDocsOpen, setCompanyDocsOpen] = useState(false);
   const [page, setPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
@@ -182,6 +180,7 @@ function ManageUsers() {
     try {
       const res = await fetch(`${API_URL}/users`, {
         headers: { Accept: "application/json", ...authHeaders() },
+        skipLoader: true,
         _notifHandled: true,
       });
       if (!res.ok) throw new Error("Unable to load users");
@@ -308,11 +307,7 @@ function ManageUsers() {
       employmentContract: null,
       offerLetter: null,
       techxaroRegulations: null,
-      latestEducationCert: null,
-      cv: null,
-      previousExpLetter: null,
-      previousSalarySlip: null,
-      otherDocument: null,
+      otherDocument: [],
     });
     setAddErrors({});
     setIsAddModalOpen(true);
@@ -356,11 +351,7 @@ function ManageUsers() {
       employmentContract: null,
       offerLetter: null,
       techxaroRegulations: null,
-      latestEducationCert: null,
-      cv: null,
-      previousExpLetter: null,
-      previousSalarySlip: null,
-      otherDocument: null,
+      otherDocument: [],
     });
     setAddErrors({});
     setIsAddModalOpen(true);
@@ -401,11 +392,7 @@ function ManageUsers() {
       employmentContract: null,
       offerLetter: null,
       techxaroRegulations: null,
-      latestEducationCert: null,
-      cv: null,
-      previousExpLetter: null,
-      previousSalarySlip: null,
-      otherDocument: null,
+      otherDocument: [],
     });
   };
 
@@ -571,7 +558,7 @@ function ManageUsers() {
             <span className="user-avatar">{getInitials(user.name)}</span>
             <div className="user-details">
               <span className="user-name">{user.name}</span>
-              <span className="user-email">{user.email}</span>
+              <span className="user-email">{user.professional_email || "—"}</span>
             </div>
           </div>
         </td>
@@ -610,7 +597,7 @@ function ManageUsers() {
   const filteredUsers = localUsers.filter((user) => {
     const matchesSearch =
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase());
+      (user.professional_email || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = roleFilter === "" || user.role === roleFilter;
     const matchesStatus =
       statusFilter === "" ||
@@ -650,7 +637,7 @@ function ManageUsers() {
             <span className="user-avatar">{getInitials(user.name)}</span>
             <div className="user-details">
               <span className="user-name">{user.name}</span>
-              <span className="user-email">{user.email}</span>
+              <span className="user-email">{user.professional_email || "—"}</span>
             </div>
           </div>
         </td>
@@ -713,17 +700,20 @@ function ManageUsers() {
 
     const fileFields = [
       "employmentContract", "offerLetter", "techxaroRegulations",
-      "latestEducationCert", "cv", "previousExpLetter",
-      "previousSalarySlip", "otherDocument",
     ];
     const fileApiNames = [
       "employment_contract", "offer_letter", "techxaro_regulations",
-      "latest_education_cert", "cv", "previous_exp_letter",
-      "previous_salary_slip", "other_document",
     ];
     fileFields.forEach((field, i) => {
       if (newUser[field]) formData.append(fileApiNames[i], newUser[field]);
     });
+
+    // otherDocument supports multiple files
+    if (newUser.otherDocument && newUser.otherDocument.length > 0) {
+      newUser.otherDocument.forEach((f) => {
+        formData.append("other_document[]", f);
+      });
+    }
 
     await run(async () => {
       const token = authToken();
@@ -793,9 +783,14 @@ function ManageUsers() {
             <h1>User Management</h1>
             <p>Manage users, roles and access permissions.</p>
           </div>
-          <button className="primary-button add-user-button" onClick={openModal}>
-            <CiCirclePlus fontSize={"21px"} /> Add User
-          </button>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <button className="primary-button add-user-button" onClick={() => setCompanyDocsOpen(true)} style={{ background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }}>
+              Company Documents
+            </button>
+            <button className="primary-button add-user-button" onClick={openModal}>
+              <CiCirclePlus fontSize={"21px"} /> Add User
+            </button>
+          </div>
         </div>
 
         <div className="bar">
@@ -1087,11 +1082,6 @@ function ManageUsers() {
                     { label: "Employment Contract", key: "employmentContract", api: "employment_contract" },
                     { label: "Offer Letter", key: "offerLetter", api: "offer_letter" },
                     { label: "Techxaro Regulations", key: "techxaroRegulations", api: "techxaro_regulations" },
-                    { label: "Latest Educational Certificate", key: "latestEducationCert", api: "latest_education_cert" },
-                    { label: "CV", key: "cv", api: "cv" },
-                    { label: "Previous Job Experience Letter", key: "previousExpLetter", api: "previous_exp_letter" },
-                    { label: "Previous Salary Slip", key: "previousSalarySlip", api: "previous_salary_slip" },
-                    { label: "Revised / Other Document", key: "otherDocument", api: "other_document" },
                   ].map(({ label, key, api }) => (
                     <div className="form-row" key={key}>
                       <label htmlFor={key}>{label}</label>
@@ -1116,6 +1106,51 @@ function ManageUsers() {
                       />
                     </div>
                   ))}
+
+                  {/* Other Document — right after Previous Salary Slip */}
+                  <div className="form-row">
+                    <label htmlFor="otherDocument">Other Document</label>
+                    {editingUser && editingUser.other_document && newUser.otherDocument.length === 0 && (
+                      <div style={{ marginBottom: 6, fontSize: 13, color: "#64748b" }}>
+                        Current: <a href={`${API_URL}/users/${editingUser.id}/documents/other_document?token=${authToken()}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>View uploaded file(s)</a>
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      id="otherDocument"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        const valid = [];
+                        for (const f of files) {
+                          if (!["application/pdf","image/jpeg","image/png","image/webp"].includes(f.type)) {
+                            notify.error(`"${f.name}" is not a supported file type. Skipped.`);
+                            continue;
+                          }
+                          valid.push(f);
+                        }
+                        if (valid.length > 0) {
+                          setNewUser((p) => ({ ...p, otherDocument: [...p.otherDocument, ...valid] }));
+                        }
+                        e.target.value = "";
+                      }}
+                    />
+                    {newUser.otherDocument.length > 0 && (
+                      <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                        {newUser.otherDocument.map((f, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
+                            <span style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{f.name}</span>
+                            <button type="button" onClick={() => {
+                              setNewUser((p) => ({ ...p, otherDocument: p.otherDocument.filter((_, idx) => idx !== i) }));
+                            }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 12, fontWeight: 600, flexShrink: 0, marginLeft: 8 }}>Remove</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+
                 </div>
 
                 <div className="user-form-actions">
@@ -1143,6 +1178,11 @@ function ManageUsers() {
       confirmText="Confirm Resignation"
       cancelText="Cancel"
       danger
+    />
+
+    <CompanyDocuments
+      isOpen={companyDocsOpen}
+      onClose={() => setCompanyDocsOpen(false)}
     />
     </>
   );

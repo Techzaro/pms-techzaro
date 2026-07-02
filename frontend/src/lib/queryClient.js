@@ -13,7 +13,7 @@ import { QueryClient } from "@tanstack/react-query";
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 0, // Always consider data stale to refetch on mount
+      staleTime: 30000,
       gcTime: 60000, // Keep unused cache for 60 seconds
       refetchOnWindowFocus: true, // Refetch when tab gains focus
       retry: 1, // Retry failed requests once

@@ -94,21 +94,23 @@ const CreateProjectModal = ({ onClose }) => {
   useEffect(() => {
     const token = authToken();
 
-    fetch(`${API_URL}/teams`, {
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      skipLoader: true,
-    })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setTeams(Array.isArray(data) ? data : []))
-      .catch(() => {});
+    Promise.all([
+      fetch(`${API_URL}/teams`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => setTeams(Array.isArray(data) ? data : []))
+        .catch(() => {}),
 
-    fetch(`${API_URL}/team-users`, {
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      skipLoader: true,
-    })
-      .then((res) => (res.ok ? res.json() : { users: [] }))
-      .then((data) => setAllUsers(Array.isArray(data) ? data : (data.users || [])))
-      .catch(() => {});
+      fetch(`${API_URL}/team-users`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      })
+        .then((res) => (res.ok ? res.json() : { users: [] }))
+        .then((data) => setAllUsers(Array.isArray(data) ? data : (data.users || [])))
+        .catch(() => {}),
+    ]);
   }, []);
 
   const displayUsers = (() => {
@@ -247,24 +249,19 @@ const CreateProjectModal = ({ onClose }) => {
    * @param {string} token - Auth token
    */
   const uploadAttachments = async (projectId, token) => {
-    // Upload each file as multipart/form-data
-    for (const file of pendingFiles) {
-      const fd = new FormData();
-      fd.append("file", file);
-      try {
-        await fetch(`${API_URL}/projects/${projectId}/files`, {
+    await Promise.all([
+      ...pendingFiles.map((file) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        return fetch(`${API_URL}/projects/${projectId}/files`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           body: fd,
           _notifHandled: true,
-        });
-      } catch {}
-    }
-
-    // Upload each link as JSON
-    for (const link of links) {
-      try {
-        await fetch(`${API_URL}/projects/${projectId}/links`, {
+        }).catch(() => {});
+      }),
+      ...links.map((link) => {
+        return fetch(`${API_URL}/projects/${projectId}/links`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -273,9 +270,9 @@ const CreateProjectModal = ({ onClose }) => {
           },
           body: JSON.stringify(link),
           _notifHandled: true,
-        });
-      } catch {}
-    }
+        }).catch(() => {});
+      }),
+    ]);
   };
 
   /**

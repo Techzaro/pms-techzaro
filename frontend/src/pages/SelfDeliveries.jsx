@@ -78,6 +78,7 @@ function SelfDeliveries() {
 
     fetch(`${API_URL}/self-deliverables?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
     })
       .then((res) => (res.ok ? res.json() : { data: [] }))
       .then((data) => {

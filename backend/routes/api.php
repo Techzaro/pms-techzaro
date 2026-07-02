@@ -100,6 +100,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/test-email', [UserController::class, 'testEmail']);
         // Reorder users list
         Route::post('/users/reorder', [UserController::class, 'reorder']);
+
+        // Company documents management (logo, QR code, contracts, etc.)
+        Route::get('/company-documents', [\App\Http\Controllers\CompanyDocumentController::class, 'index']);
+        Route::post('/company-documents', [\App\Http\Controllers\CompanyDocumentController::class, 'store']);
+        Route::delete('/company-documents/{type}', [\App\Http\Controllers\CompanyDocumentController::class, 'destroy']);
     });
 
     // Get users for team management (all authenticated users)
@@ -305,11 +310,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reports/detailed', [ReportController::class, 'detailedReport']); // Detailed report
     Route::get('/reports/performance', [ReportController::class, 'performanceReport']); // Performance report
     Route::get('/reports/progress', [ReportController::class, 'progressReport']); // Progress report
-    Route::get('/reports/user/me', function (Request $request) {
-        $controller = new \App\Http\Controllers\ReportController();
-        return $controller->userPerformance($request, $request->user());
-    }); // User performance report (own)
-    Route::get('/reports/user/{user}', [ReportController::class, 'userPerformance']); // User performance report
+    Route::get('/reports/user/me', [ReportController::class, 'myPerformance']); // User performance report (own)
+    Route::get('/reports/user/{user}', [ReportController::class, 'userPerformance'])->where('user', '[0-9]+'); // User performance report
     Route::get('/reports/project/{project}', [ReportController::class, 'projectReport']); // Project report
     Route::get('/reports/summary-cards', [ReportController::class, 'summaryCards']); // Summary cards data
     Route::get('/reports/user-performance-table', [ReportController::class, 'userPerformanceTable']); // User performance table

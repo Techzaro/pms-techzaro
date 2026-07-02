@@ -16,17 +16,22 @@ class UserProfileUpdated extends Mailable
     public User $user;
     public string $updatedBy;
     public array $changes;
+    public string $senderEmail;
+    public string $senderName;
 
-    public function __construct(User $user, string $updatedBy, array $changes)
+    public function __construct(User $user, string $updatedBy, array $changes, string $senderEmail = '', string $senderName = 'PMS Techxaro')
     {
         $this->user = $user;
         $this->updatedBy = $updatedBy;
         $this->changes = $changes;
+        $this->senderEmail = $senderEmail ?: config('mail.from.address');
+        $this->senderName = $senderName ?: config('mail.from.name');
     }
 
     public function envelope(): Envelope
     {
         return new Envelope(
+            from: new \Illuminate\Mail\Mailables\Address($this->senderEmail, $this->senderName),
             subject: 'Your PMS Profile Has Been Updated',
         );
     }

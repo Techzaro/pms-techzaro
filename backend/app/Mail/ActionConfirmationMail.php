@@ -18,6 +18,8 @@ class ActionConfirmationMail extends Mailable
     public string $entityName;
     public array $details;
     public string $loginUrl;
+    public string $senderEmail;
+    public string $senderName;
 
     public function __construct(
         string $performerName,
@@ -25,7 +27,9 @@ class ActionConfirmationMail extends Mailable
         string $entityType,
         string $entityName,
         array $details = [],
-        string $loginUrl = ''
+        string $loginUrl = '',
+        string $senderEmail = '',
+        string $senderName = 'PMS Techxaro'
     ) {
         $this->performerName = $performerName;
         $this->actionVerb = $actionVerb;
@@ -33,12 +37,15 @@ class ActionConfirmationMail extends Mailable
         $this->entityName = $entityName;
         $this->details = $details;
         $this->loginUrl = $loginUrl;
+        $this->senderEmail = $senderEmail ?: config('mail.from.address');
+        $this->senderName = $senderName ?: config('mail.from.name');
     }
 
     public function envelope(): Envelope
     {
         $subject = ucfirst($this->entityType) . ' ' . $this->actionVerb . ' Confirmation';
         return new Envelope(
+            from: new \Illuminate\Mail\Mailables\Address($this->senderEmail, $this->senderName),
             subject: $subject,
         );
     }

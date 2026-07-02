@@ -126,6 +126,7 @@ function ManageTeam() {
     try {
       const response = await fetch(`${API_URL}/team-users`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
         _notifHandled: true,
       });
       const data = await response.json();
@@ -147,6 +148,7 @@ function ManageTeam() {
     try {
       const response = await fetch(`${API_URL}/teams`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
       });
       const data = await response.json();
       setTeams(Array.isArray(data) ? data : []);
@@ -164,8 +166,7 @@ function ManageTeam() {
       navigate("/");
       return;
     }
-    fetchUsers();
-    fetchTeams();
+    Promise.all([fetchUsers(), fetchTeams()]);
   }, []);
 
   // Auto-refresh teams when data changes elsewhere in the app

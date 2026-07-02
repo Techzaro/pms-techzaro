@@ -71,6 +71,7 @@ function UserProfile() {
   const { submitting, run } = useSubmit();
   const [editFiles, setEditFiles] = useState({});
   const [filePreviews, setFilePreviews] = useState({});
+  const [editOtherDocs, setEditOtherDocs] = useState([]);
   const [currentUserRole] = useState(() => getCurrentRole());
   const [changes, setChanges] = useState([]);
 
@@ -120,6 +121,7 @@ function UserProfile() {
     try {
       const res = await fetch(`${API_URL}/users/${userId}/profile`, {
         headers: { Accept: "application/json", ...authHeaders() },
+        skipLoader: true,
       });
       if (!res.ok) throw new Error("Unable to load user profile");
       const data = await res.json();
@@ -314,14 +316,18 @@ function UserProfile() {
 
       const fileFields = [
         "employment_contract", "offer_letter", "techxaro_regulations",
-        "latest_education_cert", "cv", "previous_exp_letter",
-        "previous_salary_slip", "other_document",
       ];
       fileFields.forEach((field) => {
         if (editFiles[field]) {
           formData.append(field, editFiles[field]);
         }
       });
+
+      if (editOtherDocs.length > 0) {
+        editOtherDocs.forEach((f) => {
+          formData.append("other_document[]", f);
+        });
+      }
 
       let url = isOwnProfile ? `${API_URL}/auth/update-profile` : `${API_URL}/users/${userId}`;
 
@@ -599,10 +605,6 @@ function UserProfile() {
                   { label: "Employment Contract", key: "employment_contract" },
                   { label: "Offer Letter", key: "offer_letter" },
                   { label: "Techxaro Regulations", key: "techxaro_regulations" },
-                  { label: "Latest Educational Certificate", key: "latest_education_cert" },
-                  { label: "CV", key: "cv" },
-                  { label: "Previous Job Experience Letter", key: "previous_exp_letter" },
-                  { label: "Previous Salary Slip", key: "previous_salary_slip" },
                   { label: "Other Document", key: "other_document" },
                 ].map(({ label, key }) => (
                   <div className="info-row" key={key}>
@@ -907,11 +909,6 @@ function UserProfile() {
                   { label: "Employment Contract", key: "employment_contract" },
                   { label: "Offer Letter", key: "offer_letter" },
                   { label: "Techxaro Regulations", key: "techxaro_regulations" },
-                  { label: "Latest Educational Certificate", key: "latest_education_cert" },
-                  { label: "CV", key: "cv" },
-                  { label: "Previous Job Experience Letter", key: "previous_exp_letter" },
-                  { label: "Previous Salary Slip", key: "previous_salary_slip" },
-                  { label: "Other Document", key: "other_document" },
                 ].map(({ label, key }) => (
                   <div className="form-row" key={key}>
                     <label htmlFor={`edit-${key}`}>{label}</label>
@@ -944,6 +941,49 @@ function UserProfile() {
                     )}
                   </div>
                 ))}
+
+                {/* Other Document — multi-file with remove buttons */}
+                <div className="form-row">
+                  <label htmlFor="edit-other_document">Other Document</label>
+                  {user.other_document && editOtherDocs.length === 0 && (
+                    <div style={{ marginBottom: 6, fontSize: 13, color: "#64748b" }}>
+                      Current: <a href={`${API_URL}/users/${userId}/documents/other_document?token=${authToken()}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>View uploaded file(s)</a>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    id="edit-other_document"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      const valid = [];
+                      for (const f of files) {
+                        if (!["application/pdf","image/jpeg","image/png","image/webp"].includes(f.type)) {
+                          notify.error(`"${f.name}" is not a supported file type. Skipped.`);
+                          continue;
+                        }
+                        valid.push(f);
+                      }
+                      if (valid.length > 0) {
+                        setEditOtherDocs((prev) => [...prev, ...valid]);
+                      }
+                      e.target.value = "";
+                    }}
+                  />
+                  {editOtherDocs.length > 0 && (
+                    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                      {editOtherDocs.map((f, i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
+                          <span style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{f.name}</span>
+                          <button type="button" onClick={() => {
+                            setEditOtherDocs((prev) => prev.filter((_, idx) => idx !== i));
+                          }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 12, fontWeight: 600, flexShrink: 0, marginLeft: 8 }}>Remove</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="user-form-actions">

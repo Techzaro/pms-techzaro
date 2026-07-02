@@ -86,6 +86,7 @@ function Projects() {
             Accept: "application/json",
             Authorization: `Bearer ${token}`,
           },
+          skipLoader: true,
         }
       );
 

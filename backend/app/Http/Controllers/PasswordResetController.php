@@ -84,7 +84,7 @@ class PasswordResetController extends Controller
                 'errors' => $e->errors(),
             ], 422);
         } catch (\Throwable $e) {
-            \Log::error('Password reset email failed', ['email' => $email ?? null, 'error' => $e->getMessage()]);
+            \Log::error('Password reset email failed', ['email' => $professionalEmail ?? null, 'error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
                 'message' => 'Something went wrong. Please try again later.',

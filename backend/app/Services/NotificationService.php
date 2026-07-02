@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * Service for creating, managing, and querying user notifications.
@@ -50,9 +52,71 @@ class NotificationService
             return !empty($n['user_id']) && (!isset($n['sender_user_id']) || (int) $n['user_id'] !== (int) $n['sender_user_id']);
         });
 
-        if (!empty($filtered)) {
-            foreach (array_values($filtered) as $data) {
-                Notification::create($data);
+        if (empty($filtered)) return;
+
+        $filtered = array_values($filtered);
+        $now = now()->toDateTimeString();
+
+        $rows = array_map(function ($n) use ($now) {
+            return [
+                'user_id' => $n['user_id'],
+                'sender_user_id' => $n['sender_user_id'] ?? null,
+                'type' => $n['type'],
+                'related_module' => $n['related_module'],
+                'related_id' => $n['related_id'],
+                'title' => $n['title'],
+                'message' => $n['message'],
+                'changes' => isset($n['changes']) ? json_encode($n['changes']) : null,
+                'link' => $n['link'] ?? null,
+                'is_read' => false,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }, $filtered);
+
+        DB::table('notifications')->insert($rows);
+
+        $firstId = (int) DB::getPdo()->lastInsertId();
+        $ids = range($firstId, $firstId + count($rows) - 1);
+
+        $createdNotifications = Notification::whereIn('id', $ids)
+            ->with(['user.emailPreference', 'sender'])
+            ->get();
+
+        foreach ($createdNotifications as $notification) {
+            if (!$notification->user || !$notification->user->professional_email) continue;
+            if ($notification->type === 'user_updated') continue;
+
+            if (Notification::wantsChannel($notification, 'email')) {
+                try {
+                    $mail = new \App\Mail\NotificationMail(
+                        $notification,
+                        $notification->sender->professional_email ?? '',
+                        $notification->sender->name ?? 'PMS Techxaro'
+                    );
+                    if (config('queue.default') !== 'sync') {
+                        Mail::to($notification->user->professional_email)->queue($mail);
+                    } else {
+                        Mail::to($notification->user->professional_email)->send($mail);
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('Failed to send notification email', [
+                        'notification_id' => $notification->id,
+                        'user_id' => $notification->user_id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            if (Notification::wantsChannel($notification, 'mobile_push')) {
+                try {
+                    \App\Jobs\SendFcmNotification::dispatch($notification);
+                } catch (\Throwable $e) {
+                    Log::error('Failed to dispatch FCM push', [
+                        'notification_id' => $notification->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
         }
     }
@@ -156,19 +220,22 @@ class NotificationService
 
         $filteredIds = array_values(array_filter($recipientIds, fn($id) => (int) $id !== (int) $adder->id));
 
+        $notifications = [];
         foreach ($filteredIds as $userId) {
-            $this->notify(
-                $userId,
-                $adder->id,
-                'deliverable_added',
-                'deliverable',
-                $deliverable->id,
-                'New Deliverable Added',
-                $message,
-                '/deliveries?selectedDeliverable=' . $deliverable->id,
-                $changes
-            );
+            $notifications[] = [
+                'user_id' => $userId,
+                'sender_user_id' => $adder->id,
+                'type' => 'deliverable_added',
+                'related_module' => 'deliverable',
+                'related_id' => $deliverable->id,
+                'title' => 'New Deliverable Added',
+                'message' => $message,
+                'changes' => $changes,
+                'link' => '/deliveries?selectedDeliverable=' . $deliverable->id,
+            ];
         }
+
+        $this->createBulk($notifications);
     }
 
     /**
@@ -254,15 +321,21 @@ class NotificationService
         $loginUrl = rtrim(config('app.frontend_url'), '/');
 
         try {
-            \Illuminate\Support\Facades\Mail::to($performer->professional_email)
-                ->send(new \App\Mail\ActionConfirmationMail(
-                    $performer->name,
-                    $actionVerb,
-                    $entityType,
-                    $entityName,
-                    $details,
-                    $loginUrl
-                ));
+            $mail = new \App\Mail\ActionConfirmationMail(
+                $performer->name,
+                $actionVerb,
+                $entityType,
+                $entityName,
+                $details,
+                $loginUrl,
+                $performer->professional_email,
+                $performer->name
+            );
+            if (config('queue.default') !== 'sync') {
+                Mail::to($performer->professional_email)->queue($mail);
+            } else {
+                Mail::to($performer->professional_email)->send($mail);
+            }
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Failed to send action confirmation email', [
                 'user_id' => $performer->id,

@@ -60,7 +60,7 @@ class DeliverableController extends Controller
 
         $query->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()));
 
-        $deliverables = $query->orderBy('sort_order')->latest('updated_at')->filter($filters)->get();
+        $deliverables = $query->orderBy('sort_order')->latest('updated_at')->filter($filters)->limit(200)->get();
 
         // Bulk has_submitted query
         $deliverableIds = $deliverables->pluck('id');
@@ -114,7 +114,7 @@ class DeliverableController extends Controller
         $query->whereColumn('created_by', '!=', 'assigned_to');
         $query->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()));
 
-        return response()->json(['success' => true, 'data' => $query->orderBy('sort_order')->latest('updated_at')->filter($filters)->get()]);
+        return response()->json(['success' => true, 'data' => $query->orderBy('sort_order')->latest('updated_at')->filter($filters)->limit(200)->get()]);
     }
 
     /**
@@ -140,6 +140,7 @@ class DeliverableController extends Controller
             ->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()))
             ->orderBy('sort_order')->latest('updated_at')
             ->filter($filters)
+            ->limit(200)
             ->get();
 
         return response()->json(['success' => true, 'data' => $deliverables]);
@@ -156,8 +157,8 @@ class DeliverableController extends Controller
     {
         $deliverable = Deliverable::findOrFail($id);
         $user = request()->user();
-        $isCreator = $deliverable->created_by === $user->id;
-        $isAssignee = $deliverable->assigned_to === $user->id;
+        $isCreator = (int) $deliverable->created_by === (int) $user->id;
+        $isAssignee = (int) $deliverable->assigned_to === (int) $user->id;
 
         if (!$isCreator && !$isAssignee && !in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -227,7 +228,7 @@ class DeliverableController extends Controller
             ]);
         }
 
-        if ($deliverable->assigned_to && $deliverable->assigned_to !== $user->id) {
+        if ($deliverable->assigned_to && (int) $deliverable->assigned_to !== (int) $user->id) {
             $this->sendDeliverableNotification($deliverable, $user, 'deliverable_assigned', 'Deliverable Assigned');
         }
 
@@ -247,6 +248,8 @@ class DeliverableController extends Controller
                 $this->notificationService->notifyDeliverableAdded($deliverable, $user, $taskAssigneeIds, 'task');
             }
         }
+
+        $deliverable->load('task:id,title');
 
         // Send confirmation email to performer
         $this->notificationService->confirmAction($user, 'Created', 'deliverable', $deliverable->title, [
@@ -275,8 +278,10 @@ class DeliverableController extends Controller
     public function update(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
-        $isCreator = $deliverable->created_by === $user->id;
+        $isCreator = (int) $deliverable->created_by === (int) $user->id;
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+
+        $deliverable->load('project:id,title', 'task:id,title');
 
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255', 'description' => 'sometimes|nullable|string',
@@ -349,7 +354,7 @@ class DeliverableController extends Controller
     public function destroy(Deliverable $deliverable)
     {
         $user = request()->user();
-        $isCreator = $deliverable->created_by === $user->id;
+        $isCreator = (int) $deliverable->created_by === (int) $user->id;
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         $deliverable->delete();
         return response()->json(['success' => true, 'message' => 'Deliverable deleted successfully']);
@@ -369,7 +374,7 @@ class DeliverableController extends Controller
     public function submit(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
-        if ($deliverable->assigned_to !== $user->id) return response()->json(['success' => false, 'message' => 'Only the assignee can submit this deliverable'], 403);
+        if ((int) $deliverable->assigned_to !== (int) $user->id) return response()->json(['success' => false, 'message' => 'Only the assignee can submit this deliverable'], 403);
         if (!in_array($deliverable->status, ['pending', 'rejected', 'reopened', 'rework_required'])) return response()->json(['success' => false, 'message' => 'This deliverable cannot be submitted in its current status'], 422);
 
         $validated = $request->validate([
@@ -477,7 +482,7 @@ class DeliverableController extends Controller
     public function approve(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
-        $isCreator = $deliverable->created_by === $user->id;
+        $isCreator = (int) $deliverable->created_by === (int) $user->id;
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         if ($deliverable->status !== 'submitted') return response()->json(['success' => false, 'message' => 'Can only approve submitted deliverables'], 422);
 
@@ -526,7 +531,7 @@ class DeliverableController extends Controller
     public function reject(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
-        $isCreator = $deliverable->created_by === $user->id;
+        $isCreator = (int) $deliverable->created_by === (int) $user->id;
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         if ($deliverable->status !== 'submitted') return response()->json(['success' => false, 'message' => 'Can only reject submitted deliverables'], 422);
 
@@ -586,7 +591,7 @@ class DeliverableController extends Controller
     public function reopen(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
-        $isCreator = $deliverable->created_by === $user->id;
+        $isCreator = (int) $deliverable->created_by === (int) $user->id;
         if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         if ($deliverable->status !== 'submitted') return response()->json(['success' => false, 'message' => 'Can only reopen submitted deliverables'], 422);
 
@@ -661,7 +666,7 @@ class DeliverableController extends Controller
     public function selfApprove(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
-        if ($deliverable->created_by !== $user->id || $deliverable->assigned_to !== $user->id) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        if ((int) $deliverable->created_by !== (int) $user->id || (int) $deliverable->assigned_to !== (int) $user->id) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         if ($deliverable->status !== 'submitted') return response()->json(['success' => false, 'message' => 'Can only approve submitted deliverables'], 422);
 
         $deliverable->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id]);
@@ -684,7 +689,7 @@ class DeliverableController extends Controller
     public function selfRework(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
-        if ($deliverable->created_by !== $user->id || $deliverable->assigned_to !== $user->id) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        if ((int) $deliverable->created_by !== (int) $user->id || (int) $deliverable->assigned_to !== (int) $user->id) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         if ($deliverable->status !== 'submitted') return response()->json(['success' => false, 'message' => 'Can only rework submitted deliverables'], 422);
 
         $validated = $request->validate([
@@ -729,8 +734,8 @@ class DeliverableController extends Controller
     {
         $user = request()->user();
         $deliverable = $submission->deliverable;
-        $isCreator = $deliverable->created_by === $user->id;
-        $isAssignee = $deliverable->assigned_to === $user->id;
+        $isCreator = (int) $deliverable->created_by === (int) $user->id;
+        $isAssignee = (int) $deliverable->assigned_to === (int) $user->id;
 
         if (!$isCreator && !$isAssignee && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         if (!$submission->file_path || !Storage::disk('public')->exists($submission->file_path)) return response()->json(['success' => false, 'message' => 'File not found'], 404);

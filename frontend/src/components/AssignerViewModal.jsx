@@ -55,6 +55,7 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
     const token = authToken();
     fetch(`${API_URL}/deliverables/${deliverable.id}/latest-submission`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
     })
       .then((res) => res.json())
       .then((data) => { setSubmission(data.submission); setLoading(false); })

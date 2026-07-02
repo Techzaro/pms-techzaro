@@ -102,28 +102,30 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         })
         .catch(() => { });
     } else {
-      fetch(`${API_URL}/projects`, {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        skipLoader: true,
-      })
-        .then((res) => (res.ok ? res.json() : []))
-        .then((data) => {
-          const list = data?.data || data;
-          setProjects(Array.isArray(list) ? list : []);
+      Promise.all([
+        fetch(`${API_URL}/projects`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          skipLoader: true,
         })
-        .catch(() => { });
+          .then((res) => (res.ok ? res.json() : []))
+          .then((data) => {
+            const list = data?.data || data;
+            setProjects(Array.isArray(list) ? list : []);
+          })
+          .catch(() => { }),
 
-      fetch(`${API_URL}/team-users`, {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        skipLoader: true,
-      })
-        .then((res) => (res.ok ? res.json() : { users: [] }))
-        .then((data) => {
-          const users = Array.isArray(data) ? data : (data.users || []);
-          setAllUsers(users);
-          setDisplayUsers(users);
+        fetch(`${API_URL}/team-users`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          skipLoader: true,
         })
-        .catch(() => { });
+          .then((res) => (res.ok ? res.json() : { users: [] }))
+          .then((data) => {
+            const users = Array.isArray(data) ? data : (data.users || []);
+            setAllUsers(users);
+            setDisplayUsers(users);
+          })
+          .catch(() => { }),
+      ]);
     }
   }, [projectId]);
 
@@ -267,24 +269,19 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
    * @param {string} token - Auth token
    */
   const uploadAttachments = async (taskId, token) => {
-    // Upload each file as multipart/form-data
-    for (const file of pendingFiles) {
-      const fd = new FormData();
-      fd.append("file", file);
-      try {
-        await fetch(`${API_URL}/tasks/${taskId}/files`, {
+    await Promise.all([
+      ...pendingFiles.map((file) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        return fetch(`${API_URL}/tasks/${taskId}/files`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           body: fd,
           _notifHandled: true,
-        });
-      } catch { }
-    }
-
-    // Upload each link as JSON
-    for (const link of links) {
-      try {
-        await fetch(`${API_URL}/tasks/${taskId}/links`, {
+        }).catch(() => {});
+      }),
+      ...links.map((link) => {
+        return fetch(`${API_URL}/tasks/${taskId}/links`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -293,9 +290,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
           },
           body: JSON.stringify(link),
           _notifHandled: true,
-        });
-      } catch { }
-    }
+        }).catch(() => {});
+      }),
+    ]);
   };
 
   /**

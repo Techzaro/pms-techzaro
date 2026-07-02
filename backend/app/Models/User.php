@@ -70,10 +70,6 @@ class User extends Authenticatable
         'employment_contract',
         'offer_letter',
         'techxaro_regulations',
-        'latest_education_cert',
-        'cv',
-        'previous_exp_letter',
-        'previous_salary_slip',
         'other_document',
         'sort_order',
     ];
