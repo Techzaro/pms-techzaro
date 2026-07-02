@@ -59,24 +59,14 @@ const CARD_META = {
 /** Memoised summary card used for the KPI row on the user performance page. */
 const SummaryCard = memo(function SummaryCard({ card }) {
   return (
-    <div style={{
-      background: "#fff", borderRadius: "16px", padding: "20px",
-      boxShadow: "0 2px 10px rgba(0,0,0,0.05)", display: "flex",
-      flexDirection: "column", gap: "18px",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-        <div style={{
-          width: "56px", height: "56px", borderRadius: "14px",
-          background: card.bgColor, display: "flex", alignItems: "center",
-          justifyContent: "center",
-        }}>
-          <img src={card.icon} alt={card.title} style={{ width: "26px", height: "26px" }} />
+    <div className="up-summary-card">
+      <div className="up-summary-top">
+        <div className="up-summary-icon" style={{ background: card.bgColor }}>
+          <img src={card.icon} alt={card.title} />
         </div>
         <div>
-          <h4 style={{ margin: 0, fontSize: "15px", color: "#6b7280" }}>
-            {card.title}
-          </h4>
-          <div style={{ marginTop: "5px", fontSize: "36px", fontWeight: "700", color: card.valueColor }}>
+          <h4 className="up-summary-title">{card.title}</h4>
+          <div className="up-summary-value" style={{ color: card.valueColor }}>
             {card.value}
           </div>
         </div>
@@ -170,7 +160,7 @@ function UserPerformance() {
   }, [statusBreakdown, totalTasks]);
 
   // Priority breakdown data
-  const priorityBreakdown = useMemo(() => data?.priority_breakdown || {}, [data?.priority_breakdown]);
+  const priorityBreakdown = useMemo(() => data?.priority_distribution || {}, [data?.priority_distribution]);
   const priorityItems = useMemo(() => {
     const high = priorityBreakdown.high || 0;
     const medium = priorityBreakdown.medium || 0;
@@ -343,12 +333,7 @@ function UserPerformance() {
           </div>
 
           {/* SUMMARY CARDS */}
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
-            gap: "20px",
-            marginBottom: "32px",
-          }}>
+          <div className="up-summary">
             {["total_assigned", "approved", "pending", "overdue"].map((key) => {
               const meta = CARD_META[key];
               return (
@@ -602,6 +587,91 @@ function UserPerformance() {
             )}
           </div>
 
+          {/* Mobile Task Cards */}
+          <div className="up-task-cards">
+            {tasksLoading ? (
+              <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
+            ) : filteredItems.length === 0 ? (
+              <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
+            ) : (
+              filteredItems.map((item, idx) => {
+                const isProject = item.item_type === "project";
+                const uniqueKey = `card-${item.item_type}-${item.id}-${idx}`;
+
+                return (
+                  <div className="up-task-card" key={uniqueKey}>
+                    <div className="up-task-card-header">
+                      <div className="up-task-card-title">{item.title}</div>
+                      <div className="up-task-card-type">
+                        <span className="badge" style={{
+                          background: isProject ? "#eef2ff" : "#f0fdf4",
+                          color: isProject ? "#4f46e5" : "#16a34a"
+                        }}>
+                          {isProject ? "Project" : "Task"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="up-task-card-details">
+                      <div className="up-task-card-detail">
+                        <span className="up-task-card-detail-label">Status</span>
+                        <span className="badge" style={{
+                          background: STATUS_COLORS[item.status] || "#F3F4F6",
+                          color: STATUS_TEXT_COLORS[item.status] || "#374151"
+                        }}>
+                          {["submitted", "approved", "rejected", "reopened"].includes(item.status)
+                            ? formatStatus(item.status)
+                            : isProject ? "Pending" : formatStatus(item.status)}
+                        </span>
+                      </div>
+                      <div className="up-task-card-detail">
+                        <span className="up-task-card-detail-label">Priority</span>
+                        <span className="badge" style={{
+                          background: PRIORITY_COLORS[item.priority] || "#F3F4F6",
+                          color: PRIORITY_TEXT_COLORS[item.priority] || "#374151"
+                        }}>
+                          {item.priority}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="up-task-card-progress">
+                      <div className="up-task-card-progress-info">
+                        <span className="up-task-card-progress-text">
+                          {isProject ? calculateProgress(item) : (item.deliverables_progress || 0)}%
+                        </span>
+                        <span className="up-task-card-progress-detail">
+                          {isProject
+                            ? `${item.completed_tasks || 0}/${item.total_tasks || 0} tasks`
+                            : `${item.approved_deliverables || 0}/${item.total_deliverables || 0} deliverables`}
+                        </span>
+                      </div>
+                      <div className="progress-bar-track">
+                        <div className="progress-bar-fill" style={{
+                          width: `${isProject ? calculateProgress(item) : (item.deliverables_progress || 0)}%`
+                        }}></div>
+                      </div>
+                    </div>
+
+                    <div className="up-task-card-actions">
+                      <button
+                        className="action-icon-btn action-view"
+                        title="View"
+                        onClick={() => navigate(rolePath(isProject
+                          ? `projects/project-details/${item.id}`
+                          : `tasks/task-details/${item.id}`), {
+                          state: isProject ? undefined : { taskIds: taskIdList, from: 'user-performance' }
+                        })}
+                      >
+                        <IoEyeOutline /> View
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
         </div>
       </div>
 
@@ -614,6 +684,7 @@ function UserPerformance() {
           summary,
           status_breakdown: statusBreakdown,
           status_distribution: data?.status_distribution || {},
+          priority_distribution: data?.priority_distribution || {},
           tasks: items,
           projects: data?.projects || [],
           deliverables: data?.deliverables || [],
