@@ -71,6 +71,7 @@ async function sendDeviceToken(token) {
         Authorization: `Bearer ${t}`,
       },
       body: JSON.stringify({ device_token: token }),
+      _notifHandled: true,
     });
   } catch {
     // Silently fail - token registration is not critical

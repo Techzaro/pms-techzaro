@@ -18,6 +18,7 @@ import API_URL from "../config/api";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { authToken, getCurrentRole, rolePath, getUser, normalizeRole } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
+import { showSuccessMessage } from "../utils/notify";
 import { formatDateTimeInline } from "../utils/formatDateTime";
 import { useActivityHighlight } from "../hooks/useActivityHighlight";
 import "../components/layout/ActivityHighlight.css";
@@ -349,7 +350,7 @@ function UserProfile() {
         setProfileData((prev) => ({ ...prev, user: { ...prev.user, ...data.user } }));
       }
 
-      notify.success("User updated successfully.");
+      showSuccessMessage("User", "updated");
       publish('data:changed', { type: 'user', action: 'updated' });
 
       try {

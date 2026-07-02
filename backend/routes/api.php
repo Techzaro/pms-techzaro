@@ -305,6 +305,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reports/detailed', [ReportController::class, 'detailedReport']); // Detailed report
     Route::get('/reports/performance', [ReportController::class, 'performanceReport']); // Performance report
     Route::get('/reports/progress', [ReportController::class, 'progressReport']); // Progress report
+    Route::get('/reports/user/me', function (Request $request) {
+        $controller = new \App\Http\Controllers\ReportController();
+        return $controller->userPerformance($request, $request->user());
+    }); // User performance report (own)
     Route::get('/reports/user/{user}', [ReportController::class, 'userPerformance']); // User performance report
     Route::get('/reports/project/{project}', [ReportController::class, 'projectReport']); // Project report
     Route::get('/reports/summary-cards', [ReportController::class, 'summaryCards']); // Summary cards data

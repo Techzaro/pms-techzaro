@@ -86,6 +86,7 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
           method: "POST",
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
           body: formData,
+          _notifHandled: true,
         });
       } else {
         // Approve/reject use JSON payload
@@ -93,6 +94,7 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify(body),
+          _notifHandled: true,
         });
       }
 

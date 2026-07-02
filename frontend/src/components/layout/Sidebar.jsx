@@ -470,6 +470,7 @@ function Sidebar() {
                       Authorization: `Bearer ${token}`,
                     },
                     skipLoader: true,
+                    _notifHandled: true,
                   });
                 } catch {
                   // ignore logout API errors

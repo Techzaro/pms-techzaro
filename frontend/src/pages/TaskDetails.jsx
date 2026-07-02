@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { useNotification } from "../context/NotificationContext";
+import { showSuccessMessage } from "../utils/notify";
 import {
   Calendar,
   CheckCircle2,
@@ -228,6 +229,7 @@ function TaskDetails() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken()}` },
       body: JSON.stringify({ items: payload }),
+      _notifHandled: true,
     }).catch(() => {});
   }, []);
 
@@ -267,6 +269,7 @@ function TaskDetails() {
     fetch(`${API_URL}/tasks/${task.id}/changes/mark-read`, {
       method: "POST",
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      _notifHandled: true,
     }).catch(() => { });
   }, [task?.id, task?.unviewed_changes_count]);
 
@@ -344,14 +347,14 @@ function TaskDetails() {
 
   const handleTaskActionSuccess = (updatedTask) => {
     setTask((prev) => ({ ...prev, ...updatedTask }));
-    const statusMessages = {
-      submitted: "Task submitted successfully.",
-      approved: "Task approved successfully.",
-      rejected: "Task rejected.",
-      reopened: "Task reopened successfully.",
+    const statusActions = {
+      submitted: "submitted",
+      approved: "approved",
+      rejected: "rejected",
+      reopened: "reopened",
     };
-    const msg = statusMessages[updatedTask?.status] || "Task updated successfully.";
-    notify.success(msg);
+    const action = statusActions[updatedTask?.status] || "updated";
+    showSuccessMessage("Task", action);
     publish('task:updated', updatedTask);
     publish('data:changed', { type: 'task', action: 'updated' });
   };
@@ -369,7 +372,7 @@ function TaskDetails() {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
-      if (res.ok) { publish('task:deleted', { id: taskId }); publish('data:changed', { type: 'task', action: 'deleted' }); notify.success("Task deleted."); setTimeout(() => navigate(rolePath("tasks")), 800); }
+      if (res.ok) { publish('task:deleted', { id: taskId }); publish('data:changed', { type: 'task', action: 'deleted' }); showSuccessMessage("Task", "deleted"); setTimeout(() => navigate(rolePath("tasks")), 800); }
       else notify.error("Failed to delete task.");
     } catch { notify.error("Failed to delete task."); }
   };
@@ -383,7 +386,7 @@ function TaskDetails() {
         body: JSON.stringify({ status: newStatus }),
         _notifHandled: true,
       });
-      if (res.ok) { publish('task:updated', { id: taskId, status: newStatus }); publish('data:changed', { type: 'task', action: 'updated' }); setTask((p) => p ? { ...p, status: newStatus } : p); notify.success("Status updated."); }
+      if (res.ok) { publish('task:updated', { id: taskId, status: newStatus }); publish('data:changed', { type: 'task', action: 'updated' }); setTask((p) => p ? { ...p, status: newStatus } : p); showSuccessMessage("Task", "status updated"); }
     } catch { notify.error("Failed to update status."); }
   };
 

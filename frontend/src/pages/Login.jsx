@@ -15,6 +15,7 @@ import { useSearchParams, Link } from "react-router-dom";
 import API_URL from "../config/api";
 import { saveSession, clearAllSessions, authToken } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
+import { showSuccessMessage } from "../utils/notify";
 import { PasswordInput, isPasswordValid } from "../components/PasswordInput";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "../components/LoadingButton";
@@ -188,7 +189,7 @@ function Login() {
 
       clearAllSessions();
 
-      notify.success("Password changed successfully. Please login with your new password.");
+      showSuccessMessage("Password", "changed");
       setMustChangePassword(false);
       setNewPassword("");
       setConfirmPassword("");

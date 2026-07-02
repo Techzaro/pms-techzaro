@@ -14,6 +14,8 @@ import { createPortal } from "react-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useApiQuery } from "../hooks/useApi";
+import DonutChart from "../components/DonutChart";
+import "../components/Charts.css";
 import "../pages/ExportReport.css";
 
 /** Color palette for user avatar backgrounds */
@@ -172,36 +174,55 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
 
       // ── STATUS BREAKDOWN + TASKS TREND ──
       const halfW = (CW - 5) / 2;
-      // Left: Status Breakdown
+      // Left: Status Breakdown with Donut
       doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
       doc.roundedRect(M, y, halfW, 42, 2, 2, "S");
       doc.setFontSize(8); doc.setFont("helvetica", "bold");
       doc.setTextColor(17, 24, 39); doc.text("TASK STATUS BREAKDOWN (Overall)", M + 5, y + 6);
-      doc.setFontSize(5.5); doc.setFont("helvetica", "normal");
-      doc.setTextColor(156, 163, 175); doc.text(`${totalStatusItems} Total Tasks`, M + 5, y + 10.5);
-      doc.setFontSize(5.5); doc.setFont("helvetica", "bold");
-      doc.setTextColor(107, 114, 128);
-      doc.text("Status", M + 5, y + 16);
-      doc.text("Count", M + halfW - 24, y + 16);
-      doc.text("Percentage", M + halfW - 13, y + 16);
       const bStatuses = [
-        { label: "Completed", count: statusDist.completed ?? 0, color: [34, 197, 94] },
+        { label: "Completed", count: statusDist.completed ?? 0, color: [16, 185, 129] },
         { label: "Pending", count: statusDist.pending ?? 0, color: [245, 158, 11] },
         { label: "In Review", count: statusDist.in_review ?? 0, color: [99, 102, 241] },
         { label: "Overdue", count: statusDist.overdue ?? 0, color: [239, 68, 68] },
       ];
+      const stTotal = bStatuses.reduce((s, x) => s + x.count, 0) || 1;
+      // Draw donut using filled polygon arc segments
+      const donutCx = M + 22, donutCy = y + 26, outerR = 12, innerR = 8;
+      let startAngle = -Math.PI / 2;
+      bStatuses.forEach((s) => {
+        if (s.count <= 0) { return; }
+        const sweep = (s.count / stTotal) * 2 * Math.PI;
+        const endAngle = startAngle + sweep;
+        const segments = Math.max(Math.ceil(sweep / (Math.PI / 8)), 2);
+        const step = sweep / segments;
+        const points = [];
+        for (let i = 0; i <= segments; i++) {
+          const a = startAngle + i * step;
+          points.push([donutCx + outerR * Math.cos(a), donutCy + outerR * Math.sin(a)]);
+        }
+        for (let i = segments; i >= 0; i--) {
+          const a = startAngle + i * step;
+          points.push([donutCx + innerR * Math.cos(a), donutCy + innerR * Math.sin(a)]);
+        }
+        doc.setFillColor(...s.color); doc.setDrawColor(...s.color); doc.setLineWidth(0.01);
+        doc.lines(points.map((p, i) => i === 0 ? [0, 0] : [p[0] - points[i - 1][0], p[1] - points[i - 1][1]]), points[0][0], points[0][1], [1, 1], "F");
+        startAngle = endAngle;
+      });
+      // Center text
+      doc.setFontSize(14); doc.setFont("helvetica", "bold"); doc.setTextColor(17, 24, 39);
+      doc.text(String(stTotal), donutCx, donutCy + 1, { align: "center" });
+      doc.setFontSize(4.5); doc.setFont("helvetica", "normal"); doc.setTextColor(156, 163, 175);
+      doc.text("Total Tasks", donutCx, donutCy + 5, { align: "center" });
+      // Legend (right of donut)
+      const lgX = M + 46;
       bStatuses.forEach((s, i) => {
-        const sy = y + 21 + i * 5;
+        const sy = y + 17 + i * 7;
         const pct = totalStatusItems > 0 ? Math.round((s.count / totalStatusItems) * 100) : 0;
-        doc.setFillColor(...s.color); doc.circle(M + 7, sy, 1.2, "F");
+        doc.setFillColor(...s.color); doc.circle(lgX, sy, 1.5, "F");
         doc.setFontSize(6); doc.setFont("helvetica", "normal");
-        doc.setTextColor(55, 65, 81); doc.text(s.label, M + 11, sy + 0.5);
-        const barX = M + 40, barMax = halfW - 68;
-        doc.setFillColor(229, 231, 235); doc.roundedRect(barX, sy - 1.2, barMax, 2.4, 1, 1, "F");
-        if (pct > 0) { doc.setFillColor(...s.color); doc.roundedRect(barX, sy - 1.2, barMax * (pct / 100), 2.4, 1, 1, "F"); }
-        doc.setFont("helvetica", "normal"); doc.setTextColor(55, 65, 81);
-        doc.text(String(s.count), M + halfW - 20, sy + 0.5);
-        doc.setTextColor(156, 163, 175); doc.text(`${pct}%`, M + halfW - 9, sy + 0.5);
+        doc.setTextColor(55, 65, 81); doc.text(s.label, lgX + 4, sy + 0.5);
+        doc.setFont("helvetica", "bold"); doc.setTextColor(17, 24, 39);
+        doc.text(`${s.count} (${pct}%)`, M + halfW - 5, sy + 0.5, { align: "right" });
       });
       // Right: Priority Distribution
       const rX = M + halfW + 5;
@@ -322,14 +343,12 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
         },
       });
 
-      // Right: Status Distribution
+      // Right: Status Distribution — simple dot + label + count + % matching review modal
       const sdX = M + qHalf + 5;
       doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
       doc.roundedRect(sdX, y, qHalf, 48, 2, 2, "S");
       doc.setFontSize(8); doc.setFont("helvetica", "bold");
       doc.setTextColor(17, 24, 39); doc.text("STATUS DISTRIBUTION (Overall)", sdX + 5, y + 6);
-      doc.setFontSize(5.5); doc.setFont("helvetica", "normal");
-      doc.setTextColor(156, 163, 175); doc.text(`${totalStatusItems} Total Tasks`, sdX + 5, y + 10.5);
       const sdItems = [
         { label: "Completed", count: statusDist.completed ?? 0, color: [34, 197, 94] },
         { label: "Pending", count: statusDist.pending ?? 0, color: [245, 158, 11] },
@@ -337,25 +356,24 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
         { label: "Overdue", count: statusDist.overdue ?? 0, color: [239, 68, 68] },
       ];
       sdItems.forEach((s, i) => {
-        const sy = y + 16 + i * 6;
+        const sy = y + 15 + i * 7;
         const pct = totalStatusItems > 0 ? Math.round((s.count / totalStatusItems) * 100) : 0;
         doc.setFillColor(...s.color); doc.circle(sdX + 7, sy, 1.2, "F");
         doc.setFontSize(6); doc.setFont("helvetica", "normal");
         doc.setTextColor(55, 65, 81); doc.text(s.label, sdX + 11, sy + 0.5);
-        const barX = sdX + 40, barMax = qHalf - 68;
-        doc.setFillColor(229, 231, 235); doc.roundedRect(barX, sy - 1.2, barMax, 2.4, 1, 1, "F");
-        if (pct > 0) { doc.setFillColor(...s.color); doc.roundedRect(barX, sy - 1.2, barMax * (pct / 100), 2.4, 1, 1, "F"); }
-        doc.setFont("helvetica", "normal"); doc.setTextColor(55, 65, 81);
-        doc.text(String(s.count), sdX + qHalf - 20, sy + 0.5);
-        doc.setTextColor(156, 163, 175); doc.text(`${pct}%`, sdX + qHalf - 9, sy + 0.5);
+        doc.setFont("helvetica", "bold"); doc.setTextColor(17, 24, 39);
+        doc.text(String(s.count), sdX + qHalf - 22, sy + 0.5, { align: "right" });
+        doc.setFont("helvetica", "normal"); doc.setTextColor(156, 163, 175);
+        doc.text(`${pct}%`, sdX + qHalf - 5, sy + 0.5, { align: "right" });
       });
       // Total row
-      const totalY = y + 16 + 4 * 6;
-      doc.setFillColor(229, 231, 235); doc.rect(sdX + 5, totalY - 2, qHalf - 10, 0.3, "F");
+      const totalY = y + 15 + 4 * 7;
+      doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.1);
+      doc.line(sdX + 5, totalY - 2, sdX + qHalf - 5, totalY - 2);
       doc.setFontSize(6); doc.setFont("helvetica", "bold");
       doc.setTextColor(17, 24, 39); doc.text("Total", sdX + 7, totalY + 2);
-      doc.text(String(totalStatusItems), sdX + qHalf - 16, totalY + 2);
-      doc.text("100%", sdX + qHalf - 9, totalY + 2);
+      doc.text(String(totalStatusItems), sdX + qHalf - 22, totalY + 2, { align: "right" });
+      doc.text("100%", sdX + qHalf - 5, totalY + 2, { align: "right" });
       y += 56;
 
       // ── REPORT NOTES + AUTHORIZED BY ──
@@ -535,34 +553,18 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
               <div style={{ margin: "0 28px 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 {/* Left: Status Breakdown */}
                 <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827" }}>TASK STATUS BREAKDOWN (Overall)</div>
-                  <div style={{ fontSize: 9, color: "#9ca3af", marginBottom: 4 }}>{totalStatusItems} Total Tasks</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 50px 70px", fontSize: 9, fontWeight: 600, color: "#6b7280", borderBottom: "1px solid #e5e7eb", paddingBottom: 3, marginBottom: 4 }}>
-                    <span>Status</span><span style={{ textAlign: "center" }}>Count</span><span style={{ textAlign: "center" }}>Percentage</span>
-                  </div>
-                  {[
-                    { label: "Completed", count: statusDist.completed ?? 0, color: "#22c55e" },
-                    { label: "Pending", count: statusDist.pending ?? 0, color: "#f59e0b" },
-                    { label: "In Review", count: statusDist.in_review ?? 0, color: "#6366f1" },
-                    { label: "Overdue", count: statusDist.overdue ?? 0, color: "#ef4444" },
-                  ].map((s) => {
-                    const pct = totalStatusItems > 0 ? Math.round((s.count / totalStatusItems) * 100) : 0;
-                    return (
-                      <div key={s.label} style={{ display: "grid", gridTemplateColumns: "1fr 50px 70px", alignItems: "center", fontSize: 10, padding: "2px 0" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: s.color }}></div>
-                          <span style={{ color: "#374151" }}>{s.label}</span>
-                        </div>
-                        <span style={{ textAlign: "center", color: "#374151", fontWeight: 600 }}>{s.count}</span>
-                        <div style={{ textAlign: "center", display: "flex", alignItems: "center", gap: 4, justifyContent: "center" }}>
-                          <div style={{ flex: 1, height: 4, borderRadius: 2, background: "#e5e7eb", overflow: "hidden" }}>
-                            <div style={{ width: `${pct}%`, height: "100%", borderRadius: 2, background: s.color }}></div>
-                          </div>
-                          <span style={{ fontSize: 9, color: "#9ca3af", minWidth: 28 }}>{pct}%</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 8 }}>TASK STATUS BREAKDOWN (Overall)</div>
+                  <DonutChart
+                    segments={[
+                      { label: "Completed", count: statusDist.completed ?? 0, color: "#10b981" },
+                      { label: "Pending", count: statusDist.pending ?? 0, color: "#f59e0b" },
+                      { label: "In Review", count: statusDist.in_review ?? 0, color: "#6366f1" },
+                      { label: "Overdue", count: statusDist.overdue ?? 0, color: "#ef4444" },
+                    ]}
+                    size={140}
+                    strokeWidth={24}
+                    totalLabel="Total Tasks"
+                  />
                 </div>
 
                 {/* Right: Priority Distribution */}

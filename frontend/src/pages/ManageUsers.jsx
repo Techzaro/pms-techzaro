@@ -32,6 +32,7 @@ import { authToken, getCurrentRole, getUser, setUser, rolePath, normalizeRole } 
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
+import { showSuccessMessage } from "../utils/notify";
 import Pagination from "../components/Pagination";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "../components/LoadingButton";
@@ -109,8 +110,7 @@ function ManageUsers() {
   });
   const [loading, setLoading] = useState(false);
   const [savingUserId, setSavingUserId] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const { run } = useSubmit();
+  const { submitting, run } = useSubmit();
   const [addErrors, setAddErrors] = useState({});
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -266,6 +266,7 @@ function ManageUsers() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ items: payload }),
+      _notifHandled: true,
     }).catch(() => {});
   }, []);
 
@@ -503,7 +504,7 @@ function ManageUsers() {
             : item
         )
       );
-      notify.success("User role updated successfully.");
+      showSuccessMessage("User role", "updated");
       publish('data:changed', { type: 'user', action: 'updated' });
     } catch (error) {
       console.error(error);
@@ -543,7 +544,7 @@ function ManageUsers() {
           item.id === userId ? { ...item, active: false } : item
         )
       );
-      notify.success(data.message || "User resigned successfully.");
+      showSuccessMessage("User", "resigned");
       publish('data:changed', { type: 'user', action: 'resigned' });
     });
   };
@@ -767,11 +768,11 @@ function ManageUsers() {
       setAddErrors({});
       if (isEdit) {
         setUsers((prev) => prev.map((item) => item.id === editingUser.id ? { ...item, ...data.user } : item));
-        notify.success(data.message || "User updated successfully.");
+        showSuccessMessage("User", "updated");
         publish('data:changed', { type: 'user', action: 'updated' });
       } else {
         setUsers((prev) => [data.user, ...prev]);
-        notify.success(data.message || "User created successfully.");
+        showSuccessMessage("User", "created");
         publish('data:changed', { type: 'user', action: 'created' });
       }
       closeModal();
@@ -900,7 +901,7 @@ function ManageUsers() {
                 </button>
               </div>
 
-              <form className="user-form" onSubmit={handleSubmit}>
+              <form className="user-form" onSubmit={handleSubmit} style={{ pointerEvents: submitting ? 'none' : 'auto', opacity: submitting ? 0.7 : 1 }}>
                 {/* ===== Personal Information ===== */}
                 <h3 className="form-section-title">Personal Information</h3>
                 <div className="user-form-grid">
@@ -1118,11 +1119,11 @@ function ManageUsers() {
                 </div>
 
                 <div className="user-form-actions">
-                  <button type="button" className="secondary-button" onClick={closeModal}>
+                  <button type="button" className="secondary-button" onClick={closeModal} disabled={submitting}>
                     Cancel
                   </button>
                   <LoadingButton type="submit" className="primary-button" loading={submitting}>
-                    {submitting ? "Saving..." : (editingUser ? "Update User" : "Create User")}
+                    {submitting ? (editingUser ? "Updating User..." : "Creating User...") : (editingUser ? "Update User" : "Create User")}
                   </LoadingButton>
                 </div>
               </form>

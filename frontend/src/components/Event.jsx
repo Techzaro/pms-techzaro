@@ -14,7 +14,7 @@ import { useSubmit } from "../hooks/useSubmit";
 import UserSelectDropdown from "./UserSelectDropdown";
 import LoadingButton from "./LoadingButton";
 import { publish } from "../utils/eventBus";
-import { notify } from "../utils/notify";
+import { notify, showSuccessMessage } from "../utils/notify";
 import "./Event.css";
 
 const TYPE_MAP = {
@@ -229,6 +229,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
           throw new Error(data.message || "Failed to save event");
         }
 
+        showSuccessMessage("Event", isEditing ? "updated" : "created");
         setStep(1);
         if (isEditing) {
           publish('event:updated', data.event || data);

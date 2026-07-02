@@ -321,11 +321,12 @@ class ReportController extends Controller
             ")->whereIn('id', $taskIds)->first()
             : (object)['p_high' => 0, 'p_medium' => 0, 'p_low' => 0];
 
-        $projectPriorityStats = $projectQuery->selectRaw("
+        $projectPriorityStatsResult = (clone $projectQuery)->selectRaw("
             SUM(CASE WHEN `priority` = 'high' THEN 1 ELSE 0 END) as p_high,
             SUM(CASE WHEN `priority` = 'medium' THEN 1 ELSE 0 END) as p_medium,
             SUM(CASE WHEN `priority` = 'low' THEN 1 ELSE 0 END) as p_low
         ")->first();
+        $projectPriorityStats = $projectPriorityStatsResult ?: (object)['p_high' => 0, 'p_medium' => 0, 'p_low' => 0];
 
         $priorityDistribution = [
             'high' => (int) $priorityStats->p_high + (int) $projectPriorityStats->p_high,

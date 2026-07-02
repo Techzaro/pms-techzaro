@@ -15,7 +15,7 @@ import LoadingButton from "./LoadingButton";
 
 import { formatDateTime, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
-import { notify } from "../utils/notify";
+import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import "./layout/CreateProjectModal.css";
 
@@ -256,6 +256,7 @@ const CreateProjectModal = ({ onClose }) => {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           body: fd,
+          _notifHandled: true,
         });
       } catch {}
     }
@@ -271,6 +272,7 @@ const CreateProjectModal = ({ onClose }) => {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(link),
+          _notifHandled: true,
         });
       } catch {}
     }
@@ -347,6 +349,7 @@ const CreateProjectModal = ({ onClose }) => {
           await uploadAttachments(projectId, token);
         }
 
+        showSuccessMessage("Project", "created");
         publish('project:created', data.project || data);
         publish('data:changed', { type: 'project', action: 'created' });
         onClose(true);

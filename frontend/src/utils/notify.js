@@ -49,3 +49,23 @@ export const notify = {
    */
   info: (msg, dur) => notifyRef.info?.(msg, dur),
 };
+
+/**
+ * Shows a context-based success message.
+ * @param {string} entity - Entity name (e.g. "Task", "Project", "Event")
+ * @param {string} action - Action performed (e.g. "created", "updated", "deleted")
+ * @example showSuccessMessage("Task", "created") // "Task created successfully"
+ */
+export function showSuccessMessage(entity, action) {
+  notify.success(`${entity} ${action} successfully`);
+}
+
+/**
+ * Shows a context-based error message.
+ * @param {string} entity - Entity name (e.g. "Task", "Project", "Event")
+ * @param {string} action - Action that failed (e.g. "create", "update", "delete")
+ * @example showErrorMessage("Task", "create") // "Failed to create task"
+ */
+export function showErrorMessage(entity, action) {
+  notify.error(`Failed to ${action} ${entity.toLowerCase()}`);
+}

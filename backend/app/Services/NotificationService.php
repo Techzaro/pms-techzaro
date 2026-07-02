@@ -241,12 +241,19 @@ class NotificationService
      */
     public function confirmAction($performer, string $actionVerb, string $entityType, string $entityName, array $details = []): void
     {
-        if (!$performer || !$performer->professional_email) {
+        if (!$performer) {
             return;
         }
 
+        // Sirf professional email (Outlook) pe bhejo
+        // Personal email pe sirf first time welcome email jata hai
+        if (empty($performer->professional_email)) {
+            return;
+        }
+
+        $loginUrl = rtrim(config('app.frontend_url'), '/');
+
         try {
-            $loginUrl = rtrim(config('app.frontend_url'), '/');
             \Illuminate\Support\Facades\Mail::to($performer->professional_email)
                 ->send(new \App\Mail\ActionConfirmationMail(
                     $performer->name,
@@ -259,6 +266,7 @@ class NotificationService
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Failed to send action confirmation email', [
                 'user_id' => $performer->id,
+                'email' => $performer->professional_email,
                 'action' => $actionVerb,
                 'entity_type' => $entityType,
                 'error' => $e->getMessage(),

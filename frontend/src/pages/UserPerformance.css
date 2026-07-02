@@ -675,17 +675,21 @@
 
   .up-profile-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .up-export-btn,
   .up-assign-btn {
     flex: 1;
     justify-content: center;
+    min-width: 0;
+    padding: 8px 12px;
+    font-size: 13px;
   }
 
   .up-summary {
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    gap: 10px;
   }
 
   .up-charts-row {
@@ -709,34 +713,43 @@
   }
 
   .up-chart-area {
-    height: 180px;
+    height: 160px;
   }
 
   .up-chart-card {
-    padding: 18px;
+    padding: 14px;
   }
 
   .up-table-section {
-    padding: 18px;
+    padding: 14px;
   }
 
   .up-profile-info h1 {
-    font-size: 24px;
+    font-size: 22px;
+  }
+
+  .up-avatar {
+    width: 52px;
+    height: 52px;
+  }
+
+  .up-role {
+    font-size: 13px;
   }
 }
 
 @media (max-width: 480px) {
   .up-summary {
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 8px;
   }
 
   .up-summary-card {
-    padding: 14px;
+    padding: 12px;
   }
 
   .up-summary-value {
-    font-size: 26px;
+    font-size: 24px;
   }
 
   .up-table-header,
@@ -755,8 +768,8 @@
   }
 
   .up-chart-tabs button {
-    font-size: 13px;
-    padding: 6px 14px;
+    font-size: 12px;
+    padding: 5px 12px;
   }
 
   .up-table-tabs {
@@ -769,6 +782,29 @@
   }
 
   .up-profile-info h1 {
-    font-size: 22px;
+    font-size: 20px;
+  }
+
+  .up-avatar {
+    width: 44px;
+    height: 44px;
+  }
+
+  .up-chart-card {
+    padding: 12px;
+  }
+
+  .up-chart-header h3 {
+    font-size: 14px;
+  }
+
+  .up-profile-actions {
+    gap: 8px;
+  }
+
+  .up-export-btn,
+  .up-assign-btn {
+    padding: 7px 10px;
+    font-size: 12px;
   }
 }

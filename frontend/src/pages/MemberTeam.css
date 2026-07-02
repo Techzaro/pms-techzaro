@@ -121,7 +121,7 @@
 @media (max-width: 768px) {
   .mt-info-row {
     flex-direction: column;
-    gap: 16px;
+    gap: 14px;
   }
 
   .mt-members-grid {
@@ -131,10 +131,57 @@
   .mt-member-details {
     padding-left: 0;
   }
+
+  .mt-member-card {
+    padding: 14px;
+  }
+
+  .mt-date-chip {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
+  .mt-lead-chip {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
 }
 
 @media (max-width: 480px) {
   .mt-title {
-    font-size: 22px;
+    font-size: 20px;
+  }
+
+  .mt-subtitle {
+    font-size: 13px;
+  }
+
+  .mt-member-card {
+    padding: 12px;
+    border-radius: 10px;
+  }
+
+  .mt-member-card .mt-member-name {
+    font-size: 14px;
+  }
+
+  .mt-member-detail {
+    font-size: 12px;
+  }
+
+  .mt-member-email {
+    font-size: 12px;
+  }
+
+  .mt-info-row {
+    gap: 12px;
+  }
+
+  .mt-section-label {
+    font-size: 12px;
+  }
+
+  .mt-team-desc {
+    font-size: 13px;
   }
 }

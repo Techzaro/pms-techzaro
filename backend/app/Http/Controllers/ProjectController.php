@@ -211,6 +211,7 @@ class ProjectController extends Controller
             ? 'You created project "' . $project->title . '" and assigned it to ' . $assigneeNames
             : 'You created project "' . $project->title . '"';
         $this->activityService->log($request->user()->id, 'project_created', $activityDesc, 'project', $project->id);
+        $this->clearDashboardCache($request->user()->id);
 
         if (!empty($deliverables)) {
             $assignedUsers = $validated['assigned_users'] ?? [];
@@ -244,7 +245,7 @@ class ProjectController extends Controller
 
         // Send confirmation email to performer
         $assigneeNames = User::whereIn('id', $validated['assigned_users'] ?? [])->pluck('name')->implode(', ');
-        $this->notificationService->confirmAction($user, 'Created & Assigned', 'project', $project->title, [
+        $this->notificationService->confirmAction($request->user(), 'Created & Assigned', 'project', $project->title, [
             'Assigned To' => $assigneeNames ?: 'N/A',
             'Deliverables' => !empty($deliverables) ? (string) count($deliverables) . ' added' : 'None',
         ]);
@@ -477,20 +478,8 @@ class ProjectController extends Controller
                             ];
                         }
                     }
-                    $addedDeliverables[] = $del['title'];
-                }
-                if (!empty($bulkDeliverables)) {
-                    $createdDeliverables =  $project->deliverables()->createMany($bulkDeliverables);
-                }
-                if (!empty($bulkNotifications)) {
-                    $this->notificationService->createBulk($bulkNotifications);
                     if (!empty($bulkNotifications)) {
                         $this->notificationService->createBulk($bulkNotifications);
-                    }
-
-                    // Notify project assignees about new deliverables
-                    foreach ($createdDeliverables as $dlv) {
-                        $this->notificationService->notifyDeliverableAdded($dlv, $user, $assignedUsers, 'project');
                     }
                 }
             }
@@ -532,6 +521,7 @@ class ProjectController extends Controller
             $activityDesc = 'You updated project "' . $project->title . '" — changed: ' . implode(', ', array_slice($fieldNames, 0, 3));
             if ($changeCount > 3) $activityDesc .= ' and ' . ($changeCount - 3) . ' more';
             $this->activityService->log($user->id, 'project_updated', $activityDesc, 'project', $project->id);
+        $this->clearDashboardCache($user->id);
         }
 
         return response()->json([
@@ -804,6 +794,7 @@ class ProjectController extends Controller
             if ($grantCount > 0) $parts[] = 'granted access to ' . $grantCount . ' user(s)';
             if ($removeCount > 0) $parts[] = 'removed access for ' . $removeCount . ' user(s)';
             $this->activityService->log($user->id, 'project_visibility_updated', 'You ' . implode(' and ', $parts) . ' on project "' . $project->title . '"', 'project', $project->id);
+        $this->clearDashboardCache($user->id);
         }
 
         return response()->json(['success' => true, 'message' => 'Visibility updated successfully']);
@@ -953,6 +944,7 @@ class ProjectController extends Controller
         // Log activity
         $isResubmitLabel = $isResubmit ? 'resubmitted' : 'submitted';
         $this->activityService->log($user->id, 'project_' . $isResubmitLabel, 'You ' . $isResubmitLabel . ' project "' . $project->title . '" for review', 'project', $project->id);
+        $this->clearDashboardCache($user->id);
 
         return response()->json([
             'success' => true,
@@ -1009,6 +1001,7 @@ class ProjectController extends Controller
 
         // Log activity
         $this->activityService->log($user->id, 'project_approved', 'You approved project "' . $project->title . '"', 'project', $project->id);
+        $this->clearDashboardCache($user->id);
 
         return response()->json([
             'success' => true,
@@ -1078,6 +1071,7 @@ class ProjectController extends Controller
 
         // Log activity
         $this->activityService->log($user->id, 'project_rejected', 'You rejected project "' . $project->title . '"', 'project', $project->id);
+        $this->clearDashboardCache($user->id);
 
         return response()->json([
             'success' => true,
@@ -1175,6 +1169,7 @@ class ProjectController extends Controller
 
         // Log activity
         $this->activityService->log($user->id, 'project_reopened', 'You reopened project "' . $project->title . '" for revision', 'project', $project->id);
+        $this->clearDashboardCache($user->id);
 
         return response()->json([
             'success' => true,
@@ -1277,14 +1272,13 @@ class ProjectController extends Controller
         $assignedUserIds = $project->assigned_users ?? [];
         if (is_string($assignedUserIds)) $assignedUserIds = json_decode($assignedUserIds, true) ?? [];
 
-        $message = 'The project "' . $project->title . '" has been updated by ' . $updater->name . '.';
-        if (count($changes) > 0) $message .= ' ' . count($changes) . ' change(s) were made.';
+        // Build a short summary of all changes
+        $changeLabels = array_map(fn($c) => $c['label'] ?? ucwords(str_replace('_', ' ', $c['field_name'])), $changes);
+        $summary = count($changeLabels) > 0
+            ? implode(', ', array_slice($changeLabels, 0, 4)) . (count($changeLabels) > 4 ? ' and ' . (count($changeLabels) - 4) . ' more' : '')
+            : 'details';
 
-        $formattedChanges = array_map(fn($c) => [
-            'field' => $c['label'] ?? ucwords(str_replace('_', ' ', $c['field_name'])),
-            'old' => $c['old_value'] ?? '',
-            'new' => $c['new_value'] ?? '',
-        ], $changes);
+        $message = $updater->name . ' updated project "' . $project->title . '" — changed: ' . $summary . '.';
 
         foreach (array_filter($assignedUserIds, fn($id) => (int) $id !== (int) $updater->id) as $userId) {
             $this->notificationService->notify(
@@ -1295,8 +1289,7 @@ class ProjectController extends Controller
                 $project->id,
                 'Project Updated',
                 $message,
-                '/projects/project-details/' . $project->id,
-                !empty($formattedChanges) ? $formattedChanges : null
+                '/projects/project-details/' . $project->id
             );
         }
     }

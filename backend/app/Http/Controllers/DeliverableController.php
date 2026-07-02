@@ -454,6 +454,7 @@ class DeliverableController extends Controller
         // Log activity
         $isResubmitLabel = $isResubmit ? 'resubmitted' : 'submitted';
         $this->activityService->log($user->id, 'deliverable_' . $isResubmitLabel, 'You ' . $isResubmitLabel . ' deliverable "' . $deliverable->title . '" for review', 'deliverable', $deliverable->id);
+        $this->clearDashboardCache($user->id);
 
         return response()->json([
             'success' => true,
@@ -506,6 +507,7 @@ class DeliverableController extends Controller
 
         // Log activity
         $this->activityService->log($user->id, 'deliverable_approved', 'You approved deliverable "' . $deliverable->title . '"', 'deliverable', $deliverable->id);
+        $this->clearDashboardCache($user->id);
 
         return response()->json([
             'success' => true,
@@ -562,6 +564,7 @@ class DeliverableController extends Controller
 
         // Log activity
         $this->activityService->log($user->id, 'deliverable_rejected', 'You rejected deliverable "' . $deliverable->title . '"', 'deliverable', $deliverable->id);
+        $this->clearDashboardCache($user->id);
 
         return response()->json([
             'success' => true,
@@ -639,6 +642,7 @@ class DeliverableController extends Controller
 
         // Log activity
         $this->activityService->log($user->id, 'deliverable_reopened', 'You reopened deliverable "' . $deliverable->title . '" for revision', 'deliverable', $deliverable->id);
+        $this->clearDashboardCache($user->id);
 
         return response()->json([
             'success' => true,

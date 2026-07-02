@@ -260,7 +260,7 @@ function Header() {
   // Poll for unread notifications every 10 seconds + subscribe to data-change events
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 10000);
+    const interval = setInterval(fetchNotifications, 30000);
     const unsub = subscribe('data:changed', fetchNotifications);
     return () => { clearInterval(interval); unsub(); };
   }, [fetchNotifications]);
@@ -291,6 +291,7 @@ function Header() {
       method: "POST",
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       skipLoader: true,
+      _notifHandled: true,
     });
     setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, is_read: true } : n));
     setUnreadCount((prev) => Math.max(0, prev - 1));
@@ -304,6 +305,7 @@ function Header() {
       method: "POST",
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       skipLoader: true,
+      _notifHandled: true,
     });
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     setUnreadCount(0);

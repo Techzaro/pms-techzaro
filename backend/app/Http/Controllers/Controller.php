@@ -16,4 +16,12 @@ use Illuminate\Routing\Controller as BaseController;
 abstract class Controller extends BaseController
 {
     use AuthorizesRequests, ValidatesRequests;
+
+    /**
+     * Clear the dashboard cache for a given user so fresh activity data is shown.
+     */
+    protected function clearDashboardCache(int $userId): void
+    {
+        \Illuminate\Support\Facades\Cache::forget("dashboard_{$userId}");
+    }
 }

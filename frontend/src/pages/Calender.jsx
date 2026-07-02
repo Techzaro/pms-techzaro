@@ -27,6 +27,7 @@ import { formatEventDateTime } from "../utils/formatDateTime";
 import { authToken, getCurrentRole, getUser } from "../utils/auth";
 import API_URL from "../config/api";
 import { publish } from "../utils/eventBus";
+import { showSuccessMessage } from "../utils/notify";
 
 /** Default color scheme for events without a specific type */
 export const DEFAULT_EVENT_COLOR = { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" };
@@ -228,11 +229,13 @@ function Calender() {
       const res = await fetch(`${API_URL}/events/${eventId}`, {
         method: "DELETE",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
       });
       if (res.ok) {
         setEvents((prev) => prev.filter((e) => e.id !== eventId));
         publish('event:deleted', { id: eventId });
         publish('data:changed', { type: 'event', action: 'deleted' });
+        showSuccessMessage("Event", "deleted");
         setShowDayPopup(false);
         setSelectedDay(null);
       }

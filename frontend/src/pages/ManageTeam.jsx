@@ -37,6 +37,7 @@ import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import API_URL from "../config/api";
 import Pagination from "../components/Pagination";
 import { useNotification } from "../context/NotificationContext";
+import { showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "../components/LoadingButton";
 import "./ManageTeam.css";
@@ -214,7 +215,7 @@ function ManageTeam() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Could not update team leader.");
       await fetchTeams();
-      notify.success("New Leader Appointed!");
+      showSuccessMessage("Team leader", "updated");
     });
   };
 
@@ -240,7 +241,7 @@ function ManageTeam() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Could not remove member.");
       await fetchTeams();
-      notify.success("Member removed from team.");
+      showSuccessMessage("Member", "removed from team");
     });
   };
 
@@ -265,7 +266,7 @@ function ManageTeam() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Could not delete team.");
       await fetchTeams();
-      notify.success("Team deleted successfully.");
+      showSuccessMessage("Team", "deleted");
     });
   };
 
@@ -352,7 +353,7 @@ function ManageTeam() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Failed to create team");
-      notify.success("Team created successfully");
+      showSuccessMessage("Team", "created");
       fetchTeams();
       closeModal();
     });
@@ -379,7 +380,7 @@ function ManageTeam() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Failed to add members");
-      notify.success(data.message || "Members added successfully");
+      showSuccessMessage("Members", "added to team");
       fetchTeams();
       closeModal();
     });
@@ -413,7 +414,7 @@ function ManageTeam() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Failed to update team");
-      notify.success("Team updated successfully");
+      showSuccessMessage("Team", "updated");
       fetchTeams();
       closeModal();
     });

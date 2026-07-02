@@ -15,7 +15,7 @@ import LoadingButton from "./LoadingButton";
 
 import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
-import { notify } from "../utils/notify";
+import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import "./layout/CreateTaskModal.css";
 
@@ -276,6 +276,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           body: fd,
+          _notifHandled: true,
         });
       } catch { }
     }
@@ -291,6 +292,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(link),
+          _notifHandled: true,
         });
       } catch { }
     }
@@ -362,6 +364,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
           await Promise.all(taskIds.map(id => uploadAttachments(id, token)));
         }
 
+        showSuccessMessage("Task", "created");
         publish('task:created', data.task || data);
         publish('data:changed', { type: 'task', action: 'created' });
         onClose(true);

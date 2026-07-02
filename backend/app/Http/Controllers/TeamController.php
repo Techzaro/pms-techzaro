@@ -103,6 +103,7 @@ class TeamController extends Controller
             $activityDesc .= ' with ' . $memberCount . ' member(s)';
         }
         $this->activityService->log($user->id, 'team_created', $activityDesc, 'team', $team->id, 'created', $team->name);
+        $this->clearDashboardCache($user->id);
 
         $this->notificationService->confirmAction($user, 'Created', 'team', $team->name, [
             'Team Lead' => $leaderName,
@@ -118,6 +119,7 @@ class TeamController extends Controller
                     'You were added to team "' . $team->name . '" by ' . $user->name,
                     'team', $team->id, 'created', $team->name
                 );
+                $this->clearDashboardCache($memberId);
 
                 $this->notificationService->notify(
                     $memberId, $user->id, 'team_created', 'team', $team->id,

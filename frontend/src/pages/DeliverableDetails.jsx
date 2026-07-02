@@ -20,6 +20,7 @@ import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
+import { showSuccessMessage } from "../utils/notify";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import "./TaskDetails.css";
 import { formatDateTimeShort } from "../utils/formatDateTime";
@@ -107,6 +108,7 @@ function DeliverableDetails() {
     fetch(`${API_URL}/deliverables/${deliverable.id}/changes/mark-read`, {
       method: "POST",
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      _notifHandled: true,
     }).catch(() => {});
   }, [deliverable?.id, deliverable?.unviewed_changes_count]);
 
@@ -160,7 +162,7 @@ function DeliverableDetails() {
       if (res.ok) {
         publish('deliverable:updated', data.deliverable || data);
         publish('data:changed', { type: 'deliverable', action: 'updated' });
-        notify.success("Deliverable submitted successfully!");
+        showSuccessMessage("Deliverable", "submitted");
         setShowSubmitForm(false);
         setSubmitComment("");
         setSubmitFile(null);
@@ -191,7 +193,7 @@ function DeliverableDetails() {
       if (res.ok) {
         publish('deliverable:updated', data.deliverable || data);
         publish('data:changed', { type: 'deliverable', action: 'updated' });
-        notify.success("Deliverable approved!");
+        showSuccessMessage("Deliverable", "approved");
         fetchDeliverable();
       } else {
         notify.error(data.message || "Failed to approve");
@@ -215,7 +217,7 @@ function DeliverableDetails() {
       if (res.ok) {
         publish('deliverable:updated', data.deliverable || data);
         publish('data:changed', { type: 'deliverable', action: 'updated' });
-        notify.success("Deliverable rejected");
+        showSuccessMessage("Deliverable", "rejected");
         setShowRejectForm(false);
         setRejectComment("");
         fetchDeliverable();

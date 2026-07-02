@@ -717,6 +717,7 @@ class TaskController extends Controller
         // Log activity
         $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
         $this->activityService->log($user->id, 'task_created', 'You created ' . $taskCount . ' task(s) and assigned them to ' . $assigneeNames, 'task', $createdTasks[0]->id);
+        $this->clearDashboardCache($user->id);
 
         $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');
 
@@ -848,6 +849,7 @@ class TaskController extends Controller
         // Log activity
         $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
         $this->activityService->log($user->id, 'task_created', 'You created ' . $taskCount . ' task(s) and assigned them to ' . $assigneeNames, 'task', $createdTasks[0]->id);
+        $this->clearDashboardCache($user->id);
 
         $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');
 
@@ -951,13 +953,6 @@ class TaskController extends Controller
             $createdDeliverables = $task->deliverables()->createMany($delData);
             $addedDeliverables = array_column($delData, 'title');
             $changes[] = ['field_name' => 'deliverables', 'label' => 'Deliverable Added', 'old_value' => '', 'new_value' => implode(', ', $addedDeliverables)];
-
-            // Notify task assignees about new deliverables
-            if (!$task->relationLoaded('assignees')) $task->load('assignees:id');
-            $taskAssigneeIds = $task->assignees->pluck('id')->toArray();
-            foreach ($createdDeliverables as $dlv) {
-                $this->notificationService->notifyDeliverableAdded($dlv, $user, $taskAssigneeIds, 'task');
-            }
         }
 
         // Bulk create changes and workflow events
@@ -1076,6 +1071,7 @@ class TaskController extends Controller
 
             // Log activity
             $this->activityService->log($user->id, 'task_completed', 'You completed task "' . $task->title . '"', 'task', $task->id);
+        $this->clearDashboardCache($user->id);
 
             return response()->json([
                 'success' => true,
@@ -1190,6 +1186,7 @@ class TaskController extends Controller
         // Log activity
         $isResubmitLabel = $isResubmit ? 'resubmitted' : 'submitted';
         $this->activityService->log($user->id, 'task_' . $isResubmitLabel, 'You ' . $isResubmitLabel . ' task "' . $task->title . '" for review', 'task', $task->id);
+        $this->clearDashboardCache($user->id);
 
         return response()->json([
             'success' => true,
@@ -1242,6 +1239,8 @@ class TaskController extends Controller
         ]);
 
         // Log activity
+        $this->activityService->log($user->id, 'task_approved', 'You approved task "' . $task->title . '"', 'task', $task->id);
+        $this->clearDashboardCache($user->id);
 
         return response()->json([
             'success' => true,
@@ -1299,6 +1298,7 @@ class TaskController extends Controller
 
         // Log activity
         $this->activityService->log($user->id, 'task_rejected', 'You rejected task "' . $task->title . '"', 'task', $task->id);
+        $this->clearDashboardCache($user->id);
 
         return response()->json([
             'success' => true,
@@ -1379,6 +1379,7 @@ class TaskController extends Controller
 
         // Log activity
         $this->activityService->log($user->id, 'task_reopened', 'You reopened task "' . $task->title . '" for revision', 'task', $task->id);
+        $this->clearDashboardCache($user->id);
 
         return response()->json([
             'success' => true,
@@ -1564,14 +1565,13 @@ class TaskController extends Controller
         if (!$task->relationLoaded('assignees')) $task->load('assignees:id');
         $assigneeIds = $task->assignees->pluck('id')->toArray();
 
-        $msg = 'The task "' . $task->title . '" has been updated by ' . $updater->name . '.';
-        if (count($changes) > 0) $msg .= ' ' . count($changes) . ' change(s) were made.';
+        // Build a short summary of all changes
+        $changeLabels = array_map(fn($c) => $c['label'] ?? ucwords(str_replace('_', ' ', $c['field_name'])), $changes);
+        $summary = count($changeLabels) > 0
+            ? implode(', ', array_slice($changeLabels, 0, 4)) . (count($changeLabels) > 4 ? ' and ' . (count($changeLabels) - 4) . ' more' : '')
+            : 'details';
 
-        $formattedChanges = array_map(fn($c) => [
-            'field' => $c['label'] ?? ucwords(str_replace('_', ' ', $c['field_name'])),
-            'old' => $c['old_value'] ?? '',
-            'new' => $c['new_value'] ?? '',
-        ], $changes);
+        $msg = $updater->name . ' updated task "' . $task->title . '" — changed: ' . $summary . '.';
 
         foreach (array_filter($assigneeIds, fn($id) => (int) $id !== (int) $updater->id) as $assigneeId) {
             $this->notificationService->notify(
@@ -1582,8 +1582,7 @@ class TaskController extends Controller
                 $task->id,
                 'Task Updated',
                 $msg,
-                '/tasks/task-details/' . $task->id . '?from=tasks',
-                !empty($formattedChanges) ? $formattedChanges : null
+                '/tasks/task-details/' . $task->id . '?from=tasks'
             );
         }
     }

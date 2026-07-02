@@ -34,6 +34,7 @@ export function useActivityHighlight(entityType, entityId, activityMaxId, activi
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ entities: [{ type: entityType, id: entityId }] }),
+      _notifHandled: true,
     })
       .then((r) => r.json())
       .then((data) => {
@@ -62,6 +63,7 @@ export function useActivityHighlight(entityType, entityId, activityMaxId, activi
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ type: entityTypeRef.current, id: entityIdRef.current }),
+      _notifHandled: true,
     })
       .then((r) => r.json())
       .then((data) => {

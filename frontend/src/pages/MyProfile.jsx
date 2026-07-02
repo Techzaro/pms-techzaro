@@ -16,6 +16,7 @@ import API_URL from "../config/api";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { authToken, getCurrentRole, normalizeRole } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
+import { showSuccessMessage } from "../utils/notify";
 import { formatDateTimeInline } from "../utils/formatDateTime";
 import { useActivityHighlight } from "../hooks/useActivityHighlight";
 import "../components/layout/ActivityHighlight.css";
@@ -179,7 +180,7 @@ function MyProfile() {
       if (!res.ok) throw new Error(data.message || "Failed to change password");
 
       setIsPasswordModalOpen(false);
-      notify.success("Password changed successfully.");
+      showSuccessMessage("Password", "changed");
     } catch (err) {
       notify.error(err.message || "Password change failed.");
     } finally {

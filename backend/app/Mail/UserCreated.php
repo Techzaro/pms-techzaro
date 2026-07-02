@@ -18,7 +18,7 @@ class UserCreated extends Mailable
     public string $professionalEmail;
     public string $professionalPassword;
     public string $loginUrl;
-    public array $attachments;
+    public array $docAttachments;
 
     public function __construct(User $user, string $password, string $professionalEmail, string $professionalPassword, string $loginUrl, array $attachments = [])
     {
@@ -27,7 +27,7 @@ class UserCreated extends Mailable
         $this->professionalEmail = $professionalEmail;
         $this->professionalPassword = $professionalPassword;
         $this->loginUrl = $loginUrl;
-        $this->attachments = $attachments;
+        $this->docAttachments = $attachments;
     }
 
     public function envelope(): Envelope
@@ -46,7 +46,7 @@ class UserCreated extends Mailable
 
     public function build(): self
     {
-        foreach ($this->attachments as $filePath) {
+        foreach ($this->docAttachments as $filePath) {
             if (file_exists($filePath)) {
                 $this->attach($filePath);
             }
@@ -56,7 +56,7 @@ class UserCreated extends Mailable
 
     private function buildAttachmentsSection(): string
     {
-        if (empty($this->attachments)) {
+        if (empty($this->docAttachments)) {
             return '';
         }
 
@@ -72,7 +72,7 @@ class UserCreated extends Mailable
         ];
 
         $items = '';
-        foreach ($this->attachments as $filePath => $fieldName) {
+        foreach ($this->docAttachments as $filePath => $fieldName) {
             $label = $labels[$fieldName] ?? ucfirst(str_replace('_', ' ', $fieldName));
             $filename = basename($filePath);
             $items .= "<li><strong>" . e($label) . "</strong> &mdash; " . e($filename) . "</li>";

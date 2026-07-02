@@ -218,35 +218,50 @@ class UserController extends Controller
             $user->name,
             $user->id,
         );
+        $this->clearDashboardCache($authUser->id);
 
         $loginUrl = config('app.frontend_url');
 
         $emailSent = false;
         $emailError = null;
 
-        $sendTo = $request->input('personal_email') ?: $user->email;
         $profEmail = $request->input('professional_email') ?: $user->professional_email;
         $profPassword = $request->input('professional_email_password') ?: '';
+        $personalEmail = $request->input('personal_email');
 
-        try {
-            Mail::to($sendTo)->send(new UserCreated($user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments));
-            $emailSent = true;
-            Log::info("Welcome email sent successfully to {$sendTo} for user ID {$user->id}");
-        } catch (\Throwable $e) {
-            $emailError = $e->getMessage();
-            Log::error("Failed to send email to {$sendTo}: " . $e->getMessage(), [
-                'user_id' => $user->id,
-                'user_email' => $sendTo,
-                'user_name' => $user->name,
-                'exception' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]);
+        // 1. Welcome email ONLY to new user's personal email (first time)
+        if ($personalEmail) {
+            try {
+                Mail::to($personalEmail)->send(new UserCreated($user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments));
+                $emailSent = true;
+                Log::info("Welcome email sent to personal email {$personalEmail} for user ID {$user->id}");
+            } catch (\Throwable $e) {
+                $emailError = $e->getMessage();
+                Log::error("Failed to send welcome email to personal email {$personalEmail}: " . $e->getMessage(), [
+                    'user_id' => $user->id,
+                    'user_email' => $personalEmail,
+                    'user_name' => $user->name,
+                    'exception' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        // 2. Admin/Manager ko confirmation email on their professional email (Outlook)
+        if ($authUser && $authUser->professional_email) {
+            try {
+                Mail::to($authUser->professional_email)->send(new UserCreated($user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments));
+                Log::info("User creation confirmation sent to admin {$authUser->professional_email}");
+            } catch (\Throwable $e) {
+                Log::error("Failed to send admin confirmation email: " . $e->getMessage(), [
+                    'admin_id' => $authUser->id,
+                    'admin_email' => $authUser->professional_email,
+                ]);
+            }
         }
 
         $message = $emailSent
-            ? 'User created successfully and welcome email sent to ' . $sendTo
-            : 'User created successfully. Email sending failed: ' . $emailError;
+            ? 'User created successfully and welcome email sent to ' . $personalEmail
+            : 'User created successfully. Email sending failed: ' . ($emailError ?? 'Unknown error');
 
         return response()->json([
             'success' => true,

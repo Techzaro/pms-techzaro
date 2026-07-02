@@ -43,6 +43,7 @@ import SubmitTaskModal from "../components/SubmitTaskModal";
 import { formatDateTimeShort, formatDateTime, formatDateTimeInline } from "../utils/formatDateTime";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { useNotification } from "../context/NotificationContext";
+import { showSuccessMessage } from "../utils/notify";
 import { useActivityHighlight } from "../hooks/useActivityHighlight";
 import "../components/layout/ActivityHighlight.css";
 import "./ProjectDetails.css";
@@ -222,6 +223,7 @@ function ProjectDetails() {
       method: 'POST',
       headers: authHeadersLocal(),
       body: JSON.stringify({ items: payload }),
+      _notifHandled: true,
     }).catch(() => { });
   }, []);
 
@@ -232,6 +234,7 @@ function ProjectDetails() {
       method: 'POST',
       headers: authHeadersLocal(),
       body: JSON.stringify({ items: payload }),
+      _notifHandled: true,
     }).catch(() => { });
   }, []);
 
@@ -307,6 +310,7 @@ function ProjectDetails() {
     fetch(`${API}/projects/${project.id}/changes/mark-read`, {
       method: "POST",
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      _notifHandled: true,
     }).catch(() => { });
   }, [project?.id, project?.unviewed_changes_count]);
 
@@ -331,7 +335,7 @@ function ProjectDetails() {
       });
       if (!res.ok) throw new Error("Failed to delete task");
       await loadProject();
-      notify.success("Task deleted.");
+      showSuccessMessage("Task", "deleted");
     } catch (err) {
       console.error(err);
       notify.error("Failed to delete task.");
@@ -382,7 +386,7 @@ function ProjectDetails() {
       if (!res.ok) throw new Error("Delete failed");
       publish('project:deleted', { id: projectId });
       publish('data:changed', { type: 'project', action: 'deleted' });
-      notify.success("Project deleted.");
+      showSuccessMessage("Project", "deleted");
       setTimeout(() => navigate(rolePath("projects")), 800);
     } catch (err) {
       console.error(err);

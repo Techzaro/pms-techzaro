@@ -272,6 +272,7 @@ function Notifications() {
         method: "POST",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         skipLoader: true,
+        _notifHandled: true,
       });
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
@@ -289,6 +290,7 @@ function Notifications() {
         method: "POST",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         skipLoader: true,
+        _notifHandled: true,
       });
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       publish("data:changed");

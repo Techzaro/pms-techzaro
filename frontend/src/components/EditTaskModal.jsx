@@ -14,7 +14,7 @@ import CustomSelect from "./CustomSelect";
 import LoadingButton from "./LoadingButton";
 import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
-import { notify } from "../utils/notify";
+import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import "./layout/CreateTaskModal.css";
 
@@ -125,6 +125,7 @@ export default function EditTaskModal({ task, onClose }) {
       await fetch(`${API_URL}/tasks/${task.id}/files/${fileId}`, {
         method: "DELETE",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
       });
       setExistingFiles((prev) => prev.filter((f) => f.id !== fileId));
     } catch {}
@@ -159,6 +160,7 @@ export default function EditTaskModal({ task, onClose }) {
           method: "POST",
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
           body: fd,
+          _notifHandled: true,
         });
       } catch {}
     }
@@ -168,6 +170,7 @@ export default function EditTaskModal({ task, onClose }) {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ url: link.url, name: link.name }),
+          _notifHandled: true,
         });
       } catch {}
     }
@@ -202,6 +205,7 @@ export default function EditTaskModal({ task, onClose }) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || "Failed to update task");
         await uploadAttachments();
+        showSuccessMessage("Task", "updated");
         publish('task:updated', data.task || data);
         publish('data:changed', { type: 'task', action: 'updated' });
         onClose(true);

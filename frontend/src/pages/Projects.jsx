@@ -173,6 +173,7 @@ function Projects() {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ user_ids: userIds }),
+        _notifHandled: true,
       });
       if (!res.ok) throw new Error("Failed to save visibility");
       closeVisibility();

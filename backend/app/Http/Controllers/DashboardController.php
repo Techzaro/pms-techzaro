@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\DB;
 class DashboardController extends Controller
 {
     /** @var int Cache time-to-live in seconds (5 minutes). */
-    const CACHE_TTL = 30;
+    const CACHE_TTL = 300;
 
     /** @var string Cache key for admin/manager user IDs. */
     const ADMIN_MANAGER_CACHE_KEY = 'admin_manager_ids';
@@ -427,7 +427,8 @@ class DashboardController extends Controller
         }
 
         // ── USER MANAGEMENT (past, from activities table) ──
-        $userActivities = Activity::where('related_module', 'user')
+        $userActivities = Activity::with('user:id,name,role')
+            ->where('related_module', 'user')
             ->whereDate('created_at', '<=', $yesterday)
             ->whereIn('action', ['created', 'updated', 'resigned'])
             ->latest()
@@ -452,7 +453,8 @@ class DashboardController extends Controller
         }
 
         // ── TEAM MANAGEMENT (past, from activities table) ──
-        $teamActivities = Activity::where('related_module', 'team')
+        $teamActivities = Activity::with('user:id,name,role')
+            ->where('related_module', 'team')
             ->whereDate('created_at', '<=', $yesterday)
             ->whereIn('action', ['created', 'updated', 'deleted', 'leader_changed', 'member_added', 'member_removed'])
             ->latest()
@@ -595,7 +597,8 @@ class DashboardController extends Controller
         }
 
         // ── USER MANAGEMENT (from activities table) ──
-        $userActivities = Activity::where('related_module', 'user')
+        $userActivities = Activity::with('user:id,name,role')
+            ->where('related_module', 'user')
             ->whereDate('created_at', $today)
             ->whereIn('action', ['created', 'updated', 'resigned'])
             ->limit(50)->get();
@@ -619,7 +622,8 @@ class DashboardController extends Controller
         }
 
         // ── TEAM MANAGEMENT (from activities table) ──
-        $teamActivities = Activity::where('related_module', 'team')
+        $teamActivities = Activity::with('user:id,name,role')
+            ->where('related_module', 'team')
             ->whereDate('created_at', $today)
             ->whereIn('action', ['created', 'updated', 'deleted', 'leader_changed', 'member_added', 'member_removed'])
             ->limit(50)->get();

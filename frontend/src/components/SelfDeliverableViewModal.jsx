@@ -121,6 +121,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
       const res = await fetch(`${API_URL}/deliverables/${deliverable.id}/self-approve`, {
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
       });
       const data = await res.json();
       if (res.ok) {

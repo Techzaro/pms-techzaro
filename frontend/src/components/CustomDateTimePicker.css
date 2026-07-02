@@ -136,3 +136,48 @@
 .cdt-clear:hover {
   background: #f3f4f6;
 }
+
+/* ── Mobile Responsive ── */
+
+@media (max-width: 480px) {
+  .cdt-dropdown {
+    padding: 10px;
+    border-radius: 10px;
+  }
+
+  .cdt-row {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .cdt-time-row {
+    margin-top: 6px;
+    padding-top: 6px;
+  }
+
+  .cdt-col select {
+    padding: 7px 6px;
+    font-size: 13px;
+  }
+
+  .cdt-col label {
+    font-size: 10px;
+  }
+
+  .cdt-actions {
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .cdt-today,
+  .cdt-clear {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .cdt-trigger {
+    padding: 9px 12px;
+    font-size: 13px;
+    min-height: 40px;
+  }
+}
