@@ -37,6 +37,7 @@ const SelfDeliveries = lazy(() => import("./pages/SelfDeliveries"));
 const Calender = lazy(() => import("./pages/Calender"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const UserPerformance = lazy(() => import("./pages/UserPerformance"));
+const TeamMembersReport = lazy(() => import("./pages/TeamMembersReport"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const LoggedOut = lazy(() => import("./pages/LoggedOut"));
@@ -120,6 +121,7 @@ function App() {
             <Route path="/:role/calender" element={<ProtectedRoute><Calender /></ProtectedRoute>} />
             <Route path="/:role/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
             <Route path="/:role/reports/user-performance/:userId" element={<ProtectedRoute><UserPerformance /></ProtectedRoute>} />
+            <Route path="/:role/reports/team-members/:teamId" element={<ProtectedRoute><TeamMembersReport /></ProtectedRoute>} />
 
             {/* Catch-all redirect */}
             <Route path="*" element={<Navigate to="/" replace />} />
