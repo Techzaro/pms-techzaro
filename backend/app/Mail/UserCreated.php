@@ -129,28 +129,11 @@ class UserCreated extends Mailable
     }
 
     /**
-     * Attach files to the email.
-     *
-     * User personal email: only the 5 standard company documents.
-     * Admin/Manager email: standard documents + all uploaded user documents.
+     * No file attachments are sent with emails to avoid exceeding Brevo's 20MB limit.
+     * Document links are included in the email body instead.
      */
     public function build(): self
     {
-        $this->resolveAttachments();
-
-        $attachmentsToUse = $this->isAdminConfirmation
-            ? $this->adminAttachments
-            : array_merge($this->standardAttachments, $this->userDocAttachments);
-
-        foreach ($attachmentsToUse as $key => $filePath) {
-            if (file_exists($filePath)) {
-                $this->attach($filePath, [
-                    'as' => basename($filePath),
-                    'disposition' => 'attachment',
-                ]);
-            }
-        }
-
         return $this;
     }
 
@@ -160,6 +143,8 @@ class UserCreated extends Mailable
      */
     private function getAttachmentsForHtml(): array
     {
+        $this->resolveAttachments();
+
         $labels = config('company.document_labels', []) + [
             'other_document' => 'Other Document',
         ];
@@ -189,14 +174,28 @@ class UserCreated extends Mailable
 
         $listHtml = '';
         foreach ($items as $item) {
-            $listHtml .= "<li><strong>" . e($item['label']) . "</strong> &mdash; " . e($item['filename']) . "</li>";
+            $listHtml .= "<li><strong>" . e($item['label']) . "</strong></li>";
         }
 
+        $docsUrl = $this->loginUrl . '/documents';
+
         return <<<HTML
-        <p style="color:#6b7280;font-size:14px;line-height:1.7;margin:0 0 8px;">Attached to this email, you will find the following documents:</p>
-        <ul style="color:#6b7280;font-size:14px;line-height:1.8;margin:0 0 20px;padding-left:24px;">
-            {$listHtml}
-        </ul>
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f9ff;border:2px solid #0ea5e9;border-radius:12px;margin-bottom:20px;">
+            <tr>
+                <td style="padding:6px 24px;background-color:#0ea5e9;">
+                    <p style="color:#ffffff;font-size:14px;font-weight:700;margin:8px 0;">COMPANY DOCUMENTS</p>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:18px 24px;">
+                    <p style="color:#6b7280;font-size:14px;line-height:1.7;margin:0 0 12px;">The following documents are available in your PMS account. Please log in to view and download them:</p>
+                    <ul style="color:#111827;font-size:14px;line-height:1.8;margin:0 0 16px;padding-left:24px;">
+                        {$listHtml}
+                    </ul>
+                    <a href="{$docsUrl}" style="display:inline-block;background-color:#0ea5e9;color:#ffffff;padding:10px 24px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600;">View Documents</a>
+                </td>
+            </tr>
+        </table>
         HTML;
     }
 

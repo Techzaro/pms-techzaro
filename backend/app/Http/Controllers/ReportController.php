@@ -194,7 +194,7 @@ class ReportController extends Controller
         if ($timeFilter !== 'all') {
             $this->applyTimeFilter($projectQuery, $timeFilter);
         }
-        $projectAsTaskStats = $projectQuery->selectRaw("
+        $projectAsTaskStats = (clone $projectQuery)->selectRaw("
             COUNT(*) as assigned,
             SUM(CASE WHEN status IN ('approved','completed','done') THEN 1 ELSE 0 END) as completed,
             SUM(CASE WHEN status IN ('submitted','reopened') THEN 1 ELSE 0 END) as in_review,
@@ -202,7 +202,7 @@ class ReportController extends Controller
         ")->first();
 
         // Project-as-task status breakdown (mapped to task statuses)
-        $projectAsTaskBreakdown = $projectQuery->selectRaw("
+        $projectAsTaskBreakdown = (clone $projectQuery)->selectRaw("
             CASE
                 WHEN status IN ('approved','completed','done') THEN 'completed'
                 WHEN status IN ('submitted','reopened') THEN 'submitted'
@@ -238,7 +238,7 @@ class ReportController extends Controller
                 'item_type' => 'task',
             ]);
 
-        $recentProjectTasks = $projectQuery->latest()->limit(10)->get()
+        $recentProjectTasks = (clone $projectQuery)->latest()->limit(10)->get()
             ->map(fn ($p) => [
                 'id' => 'proj_'.$p->id,
                 'title' => $p->title,
@@ -1048,7 +1048,7 @@ class ReportController extends Controller
         $dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
         $trendData = collect($dayOrder)->map(fn ($d) => $tasksTrend[$d] ?? 0)->values();
 
-        return response()->json([
+        return [
             'overview' => [
                 'total_employees' => $totalEmployees,
                 'company_name' => 'Techxaro Solutions',

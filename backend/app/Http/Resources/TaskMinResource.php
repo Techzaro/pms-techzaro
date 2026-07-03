@@ -49,8 +49,8 @@ class TaskMinResource extends JsonResource
      */
     private function computeProgress(): int
     {
-        $total = $this->total_deliverables ?? 0;
-        if ($total === 0) return 0;
+        $total = (int) ($this->total_deliverables ?? 0);
+        if ($total <= 0) return 0;
         return (int) round(($this->approved_deliverables / $total) * 100);
     }
 }
