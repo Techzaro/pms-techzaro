@@ -42,19 +42,19 @@ function DashboardLayout({ children, hideRightSidebar = false }) {
             <path d="M0 0H1200V260C1200 260 950 180 780 240C610 300 520 380 350 360C180 340 120 230 0 270V0Z" fill="url(#wave3)" />
             <defs>
               <linearGradient id="wave1" x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#c7d2fe" stopOpacity="0.6" />
-                <stop offset="40%" stopColor="#ddd6fe" stopOpacity="0.4" />
-                <stop offset="100%" stopColor="#f5f7fb" stopOpacity="0.05" />
+                <stop offset="0%" stopColor="#818cf8" stopOpacity="0.55" />
+                <stop offset="40%" stopColor="#a78bfa" stopOpacity="0.4" />
+                <stop offset="100%" stopColor="#e0e7ff" stopOpacity="0.08" />
               </linearGradient>
               <linearGradient id="wave2" x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#a5b4fc" stopOpacity="0.35" />
-                <stop offset="50%" stopColor="#c4b5fd" stopOpacity="0.25" />
-                <stop offset="100%" stopColor="#ede9fe" stopOpacity="0.05" />
+                <stop offset="0%" stopColor="#6366f1" stopOpacity="0.4" />
+                <stop offset="50%" stopColor="#8b5cf6" stopOpacity="0.3" />
+                <stop offset="100%" stopColor="#ddd6fe" stopOpacity="0.08" />
               </linearGradient>
               <linearGradient id="wave3" x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#e0e7ff" stopOpacity="0.3" />
-                <stop offset="60%" stopColor="#ede9fe" stopOpacity="0.15" />
-                <stop offset="100%" stopColor="#f5f7fb" stopOpacity="0.02" />
+                <stop offset="0%" stopColor="#a5b4fc" stopOpacity="0.45" />
+                <stop offset="60%" stopColor="#c4b5fd" stopOpacity="0.2" />
+                <stop offset="100%" stopColor="#ede9fe" stopOpacity="0.05" />
               </linearGradient>
             </defs>
           </svg>
