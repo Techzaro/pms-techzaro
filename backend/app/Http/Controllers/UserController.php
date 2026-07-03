@@ -56,9 +56,12 @@ class UserController extends Controller
      */
     public function index()
     {
-        $users = User::select('id', 'name', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password', 'personal_email', 'professional_email')
-            ->orderBy('sort_order')->latest('updated_at')
-            ->get();
+        $users = Cache::remember('all_users_list', 300, fn () =>
+            User::select('id', 'name', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password', 'personal_email', 'professional_email')
+                ->orderBy('sort_order')->latest('updated_at')
+                ->get()
+                ->toArray()
+        );
 
         return response()->json([
             'success' => true,
@@ -652,78 +655,82 @@ class UserController extends Controller
      */
     public function profile($id)
     {
-        $user = User::findOrFail($id);
+        $cacheKey = "user_profile_{$id}";
+        $data = Cache::remember($cacheKey, 300, function () use ($id) {
+            $user = User::findOrFail($id);
 
-        $taskStats = Task::where('assigned_to', $user->id)
-            ->selectRaw('COUNT(*) as total_assigned')
-            ->selectRaw("COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed")
-            ->selectRaw("COUNT(CASE WHEN status IN ('pending', 'in_progress') THEN 1 END) as pending")
-            ->first();
+            $taskStats = Task::where('assigned_to', $user->id)
+                ->selectRaw('COUNT(*) as total_assigned')
+                ->selectRaw("COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed")
+                ->selectRaw("COUNT(CASE WHEN status IN ('pending', 'in_progress') THEN 1 END) as pending")
+                ->first();
 
-        $totalProjects = Project::where('created_by', $user->id)->count();
+            $totalProjects = Project::where('created_by', $user->id)->count();
 
-        $projects = Project::where('created_by', $user->id)
-            ->withCount(['tasks as total_tasks' => function ($query) use ($user) {
-                $query->where('assigned_to', $user->id);
-            }, 'tasks as completed_tasks' => function ($query) use ($user) {
-                $query->where('assigned_to', $user->id)->where('status', 'completed');
-            }])
-            ->get()
-            ->map(function ($project) {
-                return [
-                    'id' => $project->id,
-                    'name' => $project->title,
-                    'status' => $project->status ?? 'active',
-                    'total_tasks' => (int) $project->total_tasks,
-                    'completed_tasks' => (int) $project->completed_tasks,
-                    'pending_tasks' => (int) $project->total_tasks - (int) $project->completed_tasks,
+            $projects = Project::where('created_by', $user->id)
+                ->withCount(['tasks as total_tasks' => function ($query) use ($user) {
+                    $query->where('assigned_to', $user->id);
+                }, 'tasks as completed_tasks' => function ($query) use ($user) {
+                    $query->where('assigned_to', $user->id)->where('status', 'completed');
+                }])
+                ->get()
+                ->map(function ($project) {
+                    return [
+                        'id' => $project->id,
+                        'name' => $project->title,
+                        'status' => $project->status ?? 'active',
+                        'total_tasks' => (int) $project->total_tasks,
+                        'completed_tasks' => (int) $project->completed_tasks,
+                        'pending_tasks' => (int) $project->total_tasks - (int) $project->completed_tasks,
+                    ];
+                });
+
+            $loginHistory = [];
+            if ($user->last_login_at) {
+                $loginHistory[] = [
+                    'login_at' => $user->last_login_at->toDateTimeString(),
+                    'ip_address' => null,
                 ];
-            });
+            }
 
-        $loginHistory = [];
-        if ($user->last_login_at) {
-            $loginHistory[] = [
-                'login_at' => $user->last_login_at->toDateTimeString(),
-                'ip_address' => null,
+            $accountAge = $user->created_at->diffForHumans();
+            $daysSinceCreation = $user->created_at->diffInDays(now());
+
+            return [
+                'user' => $user->only([
+                    'id', 'name', 'email', 'role', 'active',
+                    'father_name', 'id_card_number', 'phone_number', 'contact_no',
+                    'present_address', 'permanent_address', 'address',
+                    'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
+                    'personal_email', 'professional_email',
+                    'recovery_email',
+                    'department', 'designation', 'hired_for', 'employee_code',
+                    'job_started_date', 'job_ended_date',
+                    'gross_salary', 'applied_via',
+                    'bank_name', 'bank_account_number', 'bank_account_title',
+                    'employment_contract', 'offer_letter', 'techxaro_regulations',
+                    'other_document',
+                    'last_login_at', 'created_at', 'updated_at', 'must_change_password',
+                ]),
+                'stats' => [
+                    'total_assigned_tasks' => (int) $taskStats->total_assigned,
+                    'completed_tasks' => (int) $taskStats->completed,
+                    'pending_tasks' => (int) $taskStats->pending,
+                    'total_projects' => $totalProjects,
+                ],
+                'projects' => $projects,
+                'login_history' => $loginHistory,
+                'account' => [
+                    'account_age' => $accountAge,
+                    'days_since_creation' => $daysSinceCreation,
+                    'status' => $user->active ? 'Active' : ($user->must_change_password ? 'Inactive' : 'Resigned'),
+                    'last_login' => $user->last_login_at?->toDateTimeString() ?? 'Never logged in',
+                ],
+                'activity_max_id' => (int) \App\Models\UserChange::where('user_id', $id)->max('id'),
             ];
-        }
+        });
 
-        $accountAge = $user->created_at->diffForHumans();
-        $daysSinceCreation = $user->created_at->diffInDays(now());
-
-        return response()->json([
-            'success' => true,
-            'user' => $user->only([
-                'id', 'name', 'email', 'role', 'active',
-                'father_name', 'id_card_number', 'phone_number', 'contact_no',
-                'present_address', 'permanent_address', 'address',
-                'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
-                'personal_email', 'professional_email',
-                'recovery_email',
-                'department', 'designation', 'hired_for', 'employee_code',
-                'job_started_date', 'job_ended_date',
-                'gross_salary', 'applied_via',
-                'bank_name', 'bank_account_number', 'bank_account_title',
-                'employment_contract', 'offer_letter', 'techxaro_regulations',
-                'other_document',
-                'last_login_at', 'created_at', 'updated_at', 'must_change_password',
-            ]),
-            'stats' => [
-                'total_assigned_tasks' => (int) $taskStats->total_assigned,
-                'completed_tasks' => (int) $taskStats->completed,
-                'pending_tasks' => (int) $taskStats->pending,
-                'total_projects' => $totalProjects,
-            ],
-            'projects' => $projects,
-            'login_history' => $loginHistory,
-            'account' => [
-                'account_age' => $accountAge,
-                'days_since_creation' => $daysSinceCreation,
-                'status' => $user->active ? 'Active' : ($user->must_change_password ? 'Inactive' : 'Resigned'),
-                'last_login' => $user->last_login_at?->toDateTimeString() ?? 'Never logged in',
-            ],
-            'activity_max_id' => (int) \App\Models\UserChange::where('user_id', $id)->max('id'),
-        ]);
+        return response()->json(['success' => true] + $data);
     }
 
     public function changes($id)

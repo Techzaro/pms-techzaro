@@ -508,22 +508,10 @@ class TaskController extends Controller
     public function show(Task $task)
     {
         $user = request()->user();
-        $task->load('project:id,created_by,team_id', 'project.team:id,leader_id', 'assignees:id');
-        $isCreator = (int) $task->assigned_by === (int) $user->id;
-        $isAssignee = $task->assignees->contains('id', $user->id);
-        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
-        $isProjectCreator = $task->project && (int) $task->project->created_by === (int) $user->id;
-        $isTeamLeader = $task->project && $task->project->team && (int) $task->project->team->leader_id === (int) $user->id;
-        $isTeamMember = $task->project && $task->project->team && $task->project->team->members && $task->project->team->members->contains('id', $user->id);
-
-        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager && ! $isProjectCreator && ! $isTeamLeader && ! $isTeamMember) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
-
         $task->load([
             'project:id,title,team_id,created_by,client_name,category,budget,priority,goals_checklist,sidebar_notes,sheets_documents,website_link,website_name,status,start_date,end_date',
             'project.creator:id,name,email,role',
-            'project.team:id,name',
+            'project.team:id,name,leader_id',
             'project.team.leader:id,name',
             'project.team.members:id,name,email,role',
             'project.milestones:id,project_id,title,due_date,status,sort_order',
@@ -540,6 +528,17 @@ class TaskController extends Controller
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'changes' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
         ]);
+
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
+        $isAssignee = $task->assignees->contains('id', $user->id);
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
+        $isProjectCreator = $task->project && (int) $task->project->created_by === (int) $user->id;
+        $isTeamLeader = $task->project && $task->project->team && (int) $task->project->team->leader_id === (int) $user->id;
+        $isTeamMember = $task->project && $task->project->team && $task->project->team->members && $task->project->team->members->contains('id', $user->id);
+
+        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager && ! $isProjectCreator && ! $isTeamLeader && ! $isTeamMember) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
 
         // Single query for deliverables with stats
         $deliverables = $task->deliverables()->when(! $isCreator, function ($q) use ($user) {
@@ -737,14 +736,14 @@ class TaskController extends Controller
 
         // Send confirmation email to performer
         $taskCount = count($createdTasks);
+        $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
         $this->notificationService->confirmAction($user, 'Assigned', 'task', $createdTasks[0]->title, [
             'Project' => $project->title,
-            'Assigned To' => User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', '),
+            'Assigned To' => $assigneeNames,
             'Tasks Created' => (string) $taskCount,
         ]);
 
         // Log activity
-        $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
         $this->activityService->log($user->id, 'task_created', 'You created '.$taskCount.' task(s) and assigned them to '.$assigneeNames, 'task', $createdTasks[0]->id);
         $this->clearDashboardCache($user->id);
 
@@ -872,13 +871,13 @@ class TaskController extends Controller
 
         // Send confirmation email to performer
         $taskCount = count($createdTasks);
+        $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
         $this->notificationService->confirmAction($user, 'Assigned', 'task', $createdTasks[0]->title, [
-            'Assigned To' => User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', '),
+            'Assigned To' => $assigneeNames,
             'Tasks Created' => (string) $taskCount,
         ]);
 
         // Log activity
-        $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
         $this->activityService->log($user->id, 'task_created', 'You created '.$taskCount.' task(s) and assigned them to '.$assigneeNames, 'task', $createdTasks[0]->id);
         $this->clearDashboardCache($user->id);
 
@@ -951,8 +950,10 @@ class TaskController extends Controller
         }
 
         if (! empty($assigneeIds) && $oldAssigneeIds !== $assigneeIds) {
-            $oldNames = User::whereIn('id', $oldAssigneeIds)->pluck('name')->implode(', ');
-            $newNames = User::whereIn('id', $assigneeIds)->pluck('name')->implode(', ');
+            $allIds = array_unique(array_merge($oldAssigneeIds, $assigneeIds));
+            $userNames = User::whereIn('id', $allIds)->pluck('name', 'id');
+            $oldNames = collect($oldAssigneeIds)->map(fn ($id) => $userNames->get($id))->implode(', ');
+            $newNames = collect($assigneeIds)->map(fn ($id) => $userNames->get($id))->implode(', ');
             $changes[] = ['field_name' => 'assigned_to', 'label' => 'Assignee', 'old_value' => $oldNames ?: 'None', 'new_value' => $newNames ?: 'None'];
             $task->assignees()->sync($assigneeIds);
             $task->update(['assigned_to' => $assigneeIds[0]]);

@@ -1,7 +1,7 @@
 /**
  * @file main.jsx
  * @description React application bootstrap file.
- * Mounts the root App component into the DOM with global providers
+ * Mounts the root App component into the global providers
  * and sets up a fetch interceptor for automatic cache invalidation.
  */
 
@@ -17,7 +17,7 @@ import LoadingSpinner from './components/LoadingSpinner.jsx'
 import ToastContainer from './components/Toast.jsx'
 import { queryClient } from './lib/queryClient.js'
 
-// Global fetch interceptor for automatic cache invalidation on mutations
+// Scoped fetch interceptor — only invalidate related query keys, not ALL queries
 const originalFetch = window.fetch;
 window.fetch = async function (...args) {
   const response = await originalFetch.apply(window, args);
@@ -25,18 +25,25 @@ window.fetch = async function (...args) {
     const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
     const options = args[1] || {};
     const method = (options.method || 'GET').toUpperCase();
-    // Invalidate all queries on write operations
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-      queryClient.invalidateQueries();
-      // Trigger calendar sync for relevant endpoints
       if (url && (
-        url.includes('/tasks') || 
-        url.includes('/projects') || 
-        url.includes('/deliverables') || 
+        url.includes('/tasks') ||
+        url.includes('/projects') ||
+        url.includes('/deliverables') ||
         url.includes('/events') ||
         url.includes('/deliveries')
       )) {
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+        queryClient.invalidateQueries({ queryKey: ['activities'] });
         window.dispatchEvent(new CustomEvent('calendar-sync'));
+      } else if (url && url.includes('/teams')) {
+        queryClient.invalidateQueries({ queryKey: ['teams'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      } else if (url && url.includes('/notifications')) {
+        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      } else if (url && url.includes('/users')) {
+        queryClient.invalidateQueries({ queryKey: ['users'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       }
     }
   }

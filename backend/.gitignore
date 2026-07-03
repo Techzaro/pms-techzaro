@@ -18,7 +18,11 @@
 /public/storage
 /storage/*.key
 /storage/pail
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/framework/cache/data/*
 /vendor
+/bootstrap/cache/*.php
 Homestead.json
 Homestead.yaml
 Thumbs.db

@@ -958,21 +958,24 @@ class DashboardController extends Controller
      */
     public function getUserProjectIds(User $user): array
     {
-        if (in_array($user->role, ['admin', 'manager'])) {
-            return Project::pluck('id')->toArray();
-        }
+        $cacheKey = "user_project_ids_{$user->id}";
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($user) {
+            if (in_array($user->role, ['admin', 'manager'])) {
+                return Project::pluck('id')->toArray();
+            }
 
-        return Project::where(function ($q) use ($user) {
-            $q->whereHas('manuallyVisibleTo', fn ($q) => $q->where('user_id', $user->id))
-                ->orWhere(function ($q) use ($user) {
-                    $q->where(function ($q) use ($user) {
-                        $q->where('created_by', $user->id)
-                            ->orWhereHas('team.members', fn ($m) => $m->where('users.id', $user->id))
-                            ->orWhereHas('team', fn ($t) => $t->where('leader_id', $user->id))
-                            ->orWhereJsonContains('assigned_users', (int) $user->id);
-                    })->whereDoesntHave('visibility', fn ($q) => $q->where('user_id', $user->id)->where('is_visible', false));
-                });
-        })->pluck('id')->toArray();
+            return Project::where(function ($q) use ($user) {
+                $q->whereHas('manuallyVisibleTo', fn ($q) => $q->where('user_id', $user->id))
+                    ->orWhere(function ($q) use ($user) {
+                        $q->where(function ($q) use ($user) {
+                            $q->where('created_by', $user->id)
+                                ->orWhereHas('team.members', fn ($m) => $m->where('users.id', $user->id))
+                                ->orWhereHas('team', fn ($t) => $t->where('leader_id', $user->id))
+                                ->orWhereJsonContains('assigned_users', (int) $user->id);
+                        })->whereDoesntHave('visibility', fn ($q) => $q->where('user_id', $user->id)->where('is_visible', false));
+                    });
+            })->pluck('id')->toArray();
+        });
     }
 
     /**

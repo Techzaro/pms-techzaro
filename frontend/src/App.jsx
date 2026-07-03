@@ -5,7 +5,7 @@
  */
 
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, Component } from "react";
 import { useLocation } from "react-router-dom";
 import LoadingSpinner from "./components/LoadingSpinner";
 import { useInactivityTimeout } from "./utils/useInactivityTimeout";
@@ -45,10 +45,24 @@ const LoggedOut = lazy(() => import("./pages/LoggedOut"));
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleProtectedRoute from "./components/RoleProtectedRoute";
 
-/**
- * Main App component with routing.
- * @returns {JSX.Element} Application with routes
- */
+class ErrorBoundary extends Component {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error, info) { console.error('Page error:', error, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'sans-serif' }}>
+          <h2 style={{ marginBottom: 12 }}>Something went wrong</h2>
+          <p style={{ color: '#666', marginBottom: 16 }}>Please try refreshing the page.</p>
+          <button onClick={() => { this.setState({ hasError: false }); window.location.reload(); }} style={{ padding: '8px 24px', cursor: 'pointer' }}>Reload</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
@@ -61,55 +75,57 @@ function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
-      <Suspense fallback={<LoadingSpinner />}>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<Login />} />
-          <Route path="/logged-out" element={<LoggedOut />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingSpinner />}>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<Login />} />
+            <Route path="/logged-out" element={<LoggedOut />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* Dashboard routes - role-specific */}
-          <Route path="/:role/dashboard" element={<RoleProtectedRoute><Admin /></RoleProtectedRoute>} />
+            {/* Dashboard routes - role-specific */}
+            <Route path="/:role/dashboard" element={<RoleProtectedRoute><Admin /></RoleProtectedRoute>} />
 
-          {/* Task routes */}
-          <Route path="/:role/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
-          <Route path="/:role/taskby" element={<ProtectedRoute><Taskby /></ProtectedRoute>} />
-          <Route path="/:role/self-tasks" element={<ProtectedRoute><SelfTasks /></ProtectedRoute>} />
-          <Route path="/:role/tasks/task-details/:taskId" element={<ProtectedRoute><TaskDetails /></ProtectedRoute>} />
+            {/* Task routes */}
+            <Route path="/:role/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
+            <Route path="/:role/taskby" element={<ProtectedRoute><Taskby /></ProtectedRoute>} />
+            <Route path="/:role/self-tasks" element={<ProtectedRoute><SelfTasks /></ProtectedRoute>} />
+            <Route path="/:role/tasks/task-details/:taskId" element={<ProtectedRoute><TaskDetails /></ProtectedRoute>} />
 
-          {/* Project routes */}
-          <Route path="/:role/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
-          <Route path="/:role/create-project" element={<ProtectedRoute><CreateProject /></ProtectedRoute>} />
-          <Route path="/:role/projects/project-details/:projectId" element={<ProtectedRoute><ProjectDetails /></ProtectedRoute>} />
+            {/* Project routes */}
+            <Route path="/:role/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+            <Route path="/:role/create-project" element={<ProtectedRoute><CreateProject /></ProtectedRoute>} />
+            <Route path="/:role/projects/project-details/:projectId" element={<ProtectedRoute><ProjectDetails /></ProtectedRoute>} />
 
-          {/* Deliverable routes */}
-          <Route path="/:role/deliveries" element={<ProtectedRoute><Deliveries /></ProtectedRoute>} />
-          <Route path="/:role/deliveries-by-you" element={<ProtectedRoute><DeliveriesByYou /></ProtectedRoute>} />
-          <Route path="/:role/self-deliveries" element={<ProtectedRoute><SelfDeliveries /></ProtectedRoute>} />
-          <Route path="/:role/deliveries/deliverable-details/:deliverable" element={<ProtectedRoute><DeliverableDetails /></ProtectedRoute>} />
+            {/* Deliverable routes */}
+            <Route path="/:role/deliveries" element={<ProtectedRoute><Deliveries /></ProtectedRoute>} />
+            <Route path="/:role/deliveries-by-you" element={<ProtectedRoute><DeliveriesByYou /></ProtectedRoute>} />
+            <Route path="/:role/self-deliveries" element={<ProtectedRoute><SelfDeliveries /></ProtectedRoute>} />
+            <Route path="/:role/deliveries/deliverable-details/:deliverable" element={<ProtectedRoute><DeliverableDetails /></ProtectedRoute>} />
 
-          {/* Admin/Manager only routes */}
-          <Route path="/:role/manage-users" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><ManageUsers /></RoleProtectedRoute>} />
-          <Route path="/:role/manage-users/user-profile/:userId" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><UserProfile /></RoleProtectedRoute>} />
-          <Route path="/:role/manage-team" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><ManageTeam /></RoleProtectedRoute>} />
+            {/* Admin/Manager only routes */}
+            <Route path="/:role/manage-users" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><ManageUsers /></RoleProtectedRoute>} />
+            <Route path="/:role/manage-users/user-profile/:userId" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><UserProfile /></RoleProtectedRoute>} />
+            <Route path="/:role/manage-team" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><ManageTeam /></RoleProtectedRoute>} />
 
-          {/* Member/Team Lead: read-only team view */}
-          <Route path="/:role/my-team" element={<ProtectedRoute><MemberTeam /></ProtectedRoute>} />
+            {/* Member/Team Lead: read-only team view */}
+            <Route path="/:role/my-team" element={<ProtectedRoute><MemberTeam /></ProtectedRoute>} />
 
-          {/* Other protected routes */}
-          <Route path="/:role/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
-          <Route path="/:role/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-          <Route path="/:role/team-members-report" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-          <Route path="/:role/my-profile" element={<ProtectedRoute><MyProfile /></ProtectedRoute>} />
-          <Route path="/:role/calender" element={<ProtectedRoute><Calender /></ProtectedRoute>} />
-          <Route path="/:role/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-          <Route path="/:role/reports/user-performance/:userId" element={<ProtectedRoute><UserPerformance /></ProtectedRoute>} />
+            {/* Other protected routes */}
+            <Route path="/:role/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
+            <Route path="/:role/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+            <Route path="/:role/team-members-report" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+            <Route path="/:role/my-profile" element={<ProtectedRoute><MyProfile /></ProtectedRoute>} />
+            <Route path="/:role/calender" element={<ProtectedRoute><Calender /></ProtectedRoute>} />
+            <Route path="/:role/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+            <Route path="/:role/reports/user-performance/:userId" element={<ProtectedRoute><UserPerformance /></ProtectedRoute>} />
 
-          {/* Catch-all redirect */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+            {/* Catch-all redirect */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

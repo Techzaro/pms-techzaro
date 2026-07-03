@@ -951,7 +951,9 @@ class ReportController extends Controller
     public function companyEmployeesReport(Request $request)
     {
         $timeFilter = $request->query('period', 'all');
+        $cacheKey = "report_company_employees_{$timeFilter}";
 
+        $data = Cache::remember($cacheKey, 300, function () use ($timeFilter) {
         $allUsers = User::where('active', true)->select('id', 'name', 'role')->orderBy('name')->get();
         $totalEmployees = $allUsers->count();
 
@@ -1072,7 +1074,10 @@ class ReportController extends Controller
             ],
             'teams' => $teams,
             'tasks_trend' => $trendData,
-        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        ];
+        });
+
+        return response()->json($data)->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     }
 
     /**
@@ -1098,21 +1103,25 @@ class ReportController extends Controller
      */
     private function getProjectAsTaskStats($userIds, string $timeFilter): Collection
     {
-        $results = collect();
         $allProjects = Project::whereNotNull('assigned_users')
             ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter))
             ->select('id', 'assigned_users', 'status', 'end_date', 'created_at')
             ->get();
 
+        $userProjectMap = [];
+        foreach ($allProjects as $p) {
+            $ids = is_string($p->assigned_users) ? json_decode($p->assigned_users, true) ?? [] : ($p->assigned_users ?? []);
+            foreach (array_map('intval', $ids) as $uid) {
+                $userProjectMap[$uid][] = $p;
+            }
+        }
+
+        $results = collect();
         foreach ($userIds as $uid) {
             $assigned = 0;
             $completed = 0;
             $overdue = 0;
-            foreach ($allProjects as $p) {
-                $ids = is_string($p->assigned_users) ? json_decode($p->assigned_users, true) ?? [] : ($p->assigned_users ?? []);
-                if (! in_array((int) $uid, array_map('intval', $ids), true)) {
-                    continue;
-                }
+            foreach ($userProjectMap[$uid] ?? [] as $p) {
                 $assigned++;
                 if (in_array(strtolower((string) $p->status), ['approved', 'completed', 'done'])) {
                     $completed++;
@@ -1132,28 +1141,30 @@ class ReportController extends Controller
      */
     private function getProjectAsTaskStatsForTeamLead($userIds, string $timeFilter, ?int $teamLeadId = null): Collection
     {
-        $results = collect();
-
         if (! $teamLeadId) {
             return $this->getProjectAsTaskStats($userIds, $timeFilter);
         }
 
-        // Only get projects created by the team lead
         $allProjects = Project::whereNotNull('assigned_users')
             ->where('created_by', $teamLeadId)
             ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter))
             ->select('id', 'assigned_users', 'status', 'end_date', 'created_at')
             ->get();
 
+        $userProjectMap = [];
+        foreach ($allProjects as $p) {
+            $ids = is_string($p->assigned_users) ? json_decode($p->assigned_users, true) ?? [] : ($p->assigned_users ?? []);
+            foreach (array_map('intval', $ids) as $uid) {
+                $userProjectMap[$uid][] = $p;
+            }
+        }
+
+        $results = collect();
         foreach ($userIds as $uid) {
             $assigned = 0;
             $completed = 0;
             $overdue = 0;
-            foreach ($allProjects as $p) {
-                $ids = is_string($p->assigned_users) ? json_decode($p->assigned_users, true) ?? [] : ($p->assigned_users ?? []);
-                if (! in_array((int) $uid, array_map('intval', $ids), true)) {
-                    continue;
-                }
+            foreach ($userProjectMap[$uid] ?? [] as $p) {
                 $assigned++;
                 if (in_array(strtolower((string) $p->status), ['approved', 'completed', 'done'])) {
                     $completed++;

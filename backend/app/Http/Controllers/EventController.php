@@ -344,14 +344,13 @@ class EventController extends Controller
         $this->sendBulkEventNotification($event, $user, 'event_created', 'Event Assigned');
 
         // Send confirmation email to performer
-        $assignedCount = $event->assignedUsers()->count();
+        $assignedCount = count($validated['assigned_user_ids'] ?? []);
         $this->notificationService->confirmAction($user, 'Created', 'event', $event->title, [
             'Assigned To' => $assignedCount > 0 ? $assignedCount.' user(s)' : 'All users (global event)',
             'Date' => $event->start_date ? Carbon::parse($event->start_date)->format('d M Y, g:i A') : 'N/A',
         ]);
 
         // Log activity
-        $assignedCount = $event->assignedUsers()->count();
         $activityDesc = $assignedCount > 0
             ? 'You created event "'.$event->title.'" and assigned it to '.$assignedCount.' user(s)'
             : 'You created event "'.$event->title.'"';
