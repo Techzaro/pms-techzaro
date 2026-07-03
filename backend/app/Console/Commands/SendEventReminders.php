@@ -72,6 +72,7 @@ class SendEventReminders extends Command
                     // Skip if duplicate reminder already sent recently
                     if ($exists) {
                         $duplicates++;
+
                         continue;
                     }
 
@@ -83,7 +84,7 @@ class SendEventReminders extends Command
                         'related_module' => 'event',
                         'related_id' => $event->id,
                         'title' => 'Event Reminder',
-                        'message' => "Reminder: '" . $event->title . "' starts in " . $interval['label'] . ".",
+                        'message' => "Reminder: '".$event->title."' starts in ".$interval['label'].'.',
                         'link' => '/calender',
                     ]);
 
@@ -103,8 +104,7 @@ class SendEventReminders extends Command
      * Returns all active users for global events, assigned users for
      * team events, or falls back to the event creator if no users are assigned.
      *
-     * @param \App\Models\Event $event The event to check recipients for
-     *
+     * @param  Event  $event  The event to check recipients for
      * @return array<int> Array of user IDs
      */
     private function getEventRecipientIds(Event $event): array
@@ -117,7 +117,7 @@ class SendEventReminders extends Command
         // Use assigned users if any exist
         $assignedIds = $event->assignedUsers()->pluck('user_id')->toArray();
 
-        if (!empty($assignedIds)) {
+        if (! empty($assignedIds)) {
             return $assignedIds;
         }
 

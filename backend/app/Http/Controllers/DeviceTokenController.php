@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\UserDeviceToken;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
@@ -17,8 +18,8 @@ class DeviceTokenController extends Controller
      *
      * Uses updateOrCreate to prevent duplicate tokens per user-device combination.
      *
-     * @param  \Illuminate\Http\Request  $request  Input: device_token (required), device_type (optional: browser|ios|android).
-     * @return \Illuminate\Http\JsonResponse  JSON response confirming token saved.
+     * @param  Request  $request  Input: device_token (required), device_type (optional: browser|ios|android).
+     * @return JsonResponse JSON response confirming token saved.
      */
     public function store(Request $request)
     {
@@ -46,8 +47,8 @@ class DeviceTokenController extends Controller
     /**
      * Remove a device token for the authenticated user.
      *
-     * @param  \Illuminate\Http\Request  $request  Input: device_token (required).
-     * @return \Illuminate\Http\JsonResponse  JSON response confirming token removed.
+     * @param  Request  $request  Input: device_token (required).
+     * @return JsonResponse JSON response confirming token removed.
      */
     public function destroy(Request $request)
     {

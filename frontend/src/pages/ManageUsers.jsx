@@ -658,13 +658,41 @@ function ManageUsers() {
   }
 
 
+  const scrollToFirstError = (errors) => {
+    const fieldOrder = [
+      "fullName", "fatherName", "idCardNumber", "phoneNumber",
+      "presentAddress", "emergencyContactPhone",
+      "personalEmail", "professionalEmail", "professionalEmailPassword",
+      "designation", "designationCustom", "department", "departmentCustom",
+      "employeeCode", "jobStartedDate", "grossSalary", "bankAccountNumber",
+    ];
+    setTimeout(() => {
+      const modalBody = document.querySelector(".user-modal-content");
+      for (const key of fieldOrder) {
+        if (errors[key]) {
+          const el = document.getElementById(key);
+          if (el) {
+            if (modalBody) {
+              el.scrollIntoView({ block: "center", behavior: "smooth" });
+            }
+            el.focus();
+            break;
+          }
+        }
+      }
+    }, 100);
+  };
+
   // Submit new user or update existing user via API with FormData (supports file uploads)
   const handleSubmit = async (event) => {
     event.preventDefault();
 
     const errors = validateAddForm();
     setAddErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).length > 0) {
+      scrollToFirstError(errors);
+      return;
+    }
 
     const finalDepartment =
       newUser.department === "__custom__" ? newUser.departmentCustom : newUser.department;
@@ -735,7 +763,8 @@ function ManageUsers() {
       if (!res.ok) {
         if (data.errors) {
           const fieldMap = {
-            email: "email", full_name: "fullName",
+            email: "personalEmail", full_name: "fullName",
+            personal_email: "personalEmail",
             father_name: "fatherName", id_card_number: "idCardNumber", phone_number: "phoneNumber",
             present_address: "presentAddress", permanent_address: "permanentAddress",
             emergency_contact_name: "emergencyContactName", emergency_contact_relation: "emergencyContactRelation",
@@ -750,6 +779,7 @@ function ManageUsers() {
             mapped[fieldMap[key] || key] = Array.isArray(msgs) ? msgs[0] : msgs;
           });
           setAddErrors(mapped);
+          scrollToFirstError(mapped);
         }
         notify.error(data.message || (isEdit ? "Unable to update user" : "Unable to create user"));
         return;
@@ -1053,7 +1083,7 @@ function ManageUsers() {
                 <div className="user-form-grid">
                   <div className="form-row">
                     <label htmlFor="grossSalary">Gross Salary</label>
-                    <input type="number" id="grossSalary" name="grossSalary" value={newUser.grossSalary} onChange={handleChange} placeholder="Enter gross salary" className={addErrors.grossSalary ? "field-error" : ""} />
+                    <input type="number" id="grossSalary" name="grossSalary" value={newUser.grossSalary} onChange={handleChange} placeholder="Enter gross salary (PKR)" className={addErrors.grossSalary ? "field-error" : ""} />
                     {addErrors.grossSalary && <span className="field-error-text">{addErrors.grossSalary}</span>}
                   </div>
                   <div className="form-row">

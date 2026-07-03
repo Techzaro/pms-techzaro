@@ -17,21 +17,50 @@ class CompanyDocumentController extends Controller
         foreach ($files as $file) {
             $basename = basename($file);
             foreach ($validExtensions as $ext) {
-                if ($basename === $type . '.' . $ext) {
+                if ($basename === $type.'.'.$ext) {
                     return $file;
                 }
             }
         }
+
         return null;
+    }
+
+    private function findOtherDocumentFiles(): array
+    {
+        $disk = config('company.disk', 'public');
+        $uploadDir = config('company.upload_dir', 'company_docs');
+        $validExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
+        $prefix = 'other_document_';
+
+        $result = [];
+        $files = Storage::disk($disk)->files($uploadDir);
+        foreach ($files as $file) {
+            $basename = basename($file);
+            if (str_starts_with($basename, $prefix)) {
+                foreach ($validExtensions as $ext) {
+                    if (str_ends_with($basename, '.'.$ext)) {
+                        $result[] = [
+                            'path' => $file,
+                            'url' => Storage::disk($disk)->url($file),
+                            'filename' => $basename,
+                        ];
+                        break;
+                    }
+                }
+            }
+        }
+
+        return $result;
     }
 
     public function index()
     {
         $labels = config('company.document_labels', []);
-        $types = ['company_logo', 'qr_code', 'employment_contract', 'offer_letter', 'techxaro_regulations'];
+        $singleTypes = ['company_logo', 'qr_code'];
 
         $result = [];
-        foreach ($types as $key) {
+        foreach ($singleTypes as $key) {
             $path = $this->findExistingFile($key);
             $exists = $path !== null;
             $result[$key] = [
@@ -42,6 +71,13 @@ class CompanyDocumentController extends Controller
             ];
         }
 
+        $otherDocs = $this->findOtherDocumentFiles();
+        $result['other_documents'] = [
+            'label' => $labels['other_documents'] ?? 'Other Documents',
+            'files' => $otherDocs,
+            'exists' => count($otherDocs) > 0,
+        ];
+
         return response()->json([
             'success' => true,
             'documents' => $result,
@@ -51,7 +87,7 @@ class CompanyDocumentController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'type' => 'required|string|in:company_logo,qr_code,employment_contract,offer_letter,techxaro_regulations',
+            'type' => 'required|string|in:company_logo,qr_code,other_documents',
             'file' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:10240',
         ]);
 
@@ -60,19 +96,37 @@ class CompanyDocumentController extends Controller
         $type = $request->input('type');
         $file = $request->file('file');
 
+        if ($type === 'other_documents') {
+            $extension = $file->getClientOriginalExtension();
+            $filename = 'other_document_'.time().'_'.mt_rand(1000, 9999).'.'.$extension;
+            $file->storeAs($uploadDir, $filename, $disk);
+            $path = $uploadDir.'/'.$filename;
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Other document uploaded successfully',
+                'document' => [
+                    'type' => $type,
+                    'path' => $path,
+                    'url' => Storage::disk($disk)->url($path),
+                    'filename' => $filename,
+                ],
+            ]);
+        }
+
         $existing = $this->findExistingFile($type);
         if ($existing) {
             Storage::disk($disk)->delete($existing);
         }
 
         $extension = $file->getClientOriginalExtension();
-        $filename = $type . '.' . $extension;
+        $filename = $type.'.'.$extension;
         $file->storeAs($uploadDir, $filename, $disk);
-        $path = $uploadDir . '/' . $filename;
+        $path = $uploadDir.'/'.$filename;
 
         return response()->json([
             'success' => true,
-            'message' => ucfirst(str_replace('_', ' ', $type)) . ' uploaded successfully',
+            'message' => ucfirst(str_replace('_', ' ', $type)).' uploaded successfully',
             'document' => [
                 'type' => $type,
                 'path' => $path,
@@ -83,8 +137,29 @@ class CompanyDocumentController extends Controller
 
     public function destroy(Request $request, string $type)
     {
-        $validTypes = ['company_logo', 'qr_code', 'employment_contract', 'offer_letter', 'techxaro_regulations'];
-        if (!in_array($type, $validTypes)) {
+        $disk = config('company.disk', 'public');
+
+        if ($type === 'other_documents') {
+            $filename = $request->query('filename');
+            if (! $filename) {
+                return response()->json(['success' => false, 'message' => 'Filename is required to delete other document'], 422);
+            }
+
+            $uploadDir = config('company.upload_dir', 'company_docs');
+            $path = $uploadDir.'/'.$filename;
+
+            if (Storage::disk($disk)->exists($path)) {
+                Storage::disk($disk)->delete($path);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Other document deleted successfully',
+            ]);
+        }
+
+        $validTypes = ['company_logo', 'qr_code'];
+        if (! in_array($type, $validTypes)) {
             return response()->json(['success' => false, 'message' => 'Invalid document type'], 422);
         }
 
@@ -95,7 +170,7 @@ class CompanyDocumentController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => ucfirst(str_replace('_', ' ', $type)) . ' deleted successfully',
+            'message' => ucfirst(str_replace('_', ' ', $type)).' deleted successfully',
         ]);
     }
 }

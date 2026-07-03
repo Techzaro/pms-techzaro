@@ -6,16 +6,21 @@ use App\Models\Deliverable;
 use App\Models\DeliverableSubmission;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\TaskChange;
 use App\Models\TaskFile;
 use App\Models\TaskSubmission;
 use App\Models\TaskWorkflowEvent;
 use App\Models\User;
-use App\Services\NotificationService;
 use App\Services\ActivityService;
+use App\Services\NotificationService;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * Controller for managing tasks within projects.
@@ -34,8 +39,8 @@ class TaskController extends Controller
      * Get tasks assigned to the authenticated user (excluding self-assigned tasks).
      * Also includes projects where the user is assigned but not the creator.
      *
-     * @param  \Illuminate\Http\Request  $request  Query parameters: status (due_today, approved, pending, submitted, reopened, rejected, or custom), filter params.
-     * @return \Illuminate\Http\JsonResponse  JSON response with merged task and project list.
+     * @param  Request  $request  Query parameters: status (due_today, approved, pending, submitted, reopened, rejected, or custom), filter params.
+     * @return JsonResponse JSON response with merged task and project list.
      */
     public function myTasks(Request $request)
     {
@@ -48,12 +53,14 @@ class TaskController extends Controller
         $isRejectedFilter = $request->input('status') === 'rejected';
         $statusFilter = $request->input('status');
         $filters = $request->query();
-        if ($isDueTodayFilter || $isPendingFilter) unset($filters['status']);
+        if ($isDueTodayFilter || $isPendingFilter) {
+            unset($filters['status']);
+        }
 
         $tasksQuery = Task::where(function ($q) use ($user) {
-                $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
-                  ->orWhere('assigned_to', $user->id);
-            })
+            $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+                ->orWhere('assigned_to', $user->id);
+        })
             ->where('assigned_by', '!=', $user->id)
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
@@ -83,6 +90,7 @@ class TaskController extends Controller
             $task->completed_deliverables = $completed;
             $task->pending_deliverables_count = $pending;
             $task->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
+
             return $task;
         });
 
@@ -97,7 +105,7 @@ class TaskController extends Controller
             ->when($isSubmittedFilter, fn ($q) => $q->where('status', 'submitted'))
             ->when($isReopenedFilter, fn ($q) => $q->where('status', 'reopened'))
             ->when($isRejectedFilter, fn ($q) => $q->where('status', 'rejected'))
-            ->when($statusFilter && !$isDueTodayFilter && !in_array($statusFilter, ['approved', 'pending', 'submitted', 'reopened', 'rejected']), fn ($q) => $q->where('status', $statusFilter))
+            ->when($statusFilter && ! $isDueTodayFilter && ! in_array($statusFilter, ['approved', 'pending', 'submitted', 'reopened', 'rejected']), fn ($q) => $q->where('status', $statusFilter))
             ->with(['creator:id,name,role', 'team:id,name'])
             ->latest()
             ->limit(100)
@@ -110,6 +118,7 @@ class TaskController extends Controller
             $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
             $project->is_assigned = $isAssigned;
             $project->can_submit = in_array($project->status, $submittableStatuses) && $isAssigned;
+
             return $project;
         });
 
@@ -127,8 +136,8 @@ class TaskController extends Controller
      * Get tasks that are both created by and assigned to the authenticated user (self-created tasks).
      * Also includes projects where the user is both creator and assignee.
      *
-     * @param  \Illuminate\Http\Request  $request  Query parameters: status filter, other filter params.
-     * @return \Illuminate\Http\JsonResponse  JSON response with merged self-created task and project list.
+     * @param  Request  $request  Query parameters: status filter, other filter params.
+     * @return JsonResponse JSON response with merged self-created task and project list.
      */
     public function mySelfTasks(Request $request)
     {
@@ -139,12 +148,14 @@ class TaskController extends Controller
         $isReopenedFilter = $request->input('status') === 'reopened';
         $isRejectedFilter = $request->input('status') === 'rejected';
         $filters = $request->query();
-        if ($isPendingFilter) unset($filters['status']);
+        if ($isPendingFilter) {
+            unset($filters['status']);
+        }
 
         $tasks = Task::where('assigned_by', $user->id)
             ->where(function ($q) use ($user) {
                 $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
-                  ->orWhere('assigned_to', $user->id);
+                    ->orWhere('assigned_to', $user->id);
             })
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
@@ -173,12 +184,15 @@ class TaskController extends Controller
             $task->completed_deliverables = $completed;
             $task->pending_deliverables_count = $pending;
             $task->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
+
             return $task;
         });
 
         $projects = Project::where('created_by', $user->id)
             ->whereJsonContains('assigned_users', $user->id)
-            ->where(function ($q) { $q->whereNotNull('assigned_users')->whereRaw('JSON_LENGTH(assigned_users) > 0'); })
+            ->where(function ($q) {
+                $q->whereNotNull('assigned_users')->whereRaw('JSON_LENGTH(assigned_users) > 0');
+            })
             ->when($isApprovedFilter, fn ($q) => $q->where('status', 'approved'))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->when($isSubmittedFilter, fn ($q) => $q->where('status', 'submitted'))
@@ -194,6 +208,7 @@ class TaskController extends Controller
                 $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
                 $project->is_assigned = $isAssigned;
                 $project->can_submit = in_array($project->status, $submittableStatuses) && $isAssigned;
+
                 return $project;
             });
 
@@ -212,19 +227,20 @@ class TaskController extends Controller
      *
      * Team leads viewing other users only see tasks they assigned and projects they created.
      *
-     * @param  \Illuminate\Http\Request  $request  Query parameters: status, search, filter params.
+     * @param  Request  $request  Query parameters: status, search, filter params.
      * @param  int  $userId  The ID of the target user.
-     * @return \Illuminate\Http\JsonResponse  JSON response with merged task and project list.
+     * @return JsonResponse JSON response with merged task and project list.
      */
     public function userTasks(Request $request, $userId)
     {
         try {
             return $this->handleUserTasks($request, $userId);
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('userTasks error: ' . $e->getMessage(), [
+            Log::error('userTasks error: '.$e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
                 'userId' => $userId,
             ]);
+
             return response()->json(['success' => false, 'error' => $e->getMessage(), 'data' => [], 'total' => 0], 500);
         }
     }
@@ -232,12 +248,12 @@ class TaskController extends Controller
     private function handleUserTasks(Request $request, $userId)
     {
         $targetUser = User::find($userId);
-        if (!$targetUser) {
+        if (! $targetUser) {
             return response()->json(['success' => true, 'data' => [], 'total' => 0]);
         }
 
         $requestingUser = $request->user();
-        $isTeamLeadViewingMember = ($requestingUser->role === 'team_lead' || $requestingUser->role === 'teamlead') 
+        $isTeamLeadViewingMember = ($requestingUser->role === 'team_lead' || $requestingUser->role === 'teamlead')
             && $requestingUser->id != $userId;
 
         $isDueTodayFilter = $request->input('status') === 'due_today';
@@ -250,15 +266,15 @@ class TaskController extends Controller
         $search = $request->input('search');
 
         $tasksQuery = Task::where(function ($q) use ($userId) {
-                $q->whereHas('assignees', fn ($q) => $q->where('users.id', $userId))
-                  ->orWhere('assigned_to', $userId);
-            })
+            $q->whereHas('assignees', fn ($q) => $q->where('users.id', $userId))
+                ->orWhere('assigned_to', $userId);
+        })
             // If team lead is viewing member, only show tasks assigned BY the team lead
             ->when($isTeamLeadViewingMember, fn ($q) => $q->where('tasks.assigned_by', $requestingUser->id))
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
-            ->when($search, fn ($q) => $q->where('title', 'like', '%' . $search . '%'))
-            ->when($statusFilter && !$isDueTodayFilter && !$isPendingFilter, fn ($q) => $q->where('status', $statusFilter))
+            ->when($search, fn ($q) => $q->where('title', 'like', '%'.$search.'%'))
+            ->when($statusFilter && ! $isDueTodayFilter && ! $isPendingFilter, fn ($q) => $q->where('status', $statusFilter))
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
             ->orderBy('sort_order')->latest('updated_at');
 
@@ -289,7 +305,7 @@ class TaskController extends Controller
             $expandedTasks->push($clone);
         }
 
-        $projectsQuery = Project::whereJsonContains('assigned_users', (int)$userId)
+        $projectsQuery = Project::whereJsonContains('assigned_users', (int) $userId)
             ->where(function ($q) {
                 $q->whereNotNull('assigned_users')->whereRaw('JSON_LENGTH(assigned_users) > 0');
             })
@@ -301,8 +317,8 @@ class TaskController extends Controller
             ->when($isSubmittedFilter, fn ($q) => $q->where('status', 'submitted'))
             ->when($isReopenedFilter, fn ($q) => $q->where('status', 'reopened'))
             ->when($isRejectedFilter, fn ($q) => $q->where('status', 'rejected'))
-            ->when($search, fn ($q) => $q->where('title', 'like', '%' . $search . '%'))
-            ->when($statusFilter && !$isDueTodayFilter && !in_array($statusFilter, ['approved', 'pending', 'submitted', 'reopened', 'rejected']), fn ($q) => $q->where('status', $statusFilter))
+            ->when($search, fn ($q) => $q->where('title', 'like', '%'.$search.'%'))
+            ->when($statusFilter && ! $isDueTodayFilter && ! in_array($statusFilter, ['approved', 'pending', 'submitted', 'reopened', 'rejected']), fn ($q) => $q->where('status', $statusFilter))
             ->with(['creator:id,name,role', 'team:id,name'])
             ->latest();
 
@@ -332,8 +348,8 @@ class TaskController extends Controller
      * Admin/manager users see tasks created by any admin/manager.
      * Also includes projects created by the user with their assigned members expanded.
      *
-     * @param  \Illuminate\Http\Request  $request  Query parameters: status, search, filter params.
-     * @return \Illuminate\Http\JsonResponse  JSON response with expanded task and project list.
+     * @param  Request  $request  Query parameters: status, search, filter params.
+     * @return JsonResponse JSON response with expanded task and project list.
      */
     public function assignedByMe(Request $request)
     {
@@ -349,8 +365,7 @@ class TaskController extends Controller
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
 
         if ($isAdminOrManager) {
-            $adminManagerIds = Cache::remember('admin_manager_ids', 300, fn () =>
-                User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray()
+            $adminManagerIds = Cache::remember('admin_manager_ids', 300, fn () => User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray()
             );
         }
 
@@ -358,16 +373,18 @@ class TaskController extends Controller
 
         if ($isAdminOrManager) {
             $tasksQuery->whereIn('assigned_by', $adminManagerIds)
-                ->where(function ($q) { $q->whereColumn('assigned_by', '!=', 'assigned_to')->orWhereNull('assigned_to'); });
+                ->where(function ($q) {
+                    $q->whereColumn('assigned_by', '!=', 'assigned_to')->orWhereNull('assigned_to');
+                });
         } else {
             $tasksQuery->where('assigned_by', $userId);
         }
 
         $tasks = $tasksQuery->orderBy('sort_order')->latest('updated_at')
-            ->when($request->filled('search'), fn ($q) => $q->where('title', 'like', '%' . $request->input('search') . '%'))
+            ->when($request->filled('search'), fn ($q) => $q->where('title', 'like', '%'.$request->input('search').'%'))
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
-            ->when($request->filled('status') && !$isDueTodayFilter && !$isPendingFilter, fn ($q) => $q->where('status', $request->input('status')))
+            ->when($request->filled('status') && ! $isDueTodayFilter && ! $isPendingFilter, fn ($q) => $q->where('status', $request->input('status')))
             ->limit(100)->get();
 
         // Bulk load deliverable counts
@@ -392,8 +409,12 @@ class TaskController extends Controller
 
             $assignees = $task->assignees->isEmpty() ? collect([null]) : $task->assignees;
             foreach ($assignees as $assignee) {
-                if ($assignee && (int)$assignee->id === (int)$task->assigned_by) continue;
-                if (!$assignee && (int)$task->assigned_to === (int)$task->assigned_by) continue;
+                if ($assignee && (int) $assignee->id === (int) $task->assigned_by) {
+                    continue;
+                }
+                if (! $assignee && (int) $task->assigned_to === (int) $task->assigned_by) {
+                    continue;
+                }
 
                 $clone = clone $task;
                 $clone->assignees = $assignee ? collect([$assignee]) : collect();
@@ -423,7 +444,7 @@ class TaskController extends Controller
             ->when($isSubmittedFilter, fn ($q) => $q->where('status', 'submitted'))
             ->when($isReopenedFilter, fn ($q) => $q->where('status', 'reopened'))
             ->when($isRejectedFilter, fn ($q) => $q->where('status', 'rejected'))
-            ->when($statusFilter && !$isDueTodayFilter && !in_array($statusFilter, ['approved', 'pending', 'submitted', 'reopened', 'rejected']), fn ($q) => $q->where('status', $statusFilter))
+            ->when($statusFilter && ! $isDueTodayFilter && ! in_array($statusFilter, ['approved', 'pending', 'submitted', 'reopened', 'rejected']), fn ($q) => $q->where('status', $statusFilter))
             ->with(['creator:id,name,role', 'team:id,name'])
             ->latest()
             ->limit(100)->get();
@@ -434,7 +455,7 @@ class TaskController extends Controller
         // Bulk-load all assigned user IDs across projects
         $allUserIds = $projects->flatMap(fn ($p) => is_string($p->assigned_users) ? json_decode($p->assigned_users, true) ?? [] : ($p->assigned_users ?? []))
             ->unique()->values()->toArray();
-        $allResolvedUsers = !empty($allUserIds)
+        $allResolvedUsers = ! empty($allUserIds)
             ? User::whereIn('id', $allUserIds)->select('id', 'name', 'role')->get()->keyBy('id')
             : collect();
 
@@ -442,7 +463,9 @@ class TaskController extends Controller
             $project->item_type = 'project';
             $project->sort_order = null;
             $assignedIds = $project->assigned_users;
-            if (is_string($assignedIds)) $assignedIds = json_decode($assignedIds, true) ?? [];
+            if (is_string($assignedIds)) {
+                $assignedIds = json_decode($assignedIds, true) ?? [];
+            }
             $assignedUsers = collect($assignedIds);
 
             if ($assignedUsers->isEmpty()) {
@@ -453,10 +476,12 @@ class TaskController extends Controller
                 $expandedProjects->push($clone);
             } else {
                 foreach ($assignedUsers as $id) {
-                    if ((int)$id === (int)$project->created_by) continue;
+                    if ((int) $id === (int) $project->created_by) {
+                        continue;
+                    }
                     $clone = clone $project;
                     $clone->assigned_user = $allResolvedUsers->get($id);
-                    $isAssignedToUser = (int)$id === (int)$user->id;
+                    $isAssignedToUser = (int) $id === (int) $user->id;
                     $clone->is_assigned = $isAssignedToUser;
                     $clone->can_submit = in_array($clone->status, $submittableStatuses) && $isAssignedToUser;
                     $expandedProjects->push($clone);
@@ -477,8 +502,8 @@ class TaskController extends Controller
      * Enforces authorization based on creator, assignee, project creator, team leader, or admin/manager role.
      * Returns deliverable progress stats and unviewed changes.
      *
-     * @param  \App\Models\Task  $task  The task to retrieve.
-     * @return \Illuminate\Http\JsonResponse  JSON response with full task details or 403.
+     * @param  Task  $task  The task to retrieve.
+     * @return JsonResponse JSON response with full task details or 403.
      */
     public function show(Task $task)
     {
@@ -491,7 +516,7 @@ class TaskController extends Controller
         $isTeamLeader = $task->project && $task->project->team && (int) $task->project->team->leader_id === (int) $user->id;
         $isTeamMember = $task->project && $task->project->team && $task->project->team->members && $task->project->team->members->contains('id', $user->id);
 
-        if (!$isCreator && !$isAssignee && !$isAdminOrManager && !$isProjectCreator && !$isTeamLeader && !$isTeamMember) {
+        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager && ! $isProjectCreator && ! $isTeamLeader && ! $isTeamMember) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -517,7 +542,7 @@ class TaskController extends Controller
         ]);
 
         // Single query for deliverables with stats
-        $deliverables = $task->deliverables()->when(!$isCreator, function ($q) use ($user) {
+        $deliverables = $task->deliverables()->when(! $isCreator, function ($q) use ($user) {
             $q->where(function ($qq) use ($user) {
                 $qq->where('assigned_to', $user->id)->orWhere('created_by', $user->id);
             });
@@ -541,7 +566,7 @@ class TaskController extends Controller
             ? Deliverable::selectRaw('COUNT(*) as total, SUM(CASE WHEN status = "approved" THEN 1 ELSE 0 END) as completed, SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending')
                 ->where('task_id', $task->id)
                 ->first()
-            : (object)['total' => 0, 'completed' => 0, 'pending' => 0];
+            : (object) ['total' => 0, 'completed' => 0, 'pending' => 0];
 
         $isApproved = strtolower((string) $task->status) === 'approved';
         $pendingStatuses = ['pending', 'reopened'];
@@ -564,11 +589,11 @@ class TaskController extends Controller
         $payload['unviewed_changes_count'] = $task->unviewedChanges->count();
         $payload['is_creator'] = $isCreator;
         $payload['is_assignee'] = $isAssignee;
-        $payload['can_edit'] = $isCreator && !$isApproved;
+        $payload['can_edit'] = $isCreator && ! $isApproved;
         $payload['can_submit'] = $isAssignee && in_array($task->status, $pendingStatuses) && $allDeliverablesSubmitted;
 
-        $taskChangeMax = (int) \App\Models\TaskChange::where('task_id', $task->id)->max('id');
-        $taskEventMax = (int) \App\Models\TaskWorkflowEvent::where('task_id', $task->id)->max('id');
+        $taskChangeMax = (int) TaskChange::where('task_id', $task->id)->max('id');
+        $taskEventMax = (int) TaskWorkflowEvent::where('task_id', $task->id)->max('id');
         $payload['activity_max_id'] = max($taskChangeMax, $taskEventMax);
 
         return response()->json(['success' => true, 'task' => $payload]);
@@ -580,9 +605,9 @@ class TaskController extends Controller
      * Creates workflow events for each task, handles deliverable creation and notifications,
      * and sends bulk assignment notifications.
      *
-     * @param  \Illuminate\Http\Request  $request  Validated input: title, description, requirements, start_date, end_date, assigned_to[], priority, deliverables[].
-     * @param  \App\Models\Project  $project  The parent project.
-     * @return \Illuminate\Http\JsonResponse  JSON response with created tasks.
+     * @param  Request  $request  Validated input: title, description, requirements, start_date, end_date, assigned_to[], priority, deliverables[].
+     * @param  Project  $project  The parent project.
+     * @return JsonResponse JSON response with created tasks.
      */
     public function store(Request $request, Project $project)
     {
@@ -630,12 +655,12 @@ class TaskController extends Controller
                 'task_id' => $task->id,
                 'user_id' => $user->id,
                 'action' => 'created',
-                'comment' => $assignee ? 'Assigned to ' . $assignee->name : null,
+                'comment' => $assignee ? 'Assigned to '.$assignee->name : null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ];
 
-            if (!empty($validated['deliverables'])) {
+            if (! empty($validated['deliverables'])) {
                 foreach ($validated['deliverables'] as $del) {
                     $deliverablesToCreate[] = [
                         'project_id' => $project->id,
@@ -654,11 +679,11 @@ class TaskController extends Controller
             $createdTasks[] = $task;
         }
 
-        if (!empty($workflowRecords)) {
+        if (! empty($workflowRecords)) {
             DB::table('task_workflow_events')->insert($workflowRecords);
         }
 
-        if (!empty($deliverablesToCreate)) {
+        if (! empty($deliverablesToCreate)) {
             Deliverable::insert($deliverablesToCreate);
             $insertedDeliverables = Deliverable::where('created_by', $user->id)
                 ->where('created_at', '>=', now()->subSeconds(5))
@@ -670,20 +695,20 @@ class TaskController extends Controller
                         'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
                         'related_id' => $dlv->id,
                         'title' => 'Deliverable Assigned',
-                        'message' => 'A new deliverable "' . $dlv->title . '" has been assigned to you by ' . $user->name . '.',
-                        'link' => '/deliveries?selectedDeliverable=' . $dlv->id,
+                        'message' => 'A new deliverable "'.$dlv->title.'" has been assigned to you by '.$user->name.'.',
+                        'link' => '/deliveries?selectedDeliverable='.$dlv->id,
                     ];
                 }
             }
         }
-        if (!empty($deliverableNotifications)) {
+        if (! empty($deliverableNotifications)) {
             $this->notificationService->createBulk($deliverableNotifications);
         }
 
         // Notify project assignees about new deliverables added under tasks
-        if (!empty($insertedDeliverables)) {
+        if (! empty($insertedDeliverables)) {
             $projectAssignees = $project->assigned_users ?? [];
-            if (!empty($projectAssignees)) {
+            if (! empty($projectAssignees)) {
                 foreach ($insertedDeliverables as $dlv) {
                     $this->notificationService->notifyDeliverableAdded($dlv, $user, $projectAssignees, 'project');
                 }
@@ -695,14 +720,16 @@ class TaskController extends Controller
         $notifications = [];
         foreach ($createdTasks as $task) {
             foreach ($validated['assigned_to'] as $assigneeId) {
-                if ((int) $assigneeId === (int) $user->id || in_array($assigneeId, $sent)) continue;
+                if ((int) $assigneeId === (int) $user->id || in_array($assigneeId, $sent)) {
+                    continue;
+                }
                 $sent[] = $assigneeId;
                 $notifications[] = [
                     'user_id' => $assigneeId, 'sender_user_id' => $user->id,
                     'type' => 'task_assigned', 'related_module' => 'task',
                     'related_id' => $task->id, 'title' => 'Task Assigned',
-                    'message' => 'A new task "' . $task->title . '" has been assigned to you by ' . $user->name . '.',
-                    'link' => '/tasks/task-details/' . $task->id . '?from=tasks',
+                    'message' => 'A new task "'.$task->title.'" has been assigned to you by '.$user->name.'.',
+                    'link' => '/tasks/task-details/'.$task->id.'?from=tasks',
                 ];
             }
         }
@@ -718,14 +745,14 @@ class TaskController extends Controller
 
         // Log activity
         $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
-        $this->activityService->log($user->id, 'task_created', 'You created ' . $taskCount . ' task(s) and assigned them to ' . $assigneeNames, 'task', $createdTasks[0]->id);
+        $this->activityService->log($user->id, 'task_created', 'You created '.$taskCount.' task(s) and assigned them to '.$assigneeNames, 'task', $createdTasks[0]->id);
         $this->clearDashboardCache($user->id);
 
         $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');
 
         return response()->json([
             'success' => true,
-            'message' => count($createdTasks) . ' task(s) created successfully',
+            'message' => count($createdTasks).' task(s) created successfully',
             'task' => $firstTask,
             'tasks' => array_map(fn ($t) => ['id' => $t->id, 'assigned_to' => $t->assigned_to], $createdTasks),
         ], 201);
@@ -737,8 +764,8 @@ class TaskController extends Controller
      * Creates one task per user in the assigned_to array, with optional deliverables.
      * Sends assignment notifications and logs activity.
      *
-     * @param  \Illuminate\Http\Request  $request  Validated input: title, description, requirements, start_date, end_date, assigned_to[], priority, deliverables[].
-     * @return \Illuminate\Http\JsonResponse  JSON response with created tasks.
+     * @param  Request  $request  Validated input: title, description, requirements, start_date, end_date, assigned_to[], priority, deliverables[].
+     * @return JsonResponse JSON response with created tasks.
      */
     public function storeStandalone(Request $request)
     {
@@ -786,12 +813,12 @@ class TaskController extends Controller
                 'task_id' => $task->id,
                 'user_id' => $user->id,
                 'action' => 'created',
-                'comment' => $assignee ? 'Assigned to ' . $assignee->name : null,
+                'comment' => $assignee ? 'Assigned to '.$assignee->name : null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ];
 
-            if (!empty($validated['deliverables'])) {
+            if (! empty($validated['deliverables'])) {
                 $deliverableData = collect($validated['deliverables'])->map(fn ($del) => [
                     'title' => $del['title'], 'description' => $del['description'] ?? null,
                     'status' => 'pending', 'priority' => $validated['priority'],
@@ -807,8 +834,8 @@ class TaskController extends Controller
                             'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
                             'related_id' => $dlv->id,
                             'title' => 'Deliverable Assigned',
-                            'message' => 'A new deliverable "' . $dlv->title . '" has been assigned to you by ' . $user->name . '.',
-                            'link' => '/deliveries?selectedDeliverable=' . $dlv->id,
+                            'message' => 'A new deliverable "'.$dlv->title.'" has been assigned to you by '.$user->name.'.',
+                            'link' => '/deliveries?selectedDeliverable='.$dlv->id,
                         ];
                     }
                 }
@@ -817,10 +844,10 @@ class TaskController extends Controller
             $createdTasks[] = $task;
         }
 
-        if (!empty($workflowRecords)) {
+        if (! empty($workflowRecords)) {
             DB::table('task_workflow_events')->insert($workflowRecords);
         }
-        if (!empty($deliverableNotifications)) {
+        if (! empty($deliverableNotifications)) {
             $this->notificationService->createBulk($deliverableNotifications);
         }
 
@@ -828,14 +855,16 @@ class TaskController extends Controller
         $notifications = [];
         foreach ($createdTasks as $task) {
             foreach ($validated['assigned_to'] as $assigneeId) {
-                if ((int) $assigneeId === (int) $user->id || in_array($assigneeId, $sent)) continue;
+                if ((int) $assigneeId === (int) $user->id || in_array($assigneeId, $sent)) {
+                    continue;
+                }
                 $sent[] = $assigneeId;
                 $notifications[] = [
                     'user_id' => $assigneeId, 'sender_user_id' => $user->id,
                     'type' => 'task_assigned', 'related_module' => 'task',
                     'related_id' => $task->id, 'title' => 'Task Assigned',
-                    'message' => 'A new task "' . $task->title . '" has been assigned to you by ' . $user->name . '.',
-                    'link' => '/tasks/task-details/' . $task->id . '?from=tasks',
+                    'message' => 'A new task "'.$task->title.'" has been assigned to you by '.$user->name.'.',
+                    'link' => '/tasks/task-details/'.$task->id.'?from=tasks',
                 ];
             }
         }
@@ -850,14 +879,14 @@ class TaskController extends Controller
 
         // Log activity
         $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
-        $this->activityService->log($user->id, 'task_created', 'You created ' . $taskCount . ' task(s) and assigned them to ' . $assigneeNames, 'task', $createdTasks[0]->id);
+        $this->activityService->log($user->id, 'task_created', 'You created '.$taskCount.' task(s) and assigned them to '.$assigneeNames, 'task', $createdTasks[0]->id);
         $this->clearDashboardCache($user->id);
 
         $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');
 
         return response()->json([
             'success' => true,
-            'message' => count($createdTasks) . ' task(s) created successfully',
+            'message' => count($createdTasks).' task(s) created successfully',
             'task' => $firstTask,
             'tasks' => array_map(fn ($t) => ['id' => $t->id, 'assigned_to' => $t->assigned_to], $createdTasks),
         ], 201);
@@ -869,14 +898,14 @@ class TaskController extends Controller
      * Only the task creator or admin/manager can edit. Approved tasks cannot be edited.
      * Handles assignee changes with notifications, deliverable creation, and change tracking.
      *
-     * @param  \Illuminate\Http\Request  $request  Validated input for updatable fields.
-     * @param  \App\Models\Task  $task  The task to update.
-     * @return \Illuminate\Http\JsonResponse  JSON response with the updated task and change count.
+     * @param  Request  $request  Validated input for updatable fields.
+     * @param  Task  $task  The task to update.
+     * @return JsonResponse JSON response with the updated task and change count.
      */
     public function update(Request $request, Task $task)
     {
         $user = $request->user();
-        if ((int) $task->assigned_by !== (int) $user->id && !in_array($user->role, ['admin', 'manager'])) {
+        if ((int) $task->assigned_by !== (int) $user->id && ! in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized — only the task creator can edit'], 403);
         }
         if (strtolower((string) $task->status) === 'approved') {
@@ -903,7 +932,9 @@ class TaskController extends Controller
 
         $oldValues = [];
         foreach (['title', 'description', 'start_date', 'end_date', 'priority', 'status'] as $f) {
-            if (array_key_exists($f, $validated)) $oldValues[$f] = $task->{$f};
+            if (array_key_exists($f, $validated)) {
+                $oldValues[$f] = $task->{$f};
+            }
         }
 
         $oldAssigneeIds = $task->assignees()->pluck('users.id')->toArray();
@@ -919,7 +950,7 @@ class TaskController extends Controller
             }
         }
 
-        if (!empty($assigneeIds) && $oldAssigneeIds !== $assigneeIds) {
+        if (! empty($assigneeIds) && $oldAssigneeIds !== $assigneeIds) {
             $oldNames = User::whereIn('id', $oldAssigneeIds)->pluck('name')->implode(', ');
             $newNames = User::whereIn('id', $assigneeIds)->pluck('name')->implode(', ');
             $changes[] = ['field_name' => 'assigned_to', 'label' => 'Assignee', 'old_value' => $oldNames ?: 'None', 'new_value' => $newNames ?: 'None'];
@@ -927,26 +958,28 @@ class TaskController extends Controller
             $task->update(['assigned_to' => $assigneeIds[0]]);
 
             $newlyAssignedIds = array_values(array_diff($assigneeIds, $oldAssigneeIds));
-            if (!empty($newlyAssignedIds)) {
+            if (! empty($newlyAssignedIds)) {
                 $newAssignNotifications = [];
                 foreach ($newlyAssignedIds as $newId) {
-                    if ((int) $newId === (int) $user->id) continue;
+                    if ((int) $newId === (int) $user->id) {
+                        continue;
+                    }
                     $newAssignNotifications[] = [
                         'user_id' => $newId, 'sender_user_id' => $user->id,
                         'type' => 'task_assigned', 'related_module' => 'task',
                         'related_id' => $task->id, 'title' => 'Task Assigned',
-                        'message' => 'A new task "' . $task->title . '" has been assigned to you by ' . $user->name . '.',
-                        'link' => '/tasks/task-details/' . $task->id . '?from=tasks',
+                        'message' => 'A new task "'.$task->title.'" has been assigned to you by '.$user->name.'.',
+                        'link' => '/tasks/task-details/'.$task->id.'?from=tasks',
                     ];
                 }
-                if (!empty($newAssignNotifications)) {
+                if (! empty($newAssignNotifications)) {
                     $this->notificationService->createBulk($newAssignNotifications);
                 }
             }
         }
 
         $addedDeliverables = [];
-        if (!empty($validated['deliverables'])) {
+        if (! empty($validated['deliverables'])) {
             $delData = collect($validated['deliverables'])->map(fn ($del) => [
                 'title' => $del['title'], 'description' => $del['description'] ?? null,
                 'due_date' => $del['due_date'] ?? null, 'assigned_to' => $task->assigned_to,
@@ -958,7 +991,7 @@ class TaskController extends Controller
         }
 
         // Bulk create changes and workflow events
-        if (!empty($changes)) {
+        if (! empty($changes)) {
             $task->changes()->createMany(
                 array_map(fn ($c) => [
                     'field_name' => $c['field_name'], 'old_value' => $c['old_value'],
@@ -968,7 +1001,7 @@ class TaskController extends Controller
             TaskWorkflowEvent::insert(
                 array_map(fn ($c) => [
                     'task_id' => $task->id, 'user_id' => $user->id, 'action' => 'field_changed',
-                    'comment' => $c['label'] . ': ' . $c['old_value'] . ' → ' . $c['new_value'],
+                    'comment' => $c['label'].': '.$c['old_value'].' → '.$c['new_value'],
                 ], $changes)
             );
         }
@@ -980,13 +1013,13 @@ class TaskController extends Controller
             $fieldNames = array_column($changes, 'label');
             $this->notificationService->confirmAction($user, 'Updated', 'task', $task->title, [
                 'Project' => $task->project?->title ?? 'N/A',
-                'Changes Made' => implode(', ', array_slice($fieldNames, 0, 5)) . (count($fieldNames) > 5 ? ' and more' : ''),
+                'Changes Made' => implode(', ', array_slice($fieldNames, 0, 5)).(count($fieldNames) > 5 ? ' and more' : ''),
             ]);
         }
 
         return response()->json([
             'success' => true,
-            'message' => count($changes) > 0 ? 'Task updated — ' . count($changes) . ' change(s) made' : 'Task updated successfully',
+            'message' => count($changes) > 0 ? 'Task updated — '.count($changes).' change(s) made' : 'Task updated successfully',
             'task' => $task->fresh()->load('assignees:id,name,email,role'),
             'changes_count' => count($changes),
         ]);
@@ -995,9 +1028,9 @@ class TaskController extends Controller
     /**
      * Update only the status of a task.
      *
-     * @param  \Illuminate\Http\Request  $request  Input: status (required).
-     * @param  \App\Models\Task  $task  The task to update.
-     * @return \Illuminate\Http\JsonResponse  JSON response with the updated task.
+     * @param  Request  $request  Input: status (required).
+     * @param  Task  $task  The task to update.
+     * @return JsonResponse JSON response with the updated task.
      */
     public function updateStatus(Request $request, Task $task)
     {
@@ -1006,8 +1039,12 @@ class TaskController extends Controller
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
 
-        if (!$isCreator && !$isAssignee && !$isAdminOrManager) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        if (strtolower((string) $task->status) === 'approved') return response()->json(['success' => false, 'message' => 'Approved tasks cannot be modified.'], 403);
+        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        if (strtolower((string) $task->status) === 'approved') {
+            return response()->json(['success' => false, 'message' => 'Approved tasks cannot be modified.'], 403);
+        }
 
         $validated = $request->validate(['status' => 'required|string|max:64|in:pending,in_progress,review,completed,done,failed,abandoned']);
         $oldStatus = $task->status;
@@ -1016,7 +1053,7 @@ class TaskController extends Controller
         TaskWorkflowEvent::create([
             'task_id' => $task->id, 'user_id' => $user->id,
             'action' => 'status_updated',
-            'comment' => $oldStatus . ' → ' . $validated['status'],
+            'comment' => $oldStatus.' → '.$validated['status'],
         ]);
 
         return response()->json(['success' => true, 'message' => 'Task status updated', 'task' => $task->fresh()->load('assignees:id,name,email,role')]);
@@ -1027,9 +1064,9 @@ class TaskController extends Controller
      *
      * Notifies the task creator that the task is ready for review.
      *
-     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
-     * @param  \App\Models\Task  $task  The task to complete.
-     * @return \Illuminate\Http\JsonResponse  JSON response with the completed task and created deliverable.
+     * @param  Request  $request  The incoming HTTP request.
+     * @param  Task  $task  The task to complete.
+     * @return JsonResponse JSON response with the completed task and created deliverable.
      */
     public function completeTask(Request $request, Task $task)
     {
@@ -1038,7 +1075,9 @@ class TaskController extends Controller
             $isCreator = intval($task->assigned_by) === intval($user->id);
             $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
 
-            if (!$isCreator && !$isAssignee) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            if (! $isCreator && ! $isAssignee) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            }
 
             $task->update(['status' => 'completed']);
 
@@ -1062,8 +1101,8 @@ class TaskController extends Controller
                     'task',
                     $task->id,
                     'Task Completed',
-                    $user->name . ' has completed the task "' . $task->title . '" and submitted it for review.',
-                    '/tasks/task-details/' . $task->id . '?from=taskby'
+                    $user->name.' has completed the task "'.$task->title.'" and submitted it for review.',
+                    '/tasks/task-details/'.$task->id.'?from=taskby'
                 );
             }
 
@@ -1074,8 +1113,8 @@ class TaskController extends Controller
             ]);
 
             // Log activity
-            $this->activityService->log($user->id, 'task_completed', 'You completed task "' . $task->title . '"', 'task', $task->id);
-        $this->clearDashboardCache($user->id);
+            $this->activityService->log($user->id, 'task_completed', 'You completed task "'.$task->title.'"', 'task', $task->id);
+            $this->clearDashboardCache($user->id);
 
             return response()->json([
                 'success' => true,
@@ -1084,7 +1123,7 @@ class TaskController extends Controller
                 'deliverable' => $deliverable,
             ], 201);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Failed to complete task: ' . $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Failed to complete task: '.$e->getMessage()], 500);
         }
     }
 
@@ -1094,20 +1133,26 @@ class TaskController extends Controller
      * Only the assignee can submit. All deliverables must be submitted first.
      * Handles file uploads, link attachments, and determines first submission vs resubmission.
      *
-     * @param  \Illuminate\Http\Request  $request  Input: comment, file, files[], links[].
-     * @param  \App\Models\Task  $task  The task to submit.
-     * @return \Illuminate\Http\JsonResponse  JSON response with the updated task.
+     * @param  Request  $request  Input: comment, file, files[], links[].
+     * @param  Task  $task  The task to submit.
+     * @return JsonResponse JSON response with the updated task.
      */
     public function submit(Request $request, Task $task)
     {
         $user = $request->user();
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
 
-        if (!$isAssignee) return response()->json(['success' => false, 'message' => 'Only the assignee can submit this task'], 403);
-        if (!in_array($task->status, ['pending', 'reopened'])) return response()->json(['success' => false, 'message' => 'This task cannot be submitted in its current status'], 422);
+        if (! $isAssignee) {
+            return response()->json(['success' => false, 'message' => 'Only the assignee can submit this task'], 403);
+        }
+        if (! in_array($task->status, ['pending', 'reopened'])) {
+            return response()->json(['success' => false, 'message' => 'This task cannot be submitted in its current status'], 422);
+        }
 
         $pendingDeliverables = $task->deliverables()->where('status', 'pending')->count();
-        if ($pendingDeliverables > 0) return response()->json(['success' => false, 'message' => 'All deliverables must be submitted before submitting this task'], 422);
+        if ($pendingDeliverables > 0) {
+            return response()->json(['success' => false, 'message' => 'All deliverables must be submitted before submitting this task'], 422);
+        }
 
         $validated = $request->validate([
             'comment' => 'nullable|string|max:2000',
@@ -1120,7 +1165,7 @@ class TaskController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $fileName = $file->getClientOriginalName();
-            $filePath = $file->store('task-submissions/' . $task->id, 'public');
+            $filePath = $file->store('task-submissions/'.$task->id, 'public');
         }
 
         $submission = TaskSubmission::create([
@@ -1132,16 +1177,16 @@ class TaskController extends Controller
             $submission->attachments()->createMany(
                 collect($request->file('files'))->map(fn ($file) => [
                     'submission_type' => 'task',
-                    'file_name' => basename($path = $file->store('task-submissions/' . $task->id, 'public')),
+                    'file_name' => basename($path = $file->store('task-submissions/'.$task->id, 'public')),
                     'original_name' => $file->getClientOriginalName(), 'file_path' => $path,
                     'file_type' => $file->getMimeType(), 'file_size' => $file->getSize(),
                     'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
-                    'url' => '/storage/' . $path,
+                    'url' => '/storage/'.$path,
                 ])->toArray()
             );
         }
 
-        if (!empty($validated['links'])) {
+        if (! empty($validated['links'])) {
             $submission->attachments()->createMany(
                 collect($validated['links'])->map(fn ($url) => [
                     'submission_type' => 'task', 'file_name' => $url, 'original_name' => $url,
@@ -1161,7 +1206,7 @@ class TaskController extends Controller
         $updateData = ['status' => 'submitted', 'submitted_at' => now()];
 
         if ($task->status === 'reopened') {
-            foreach (['rejected_at','rejected_by','rejection_comment','reopened_at','reopened_by','reopen_comment','reopen_instructions','reopen_new_deadline','reopen_file_path','reopen_file_name'] as $f) {
+            foreach (['rejected_at', 'rejected_by', 'rejection_comment', 'reopened_at', 'reopened_by', 'reopen_comment', 'reopen_instructions', 'reopen_new_deadline', 'reopen_file_path', 'reopen_file_name'] as $f) {
                 $updateData[$f] = null;
             }
         }
@@ -1178,8 +1223,8 @@ class TaskController extends Controller
                 'task',
                 $task->id,
                 'Task Submitted',
-                $user->name . ' has completed the task "' . $task->title . '" and submitted it for review.',
-                '/tasks/task-details/' . $task->id . '?from=taskby'
+                $user->name.' has completed the task "'.$task->title.'" and submitted it for review.',
+                '/tasks/task-details/'.$task->id.'?from=taskby'
             );
         }
 
@@ -1191,7 +1236,7 @@ class TaskController extends Controller
 
         // Log activity
         $isResubmitLabel = $isResubmit ? 'resubmitted' : 'submitted';
-        $this->activityService->log($user->id, 'task_' . $isResubmitLabel, 'You ' . $isResubmitLabel . ' task "' . $task->title . '" for review', 'task', $task->id);
+        $this->activityService->log($user->id, 'task_'.$isResubmitLabel, 'You '.$isResubmitLabel.' task "'.$task->title.'" for review', 'task', $task->id);
         $this->clearDashboardCache($user->id);
 
         return response()->json([
@@ -1210,17 +1255,21 @@ class TaskController extends Controller
     /**
      * Approve a submitted task. Only the task creator or admin/manager can approve.
      *
-     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
-     * @param  \App\Models\Task  $task  The task to approve (must be in 'submitted' status).
-     * @return \Illuminate\Http\JsonResponse  JSON response with the approved task.
+     * @param  Request  $request  The incoming HTTP request.
+     * @param  Task  $task  The task to approve (must be in 'submitted' status).
+     * @return JsonResponse JSON response with the approved task.
      */
     public function approve(Request $request, Task $task)
     {
         $user = $request->user();
         $isCreator = (int) $task->assigned_by === (int) $user->id;
 
-        if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        if ($task->status !== 'submitted') return response()->json(['success' => false, 'message' => 'Can only approve submitted tasks'], 422);
+        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        if ($task->status !== 'submitted') {
+            return response()->json(['success' => false, 'message' => 'Can only approve submitted tasks'], 422);
+        }
 
         $task->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id]);
 
@@ -1228,14 +1277,14 @@ class TaskController extends Controller
 
         $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
         $this->notificationService->notifyMultiple(
-            array_filter($assigneeIds, fn($id) => (int) $id !== (int) $user->id),
+            array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $user->id),
             $user->id,
             'task_approved',
             'task',
             $task->id,
             'Task Approved',
-            'Your task "' . $task->title . '" has been approved.',
-            '/tasks/task-details/' . $task->id . '?from=tasks'
+            'Your task "'.$task->title.'" has been approved.',
+            '/tasks/task-details/'.$task->id.'?from=tasks'
         );
 
         // Send confirmation email to performer
@@ -1245,7 +1294,7 @@ class TaskController extends Controller
         ]);
 
         // Log activity
-        $this->activityService->log($user->id, 'task_approved', 'You approved task "' . $task->title . '"', 'task', $task->id);
+        $this->activityService->log($user->id, 'task_approved', 'You approved task "'.$task->title.'"', 'task', $task->id);
         $this->clearDashboardCache($user->id);
 
         return response()->json([
@@ -1261,17 +1310,21 @@ class TaskController extends Controller
     /**
      * Reject a submitted task with an optional comment.
      *
-     * @param  \Illuminate\Http\Request  $request  Input: comment (optional).
-     * @param  \App\Models\Task  $task  The task to reject (must be in 'submitted' status).
-     * @return \Illuminate\Http\JsonResponse  JSON response with the rejected task.
+     * @param  Request  $request  Input: comment (optional).
+     * @param  Task  $task  The task to reject (must be in 'submitted' status).
+     * @return JsonResponse JSON response with the rejected task.
      */
     public function reject(Request $request, Task $task)
     {
         $user = $request->user();
         $isCreator = (int) $task->assigned_by === (int) $user->id;
 
-        if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        if ($task->status !== 'submitted') return response()->json(['success' => false, 'message' => 'Can only reject submitted tasks'], 422);
+        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        if ($task->status !== 'submitted') {
+            return response()->json(['success' => false, 'message' => 'Can only reject submitted tasks'], 422);
+        }
 
         $validated = $request->validate(['comment' => 'nullable|string|max:2000']);
 
@@ -1280,9 +1333,11 @@ class TaskController extends Controller
         TaskWorkflowEvent::create(['task_id' => $task->id, 'user_id' => $user->id, 'action' => 'rejected', 'comment' => $validated['comment'] ?? null]);
 
         $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
-        $assigneeIds = array_values(array_filter($assigneeIds, fn($id) => (int) $id !== (int) $user->id));
-        $rejectMsg = 'Your task "' . $task->title . '" has been rejected. Please make the required changes.';
-        if (!empty($validated['comment'])) $rejectMsg .= ' Reason: ' . $validated['comment'];
+        $assigneeIds = array_values(array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $user->id));
+        $rejectMsg = 'Your task "'.$task->title.'" has been rejected. Please make the required changes.';
+        if (! empty($validated['comment'])) {
+            $rejectMsg .= ' Reason: '.$validated['comment'];
+        }
 
         $this->notificationService->notifyMultiple(
             $assigneeIds,
@@ -1292,7 +1347,7 @@ class TaskController extends Controller
             $task->id,
             'Task Rejected',
             $rejectMsg,
-            '/tasks/task-details/' . $task->id . '?from=tasks'
+            '/tasks/task-details/'.$task->id.'?from=tasks'
         );
 
         // Send confirmation email to performer
@@ -1303,7 +1358,7 @@ class TaskController extends Controller
         ]);
 
         // Log activity
-        $this->activityService->log($user->id, 'task_rejected', 'You rejected task "' . $task->title . '"', 'task', $task->id);
+        $this->activityService->log($user->id, 'task_rejected', 'You rejected task "'.$task->title.'"', 'task', $task->id);
         $this->clearDashboardCache($user->id);
 
         return response()->json([
@@ -1319,17 +1374,21 @@ class TaskController extends Controller
     /**
      * Reopen a submitted task for revision with instructions and optional new deadline.
      *
-     * @param  \Illuminate\Http\Request  $request  Input: comment, instructions, new_deadline, file.
-     * @param  \App\Models\Task  $task  The task to reopen.
-     * @return \Illuminate\Http\JsonResponse  JSON response with the reopened task.
+     * @param  Request  $request  Input: comment, instructions, new_deadline, file.
+     * @param  Task  $task  The task to reopen.
+     * @return JsonResponse JSON response with the reopened task.
      */
     public function reopen(Request $request, Task $task)
     {
         $user = $request->user();
         $isCreator = (int) $task->assigned_by === (int) $user->id;
 
-        if (!$isCreator && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        if ($task->status !== 'submitted') return response()->json(['success' => false, 'message' => 'Can only reopen submitted tasks'], 422);
+        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        if ($task->status !== 'submitted') {
+            return response()->json(['success' => false, 'message' => 'Can only reopen submitted tasks'], 422);
+        }
 
         $validated = $request->validate([
             'comment' => 'nullable|string|max:2000', 'instructions' => 'nullable|string|max:2000',
@@ -1340,7 +1399,7 @@ class TaskController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $fileName = $file->getClientOriginalName();
-            $filePath = $file->store('task-reopen/' . $task->id, 'public');
+            $filePath = $file->store('task-reopen/'.$task->id, 'public');
         }
 
         $updateData = [
@@ -1348,8 +1407,14 @@ class TaskController extends Controller
             'reopen_comment' => $validated['comment'] ?? null,
             'reopen_instructions' => $validated['instructions'] ?? null,
         ];
-        if (!empty($validated['new_deadline'])) { $updateData['reopen_new_deadline'] = $validated['new_deadline']; $updateData['end_date'] = $validated['new_deadline']; }
-        if (!empty($filePath)) { $updateData['reopen_file_path'] = $filePath; $updateData['reopen_file_name'] = $fileName; }
+        if (! empty($validated['new_deadline'])) {
+            $updateData['reopen_new_deadline'] = $validated['new_deadline'];
+            $updateData['end_date'] = $validated['new_deadline'];
+        }
+        if (! empty($filePath)) {
+            $updateData['reopen_file_path'] = $filePath;
+            $updateData['reopen_file_name'] = $fileName;
+        }
 
         $task->update($updateData);
 
@@ -1360,10 +1425,14 @@ class TaskController extends Controller
         ]);
 
         $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
-        $assigneeIds = array_values(array_filter($assigneeIds, fn($id) => (int) $id !== (int) $user->id));
-        $reopenMsg = 'Your task "' . $task->title . '" has been reopened for revision.';
-        if (!empty($validated['comment'])) $reopenMsg .= ' Comment: ' . $validated['comment'];
-        if (!empty($validated['instructions'])) $reopenMsg .= ' Instructions: ' . $validated['instructions'];
+        $assigneeIds = array_values(array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $user->id));
+        $reopenMsg = 'Your task "'.$task->title.'" has been reopened for revision.';
+        if (! empty($validated['comment'])) {
+            $reopenMsg .= ' Comment: '.$validated['comment'];
+        }
+        if (! empty($validated['instructions'])) {
+            $reopenMsg .= ' Instructions: '.$validated['instructions'];
+        }
 
         $this->notificationService->notifyMultiple(
             $assigneeIds,
@@ -1373,7 +1442,7 @@ class TaskController extends Controller
             $task->id,
             'Task Reopened',
             $reopenMsg,
-            '/tasks/task-details/' . $task->id . '?from=tasks'
+            '/tasks/task-details/'.$task->id.'?from=tasks'
         );
 
         // Send confirmation email to performer
@@ -1384,7 +1453,7 @@ class TaskController extends Controller
         ]);
 
         // Log activity
-        $this->activityService->log($user->id, 'task_reopened', 'You reopened task "' . $task->title . '" for revision', 'task', $task->id);
+        $this->activityService->log($user->id, 'task_reopened', 'You reopened task "'.$task->title.'" for revision', 'task', $task->id);
         $this->clearDashboardCache($user->id);
 
         return response()->json([
@@ -1400,9 +1469,9 @@ class TaskController extends Controller
     /**
      * Get the most recent submission for a task.
      *
-     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
-     * @param  \App\Models\Task  $task  The task to get the latest submission for.
-     * @return \Illuminate\Http\JsonResponse  JSON response with the latest submission.
+     * @param  Request  $request  The incoming HTTP request.
+     * @param  Task  $task  The task to get the latest submission for.
+     * @return JsonResponse JSON response with the latest submission.
      */
     public function latestSubmission(Request $request, Task $task)
     {
@@ -1410,17 +1479,20 @@ class TaskController extends Controller
         $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
 
-        if (!$isCreator && !$isAssignee && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        if (! $isCreator && ! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
 
         $submission = TaskSubmission::where('task_id', $task->id)->with('submittedBy:id,name,email')->latest()->first();
+
         return response()->json(['success' => true, 'submission' => $submission]);
     }
 
     /**
      * Download the file attached to a task submission.
      *
-     * @param  \App\Models\TaskSubmission  $submission  The submission containing the file.
-     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse|\Illuminate\Http\JsonResponse  File download or error.
+     * @param  TaskSubmission  $submission  The submission containing the file.
+     * @return BinaryFileResponse|JsonResponse File download or error.
      */
     public function downloadSubmissionFile(TaskSubmission $submission)
     {
@@ -1429,8 +1501,12 @@ class TaskController extends Controller
         $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
 
-        if (!$isCreator && !$isAssignee && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        if (!$submission->file_path || !Storage::disk('public')->exists($submission->file_path)) return response()->json(['success' => false, 'message' => 'File not found'], 404);
+        if (! $isCreator && ! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        if (! $submission->file_path || ! Storage::disk('public')->exists($submission->file_path)) {
+            return response()->json(['success' => false, 'message' => 'File not found'], 404);
+        }
 
         return Storage::disk('public')->download($submission->file_path, $submission->file_name);
     }
@@ -1438,12 +1514,13 @@ class TaskController extends Controller
     /**
      * Mark all unviewed changes on a task as read.
      *
-     * @param  \App\Models\Task  $task  The task whose changes to mark.
-     * @return \Illuminate\Http\JsonResponse  JSON response confirming changes marked.
+     * @param  Task  $task  The task whose changes to mark.
+     * @return JsonResponse JSON response confirming changes marked.
      */
     public function markChangesRead(Task $task)
     {
         $task->changes()->where('is_viewed', false)->update(['is_viewed' => true]);
+
         return response()->json(['success' => true, 'message' => 'Changes marked as read']);
     }
 
@@ -1451,13 +1528,15 @@ class TaskController extends Controller
      * Delete a task and all its associated data (assignees, deliverables, files).
      * Only the task creator or admin/manager can delete.
      *
-     * @param  \App\Models\Task  $task  The task to delete.
-     * @return \Illuminate\Http\JsonResponse  JSON response confirming deletion.
+     * @param  Task  $task  The task to delete.
+     * @return JsonResponse JSON response confirming deletion.
      */
     public function destroy(Task $task)
     {
         $user = request()->user();
-        if ((int) $task->assigned_by !== (int) $user->id && !in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized — only the task creator can delete'], 403);
+        if ((int) $task->assigned_by !== (int) $user->id && ! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized — only the task creator can delete'], 403);
+        }
 
         $task->assignees()->detach();
         $task->deliverables()->delete();
@@ -1470,9 +1549,9 @@ class TaskController extends Controller
     /**
      * Upload a file to a task. Only the creator, assignee, or admin/manager can upload.
      *
-     * @param  \Illuminate\Http\Request  $request  Input: file (required, max 10MB).
-     * @param  \App\Models\Task  $task  The task to upload the file to.
-     * @return \Illuminate\Http\JsonResponse  JSON response with the created file record.
+     * @param  Request  $request  Input: file (required, max 10MB).
+     * @param  Task  $task  The task to upload the file to.
+     * @return JsonResponse JSON response with the created file record.
      */
     public function uploadFile(Request $request, Task $task)
     {
@@ -1481,22 +1560,26 @@ class TaskController extends Controller
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
 
-        if (!$isCreator && !$isAssignee && !$isAdminOrManager) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        if (strtolower((string) $task->status) === 'approved') return response()->json(['success' => false, 'message' => 'Approved tasks cannot be modified.'], 403);
+        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        if (strtolower((string) $task->status) === 'approved') {
+            return response()->json(['success' => false, 'message' => 'Approved tasks cannot be modified.'], 403);
+        }
 
         $request->validate(['file' => 'required|file|max:10240']);
         $file = $request->file('file');
-        $path = $file->store('task-files/' . $task->id, 'public');
+        $path = $file->store('task-files/'.$task->id, 'public');
 
-        return response()->json(['success' => true, 'message' => 'File uploaded successfully', 'file' => $task->files()->create(['name' => $file->getClientOriginalName(), 'url' => '/storage/' . $path])], 201);
+        return response()->json(['success' => true, 'message' => 'File uploaded successfully', 'file' => $task->files()->create(['name' => $file->getClientOriginalName(), 'url' => '/storage/'.$path])], 201);
     }
 
     /**
      * Add a URL link to a task. Only the creator, assignee, or admin/manager can add links.
      *
-     * @param  \Illuminate\Http\Request  $request  Input: url (required), name (optional).
-     * @param  \App\Models\Task  $task  The task to add the link to.
-     * @return \Illuminate\Http\JsonResponse  JSON response with the created file record.
+     * @param  Request  $request  Input: url (required), name (optional).
+     * @param  Task  $task  The task to add the link to.
+     * @return JsonResponse JSON response with the created file record.
      */
     public function addLink(Request $request, Task $task)
     {
@@ -1505,8 +1588,12 @@ class TaskController extends Controller
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
 
-        if (!$isCreator && !$isAssignee && !$isAdminOrManager) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        if (strtolower((string) $task->status) === 'approved') return response()->json(['success' => false, 'message' => 'Approved tasks cannot be modified.'], 403);
+        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        if (strtolower((string) $task->status) === 'approved') {
+            return response()->json(['success' => false, 'message' => 'Approved tasks cannot be modified.'], 403);
+        }
 
         $validated = $request->validate(['url' => 'required|url|max:2048', 'name' => 'nullable|string|max:255']);
 
@@ -1516,9 +1603,9 @@ class TaskController extends Controller
     /**
      * Delete a file or link from a task. Also removes the physical file if it exists on disk.
      *
-     * @param  \App\Models\Task  $task  The task the file belongs to.
-     * @param  \App\Models\TaskFile  $file  The file to delete.
-     * @return \Illuminate\Http\JsonResponse  JSON response confirming deletion.
+     * @param  Task  $task  The task the file belongs to.
+     * @param  TaskFile  $file  The file to delete.
+     * @return JsonResponse JSON response confirming deletion.
      */
     public function deleteFile(Task $task, TaskFile $file)
     {
@@ -1527,8 +1614,12 @@ class TaskController extends Controller
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
 
-        if (!$isCreator && !$isAssignee && !$isAdminOrManager) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        if (strtolower((string) $task->status) === 'approved') return response()->json(['success' => false, 'message' => 'Approved tasks cannot be modified.'], 403);
+        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        if (strtolower((string) $task->status) === 'approved') {
+            return response()->json(['success' => false, 'message' => 'Approved tasks cannot be modified.'], 403);
+        }
 
         if ($file->url && str_starts_with($file->url, '/storage/')) {
             $relativePath = str_replace('/storage/', '', $file->url);
@@ -1542,43 +1633,50 @@ class TaskController extends Controller
     /**
      * Reorder tasks by updating their sort_order values in bulk.
      *
-     * @param  \Illuminate\Http\Request  $request  Input: items[] with id and sort_order.
-     * @return \Illuminate\Http\JsonResponse  JSON response confirming reorder.
+     * @param  Request  $request  Input: items[] with id and sort_order.
+     * @return JsonResponse JSON response confirming reorder.
      */
     public function reorderTasks(Request $request)
     {
         $request->validate(['items' => 'required|array', 'items.*.id' => 'required|integer|exists:tasks,id', 'items.*.sort_order' => 'required|integer|min:0']);
-        $ids = []; $bindings = [];
-        foreach ($request->items as $item) { $ids[] = (int) $item['id']; $bindings[] = (int) $item['id']; $bindings[] = (int) $item['sort_order']; }
-        if (!empty($ids)) {
-            $ph = implode(',', array_fill(0, count($ids), '?'));
-            DB::statement("UPDATE tasks SET sort_order = CASE id " . implode(' ', array_fill(0, count($ids), 'WHEN ? THEN ?')) . " END WHERE id IN ($ph)", [...$bindings, ...$ids]);
+        $ids = [];
+        $bindings = [];
+        foreach ($request->items as $item) {
+            $ids[] = (int) $item['id'];
+            $bindings[] = (int) $item['id'];
+            $bindings[] = (int) $item['sort_order'];
         }
+        if (! empty($ids)) {
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            DB::statement('UPDATE tasks SET sort_order = CASE id '.implode(' ', array_fill(0, count($ids), 'WHEN ? THEN ?'))." END WHERE id IN ($ph)", [...$bindings, ...$ids]);
+        }
+
         return response()->json(['success' => true, 'message' => 'Tasks reordered successfully']);
     }
 
     /**
      * Send update notifications to all task assignees (excluding the updater).
      *
-     * @param  \App\Models\Task  $task  The updated task.
-     * @param  \App\Models\User  $updater  The user who made the update.
+     * @param  Task  $task  The updated task.
+     * @param  User  $updater  The user who made the update.
      * @param  int  $changeCount  Number of changes made.
-     * @return void
      */
     private function sendTaskUpdateNotification(Task $task, User $updater, array $changes = []): void
     {
-        if (!$task->relationLoaded('assignees')) $task->load('assignees:id');
+        if (! $task->relationLoaded('assignees')) {
+            $task->load('assignees:id');
+        }
         $assigneeIds = $task->assignees->pluck('id')->toArray();
 
-        $changeLabels = array_map(fn($c) => $c['label'] ?? ucwords(str_replace('_', ' ', $c['field_name'])), $changes);
+        $changeLabels = array_map(fn ($c) => $c['label'] ?? ucwords(str_replace('_', ' ', $c['field_name'])), $changes);
         $summary = count($changeLabels) > 0
-            ? implode(', ', array_slice($changeLabels, 0, 4)) . (count($changeLabels) > 4 ? ' and ' . (count($changeLabels) - 4) . ' more' : '')
+            ? implode(', ', array_slice($changeLabels, 0, 4)).(count($changeLabels) > 4 ? ' and '.(count($changeLabels) - 4).' more' : '')
             : 'details';
 
-        $msg = $updater->name . ' updated task "' . $task->title . '" — changed: ' . $summary . '.';
+        $msg = $updater->name.' updated task "'.$task->title.'" — changed: '.$summary.'.';
 
         $notifications = [];
-        foreach (array_filter($assigneeIds, fn($id) => (int) $id !== (int) $updater->id) as $assigneeId) {
+        foreach (array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $updater->id) as $assigneeId) {
             $notifications[] = [
                 'user_id' => $assigneeId,
                 'sender_user_id' => $updater->id,
@@ -1587,7 +1685,7 @@ class TaskController extends Controller
                 'related_id' => $task->id,
                 'title' => 'Task Updated',
                 'message' => $msg,
-                'link' => '/tasks/task-details/' . $task->id . '?from=tasks',
+                'link' => '/tasks/task-details/'.$task->id.'?from=tasks',
             ];
         }
 
@@ -1597,22 +1695,31 @@ class TaskController extends Controller
     /**
      * Get the list of statuses considered as pending/in-progress for filtering.
      *
-     * @return array  Array of status strings.
+     * @return array Array of status strings.
      */
-    private function pendingTaskStatuses(): array { return ['pending', 'in_progress', 'In Progress', 'Planned', 'submitted', 'reopened', 'rejected']; }
+    private function pendingTaskStatuses(): array
+    {
+        return ['pending', 'in_progress', 'In Progress', 'Planned', 'submitted', 'reopened', 'rejected'];
+    }
 
     /**
      * Get the list of statuses that indicate a task is completed (for due-today exclusion).
      *
-     * @return array  Array of completed status strings.
+     * @return array Array of completed status strings.
      */
-    private function incompleteDueTodayStatuses(): array { return ['approved', 'completed', 'done']; }
+    private function incompleteDueTodayStatuses(): array
+    {
+        return ['approved', 'completed', 'done'];
+    }
 
     /**
      * Apply a due-today filter to a query (tasks due today that are not yet completed).
      *
-     * @param  \Illuminate\Database\Eloquent\Builder  $query  The query to filter.
-     * @return \Illuminate\Database\Eloquent\Builder  The filtered query.
+     * @param  Builder  $query  The query to filter.
+     * @return Builder The filtered query.
      */
-    private function applyDueTodayFilter($query) { return $query->whereDate('end_date', today())->whereNotIn('status', $this->incompleteDueTodayStatuses()); }
+    private function applyDueTodayFilter($query)
+    {
+        return $query->whereDate('end_date', today())->whereNotIn('status', $this->incompleteDueTodayStatuses());
+    }
 }

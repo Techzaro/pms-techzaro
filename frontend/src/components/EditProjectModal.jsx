@@ -729,7 +729,7 @@ const EditProjectModal = ({ project, onClose }) => {
               </div>
               <div className="cp-field">
                 <label style={{ fontSize: "13px" }}>Budget</label>
-                <input type="number" name="budget" placeholder="Budget amount" min="0" step="0.01" value={form.budget} onChange={handleChange} />
+                <input type="number" name="budget" placeholder="Budget amount (PKR)" min="0" step="0.01" value={form.budget} onChange={handleChange} />
               </div>
             </div>
 

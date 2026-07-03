@@ -33,6 +33,9 @@ class UserCreated extends Mailable
     /** @var array All attachments for admin (standard + uploaded) */
     private array $adminAttachments = [];
 
+    /** @var array User-uploaded docs (Employment Contract, Offer Letter, Regulations) for personal email */
+    private array $userDocAttachments = [];
+
     public function __construct(User $user, string $password, string $professionalEmail, string $professionalPassword, string $loginUrl, array $attachments = [], bool $isAdminConfirmation = false, string $createdBy = '', string $senderEmail = '', string $senderName = 'PMS Techxaro')
     {
         $this->user = $user;
@@ -45,8 +48,6 @@ class UserCreated extends Mailable
         $this->createdBy = $createdBy;
         $this->senderEmail = $senderEmail ?: config('mail.from.address');
         $this->senderName = $senderName ?: config('mail.from.name');
-
-        $this->resolveAttachments();
     }
 
     /**
@@ -62,41 +63,50 @@ class UserCreated extends Mailable
         $disk = config('company.disk', 'public');
         $uploadDir = config('company.upload_dir', 'company_docs');
         $validExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
-        $types = ['company_logo', 'qr_code', 'employment_contract', 'offer_letter', 'techxaro_regulations'];
+        $singleTypes = ['company_logo', 'qr_code'];
 
-        // Scan storage for files matching type prefix (handles any extension)
         $allFiles = Storage::disk($disk)->files($uploadDir);
         $found = [];
+        $otherDocFiles = [];
         foreach ($allFiles as $file) {
             $basename = basename($file);
-            foreach ($types as $type) {
+            foreach ($singleTypes as $type) {
                 foreach ($validExtensions as $ext) {
                     if ($basename === $type . '.' . $ext) {
                         $found[$type] = $file;
                     }
                 }
             }
+            if (str_starts_with($basename, 'other_document_')) {
+                foreach ($validExtensions as $ext) {
+                    if (str_ends_with($basename, '.' . $ext)) {
+                        $otherDocFiles[] = $file;
+                        break;
+                    }
+                }
+            }
         }
 
-        // Resolve standard company documents → [fieldName => fullDiskPath]
         foreach ($found as $key => $path) {
             $this->standardAttachments[$key] = Storage::disk($disk)->path($path);
         }
 
-        // Normalize docAttachments from [fullPath => fieldName] to [fieldName => fullPath]
+        foreach ($otherDocFiles as $path) {
+            $this->standardAttachments['other_document_' . basename($path)] = Storage::disk($disk)->path($path);
+        }
+
         $normalizedUploaded = [];
         foreach ($this->docAttachments as $filePath => $fieldName) {
             if (is_string($filePath) && is_string($fieldName)) {
-                // Controller passes [fullDiskPath => fieldName], swap to [fieldName => fullDiskPath]
                 $normalizedUploaded[$fieldName] = $filePath;
             } elseif (is_string($fieldName) && is_int($filePath)) {
-                // Just in case: numeric key with path value
                 $normalizedUploaded[$fieldName] = $fieldName;
             }
         }
 
-        // Admin gets standard + all uploaded user documents
         $this->adminAttachments = array_merge($this->standardAttachments, $normalizedUploaded);
+
+        $this->userDocAttachments = array_filter($normalizedUploaded, fn ($k) => in_array($k, ['employment_contract', 'offer_letter', 'techxaro_regulations']), ARRAY_FILTER_USE_KEY);
     }
 
     public function envelope(): Envelope
@@ -126,9 +136,11 @@ class UserCreated extends Mailable
      */
     public function build(): self
     {
+        $this->resolveAttachments();
+
         $attachmentsToUse = $this->isAdminConfirmation
             ? $this->adminAttachments
-            : $this->standardAttachments;
+            : array_merge($this->standardAttachments, $this->userDocAttachments);
 
         foreach ($attachmentsToUse as $key => $filePath) {
             if (file_exists($filePath)) {
@@ -149,15 +161,12 @@ class UserCreated extends Mailable
     private function getAttachmentsForHtml(): array
     {
         $labels = config('company.document_labels', []) + [
-            'employment_contract' => 'Employment Contract',
-            'offer_letter' => 'Offer Letter',
-            'techxaro_regulations' => 'TechXaro Regulations',
             'other_document' => 'Other Document',
         ];
 
         $source = $this->isAdminConfirmation
             ? $this->adminAttachments
-            : $this->standardAttachments;
+            : array_merge($this->standardAttachments, $this->userDocAttachments);
 
         $result = [];
         foreach ($source as $key => $filePath) {
@@ -202,7 +211,7 @@ class UserCreated extends Mailable
         $designation = e($this->user->designation ?? 'Team Member');
 
         $sharedCredentials = $this->buildCredentialsHtml($loginUrl, $profEmail, $password, $profPassword);
-        $sharedSteps = $this->buildStepsHtml($profEmail, $employeeCode);
+        $sharedSteps = $this->buildStepsHtml($profEmail, $employeeCode, $this->isAdminConfirmation);
         $sharedAttachments = $this->buildAttachmentsSection();
 
         if ($this->isAdminConfirmation) {
@@ -267,13 +276,14 @@ class UserCreated extends Mailable
         HTML;
     }
 
-    private function buildStepsHtml(string $profEmail, string $employeeCode): string
+    private function buildStepsHtml(string $profEmail, string $employeeCode, bool $isWelcome = false): string
     {
+        $codeLabel = $isWelcome ? 'The Employee Code is' : 'Your Employee Code is';
         return <<<HTML
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
                 <tr>
                     <td style="padding:10px 0;color:#111827;font-size:14px;line-height:1.7;vertical-align:top;">
-                        <strong>1.</strong> Your Employee Code is <strong>{$employeeCode}</strong>.
+                        <strong>1.</strong> {$codeLabel} <strong>{$employeeCode}</strong>.
                     </td>
                 </tr>
                 <tr>

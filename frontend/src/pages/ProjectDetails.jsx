@@ -15,7 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
-  DollarSign,
+  Banknote,
   Eye,
   FolderOpen,
   ListChecks,
@@ -602,12 +602,12 @@ function ProjectDetails() {
             {isAdminOrManager && (
               <li>
                 <span className="pd-meta-rows__ic">
-                  <DollarSign size={18} />
+                  <Banknote size={18} />
                 </span>
                 <div>
                   <span className="pd-meta-rows__label">Budget</span>
                   <span className="pd-meta-rows__value">
-                    {project.budget != null && project.budget !== "" ? `USD ${Number(project.budget).toLocaleString()}` : "—"}
+                    {project.budget != null && project.budget !== "" ? `PKR ${Number(project.budget).toLocaleString()}` : "—"}
                   </span>
                 </div>
               </li>

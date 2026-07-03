@@ -29,9 +29,6 @@ return [
     'documents' => [
         'company_logo' => env('COMPANY_LOGO_PATH', 'company_docs/company_logo.png'),
         'qr_code' => env('COMPANY_QR_CODE_PATH', 'company_docs/qr_code.png'),
-        'employment_contract' => env('COMPANY_EMPLOYMENT_CONTRACT_PATH', 'company_docs/employment_contract.pdf'),
-        'offer_letter' => env('COMPANY_OFFER_LETTER_PATH', 'company_docs/offer_letter.pdf'),
-        'techxaro_regulations' => env('COMPANY_REGULATIONS_PATH', 'company_docs/techxaro_regulations.pdf'),
     ],
 
     /*
@@ -43,9 +40,7 @@ return [
     'document_labels' => [
         'company_logo' => 'TechXaro Company Logo',
         'qr_code' => 'Company QR Code',
-        'employment_contract' => 'Employment Contract',
-        'offer_letter' => 'Offer Letter',
-        'techxaro_regulations' => 'TechXaro Regulations',
+        'other_documents' => 'Other Documents',
     ],
 
     /*

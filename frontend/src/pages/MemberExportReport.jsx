@@ -12,10 +12,10 @@
  * summary and a manager-remarks section.
  */
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import { jsPDF } from "jspdf";
-import html2canvas from "html2canvas";
+import autoTable from "jspdf-autotable";
 import DonutChart from "../components/DonutChart";
 import "../components/Charts.css";
 import "../pages/ExportReport.css";
@@ -99,7 +99,6 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
   const [customEnd, setCustomEnd] = useState("");
   const [generating, setGenerating] = useState(false);
   const [showReview, setShowReview] = useState(false);
-  const reportRef = useRef(null);
 
   const user = userData?.user || {};
   const summary = userData?.summary || {};
@@ -163,7 +162,6 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
   const now = new Date();
   const genDate = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const genTime = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
-  const genBy = user.name || "Admin";
   const roleDisplay = user.role
     ? user.role === "team_lead" || user.role === "teamlead"
       ? "Team Lead"
@@ -172,27 +170,309 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
   const empId = user.employee_id || "EMP-" + String(user.id || 0).padStart(4, "0");
 
   // ═══════════════════════════ PDF GENERATION ═══════════════════════════
-  const generatePDF = async () => {
+  const generatePDF = () => {
     setGenerating(true);
     try {
-      const el = reportRef.current;
-      if (!el) return;
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: "#ffffff",
-      });
-      const imgData = canvas.toDataURL("image/png");
       const doc = new jsPDF("p", "mm", "a4");
-      const pw = doc.internal.pageSize.getWidth();
-      const ph = doc.internal.pageSize.getHeight();
-      const imgW = canvas.width;
-      const imgH = canvas.height;
-      const ratio = Math.min(pw / imgW, ph / imgH);
-      const dw = imgW * ratio;
-      const dh = imgH * ratio;
-      doc.addImage(imgData, "PNG", (pw - dw) / 2, 0, dw, dh);
+      const PW = doc.internal.pageSize.getWidth();
+      const PH = doc.internal.pageSize.getHeight();
+      const M = 14;
+      const CW = PW - M * 2;
+      let y = 0;
+
+      // ── HEADER ──
+      doc.setFillColor(15, 23, 42); doc.rect(0, 0, PW, 14, "F");
+      doc.setFillColor(79, 70, 229); doc.roundedRect(M, 2.5, 8, 8, 1.5, 1.5, "F");
+      doc.setFontSize(5.5); doc.setFont("helvetica", "bold");
+      doc.setTextColor(255, 255, 255); doc.text("TX", M + 4, 8, { align: "center" });
+      doc.setFontSize(9); doc.setFont("helvetica", "bold");
+      doc.setTextColor(255, 255, 255); doc.text("Techxaro", M + 12, 6.5);
+      doc.setFontSize(5.5); doc.setFont("helvetica", "normal");
+      doc.setTextColor(148, 163, 184); doc.text("PMS Portal", M + 12, 10.5);
+      doc.setFontSize(11); doc.setFont("helvetica", "bold");
+      doc.setTextColor(255, 255, 255);
+      doc.text(`${reportLabel} PERFORMANCE REPORT`, PW / 2, 8, { align: "center" });
+      y = 18;
+
+      // ── PROFILE ──
+      doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
+      doc.roundedRect(M, y, CW, 24, 2, 2, "S");
+      doc.setFillColor(209, 213, 219); doc.circle(M + 14, y + 12, 7.5, "F");
+      doc.setFillColor(180, 185, 195); doc.roundedRect(M + 10, y + 8, 8, 6, 1, 1, "F");
+      doc.setFillColor(229, 231, 235); doc.rect(M + 12, y + 6, 4, 2, "F");
+      doc.setFontSize(8); doc.setFont("helvetica", "bold");
+      doc.setTextColor(17, 24, 39); doc.text(user.name || "Unknown User", M + 27, y + 7);
+      doc.setFontSize(5.5); doc.setFont("helvetica", "normal");
+      doc.setTextColor(107, 114, 128); doc.text(roleDisplay, M + 27, y + 12);
+      doc.setTextColor(99, 102, 241); doc.setFont("helvetica", "bold");
+      doc.text(user.team || "", M + 27, y + 16);
+      // Profile right side — 2-col grid
+      const profileRX = M + CW / 2 + 5;
+      const profileData = [
+        ["Employee ID:", empId, "Role:", roleDisplay],
+        ["Report Period:", dateRangeLabels[dateRange], "Reporting To:", user.reporting_to || "-"],
+        ["Total Work Items:", String(totalItems), "Report Date:", genDate],
+        ["Team:", user.team || "-", "Report Time:", genTime],
+      ];
+      profileData.forEach((row, ri) => {
+        const ry = y + 4 + ri * 5;
+        doc.setFontSize(5); doc.setFont("helvetica", "normal"); doc.setTextColor(107, 114, 128);
+        doc.text(row[0], profileRX, ry);
+        doc.setFont("helvetica", "bold"); doc.setTextColor(17, 24, 39);
+        doc.text(String(row[1]).substring(0, 28), profileRX + 28, ry);
+        doc.setFont("helvetica", "normal"); doc.setTextColor(107, 114, 128);
+        doc.text(row[2], profileRX + CW / 2 - 12, ry);
+        doc.setFont("helvetica", "bold"); doc.setTextColor(17, 24, 39);
+        doc.text(String(row[3]).substring(0, 28), profileRX + CW / 2 + 16, ry);
+      });
+      y += 30;
+
+      // ── SUMMARY CARDS ──
+      const cGap = 4, cW = (CW - cGap * 3) / 4;
+      cardMeta.forEach((c, i) => {
+        const cx = M + i * (cW + cGap);
+        doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
+        doc.roundedRect(cx, y, cW, 22, 2, 2, "S");
+        doc.setFillColor(...(c.key === "total_assigned" ? [79, 70, 229] : c.key === "approved" ? [34, 197, 94] : c.key === "pending" ? [245, 158, 11] : [239, 68, 68]));
+        doc.circle(cx + 9, y + 6, 4.5, "F");
+        doc.setFillColor(255, 255, 255); doc.circle(cx + 9, y + 6, 2, "F");
+        doc.setFontSize(6); doc.setFont("helvetica", "normal");
+        doc.setTextColor(107, 114, 128); doc.text(c.label, cx + 18, y + 6);
+        doc.setFontSize(18); doc.setFont("helvetica", "bold");
+        doc.setTextColor(...(c.key === "total_assigned" ? [79, 70, 229] : c.key === "approved" ? [34, 197, 94] : c.key === "pending" ? [245, 158, 11] : [239, 68, 68]));
+        doc.text(String(c.value), cx + 18, y + 16);
+        doc.setFontSize(5); doc.setFont("helvetica", "normal");
+        doc.setTextColor(156, 163, 175);
+        const subs = { total_assigned: "All tasks and projects", approved: "Tasks completed", pending: "Tasks in progress", overdue: "Require attention" };
+        doc.text(subs[c.key], cx + cW / 2, y + 20, { align: "center" });
+      });
+      y += 30;
+
+      // ── TWO COLUMNS: STATUS BREAKDOWN + PRIORITY DISTRIBUTION ──
+      const halfW = (CW - 5) / 2;
+
+      // Left: Status Breakdown with Donut
+      doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
+      doc.roundedRect(M, y, halfW, 42, 2, 2, "S");
+      doc.setFontSize(8); doc.setFont("helvetica", "bold");
+      doc.setTextColor(17, 24, 39); doc.text("TASK STATUS BREAKDOWN", M + 5, y + 6);
+      const bStatuses = [
+        { label: "Approved", count: sc.approved, color: [16, 185, 129] },
+        { label: "Pending", count: sc.pending, color: [245, 158, 11] },
+        { label: "In Review", count: sc.submitted + sc.reopened, color: [99, 102, 241] },
+        { label: "Overdue", count: sc.overdue, color: [239, 68, 68] },
+      ];
+      const stTotal = bStatuses.reduce((s, x) => s + x.count, 0) || 1;
+      const donutCx = M + 22, donutCy = y + 26, outerR = 12, innerR = 8;
+      let startAngle = -Math.PI / 2;
+      bStatuses.forEach((s) => {
+        if (s.count <= 0) return;
+        const sweep = (s.count / stTotal) * 2 * Math.PI;
+        const endAngle = startAngle + sweep;
+        const segments = Math.max(Math.ceil(sweep / (Math.PI / 8)), 2);
+        const step = sweep / segments;
+        const points = [];
+        for (let i = 0; i <= segments; i++) {
+          const a = startAngle + i * step;
+          points.push([donutCx + outerR * Math.cos(a), donutCy + outerR * Math.sin(a)]);
+        }
+        for (let i = segments; i >= 0; i--) {
+          const a = startAngle + i * step;
+          points.push([donutCx + innerR * Math.cos(a), donutCy + innerR * Math.sin(a)]);
+        }
+        doc.setFillColor(...s.color); doc.setDrawColor(...s.color); doc.setLineWidth(0.01);
+        doc.lines(points.map((p, i) => i === 0 ? [0, 0] : [p[0] - points[i - 1][0], p[1] - points[i - 1][1]]), points[0][0], points[0][1], [1, 1], "F");
+        startAngle = endAngle;
+      });
+      doc.setFontSize(14); doc.setFont("helvetica", "bold"); doc.setTextColor(17, 24, 39);
+      doc.text(String(stTotal), donutCx, donutCy + 1, { align: "center" });
+      doc.setFontSize(4.5); doc.setFont("helvetica", "normal"); doc.setTextColor(156, 163, 175);
+      doc.text("Total Tasks", donutCx, donutCy + 5, { align: "center" });
+      const lgX = M + 46;
+      bStatuses.forEach((s, i) => {
+        const sy = y + 17 + i * 7;
+        const pct = stTotal > 0 ? Math.round((s.count / stTotal) * 100) : 0;
+        doc.setFillColor(...s.color); doc.circle(lgX, sy, 1.5, "F");
+        doc.setFontSize(6); doc.setFont("helvetica", "normal");
+        doc.setTextColor(55, 65, 81); doc.text(s.label, lgX + 4, sy + 0.5);
+        doc.setFont("helvetica", "bold"); doc.setTextColor(17, 24, 39);
+        doc.text(`${s.count} (${pct}%)`, M + halfW - 5, sy + 0.5, { align: "right" });
+      });
+
+      // Right: Priority Distribution
+      const rX = M + halfW + 5;
+      doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
+      doc.roundedRect(rX, y, halfW, 42, 2, 2, "S");
+      doc.setFontSize(8); doc.setFont("helvetica", "bold");
+      doc.setTextColor(17, 24, 39); doc.text("PRIORITY DISTRIBUTION", rX + 5, y + 6);
+      const totalP = (priorityDistribution.high ?? 0) + (priorityDistribution.medium ?? 0) + (priorityDistribution.low ?? 0);
+      doc.setFontSize(5.5); doc.setFont("helvetica", "normal");
+      doc.setTextColor(156, 163, 175); doc.text(`${totalP} Total Tasks`, rX + 5, y + 10.5);
+      const priorityItems = [
+        { label: "High", count: priorityDistribution.high ?? 0, color: [239, 68, 68] },
+        { label: "Medium", count: priorityDistribution.medium ?? 0, color: [245, 158, 11] },
+        { label: "Low", count: priorityDistribution.low ?? 0, color: [16, 185, 129] },
+      ];
+      priorityItems.forEach((p, i) => {
+        const sy = y + 18 + i * 9;
+        const pct = totalP > 0 ? Math.round((p.count / totalP) * 100) : 0;
+        doc.setFontSize(6); doc.setFont("helvetica", "normal");
+        doc.setTextColor(55, 65, 81); doc.text(p.label, rX + 5, sy);
+        doc.setTextColor(156, 163, 175); doc.text(`${p.count} (${pct}%)`, rX + halfW - 5, sy, { align: "right" });
+        const barX = rX + 5, barMax = halfW - 10;
+        doc.setFillColor(229, 231, 235); doc.roundedRect(barX, sy + 1.5, barMax, 3, 1, 1, "F");
+        if (pct > 0) { doc.setFillColor(...p.color); doc.roundedRect(barX, sy + 1.5, barMax * (pct / 100), 3, 1, 1, "F"); }
+      });
+      y += 50;
+
+      // ── TASKS & PROJECTS TABLE ──
+      if (y > 220) { doc.addPage(); y = 16; }
+      doc.setFontSize(9); doc.setFont("helvetica", "bold");
+      doc.setTextColor(17, 24, 39); doc.text("TASKS & PROJECTS DETAILS", M, y + 2);
+      y += 6;
+
+      const taskTableData = filteredItems.map((item, idx) => {
+        const progress = calculateProgress(item);
+        const isProject = item.item_type === "project";
+        const st = isProject ? (["submitted", "approved", "rejected", "reopened"].includes(item.status) ? formatStatus(item.status) : "Pending") : formatStatus(item.status);
+        const due = item.end_date ? formatDateShort(item.end_date) : "-";
+        return [
+          String(idx + 1),
+          (item.title || item.name || "-").substring(0, 36),
+          isProject ? "Project" : "Task",
+          st,
+          `${progress}%`,
+          item.priority || "Medium",
+          due,
+        ];
+      });
+
+      autoTable(doc, {
+        startY: y,
+        margin: { left: M, right: M },
+        head: [["#", "Task / Project Name", "Type", "Status", "Progress", "Priority", "Due Date"]],
+        body: taskTableData,
+        theme: "plain",
+        styles: { fontSize: 6, cellPadding: 3, textColor: [55, 65, 81], lineColor: [229, 231, 235], lineWidth: 0.1 },
+        headStyles: { fillColor: [17, 24, 39], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 6, cellPadding: 2.5 },
+        alternateRowStyles: { fillColor: [249, 250, 251] },
+        columnStyles: {
+          0: { cellWidth: 8, halign: "center" },
+          1: { cellWidth: "auto" },
+          2: { cellWidth: 18, halign: "center" },
+          3: { cellWidth: 20, halign: "center" },
+          4: { cellWidth: 20, halign: "center" },
+          5: { cellWidth: 18, halign: "center" },
+          6: { cellWidth: 22, halign: "center" },
+        },
+        didParseCell(data) {
+          if (data.section === "body") {
+            if (data.column.index === 1) data.cell.styles.fontStyle = "bold";
+            if (data.column.index === 3 || data.column.index === 5) data.cell.styles.fontStyle = "bold";
+          }
+        },
+        didDrawCell(data) {
+          if (data.section === "body" && data.column.index === 4) {
+            const pctVal = parseInt(data.cell.raw) || 0;
+            const { x: cx, y: cy, height: ch, width: cw } = data.cell;
+            const barY = cy + ch - 3.5;
+            const barMaxW = cw - 4;
+            doc.setFillColor(229, 231, 235); doc.roundedRect(cx + 2, barY, barMaxW, 2, 1, 1, "F");
+            if (pctVal > 0) {
+              const barCol = pctVal >= 80 ? [34, 197, 94] : pctVal >= 50 ? [245, 158, 11] : [239, 68, 68];
+              doc.setFillColor(...barCol); doc.roundedRect(cx + 2, barY, barMaxW * (pctVal / 100), 2, 1, 1, "F");
+            }
+          }
+        },
+      });
+      y = doc.lastAutoTable.finalY + 5;
+
+      // ── DELIVERABLES ──
+      if (y > 220) { doc.addPage(); y = 16; }
+      const qHalf = (CW - 5) / 2;
+
+      // Left: Deliverables Summary
+      doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
+      doc.roundedRect(M, y, qHalf, 42, 2, 2, "S");
+      doc.setFontSize(8); doc.setFont("helvetica", "bold");
+      doc.setTextColor(17, 24, 39); doc.text("DELIVERABLES SUMMARY", M + 5, y + 7);
+      const delivItems = [
+        { label: "Total Deliverables", count: delivSummary.total ?? 0, color: [99, 102, 241] },
+        { label: "Submitted", count: delivSummary.submitted ?? 0, color: [245, 158, 11] },
+        { label: "Approved", count: delivSummary.approved ?? 0, color: [34, 197, 94] },
+        { label: "Pending Review", count: delivSummary.pending_review ?? 0, color: [245, 158, 11] },
+        { label: "Rejected", count: delivSummary.rejected ?? 0, color: [239, 68, 68] },
+        { label: "Reopened", count: delivSummary.reopened ?? 0, color: [99, 102, 241] },
+      ];
+      delivItems.forEach((d, i) => {
+        const dy = y + 14 + i * 4.5;
+        doc.setFillColor(...d.color); doc.circle(M + 8, dy, 1.2, "F");
+        doc.setFontSize(5.5); doc.setFont("helvetica", "normal");
+        doc.setTextColor(55, 65, 81); doc.text(d.label, M + 12, dy + 0.5);
+        doc.setFont("helvetica", "bold"); doc.setTextColor(17, 24, 39);
+        doc.text(String(d.count), M + qHalf - 5, dy + 0.5, { align: "right" });
+      });
+
+      // Right: Deliverables Details
+      const ddX = M + qHalf + 5;
+      doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
+      doc.roundedRect(ddX, y, qHalf, 42, 2, 2, "S");
+      doc.setFontSize(8); doc.setFont("helvetica", "bold");
+      doc.setTextColor(17, 24, 39); doc.text("DELIVERABLES DETAILS", ddX + 5, y + 7);
+      if (deliverables.length === 0) {
+        doc.setFontSize(5.5); doc.setFont("helvetica", "normal"); doc.setTextColor(152, 163, 175);
+        doc.text("No deliverables found.", ddX + qHalf / 2, y + 24, { align: "center" });
+      } else {
+        const delivTableData = deliverables.slice(0, 6).map((d, i) => [
+          String(i + 1),
+          (d.title || "-").substring(0, 20),
+          formatStatus(d.status),
+          d.submitted_at ? formatDateShort(d.submitted_at) : "-",
+          d.approved_at ? formatDateShort(d.approved_at) : "-",
+        ]);
+        autoTable(doc, {
+          startY: y + 10,
+          margin: { left: ddX + 3, right: ddX + 3 },
+          head: [["#", "Name", "Status", "Submitted", "Approved"]],
+          body: delivTableData,
+          theme: "plain",
+          styles: { fontSize: 5, cellPadding: 2, textColor: [55, 65, 81], lineColor: [229, 231, 235], lineWidth: 0.05 },
+          headStyles: { fillColor: [249, 250, 251], textColor: [107, 114, 128], fontStyle: "bold", fontSize: 5, cellPadding: 2 },
+          columnStyles: { 0: { cellWidth: 8, halign: "center" }, 1: { cellWidth: "auto" }, 2: { cellWidth: 22, halign: "center" }, 3: { cellWidth: 22, halign: "center" }, 4: { cellWidth: 22, halign: "center" } },
+        });
+      }
+      y += 50;
+
+      // ── MANAGER REMARKS ──
+      if (y > 240) { doc.addPage(); y = 16; }
+      doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
+      doc.roundedRect(M, y, CW, 28, 2, 2, "S");
+      doc.setFontSize(8); doc.setFont("helvetica", "bold");
+      doc.setTextColor(17, 24, 39); doc.text("MANAGER REMARKS", M + 5, y + 7);
+      for (let i = 0; i < 4; i++) { doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.1); doc.line(M + 5, y + 13 + i * 4, M + CW - 60, y + 13 + i * 4); }
+      doc.setFontSize(5); doc.setFont("helvetica", "normal"); doc.setTextColor(107, 114, 128);
+      doc.text("Manager Signature", PW - M - 20, y + 7, { align: "center" });
+      doc.setDrawColor(17, 24, 39); doc.setLineWidth(0.1);
+      doc.line(PW - M - 35, y + 15, PW - M - 5, y + 15);
+      doc.text("Date", PW - M - 20, y + 19, { align: "center" });
+      doc.line(PW - M - 35, y + 25, PW - M - 5, y + 25);
+      y += 36;
+
+      // ── FOOTER ──
+      const fY = PH - 10;
+      doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
+      doc.line(M, fY, PW - M, fY);
+      doc.setFillColor(79, 70, 229); doc.roundedRect(M, fY + 1.5, 5.5, 5.5, 1, 1, "F");
+      doc.setFontSize(4); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
+      doc.text("TX", M + 2.75, fY + 5, { align: "center" });
+      doc.setFontSize(5); doc.setFont("helvetica", "bold"); doc.setTextColor(107, 114, 128);
+      doc.text("Techxaro", M + 8.5, fY + 4);
+      doc.setFontSize(4.5); doc.setFont("helvetica", "normal"); doc.setTextColor(156, 163, 175);
+      doc.text("PMS Portal", M + 8.5, fY + 7.5);
+      doc.text(`Generated Date:   ${genDate}  |  Generated Time:   ${genTime}`, M + 38, fY + 4);
+      doc.text(`Report Type:  ${reportLabelTitle} Performance Report`, PW - M - 50, fY + 4);
+      doc.text("Page 1 of 1", PW - M, fY + 7.5, { align: "right" });
+
       doc.save(`${reportLabelTitle}-Performance-Report-${(user.name || "user").replace(/\s+/g, "-")}.pdf`);
     } catch (err) {
       console.error("PDF generation error:", err);
@@ -278,10 +558,9 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
             </button>
 
             <div style={{ padding: "0", background: "#fff" }}>
-              <div ref={reportRef}>
               {/* ═══ HEADER ═══ */}
-              <div style={{ background: "#0f172a", padding: "14px 28px", display: "flex", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="erm-header">
+                <div className="erm-header-left">
                   <div style={{ width: 26, height: 26, borderRadius: 5, background: "#6366f1", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>TX</span>
                   </div>
@@ -290,19 +569,14 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                     <div style={{ fontSize: 8, color: "#94a3b8" }}>PMS Portal</div>
                   </div>
                 </div>
-                <div style={{ flex: 1, textAlign: "center" }}>
+                <div className="erm-header-center">
                   <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{reportLabel} PERFORMANCE REPORT</span>
-                </div>
-                <div style={{ textAlign: "right", fontSize: 9, color: "#fff", lineHeight: 1.8 }}>
-                  <div>Generated On:  {genDate}</div>
-                  <div>Generated By:  {genBy}</div>
-                  <div>Report Type:  {reportLabelTitle} Performance Report</div>
                 </div>
               </div>
 
               {/* ═══ PROFILE ═══ */}
-              <div style={{ margin: "14px 28px", border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px 16px", display: "flex" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+              <div className="erm-profile">
+                <div className="erm-profile-left">
                   <div style={{ width: 38, height: 38, borderRadius: "50%", background: "#d1d5db", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <svg width="20" height="20" viewBox="0 0 48 48" fill="#9ca3af"><circle cx="24" cy="18" r="8" /><path d="M5 46c0-11 9-20 20-20s20 9 20 20" /></svg>
                   </div>
@@ -312,7 +586,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                     <div style={{ fontSize: 9, fontWeight: 600, color: "#6366f1" }}>{user.team || ""}</div>
                   </div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gapX: 16, gapY: 2, fontSize: 9, minWidth: 340 }}>
+                <div className="erm-profile-right">
                   {[
                     { lbl: "Employee ID", val: empId, col: 1 }, { lbl: "Role", val: roleDisplay, col: 2 },
                     { lbl: "Report Period", val: dateRangeLabels[dateRange], col: 1 }, { lbl: "Reporting To", val: user.reporting_to || "-", col: 2 },
@@ -328,7 +602,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               </div>
 
               {/* ═══ SUMMARY CARDS ═══ */}
-              <div style={{ margin: "0 28px 14px", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+              <div className="erm-summary-grid">
                 {cardMeta.map((c) => (
                   <div key={c.key} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -346,7 +620,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               </div>
 
               {/* ═══ TWO COLUMNS ═══ */}
-              <div style={{ margin: "0 28px 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div className="erm-two-col">
                 {/* Left: Status Breakdown */}
                 <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 8 }}>TASK STATUS BREAKDOWN</div>
@@ -394,19 +668,19 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               </div>
 
               {/* ═══ TASKS TABLE ═══ */}
-              <div style={{ margin: "0 28px 14px" }}>
+              <div className="erm-table-section">
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>TASKS & PROJECTS DETAILS</div>
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
-                  <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", fontSize: 10 }}>
+                <div className="erm-table-wrapper">
+                  <table className="erm-table">
                     <thead>
-                      <tr style={{ background: "#111827", color: "#fff", fontWeight: 600, fontSize: 9 }}>
-                        <th style={{ width: "5%", padding: "6px 8px", textAlign: "center" }}>#</th>
-                        <th style={{ width: "30%", padding: "6px 8px", textAlign: "left" }}>Task / Project Name</th>
-                        <th style={{ width: "10%", padding: "6px 8px", textAlign: "center" }}>Type</th>
-                        <th style={{ width: "14%", padding: "6px 8px", textAlign: "center" }}>Status</th>
-                        <th style={{ width: "16%", padding: "6px 8px", textAlign: "center" }}>Progress</th>
-                        <th style={{ width: "10%", padding: "6px 8px", textAlign: "center" }}>Priority</th>
-                        <th style={{ width: "15%", padding: "6px 8px", textAlign: "center" }}>Due Date</th>
+                      <tr>
+                        <th style={{ width: "5%", textAlign: "center" }}>#</th>
+                        <th style={{ width: "30%", textAlign: "left" }}>Task / Project Name</th>
+                        <th style={{ width: "10%", textAlign: "center" }}>Type</th>
+                        <th style={{ width: "14%", textAlign: "center" }}>Status</th>
+                        <th style={{ width: "16%", textAlign: "center" }}>Progress</th>
+                        <th style={{ width: "10%", textAlign: "center" }}>Priority</th>
+                        <th style={{ width: "15%", textAlign: "center" }}>Due Date</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -421,15 +695,15 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                         const due = item.end_date ? formatDateShort(item.end_date) : "-";
                         return (
                           <tr key={idx} style={{ borderBottom: "1px solid #f3f4f6", background: idx % 2 ? "#f9fafb" : "#fff" }}>
-                            <td style={{ padding: "6px 8px", textAlign: "center", color: "#6b7280", verticalAlign: "middle" }}>{idx + 1}</td>
-                            <td style={{ padding: "6px 8px", fontWeight: 600, color: "#111827", wordBreak: "break-word", verticalAlign: "middle" }}>{item.title || item.name || "-"}</td>
-                            <td style={{ padding: "6px 8px", textAlign: "center", verticalAlign: "middle" }}>
+                            <td data-label="#" style={{ textAlign: "center", color: "#6b7280" }}>{idx + 1}</td>
+                            <td data-label="Name" style={{ fontWeight: 600, color: "#111827", wordBreak: "break-word" }}>{item.title || item.name || "-"}</td>
+                            <td data-label="Type" style={{ textAlign: "center" }}>
                               <span style={{ fontWeight: 600, color: isProject ? "#6366f1" : "#16a34a" }}>{isProject ? "Project" : "Task"}</span>
                             </td>
-                            <td style={{ padding: "6px 8px", textAlign: "center", verticalAlign: "middle" }}>
+                            <td data-label="Status" style={{ textAlign: "center" }}>
                               <span style={{ fontWeight: 600, color: ss.text }}>&#9679; {st}</span>
                             </td>
-                            <td style={{ padding: "6px 8px", textAlign: "center", verticalAlign: "middle" }}>
+                            <td data-label="Progress" style={{ textAlign: "center" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                 <div style={{ flex: 1, height: 4, borderRadius: 2, background: "#e5e7eb", overflow: "hidden" }}>
                                   <div style={{ width: `${progress}%`, height: "100%", borderRadius: 2, background: progress >= 80 ? "#22c55e" : progress >= 50 ? "#f59e0b" : "#ef4444" }}></div>
@@ -437,10 +711,10 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                                 <span style={{ fontWeight: 600, fontSize: 9, color: "#374151" }}>{progress}%</span>
                               </div>
                             </td>
-                            <td style={{ padding: "6px 8px", textAlign: "center", verticalAlign: "middle" }}>
+                            <td data-label="Priority" style={{ textAlign: "center" }}>
                               <span style={{ fontWeight: 600, fontSize: 9, color: ps.text }}>&#9679; {item.priority || "Medium"}</span>
                             </td>
-                            <td style={{ padding: "6px 8px", textAlign: "center", color: "#6b7280", fontSize: 9, verticalAlign: "middle" }}>{due}</td>
+                            <td data-label="Due Date" style={{ textAlign: "center", color: "#6b7280", fontSize: 9 }}>{due}</td>
                           </tr>
                         );
                       })}
@@ -450,7 +724,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               </div>
 
               {/* ═══ DELIVERABLES ═══ */}
-              <div style={{ margin: "0 28px 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div className="erm-deliverables-grid">
                 {/* Left */}
                 <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>DELIVERABLES SUMMARY</div>
@@ -478,37 +752,39 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                   {deliverables.length === 0 ? (
                     <div style={{ textAlign: "center", padding: 20, color: "#9ca3af", fontSize: 10 }}>No deliverables found.</div>
                   ) : (
-                    <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", fontSize: 9 }}>
-                      <thead>
-                        <tr style={{ background: "#f9fafb", color: "#6b7280", fontWeight: 600 }}>
-                          <th style={{ width: "8%", padding: "4px 6px", textAlign: "center" }}>#</th>
-                          <th style={{ width: "40%", padding: "4px 6px", textAlign: "left" }}>Name</th>
-                          <th style={{ width: "17%", padding: "4px 6px", textAlign: "center" }}>Status</th>
-                          <th style={{ width: "17%", padding: "4px 6px", textAlign: "center" }}>Submitted</th>
-                          <th style={{ width: "18%", padding: "4px 6px", textAlign: "center" }}>Approved</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {deliverables.slice(0, 6).map((d, i) => {
-                          const ss = getStatusStyle(d.status);
-                          return (
-                            <tr key={i} style={{ borderBottom: "1px solid #f3f4f6", background: i % 2 ? "#f9fafb" : "#fff" }}>
-                              <td style={{ padding: "4px 6px", textAlign: "center", color: "#6b7280", verticalAlign: "middle" }}>{i + 1}</td>
-                              <td style={{ padding: "4px 6px", fontWeight: 600, color: "#111827", verticalAlign: "middle" }}>{(d.title || "-").substring(0, 24)}</td>
-                              <td style={{ padding: "4px 6px", textAlign: "center", fontWeight: 600, color: ss.text, verticalAlign: "middle" }}>&#9679; {formatStatus(d.status)}</td>
-                              <td style={{ padding: "4px 6px", textAlign: "center", color: "#6b7280", verticalAlign: "middle" }}>{d.submitted_at ? formatDateShort(d.submitted_at) : "-"}</td>
-                              <td style={{ padding: "4px 6px", textAlign: "center", color: "#6b7280", verticalAlign: "middle" }}>{d.approved_at ? formatDateShort(d.approved_at) : "-"}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                    <div className="erm-table-wrapper">
+                      <table className="erm-table" style={{ tableLayout: "auto", minWidth: 0 }}>
+                        <thead>
+                          <tr style={{ background: "#f9fafb", color: "#6b7280", fontWeight: 600 }}>
+                            <th style={{ width: "8%", padding: "4px 6px", textAlign: "center" }}>#</th>
+                            <th style={{ width: "40%", padding: "4px 6px", textAlign: "left" }}>Name</th>
+                            <th style={{ width: "17%", padding: "4px 6px", textAlign: "center" }}>Status</th>
+                            <th style={{ width: "17%", padding: "4px 6px", textAlign: "center" }}>Submitted</th>
+                            <th style={{ width: "18%", padding: "4px 6px", textAlign: "center" }}>Approved</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {deliverables.slice(0, 6).map((d, i) => {
+                            const ss = getStatusStyle(d.status);
+                            return (
+                              <tr key={i} style={{ borderBottom: "1px solid #f3f4f6", background: i % 2 ? "#f9fafb" : "#fff" }}>
+                                <td data-label="#" style={{ padding: "4px 6px", textAlign: "center", color: "#6b7280" }}>{i + 1}</td>
+                                <td data-label="Name" style={{ padding: "4px 6px", fontWeight: 600, color: "#111827" }}>{(d.title || "-").substring(0, 24)}</td>
+                                <td data-label="Status" style={{ padding: "4px 6px", textAlign: "center", fontWeight: 600, color: ss.text }}>&#9679; {formatStatus(d.status)}</td>
+                                <td data-label="Submitted" style={{ padding: "4px 6px", textAlign: "center", color: "#6b7280" }}>{d.submitted_at ? formatDateShort(d.submitted_at) : "-"}</td>
+                                <td data-label="Approved" style={{ padding: "4px 6px", textAlign: "center", color: "#6b7280" }}>{d.approved_at ? formatDateShort(d.approved_at) : "-"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
               </div>
 
               {/* ═══ MANAGER REMARKS ═══ */}
-              <div style={{ margin: "0 28px 14px", border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
+              <div className="erm-remarks">
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>MANAGER REMARKS</div>
                 <div style={{ display: "flex", gap: 16 }}>
                   <div style={{ flex: 1 }}>
@@ -526,8 +802,8 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               </div>
 
               {/* ═══ FOOTER ═══ */}
-              <div style={{ borderTop: "1px solid #e5e7eb", margin: "0 28px", padding: "8px 0", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 9, color: "#9ca3af" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div className="erm-footer">
+                <div className="erm-footer-left">
                   <div style={{ width: 16, height: 16, borderRadius: 3, background: "#6366f1", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <span style={{ fontSize: 7, fontWeight: 700, color: "#fff" }}>TX</span>
                   </div>
@@ -537,10 +813,9 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                 <div>Generated Date:  {genDate} | Generated Time:  {genTime}</div>
                 <div>Report Type:  {reportLabelTitle} Performance Report | Page 1 of 1</div>
               </div>
-              </div>
 
               {/* ═══ ACTIONS ═══ */}
-              <div style={{ borderTop: "1px solid #f3f4f6", padding: "14px 28px", display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <div className="erm-actions">
                 <button className="er-cancel-btn" onClick={() => setShowReview(false)}>Back</button>
                 <button className="er-export-btn" onClick={generatePDF} disabled={generating}>
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

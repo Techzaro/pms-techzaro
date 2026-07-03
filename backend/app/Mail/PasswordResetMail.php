@@ -7,6 +7,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Queue\SerializesModels;
 
 class PasswordResetMail extends Mailable
@@ -16,17 +17,22 @@ class PasswordResetMail extends Mailable
     public User $user;
     public string $resetUrl;
     public string $token;
+    public string $senderEmail;
+    public string $senderName;
 
-    public function __construct(User $user, string $resetUrl, string $token)
+    public function __construct(User $user, string $resetUrl, string $token, string $senderEmail = '', string $senderName = '')
     {
         $this->user = $user;
         $this->resetUrl = $resetUrl;
         $this->token = $token;
+        $this->senderEmail = $senderEmail ?: config('mail.from.address');
+        $this->senderName = $senderName ?: config('mail.from.name');
     }
 
     public function envelope(): Envelope
     {
         return new Envelope(
+            from: new Address($this->senderEmail, $this->senderName),
             subject: 'Password Reset Request - TechXaro PMS',
         );
     }

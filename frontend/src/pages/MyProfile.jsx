@@ -395,7 +395,7 @@ function MyProfile() {
               <div className="info-card-body">
                 <div className="info-row">
                   <span className="info-label">Gross Salary</span>
-                  <span className="info-value">{user.gross_salary ? `USD ${Number(user.gross_salary).toLocaleString()}` : "---"}</span>
+                  <span className="info-value">{user.gross_salary ? `PKR ${Number(user.gross_salary).toLocaleString()}` : "---"}</span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Applied Via</span>

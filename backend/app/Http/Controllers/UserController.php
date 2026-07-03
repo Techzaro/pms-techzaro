@@ -12,6 +12,7 @@ use App\Services\ActivityService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use App\Models\Project;
+use App\Jobs\SendUserCreatedEmails;
 use App\Mail\UserCreated;
 use App\Mail\UserResigned;
 use App\Mail\UserProfileUpdated;
@@ -92,41 +93,46 @@ class UserController extends Controller
     {
         $this->normalizeEmptyStrings($request);
 
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email',
-            'personal_email' => 'nullable|email|max:255',
-            'professional_email' => 'nullable|string|max:255',
-            'professional_email_password' => 'nullable|string|max:255',
-            'role' => ['required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member'])],
-            'father_name' => 'nullable|string|max:255',
-            'id_card_number' => 'nullable|string|max:32',
-            'phone_number' => 'nullable|string|max:32',
-            'contact_no' => 'nullable|string|max:32',
-            'present_address' => 'nullable|string|max:500',
-            'permanent_address' => 'nullable|string|max:500',
-            'address' => 'nullable|string|max:500',
-            'emergency_contact_name' => 'nullable|string|max:255',
-            'emergency_contact_relation' => 'nullable|string|max:255',
-            'emergency_contact_phone' => 'nullable|string|max:32',
-            'recovery_email' => 'nullable|email|max:255',
-            'department' => 'required|string|max:255',
-            'designation' => 'required|string|max:255',
-            'hired_for' => 'nullable|string|max:255',
-            'employee_code' => 'required|string|max:64',
-            'job_started_date' => 'nullable|date',
-            'job_ended_date' => 'nullable|date|after_or_equal:job_started_date',
-            'gross_salary' => 'nullable|numeric|min:0',
-            'applied_via' => 'nullable|string|max:255',
-            'bank_name' => 'nullable|string|max:255',
-            'bank_account_number' => 'nullable|string|max:64',
-            'bank_account_title' => 'nullable|string|max:255',
-            'employment_contract' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'offer_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'other_document' => 'nullable|array',
-            'other_document.*' => 'file|mimes:pdf,jpeg,png,webp|max:10240',
-        ]);
+        try {
+            $request->validate([
+                'name' => 'required|string|max:255',
+                'email' => 'required|string|email|max:255|unique:users,email',
+                'personal_email' => 'nullable|email|max:255',
+                'professional_email' => 'nullable|string|max:255',
+                'professional_email_password' => 'nullable|string|max:255',
+                'role' => ['required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member'])],
+                'father_name' => 'nullable|string|max:255',
+                'id_card_number' => 'nullable|string|max:32',
+                'phone_number' => 'nullable|string|max:32',
+                'contact_no' => 'nullable|string|max:32',
+                'present_address' => 'nullable|string|max:500',
+                'permanent_address' => 'nullable|string|max:500',
+                'address' => 'nullable|string|max:500',
+                'emergency_contact_name' => 'nullable|string|max:255',
+                'emergency_contact_relation' => 'nullable|string|max:255',
+                'emergency_contact_phone' => 'nullable|string|max:32',
+                'recovery_email' => 'nullable|email|max:255',
+                'department' => 'required|string|max:255',
+                'designation' => 'required|string|max:255',
+                'hired_for' => 'nullable|string|max:255',
+                'employee_code' => 'required|string|max:64',
+                'job_started_date' => 'nullable|date',
+                'job_ended_date' => 'nullable|date|after_or_equal:job_started_date',
+                'gross_salary' => 'nullable|numeric|min:0',
+                'applied_via' => 'nullable|string|max:255',
+                'bank_name' => 'nullable|string|max:255',
+                'bank_account_number' => 'nullable|string|max:64',
+                'bank_account_title' => 'nullable|string|max:255',
+                'employment_contract' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:20480',
+                'offer_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:20480',
+                'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:20480',
+                'other_document' => 'nullable|array',
+                'other_document.*' => 'file|mimes:pdf,jpeg,png,webp|max:20480',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('User create validation failed', ['errors' => $e->errors()]);
+            throw $e;
+        }
 
         $plainPassword = Str::random(10);
         $role = $request->input('role') === 'teamlead' ? 'team_lead' : $request->input('role');
@@ -230,46 +236,23 @@ class UserController extends Controller
         $profEmail = $request->input('professional_email') ?: $user->professional_email;
         $profPassword = $request->input('professional_email_password') ?: '';
         $personalEmail = $request->input('personal_email');
+        $adderEmail = $authUser->professional_email;
 
-        // 1. Welcome email ONLY to new user's personal email (first time)
-        if ($personalEmail) {
-            try {
-                Mail::to($personalEmail)->send(new UserCreated($user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments, false, '', $authUser->professional_email, $authUser->name));
-                $emailSent = true;
-                Log::info("Welcome email sent to personal email {$personalEmail} for user ID {$user->id}");
-            } catch (\Throwable $e) {
-                $emailError = $e->getMessage();
-                Log::error("Failed to send welcome email to personal email {$personalEmail}: " . $e->getMessage(), [
-                    'user_id' => $user->id,
-                    'user_email' => $personalEmail,
-                    'user_name' => $user->name,
-                    'exception' => $e->getMessage(),
-                ]);
-            }
-        }
+        $message = $personalEmail
+            ? 'User created successfully. Welcome email will be sent to ' . $personalEmail
+            : 'User created successfully.';
 
-        // 2. Confirmation email to new user's professional email (Outlook)
-        if ($profEmail) {
-            try {
-                Mail::to($profEmail)->send(new UserCreated($user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments, true, $authUser->name, $authUser->professional_email, $authUser->name));
-                Log::info("User creation confirmation sent to professional email {$profEmail} for user ID {$user->id}");
-            } catch (\Throwable $e) {
-                Log::error("Failed to send confirmation email to professional email {$profEmail}: " . $e->getMessage(), [
-                    'user_id' => $user->id,
-                    'user_email' => $profEmail,
-                ]);
-            }
-        }
-
-        $message = $emailSent
-            ? 'User created successfully and welcome email sent to ' . $personalEmail
-            : 'User created successfully. Email sending failed: ' . ($emailError ?? 'Unknown error');
+        // Dispatch emails to queue — user creation is instant
+        SendUserCreatedEmails::dispatch(
+            $user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments,
+            $personalEmail, $adderEmail, $authUser->name
+        );
 
         return response()->json([
             'success' => true,
             'message' => $message,
             'user' => $user,
-            'email_sent' => $emailSent,
+            'email_sent' => false,
         ], 201);
     }
 
@@ -318,11 +301,11 @@ class UserController extends Controller
             'bank_name' => 'nullable|string|max:255',
             'bank_account_number' => 'nullable|string|max:64',
             'bank_account_title' => 'nullable|string|max:255',
-            'employment_contract' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'offer_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'employment_contract' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:20480',
+            'offer_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:20480',
+            'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:20480',
             'other_document' => 'nullable|array',
-            'other_document.*' => 'file|mimes:pdf,jpeg,png,webp|max:10240',
+            'other_document.*' => 'file|mimes:pdf,jpeg,png,webp|max:20480',
         ]);
 
         $authUser = $request->user();
@@ -1020,7 +1003,8 @@ class UserController extends Controller
         $loginUrl = config('app.frontend_url');
 
         try {
-            Mail::to($testUser->email)->send(new UserCreated($testUser, $plainPassword, $loginUrl));
+            $authUser = $request->user();
+            Mail::to($testUser->email)->send(new UserCreated($testUser, $plainPassword, '', '', $loginUrl, [], false, '', $authUser->professional_email ?? '', $authUser->name ?? 'PMS Techxaro'));
             Log::info("Test email sent successfully to {$testUser->email}");
 
             return response()->json([

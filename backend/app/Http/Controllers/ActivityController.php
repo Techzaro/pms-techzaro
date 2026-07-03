@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ActivityService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
@@ -19,8 +20,8 @@ class ActivityController extends Controller
     /**
      * Get today's activities for the logged-in user.
      *
-     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request containing the authenticated user.
-     * @return \Illuminate\Http\JsonResponse  JSON response with today's activities and total count.
+     * @param  Request  $request  The incoming HTTP request containing the authenticated user.
+     * @return JsonResponse JSON response with today's activities and total count.
      */
     public function today(Request $request)
     {
@@ -40,15 +41,15 @@ class ActivityController extends Controller
      * tables (tasks, projects, deliverables, user management) for past dates,
      * returning the same rich data format as today's activity feed.
      *
-     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request with optional 'limit' parameter.
-     * @return \Illuminate\Http\JsonResponse  JSON response with activities grouped by date.
+     * @param  Request  $request  The incoming HTTP request with optional 'limit' parameter.
+     * @return JsonResponse JSON response with activities grouped by date.
      */
     public function past(Request $request)
     {
         $user = $request->user();
         $limit = $request->input('limit', 100);
 
-        $dashboard = app(\App\Http\Controllers\DashboardController::class);
+        $dashboard = app(DashboardController::class);
         $projectIds = $dashboard->getUserProjectIds($user);
         $result = $dashboard->getPastActivityFeed($user, $user->role, $projectIds, $limit);
 
@@ -60,8 +61,8 @@ class ActivityController extends Controller
     /**
      * Get activities for the logged-in user with optional date filter.
      *
-     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request with optional 'date', 'limit', and 'offset' parameters.
-     * @return \Illuminate\Http\JsonResponse  JSON response with paginated activities and total count.
+     * @param  Request  $request  The incoming HTTP request with optional 'date', 'limit', and 'offset' parameters.
+     * @return JsonResponse JSON response with paginated activities and total count.
      */
     public function index(Request $request)
     {

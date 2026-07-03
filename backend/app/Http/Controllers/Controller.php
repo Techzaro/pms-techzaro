@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Routing\Controller as BaseController;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Base controller class for all controllers in the application.
@@ -22,6 +23,6 @@ abstract class Controller extends BaseController
      */
     protected function clearDashboardCache(int $userId): void
     {
-        \Illuminate\Support\Facades\Cache::forget("dashboard_{$userId}");
+        Cache::forget("dashboard_{$userId}");
     }
 }

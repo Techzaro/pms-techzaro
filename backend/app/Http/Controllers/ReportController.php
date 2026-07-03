@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Deliverable;
 use App\Models\Project;
 use App\Models\Task;
-use App\Models\User;
-use App\Models\Team;
-use App\Models\Deliverable;
 use App\Models\TaskWorkflowEvent;
+use App\Models\Team;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -26,8 +29,8 @@ class ReportController extends Controller
      * Team leads only see members from their teams and tasks they assigned.
      * Supports time period filtering (today, week, month, all).
      *
-     * @param  \Illuminate\Http\Request  $request  Query parameter: period (today|week|month|all).
-     * @return \Illuminate\Http\JsonResponse  JSON response with team summary and per-member stats.
+     * @param  Request  $request  Query parameter: period (today|week|month|all).
+     * @return JsonResponse JSON response with team summary and per-member stats.
      */
     public function teamPerformance(Request $request)
     {
@@ -37,7 +40,7 @@ class ReportController extends Controller
 
         return Cache::remember($cacheKey, 300, function () use ($user, $timeFilter) {
             $isTeamLead = $user->role === 'team_lead' || $user->role === 'teamlead';
-            
+
             $query = User::select('id', 'name', 'email', 'role')
                 ->where('active', true)
                 ->orderBy('name');
@@ -97,7 +100,7 @@ class ReportController extends Controller
                 ->map(fn ($items) => $items->pluck('title')->unique()->values()->take(5)->toArray());
 
             $result = $members->map(function ($member) use ($taskStats, $userProjects) {
-                $stats = $taskStats->get($member->id, (object)['assigned' => 0, 'completed' => 0]);
+                $stats = $taskStats->get($member->id, (object) ['assigned' => 0, 'completed' => 0]);
                 $assigned = (int) $stats->assigned;
                 $completed = (int) $stats->completed;
                 $pending = $assigned - $completed;
@@ -131,13 +134,14 @@ class ReportController extends Controller
      * recent tasks, and project breakdowns. Team leads viewing members
      * only see tasks they assigned and projects they created.
      *
-     * @param  \Illuminate\Http\Request  $request  Query parameter: period (today|week|month|all).
-     * @param  \App\Models\User  $user  The user to generate the report for.
-     * @return \Illuminate\Http\JsonResponse  JSON response with user profile, stats, deliverables, and projects.
+     * @param  Request  $request  Query parameter: period (today|week|month|all).
+     * @param  User  $user  The user to generate the report for.
+     * @return JsonResponse JSON response with user profile, stats, deliverables, and projects.
      */
     public function myPerformance(Request $request)
     {
         $user = $request->user();
+
         return $this->userPerformance($request, $user);
     }
 
@@ -145,18 +149,20 @@ class ReportController extends Controller
     {
         $requestingUser = $request->user();
         $timeFilter = $request->query('period', 'all');
-        $isTeamLeadViewingMember = ($requestingUser->role === 'team_lead' || $requestingUser->role === 'teamlead') 
+        $isTeamLeadViewingMember = ($requestingUser->role === 'team_lead' || $requestingUser->role === 'teamlead')
             && $requestingUser->id !== $user->id;
 
         // --- TASKS ASSIGNED TO USER ---
         $taskBase = Task::whereHas('assignees', fn ($q) => $q->where('users.id', $user->id));
-        
+
         // If team lead is viewing member, only show tasks assigned BY the team lead
         if ($isTeamLeadViewingMember) {
             $taskBase->where('tasks.assigned_by', $requestingUser->id);
         }
-        
-        if ($timeFilter !== 'all') $taskBase = $this->applyTimeFilter($taskBase, $timeFilter);
+
+        if ($timeFilter !== 'all') {
+            $taskBase = $this->applyTimeFilter($taskBase, $timeFilter);
+        }
 
         $taskIds = (clone $taskBase)->pluck('id');
 
@@ -168,23 +174,23 @@ class ReportController extends Controller
                 SUM(CASE WHEN status IN ('submitted','reopened') THEN 1 ELSE 0 END) as in_review,
                 SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
             ")->whereIn('id', $taskIds)->first()
-            : (object)['assigned' => 0, 'completed' => 0, 'in_review' => 0, 'overdue' => 0];
+            : (object) ['assigned' => 0, 'completed' => 0, 'in_review' => 0, 'overdue' => 0];
 
         // Task status breakdown
         $taskStatusBreakdown = $taskIds->isNotEmpty()
-            ? Task::selectRaw("status, COUNT(*) as count")
+            ? Task::selectRaw('status, COUNT(*) as count')
                 ->whereIn('id', $taskIds)->groupBy('status')->get()
             : collect();
 
         // --- PROJECTS ASSIGNED AS TASKS ---
         $projectQuery = Project::whereJsonContains('assigned_users', $user->id)
             ->whereNotNull('assigned_users');
-        
+
         // If team lead is viewing member, only show projects created BY the team lead
         if ($isTeamLeadViewingMember) {
             $projectQuery->where('projects.created_by', $requestingUser->id);
         }
-        
+
         if ($timeFilter !== 'all') {
             $this->applyTimeFilter($projectQuery, $timeFilter);
         }
@@ -234,7 +240,7 @@ class ReportController extends Controller
 
         $recentProjectTasks = $projectQuery->latest()->limit(10)->get()
             ->map(fn ($p) => [
-                'id' => 'proj_' . $p->id,
+                'id' => 'proj_'.$p->id,
                 'title' => $p->title,
                 'project' => $p->title,
                 'status' => $p->status,
@@ -273,16 +279,16 @@ class ReportController extends Controller
         // Also include projects assigned directly as tasks (not via tasks table)
         $directProjectStatsQuery = Project::whereJsonContains('assigned_users', $user->id)
             ->whereNotNull('assigned_users');
-        
+
         // If team lead is viewing member, only show projects created BY the team lead
         if ($isTeamLeadViewingMember) {
             $directProjectStatsQuery->where('projects.created_by', $requestingUser->id);
         }
-        
+
         $directProjectStats = $directProjectStatsQuery
             ->select('id', 'title', 'status', 'start_date', 'end_date')
             ->get()
-            ->filter(fn ($p) => !$projectStats->contains('id', $p->id))
+            ->filter(fn ($p) => ! $projectStats->contains('id', $p->id))
             ->map(fn ($p) => [
                 'id' => $p->id,
                 'name' => $p->title,
@@ -325,14 +331,14 @@ class ReportController extends Controller
                 SUM(CASE WHEN `priority` = 'medium' THEN 1 ELSE 0 END) as p_medium,
                 SUM(CASE WHEN `priority` = 'low' THEN 1 ELSE 0 END) as p_low
             ")->whereIn('id', $taskIds)->first()
-            : (object)['p_high' => 0, 'p_medium' => 0, 'p_low' => 0];
+            : (object) ['p_high' => 0, 'p_medium' => 0, 'p_low' => 0];
 
         $projectPriorityStatsResult = (clone $projectQuery)->selectRaw("
             SUM(CASE WHEN `priority` = 'high' THEN 1 ELSE 0 END) as p_high,
             SUM(CASE WHEN `priority` = 'medium' THEN 1 ELSE 0 END) as p_medium,
             SUM(CASE WHEN `priority` = 'low' THEN 1 ELSE 0 END) as p_low
         ")->first();
-        $projectPriorityStats = $projectPriorityStatsResult ?: (object)['p_high' => 0, 'p_medium' => 0, 'p_low' => 0];
+        $projectPriorityStats = $projectPriorityStatsResult ?: (object) ['p_high' => 0, 'p_medium' => 0, 'p_low' => 0];
 
         $priorityDistribution = [
             'high' => (int) $priorityStats->p_high + (int) $projectPriorityStats->p_high,
@@ -344,12 +350,12 @@ class ReportController extends Controller
 
         // --- DELIVERABLES ---
         $deliverableQuery = Deliverable::where('assigned_to', $user->id);
-        
+
         // If team lead is viewing member, only show deliverables created BY the team lead
         if ($isTeamLeadViewingMember) {
             $deliverableQuery->where('deliverables.created_by', $requestingUser->id);
         }
-        
+
         $deliverableStats = (clone $deliverableQuery)
             ->selectRaw("
                 COUNT(*) as total,
@@ -400,7 +406,7 @@ class ReportController extends Controller
         if ($taskIds->isNotEmpty()) {
             $workflowEvents = TaskWorkflowEvent::whereIn('task_id', $taskIds)
                 ->whereBetween('created_at', [$workloadStart, $workloadEnd])
-                ->selectRaw("DAYNAME(created_at) as day_name, COUNT(*) as count")
+                ->selectRaw('DAYNAME(created_at) as day_name, COUNT(*) as count')
                 ->groupBy('day_name')
                 ->get()
                 ->keyBy('day_name');
@@ -424,7 +430,7 @@ class ReportController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->role,
-                'employee_id' => $user->employee_id ?? 'EMP-' . str_pad($user->id, 4, '0', STR_PAD_LEFT),
+                'employee_id' => $user->employee_id ?? 'EMP-'.str_pad($user->id, 4, '0', STR_PAD_LEFT),
                 'team' => $team?->name ?? null,
                 'reporting_to' => $reportingTo,
             ],
@@ -455,12 +461,13 @@ class ReportController extends Controller
     /**
      * Get a report for a specific project including task completion and per-assignee breakdown.
      *
-     * @param  \App\Models\Project  $project  The project to generate the report for.
-     * @return \Illuminate\Http\JsonResponse  JSON response with project summary, per-assignee stats, and tasks.
+     * @param  Project  $project  The project to generate the report for.
+     * @return JsonResponse JSON response with project summary, per-assignee stats, and tasks.
      */
     public function projectReport(Project $project)
     {
         $cacheKey = "report_project_{$project->id}";
+
         return Cache::remember($cacheKey, 300, function () use ($project) {
             $tasks = $project->tasks()->with('assignees:id,name,email,role')->get();
 
@@ -497,8 +504,8 @@ class ReportController extends Controller
      * Returns total teams, active projects, task completion stats, overdue tasks,
      * and the top 10 projects by recency.
      *
-     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
-     * @return \Illuminate\Http\JsonResponse  JSON response with summary stats and top projects.
+     * @param  Request  $request  The incoming HTTP request.
+     * @return JsonResponse JSON response with summary stats and top projects.
      */
     public function summaryReport(Request $request)
     {
@@ -531,6 +538,7 @@ class ReportController extends Controller
                 ->map(function ($p) {
                     $total = $p->total_tasks;
                     $done = $p->completed_tasks;
+
                     return [
                         'title' => $p->title, 'completion' => $total > 0 ? (int) round(($done / $total) * 100) : 0,
                         'completed_tasks' => $done, 'total_tasks' => $total, 'end_date' => $p->end_date,
@@ -552,8 +560,8 @@ class ReportController extends Controller
     /**
      * Get a detailed report including project breakdown, team stats, overdue tasks, and recent tasks.
      *
-     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
-     * @return \Illuminate\Http\JsonResponse  JSON response with detailed stats, projects, teams, and overdue list.
+     * @param  Request  $request  The incoming HTTP request.
+     * @return JsonResponse JSON response with detailed stats, projects, teams, and overdue list.
      */
     public function detailedReport(Request $request)
     {
@@ -573,7 +581,9 @@ class ReportController extends Controller
             $projects = Project::withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
                 $q->whereIn('status', ['done', 'completed']);
             }])->latest()->limit(10)->get()->map(function ($p) {
-                $total = $p->total_tasks; $done = $p->completed_tasks;
+                $total = $p->total_tasks;
+                $done = $p->completed_tasks;
+
                 return ['title' => $p->title, 'completion' => $total > 0 ? (int) round(($done / $total) * 100) : 0,
                     'completed_tasks' => $done, 'total_tasks' => $total, 'status' => $p->status];
             });
@@ -601,8 +611,8 @@ class ReportController extends Controller
     /**
      * Get a performance report with team stats, member completion rates, and open overdue tasks.
      *
-     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
-     * @return \Illuminate\Http\JsonResponse  JSON response with overview, teams, members, and open tasks.
+     * @param  Request  $request  The incoming HTTP request.
+     * @return JsonResponse JSON response with overview, teams, members, and open tasks.
      */
     public function performanceReport(Request $request)
     {
@@ -631,9 +641,10 @@ class ReportController extends Controller
                 : collect();
 
             $memberResults = $members->map(function ($member) use ($memberStats) {
-                $stats = $memberStats->get($member->id, (object)['assigned' => 0, 'completed' => 0]);
+                $stats = $memberStats->get($member->id, (object) ['assigned' => 0, 'completed' => 0]);
                 $assigned = (int) $stats->assigned;
                 $completed = (int) $stats->completed;
+
                 return ['name' => $member->name, 'assigned' => $assigned, 'completed' => $completed,
                     'pending' => max($assigned - $completed, 0),
                     'completion_rate' => $assigned > 0 ? (int) round(($completed / $assigned) * 100) : 0];
@@ -657,8 +668,8 @@ class ReportController extends Controller
     /**
      * Get a progress report with top project overview, member workload, milestones, and overdue tasks.
      *
-     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
-     * @return \Illuminate\Http\JsonResponse  JSON response with overview, project details, members, and milestones.
+     * @param  Request  $request  The incoming HTTP request.
+     * @return JsonResponse JSON response with overview, project details, members, and milestones.
      */
     public function progressReport(Request $request)
     {
@@ -725,8 +736,8 @@ class ReportController extends Controller
      * Supports role-based filtering and team view for team leads.
      * Merges task and project-as-task counts.
      *
-     * @param  \Illuminate\Http\Request  $request  Query parameters: period, view (self|team).
-     * @return \Illuminate\Http\JsonResponse  JSON response with summary card stats.
+     * @param  Request  $request  Query parameters: period, view (self|team).
+     * @return JsonResponse JSON response with summary card stats.
      */
     public function summaryCards(Request $request)
     {
@@ -737,7 +748,7 @@ class ReportController extends Controller
 
         // For team_lead viewing 'team' tab, get stats for team members
         $isTeamView = ($role === 'team_lead' && $view === 'team');
-        
+
         if ($isTeamView) {
             // Get team member IDs for team_lead
             $teamIds = DB::table('team_user')
@@ -843,8 +854,8 @@ class ReportController extends Controller
      *
      * Team leads only see members from their teams. Merges task and project-as-task counts.
      *
-     * @param  \Illuminate\Http\Request  $request  Query parameter: period.
-     * @return \Illuminate\Http\JsonResponse  JSON response with per-user performance stats.
+     * @param  Request  $request  Query parameter: period.
+     * @return JsonResponse JSON response with per-user performance stats.
      */
     public function userPerformanceTable(Request $request)
     {
@@ -862,14 +873,14 @@ class ReportController extends Controller
                 ->whereIn('team_id', $teamIds)
                 ->pluck('user_id')
                 ->toArray();
-            
+
             // Exclude team lead themselves from the list
-            $memberIds = array_filter($memberIds, fn($id) => $id != $user->id);
+            $memberIds = array_filter($memberIds, fn ($id) => $id != $user->id);
         }
 
         // --- TASK STATS PER USER (from tasks table via task_user pivot) ---
         $isTeamLead = $user->role === 'team_lead' || $user->role === 'teamlead';
-        
+
         $taskQuery = User::query()
             ->select('users.id', 'users.name', 'users.role')
             ->where('users.active', true)
@@ -897,12 +908,12 @@ class ReportController extends Controller
 
         // --- PROJECT-AS-TASK STATS PER USER — single query instead of N+1 ---
         $allUsers = User::where('active', true)->select('id', 'name', 'role');
-        
+
         // Filter by team members for team_lead
         if ($isTeamLead) {
             $allUsers->whereIn('users.id', $memberIds);
         }
-        
+
         $allUsers = $allUsers->orderBy('name')->get();
         $projectStats = $this->getProjectAsTaskStatsForTeamLead($allUsers->pluck('id'), $timeFilter, $isTeamLead ? $user->id : null);
 
@@ -934,8 +945,8 @@ class ReportController extends Controller
     /**
      * Get a company-wide employee report with per-employee stats, team summaries, status distribution, and weekly trend.
      *
-     * @param  \Illuminate\Http\Request  $request  Query parameter: period.
-     * @return \Illuminate\Http\JsonResponse  JSON response with overview, employees, teams, distribution, and trend data.
+     * @param  Request  $request  Query parameter: period.
+     * @return JsonResponse JSON response with overview, employees, teams, distribution, and trend data.
      */
     public function companyEmployeesReport(Request $request)
     {
@@ -1026,7 +1037,7 @@ class ReportController extends Controller
         // --- TASKS TREND (weekly data by day of week) ---
         $weekStart = now()->startOfWeek();
         $tasksTrend = Task::where('created_at', '>=', $weekStart)
-            ->selectRaw("DAYNAME(created_at) as day_name, COUNT(*) as count")
+            ->selectRaw('DAYNAME(created_at) as day_name, COUNT(*) as count')
             ->groupBy('day_name')
             ->get()
             ->pluck('count', 'day_name')
@@ -1067,9 +1078,9 @@ class ReportController extends Controller
     /**
      * Apply a time period filter to a query.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder  $query  The query to filter.
+     * @param  Builder|\Illuminate\Database\Query\Builder  $query  The query to filter.
      * @param  string  $period  The period filter: 'today', 'week', 'month', or 'all'.
-     * @return mixed  The filtered query.
+     * @return mixed The filtered query.
      */
     private function applyTimeFilter($query, string $period)
     {
@@ -1085,7 +1096,7 @@ class ReportController extends Controller
      * Bulk compute project-as-task stats for all user IDs in a single pass.
      * Replaces N+1 pattern where one query ran per user.
      */
-    private function getProjectAsTaskStats($userIds, string $timeFilter): \Illuminate\Support\Collection
+    private function getProjectAsTaskStats($userIds, string $timeFilter): Collection
     {
         $results = collect();
         $allProjects = Project::whereNotNull('assigned_users')
@@ -1094,15 +1105,23 @@ class ReportController extends Controller
             ->get();
 
         foreach ($userIds as $uid) {
-            $assigned = 0; $completed = 0; $overdue = 0;
+            $assigned = 0;
+            $completed = 0;
+            $overdue = 0;
             foreach ($allProjects as $p) {
                 $ids = is_string($p->assigned_users) ? json_decode($p->assigned_users, true) ?? [] : ($p->assigned_users ?? []);
-                if (!in_array((int) $uid, array_map('intval', $ids), true)) continue;
+                if (! in_array((int) $uid, array_map('intval', $ids), true)) {
+                    continue;
+                }
                 $assigned++;
-                if (in_array(strtolower((string) $p->status), ['approved', 'completed', 'done'])) $completed++;
-                if ($p->end_date && now()->greaterThan($p->end_date) && !in_array(strtolower((string) $p->status), ['completed', 'done', 'abandoned', 'approved'])) $overdue++;
+                if (in_array(strtolower((string) $p->status), ['approved', 'completed', 'done'])) {
+                    $completed++;
+                }
+                if ($p->end_date && now()->greaterThan($p->end_date) && ! in_array(strtolower((string) $p->status), ['completed', 'done', 'abandoned', 'approved'])) {
+                    $overdue++;
+                }
             }
-            $results->put($uid, (object)['assigned' => $assigned, 'completed' => $completed, 'overdue' => $overdue]);
+            $results->put($uid, (object) ['assigned' => $assigned, 'completed' => $completed, 'overdue' => $overdue]);
         }
 
         return $results;
@@ -1111,14 +1130,14 @@ class ReportController extends Controller
     /**
      * Bulk compute project-as-task stats for team lead - only projects created by the team lead.
      */
-    private function getProjectAsTaskStatsForTeamLead($userIds, string $timeFilter, ?int $teamLeadId = null): \Illuminate\Support\Collection
+    private function getProjectAsTaskStatsForTeamLead($userIds, string $timeFilter, ?int $teamLeadId = null): Collection
     {
         $results = collect();
-        
-        if (!$teamLeadId) {
+
+        if (! $teamLeadId) {
             return $this->getProjectAsTaskStats($userIds, $timeFilter);
         }
-        
+
         // Only get projects created by the team lead
         $allProjects = Project::whereNotNull('assigned_users')
             ->where('created_by', $teamLeadId)
@@ -1127,15 +1146,23 @@ class ReportController extends Controller
             ->get();
 
         foreach ($userIds as $uid) {
-            $assigned = 0; $completed = 0; $overdue = 0;
+            $assigned = 0;
+            $completed = 0;
+            $overdue = 0;
             foreach ($allProjects as $p) {
                 $ids = is_string($p->assigned_users) ? json_decode($p->assigned_users, true) ?? [] : ($p->assigned_users ?? []);
-                if (!in_array((int) $uid, array_map('intval', $ids), true)) continue;
+                if (! in_array((int) $uid, array_map('intval', $ids), true)) {
+                    continue;
+                }
                 $assigned++;
-                if (in_array(strtolower((string) $p->status), ['approved', 'completed', 'done'])) $completed++;
-                if ($p->end_date && now()->greaterThan($p->end_date) && !in_array(strtolower((string) $p->status), ['completed', 'done', 'abandoned', 'approved'])) $overdue++;
+                if (in_array(strtolower((string) $p->status), ['approved', 'completed', 'done'])) {
+                    $completed++;
+                }
+                if ($p->end_date && now()->greaterThan($p->end_date) && ! in_array(strtolower((string) $p->status), ['completed', 'done', 'abandoned', 'approved'])) {
+                    $overdue++;
+                }
             }
-            $results->put($uid, (object)['assigned' => $assigned, 'completed' => $completed, 'overdue' => $overdue]);
+            $results->put($uid, (object) ['assigned' => $assigned, 'completed' => $completed, 'overdue' => $overdue]);
         }
 
         return $results;
@@ -1144,7 +1171,7 @@ class ReportController extends Controller
     /**
      * Bulk compute team task stats in 2 queries instead of N+1 per team.
      */
-    private function getTeamsWithTaskStats(string $timeFilter = 'all'): \Illuminate\Support\Collection
+    private function getTeamsWithTaskStats(string $timeFilter = 'all'): Collection
     {
         $teams = Team::with('members:id')->withCount(['members as member_count'])->get();
 
@@ -1155,7 +1182,7 @@ class ReportController extends Controller
 
         $allMemberIds = collect($teamMemberMap)->flatten()->unique()->toArray();
         $userTaskCounts = [];
-        if (!empty($allMemberIds)) {
+        if (! empty($allMemberIds)) {
             $query = DB::table('task_user')
                 ->join('tasks', 'tasks.id', '=', 'task_user.task_id')
                 ->whereIn('task_user.user_id', $allMemberIds);
@@ -1181,13 +1208,15 @@ class ReportController extends Controller
 
         return $teams->map(function ($team) use ($teamMemberMap, $userTaskCounts) {
             $memberIds = $teamMemberMap[$team->id] ?? [];
-            $total = 0; $completed = 0;
+            $total = 0;
+            $completed = 0;
             foreach ($memberIds as $uid) {
                 if (isset($userTaskCounts[$uid])) {
                     $total += $userTaskCounts[$uid]['total'];
                     $completed += $userTaskCounts[$uid]['completed'];
                 }
             }
+
             return [
                 'name' => $team->name,
                 'members' => $team->member_count,

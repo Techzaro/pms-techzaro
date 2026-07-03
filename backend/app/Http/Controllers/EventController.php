@@ -8,8 +8,10 @@ use App\Models\Notification;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
-use App\Services\NotificationService;
 use App\Services\ActivityService;
+use App\Services\NotificationService;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
@@ -33,8 +35,8 @@ class EventController extends Controller
      * Non-admin/manager users only see events they are assigned to.
      * Supports 'all' query param to return all events without pagination.
      *
-     * @param  \Illuminate\Http\Request  $request  Query parameters: 'all', filter params.
-     * @return \Illuminate\Http\JsonResponse  JSON response with paginated or full event list.
+     * @param  Request  $request  Query parameters: 'all', filter params.
+     * @return JsonResponse JSON response with paginated or full event list.
      */
     public function index(Request $request)
     {
@@ -43,7 +45,7 @@ class EventController extends Controller
             ->latest('start_date')
             ->filter($request->query());
 
-        if (!in_array($user->role, ['admin', 'manager'])) {
+        if (! in_array($user->role, ['admin', 'manager'])) {
             $query->whereHas('assignedUsers', function ($q) use ($user) {
                 $q->where('user_id', $user->id);
             });
@@ -51,11 +53,13 @@ class EventController extends Controller
 
         if ($request->boolean('all')) {
             $events = $query->limit(500)->get();
+
             return response()->json(['data' => $events->map(fn ($event) => $this->formatEventResponse($event))]);
         }
 
         $events = $query->paginate(50);
         $events->getCollection()->transform(fn ($event) => $this->formatEventResponse($event));
+
         return response()->json($events);
     }
 
@@ -65,8 +69,8 @@ class EventController extends Controller
      * Filters by date range (from/to) and optional search term. Returns all items
      * relevant to the authenticated user in a normalized calendar event format.
      *
-     * @param  \Illuminate\Http\Request  $request  Query parameters: from, to, search.
-     * @return \Illuminate\Http\JsonResponse  JSON response with unified event list and metadata counts.
+     * @param  Request  $request  Query parameters: from, to, search.
+     * @return JsonResponse JSON response with unified event list and metadata counts.
      */
     public function unifiedCalendar(Request $request)
     {
@@ -80,55 +84,63 @@ class EventController extends Controller
         // Tasks
         $taskQuery = Task::where(function ($q) use ($user) {
             $q->where('assigned_to', $user->id)
-              ->orWhereHas('assignees', fn ($aq) => $aq->where('user_id', $user->id))
-              ->orWhereHas('project', fn ($pq) => $pq->whereJsonContains('assigned_users', $user->id));
-        })->select(['id','title','description','start_date','end_date','assigned_to','assigned_by','project_id','status','priority','created_at','updated_at'])
-          ->with(['project:id,title','assignee:id,name','assigner:id,name']);
+                ->orWhereHas('assignees', fn ($aq) => $aq->where('user_id', $user->id))
+                ->orWhereHas('project', fn ($pq) => $pq->whereJsonContains('assigned_users', $user->id));
+        })->select(['id', 'title', 'description', 'start_date', 'end_date', 'assigned_to', 'assigned_by', 'project_id', 'status', 'priority', 'created_at', 'updated_at'])
+            ->with(['project:id,title', 'assignee:id,name', 'assigner:id,name']);
 
-        if ($search) $taskQuery->where('title', 'like', '%' . $search . '%');
+        if ($search) {
+            $taskQuery->where('title', 'like', '%'.$search.'%');
+        }
         if ($startDate && $endDate) {
             $taskQuery->where(function ($q) use ($startDate, $endDate) {
                 $q->whereBetween('start_date', [$startDate, $endDate])
-                  ->orWhereBetween('end_date', [$startDate, $endDate])
-                  ->orWhere(fn ($q2) => $q2->whereDate('start_date', '<=', $startDate)->whereDate('end_date', '>=', $endDate));
+                    ->orWhereBetween('end_date', [$startDate, $endDate])
+                    ->orWhere(fn ($q2) => $q2->whereDate('start_date', '<=', $startDate)->whereDate('end_date', '>=', $endDate));
             });
         }
         $tasks = $taskQuery->limit(500)->get();
 
         // Projects
         $projectQuery = Project::whereJsonContains('assigned_users', $user->id)
-            ->select(['id','title','description','start_date','end_date','assigned_users','status','priority','created_by'])
+            ->select(['id', 'title', 'description', 'start_date', 'end_date', 'assigned_users', 'status', 'priority', 'created_by'])
             ->with(['creator:id,name']);
 
         if ($startDate && $endDate) {
             $projectQuery->where(function ($q) use ($startDate, $endDate) {
                 $q->whereBetween('start_date', [$startDate, $endDate])
-                  ->orWhereBetween('end_date', [$startDate, $endDate])
-                  ->orWhere(fn ($q2) => $q2->whereDate('start_date', '<=', $startDate)->whereDate('end_date', '>=', $endDate));
+                    ->orWhereBetween('end_date', [$startDate, $endDate])
+                    ->orWhere(fn ($q2) => $q2->whereDate('start_date', '<=', $startDate)->whereDate('end_date', '>=', $endDate));
             });
         }
-        if ($search) $projectQuery->where('title', 'like', '%' . $search . '%');
+        if ($search) {
+            $projectQuery->where('title', 'like', '%'.$search.'%');
+        }
         $projects = $projectQuery->limit(500)->get();
 
         // Deliverables
         $deliverableQuery = Deliverable::where('assigned_to', $user->id)
-            ->select(['id','title','description','due_date','assigned_to','created_by','project_id','task_id','status','priority','submitted_at','approved_at','rejected_at'])
-            ->with(['project:id,title','assignee:id,name','creator:id,name']);
+            ->select(['id', 'title', 'description', 'due_date', 'assigned_to', 'created_by', 'project_id', 'task_id', 'status', 'priority', 'submitted_at', 'approved_at', 'rejected_at'])
+            ->with(['project:id,title', 'assignee:id,name', 'creator:id,name']);
 
-        if ($search) $deliverableQuery->where('title', 'like', '%' . $search . '%');
-        if ($startDate && $endDate) $deliverableQuery->whereBetween('due_date', [$startDate, $endDate]);
+        if ($search) {
+            $deliverableQuery->where('title', 'like', '%'.$search.'%');
+        }
+        if ($startDate && $endDate) {
+            $deliverableQuery->whereBetween('due_date', [$startDate, $endDate]);
+        }
         $deliverables = $deliverableQuery->limit(500)->get();
 
         // Manual Events
-        $manualEventsQuery = Event::with(['user:id,name','assignedUsers:id']);
-        if (!in_array($user->role, ['admin', 'manager'])) {
+        $manualEventsQuery = Event::with(['user:id,name', 'assignedUsers:id']);
+        if (! in_array($user->role, ['admin', 'manager'])) {
             $manualEventsQuery->where(fn ($q) => $q->where('is_global', true)->orWhereHas('assignedUsers', fn ($aq) => $aq->where('user_id', $user->id)));
         }
         if ($startDate && $endDate) {
             $manualEventsQuery->where(function ($q) use ($startDate, $endDate) {
                 $q->whereBetween('start_date', [$startDate, $endDate])
-                  ->orWhereBetween('end_date', [$startDate, $endDate])
-                  ->orWhere(fn ($q2) => $q2->whereDate('start_date', '<=', $startDate)->whereDate('end_date', '>=', $endDate));
+                    ->orWhereBetween('end_date', [$startDate, $endDate])
+                    ->orWhere(fn ($q2) => $q2->whereDate('start_date', '<=', $startDate)->whereDate('end_date', '>=', $endDate));
             });
         }
         $manualEvents = $manualEventsQuery->limit(500)->get();
@@ -162,8 +174,8 @@ class EventController extends Controller
      *
      * Returns events split into 'today' and 'upcoming' categories, cached for 60 seconds.
      *
-     * @param  \Illuminate\Http\Request  $request  Query parameter: local_date (YYYY-MM-DD, defaults to today).
-     * @return \Illuminate\Http\JsonResponse  JSON response with today and upcoming event arrays.
+     * @param  Request  $request  Query parameter: local_date (YYYY-MM-DD, defaults to today).
+     * @return JsonResponse JSON response with today and upcoming event arrays.
      */
     public function unifiedSummary(Request $request)
     {
@@ -171,31 +183,32 @@ class EventController extends Controller
         $today = $request->input('local_date', date('Y-m-d'));
 
         $cacheKey = "unified_summary_{$user->id}_{$today}";
+
         return Cache::remember($cacheKey, 30, function () use ($user, $today) {
             $events = collect();
 
             $tasks = Task::where(function ($q) use ($user) {
                 $q->where('assigned_to', $user->id)
-                  ->orWhereHas('assignees', fn ($aq) => $aq->where('user_id', $user->id))
-                  ->orWhereHas('project', fn ($pq) => $pq->whereJsonContains('assigned_users', $user->id));
+                    ->orWhereHas('assignees', fn ($aq) => $aq->where('user_id', $user->id))
+                    ->orWhereHas('project', fn ($pq) => $pq->whereJsonContains('assigned_users', $user->id));
             })->where(function ($q) use ($today) {
                 $q->whereDate('start_date', '>=', $today)->orWhereDate('end_date', '>=', $today);
-            })->select(['id','title','description','start_date','end_date','assigned_to','assigned_by','project_id','status','priority','created_at','updated_at'])
-              ->with(['project:id,title','assignee:id,name','assigner:id,name'])->get();
+            })->select(['id', 'title', 'description', 'start_date', 'end_date', 'assigned_to', 'assigned_by', 'project_id', 'status', 'priority', 'created_at', 'updated_at'])
+                ->with(['project:id,title', 'assignee:id,name', 'assigner:id,name'])->get();
 
             $projects = Project::whereJsonContains('assigned_users', $user->id)
                 ->where(function ($q) use ($today) {
                     $q->whereDate('start_date', '>=', $today)->orWhereDate('end_date', '>=', $today);
-                })->select(['id','title','description','start_date','end_date','assigned_users','status','priority','created_by'])
+                })->select(['id', 'title', 'description', 'start_date', 'end_date', 'assigned_users', 'status', 'priority', 'created_by'])
                 ->with(['creator:id,name'])->get();
 
             $deliverables = Deliverable::where('assigned_to', $user->id)
                 ->whereDate('due_date', '>=', $today)
-                ->select(['id','title','description','due_date','assigned_to','created_by','project_id','task_id','status','priority','submitted_at','approved_at','rejected_at'])
-                ->with(['project:id,title','assignee:id,name','creator:id,name'])->get();
+                ->select(['id', 'title', 'description', 'due_date', 'assigned_to', 'created_by', 'project_id', 'task_id', 'status', 'priority', 'submitted_at', 'approved_at', 'rejected_at'])
+                ->with(['project:id,title', 'assignee:id,name', 'creator:id,name'])->get();
 
-            $manualEventsQuery = Event::with(['user:id,name','assignedUsers:id']);
-            if (!in_array($user->role, ['admin', 'manager'])) {
+            $manualEventsQuery = Event::with(['user:id,name', 'assignedUsers:id']);
+            if (! in_array($user->role, ['admin', 'manager'])) {
                 $manualEventsQuery->where(fn ($q) => $q->where('is_global', true)->orWhereHas('assignedUsers', fn ($aq) => $aq->where('user_id', $user->id)));
             }
             $manualEvents = $manualEventsQuery->where(function ($q) use ($today) {
@@ -218,6 +231,7 @@ class EventController extends Controller
             $todayEvents = $events->filter(fn ($ev) => substr($ev['start_date'] ?? $ev['date'] ?? '', 0, 10) === $today)->values();
             $upcomingEvents = $events->filter(function ($ev) use ($today) {
                 $date = substr($ev['start_date'] ?? $ev['date'] ?? '', 0, 10);
+
                 return $date !== '' && $date > $today;
             })->values();
 
@@ -234,7 +248,7 @@ class EventController extends Controller
         $isDeliverable = $source === 'deliverable';
 
         return array_merge([
-            'id' => $source . '-' . $id,
+            'id' => $source.'-'.$id,
             'source' => $source,
             'type' => $source,
             'title' => $model->title,
@@ -274,16 +288,16 @@ class EventController extends Controller
      *
      * Non-admin/manager users can only view global events or events they are assigned to.
      *
-     * @param  \App\Models\Event  $event  The event to retrieve.
-     * @return \Illuminate\Http\JsonResponse  JSON response with the formatted event or 403.
+     * @param  Event  $event  The event to retrieve.
+     * @return JsonResponse JSON response with the formatted event or 403.
      */
     public function show(Event $event)
     {
         $user = request()->user();
         $event->load('assignedUsers');
 
-        if (!in_array($user->role, ['admin', 'manager'])) {
-            if (!$event->is_global && !$event->assignedUsers->contains('id', $user->id)) {
+        if (! in_array($user->role, ['admin', 'manager'])) {
+            if (! $event->is_global && ! $event->assignedUsers->contains('id', $user->id)) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             }
         }
@@ -296,13 +310,15 @@ class EventController extends Controller
      *
      * Sends notifications to all assigned users (or all active users for global events).
      *
-     * @param  \Illuminate\Http\Request  $request  Validated input: title, description, type, color, start_date, end_date, all_day, is_global, assigned_user_ids.
-     * @return \Illuminate\Http\JsonResponse  JSON response with the created event.
+     * @param  Request  $request  Validated input: title, description, type, color, start_date, end_date, all_day, is_global, assigned_user_ids.
+     * @return JsonResponse JSON response with the created event.
      */
     public function store(Request $request)
     {
         $user = $request->user();
-        if (!in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        if (! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
 
         $validated = $request->validate([
             'title' => 'required|string|max:255', 'description' => 'nullable|string',
@@ -321,7 +337,7 @@ class EventController extends Controller
             'is_global' => $validated['is_global'] ?? false,
         ]);
 
-        if (!($validated['is_global'] ?? false) && !empty($validated['assigned_user_ids'])) {
+        if (! ($validated['is_global'] ?? false) && ! empty($validated['assigned_user_ids'])) {
             $event->assignedUsers()->sync($validated['assigned_user_ids']);
         }
 
@@ -330,15 +346,15 @@ class EventController extends Controller
         // Send confirmation email to performer
         $assignedCount = $event->assignedUsers()->count();
         $this->notificationService->confirmAction($user, 'Created', 'event', $event->title, [
-            'Assigned To' => $assignedCount > 0 ? $assignedCount . ' user(s)' : 'All users (global event)',
-            'Date' => $event->start_date ? \Carbon\Carbon::parse($event->start_date)->format('d M Y, g:i A') : 'N/A',
+            'Assigned To' => $assignedCount > 0 ? $assignedCount.' user(s)' : 'All users (global event)',
+            'Date' => $event->start_date ? Carbon::parse($event->start_date)->format('d M Y, g:i A') : 'N/A',
         ]);
 
         // Log activity
         $assignedCount = $event->assignedUsers()->count();
         $activityDesc = $assignedCount > 0
-            ? 'You created event "' . $event->title . '" and assigned it to ' . $assignedCount . ' user(s)'
-            : 'You created event "' . $event->title . '"';
+            ? 'You created event "'.$event->title.'" and assigned it to '.$assignedCount.' user(s)'
+            : 'You created event "'.$event->title.'"';
         $this->activityService->log($user->id, 'event_created', $activityDesc, 'event', $event->id);
 
         return response()->json(['success' => true, 'message' => 'Event created successfully', 'event' => $this->formatEventResponse($event->fresh())], 201);
@@ -349,14 +365,16 @@ class EventController extends Controller
      *
      * Syncs assigned user relationships and sends notifications to affected users.
      *
-     * @param  \Illuminate\Http\Request  $request  Validated input for updatable fields.
-     * @param  \App\Models\Event  $event  The event to update.
-     * @return \Illuminate\Http\JsonResponse  JSON response with the updated event.
+     * @param  Request  $request  Validated input for updatable fields.
+     * @param  Event  $event  The event to update.
+     * @return JsonResponse JSON response with the updated event.
      */
     public function update(Request $request, Event $event)
     {
         $user = $request->user();
-        if (!in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        if (! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
 
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255', 'description' => 'sometimes|nullable|string',
@@ -375,19 +393,22 @@ class EventController extends Controller
         ]);
 
         if (array_key_exists('assigned_user_ids', $validated)) {
-            if ($event->is_global) $event->assignedUsers()->detach();
-            else $event->assignedUsers()->sync($validated['assigned_user_ids'] ?? []);
+            if ($event->is_global) {
+                $event->assignedUsers()->detach();
+            } else {
+                $event->assignedUsers()->sync($validated['assigned_user_ids'] ?? []);
+            }
         }
 
         $this->sendBulkEventNotification($event, $user, 'event_updated', 'Event Updated');
 
         // Send confirmation email to performer
         $this->notificationService->confirmAction($user, 'Updated', 'event', $event->title, [
-            'Date' => $event->start_date ? \Carbon\Carbon::parse($event->start_date)->format('d M Y, g:i A') : 'N/A',
+            'Date' => $event->start_date ? Carbon::parse($event->start_date)->format('d M Y, g:i A') : 'N/A',
         ]);
 
         // Log activity
-        $this->activityService->log($user->id, 'event_updated', 'You updated event "' . $event->title . '"', 'event', $event->id);
+        $this->activityService->log($user->id, 'event_updated', 'You updated event "'.$event->title.'"', 'event', $event->id);
 
         return response()->json(['success' => true, 'message' => 'Event updated successfully', 'event' => $this->formatEventResponse($event->fresh())]);
     }
@@ -397,23 +418,25 @@ class EventController extends Controller
      *
      * Sends cancellation notifications to all assigned users before deletion.
      *
-     * @param  \App\Models\Event  $event  The event to delete.
-     * @return \Illuminate\Http\JsonResponse  JSON response confirming deletion.
+     * @param  Event  $event  The event to delete.
+     * @return JsonResponse JSON response confirming deletion.
      */
     public function destroy(Event $event)
     {
         $user = request()->user();
-        if (!in_array($user->role, ['admin', 'manager'])) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        if (! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
 
         $this->sendBulkEventNotification($event, $user, 'event_cancelled', 'Event Cancelled');
 
         // Send confirmation email to performer
         $this->notificationService->confirmAction($user, 'Cancelled', 'event', $event->title, [
-            'Original Date' => $event->start_date ? \Carbon\Carbon::parse($event->start_date)->format('d M Y, g:i A') : 'N/A',
+            'Original Date' => $event->start_date ? Carbon::parse($event->start_date)->format('d M Y, g:i A') : 'N/A',
         ]);
 
         // Log activity
-        $this->activityService->log($user->id, 'event_cancelled', 'You cancelled event "' . $event->title . '"', 'event', $event->id);
+        $this->activityService->log($user->id, 'event_cancelled', 'You cancelled event "'.$event->title.'"', 'event', $event->id);
 
         $event->delete();
 
@@ -423,11 +446,10 @@ class EventController extends Controller
     /**
      * Send bulk notifications to all event recipients, avoiding duplicates within 5 minutes.
      *
-     * @param  \App\Models\Event  $event  The event triggering the notification.
-     * @param  \App\Models\User  $sender  The user who performed the action.
+     * @param  Event  $event  The event triggering the notification.
+     * @param  User  $sender  The user who performed the action.
      * @param  string  $type  The notification type (event_created, event_updated, event_cancelled).
      * @param  string  $title  The notification title.
-     * @return void
      */
     private function sendBulkEventNotification(Event $event, User $sender, string $type, string $title): void
     {
@@ -441,8 +463,12 @@ class EventController extends Controller
             ->pluck('user_id')->toArray();
 
         foreach ($recipientIds as $recipientId) {
-            if ((int) $recipientId === (int) $sender->id) continue;
-            if (in_array((int) $recipientId, $existingUserIds, true)) continue;
+            if ((int) $recipientId === (int) $sender->id) {
+                continue;
+            }
+            if (in_array((int) $recipientId, $existingUserIds, true)) {
+                continue;
+            }
 
             $notifications[] = [
                 'user_id' => $recipientId, 'sender_user_id' => $sender->id,
@@ -460,25 +486,29 @@ class EventController extends Controller
      *
      * Returns all active users for global events, or the assigned user IDs for non-global events.
      *
-     * @param  \App\Models\Event  $event  The event to get recipients for.
-     * @return array  Array of user IDs.
+     * @param  Event  $event  The event to get recipients for.
+     * @return array Array of user IDs.
      */
     private function getEventRecipientIds(Event $event): array
     {
-        if ($event->is_global) return User::where('active', true)->pluck('id')->toArray();
+        if ($event->is_global) {
+            return User::where('active', true)->pluck('id')->toArray();
+        }
         $assignedIds = $event->assignedUsers()->pluck('user_id')->toArray();
-        return !empty($assignedIds) ? $assignedIds : [$event->user_id];
+
+        return ! empty($assignedIds) ? $assignedIds : [$event->user_id];
     }
 
     /**
      * Format an event model into a standardized API response array.
      *
-     * @param  \App\Models\Event  $event  The event to format.
-     * @return array  Formatted event data.
+     * @param  Event  $event  The event to format.
+     * @return array Formatted event data.
      */
     private function formatEventResponse(Event $event): array
     {
         $event->loadMissing('user:id,name', 'assignedUsers:id,name');
+
         return [
             'id' => $event->id, 'source' => 'manual', 'type' => $event->type,
             'title' => $event->title, 'description' => $event->description,
@@ -498,30 +528,33 @@ class EventController extends Controller
      * Format a date value to ISO 8601 format, or return null if empty.
      *
      * @param  mixed  $date  A Carbon instance or date string.
-     * @return string|null  Formatted date string or null.
+     * @return string|null Formatted date string or null.
      */
-    private function fmtDate($date): ?string { return $date ? (is_string($date) ? $date : $date->format('Y-m-d\TH:i:s')) : null; }
+    private function fmtDate($date): ?string
+    {
+        return $date ? (is_string($date) ? $date : $date->format('Y-m-d\TH:i:s')) : null;
+    }
 
     /**
      * Get a human-readable label for an event type.
      *
      * @param  string  $type  The event type key.
-     * @return string  The display label for the event type.
+     * @return string The display label for the event type.
      */
     private function getEventTypeLabel(string $type): string
     {
-        return ['Meeting'=>'Meeting','Training'=>'Training','Workshop'=>'Workshop','Client Meeting'=>'Client Meeting',
-            'Company Event'=>'Company Event','Holiday'=>'Holiday','Interview'=>'Interview',
-            'Project Milestone'=>'Project Milestone','Internship Activity'=>'Internship Activity','Other'=>'Other'][$type] ?? $type;
+        return ['Meeting' => 'Meeting', 'Training' => 'Training', 'Workshop' => 'Workshop', 'Client Meeting' => 'Client Meeting',
+            'Company Event' => 'Company Event', 'Holiday' => 'Holiday', 'Interview' => 'Interview',
+            'Project Milestone' => 'Project Milestone', 'Internship Activity' => 'Internship Activity', 'Other' => 'Other'][$type] ?? $type;
     }
 
     /**
      * Build a notification message based on the event type and sender.
      *
-     * @param  \App\Models\Event  $event  The event.
-     * @param  \App\Models\User  $sender  The user who triggered the event.
+     * @param  Event  $event  The event.
+     * @param  User  $sender  The user who triggered the event.
      * @param  string  $type  The notification type.
-     * @return string  The formatted notification message.
+     * @return string The formatted notification message.
      */
     private function buildEventMessage(Event $event, User $sender, string $type): string
     {

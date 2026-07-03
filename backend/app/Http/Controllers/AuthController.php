@@ -2,13 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\PasswordChangedMail;
+use App\Models\Project;
+use App\Models\Task;
+use App\Models\User;
+use App\Models\UserChange;
+use App\Services\ActivityService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
-use App\Models\Task;
-use App\Models\Project;
-use App\Models\User;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Controller responsible for authentication actions.
@@ -23,8 +28,8 @@ class AuthController extends Controller
      * Validates credentials, checks account active status, generates a token,
      * tracks last login time, and normalizes the role format.
      *
-     * @param  \Illuminate\Http\Request  $request  Input: email (required), password (required).
-     * @return \Illuminate\Http\JsonResponse  JSON response with token, role, and user data on success.
+     * @param  Request  $request  Input: email (required), password (required).
+     * @return JsonResponse JSON response with token, role, and user data on success.
      */
     public function login(Request $request)
     {
@@ -32,25 +37,25 @@ class AuthController extends Controller
             // validation
             $request->validate([
                 'email' => 'required|email',
-                'password' => 'required'
+                'password' => 'required',
             ]);
 
             // Look up user by professional_email (not personal email)
             $user = User::where('professional_email', $request->email)->first();
 
-            if (!$user || !Hash::check($request->password, $user->password)) {
+            if (! $user || ! Hash::check($request->password, $user->password)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid Email or Password'
+                    'message' => 'Invalid Email or Password',
                 ], 401);
             }
 
             // logged in user
 
-            if ($user->active === false && !$user->must_change_password) {
+            if ($user->active === false && ! $user->must_change_password) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Your account has been resigned. You no longer have access to the system. Please contact your administrator.'
+                    'message' => 'Your account has been resigned. You no longer have access to the system. Please contact your administrator.',
                 ], 403);
             }
 
@@ -83,7 +88,7 @@ class AuthController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage() ?: 'Server Error'
+                'message' => $e->getMessage() ?: 'Server Error',
             ], 500);
         }
     }
@@ -91,8 +96,8 @@ class AuthController extends Controller
     /**
      * Log out the authenticated user by revoking the current access token.
      *
-     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request with the authenticated user.
-     * @return \Illuminate\Http\JsonResponse  JSON response confirming logout.
+     * @param  Request  $request  The incoming HTTP request with the authenticated user.
+     * @return JsonResponse JSON response confirming logout.
      */
     public function logout(Request $request)
     {
@@ -100,7 +105,7 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Logout successful'
+            'message' => 'Logout successful',
         ]);
     }
 
@@ -110,8 +115,8 @@ class AuthController extends Controller
      * Used when a newly created user must set their password on first login.
      * Clears the must_change_password flag after successful update.
      *
-     * @param  \Illuminate\Http\Request  $request  Input: new_password (required, min 6 chars).
-     * @return \Illuminate\Http\JsonResponse  JSON response confirming password change.
+     * @param  Request  $request  Input: new_password (required, min 6 chars).
+     * @return JsonResponse JSON response confirming password change.
      */
     public function firstTimeChangePassword(Request $request)
     {
@@ -133,7 +138,7 @@ class AuthController extends Controller
             if (Hash::check($request->new_password, $user->password)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'New password must be different from your temporary password.'
+                    'message' => 'New password must be different from your temporary password.',
                 ], 422);
             }
 
@@ -144,9 +149,9 @@ class AuthController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Password changed successfully. Please login with your new password.'
+                'message' => 'Password changed successfully. Please login with your new password.',
             ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character (@$!%*?&#).',
@@ -155,7 +160,7 @@ class AuthController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage() ?: 'Server Error'
+                'message' => $e->getMessage() ?: 'Server Error',
             ], 500);
         }
     }
@@ -166,8 +171,8 @@ class AuthController extends Controller
      * Returns all profile fields, document references, task statistics (assigned/completed/pending),
      * total projects created, account metadata, and last login information.
      *
-     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request with the authenticated user.
-     * @return \Illuminate\Http\JsonResponse  JSON response with full user profile, stats, and account info.
+     * @param  Request  $request  The incoming HTTP request with the authenticated user.
+     * @return JsonResponse JSON response with full user profile, stats, and account info.
      */
     public function myProfile(Request $request)
     {
@@ -179,7 +184,7 @@ class AuthController extends Controller
             ->selectRaw("COUNT(CASE WHEN status IN ('pending', 'in_progress') THEN 1 END) as pending")
             ->first();
 
-        $taskStats = $taskStats ?? (object)['total_assigned' => 0, 'completed' => 0, 'pending' => 0];
+        $taskStats = $taskStats ?? (object) ['total_assigned' => 0, 'completed' => 0, 'pending' => 0];
 
         $totalProjects = Project::where('created_by', $user->id)->count();
 
@@ -241,17 +246,17 @@ class AuthController extends Controller
             'account' => [
                 'account_age' => $user->created_at->diffForHumans(),
                 'days_since_creation' => $user->created_at->diffInDays(now()),
-                'status' => !$user->active ? 'Resigned' : ($user->must_change_password ? 'Inactive' : 'Active'),
+                'status' => ! $user->active ? 'Resigned' : ($user->must_change_password ? 'Inactive' : 'Active'),
                 'last_login' => $user->last_login_at?->toDateTimeString() ?? 'Never logged in',
             ],
-            'activity_max_id' => (int) \App\Models\UserChange::where('user_id', $user->id)->max('id'),
+            'activity_max_id' => (int) UserChange::where('user_id', $user->id)->max('id'),
         ]);
     }
 
     public function myChanges(Request $request)
     {
         $user = $request->user();
-        $changes = \App\Models\UserChange::with('modifiedBy:id,name')
+        $changes = UserChange::with('modifiedBy:id,name')
             ->where('user_id', $user->id)
             ->latest()
             ->get();
@@ -266,8 +271,8 @@ class AuthController extends Controller
      * Empty strings are converted to null for proper nullable field handling.
      * Legacy fields (phone_number, present_address) are synced to their modern equivalents.
      *
-     * @param  \Illuminate\Http\Request  $request  Input: various profile fields and optional file uploads.
-     * @return \Illuminate\Http\JsonResponse  JSON response with the updated user profile.
+     * @param  Request  $request  Input: various profile fields and optional file uploads.
+     * @return JsonResponse JSON response with the updated user profile.
      */
     public function updateProfile(Request $request)
     {
@@ -282,7 +287,7 @@ class AuthController extends Controller
         $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'email' => 'sometimes|required|email|max:255',
-            'role' => ['sometimes', 'required', \Illuminate\Validation\Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member'])],
+            'role' => ['sometimes', 'required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member'])],
             'father_name' => 'nullable|string|max:255',
             'id_card_number' => 'nullable|string|max:32',
             'phone_number' => 'nullable|string|max:32',
@@ -349,7 +354,7 @@ class AuthController extends Controller
 
         $user->save();
 
-        if (!empty($oldValues)) {
+        if (! empty($oldValues)) {
             $changeRecords = [];
             foreach ($oldValues as $field => $oldVal) {
                 $newVal = $user->$field;
@@ -365,8 +370,8 @@ class AuthController extends Controller
                     ];
                 }
             }
-            if (!empty($changeRecords)) {
-                \App\Models\UserChange::insert($changeRecords);
+            if (! empty($changeRecords)) {
+                UserChange::insert($changeRecords);
             }
         }
 
@@ -381,8 +386,8 @@ class AuthController extends Controller
                     \Storage::disk('public')->delete($user->$field);
                 }
                 $file = $request->file($field);
-                $filename = $field . '_' . time() . '_' . $file->getClientOriginalName();
-                $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+                $filename = $field.'_'.time().'_'.$file->getClientOriginalName();
+                $path = $file->storeAs('user_documents/'.$user->id, $filename, 'public');
                 $user->$field = $path;
             }
         }
@@ -401,8 +406,8 @@ class AuthController extends Controller
      *
      * Revokes all other tokens on password change for security.
      *
-     * @param  \Illuminate\Http\Request  $request  Input: old_password (required), new_password (required, min 6 chars).
-     * @return \Illuminate\Http\JsonResponse  JSON response confirming password change.
+     * @param  Request  $request  Input: old_password (required), new_password (required, min 6 chars).
+     * @return JsonResponse JSON response confirming password change.
      */
     public function changePassword(Request $request)
     {
@@ -422,17 +427,17 @@ class AuthController extends Controller
 
             $user = $request->user();
 
-            if (!Hash::check($request->old_password, $user->password)) {
+            if (! Hash::check($request->old_password, $user->password)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Current password is incorrect.'
+                    'message' => 'Current password is incorrect.',
                 ], 422);
             }
 
             if (Hash::check($request->new_password, $user->password)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'New password must be different from your current password.'
+                    'message' => 'New password must be different from your current password.',
                 ], 422);
             }
 
@@ -445,7 +450,7 @@ class AuthController extends Controller
             // Send confirmation email to professional email
             if ($user->professional_email) {
                 try {
-                    Mail::to($user->professional_email)->send(new \App\Mail\PasswordChangedMail($user));
+                    Mail::to($user->professional_email)->send(new PasswordChangedMail($user));
                 } catch (\Throwable $e) {
                     \Log::error('Failed to send password changed email', ['user_id' => $user->id, 'error' => $e->getMessage()]);
                 }
@@ -453,7 +458,7 @@ class AuthController extends Controller
 
             // Log activity
             try {
-                $activityService = new \App\Services\ActivityService();
+                $activityService = new ActivityService;
                 $activityService->log(
                     userId: $user->id,
                     activityType: 'profile',
@@ -468,9 +473,9 @@ class AuthController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Password changed successfully'
+                'message' => 'Password changed successfully',
             ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character (@$!%*?&#).',
@@ -479,7 +484,7 @@ class AuthController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage() ?: 'Server Error'
+                'message' => $e->getMessage() ?: 'Server Error',
             ], 500);
         }
     }

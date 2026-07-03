@@ -7,6 +7,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Queue\SerializesModels;
 
 class PasswordChangedMail extends Mailable
@@ -14,15 +15,20 @@ class PasswordChangedMail extends Mailable
     use Queueable, SerializesModels;
 
     public User $user;
+    public string $senderEmail;
+    public string $senderName;
 
-    public function __construct(User $user)
+    public function __construct(User $user, string $senderEmail = '', string $senderName = '')
     {
         $this->user = $user;
+        $this->senderEmail = $senderEmail ?: config('mail.from.address');
+        $this->senderName = $senderName ?: config('mail.from.name');
     }
 
     public function envelope(): Envelope
     {
         return new Envelope(
+            from: new Address($this->senderEmail, $this->senderName),
             subject: 'Password Changed Successfully - TechXaro PMS',
         );
     }

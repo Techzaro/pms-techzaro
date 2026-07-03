@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\UserActivityView;
+use App\Models\DeliverableChange;
 use App\Models\ProjectChange;
 use App\Models\TaskChange;
 use App\Models\TaskWorkflowEvent;
-use App\Models\DeliverableChange;
+use App\Models\UserActivityView;
 use App\Models\UserChange;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class ActivityviewController extends Controller
 {
@@ -28,7 +28,9 @@ class ActivityviewController extends Controller
         foreach ($entities as $entity) {
             $type = $entity['type'] ?? null;
             $id = $entity['id'] ?? null;
-            if (!$type || !$id) continue;
+            if (! $type || ! $id) {
+                continue;
+            }
 
             $key = "{$type}:{$id}";
             $maxId = $this->getMaxActivityId($type, $id);
@@ -63,7 +65,7 @@ class ActivityviewController extends Controller
         $type = $request->input('type');
         $id = $request->input('id');
 
-        if (!$type || !$id) {
+        if (! $type || ! $id) {
             return response()->json(['success' => false, 'message' => 'type and id required'], 422);
         }
 
@@ -117,8 +119,8 @@ class ActivityviewController extends Controller
                 ->where('id', '>', $lastViewedId)
                 ->count()
                 + TaskWorkflowEvent::where('task_id', $id)
-                ->where('id', '>', $lastViewedId)
-                ->count(),
+                    ->where('id', '>', $lastViewedId)
+                    ->count(),
             'deliverable' => DeliverableChange::where('deliverable_id', $id)
                 ->where('id', '>', $lastViewedId)
                 ->count(),

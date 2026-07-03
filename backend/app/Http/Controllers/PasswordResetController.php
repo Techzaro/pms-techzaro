@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\PasswordResetMail;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
-use Illuminate\Auth\Events\PasswordReset;
-use App\Models\User;
-use App\Mail\PasswordResetMail;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class PasswordResetController extends Controller
 {
@@ -20,8 +23,8 @@ class PasswordResetController extends Controller
      * Returns a generic success message regardless of email existence
      * to prevent user enumeration attacks.
      *
-     * @param  \Illuminate\Http\Request  $request  Input: email (required, valid professional email).
-     * @return \Illuminate\Http\JsonResponse  JSON response confirming email was sent.
+     * @param  Request  $request  Input: email (required, valid professional email).
+     * @return JsonResponse JSON response confirming email was sent.
      */
     public function forgotPassword(Request $request)
     {
@@ -37,8 +40,9 @@ class PasswordResetController extends Controller
             // Look up user by professional_email (Outlook/cPanel email)
             $user = User::where('professional_email', $professionalEmail)->first();
 
-            if (!$user || !$user->active) {
+            if (! $user || ! $user->active) {
                 \Log::info('Password reset: user not found or inactive', ['professional_email' => $professionalEmail]);
+
                 return response()->json([
                     'success' => true,
                     'message' => 'If an account with that email exists, a password reset link has been sent.',
@@ -57,7 +61,7 @@ class PasswordResetController extends Controller
             );
 
             $frontendUrl = config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:5173'));
-            $resetUrl = $frontendUrl . '/reset-password?token=' . $token . '&email=' . urlencode($user->professional_email);
+            $resetUrl = $frontendUrl.'/reset-password?token='.$token.'&email='.urlencode($user->professional_email);
 
             // Send email to the professional email
             $sendTo = $user->professional_email;
@@ -77,7 +81,7 @@ class PasswordResetController extends Controller
                 'success' => true,
                 'message' => 'If an account with that email exists, a password reset link has been sent.',
             ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Please provide a valid email address.',
@@ -85,6 +89,7 @@ class PasswordResetController extends Controller
             ], 422);
         } catch (\Throwable $e) {
             \Log::error('Password reset email failed', ['email' => $professionalEmail ?? null, 'error' => $e->getMessage()]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Something went wrong. Please try again later.',
@@ -99,8 +104,8 @@ class PasswordResetController extends Controller
      * password rules, updates the password, and clears the token.
      * Revokes all existing tokens for the user for security.
      *
-     * @param  \Illuminate\Http\Request  $request  Input: email (required), token (required), password (required, strong).
-     * @return \Illuminate\Http\JsonResponse  JSON response confirming password reset.
+     * @param  Request  $request  Input: email (required), token (required), password (required, strong).
+     * @return JsonResponse JSON response confirming password reset.
      */
     public function resetPassword(Request $request)
     {
@@ -120,23 +125,24 @@ class PasswordResetController extends Controller
                 ->where('email', $email)
                 ->first();
 
-            if (!$record) {
+            if (! $record) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Invalid or expired reset token. Please request a new one.',
                 ], 422);
             }
 
-            if (!Hash::check($token, $record->token)) {
+            if (! Hash::check($token, $record->token)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Invalid or expired reset token. Please request a new one.',
                 ], 422);
             }
 
-            $tokenCreatedAt = \Carbon\Carbon::parse($record->created_at);
+            $tokenCreatedAt = Carbon::parse($record->created_at);
             if ($tokenCreatedAt->diffInMinutes(now()) > config('auth.passwords.users.expire', 60)) {
                 \DB::table('password_reset_tokens')->where('email', $email)->delete();
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Reset token has expired. Please request a new one.',
@@ -145,7 +151,7 @@ class PasswordResetController extends Controller
 
             $user = User::where('professional_email', $email)->first();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Invalid or expired reset token. Please request a new one.',
@@ -166,11 +172,12 @@ class PasswordResetController extends Controller
                 'success' => true,
                 'message' => 'Your password has been reset successfully.',
             ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $message = 'Please check your input.';
             if (str_contains($e->getMessage(), 'password')) {
                 $message = 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.';
             }
+
             return response()->json([
                 'success' => false,
                 'message' => $message,

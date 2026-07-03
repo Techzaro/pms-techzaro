@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\NotificationResource;
 use App\Models\Notification;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 /**
  * Controller for managing user notifications.
@@ -20,8 +22,8 @@ class NotificationController extends Controller
      * Excludes notifications the user triggered themselves. Supports search
      * by title/message, filtering by type, and read/unread filtering.
      *
-     * @param  \Illuminate\Http\Request  $request  Query parameters: search, type, filter (unread|read).
-     * @return \Illuminate\Http\Resources\Json\AnonymousResourceCollection  Paginated notification resources.
+     * @param  Request  $request  Query parameters: search, type, filter (unread|read).
+     * @return AnonymousResourceCollection Paginated notification resources.
      */
     public function index(Request $request)
     {
@@ -31,7 +33,7 @@ class NotificationController extends Controller
             ->where(function ($q) use ($user) {
                 // Exclude notifications triggered by the user themselves
                 $q->whereNull('sender_user_id')
-                  ->orWhere('sender_user_id', '!=', $user->id);
+                    ->orWhere('sender_user_id', '!=', $user->id);
             })
             ->with('sender:id,name')
             ->latest();
@@ -40,7 +42,7 @@ class NotificationController extends Controller
             $search = $request->input('search');
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('message', 'like', "%{$search}%");
+                    ->orWhere('message', 'like', "%{$search}%");
             });
         }
 
@@ -63,8 +65,8 @@ class NotificationController extends Controller
     /**
      * Get the count of unread notifications for the authenticated user.
      *
-     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
-     * @return \Illuminate\Http\JsonResponse  JSON response with unread_count.
+     * @param  Request  $request  The incoming HTTP request.
+     * @return JsonResponse JSON response with unread_count.
      */
     public function unreadCount(Request $request)
     {
@@ -73,7 +75,7 @@ class NotificationController extends Controller
             ->where('is_read', false)
             ->where(function ($q) use ($user) {
                 $q->whereNull('sender_user_id')
-                  ->orWhere('sender_user_id', '!=', $user->id);
+                    ->orWhere('sender_user_id', '!=', $user->id);
             })
             ->count();
 
@@ -83,9 +85,9 @@ class NotificationController extends Controller
     /**
      * Mark a single notification as read.
      *
-     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
-     * @param  \App\Models\Notification  $notification  The notification to mark as read.
-     * @return \Illuminate\Http\JsonResponse  JSON response confirming the notification was marked.
+     * @param  Request  $request  The incoming HTTP request.
+     * @param  Notification  $notification  The notification to mark as read.
+     * @return JsonResponse JSON response confirming the notification was marked.
      */
     public function markAsRead(Request $request, Notification $notification)
     {
@@ -101,8 +103,8 @@ class NotificationController extends Controller
     /**
      * Mark all unread notifications as read for the authenticated user.
      *
-     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
-     * @return \Illuminate\Http\JsonResponse  JSON response confirming all notifications marked.
+     * @param  Request  $request  The incoming HTTP request.
+     * @return JsonResponse JSON response confirming all notifications marked.
      */
     public function markAllAsRead(Request $request)
     {
@@ -111,7 +113,7 @@ class NotificationController extends Controller
             ->where('is_read', false)
             ->where(function ($q) use ($user) {
                 $q->whereNull('sender_user_id')
-                  ->orWhere('sender_user_id', '!=', $user->id);
+                    ->orWhere('sender_user_id', '!=', $user->id);
             })
             ->update(['is_read' => true]);
 

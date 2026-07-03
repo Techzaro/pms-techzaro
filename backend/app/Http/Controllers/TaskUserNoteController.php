@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Task;
 use App\Models\TaskUserNote;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
@@ -16,8 +17,8 @@ class TaskUserNoteController extends Controller
     /**
      * Get all personal notes for a task belonging to the authenticated user.
      *
-     * @param  \App\Models\Task  $task  The task to retrieve notes for.
-     * @return \Illuminate\Http\JsonResponse  JSON response with the user's notes.
+     * @param  Task  $task  The task to retrieve notes for.
+     * @return JsonResponse JSON response with the user's notes.
      */
     public function show(Task $task)
     {
@@ -32,9 +33,9 @@ class TaskUserNoteController extends Controller
     /**
      * Create a new personal note on a task for the authenticated user.
      *
-     * @param  \Illuminate\Http\Request  $request  Input: note (required, max 5000 chars).
-     * @param  \App\Models\Task  $task  The task to add the note to.
-     * @return \Illuminate\Http\JsonResponse  JSON response with the updated notes list.
+     * @param  Request  $request  Input: note (required, max 5000 chars).
+     * @param  Task  $task  The task to add the note to.
+     * @return JsonResponse JSON response with the updated notes list.
      */
     public function store(Request $request, Task $task)
     {
@@ -59,9 +60,9 @@ class TaskUserNoteController extends Controller
     /**
      * Delete a personal note. Users can only delete their own notes.
      *
-     * @param  \App\Models\Task  $task  The task the note belongs to.
-     * @param  \App\Models\TaskUserNote  $note  The note to delete.
-     * @return \Illuminate\Http\JsonResponse  JSON response with the updated notes list.
+     * @param  Task  $task  The task the note belongs to.
+     * @param  TaskUserNote  $note  The note to delete.
+     * @return JsonResponse JSON response with the updated notes list.
      */
     public function destroy(Task $task, TaskUserNote $note)
     {

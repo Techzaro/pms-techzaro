@@ -274,12 +274,38 @@ function UserProfile() {
     return errors;
   };
 
+  const scrollToFirstError = (errors) => {
+    const fieldOrder = [
+      "fullName", "fatherName", "idCardNumber", "phoneNumber",
+      "presentAddress", "emergencyContactPhone",
+      "personalEmail", "professionalEmail", "professionalEmailPassword",
+      "designation", "designationCustom", "department", "departmentCustom",
+      "employeeCode", "jobStartedDate", "grossSalary", "bankAccountNumber",
+    ];
+    setTimeout(() => {
+      const modalBody = document.querySelector(".user-modal-content");
+      for (const key of fieldOrder) {
+        if (errors[key]) {
+          const el = document.getElementById(key);
+          if (el) {
+            if (modalBody) el.scrollIntoView({ block: "center", behavior: "smooth" });
+            el.focus();
+            break;
+          }
+        }
+      }
+    }, 100);
+  };
+
   /** Submit the updated user data (with optional file uploads) to the API. */
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     const errors = validateEditForm();
     setEditErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).length > 0) {
+      scrollToFirstError(errors);
+      return;
+    }
 
     const finalDepartment =
       editUser.department === "__custom__" ? editUser.departmentCustom : editUser.department;
@@ -574,7 +600,7 @@ function UserProfile() {
               <div className="info-card-body">
                 <div className="info-row">
                   <span className="info-label">Gross Salary</span>
-                  <span className="info-value">{user.gross_salary ? `USD ${Number(user.gross_salary).toLocaleString()}` : "---"}</span>
+                  <span className="info-value">{user.gross_salary ? `PKR ${Number(user.gross_salary).toLocaleString()}` : "---"}</span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Applied Via</span>
@@ -880,7 +906,7 @@ function UserProfile() {
               <div className="user-form-grid">
                 <div className="form-row">
                   <label htmlFor="edit-gross_salary">Gross Salary</label>
-                  <input type="number" id="edit-gross_salary" name="gross_salary" value={editUser.gross_salary} onChange={handleEditChange} placeholder="Enter gross salary" className={editErrors.gross_salary ? "field-error" : ""} />
+                  <input type="number" id="edit-gross_salary" name="gross_salary" value={editUser.gross_salary} onChange={handleEditChange} placeholder="Enter gross salary (PKR)" className={editErrors.gross_salary ? "field-error" : ""} />
                   {editErrors.gross_salary && <span className="field-error-text">{editErrors.gross_salary}</span>}
                 </div>
                 <div className="form-row">

@@ -1,25 +1,23 @@
 /**
  * CompanyDocuments.jsx
- * Modal component for managing company documents (logo, QR code, employment contract,
- * offer letter, techxaro regulations) that are attached to user onboarding emails.
+ * Modal component for managing company documents (logo, QR code, other documents)
+ * that are attached to user onboarding emails.
  *
  * Admin/Manager only. Allows uploading, viewing, and replacing each document type.
+ * Other Documents supports multiple file uploads.
  */
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Upload, FileText, Image, Check, X, Loader2 } from "lucide-react";
+import { Upload, FileText, Image, Check, X, Loader2, Trash2 } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { notify } from "../utils/notify";
 import "./CompanyDocuments.css";
 
-const DOC_TYPES = [
+const SINGLE_TYPES = [
   { key: "company_logo", label: "Company Logo", accept: ".png,.jpg,.jpeg,.webp", icon: "image" },
   { key: "qr_code", label: "QR Code", accept: ".png,.jpg,.jpeg,.webp", icon: "image" },
-  { key: "employment_contract", label: "Employment Contract", accept: ".pdf,.png,.jpg,.jpeg,.webp", icon: "file" },
-  { key: "offer_letter", label: "Offer Letter", accept: ".pdf,.png,.jpg,.jpeg,.webp", icon: "file" },
-  { key: "techxaro_regulations", label: "TechXaro Regulations", accept: ".pdf,.png,.jpg,.jpeg,.webp", icon: "file" },
 ];
 
 function CompanyDocuments({ isOpen, onClose }) {
@@ -81,9 +79,13 @@ function CompanyDocuments({ isOpen, onClose }) {
     }
   };
 
-  const handleDelete = async (type) => {
+  const handleDelete = async (type, filename) => {
     try {
-      const res = await fetch(`${API_URL}/company-documents/${type}`, {
+      const url = type === "other_documents" && filename
+        ? `${API_URL}/company-documents/${type}?filename=${encodeURIComponent(filename)}`
+        : `${API_URL}/company-documents/${type}`;
+
+      const res = await fetch(url, {
         method: "DELETE",
         headers: { Accept: "application/json", Authorization: `Bearer ${authToken()}` },
       });
@@ -100,6 +102,8 @@ function CompanyDocuments({ isOpen, onClose }) {
   };
 
   if (!isOpen) return null;
+
+  const otherDocs = documents.other_documents;
 
   return createPortal(
     <div className="cd-overlay" onClick={onClose}>
@@ -123,75 +127,141 @@ function CompanyDocuments({ isOpen, onClose }) {
               <span>Loading documents...</span>
             </div>
           ) : (
-            <div className="cd-doc-list">
-              {DOC_TYPES.map(({ key, label, accept, icon }) => {
-                const doc = documents[key];
-                const exists = doc?.exists;
-                const isUploading = uploading === key;
+            <>
+              <div className="cd-doc-list">
+                {SINGLE_TYPES.map(({ key, label, accept, icon }) => {
+                  const doc = documents[key];
+                  const exists = doc?.exists;
+                  const isUploading = uploading === key;
 
-                return (
-                  <div key={key} className={`cd-doc-item ${exists ? "cd-doc-item--active" : ""}`}>
-                    <div className="cd-doc-icon">
-                      {icon === "image" ? <Image size={20} /> : <FileText size={20} />}
-                    </div>
-                    <div className="cd-doc-info">
-                      <span className="cd-doc-label">{label}</span>
-                      <span className={`cd-doc-status ${exists ? "cd-doc-status--ok" : ""}`}>
-                        {exists ? (
+                  return (
+                    <div key={key} className={`cd-doc-item ${exists ? "cd-doc-item--active" : ""}`}>
+                      <div className="cd-doc-icon">
+                        {icon === "image" ? <Image size={20} /> : <FileText size={20} />}
+                      </div>
+                      <div className="cd-doc-info">
+                        <span className="cd-doc-label">{label}</span>
+                        <span className={`cd-doc-status ${exists ? "cd-doc-status--ok" : ""}`}>
+                          {exists ? (
+                            <>
+                              <Check size={14} /> Uploaded
+                            </>
+                          ) : (
+                            "Not uploaded"
+                          )}
+                        </span>
+                      </div>
+                      <div className="cd-doc-actions">
+                        <label className={`cd-upload-btn ${isUploading ? "cd-upload-btn--loading" : ""}`}>
+                          {isUploading ? (
+                            <Loader2 size={14} className="cd-spin" />
+                          ) : (
+                            <Upload size={14} />
+                          )}
+                          <span>{exists ? "Replace" : "Upload"}</span>
+                          <input
+                            type="file"
+                            accept={accept}
+                            style={{ display: "none" }}
+                            onChange={(e) => {
+                              const f = e.target.files[0];
+                              if (f) handleUpload(key, f);
+                              e.target.value = "";
+                            }}
+                            disabled={isUploading}
+                          />
+                        </label>
+                        {exists && (
                           <>
-                            <Check size={14} /> Uploaded
+                            <a
+                              href={doc.url ? `${API_URL.replace("/api", "")}/storage/${doc.path}` : "#"}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="cd-view-btn"
+                            >
+                              View
+                            </a>
+                            <button className="cd-delete-btn" onClick={() => handleDelete(key)}>
+                              Delete
+                            </button>
                           </>
-                        ) : (
-                          "Not uploaded"
                         )}
-                      </span>
+                      </div>
                     </div>
-                    <div className="cd-doc-actions">
-                      <label className={`cd-upload-btn ${isUploading ? "cd-upload-btn--loading" : ""}`}>
-                        {isUploading ? (
-                          <Loader2 size={14} className="cd-spin" />
-                        ) : (
-                          <Upload size={14} />
-                        )}
-                        <span>{exists ? "Replace" : "Upload"}</span>
-                        <input
-                          type="file"
-                          accept={accept}
-                          style={{ display: "none" }}
-                          onChange={(e) => {
-                            const f = e.target.files[0];
-                            if (f) handleUpload(key, f);
-                            e.target.value = "";
-                          }}
-                          disabled={isUploading}
-                        />
-                      </label>
-                      {exists && (
-                        <>
-                          <a
-                            href={doc.url ? `${API_URL.replace("/api", "")}/storage/${doc.path}` : "#"}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="cd-view-btn"
-                          >
-                            View
-                          </a>
-                          <button className="cd-delete-btn" onClick={() => handleDelete(key)}>
-                            Delete
-                          </button>
-                        </>
-                      )}
-                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="cd-other-section">
+                <div className="cd-doc-item cd-doc-item--active">
+                  <div className="cd-doc-icon">
+                    <FileText size={20} />
                   </div>
-                );
-              })}
-            </div>
+                  <div className="cd-doc-info">
+                    <span className="cd-doc-label">Other Documents</span>
+                    <span className={`cd-doc-status ${otherDocs?.exists ? "cd-doc-status--ok" : ""}`}>
+                      {otherDocs?.exists ? (
+                        <>
+                          <Check size={14} /> {otherDocs.files.length} file(s) uploaded
+                        </>
+                      ) : (
+                        "No files uploaded"
+                      )}
+                    </span>
+                  </div>
+                  <div className="cd-doc-actions">
+                    <label className={`cd-upload-btn ${uploading === "other_documents" ? "cd-upload-btn--loading" : ""}`}>
+                      {uploading === "other_documents" ? (
+                        <Loader2 size={14} className="cd-spin" />
+                      ) : (
+                        <Upload size={14} />
+                      )}
+                      <span>Upload</span>
+                      <input
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.webp"
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                          const f = e.target.files[0];
+                          if (f) handleUpload("other_documents", f);
+                          e.target.value = "";
+                        }}
+                        disabled={uploading === "other_documents"}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {otherDocs?.files?.length > 0 && (
+                  <div className="cd-other-files">
+                    {otherDocs.files.map((file, idx) => (
+                      <div key={idx} className="cd-other-file-row">
+                        <a
+                          href={`${API_URL.replace("/api", "")}/storage/${file.path}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="cd-other-file-name"
+                        >
+                          {file.filename}
+                        </a>
+                        <button
+                          className="cd-delete-btn"
+                          onClick={() => handleDelete("other_documents", file.filename)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
 
         <div className="cd-footer">
           <p className="cd-footer-note">
-            User personal emails receive only these 5 standard documents. Admin/Manager confirmation emails also include all additional uploaded user documents.
+            Company Logo, QR Code, and Other Documents are attached to new user welcome emails.
           </p>
         </div>
       </div>
