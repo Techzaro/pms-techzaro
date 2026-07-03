@@ -36,6 +36,28 @@ function DashboardLayout({ children, hideRightSidebar = false }) {
         <Sidebar />
 
         <div className="dashboard-content">
+          <svg className="dashboard-wave-bg" viewBox="0 0 1200 500" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMin slice">
+            <path d="M0 0H1200V180C1200 180 1050 120 900 160C750 200 680 300 500 280C320 260 250 140 100 180C-50 220 0 350 0 350V0Z" fill="url(#wave1)" />
+            <path d="M0 0H1200V220C1200 220 1000 150 850 200C700 250 600 350 420 320C240 290 180 170 50 210C-80 250 0 400 0 400V0Z" fill="url(#wave2)" />
+            <path d="M0 0H1200V260C1200 260 950 180 780 240C610 300 520 380 350 360C180 340 120 230 0 270V0Z" fill="url(#wave3)" />
+            <defs>
+              <linearGradient id="wave1" x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor="#c7d2fe" stopOpacity="0.6" />
+                <stop offset="40%" stopColor="#ddd6fe" stopOpacity="0.4" />
+                <stop offset="100%" stopColor="#f5f7fb" stopOpacity="0.05" />
+              </linearGradient>
+              <linearGradient id="wave2" x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor="#a5b4fc" stopOpacity="0.35" />
+                <stop offset="50%" stopColor="#c4b5fd" stopOpacity="0.25" />
+                <stop offset="100%" stopColor="#ede9fe" stopOpacity="0.05" />
+              </linearGradient>
+              <linearGradient id="wave3" x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor="#e0e7ff" stopOpacity="0.3" />
+                <stop offset="60%" stopColor="#ede9fe" stopOpacity="0.15" />
+                <stop offset="100%" stopColor="#f5f7fb" stopOpacity="0.02" />
+              </linearGradient>
+            </defs>
+          </svg>
           {children}
         </div>
 
