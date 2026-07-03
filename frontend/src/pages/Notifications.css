@@ -267,16 +267,17 @@
 /* ── Read notification styling ── */
 
 .notif-item--read {
-  background: #fafafa;
+  background: #f9fafb;
+  border-left-color: #d1d5db;
 }
 
 .notif-item--read .notif-item-title {
-  color: #6b7280;
+  color: #111827;
   font-weight: 600;
 }
 
 .notif-item--read .notif-item-desc {
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 .notif-item--read:hover {

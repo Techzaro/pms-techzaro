@@ -37,7 +37,6 @@ class PasswordResetController extends Controller
 
             \Log::info('Password reset requested', ['professional_email' => $professionalEmail]);
 
-            // Look up user by professional_email (Outlook/cPanel email)
             $user = User::where('professional_email', $professionalEmail)->first();
 
             if (! $user || ! $user->active) {
@@ -49,9 +48,17 @@ class PasswordResetController extends Controller
                 ]);
             }
 
+            if (empty($user->professional_email)) {
+                \Log::error('Password reset: user has no professional_email', ['user_id' => $user->id]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No professional email configured for this account. Please contact admin.',
+                ], 422);
+            }
+
             $token = Str::random(64);
 
-            // Store token against professional_email (login email)
             \DB::table('password_reset_tokens')->updateOrInsert(
                 ['email' => $user->professional_email],
                 [
@@ -63,19 +70,28 @@ class PasswordResetController extends Controller
             $frontendUrl = config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:5173'));
             $resetUrl = $frontendUrl.'/reset-password?token='.$token.'&email='.urlencode($user->professional_email);
 
-            // Send email to the professional email
             $sendTo = $user->professional_email;
 
             \Log::info('Password reset: sending email', [
                 'user_id' => $user->id,
-                'login_email' => $user->email,
                 'professional_email' => $user->professional_email,
                 'send_to' => $sendTo,
             ]);
 
-            Mail::to($sendTo)->send(new PasswordResetMail($user, $resetUrl, $token));
+            try {
+                Mail::to($sendTo)->send(new PasswordResetMail($user, $resetUrl, $token));
+                \Log::info('Password reset: email sent successfully', ['send_to' => $sendTo]);
+            } catch (\Throwable $mailException) {
+                \Log::error('Password reset: SMTP send failed', [
+                    'send_to' => $sendTo,
+                    'error' => $mailException->getMessage(),
+                ]);
 
-            \Log::info('Password reset: email sent successfully', ['send_to' => $sendTo]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to send email. Please try again later.',
+                ], 500);
+            }
 
             return response()->json([
                 'success' => true,

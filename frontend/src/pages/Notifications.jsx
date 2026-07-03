@@ -268,16 +268,18 @@ function Notifications() {
     const token = authToken();
     if (!token) return;
     try {
-      await fetch(`${API_URL}/notifications/${id}/read`, {
+      const res = await fetch(`${API_URL}/notifications/${id}/read`, {
         method: "POST",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         skipLoader: true,
         _notifHandled: true,
       });
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
-      );
-      publish("data:changed");
+      if (res.ok) {
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+        );
+        publish("data:changed");
+      }
     } catch {}
   };
 

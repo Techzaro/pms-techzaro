@@ -32,7 +32,7 @@ class NotificationResource extends JsonResource
             'is_read' => (bool) $this->is_read,
             'sender' => UserMinResource::make($this->whenLoaded('sender')),
             'created_at' => $this->created_at?->diffForHumans(),
-            'created_at_raw' => $this->created_at?->format('Y-m-d\TH:i:s') . 'Z',
+            'created_at_raw' => $this->created_at?->format('Y-m-d\TH:i:s'),
         ];
     }
 }
