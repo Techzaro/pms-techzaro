@@ -12,13 +12,14 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import DonutChart from "../components/DonutChart";
 import PriorityBarChart from "../components/PriorityBarChart";
-import { useState, useCallback, memo, useMemo } from "react";
+import { useState, useCallback, memo, useMemo, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import CompanyEmployeeReport from "./CompanyEmployeeReport";
 import { getUser, rolePath } from "../utils/auth";
 import { useApiQuery } from "../hooks/useApi";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { MdGroup } from "react-icons/md";
 import "../components/Charts.css";
 import "./Reports.css";
 
@@ -152,6 +153,15 @@ function Reports() {
     { staleTime: 0, refetchOnMount: true, refetchInterval: 30000, enabled: isAdminOrManager || isTeamMembersView }
   );
 
+  const { data: teamsData, isLoading: isTeamsLoading } = useApiQuery(
+    ["report-teams-overview"],
+    "/reports/teams-overview",
+    null,
+    { staleTime: 0, refetchOnMount: true, enabled: isAdminOrManager }
+  );
+
+  const teams = Array.isArray(teamsData) ? teamsData : [];
+
   // Status breakdown for donut chart — API returns flat summary fields
   const totalTasks = summary?.total_assigned || 0;
 
@@ -181,6 +191,33 @@ function Reports() {
   useRefreshOnEvent(["task:created", "task:updated", "task:deleted", "task:approved", "task:rejected", "task:reopened", "data:changed"], refetchSummary);
 
   const navigate = useNavigate();
+
+  const [teamSlide, setTeamSlide] = useState(0);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const TEAMS_PER_VIEW = isMobile ? 1 : 3;
+  const sliderRef = useRef(null);
+  const [cardWidth, setCardWidth] = useState(0);
+  const totalTeamSlides = Math.max(0, teams.length - TEAMS_PER_VIEW);
+  const GAP = isMobile ? 0 : 20;
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    const measure = () => {
+      if (sliderRef.current) {
+        const containerWidth = sliderRef.current.offsetWidth;
+        const cw = (containerWidth - (TEAMS_PER_VIEW - 1) * GAP) / TEAMS_PER_VIEW;
+        setCardWidth(cw);
+      }
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [teams.length, TEAMS_PER_VIEW, GAP]);
 
   const handleSummaryCardClick = useCallback((card) => {
     if (!card.filter) return;
@@ -291,6 +328,136 @@ function Reports() {
             </div>
           </div>
         </div>
+
+        {/* TEAMS CARDS - Admin/Manager only */}
+        {isAdminOrManager && teams.length > 0 && (
+          <div className="teams-carousel-section">
+            <div className="teams-carousel-header">
+              <h3>Teams Overview</h3>
+              <button
+                onClick={() => navigate(rolePath("manage-team"))}
+                className="teams-view-all-btn"
+              >
+                View All Teams
+              </button>
+            </div>
+            {isTeamsLoading ? (
+              <div style={{ padding: "24px", textAlign: "center", color: "#9ca3af" }}>Loading...</div>
+            ) : (
+              <>
+                <div ref={sliderRef} style={{ overflow: "hidden" }}>
+                  <div style={{
+                    display: "flex", gap: `${GAP}px`, transition: "transform 0.3s ease",
+                    transform: `translateX(-${teamSlide * (cardWidth + GAP)}px)`,
+                  }}>
+                    {teams.map((team, index) => (
+                      <div
+                        key={team.id || index}
+                        className="team-report-card"
+                        style={{
+                          minWidth: cardWidth > 0 ? `${cardWidth}px` : `calc((100% - ${(TEAMS_PER_VIEW - 1) * GAP}px) / ${TEAMS_PER_VIEW})`,
+                          flex: cardWidth > 0 ? `0 0 ${cardWidth}px` : `0 0 calc((100% - ${(TEAMS_PER_VIEW - 1) * GAP}px) / ${TEAMS_PER_VIEW})`,
+                        }}
+                      >
+                        <div className="team-card-top">
+                          <div className="team-card-icon">
+                            <MdGroup size={24} />
+                          </div>
+                          <div className="team-card-info">
+                            <h4
+                              className="team-card-name"
+                              onClick={() => navigate(rolePath(`reports/team-members/${team.id}`))}
+                            >
+                              {team.name}
+                            </h4>
+                            <p className="team-card-leader">
+                              {team.leader ? `Lead: ${team.leader.name}` : "No leader"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="team-card-stats">
+                          <div className="team-card-stat">
+                            <span className="team-card-stat-value">{team.member_count}</span>
+                            <span className="team-card-stat-label">Members</span>
+                          </div>
+                          <div className="team-card-stat">
+                            <span className="team-card-stat-value" style={{ color: "#6366f1" }}>{team.assigned}</span>
+                            <span className="team-card-stat-label">Tasks</span>
+                          </div>
+                          <div className="team-card-stat">
+                            <span className="team-card-stat-value" style={{ color: "#22C55E" }}>{team.completed}</span>
+                            <span className="team-card-stat-label">Done</span>
+                          </div>
+                          <div className="team-card-stat">
+                            <span className="team-card-stat-value" style={{ color: "#ef4444" }}>{team.overdue}</span>
+                            <span className="team-card-stat-label">Overdue</span>
+                          </div>
+                        </div>
+
+                        <div className="team-card-progress">
+                          <div className="team-card-progress-header">
+                            <span>Completion</span>
+                            <span>{team.completion_rate}%</span>
+                          </div>
+                          <div className="team-card-progress-bar">
+                            <div
+                              className="team-card-progress-fill"
+                              style={{ width: `${team.completion_rate}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          className="team-card-action-btn"
+                          onClick={() => navigate(rolePath(`reports/team-members/${team.id}`))}
+                        >
+                          View Members
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M5 3L9 7L5 11" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {teams.length > TEAMS_PER_VIEW && (
+                  <div className="team-carousel-nav">
+                    <button
+                      onClick={() => setTeamSlide((s) => Math.max(0, s - 1))}
+                      disabled={teamSlide === 0}
+                      className="carousel-nav-btn"
+                      style={{ color: teamSlide === 0 ? "#CBD5E1" : "#1E293B", cursor: teamSlide === 0 ? "default" : "pointer" }}
+                    >
+                      &lt;
+                    </button>
+                    <div className="carousel-dots">
+                      {Array.from({ length: totalTeamSlides + 1 }).map((_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setTeamSlide(i)}
+                          className="carousel-dot"
+                          style={{
+                            width: i === teamSlide ? "28px" : "10px",
+                            background: i === teamSlide ? "#1E293B" : "#CBD5E1",
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => setTeamSlide((s) => Math.min(totalTeamSlides, s + 1))}
+                      disabled={teamSlide >= totalTeamSlides}
+                      className="carousel-nav-btn"
+                      style={{ color: teamSlide >= totalTeamSlides ? "#CBD5E1" : "#1E293B", cursor: teamSlide >= totalTeamSlides ? "default" : "pointer" }}
+                    >
+                      &gt;
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         {/* TABLE - Admin, Manager & Team Lead (on team members view) */}
         {showUserTable && (

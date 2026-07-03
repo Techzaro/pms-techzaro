@@ -169,6 +169,7 @@ function Sidebar() {
       isActive("reports") ||
       isActive("self-report") ||
       isActive("team-members-report") ||
+      location.pathname.startsWith(`${rolePrefix}/reports/team-members/`) ||
       (user.role === "team_lead" || user.role === "teamlead") && location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`);
 
     if (isReportsRoute) {
@@ -393,7 +394,7 @@ function Sidebar() {
 
           {/* Reports – dropdown for team_lead, simple link for others */}
           {(user.role === "team_lead" || user.role === "teamlead") ? (
-            <div className={`sidebar-link ${isActive("reports") || isActive("team-members-report") || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+            <div className={`sidebar-link ${isActive("reports") || isActive("team-members-report") || location.pathname.startsWith(`${rolePrefix}/reports/team-members/`) || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
               <div
                 onClick={toggleReports}
                 style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
@@ -430,7 +431,7 @@ function Sidebar() {
           ) : (
             <Link
               to={user.role === "member" ? rolePath("reports/user-performance/me") : rolePath("reports")}
-              className={`sidebar-link ${isActive("reports") || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`) ? "active" : ""}`}
+              className={`sidebar-link ${isActive("reports") || location.pathname.startsWith(`${rolePrefix}/reports/team-members/`) || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`) ? "active" : ""}`}
             >
               <MdBarChart />
               Reports

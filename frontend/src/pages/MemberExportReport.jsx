@@ -198,8 +198,9 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
       doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
       doc.roundedRect(M, y, CW, 24, 2, 2, "S");
       doc.setFillColor(209, 213, 219); doc.circle(M + 14, y + 12, 7.5, "F");
-      doc.setFillColor(180, 185, 195); doc.roundedRect(M + 10, y + 8, 8, 6, 1, 1, "F");
-      doc.setFillColor(229, 231, 235); doc.rect(M + 12, y + 6, 4, 2, "F");
+      doc.setFillColor(152, 163, 175); doc.circle(M + 14, y + 8.5, 3.5, "F");
+      doc.setFillColor(209, 213, 219); doc.circle(M + 14, y + 17, 5, "F");
+      doc.setFillColor(15, 23, 42); doc.circle(M + 14, y + 8.5, 1.5, "F");
       doc.setFontSize(8); doc.setFont("helvetica", "bold");
       doc.setTextColor(17, 24, 39); doc.text(user.name || "Unknown User", M + 27, y + 7);
       doc.setFontSize(5.5); doc.setFont("helvetica", "normal");
@@ -233,13 +234,13 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
         const cx = M + i * (cW + cGap);
         doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
         doc.roundedRect(cx, y, cW, 22, 2, 2, "S");
-        doc.setFillColor(...(c.key === "total_assigned" ? [79, 70, 229] : c.key === "approved" ? [34, 197, 94] : c.key === "pending" ? [245, 158, 11] : [239, 68, 68]));
-        doc.circle(cx + 9, y + 6, 4.5, "F");
+        const colArr = c.key === "total_assigned" ? [79, 70, 229] : c.key === "approved" ? [34, 197, 94] : c.key === "pending" ? [245, 158, 11] : [239, 68, 68];
+        doc.setFillColor(...colArr); doc.circle(cx + 9, y + 6, 4.5, "F");
         doc.setFillColor(255, 255, 255); doc.circle(cx + 9, y + 6, 2, "F");
         doc.setFontSize(6); doc.setFont("helvetica", "normal");
         doc.setTextColor(107, 114, 128); doc.text(c.label, cx + 18, y + 6);
         doc.setFontSize(18); doc.setFont("helvetica", "bold");
-        doc.setTextColor(...(c.key === "total_assigned" ? [79, 70, 229] : c.key === "approved" ? [34, 197, 94] : c.key === "pending" ? [245, 158, 11] : [239, 68, 68]));
+        doc.setTextColor(...colArr);
         doc.text(String(c.value), cx + 18, y + 16);
         doc.setFontSize(5); doc.setFont("helvetica", "normal");
         doc.setTextColor(156, 163, 175);
@@ -269,14 +270,14 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
         if (s.count <= 0) return;
         const sweep = (s.count / stTotal) * 2 * Math.PI;
         const endAngle = startAngle + sweep;
-        const segments = Math.max(Math.ceil(sweep / (Math.PI / 8)), 2);
-        const step = sweep / segments;
+        const steps = Math.max(Math.ceil(sweep / (Math.PI / 32)), 4);
+        const step = sweep / steps;
         const points = [];
-        for (let i = 0; i <= segments; i++) {
+        for (let i = 0; i <= steps; i++) {
           const a = startAngle + i * step;
           points.push([donutCx + outerR * Math.cos(a), donutCy + outerR * Math.sin(a)]);
         }
-        for (let i = segments; i >= 0; i--) {
+        for (let i = steps; i >= 0; i--) {
           const a = startAngle + i * step;
           points.push([donutCx + innerR * Math.cos(a), donutCy + innerR * Math.sin(a)]);
         }
@@ -308,12 +309,12 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
       const totalP = (priorityDistribution.high ?? 0) + (priorityDistribution.medium ?? 0) + (priorityDistribution.low ?? 0);
       doc.setFontSize(5.5); doc.setFont("helvetica", "normal");
       doc.setTextColor(156, 163, 175); doc.text(`${totalP} Total Tasks`, rX + 5, y + 10.5);
-      const priorityItems = [
+      const priItems = [
         { label: "High", count: priorityDistribution.high ?? 0, color: [239, 68, 68] },
         { label: "Medium", count: priorityDistribution.medium ?? 0, color: [245, 158, 11] },
         { label: "Low", count: priorityDistribution.low ?? 0, color: [16, 185, 129] },
       ];
-      priorityItems.forEach((p, i) => {
+      priItems.forEach((p, i) => {
         const sy = y + 18 + i * 9;
         const pct = totalP > 0 ? Math.round((p.count / totalP) * 100) : 0;
         doc.setFontSize(6); doc.setFont("helvetica", "normal");

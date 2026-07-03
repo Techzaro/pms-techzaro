@@ -1180,6 +1180,167 @@ class ReportController extends Controller
     }
 
     /**
+     * Get teams overview with member task stats for reports page cards.
+     *
+     * Returns all teams with member count, leader name, and aggregated
+     * task stats (assigned, completed, pending). Only accessible by
+     * admin/manager roles.
+     *
+     * @param  Request  $request  The incoming HTTP request.
+     * @return JsonResponse JSON response with team list and stats.
+     */
+    public function teamsOverview(Request $request)
+    {
+        $user = $request->user();
+        $role = $user->role === 'teamlead' ? 'team_lead' : $user->role;
+
+        if (! in_array($role, ['admin', 'manager', 'team_lead'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $teams = Team::with(['leader:id,name', 'members:id,name,role,email'])->orderBy('name');
+
+        // Team leads only see their own teams
+        if ($role === 'team_lead') {
+            $teams->where('leader_id', $user->id);
+        }
+
+        $teams = $teams->get();
+
+        // Collect all member IDs for bulk task stat query
+        $teamMemberMap = [];
+        $allMemberIds = [];
+        foreach ($teams as $team) {
+            $ids = $team->members->pluck('id')->toArray();
+            $teamMemberMap[$team->id] = $ids;
+            $allMemberIds = array_merge($allMemberIds, $ids);
+        }
+        $allMemberIds = array_unique($allMemberIds);
+
+        // Bulk load task counts per user
+        $userTaskCounts = [];
+        if (! empty($allMemberIds)) {
+            $rows = DB::table('task_user')
+                ->join('tasks', 'tasks.id', '=', 'task_user.task_id')
+                ->whereIn('task_user.user_id', $allMemberIds)
+                ->selectRaw('
+                    task_user.user_id,
+                    COUNT(*) as assigned,
+                    SUM(CASE WHEN tasks.status IN ("completed","done","approved") THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN tasks.end_date < NOW() AND tasks.status NOT IN ("completed","done","abandoned","approved") THEN 1 ELSE 0 END) as overdue
+                ')
+                ->groupBy('task_user.user_id')
+                ->get();
+
+            foreach ($rows as $r) {
+                $userTaskCounts[$r->user_id] = [
+                    'assigned' => (int) $r->assigned,
+                    'completed' => (int) $r->completed,
+                    'overdue' => (int) $r->overdue,
+                ];
+            }
+        }
+
+        // Bulk load status breakdown and priority distribution per team
+        $teamStatusBreakdown = [];
+        $teamPriorityDistribution = [];
+        if (! empty($allMemberIds)) {
+            $statusRows = DB::table('task_user')
+                ->join('tasks', 'tasks.id', '=', 'task_user.task_id')
+                ->whereIn('task_user.user_id', $allMemberIds)
+                ->selectRaw('
+                    task_user.user_id,
+                    tasks.status,
+                    tasks.priority
+                ')
+                ->get();
+
+            // Group by team
+            foreach ($teams as $team) {
+                $memberIds = $teamMemberMap[$team->id] ?? [];
+                $statusCounts = ['completed' => 0, 'pending' => 0, 'in_progress' => 0, 'overdue' => 0, 'submitted' => 0, 'reopened' => 0];
+                $priorityCounts = ['high' => 0, 'medium' => 0, 'low' => 0];
+
+                foreach ($statusRows as $row) {
+                    if (in_array($row->user_id, $memberIds)) {
+                        $st = strtolower($row->status ?? 'pending');
+                        if (in_array($st, ['completed', 'done', 'approved'])) {
+                            $statusCounts['completed']++;
+                        } elseif ($st === 'pending') {
+                            $statusCounts['pending']++;
+                        } elseif (in_array($st, ['in_progress', 'in progress'])) {
+                            $statusCounts['in_progress']++;
+                        } elseif ($st === 'submitted') {
+                            $statusCounts['submitted']++;
+                        } elseif ($st === 'reopened') {
+                            $statusCounts['reopened']++;
+                        }
+
+                        $pr = strtolower($row->priority ?? 'medium');
+                        if (isset($priorityCounts[$pr])) {
+                            $priorityCounts[$pr]++;
+                        } else {
+                            $priorityCounts['medium']++;
+                        }
+                    }
+                }
+
+                $teamStatusBreakdown[$team->id] = $statusCounts;
+                $teamPriorityDistribution[$team->id] = $priorityCounts;
+            }
+        }
+
+        $result = $teams->map(function ($team) use ($teamMemberMap, $userTaskCounts, $teamStatusBreakdown, $teamPriorityDistribution) {
+            $memberIds = $teamMemberMap[$team->id] ?? [];
+            $totalAssigned = 0;
+            $totalCompleted = 0;
+            $totalOverdue = 0;
+            $memberCount = count($memberIds);
+
+            $membersBrief = $team->members->map(function ($m) use ($userTaskCounts) {
+                $stats = $userTaskCounts[$m->id] ?? ['assigned' => 0, 'completed' => 0, 'overdue' => 0];
+                return [
+                    'id' => $m->id,
+                    'name' => $m->name,
+                    'role' => $m->role,
+                    'email' => $m->email,
+                    'assigned' => $stats['assigned'],
+                    'completed' => $stats['completed'],
+                    'pending' => max($stats['assigned'] - $stats['completed'], 0),
+                    'overdue' => $stats['overdue'],
+                ];
+            });
+
+            foreach ($memberIds as $uid) {
+                if (isset($userTaskCounts[$uid])) {
+                    $totalAssigned += $userTaskCounts[$uid]['assigned'];
+                    $totalCompleted += $userTaskCounts[$uid]['completed'];
+                    $totalOverdue += $userTaskCounts[$uid]['overdue'];
+                }
+            }
+
+            return [
+                'id' => $team->id,
+                'name' => $team->name,
+                'description' => $team->description,
+                'member_count' => $memberCount,
+                'created_at' => $team->created_at,
+                'leader' => $team->leader ? ['id' => $team->leader->id, 'name' => $team->leader->name] : null,
+                'members' => $membersBrief,
+                'assigned' => $totalAssigned,
+                'completed' => $totalCompleted,
+                'pending' => max($totalAssigned - $totalCompleted, 0),
+                'overdue' => $totalOverdue,
+                'completion_rate' => $totalAssigned > 0 ? (int) round(($totalCompleted / $totalAssigned) * 100) : 0,
+                'status_breakdown' => $teamStatusBreakdown[$team->id] ?? ['completed' => 0, 'pending' => 0, 'in_progress' => 0, 'overdue' => 0, 'submitted' => 0, 'reopened' => 0],
+                'priority_distribution' => $teamPriorityDistribution[$team->id] ?? ['high' => 0, 'medium' => 0, 'low' => 0],
+            ];
+        })->values();
+
+        return response()->json($result);
+    }
+
+    /**
      * Bulk compute team task stats in 2 queries instead of N+1 per team.
      */
     private function getTeamsWithTaskStats(string $timeFilter = 'all'): Collection

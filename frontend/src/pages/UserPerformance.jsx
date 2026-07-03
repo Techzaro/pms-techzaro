@@ -9,7 +9,7 @@
  */
 
 import { useState, useMemo, memo, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import MemberExportReport from "./MemberExportReport";
@@ -112,6 +112,7 @@ const PRIORITY_TEXT_COLORS = {
 function UserPerformance() {
   const { userId: urlUserId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [showExportModal, setShowExportModal] = useState(false);
   const [showCreateTask, setShowCreateTask] = useState(false);
 
@@ -295,6 +296,7 @@ function UserPerformance() {
     <DashboardLayout>
       <Breadcrumb items={[
         { label: "Reports", path: "/reports" },
+        ...(location.state?.fromTeam ? [{ label: location.state.fromTeam, path: rolePath(`reports/team-members/${location.state.teamId}`) }] : []),
         { label: isOwnPage ? "My Performance" : "User Performance" },
       ]} />
       <div className="up-layout">

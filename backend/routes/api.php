@@ -316,6 +316,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reports/summary-cards', [ReportController::class, 'summaryCards']); // Summary cards data
     Route::get('/reports/user-performance-table', [ReportController::class, 'userPerformanceTable']); // User performance table
     Route::get('/reports/company-employees', [ReportController::class, 'companyEmployeesReport']); // Company employees report
+    Route::get('/reports/teams-overview', [ReportController::class, 'teamsOverview']); // Teams overview for reports page
 
     /*
     | Role-Based Dashboard Routes
