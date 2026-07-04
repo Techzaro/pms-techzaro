@@ -145,6 +145,11 @@ class CompanyDocumentController extends Controller
                 return response()->json(['success' => false, 'message' => 'Filename is required to delete other document'], 422);
             }
 
+            $filename = basename($filename);
+            if (str_contains($filename, '..') || str_contains($filename, '/') || str_contains($filename, '\\')) {
+                return response()->json(['success' => false, 'message' => 'Invalid filename'], 422);
+            }
+
             $uploadDir = config('company.upload_dir', 'company_docs');
             $path = $uploadDir.'/'.$filename;
 

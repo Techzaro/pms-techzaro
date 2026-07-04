@@ -108,10 +108,11 @@ class ActivityviewController extends Controller
                     ->map(fn ($v) => (int) $v)
                     ->toArray(),
                 'task' => collect(DB::select(
-                    'SELECT u.task_id, GREATEST(COALESCE(MAX(tc.id),0), COALESCE(MAX(twe.id),0)) as max_id FROM ' .
-                    '(SELECT ? AS task_id UNION SELECT ? FROM DUAL) u ' .
+                    'SELECT task_id, GREATEST(COALESCE(MAX(tc.id),0), COALESCE(MAX(twe.id),0)) as max_id ' .
+                    'FROM (SELECT DISTINCT id as task_id FROM task_changes WHERE task_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ') ' .
+                    'UNION SELECT DISTINCT id as task_id FROM task_workflow_events WHERE task_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')) u ' .
                     'LEFT JOIN task_changes tc ON tc.task_id = u.task_id ' .
-                    'LEFT JOIN task_workflow_events twe ON twe.task_id = u.task_id GROUP BY u.task_id',
+                    'LEFT JOIN task_workflow_events twe ON twe.task_id = u.task_id GROUP BY task_id',
                     array_merge($ids, $ids)
                 ))->pluck('max_id', 'task_id')->map(fn ($v) => (int) $v)->toArray(),
                 'deliverable' => DeliverableChange::whereIn('deliverable_id', $ids)

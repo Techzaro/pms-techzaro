@@ -22,6 +22,10 @@ use Illuminate\Validation\ValidationException;
  */
 class AuthController extends Controller
 {
+    public function __construct(
+        private ActivityService $activityService
+    ) {}
+
     /**
      * Authenticate a user and return a Sanctum API token.
      *
@@ -178,9 +182,12 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        $taskStats = Task::where('assigned_to', $user->id)
+        $taskStats = Task::where(function ($q) use ($user) {
+            $q->where('assigned_to', $user->id)
+                ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
+        })
             ->selectRaw('COUNT(*) as total_assigned')
-            ->selectRaw("COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed")
+            ->selectRaw("COUNT(CASE WHEN status IN ('completed','done','approved') THEN 1 END) as completed")
             ->selectRaw("COUNT(CASE WHEN status IN ('pending', 'in_progress') THEN 1 END) as pending")
             ->first();
 
@@ -380,6 +387,7 @@ class AuthController extends Controller
             'other_document',
         ];
 
+        $hasFileUploads = false;
         foreach ($documentFields as $field) {
             if ($request->hasFile($field)) {
                 if ($user->$field && \Storage::disk('public')->exists($user->$field)) {
@@ -389,10 +397,13 @@ class AuthController extends Controller
                 $filename = $field.'_'.time().'_'.$file->getClientOriginalName();
                 $path = $file->storeAs('user_documents/'.$user->id, $filename, 'public');
                 $user->$field = $path;
+                $hasFileUploads = true;
             }
         }
 
-        $user->save();
+        if ($hasFileUploads) {
+            $user->save();
+        }
 
         return response()->json([
             'success' => true,
@@ -458,8 +469,7 @@ class AuthController extends Controller
 
             // Log activity
             try {
-                $activityService = new ActivityService;
-                $activityService->log(
+                $this->activityService->log(
                     userId: $user->id,
                     activityType: 'profile',
                     description: 'Password changed successfully',
