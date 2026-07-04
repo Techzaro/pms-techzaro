@@ -322,7 +322,7 @@ class EventController extends Controller
 
         $validated = $request->validate([
             'title' => 'required|string|max:255', 'description' => 'nullable|string',
-            'type' => 'nullable|string|max:32|in:Meeting,Training,Workshop,Client Meeting,Company Event,Holiday,Interview,Project Milestone,Internship Activity,Other',
+            'type' => 'nullable|string|max:64',
             'color' => 'nullable|string|max:16', 'start_date' => 'required|date',
             'end_date' => 'nullable|date|after_or_equal:start_date', 'all_day' => 'nullable|boolean',
             'is_global' => 'nullable|boolean', 'assigned_user_ids' => 'nullable|array',
@@ -377,7 +377,7 @@ class EventController extends Controller
 
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255', 'description' => 'sometimes|nullable|string',
-            'type' => 'sometimes|string|max:32|in:Meeting,Training,Workshop,Client Meeting,Company Event,Holiday,Interview,Project Milestone,Internship Activity,Other',
+            'type' => 'sometimes|string|max:64',
             'color' => 'sometimes|nullable|string|max:16', 'start_date' => 'sometimes|required|date',
             'end_date' => 'sometimes|nullable|date|after_or_equal:start_date', 'all_day' => 'sometimes|nullable|boolean',
             'is_global' => 'sometimes|boolean', 'assigned_user_ids' => 'nullable|array',

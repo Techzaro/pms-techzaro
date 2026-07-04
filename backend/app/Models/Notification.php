@@ -41,9 +41,13 @@ class Notification extends Model
     protected static function booted(): void
     {
         static::created(function (self $notification) {
-            $notification->loadMissing('user.emailPreference');
+            $notification->loadMissing('user.emailPreference', 'sender');
 
             if (!$notification->user || !$notification->user->professional_email) {
+                Log::info('Notification email skipped (model boot): recipient has no professional_email', [
+                    'notification_id' => $notification->id,
+                    'user_id' => $notification->user_id,
+                ]);
                 return;
             }
 
@@ -52,17 +56,19 @@ class Notification extends Model
                 return;
             }
 
-            // Send email notification (synchronous)
+            // Send email notification
             if (static::wantsChannel($notification, 'email')) {
                 try {
-                    $mail = new NotificationMail($notification, $notification->sender->professional_email ?? '', $notification->sender->name ?? 'PMS Techxaro');
+                    $senderEmail = $notification->sender?->professional_email ?? '';
+                    $senderName = $notification->sender?->name ?? config('mail.from.name', 'PMS Techxaro');
+                    $mail = new NotificationMail($notification, $senderEmail, $senderName);
                     if (config('queue.default') !== 'sync') {
                         Mail::to($notification->user->professional_email)->queue($mail);
                     } else {
                         Mail::to($notification->user->professional_email)->send($mail);
                     }
                 } catch (\Throwable $e) {
-                    Log::error('Failed to send notification email', [
+                    Log::error('Failed to send notification email (model boot)', [
                         'notification_id' => $notification->id,
                         'user_id' => $notification->user_id,
                         'error' => $e->getMessage(),

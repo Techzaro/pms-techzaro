@@ -14,6 +14,7 @@ import DonutChart from "../components/DonutChart";
 import PriorityBarChart from "../components/PriorityBarChart";
 import { useState, useCallback, memo, useMemo, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { IoSearchOutline } from "react-icons/io5";
 import CompanyEmployeeReport from "./CompanyEmployeeReport";
 import { getUser, rolePath } from "../utils/auth";
 import { useApiQuery } from "../hooks/useApi";
@@ -124,6 +125,8 @@ const SummaryCard = memo(function SummaryCard({ card, onClick }) {
 function Reports() {
   const [timeFilter, setTimeFilter] = useState("All Time");
   const [showCompanyReport, setShowCompanyReport] = useState(false);
+  const [teamSearch, setTeamSearch] = useState("");
+  const [userSearch, setUserSearch] = useState("");
 
   const period = PERIOD_MAP[timeFilter] || "all";
   const queryClient = useQueryClient();
@@ -162,6 +165,27 @@ function Reports() {
 
   const teams = Array.isArray(teamsData) ? teamsData : [];
 
+  const filteredTeams = useMemo(() => {
+    if (!teamSearch.trim()) return teams;
+    const q = teamSearch.toLowerCase();
+    return teams.filter(
+      (t) =>
+        t.name?.toLowerCase().includes(q) ||
+        t.leader?.name?.toLowerCase().includes(q)
+    );
+  }, [teams, teamSearch]);
+
+  const filteredUsers = useMemo(() => {
+    const list = userTableData || [];
+    if (!userSearch.trim()) return list;
+    const q = userSearch.toLowerCase();
+    return list.filter(
+      (u) =>
+        u.name?.toLowerCase().includes(q) ||
+        (ROLE_LABEL[u.role] || u.role || "").toLowerCase().includes(q)
+    );
+  }, [userTableData, userSearch]);
+
   // Status breakdown for donut chart — API returns flat summary fields
   const totalTasks = summary?.total_assigned || 0;
 
@@ -197,7 +221,7 @@ function Reports() {
   const TEAMS_PER_VIEW = isMobile ? 1 : 3;
   const sliderRef = useRef(null);
   const [cardWidth, setCardWidth] = useState(0);
-  const totalTeamSlides = Math.max(0, teams.length - TEAMS_PER_VIEW);
+  const totalTeamSlides = Math.max(0, filteredTeams.length - TEAMS_PER_VIEW);
   const GAP = isMobile ? 0 : 20;
 
   useEffect(() => {
@@ -334,6 +358,15 @@ function Reports() {
           <div className="teams-carousel-section">
             <div className="teams-carousel-header">
               <h3>Teams Overview</h3>
+              <div className="reports-section-search">
+                <IoSearchOutline size={16} />
+                <input
+                  type="text"
+                  placeholder="Search teams..."
+                  value={teamSearch}
+                  onChange={(e) => { setTeamSearch(e.target.value); setTeamSlide(0); }}
+                />
+              </div>
               <button
                 onClick={() => navigate(rolePath("manage-team"))}
                 className="teams-view-all-btn"
@@ -350,7 +383,7 @@ function Reports() {
                     display: "flex", gap: `${GAP}px`, transition: "transform 0.3s ease",
                     transform: `translateX(-${teamSlide * (cardWidth + GAP)}px)`,
                   }}>
-                    {teams.map((team, index) => (
+                    {filteredTeams.map((team, index) => (
                       <div
                         key={team.id || index}
                         className="team-report-card"
@@ -421,7 +454,7 @@ function Reports() {
                     ))}
                   </div>
                 </div>
-                {teams.length > TEAMS_PER_VIEW && (
+                {filteredTeams.length > TEAMS_PER_VIEW && (
                   <div className="team-carousel-nav">
                     <button
                       onClick={() => setTeamSlide((s) => Math.max(0, s - 1))}
@@ -462,6 +495,18 @@ function Reports() {
         {/* TABLE - Admin, Manager & Team Lead (on team members view) */}
         {showUserTable && (
           <>
+            <div className="reports-table-section-header">
+              <h3>User Performance</h3>
+              <div className="reports-section-search">
+                <IoSearchOutline size={16} />
+                <input
+                  type="text"
+                  placeholder="Search by name or role..."
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                />
+              </div>
+            </div>
             {/* Desktop Table */}
             <div className="reports-table-wrapper">
               <div className="reports-table">
@@ -476,10 +521,10 @@ function Reports() {
 
                 {isTableLoading ? (
                   <div style={{ padding: "24px", textAlign: "center", color: "#9ca3af" }}>Loading...</div>
-                ) : (userTableData || []).length === 0 ? (
+                ) : (filteredUsers || []).length === 0 ? (
                   <div style={{ padding: "24px", textAlign: "center", color: "#9ca3af" }}>No data available</div>
                 ) : (
-                  (userTableData || []).map((member) => (
+                  (filteredUsers || []).map((member) => (
                     <div key={member.id} className="table-row">
                       <div className="table-member">
                         <div
@@ -528,10 +573,10 @@ function Reports() {
             <div className="reports-table-cards">
               {isTableLoading ? (
                 <div style={{ padding: "24px", textAlign: "center", color: "#9ca3af" }}>Loading...</div>
-              ) : (userTableData || []).length === 0 ? (
+              ) : (filteredUsers || []).length === 0 ? (
                 <div style={{ padding: "24px", textAlign: "center", color: "#9ca3af" }}>No data available</div>
               ) : (
-                (userTableData || []).map((member) => (
+                (filteredUsers || []).map((member) => (
                   <div key={member.id} className="report-member-card">
                     <div className="report-member-card-header">
                       <div

@@ -33,6 +33,17 @@ class SendUserCreatedEmails implements ShouldQueue
 
     public function handle(): void
     {
+        if ($this->profEmail) {
+            try {
+                Mail::to($this->profEmail)->send(
+                    new UserCreated($this->user, $this->plainPassword, $this->profEmail, $this->profPassword, $this->loginUrl, $this->emailAttachments, false, '', $this->adderEmail, $this->adderName)
+                );
+                Log::info("Welcome email sent to professional email {$this->profEmail} for user ID {$this->user->id}");
+            } catch (\Throwable $e) {
+                Log::error("Failed to send welcome email to professional email {$this->profEmail}: " . $e->getMessage());
+            }
+        }
+
         if ($this->personalEmail) {
             try {
                 Mail::to($this->personalEmail)->send(

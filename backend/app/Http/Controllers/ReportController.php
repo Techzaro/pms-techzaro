@@ -76,7 +76,7 @@ class ReportController extends Controller
             }
 
             $taskStats = $taskStatsQuery
-                ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter))
+                ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter, 'tasks'))
                 ->groupBy('assignees_users.user_id')
                 ->get()
                 ->keyBy('user_id');
@@ -93,7 +93,7 @@ class ReportController extends Controller
             }
 
             $userProjects = $userProjectsQuery
-                ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter))
+                ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter, 'tasks'))
                 ->distinct()
                 ->get()
                 ->groupBy('user_id')
@@ -161,7 +161,7 @@ class ReportController extends Controller
         }
 
         if ($timeFilter !== 'all') {
-            $taskBase = $this->applyTimeFilter($taskBase, $timeFilter);
+            $taskBase = $this->applyTimeFilter($taskBase, $timeFilter, 'tasks');
         }
 
         $taskIds = (clone $taskBase)->pluck('id');
@@ -192,7 +192,7 @@ class ReportController extends Controller
         }
 
         if ($timeFilter !== 'all') {
-            $this->applyTimeFilter($projectQuery, $timeFilter);
+            $this->applyTimeFilter($projectQuery, $timeFilter, 'projects');
         }
         $projectAsTaskStats = (clone $projectQuery)->selectRaw("
             COUNT(*) as assigned,
@@ -782,7 +782,7 @@ class ReportController extends Controller
                 break;
         }
         if ($timeFilter !== 'all') {
-            $this->applyTimeFilter($taskQuery, $timeFilter);
+            $this->applyTimeFilter($taskQuery, $timeFilter, 'tasks');
         }
         $taskStats = $taskQuery->selectRaw("
             COUNT(*) as total_assigned,
@@ -818,7 +818,7 @@ class ReportController extends Controller
                 break;
         }
         if ($timeFilter !== 'all') {
-            $this->applyTimeFilter($projectQuery, $timeFilter);
+            $this->applyTimeFilter($projectQuery, $timeFilter, 'projects');
         }
         $projectStats = $projectQuery->selectRaw("
             COUNT(*) as total_assigned,
@@ -888,7 +888,7 @@ class ReportController extends Controller
             ->leftJoin('tasks', 'tasks.id', '=', 'task_user.task_id');
 
         if ($timeFilter !== 'all') {
-            $this->applyTimeFilter($taskQuery, $timeFilter);
+            $this->applyTimeFilter($taskQuery, $timeFilter, 'users');
         }
 
         // Filter by team members for team_lead
@@ -965,7 +965,7 @@ class ReportController extends Controller
             ->leftJoin('tasks', 'tasks.id', '=', 'task_user.task_id');
 
         if ($timeFilter !== 'all') {
-            $this->applyTimeFilter($taskQuery, $timeFilter);
+            $this->applyTimeFilter($taskQuery, $timeFilter, 'users');
         }
 
         $taskStats = $taskQuery->addSelect(DB::raw("
@@ -1087,12 +1087,13 @@ class ReportController extends Controller
      * @param  string  $period  The period filter: 'today', 'week', 'month', or 'all'.
      * @return mixed The filtered query.
      */
-    private function applyTimeFilter($query, string $period)
+    private function applyTimeFilter($query, string $period, string $table = '')
     {
+        $col = $table ? "{$table}.created_at" : 'created_at';
         return match ($period) {
-            'today' => $query->whereDate('created_at', today()),
-            'week' => $query->where('created_at', '>=', now()->startOfWeek()),
-            'month' => $query->where('created_at', '>=', now()->startOfMonth()),
+            'today' => $query->whereDate($col, today()),
+            'week' => $query->where($col, '>=', now()->startOfWeek()),
+            'month' => $query->where($col, '>=', now()->startOfMonth()),
             default => $query,
         };
     }
@@ -1104,7 +1105,7 @@ class ReportController extends Controller
     private function getProjectAsTaskStats($userIds, string $timeFilter): Collection
     {
         $allProjects = Project::whereNotNull('assigned_users')
-            ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter))
+            ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter, 'projects'))
             ->select('id', 'assigned_users', 'status', 'end_date', 'created_at')
             ->get();
 
@@ -1147,7 +1148,7 @@ class ReportController extends Controller
 
         $allProjects = Project::whereNotNull('assigned_users')
             ->where('created_by', $teamLeadId)
-            ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter))
+            ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter, 'projects'))
             ->select('id', 'assigned_users', 'status', 'end_date', 'created_at')
             ->get();
 

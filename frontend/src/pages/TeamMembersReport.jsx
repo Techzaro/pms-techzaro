@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { IoSearchOutline } from "react-icons/io5";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import TeamExportReport from "./TeamExportReport";
@@ -22,6 +23,7 @@ function TeamMembersReport() {
   const canExport = isAdminOrManager || isTeamLead;
 
   const [showExportModal, setShowExportModal] = useState(false);
+  const [memberSearch, setMemberSearch] = useState("");
 
   const { data: teamsData, isLoading } = useApiQuery(
     ["report-teams-overview"],
@@ -32,6 +34,16 @@ function TeamMembersReport() {
 
   const team = Array.isArray(teamsData) ? teamsData.find((t) => String(t.id) === String(teamId)) : null;
   const members = team?.members || [];
+
+  const filteredMembers = useMemo(() => {
+    if (!memberSearch.trim()) return members;
+    const q = memberSearch.toLowerCase();
+    return members.filter(
+      (m) =>
+        m.name?.toLowerCase().includes(q) ||
+        (ROLE_LABEL[m.role] || m.role || "").toLowerCase().includes(q)
+    );
+  }, [members, memberSearch]);
 
   const totalAssigned = useMemo(() => members.reduce((s, m) => s + (m.assigned || 0), 0), [members]);
   const totalCompleted = useMemo(() => members.reduce((s, m) => s + (m.completed || 0), 0), [members]);
@@ -166,14 +178,23 @@ function TeamMembersReport() {
 
           {/* MEMBERS TABLE */}
           <div className="up-chart-card" style={{ marginTop: 0 }}>
-            <div className="up-chart-header">
+            <div className="up-chart-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#111827" }}>Member Performance</h3>
+              <div className="reports-section-search">
+                <IoSearchOutline size={16} />
+                <input
+                  type="text"
+                  placeholder="Search members..."
+                  value={memberSearch}
+                  onChange={(e) => setMemberSearch(e.target.value)}
+                />
+              </div>
             </div>
 
             {isLoading ? (
               <div style={{ padding: "40px", textAlign: "center", color: "#9ca3af" }}>Loading...</div>
-            ) : members.length === 0 ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "#9ca3af" }}>No members in this team.</div>
+            ) : filteredMembers.length === 0 ? (
+              <div style={{ padding: "40px", textAlign: "center", color: "#9ca3af" }}>{memberSearch ? "No matching members found." : "No members in this team."}</div>
             ) : (
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -191,7 +212,7 @@ function TeamMembersReport() {
                     </tr>
                   </thead>
                   <tbody>
-                    {members.map((member, idx) => {
+                    {filteredMembers.map((member, idx) => {
                       const rate = member.assigned > 0 ? Math.round((member.completed / member.assigned) * 100) : 0;
                       const rateColor = rate >= 80 ? "#22c55e" : rate >= 50 ? "#f59e0b" : "#ef4444";
                       return (

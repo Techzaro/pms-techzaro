@@ -85,6 +85,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
     endTime: "11:00",
     hasEndDate: false,
     eventType: "Meeting",
+    eventTypeCustom: "",
     allDay: false,
   });
 
@@ -96,6 +97,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
       const end = editEvent.end_date ? new Date(editEvent.end_date) : start;
       const startStr = getLocalDateStr(start);
       const endStr = getLocalDateStr(end);
+      const isKnownType = TYPE_MAP_REVERSE[editEvent.type];
       setFormData({
         title: editEvent.title || "",
         description: editEvent.description || "",
@@ -104,7 +106,8 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
         endDate: endStr,
         endTime: end.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
         hasEndDate: startStr !== endStr || (editEvent.end_date && editEvent.start_date !== editEvent.end_date),
-        eventType: TYPE_MAP_REVERSE[editEvent.type] || "Meeting",
+        eventType: isKnownType || "__custom__",
+        eventTypeCustom: isKnownType ? "" : (editEvent.type || ""),
         allDay: editEvent.all_day || false,
       });
       setAssignedUserIds(editEvent.assigned_user_ids || []);
@@ -119,6 +122,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
         endTime: "11:00",
         hasEndDate: false,
         eventType: "Meeting",
+        eventTypeCustom: "",
         allDay: false,
       });
       setAssignedUserIds([]);
@@ -159,7 +163,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
     { label: "Interview", color: "pink" },
     { label: "Project Milestone", color: "teal" },
     { label: "Internship Activity", color: "cyan" },
-    { label: "Other", color: "gray" },
+    { label: "Custom / Type Here", color: "gray", value: "__custom__" },
   ];
 
   const handleChange = (field, value) => {
@@ -195,11 +199,12 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
         const endDateTime = endDateToUse + "T" + endTimeToUse + ":00";
 
         // Build request payload
+        const finalType = formData.eventType === "__custom__" ? formData.eventTypeCustom.trim() : (TYPE_MAP[formData.eventType] || "Meeting");
         const payload = {
           title: formData.title.trim(),
           description: formData.description.trim() || null,
-          type: TYPE_MAP[formData.eventType] || "Meeting",
-          color: COLOR_MAP[TYPE_MAP[formData.eventType]] || null,
+          type: finalType || "Meeting",
+          color: COLOR_MAP[TYPE_MAP[formData.eventType]] || "#6b7280",
           start_date: startDateTime,
           end_date: endDateTime,
           all_day: formData.allDay,
@@ -364,18 +369,41 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
             )}
 
             <label className="event-label">Event Type</label>
-            <select
-              className="event-input"
-              value={formData.eventType}
-              onChange={(e) => handleChange("eventType", e.target.value)}
-              style={{ marginBottom: 12 }}
-            >
-              {eventTypes.map((type) => (
-                <option key={type.label} value={type.label}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
+            {formData.eventType === "__custom__" ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <input
+                  type="text"
+                  className="event-input"
+                  placeholder="Enter custom event type"
+                  value={formData.eventTypeCustom}
+                  onChange={(e) => handleChange("eventTypeCustom", e.target.value)}
+                  autoFocus
+                  style={{ flex: 1, marginBottom: 0 }}
+                />
+                <button
+                  type="button"
+                  className="custom-input-revert"
+                  onClick={() => handleChange("eventType", "Meeting")}
+                  title="Back to list"
+                  style={{ flexShrink: 0, width: 36, height: 36, border: "1px solid #d1d5db", borderRadius: 10, background: "#f3f4f6", color: "#6b7280", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                >
+                  &times;
+                </button>
+              </div>
+            ) : (
+              <select
+                className="event-input"
+                value={formData.eventType}
+                onChange={(e) => handleChange("eventType", e.target.value)}
+                style={{ marginBottom: 12 }}
+              >
+                {eventTypes.map((type) => (
+                  <option key={type.label} value={type.value || type.label}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            )}
 
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 18 }}>
               <input

@@ -128,12 +128,19 @@ class UserCreated extends Mailable
         );
     }
 
-    /**
-     * No file attachments are sent with emails to avoid exceeding Brevo's 20MB limit.
-     * Document links are included in the email body instead.
-     */
     public function build(): self
     {
+        $this->resolveAttachments();
+
+        foreach ($this->adminAttachments as $key => $filePath) {
+            if (file_exists($filePath)) {
+                $this->attach($filePath, [
+                    'as' => basename($filePath),
+                    'disposition' => 'attachment',
+                ]);
+            }
+        }
+
         return $this;
     }
 

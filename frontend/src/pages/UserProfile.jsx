@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import { MdEdit, MdArrowBack } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -217,6 +218,11 @@ function UserProfile() {
     }
   };
 
+  const handleCustomRevert = (field) => {
+    const customField = field === "department" ? "departmentCustom" : "designationCustom";
+    setEditUser((prev) => ({ ...prev, [field]: "", [customField]: "" }));
+  };
+
   /** Validate the edit form fields and return an errors object. */
   const validateEditForm = () => {
     const errors = {};
@@ -250,7 +256,8 @@ function UserProfile() {
     if (editUser.professional_email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editUser.professional_email.trim())) {
       errors.professional_email = "Please enter a valid professional email address.";
     }
-    if (editUser.professional_email.trim() && !editUser.professional_email_password.trim()) {
+    const isExistingProEmail = editUser.professional_email.trim() === (profileData?.user?.professional_email || "").trim();
+    if (editUser.professional_email.trim() && !editUser.professional_email_password.trim() && !isExistingProEmail) {
       errors.professional_email_password = "Password is required when professional email is provided.";
     }
     if (!editUser.department) {
@@ -326,7 +333,9 @@ function UserProfile() {
       formData.append("emergency_contact_phone", editUser.emergency_contact_phone);
       formData.append("personal_email", editUser.personal_email || "");
       formData.append("professional_email", editUser.professional_email || "");
-      formData.append("professional_email_password", editUser.professional_email_password || "");
+      if (editUser.professional_email_password) {
+        formData.append("professional_email_password", editUser.professional_email_password || "");
+      }
       formData.append("department", finalDepartment || "");
       formData.append("designation", finalDesignation || "");
       formData.append("hired_for", editUser.hired_for);
@@ -732,7 +741,7 @@ function UserProfile() {
       </div>
 
       {/* EDIT MODAL */}
-      {isEditModalOpen && (
+      {isEditModalOpen && createPortal(
         <div className="user-modal-overlay">
           <div
             className="user-modal-content"
@@ -832,46 +841,48 @@ function UserProfile() {
               <div className="user-form-grid">
                 <div className="form-row">
                   <label htmlFor="edit-designation">Designation / Role *</label>
-                  <select id="edit-designation" name="designation" value={editUser.designation} onChange={handleEditChange} className={editErrors.designation ? "field-error" : ""}>
-                    <option value="">Select Designation</option>
-                    {DESIGNATIONS.map((d) =>
-                      d === "__custom__" ? (
-                        <option key="custom" value="__custom__">Custom / Type Here</option>
-                      ) : (
-                        <option key={d} value={d}>{d}</option>
-                      )
-                    )}
-                  </select>
+                  {editUser.designation === "__custom__" ? (
+                    <div className="custom-input-container">
+                      <input type="text" id="edit-designationCustom" name="designationCustom" value={editUser.designationCustom} onChange={handleEditChange} placeholder="Enter custom designation" autoFocus className={editErrors.designationCustom ? "field-error" : ""} />
+                      <button type="button" className="custom-input-revert" onClick={() => handleCustomRevert("designation")} title="Back to list">&times;</button>
+                    </div>
+                  ) : (
+                    <select id="edit-designation" name="designation" value={editUser.designation} onChange={handleEditChange} className={editErrors.designation ? "field-error" : ""}>
+                      <option value="">Select Designation</option>
+                      {DESIGNATIONS.map((d) =>
+                        d === "__custom__" ? (
+                          <option key="custom" value="__custom__">Custom / Type Here</option>
+                        ) : (
+                          <option key={d} value={d}>{d}</option>
+                        )
+                      )}
+                    </select>
+                  )}
                   {editErrors.designation && <span className="field-error-text">{editErrors.designation}</span>}
+                  {editErrors.designationCustom && <span className="field-error-text">{editErrors.designationCustom}</span>}
                 </div>
-                {editUser.designation === "__custom__" && (
-                  <div className="form-row">
-                    <label htmlFor="edit-designationCustom">Custom Designation</label>
-                    <input type="text" id="edit-designationCustom" name="designationCustom" value={editUser.designationCustom} onChange={handleEditChange} placeholder="Enter custom designation" className={editErrors.designationCustom ? "field-error" : ""} />
-                    {editErrors.designationCustom && <span className="field-error-text">{editErrors.designationCustom}</span>}
-                  </div>
-                )}
                 <div className="form-row">
                   <label htmlFor="edit-department">Department *</label>
-                  <select id="edit-department" name="department" value={editUser.department} onChange={handleEditChange} className={editErrors.department ? "field-error" : ""}>
-                    <option value="">Select Department</option>
-                    {DEPARTMENTS.map((d) =>
-                      d === "__custom__" ? (
-                        <option key="custom" value="__custom__">Custom / Type Here</option>
-                      ) : (
-                        <option key={d} value={d}>{d}</option>
-                      )
-                    )}
-                  </select>
+                  {editUser.department === "__custom__" ? (
+                    <div className="custom-input-container">
+                      <input type="text" id="edit-departmentCustom" name="departmentCustom" value={editUser.departmentCustom} onChange={handleEditChange} placeholder="Enter custom department" autoFocus className={editErrors.departmentCustom ? "field-error" : ""} />
+                      <button type="button" className="custom-input-revert" onClick={() => handleCustomRevert("department")} title="Back to list">&times;</button>
+                    </div>
+                  ) : (
+                    <select id="edit-department" name="department" value={editUser.department} onChange={handleEditChange} className={editErrors.department ? "field-error" : ""}>
+                      <option value="">Select Department</option>
+                      {DEPARTMENTS.map((d) =>
+                        d === "__custom__" ? (
+                          <option key="custom" value="__custom__">Custom / Type Here</option>
+                        ) : (
+                          <option key={d} value={d}>{d}</option>
+                        )
+                      )}
+                    </select>
+                  )}
                   {editErrors.department && <span className="field-error-text">{editErrors.department}</span>}
+                  {editErrors.departmentCustom && <span className="field-error-text">{editErrors.departmentCustom}</span>}
                 </div>
-                {editUser.department === "__custom__" && (
-                  <div className="form-row">
-                    <label htmlFor="edit-departmentCustom">Custom Department</label>
-                    <input type="text" id="edit-departmentCustom" name="departmentCustom" value={editUser.departmentCustom} onChange={handleEditChange} placeholder="Enter custom department" className={editErrors.departmentCustom ? "field-error" : ""} />
-                    {editErrors.departmentCustom && <span className="field-error-text">{editErrors.departmentCustom}</span>}
-                  </div>
-                )}
                 <div className="form-row">
                   <label htmlFor="edit-hired_for">Hired For</label>
                   <input type="text" id="edit-hired_for" name="hired_for" value={editUser.hired_for} onChange={handleEditChange} placeholder="e.g. Full-time, Part-time, Contract" />
@@ -1022,7 +1033,8 @@ function UserProfile() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </DashboardLayout>
   );

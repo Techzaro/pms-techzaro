@@ -45,6 +45,7 @@ const CreateProjectModal = ({ onClose }) => {
     title: "",
     description: "",
     category: "",
+    categoryCustom: "",
     team_id: "",
     assigned_users: [],
     priority: "Medium",
@@ -309,7 +310,7 @@ const CreateProjectModal = ({ onClose }) => {
         const body = {
           title: form.title.trim(),
           description: form.description || null,
-          category: form.category || null,
+          category: form.category === "__custom__" ? form.categoryCustom.trim() || null : (form.category || null),
           goals_checklist: goalsList.length > 0 ? goalsList : [],
           team_id: form.team_id ? parseInt(form.team_id) : null,
           assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
@@ -404,18 +405,40 @@ const CreateProjectModal = ({ onClose }) => {
             <div className="cp-grid-2">
               <div className="cp-field">
                 <label>Category (Optional)</label>
-                <CustomSelect
-                  name="category"
-                  value={form.category}
-                  onChange={(val) => handleChange({ target: { name: "category", value: val } })}
-                  placeholder="Select category"
-                  options={[
-                    { value: "", label: "Select category" },
-                    { value: "Web Development", label: "Web Development" },
-                    { value: "Mobile App", label: "Mobile App" },
-                    { value: "UI/UX Design", label: "UI/UX Design" },
-                  ]}
-                />
+                {form.category === "__custom__" ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="text"
+                      name="categoryCustom"
+                      placeholder="Enter custom category"
+                      value={form.categoryCustom}
+                      onChange={handleChange}
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, category: "", categoryCustom: "" }))}
+                      title="Back to list"
+                      style={{ flexShrink: 0, width: 36, height: 36, border: "1px solid #d1d5db", borderRadius: 10, background: "#f3f4f6", color: "#6b7280", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                ) : (
+                  <CustomSelect
+                    name="category"
+                    value={form.category}
+                    onChange={(val) => handleChange({ target: { name: "category", value: val } })}
+                    placeholder="Select category"
+                    options={[
+                      { value: "", label: "Select category" },
+                      { value: "Web Development", label: "Web Development" },
+                      { value: "Mobile App", label: "Mobile App" },
+                      { value: "UI/UX Design", label: "UI/UX Design" },
+                      { value: "__custom__", label: "Custom / Type Here" },
+                    ]}
+                  />
+                )}
               </div>
 
               <div className="cp-field">

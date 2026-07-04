@@ -16,6 +16,7 @@
  * Access restricted to admin and manager roles.
  */
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { MdVisibility } from "react-icons/md";
 import { IoSearchOutline } from "react-icons/io5";
 import { CiCirclePlus } from "react-icons/ci";
@@ -72,6 +73,7 @@ function ManageUsers() {
   const [users, setUsers] = useState([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [showProfPassword, setShowProfPassword] = useState(false);
   const [newUser, setNewUser] = useState({
     fullName: "",
     fatherName: "",
@@ -276,6 +278,7 @@ function ManageUsers() {
   const openModal = () => {
     setEditingUser(null);
     setAddErrors({});
+    setShowProfPassword(false);
     setNewUser({
       fullName: "",
       fatherName: "",
@@ -433,7 +436,8 @@ function ManageUsers() {
     if (newUser.professionalEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.professionalEmail.trim())) {
       errors.professionalEmail = "Please enter a valid professional email address.";
     }
-    if (newUser.professionalEmail.trim() && !newUser.professionalEmailPassword.trim()) {
+    const isExistingProEmail = editingUser && newUser.professionalEmail.trim() === (editingUser.professional_email || "").trim();
+    if (newUser.professionalEmail.trim() && !newUser.professionalEmailPassword.trim() && !isExistingProEmail) {
       errors.professionalEmailPassword = "Password is required when professional email is provided.";
     }
     if (!newUser.department) {
@@ -467,6 +471,11 @@ function ManageUsers() {
         return next;
       });
     }
+  };
+
+  const handleCustomRevert = (field) => {
+    const customField = field === "department" ? "departmentCustom" : "designationCustom";
+    setNewUser((prev) => ({ ...prev, [field]: "", [customField]: "" }));
   };
 
   const handleUpdateUser = async (user) => {
@@ -712,7 +721,9 @@ function ManageUsers() {
     formData.append("emergency_contact_phone", newUser.emergencyContactPhone);
     formData.append("personal_email", newUser.personalEmail || "");
     formData.append("professional_email", newUser.professionalEmail || "");
-    formData.append("professional_email_password", newUser.professionalEmailPassword || "");
+    if (!editingUser || newUser.professionalEmailPassword) {
+      formData.append("professional_email_password", newUser.professionalEmailPassword || "");
+    }
     formData.append("department", finalDepartment || "");
     formData.append("designation", finalDesignation || "");
     formData.append("hired_for", newUser.hiredFor);
@@ -907,7 +918,7 @@ function ManageUsers() {
         )}
 
         {/* ===================== ADD USER MODAL ===================== */}
-        {isAddModalOpen && (
+        {isAddModalOpen && createPortal(
           <div className="user-modal-overlay">
             <div
               className="user-modal-content"
@@ -998,8 +1009,15 @@ function ManageUsers() {
                     {addErrors.professionalEmail && <span className="field-error-text">{addErrors.professionalEmail}</span>}
                   </div>
                   <div className="form-row">
-                    <label htmlFor="professionalEmailPassword">Password of Professional Email *</label>
-                    <input type="password" id="professionalEmailPassword" name="professionalEmailPassword" value={newUser.professionalEmailPassword} onChange={handleChange} placeholder="Enter professional email password" className={addErrors.professionalEmailPassword ? "field-error" : ""} />
+                    <label htmlFor="professionalEmailPassword">Password of Professional Email {editingUser ? "" : "*"}</label>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <input type={showProfPassword ? "text" : "password"} id="professionalEmailPassword" name="professionalEmailPassword" value={newUser.professionalEmailPassword} onChange={handleChange} placeholder={editingUser ? "Leave blank to keep current" : "Enter professional email password"} className={addErrors.professionalEmailPassword ? "field-error" : ""} style={{ flex: 1 }} />
+                      {editingUser && newUser.professionalEmailPassword && (
+                        <button type="button" onClick={() => setShowProfPassword(!showProfPassword)} style={{ background: "none", border: "1px solid #d1d5db", borderRadius: "6px", padding: "6px 10px", cursor: "pointer", fontSize: 12, color: "#6b7280", whiteSpace: "nowrap" }}>
+                          {showProfPassword ? "Hide" : "Show"}
+                        </button>
+                      )}
+                    </div>
                     {addErrors.professionalEmailPassword && <span className="field-error-text">{addErrors.professionalEmailPassword}</span>}
                   </div>
                 </div>
@@ -1009,46 +1027,48 @@ function ManageUsers() {
                 <div className="user-form-grid">
                   <div className="form-row">
                     <label htmlFor="designation">Designation / Role *</label>
-                    <select id="designation" name="designation" value={newUser.designation} onChange={handleChange} className={addErrors.designation ? "field-error" : ""}>
-                      <option value="">Select Designation</option>
-                      {DESIGNATIONS.map((d) =>
-                        d === "__custom__" ? (
-                          <option key="custom" value="__custom__">Custom / Type Here</option>
-                        ) : (
-                          <option key={d} value={d}>{d}</option>
-                        )
-                      )}
-                    </select>
+                    {newUser.designation === "__custom__" ? (
+                      <div className="custom-input-container">
+                        <input type="text" id="designationCustom" name="designationCustom" value={newUser.designationCustom} onChange={handleChange} placeholder="Enter custom designation" autoFocus className={addErrors.designationCustom ? "field-error" : ""} />
+                        <button type="button" className="custom-input-revert" onClick={() => handleCustomRevert("designation")} title="Back to list">&times;</button>
+                      </div>
+                    ) : (
+                      <select id="designation" name="designation" value={newUser.designation} onChange={handleChange} className={addErrors.designation ? "field-error" : ""}>
+                        <option value="">Select Designation</option>
+                        {DESIGNATIONS.map((d) =>
+                          d === "__custom__" ? (
+                            <option key="custom" value="__custom__">Custom / Type Here</option>
+                          ) : (
+                            <option key={d} value={d}>{d}</option>
+                          )
+                        )}
+                      </select>
+                    )}
                     {addErrors.designation && <span className="field-error-text">{addErrors.designation}</span>}
+                    {addErrors.designationCustom && <span className="field-error-text">{addErrors.designationCustom}</span>}
                   </div>
-                  {newUser.designation === "__custom__" && (
-                    <div className="form-row">
-                      <label htmlFor="designationCustom">Custom Designation</label>
-                      <input type="text" id="designationCustom" name="designationCustom" value={newUser.designationCustom} onChange={handleChange} placeholder="Enter custom designation" className={addErrors.designationCustom ? "field-error" : ""} />
-                      {addErrors.designationCustom && <span className="field-error-text">{addErrors.designationCustom}</span>}
-                    </div>
-                  )}
                   <div className="form-row">
                     <label htmlFor="department">Department *</label>
-                    <select id="department" name="department" value={newUser.department} onChange={handleChange} className={addErrors.department ? "field-error" : ""}>
-                      <option value="">Select Department</option>
-                      {DEPARTMENTS.map((d) =>
-                        d === "__custom__" ? (
-                          <option key="custom" value="__custom__">Custom / Type Here</option>
-                        ) : (
-                          <option key={d} value={d}>{d}</option>
-                        )
-                      )}
-                    </select>
+                    {newUser.department === "__custom__" ? (
+                      <div className="custom-input-container">
+                        <input type="text" id="departmentCustom" name="departmentCustom" value={newUser.departmentCustom} onChange={handleChange} placeholder="Enter custom department" autoFocus className={addErrors.departmentCustom ? "field-error" : ""} />
+                        <button type="button" className="custom-input-revert" onClick={() => handleCustomRevert("department")} title="Back to list">&times;</button>
+                      </div>
+                    ) : (
+                      <select id="department" name="department" value={newUser.department} onChange={handleChange} className={addErrors.department ? "field-error" : ""}>
+                        <option value="">Select Department</option>
+                        {DEPARTMENTS.map((d) =>
+                          d === "__custom__" ? (
+                            <option key="custom" value="__custom__">Custom / Type Here</option>
+                          ) : (
+                            <option key={d} value={d}>{d}</option>
+                          )
+                        )}
+                      </select>
+                    )}
                     {addErrors.department && <span className="field-error-text">{addErrors.department}</span>}
+                    {addErrors.departmentCustom && <span className="field-error-text">{addErrors.departmentCustom}</span>}
                   </div>
-                  {newUser.department === "__custom__" && (
-                    <div className="form-row">
-                      <label htmlFor="departmentCustom">Custom Department</label>
-                      <input type="text" id="departmentCustom" name="departmentCustom" value={newUser.departmentCustom} onChange={handleChange} placeholder="Enter custom department" className={addErrors.departmentCustom ? "field-error" : ""} />
-                      {addErrors.departmentCustom && <span className="field-error-text">{addErrors.departmentCustom}</span>}
-                    </div>
-                  )}
                   <div className="form-row">
                     <label htmlFor="hiredFor">Hired For</label>
                     <input type="text" id="hiredFor" name="hiredFor" value={newUser.hiredFor} onChange={handleChange} placeholder="e.g. Full-time, Part-time, Contract" />
@@ -1193,7 +1213,8 @@ function ManageUsers() {
                 </div>
               </form>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
       </div>

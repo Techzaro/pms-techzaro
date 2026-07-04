@@ -84,21 +84,34 @@ class NotificationService
             ->get();
 
         foreach ($createdNotifications as $notification) {
-            if (!$notification->user || !$notification->user->professional_email) continue;
+            if (!$notification->user || !$notification->user->professional_email) {
+                Log::info('Notification email skipped: recipient has no professional_email', [
+                    'notification_id' => $notification->id,
+                    'user_id' => $notification->user_id,
+                ]);
+                continue;
+            }
             if ($notification->type === 'user_updated') continue;
 
             if (Notification::wantsChannel($notification, 'email')) {
                 try {
+                    $senderEmail = $notification->sender?->professional_email ?? '';
+                    $senderName = $notification->sender?->name ?? config('mail.from.name', 'PMS Techxaro');
                     $mail = new \App\Mail\NotificationMail(
                         $notification,
-                        $notification->sender->professional_email ?? '',
-                        $notification->sender->name ?? 'PMS Techxaro'
+                        $senderEmail,
+                        $senderName
                     );
                     if (config('queue.default') !== 'sync') {
                         Mail::to($notification->user->professional_email)->queue($mail);
                     } else {
                         Mail::to($notification->user->professional_email)->send($mail);
                     }
+                    Log::info('Notification email sent', [
+                        'notification_id' => $notification->id,
+                        'recipient' => $notification->user->professional_email,
+                        'from' => $senderEmail,
+                    ]);
                 } catch (\Throwable $e) {
                     Log::error('Failed to send notification email', [
                         'notification_id' => $notification->id,
