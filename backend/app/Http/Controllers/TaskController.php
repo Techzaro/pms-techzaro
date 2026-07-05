@@ -588,7 +588,7 @@ class TaskController extends Controller
         $payload['unviewed_changes_count'] = $task->unviewedChanges->count();
         $payload['is_creator'] = $isCreator;
         $payload['is_assignee'] = $isAssignee;
-        $payload['can_edit'] = ($isCreator || $isAdminOrManager) && ! $isApproved;
+        $payload['can_edit'] = $isCreator && ! $isApproved;
         $payload['can_submit'] = $isAssignee && in_array($task->status, $pendingStatuses) && $allDeliverablesSubmitted;
 
         $taskChangeMax = (int) TaskChange::where('task_id', $task->id)->max('id');
@@ -904,7 +904,7 @@ class TaskController extends Controller
     public function update(Request $request, Task $task)
     {
         $user = $request->user();
-        if ((int) $task->assigned_by !== (int) $user->id && ! in_array($user->role, ['admin', 'manager'])) {
+        if ((int) $task->assigned_by !== (int) $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized — only the task creator can edit'], 403);
         }
         if (strtolower((string) $task->status) === 'approved') {
@@ -1564,7 +1564,7 @@ class TaskController extends Controller
     public function destroy(Task $task)
     {
         $user = request()->user();
-        if ((int) $task->assigned_by !== (int) $user->id && ! in_array($user->role, ['admin', 'manager'])) {
+        if ((int) $task->assigned_by !== (int) $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized — only the task creator can delete'], 403);
         }
 
