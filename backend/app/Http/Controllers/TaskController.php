@@ -588,7 +588,7 @@ class TaskController extends Controller
         $payload['unviewed_changes_count'] = $task->unviewedChanges->count();
         $payload['is_creator'] = $isCreator;
         $payload['is_assignee'] = $isAssignee;
-        $payload['can_edit'] = $isCreator && ! $isApproved;
+        $payload['can_edit'] = ($isCreator || $isAdminOrManager) && ! $isApproved;
         $payload['can_submit'] = $isAssignee && in_array($task->status, $pendingStatuses) && $allDeliverablesSubmitted;
 
         $taskChangeMax = (int) TaskChange::where('task_id', $task->id)->max('id');
@@ -999,10 +999,12 @@ class TaskController extends Controller
                     'new_value' => $c['new_value'], 'modified_by' => $user->id, 'is_viewed' => false,
                 ], $changes)
             );
+            $now = now()->toDateTimeString();
             TaskWorkflowEvent::insert(
                 array_map(fn ($c) => [
                     'task_id' => $task->id, 'user_id' => $user->id, 'action' => 'field_changed',
                     'comment' => $c['label'].': '.$c['old_value'].' → '.$c['new_value'],
+                    'created_at' => $now, 'updated_at' => $now,
                 ], $changes)
             );
         }
@@ -1017,6 +1019,8 @@ class TaskController extends Controller
                 'Changes Made' => implode(', ', array_slice($fieldNames, 0, 5)).(count($fieldNames) > 5 ? ' and more' : ''),
             ]);
         }
+
+        $this->clearDashboardCache($user->id);
 
         return response()->json([
             'success' => true,
@@ -1056,6 +1060,31 @@ class TaskController extends Controller
             'action' => 'status_updated',
             'comment' => $oldStatus.' → '.$validated['status'],
         ]);
+
+        $task->load('assignees:id,name,role');
+        $assigneeIds = $task->assignees->pluck('id')->toArray();
+
+        $notifications = [];
+        foreach (array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $user->id) as $assigneeId) {
+            $notifications[] = [
+                'user_id' => $assigneeId,
+                'sender_user_id' => $user->id,
+                'type' => 'task_status_updated',
+                'related_module' => 'task',
+                'related_id' => $task->id,
+                'title' => 'Task Status Updated',
+                'message' => $user->name.' changed status of task "'.$task->title.'" from '.$oldStatus.' to '.$validated['status'].'.',
+                'link' => '/tasks/task-details/'.$task->id.'?from=tasks',
+            ];
+        }
+        $this->notificationService->createBulk($notifications);
+
+        $this->notificationService->confirmAction($user, 'Updated status of', 'task', $task->title, [
+            'Previous Status' => $oldStatus,
+            'New Status' => $validated['status'],
+        ]);
+
+        $this->clearDashboardCache($user->id);
 
         return response()->json(['success' => true, 'message' => 'Task status updated', 'task' => $task->fresh()->load('assignees:id,name,email,role')]);
     }

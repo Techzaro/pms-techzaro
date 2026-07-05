@@ -1,11 +1,18 @@
-/* Activity Highlighting - Unread states */
+/* Activity Panel - unread state (red border) */
 section.activity-panel--unread,
 div.activity-panel--unread {
   border: 2px solid #ef4444 !important;
   box-shadow: 0 0 8px rgba(239, 68, 68, 0.3) !important;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease !important;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease !important;
 }
 
+/* Activity Panel - read state (normal border) */
+section.activity-panel,
+div.activity-panel {
+  transition: border-color 0.4s ease, box-shadow 0.4s ease !important;
+}
+
+/* Activity Item - unread state (red text) */
 .activity-item--unread,
 .activity-item--unread * {
   color: #ef4444 !important;
@@ -20,13 +27,13 @@ div.activity-panel--unread {
   color: #f87171 !important;
 }
 
-/* Read state - normal black text */
-.td-activity-item,
-.td-activity-item * {
-  transition: color 0.3s ease !important;
-}
-
 .activity-item--unread .td-activity-icon {
   transform: scale(1.1);
   transition: transform 0.2s ease !important;
+}
+
+/* Activity Item - read state (normal black text) */
+.td-activity-item,
+.td-activity-item * {
+  transition: color 0.3s ease !important;
 }

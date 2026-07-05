@@ -234,7 +234,7 @@ function TaskDetails() {
   }, []);
 
   const currentUser = getUser();
-  const canEdit = task?.can_edit ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10) && task?.status?.toLowerCase() !== "approved");
+  const canEdit = task?.can_edit ?? (task && currentUser && (parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10) || ["admin", "manager"].includes(currentUser.role)) && task?.status?.toLowerCase() !== "approved");
   const canSubmitTask = task?.can_submit ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)) && ["pending", "reopened"].includes(task?.status));
   const isCreator = task?.is_creator ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10));
   const isAssignee = task?.is_assignee ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)));

@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
@@ -357,7 +358,7 @@ const CreateProjectModal = ({ onClose }) => {
     });
   };
 
-  return (
+  return createPortal(
     <div className="cp-overlay">
       <div className="cp-modal" onClick={(e) => e.stopPropagation()}>
 
@@ -819,7 +820,8 @@ const CreateProjectModal = ({ onClose }) => {
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

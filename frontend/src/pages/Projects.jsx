@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -488,7 +489,7 @@ function Projects() {
       </div>
 
       {/* VISIBILITY MODAL */}
-      {visibilityProject && (
+      {visibilityProject && createPortal(
         <div className="modal-overlay">
           <div className="sv-modal" onClick={(e) => e.stopPropagation()}>
             <div className="sv-modal-header">
@@ -519,7 +520,8 @@ function Projects() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {showModal && (

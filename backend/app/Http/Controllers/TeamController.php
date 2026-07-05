@@ -47,8 +47,8 @@ class TeamController extends Controller
             $q->where('users.id', $user->id);
         })
             ->with([
-                'leader:id,name,role,department,designation,email',
-                'members:id,name,role,department,designation,email',
+                'leader:id,name,role,department,designation,professional_email',
+                'members:id,name,role,department,designation,professional_email',
             ])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -75,14 +75,20 @@ class TeamController extends Controller
             'description' => 'nullable|string|max:1000',
             'member_ids' => 'nullable|array',
             'member_ids.*' => 'integer|exists:users,id',
+            'leader_id' => 'nullable|integer|exists:users,id',
         ]);
 
         $user = $request->user();
+        $leaderId = $validated['leader_id'] ?? null;
+
+        if ($leaderId && !empty($validated['member_ids']) && !in_array((int) $leaderId, array_map('intval', $validated['member_ids']))) {
+            return response()->json(['message' => 'Team leader must be one of the team members.'], 422);
+        }
 
         $team = Team::create([
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
-            'leader_id' => null,
+            'leader_id' => $leaderId,
             'created_by' => $user->id,
         ]);
 
@@ -112,27 +118,34 @@ class TeamController extends Controller
             'Created On' => $team->created_at->format('d M Y, g:i A'),
         ]);
 
-        // ── Each member: personalized activity + notification + email ──
+        // ── Each member: personalized activity + notification + email (role-based) ──
         if (!empty($validated['member_ids'])) {
             $now = now()->toDateTimeString();
             $activities = [];
             $notifications = [];
             foreach (array_values(array_unique($validated['member_ids'])) as $memberId) {
+                $isLeader = $leaderId && (int) $memberId === (int) $leaderId;
+
                 $activities[] = [
                     'user_id' => $memberId, 'activity_type' => 'team_created',
-                    'description' => 'You were added to team "' . $team->name . '" by ' . $user->name,
+                    'description' => $isLeader
+                        ? 'You have been appointed as Team Lead of team "' . $team->name . '" by ' . $user->name
+                        : 'You were added to team "' . $team->name . '" by ' . $user->name,
                     'related_module' => 'team', 'related_id' => $team->id,
-                    'action' => 'created', 'entity_name' => $team->name,
+                    'action' => $isLeader ? 'leader_changed' : 'created', 'entity_name' => $team->name,
                     'created_at' => $now, 'updated_at' => $now,
                 ];
                 $this->clearDashboardCache($memberId);
 
                 $notifications[] = [
                     'user_id' => $memberId, 'sender_user_id' => $user->id,
-                    'type' => 'team_created', 'related_module' => 'team',
+                    'type' => $isLeader ? 'team_leader_changed' : 'team_created',
+                    'related_module' => 'team',
                     'related_id' => $team->id,
-                    'title' => 'You Have Been Added to a Team',
-                    'message' => 'You have been added to the team "' . $team->name . '" by ' . $user->name . '.',
+                    'title' => $isLeader ? 'Team Leader Assigned' : 'You Have Been Added to a Team',
+                    'message' => $isLeader
+                        ? 'You have been appointed as the Team Lead of "' . $team->name . '" by ' . $user->name . '.'
+                        : 'You have been added to the team "' . $team->name . '" by ' . $user->name . '.',
                     'link' => $teamLink,
                     'changes' => json_encode(['team_name' => $team->name, 'team_lead' => $leaderName, 'members' => $memberNames, 'added_by' => $user->name]),
                 ];

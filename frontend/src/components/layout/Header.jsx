@@ -257,12 +257,18 @@ function Header() {
       .catch(() => {});
   }, []);
 
-  // Poll for unread notifications every 10 seconds + subscribe to data-change events
+  // Poll for unread notifications + subscribe to data-change events + window events
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
+    const interval = setInterval(fetchNotifications, 15000);
     const unsub = subscribe('data:changed', fetchNotifications);
-    return () => { clearInterval(interval); unsub(); };
+    const handleNotifRead = () => fetchNotifications();
+    window.addEventListener('notification-read', handleNotifRead);
+    return () => {
+      clearInterval(interval);
+      unsub();
+      window.removeEventListener('notification-read', handleNotifRead);
+    };
   }, [fetchNotifications]);
 
   /** Toggle the notification panel and fetch the full list when opening. */
@@ -295,6 +301,8 @@ function Header() {
     });
     setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, is_read: true } : n));
     setUnreadCount((prev) => Math.max(0, prev - 1));
+    fetchNotifications();
+    window.dispatchEvent(new Event("notification-read"));
   };
 
   /** Mark all notifications as read. */
@@ -309,6 +317,7 @@ function Header() {
     });
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     setUnreadCount(0);
+    window.dispatchEvent(new Event("notification-read"));
   };
 
   // Close notification panel when clicking outside

@@ -26,6 +26,8 @@ export function useActivityHighlight(entityType, entityId, activityMaxId, activi
     const token = authToken();
     if (!token) return;
 
+    let cancelled = false;
+
     fetch(`${API_URL}/activity-views/check`, {
       method: "POST",
       headers: {
@@ -39,6 +41,7 @@ export function useActivityHighlight(entityType, entityId, activityMaxId, activi
     })
       .then((r) => r.json())
       .then((data) => {
+        if (cancelled) return;
         if (data.success) {
           const key = `${entityType}:${entityId}`;
           const view = data.views?.[key];
@@ -46,7 +49,11 @@ export function useActivityHighlight(entityType, entityId, activityMaxId, activi
         }
         setChecked(true);
       })
-      .catch(() => setChecked(true));
+      .catch(() => {
+        if (!cancelled) setChecked(true);
+      });
+
+    return () => { cancelled = true; };
   }, [entityType, entityId]);
 
   // Mark viewed on server
@@ -56,21 +63,27 @@ export function useActivityHighlight(entityType, entityId, activityMaxId, activi
     const token = authToken();
     if (!token) return;
 
-    fetch(`${API_URL}/activity-views/mark-viewed`, {
+    const url = `${API_URL}/activity-views/mark-viewed`;
+    const body = JSON.stringify({ type: entityTypeRef.current, id: entityIdRef.current });
+
+    fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ type: entityTypeRef.current, id: entityIdRef.current }),
+      body,
+      keepalive: true,
       _notifHandled: true,
     })
       .then((r) => r.json())
       .then((data) => {
         if (data.success && data.lastViewedId) setLastViewedId(data.lastViewedId);
       })
-      .catch(() => {});
+      .catch(() => {
+        markedRef.current = false;
+      });
   }, []);
 
   // Reset flag on entity change

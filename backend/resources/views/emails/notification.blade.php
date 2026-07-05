@@ -74,6 +74,9 @@
 
                             {{-- Updated Changes Table --}}
                             @if ($notification->changes && count($notification->changes) > 0)
+                                @php
+                                    $isFieldChanges = isset($notification->changes[0]) && (is_array($notification->changes[0])) && (isset($notification->changes[0]['field']) || isset($notification->changes[0]['field_name']));
+                                @endphp
                                 <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                                     <tr>
                                         <td style="background-color:{{ $badge[0] }};padding:12px 20px;border-bottom:1px solid #e5e7eb;">
@@ -81,6 +84,7 @@
                                                 @if ($module === 'task') Task Changes
                                                 @elseif ($module === 'project') Project Changes
                                                 @elseif ($module === 'deliverable') Deliverable Changes
+                                                @elseif ($module === 'team') Team Details
                                                 @else Changes Made
                                                 @endif
                                             </span>
@@ -89,30 +93,49 @@
                                     <tr>
                                         <td style="padding:16px 20px;">
                                             <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                                <tr>
-                                                    <th style="text-align:left;padding:8px 12px;background-color:#f9fafb;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Field</th>
-                                                    <th style="text-align:left;padding:8px 12px;background-color:#f9fafb;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Previous Value</th>
-                                                    <th style="text-align:left;padding:8px 12px;background-color:#f9fafb;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">New Value</th>
-                                                </tr>
-                                                @foreach ($notification->changes as $change)
+                                                @if ($isFieldChanges)
                                                     <tr>
-                                                        <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#374151;font-size:13px;font-weight:600;">{{ $change['field'] ?? ucwords(str_replace('_', ' ', $change['field_name'] ?? '')) }}</td>
-                                                        <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;">
-                                                            @if (!empty($change['old']))
-                                                                <span style="display:inline-block;background-color:#fef2f2;color:#dc2626;font-size:12px;font-weight:500;padding:2px 8px;border-radius:4px;text-decoration:line-through;">{{ $change['old'] }}</span>
-                                                            @else
-                                                                <span style="color:#9ca3af;font-size:12px;font-style:italic;">—</span>
-                                                            @endif
-                                                        </td>
-                                                        <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;">
-                                                            @if (!empty($change['new']))
-                                                                <span style="display:inline-block;background-color:#f0fdf4;color:#16a34a;font-size:12px;font-weight:500;padding:2px 8px;border-radius:4px;">{{ $change['new'] }}</span>
-                                                            @else
-                                                                <span style="color:#9ca3af;font-size:12px;font-style:italic;">—</span>
-                                                            @endif
-                                                        </td>
+                                                        <th style="text-align:left;padding:8px 12px;background-color:#f9fafb;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Field</th>
+                                                        <th style="text-align:left;padding:8px 12px;background-color:#f9fafb;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Previous Value</th>
+                                                        <th style="text-align:left;padding:8px 12px;background-color:#f9fafb;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">New Value</th>
                                                     </tr>
-                                                @endforeach
+                                                    @foreach ($notification->changes as $change)
+                                                        <tr>
+                                                            <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#374151;font-size:13px;font-weight:600;">{{ $change['field'] ?? ucwords(str_replace('_', ' ', $change['field_name'] ?? '')) }}</td>
+                                                            <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;">
+                                                                @if (!empty($change['old']))
+                                                                    <span style="display:inline-block;background-color:#fef2f2;color:#dc2626;font-size:12px;font-weight:500;padding:2px 8px;border-radius:4px;text-decoration:line-through;">{{ $change['old'] }}</span>
+                                                                @else
+                                                                    <span style="color:#9ca3af;font-size:12px;font-style:italic;">—</span>
+                                                                @endif
+                                                            </td>
+                                                            <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;">
+                                                                @if (!empty($change['new']))
+                                                                    <span style="display:inline-block;background-color:#f0fdf4;color:#16a34a;font-size:12px;font-weight:500;padding:2px 8px;border-radius:4px;">{{ $change['new'] }}</span>
+                                                                @else
+                                                                    <span style="color:#9ca3af;font-size:12px;font-style:italic;">—</span>
+                                                                @endif
+                                                            </td>
+                                                        </tr>
+                                                    @endforeach
+                                                @else
+                                                    <tr>
+                                                        <th style="text-align:left;padding:8px 12px;background-color:#f9fafb;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Detail</th>
+                                                        <th style="text-align:left;padding:8px 12px;background-color:#f9fafb;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Value</th>
+                                                    </tr>
+                                                    @foreach ($notification->changes as $key => $value)
+                                                        <tr>
+                                                            <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#374151;font-size:13px;font-weight:600;">{{ ucwords(str_replace('_', ' ', $key)) }}</td>
+                                                            <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;">
+                                                                @if (is_array($value))
+                                                                    {{ implode(', ', array_map(fn($v) => is_array($v) ? ($v['name'] ?? json_encode($v)) : $v, $value)) }}
+                                                                @else
+                                                                    {{ $value }}
+                                                                @endif
+                                                            </td>
+                                                        </tr>
+                                                    @endforeach
+                                                @endif
                                             </table>
                                         </td>
                                     </tr>

@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
@@ -25,6 +26,11 @@ import "./layout/CreateTaskModal.css";
  */
 export default function EditTaskModal({ task, onClose }) {
   useEscapeKey(true, onClose);
+  const [container, setContainer] = useState(null);
+
+  useEffect(() => {
+    setContainer(document.body);
+  }, []);
 
   const currentUser = getUser();
 
@@ -213,7 +219,9 @@ export default function EditTaskModal({ task, onClose }) {
     });
   };
 
-  return (
+  if (!container) return null;
+
+  return createPortal(
     <div className="task-overlay">
       <div className="task-modal" onClick={(e) => e.stopPropagation()}>
         {/* HEADER */}
@@ -506,6 +514,7 @@ export default function EditTaskModal({ task, onClose }) {
           </LoadingButton>
         </div>
       </div>
-    </div>
+    </div>,
+    container
   );
 }

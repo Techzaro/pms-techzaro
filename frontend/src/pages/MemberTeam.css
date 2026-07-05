@@ -1,5 +1,123 @@
 /* ===== MemberTeam Page ===== */
-/* Reuses .mt-* classes from ManageTeam.css for consistency */
+
+/* Header */
+.mt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.mt-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mt-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.mt-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: #64748b;
+}
+
+/* Team List */
+.mt-team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* Card */
+.mt-card {
+  background: #fff;
+  border: 1px solid #e9ecf0;
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  position: relative;
+}
+
+.mt-team-list .mt-card + .mt-card::before {
+  content: "";
+  position: absolute;
+  top: -16px;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #d1d5db 20%, #d1d5db 80%, transparent);
+}
+
+/* Card Top */
+.mt-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+/* Search Bar */
+.mt-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  width: 240px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.mt-search-bar:focus-within {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.mt-search-icon {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.mt-search-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: #1e293b;
+  width: 100%;
+  font-family: inherit;
+}
+
+.mt-search-input::placeholder {
+  color: #94a3b8;
+}
+
+.mt-card-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.mt-team-icon-inline {
+  color: #4f46e5;
+  flex-shrink: 0;
+}
+
+.mt-team-name {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+}
 
 /* Info Row */
 .mt-info-row {
@@ -10,6 +128,30 @@
 
 .mt-info-row .mt-section {
   margin-bottom: 0;
+}
+
+.mt-info-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: #334155;
+}
+
+.mt-info-label {
+  font-weight: 600;
+  color: #475569;
+}
+
+.mt-info-value {
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.mt-info-sep {
+  color: #cbd5e1;
+  margin: 0 4px;
 }
 
 .mt-member-count {
@@ -85,6 +227,18 @@
   gap: 4px;
   background: #fef3c7;
   color: #92400e;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.mt-role-badge {
+  display: inline-flex;
+  align-items: center;
+  background: #e0e7ff;
+  color: #3730a3;
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;

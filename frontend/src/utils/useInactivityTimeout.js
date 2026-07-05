@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { getCurrentRole, clearSession } from "./auth";
 
-const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+const INACTIVITY_TIMEOUT = 60 * 60 * 1000; // 60 minutes
 
 export function useInactivityTimeout() {
   const timerRef = useRef(null);

@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { MdEdit } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -526,7 +527,7 @@ function MyProfile() {
         </div>
       </div>
 
-      {isPasswordModalOpen && (
+      {isPasswordModalOpen && createPortal(
         <div className="user-modal-overlay">
           <div
             className="user-modal-content"
@@ -614,7 +615,8 @@ function MyProfile() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </DashboardLayout>
   );

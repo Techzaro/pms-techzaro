@@ -146,21 +146,21 @@ function Reports() {
     ["report-summary-cards", period, view],
     "/reports/summary-cards",
     { period, view },
-    { staleTime: 0, refetchOnMount: true, refetchInterval: 30000 }
+    { staleTime: 60000, refetchOnMount: true }
   );
 
   const { data: userTableData, isLoading: isTableLoading } = useApiQuery(
     ["report-user-table", period],
     "/reports/user-performance-table",
     { period },
-    { staleTime: 0, refetchOnMount: true, refetchInterval: 30000, enabled: isAdminOrManager || isTeamMembersView }
+    { staleTime: 60000, refetchOnMount: true, enabled: isAdminOrManager || isTeamMembersView }
   );
 
   const { data: teamsData, isLoading: isTeamsLoading } = useApiQuery(
     ["report-teams-overview"],
     "/reports/teams-overview",
     null,
-    { staleTime: 0, refetchOnMount: true, enabled: isAdminOrManager }
+    { staleTime: 60000, refetchOnMount: true, enabled: isAdminOrManager }
   );
 
   const teams = Array.isArray(teamsData) ? teamsData : [];

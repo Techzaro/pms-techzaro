@@ -8,7 +8,7 @@ function LoggedOut() {
 
   const title = reason === "inactivity" ? "Session Expired" : "Logged Out";
   const message = reason === "inactivity"
-    ? "Your session has expired due to 30 minutes of inactivity. Please log in again to continue."
+    ? "Your session has expired due to 60 minutes of inactivity. Please log in again to continue."
     : "You have been successfully logged out of your account.";
 
   return (

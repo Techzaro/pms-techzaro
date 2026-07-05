@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
@@ -371,7 +372,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     });
   };
 
-  return (
+  return createPortal(
     <div className="task-overlay">
       <div className="task-modal" onClick={(e) => e.stopPropagation()}>
 
@@ -721,7 +722,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
             </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

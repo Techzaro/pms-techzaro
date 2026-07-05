@@ -14,7 +14,8 @@
  *
  * Access restricted to admin and manager roles.
  */
-import { useEffect, useState, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Crown } from "lucide-react";
 import {
@@ -98,6 +99,7 @@ function ManageTeam() {
   const [teamName, setTeamName] = useState("");
   const [teamDescription, setTeamDescription] = useState("");
   const [selectedMemberIds, setSelectedMemberIds] = useState([]);
+  const [selectedLeaderId, setSelectedLeaderId] = useState(null);
 
   const [selectedUserIds, setSelectedUserIds] = useState([]);
 
@@ -281,6 +283,7 @@ function ManageTeam() {
     setTeamName("");
     setTeamDescription("");
     setSelectedMemberIds([]);
+    setSelectedLeaderId(null);
     setIsMemberDropdownOpen(false);
     setIsUserDropdownOpen(false);
     setIsModalOpen(true);
@@ -301,6 +304,7 @@ function ManageTeam() {
     setTeamName("");
     setTeamDescription("");
     setSelectedMemberIds([]);
+    setSelectedLeaderId(null);
     setSelectedUserIds([]);
     setIsMemberDropdownOpen(false);
     setIsUserDropdownOpen(false);
@@ -349,7 +353,7 @@ function ManageTeam() {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name: teamName, description: teamDescription, member_ids: selectedMemberIds }),
+        body: JSON.stringify({ name: teamName, description: teamDescription, member_ids: selectedMemberIds, leader_id: selectedLeaderId }),
         _notifHandled: true,
       });
       const data = await response.json();
@@ -650,8 +654,8 @@ function ManageTeam() {
         )}
 
         {/* MODAL */}
-        {isModalOpen && (
-          <div className="mt-modal-overlay">
+        {isModalOpen && createPortal(
+          <div className="mt-modal-overlay" onClick={closeModal}>
             <div className="mt-modal" onClick={(e) => e.stopPropagation()}>
               <div className="mt-modal-header">
                 <div>
@@ -866,6 +870,35 @@ function ManageTeam() {
                     )}
                   </div>
 
+                  {!editTeamId && selectedMemberIds.length > 0 && (
+                    <div style={{ width: "100%", marginBottom: "20px" }}>
+                      <label className="mt-field-label">Select Team Lead (Optional)</label>
+                      <select
+                        style={{
+                          width: "100%",
+                          height: "52px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "12px",
+                          padding: "0 14px",
+                          fontSize: "14px",
+                          background: "#f9fafb",
+                          outline: "none",
+                          boxSizing: "border-box",
+                          cursor: "pointer",
+                        }}
+                        value={selectedLeaderId || ""}
+                        onChange={(e) => setSelectedLeaderId(e.target.value ? Number(e.target.value) : null)}
+                      >
+                        <option value="">No leader selected</option>
+                        {users
+                          .filter((u) => selectedMemberIds.includes(u.id))
+                          .map((u) => (
+                            <option key={u.id} value={u.id}>{u.name} ({u.role === "teamlead" ? "Team Lead" : u.role})</option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div className="mt-modal-actions">
                     <button type="button" className="mt-btn-cancel" onClick={closeModal}>
                       Cancel
@@ -877,7 +910,8 @@ function ManageTeam() {
                 </form>
               )}
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </DashboardLayout>

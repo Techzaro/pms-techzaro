@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
 import CustomSelect from "../CustomSelect";
 import CustomDateTimePicker from "../CustomDateTimePicker";
@@ -32,7 +33,7 @@ const CreateDeliverableTask = ({ onClose }) => {
     return () => window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: false } }));
   }, []);
 
-  return (
+  return createPortal(
     <div className="deliverable-overlay">
 
       <div className="deliverable-modal" onClick={(e) => e.stopPropagation()}>
@@ -223,7 +224,8 @@ const CreateDeliverableTask = ({ onClose }) => {
 
       </div>
 
-    </div>
+    </div>,
+    document.body
   );
 };
 

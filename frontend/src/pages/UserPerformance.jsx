@@ -139,7 +139,7 @@ function UserPerformance() {
     ["user-performance", userId],
     `/reports/user/${userId}`,
     null,
-    { staleTime: 0, refetchOnMount: true, refetchInterval: 30000 }
+    { staleTime: 60000, refetchOnMount: true }
   );
 
   const summary = data?.summary || {};

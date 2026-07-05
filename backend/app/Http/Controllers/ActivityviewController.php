@@ -30,43 +30,57 @@ class ActivityviewController extends Controller
             return response()->json(['success' => true, 'views' => []]);
         }
 
-        $entityTypes = [];
-        $entityIds = [];
-        foreach ($entities as $entity) {
-            $type = $entity['type'] ?? null;
-            $id = $entity['id'] ?? null;
-            if (! $type || ! $id) { continue; }
-            $entityTypes[$type][] = $id;
-            $entityIds[] = $id;
-        }
+        try {
+            $entityTypes = [];
+            $entityIds = [];
+            foreach ($entities as $entity) {
+                $type = $entity['type'] ?? null;
+                $id = $entity['id'] ?? null;
+                if (! $type || ! $id) { continue; }
+                $entityTypes[$type][] = $id;
+                $entityIds[] = $id;
+            }
 
-        $views = UserActivityView::where('user_id', $user->id)
-            ->whereIn('entity_id', $entityIds)
-            ->get()
-            ->keyBy(fn ($v) => "{$v->entity_type}:{$v->entity_id}");
+            $views = UserActivityView::where('user_id', $user->id)
+                ->whereIn('entity_id', $entityIds)
+                ->get()
+                ->keyBy(fn ($v) => "{$v->entity_type}:{$v->entity_id}");
 
-        $maxIds = $this->batchGetMaxActivityIds($entityTypes);
+            $maxIds = $this->batchGetMaxActivityIds($entityTypes);
 
-        $unreadCounts = $this->batchCountUnread($entityTypes, $views);
+            $unreadCounts = $this->batchCountUnread($entityTypes, $views);
 
-        foreach ($entities as $entity) {
-            $type = $entity['type'] ?? null;
-            $id = $entity['id'] ?? null;
-            if (! $type || ! $id) { continue; }
+            foreach ($entities as $entity) {
+                $type = $entity['type'] ?? null;
+                $id = $entity['id'] ?? null;
+                if (! $type || ! $id) { continue; }
 
-            $key = "{$type}:{$id}";
-            $maxId = $maxIds[$type][$id] ?? 0;
-            $view = $views->get($key);
-            $lastViewed = $view?->last_viewed_activity_id ?? 0;
-            $hasUnread = $maxId > $lastViewed;
-            $unreadCount = $hasUnread ? ($unreadCounts[$type][$id] ?? 0) : 0;
+                $key = "{$type}:{$id}";
+                $maxId = $maxIds[$type][$id] ?? 0;
+                $view = $views->get($key);
+                $lastViewed = $view?->last_viewed_activity_id ?? 0;
+                $hasUnread = $maxId > $lastViewed;
+                $unreadCount = $hasUnread ? ($unreadCounts[$type][$id] ?? 0) : 0;
 
-            $result[$key] = [
-                'hasUnread' => $hasUnread,
-                'unreadCount' => $unreadCount,
-                'lastViewedId' => $lastViewed,
-                'maxId' => $maxId,
-            ];
+                $result[$key] = [
+                    'hasUnread' => $hasUnread,
+                    'unreadCount' => $unreadCount,
+                    'lastViewedId' => $lastViewed,
+                    'maxId' => $maxId,
+                ];
+            }
+        } catch (\Exception $e) {
+            foreach ($entities as $entity) {
+                $type = $entity['type'] ?? null;
+                $id = $entity['id'] ?? null;
+                if (! $type || ! $id) { continue; }
+                $result["{$type}:{$id}"] = [
+                    'hasUnread' => false,
+                    'unreadCount' => 0,
+                    'lastViewedId' => 0,
+                    'maxId' => 0,
+                ];
+            }
         }
 
         return response()->json(['success' => true, 'views' => $result]);
@@ -87,14 +101,18 @@ class ActivityviewController extends Controller
             return response()->json(['success' => false, 'message' => 'type and id required'], 422);
         }
 
-        $maxId = $this->getMaxActivityId($type, $id);
+        try {
+            $maxId = $this->getMaxActivityId($type, $id);
 
-        UserActivityView::updateOrCreate(
-            ['user_id' => $user->id, 'entity_type' => $type, 'entity_id' => $id],
-            ['last_viewed_activity_id' => $maxId]
-        );
+            UserActivityView::updateOrCreate(
+                ['user_id' => $user->id, 'entity_type' => $type, 'entity_id' => $id],
+                ['last_viewed_activity_id' => $maxId]
+            );
 
-        return response()->json(['success' => true, 'lastViewedId' => $maxId]);
+            return response()->json(['success' => true, 'lastViewedId' => $maxId]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => true, 'lastViewedId' => 0]);
+        }
     }
 
     private function batchGetMaxActivityIds(array $entityTypes): array
@@ -107,14 +125,7 @@ class ActivityviewController extends Controller
                     ->pluck(DB::raw('MAX(id)'), 'project_id')
                     ->map(fn ($v) => (int) $v)
                     ->toArray(),
-                'task' => collect(DB::select(
-                    'SELECT task_id, GREATEST(COALESCE(MAX(tc.id),0), COALESCE(MAX(twe.id),0)) as max_id ' .
-                    'FROM (SELECT DISTINCT id as task_id FROM task_changes WHERE task_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ') ' .
-                    'UNION SELECT DISTINCT id as task_id FROM task_workflow_events WHERE task_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')) u ' .
-                    'LEFT JOIN task_changes tc ON tc.task_id = u.task_id ' .
-                    'LEFT JOIN task_workflow_events twe ON twe.task_id = u.task_id GROUP BY task_id',
-                    array_merge($ids, $ids)
-                ))->pluck('max_id', 'task_id')->map(fn ($v) => (int) $v)->toArray(),
+                'task' => $this->getTaskMaxIds($ids),
                 'deliverable' => DeliverableChange::whereIn('deliverable_id', $ids)
                     ->groupBy('deliverable_id')
                     ->pluck(DB::raw('MAX(id)'), 'deliverable_id')
@@ -127,6 +138,24 @@ class ActivityviewController extends Controller
                     ->toArray(),
                 default => [],
             };
+        }
+        return $result;
+    }
+
+    private function getTaskMaxIds(array $ids): array
+    {
+        if (empty($ids)) return [];
+        $tcMax = TaskChange::whereIn('task_id', $ids)
+            ->groupBy('task_id')
+            ->pluck(DB::raw('MAX(id)'), 'task_id')
+            ->map(fn ($v) => (int) $v);
+        $tweMax = TaskWorkflowEvent::whereIn('task_id', $ids)
+            ->groupBy('task_id')
+            ->pluck(DB::raw('MAX(id)'), 'task_id')
+            ->map(fn ($v) => (int) $v);
+        $result = [];
+        foreach ($ids as $id) {
+            $result[$id] = max($tcMax->get($id, 0), $tweMax->get($id, 0));
         }
         return $result;
     }

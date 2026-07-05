@@ -10,6 +10,7 @@ use App\Models\UserChange;
 use App\Services\ActivityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
@@ -404,6 +405,9 @@ class AuthController extends Controller
         if ($hasFileUploads) {
             $user->save();
         }
+
+        Cache::forget("user_profile_{$user->id}");
+        Cache::forget('all_users_list');
 
         return response()->json([
             'success' => true,

@@ -346,7 +346,7 @@ class UserController extends Controller
             'father_name', 'id_card_number', 'phone_number',
             'present_address', 'permanent_address',
             'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
-            'personal_email', 'professional_email', 'professional_email_password',
+            'personal_email', 'professional_email',
             'recovery_email',
             'department', 'designation', 'hired_for', 'employee_code',
             'job_started_date', 'job_ended_date',
@@ -355,10 +355,22 @@ class UserController extends Controller
         ];
 
         $oldValues = [];
+        $oldDateStrings = [];
+        $dateFields = ['job_started_date', 'job_ended_date'];
         foreach ($fields as $field) {
             if ($request->exists($field)) {
                 $oldValues[$field] = $user->$field;
+                if (in_array($field, $dateFields)) {
+                    $raw = $user->getRawOriginal($field);
+                    $oldDateStrings[$field] = $raw ? substr($raw, 0, 10) : '';
+                }
             }
+        }
+
+        // Capture old password for change tracking
+        $oldPasswordValues = [];
+        if ($request->exists('professional_email_password') && $request->input('professional_email_password')) {
+            $oldPasswordValues['professional_email_password'] = $user->professional_email_password;
         }
 
         foreach ($fields as $field) {
@@ -388,10 +400,28 @@ class UserController extends Controller
         $user->save();
 
         $changes = [];
+
+        // Track professional_email_password change separately
+        if (array_key_exists('professional_email_password', $oldPasswordValues)) {
+            $oldPw = $oldPasswordValues['professional_email_password'] ?? '';
+            $newPw = $request->input('professional_email_password') ?? '';
+            if ((string) $oldPw !== (string) $newPw) {
+                $changes['professional_email_password'] = ['old' => '(hidden)', 'new' => $newPw];
+            }
+        }
+
         foreach ($oldValues as $field => $oldVal) {
-            $newVal = $user->$field;
-            $oldStr = $oldVal === null ? '' : (string) $oldVal;
-            $newStr = $newVal === null ? '' : (string) $newVal;
+            $dateFieldsList = ['job_started_date', 'job_ended_date'];
+            if (in_array($field, $dateFieldsList)) {
+                // Compare request input date against old DB date-only to avoid timezone shifts
+                $oldStr = $oldDateStrings[$field] ?? '';
+                $newStr = $request->exists($field) ? substr((string) $request->input($field), 0, 10) : '';
+            } else {
+                $newVal = $user->$field;
+                $oldStr = $oldVal === null ? '' : (string) $oldVal;
+                $newStr = $newVal === null ? '' : (string) $newVal;
+            }
+
             if ($oldStr !== $newStr) {
                 $changes[$field] = ['old' => $oldStr, 'new' => $newStr];
             }
@@ -447,6 +477,7 @@ class UserController extends Controller
         $this->handleFileUploads($request, $user);
 
         Cache::forget('all_users_list');
+        Cache::forget("user_profile_{$user->id}");
         if (in_array($user->role, ['admin', 'manager']) || isset($oldValues['role'])) {
             Cache::forget('admin_manager_ids');
         }
@@ -615,6 +646,11 @@ class UserController extends Controller
                 $message .= ' Email notification failed: ' . $emailError;
             }
 
+            $this->notificationService->confirmAction($authUser, 'Resigned', 'user', $user->name, [
+                'User Email' => $user->professional_email ?? $user->email,
+                'Role' => ucfirst($user->role),
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => $message,
@@ -702,7 +738,7 @@ class UserController extends Controller
                     'father_name', 'id_card_number', 'phone_number', 'contact_no',
                     'present_address', 'permanent_address', 'address',
                     'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
-                    'personal_email', 'professional_email',
+                    'personal_email', 'professional_email', 'professional_email_password',
                     'recovery_email',
                     'department', 'designation', 'hired_for', 'employee_code',
                     'job_started_date', 'job_ended_date',

@@ -29,7 +29,7 @@ function TeamMembersReport() {
     ["report-teams-overview"],
     "/reports/teams-overview",
     null,
-    { staleTime: 0, refetchOnMount: true }
+    { staleTime: 60000, refetchOnMount: true }
   );
 
   const team = Array.isArray(teamsData) ? teamsData.find((t) => String(t.id) === String(teamId)) : null;

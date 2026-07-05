@@ -588,6 +588,30 @@ class ProjectController extends Controller
                 'action' => 'status_updated',
                 'comment' => $oldStatus.' → '.$validated['status'],
             ]);
+
+            $assignedUserIds = $project->assigned_users ?? [];
+            if (is_string($assignedUserIds)) {
+                $assignedUserIds = json_decode($assignedUserIds, true) ?? [];
+            }
+            $notifications = [];
+            foreach (array_filter($assignedUserIds, fn ($id) => (int) $id !== (int) $user->id) as $recipientId) {
+                $notifications[] = [
+                    'user_id' => $recipientId,
+                    'sender_user_id' => $user->id,
+                    'type' => 'project_status_updated',
+                    'related_module' => 'project',
+                    'related_id' => $project->id,
+                    'title' => 'Project Status Updated',
+                    'message' => $user->name.' changed status of project "'.$project->name.'" from '.$oldStatus.' to '.$validated['status'].'.',
+                    'link' => '/projects/'.$project->id,
+                ];
+            }
+            $this->notificationService->createBulk($notifications);
+
+            $this->notificationService->confirmAction($user, 'Updated status of', 'project', $project->name, [
+                'Previous Status' => $oldStatus,
+                'New Status' => $validated['status'],
+            ]);
         }
 
         $this->clearDashboardCache($user->id);
@@ -618,6 +642,29 @@ class ProjectController extends Controller
         $project->update(['status' => 'completed']);
 
         ProjectWorkflowEvent::create(['project_id' => $project->id, 'user_id' => $user->id, 'action' => 'completed']);
+
+        $assignedUserIds = $project->assigned_users ?? [];
+        if (is_string($assignedUserIds)) {
+            $assignedUserIds = json_decode($assignedUserIds, true) ?? [];
+        }
+        $notifications = [];
+        foreach (array_filter($assignedUserIds, fn ($id) => (int) $id !== (int) $user->id) as $recipientId) {
+            $notifications[] = [
+                'user_id' => $recipientId,
+                'sender_user_id' => $user->id,
+                'type' => 'project_completed',
+                'related_module' => 'project',
+                'related_id' => $project->id,
+                'title' => 'Project Completed',
+                'message' => $user->name.' has marked project "'.$project->name.'" as completed.',
+                'link' => '/projects/'.$project->id,
+            ];
+        }
+        $this->notificationService->createBulk($notifications);
+
+        $this->notificationService->confirmAction($user, 'Completed', 'project', $project->name, [
+            'Completed On' => now()->format('d M Y, g:i A'),
+        ]);
 
         $deliverable = Deliverable::create([
             'project_id' => $project->id, 'task_id' => null,

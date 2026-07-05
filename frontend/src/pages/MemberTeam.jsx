@@ -9,7 +9,7 @@
  * - Auto-refreshes via real-time events
  */
 import { useEffect, useState } from "react";
-import { MdPeople, MdCalendarToday, MdGroup, MdEmail, MdInfoOutline } from "react-icons/md";
+import { MdPeople, MdCalendarToday, MdGroup, MdEmail, MdInfoOutline, MdSearch } from "react-icons/md";
 import { Crown } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -46,6 +46,7 @@ function formatDate(dateStr) {
 function MemberTeam() {
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   const fetchTeams = async () => {
     const token = authToken();
@@ -84,6 +85,18 @@ function MemberTeam() {
             <h1 className="mt-title">My Team</h1>
             <p className="mt-subtitle">View your assigned team information</p>
           </div>
+          {!loading && teams.length > 0 && (
+            <div className="mt-search-bar">
+              <MdSearch size={16} className="mt-search-icon" />
+              <input
+                type="text"
+                className="mt-search-input"
+                placeholder="Search members..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -101,8 +114,8 @@ function MemberTeam() {
         ) : (
           <div className="mt-team-list">
             {teams.map((team) => (
-              <TeamCard key={team.id} team={team} currentUserId={null} />
-            ))}
+              <TeamCard key={team.id} team={team} search={search} />
+            )).filter(Boolean)}
           </div>
         )}
       </div>
@@ -110,22 +123,50 @@ function MemberTeam() {
   );
 }
 
-function TeamCard({ team }) {
+function TeamCard({ team, search }) {
   const leader = team.leader;
   const members = team.members || [];
-  const memberCount = members.length;
+  const q = (search || "").toLowerCase().trim();
+
+  const teamNameMatch = q && team.name.toLowerCase().includes(q);
+
+  const memberNameMatch = q && members.some((m) => {
+    const haystack = [m.name, m.professional_email].filter(Boolean).join(" ").toLowerCase();
+    return haystack.includes(q);
+  });
+
+  if (q && !teamNameMatch && !memberNameMatch) return null;
+
+  const filteredMembers = q
+    ? members.filter((m) => {
+        const haystack = [m.name, m.professional_email].filter(Boolean).join(" ").toLowerCase();
+        return haystack.includes(q);
+      })
+    : members;
+
+  const displayMembers = q
+    ? (teamNameMatch ? members : filteredMembers)
+    : members;
+
+  const sortedMembers = [...displayMembers].sort((a, b) => {
+    const aIsLeader = leader && Number(a.id) === Number(leader.id);
+    const bIsLeader = leader && Number(b.id) === Number(leader.id);
+    if (aIsLeader && !bIsLeader) return -1;
+    if (!aIsLeader && bIsLeader) return 1;
+    return 0;
+  });
+
+  if (q && sortedMembers.length === 0) return null;
 
   return (
     <div className="mt-card">
       {/* Card Top */}
       <div className="mt-card-top">
         <div className="mt-card-identity">
-          <div className="mt-team-icon">
-            <MdPeople size={22} />
-          </div>
+          <MdPeople size={22} className="mt-team-icon-inline" />
           <div>
             <h2 className="mt-team-name">{team.name}</h2>
-            <span className="mt-member-count">{memberCount} member{memberCount !== 1 ? "s" : ""}</span>
+            <span className="mt-member-count">{q ? sortedMembers.length : members.length} of {members.length} member{members.length !== 1 ? "s" : ""}</span>
           </div>
         </div>
       </div>
@@ -140,34 +181,31 @@ function TeamCard({ team }) {
 
       {/* Info Row: Lead + Created Date */}
       <div className="mt-info-row">
-        <div className="mt-section">
-          <span className="mt-section-label">Team Lead</span>
+        <div className="mt-info-inline">
+          <span className="mt-info-label">Team Lead</span>
           {leader ? (
-            <div className="mt-lead-chip">
+            <>
               <Crown size={16} className="mt-crown-icon" />
-              <span>{leader.name}</span>
-            </div>
+              <span className="mt-info-value">{leader.name}</span>
+            </>
           ) : (
-            <p className="mt-no-data">Not assigned</p>
+            <span className="mt-info-value mt-no-data">Not assigned</span>
           )}
-        </div>
-        <div className="mt-section">
-          <span className="mt-section-label">Created</span>
-          <div className="mt-date-chip">
-            <MdCalendarToday size={16} style={{ color: "#64748b", flexShrink: 0 }} />
-            <span>{formatDate(team.created_at)}</span>
-          </div>
+          <span className="mt-info-sep">|</span>
+          <span className="mt-info-label">Created</span>
+          <MdCalendarToday size={16} style={{ color: "#64748b", flexShrink: 0 }} />
+          <span className="mt-info-value">{formatDate(team.created_at)}</span>
         </div>
       </div>
 
       {/* Members Section */}
       <div className="mt-section">
         <span className="mt-section-label">Team Members</span>
-        {memberCount === 0 ? (
-          <p className="mt-no-data">No members assigned</p>
+        {sortedMembers.length === 0 ? (
+          <p className="mt-no-data">{q ? "No members match your search" : "No members assigned"}</p>
         ) : (
           <div className="mt-members-grid">
-            {members.map((member) => {
+            {sortedMembers.map((member) => {
               const isLeader = leader && Number(member.id) === Number(leader.id);
               return (
                 <div key={member.id} className={`mt-member-card ${isLeader ? "mt-member-card--leader" : ""}`}>
@@ -180,29 +218,35 @@ function TeamCard({ team }) {
                     </div>
                     <div className="mt-member-info">
                       <span className="mt-member-name">{member.name}</span>
-                      {isLeader && (
+                      {isLeader ? (
                         <span className="mt-lead-badge">
                           <Crown size={12} />
                           Team Lead
                         </span>
-                      )}
+                      ) : member.role ? (
+                        <span className="mt-role-badge">{member.role.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
+                      ) : null}
                     </div>
                   </div>
                   <div className="mt-member-details">
-                    {member.designation && (
+                    {isLeader ? (
                       <span className="mt-member-detail">
-                        <span className="mt-detail-label">Role:</span> {member.designation}
+                        <span className="mt-detail-label">Destination:</span> Team Lead
                       </span>
-                    )}
+                    ) : member.designation ? (
+                      <span className="mt-member-detail">
+                        <span className="mt-detail-label">Destination:</span> {member.designation}
+                      </span>
+                    ) : null}
                     {member.department && (
                       <span className="mt-member-detail">
                         <span className="mt-detail-label">Dept:</span> {member.department}
                       </span>
                     )}
-                    {member.email && (
+                    {member.professional_email && (
                       <span className="mt-member-detail mt-member-email">
                         <MdEmail size={14} />
-                        {member.email}
+                        {member.professional_email}
                       </span>
                     )}
                   </div>

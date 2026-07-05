@@ -52,12 +52,21 @@ class NotificationService
             return !empty($n['user_id']) && (!isset($n['sender_user_id']) || (int) $n['user_id'] !== (int) $n['sender_user_id']);
         });
 
-        if (empty($filtered)) return;
+        if (empty($filtered)) {
+            Log::info('createBulk: all notifications filtered out (self-notifications or missing user_id)', [
+                'count' => count($notifications),
+            ]);
+            return;
+        }
 
         $filtered = array_values($filtered);
         $now = now()->toDateTimeString();
 
         $rows = array_map(function ($n) use ($now) {
+            $changesValue = $n['changes'] ?? null;
+            if (is_array($changesValue)) {
+                $changesValue = json_encode($changesValue);
+            }
             return [
                 'user_id' => $n['user_id'],
                 'sender_user_id' => $n['sender_user_id'] ?? null,
@@ -66,7 +75,7 @@ class NotificationService
                 'related_id' => $n['related_id'],
                 'title' => $n['title'],
                 'message' => $n['message'],
-                'changes' => isset($n['changes']) ? json_encode($n['changes']) : null,
+                'changes' => $changesValue,
                 'link' => $n['link'] ?? null,
                 'is_read' => false,
                 'created_at' => $now,
@@ -83,12 +92,19 @@ class NotificationService
             ->with(['user.emailPreference', 'sender'])
             ->get();
 
+        Log::info('createBulk: fetched notifications for email', [
+            'expected' => count($rows),
+            'fetched' => $createdNotifications->count(),
+            'ids' => $ids,
+        ]);
+
         foreach ($createdNotifications as $notification) {
-            if (!$notification->user || !$notification->user->professional_email) {
-                Log::info('Notification email skipped: recipient has no professional_email', [
-                    'notification_id' => $notification->id,
-                    'user_id' => $notification->user_id,
-                ]);
+            if (!$notification->user) {
+                Log::info('createBulk email skipped: user not found', ['notification_id' => $notification->id, 'user_id' => $notification->user_id]);
+                continue;
+            }
+            if (empty($notification->user->professional_email)) {
+                Log::info('createBulk email skipped: no professional_email', ['notification_id' => $notification->id, 'user_id' => $notification->user_id]);
                 continue;
             }
             if ($notification->type === 'user_updated') continue;
@@ -107,18 +123,25 @@ class NotificationService
                     } else {
                         Mail::to($notification->user->professional_email)->send($mail);
                     }
-                    Log::info('Notification email sent', [
+                    Log::info('createBulk email sent', [
                         'notification_id' => $notification->id,
                         'recipient' => $notification->user->professional_email,
-                        'from' => $senderEmail,
+                        'type' => $notification->type,
                     ]);
                 } catch (\Throwable $e) {
-                    Log::error('Failed to send notification email', [
+                    Log::error('createBulk email FAILED', [
                         'notification_id' => $notification->id,
                         'user_id' => $notification->user_id,
                         'error' => $e->getMessage(),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
                     ]);
                 }
+            } else {
+                Log::info('createBulk email skipped: wantsChannel false', [
+                    'notification_id' => $notification->id,
+                    'module' => $notification->related_module,
+                ]);
             }
 
             if (Notification::wantsChannel($notification, 'mobile_push')) {

@@ -70,7 +70,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
     ["company-employees-report", period],
     "/reports/company-employees",
     { period },
-    { staleTime: 0, refetchOnMount: true, refetchInterval: 30000 }
+    { staleTime: 60000, refetchOnMount: true }
   );
 
   const overview = reportData?.overview || {};
