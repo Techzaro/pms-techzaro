@@ -87,6 +87,7 @@ export function useActivityHighlight(entityType, entityId, activityMaxId, activi
     return () => {
       window.removeEventListener("popstate", handlePopState);
       window.removeEventListener("beforeunload", handleBeforeUnload);
+      markViewed();
     };
   }, [markViewed]);
 

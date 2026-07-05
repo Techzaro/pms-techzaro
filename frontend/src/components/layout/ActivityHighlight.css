@@ -3,11 +3,13 @@ section.activity-panel--unread,
 div.activity-panel--unread {
   border: 2px solid #ef4444 !important;
   box-shadow: 0 0 8px rgba(239, 68, 68, 0.3) !important;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease !important;
 }
 
 .activity-item--unread,
 .activity-item--unread * {
   color: #ef4444 !important;
+  transition: color 0.3s ease !important;
 }
 
 .activity-item--unread .td-activity-time {
@@ -16,4 +18,15 @@ div.activity-panel--unread {
 
 .activity-item--unread .td-activity-comment {
   color: #f87171 !important;
+}
+
+/* Read state - normal black text */
+.td-activity-item,
+.td-activity-item * {
+  transition: color 0.3s ease !important;
+}
+
+.activity-item--unread .td-activity-icon {
+  transform: scale(1.1);
+  transition: transform 0.2s ease !important;
 }

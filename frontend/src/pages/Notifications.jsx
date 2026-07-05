@@ -278,7 +278,7 @@ function Notifications() {
         setNotifications((prev) =>
           prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
         );
-        publish("data:changed");
+        setTimeout(() => publish("data:changed"), 150);
       }
     } catch {}
   };
@@ -295,7 +295,7 @@ function Notifications() {
         _notifHandled: true,
       });
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-      publish("data:changed");
+      setTimeout(() => publish("data:changed"), 150);
     } catch {}
   };
 

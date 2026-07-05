@@ -237,11 +237,11 @@ function Header() {
   const fetchNotifications = useCallback(() => {
     const token = authToken();
     if (!token) return;
-    fetch(`${API_URL}/notifications/unread-count`, {
+    fetch(`${API_URL}/notifications/unread-count?t=${Date.now()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       skipLoader: true,
     })
-      .then((res) => (res.ok ? res.json() : { count: 0 }))
+      .then((res) => (res.ok ? res.json() : { unread_count: 0 }))
       .then((data) => {
         const newCount = data.unread_count || 0;
         setUnreadCount((prev) => {
@@ -459,7 +459,7 @@ function Header() {
           <div className="header-notif">
             <Link to={rolePath("notifications")} className="header-notif-link">
               <div className="header-notif-icon-wrap">
-                <MdNotifications fontSize={"22px"} color="#6b7280" />
+                <MdNotifications fontSize={"22px"} color={unreadCount > 0 ? "#ef4444" : "#6b7280"} />
                 {unreadCount > 0 && (
                   <span className="header-notif-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
                 )}
