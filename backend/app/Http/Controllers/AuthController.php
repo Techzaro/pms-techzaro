@@ -329,7 +329,7 @@ class AuthController extends Controller
             'father_name', 'id_card_number',
             'phone_number', 'present_address', 'permanent_address',
             'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
-            'personal_email', 'recovery_email',
+            'personal_email', 'professional_email', 'recovery_email',
             'department', 'designation', 'hired_for', 'employee_code',
             'job_started_date', 'job_ended_date',
             'gross_salary', 'applied_via',
@@ -337,16 +337,25 @@ class AuthController extends Controller
         ];
 
         $oldValues = [];
+        $oldPasswordValue = null;
         foreach ($fields as $field) {
             if ($request->has($field)) {
                 $oldValues[$field] = $user->$field;
             }
         }
 
+        if ($request->has('professional_email_password') && $request->input('professional_email_password')) {
+            $oldPasswordValue = $user->professional_email_password;
+        }
+
         foreach ($fields as $field) {
             if ($request->has($field)) {
                 $user->$field = $request->input($field);
             }
+        }
+
+        if ($request->has('professional_email_password') && $request->input('professional_email_password')) {
+            $user->professional_email_password = $request->input('professional_email_password');
         }
 
         if ($request->has('phone_number')) {
@@ -383,6 +392,19 @@ class AuthController extends Controller
             }
         }
 
+        if ($oldPasswordValue !== null) {
+            $newPw = $request->input('professional_email_password') ?? '';
+            if ((string) $oldPasswordValue !== (string) $newPw) {
+                UserChange::create([
+                    'user_id' => $user->id,
+                    'field_name' => 'professional_email_password',
+                    'old_value' => '(hidden)',
+                    'new_value' => '(updated)',
+                    'modified_by' => $user->id,
+                ]);
+            }
+        }
+
         $documentFields = [
             'employment_contract', 'offer_letter', 'techxaro_regulations',
             'other_document',
@@ -399,6 +421,14 @@ class AuthController extends Controller
                 $path = $file->storeAs('user_documents/'.$user->id, $filename, 'public');
                 $user->$field = $path;
                 $hasFileUploads = true;
+
+                UserChange::create([
+                    'user_id' => $user->id,
+                    'field_name' => $field,
+                    'old_value' => null,
+                    'new_value' => $file->getClientOriginalName(),
+                    'modified_by' => $user->id,
+                ]);
             }
         }
 
@@ -458,6 +488,14 @@ class AuthController extends Controller
 
             $user->password = bcrypt($request->new_password);
             $user->save();
+
+            \App\Models\UserChange::create([
+                'user_id' => $user->id,
+                'field_name' => 'password',
+                'old_value' => '(hidden)',
+                'new_value' => '(changed)',
+                'modified_by' => $user->id,
+            ]);
 
             // Revoke all other tokens on password change for security
             $user->tokens()->where('id', '!=', $request->user()->currentAccessToken()->id)->delete();

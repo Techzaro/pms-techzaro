@@ -914,6 +914,8 @@ class TaskController extends Controller
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'description' => 'sometimes|nullable|string',
+            'requirements' => 'sometimes|nullable|array',
+            'requirements.*' => 'required_with:requirements|string|max:500',
             'start_date' => 'sometimes|nullable|date',
             'end_date' => 'sometimes|nullable|date',
             'priority' => 'sometimes|string|max:32',
@@ -930,7 +932,7 @@ class TaskController extends Controller
         unset($validated['assigned_to']);
 
         $oldValues = [];
-        foreach (['title', 'description', 'start_date', 'end_date', 'priority', 'status'] as $f) {
+        foreach (['title', 'description', 'requirements', 'start_date', 'end_date', 'priority', 'status'] as $f) {
             if (array_key_exists($f, $validated)) {
                 $oldValues[$f] = $task->{$f};
             }
@@ -942,10 +944,18 @@ class TaskController extends Controller
         $changes = [];
         foreach ($oldValues as $f => $oldVal) {
             $newVal = $task->{$f};
-            $oldStr = is_object($oldVal) && method_exists($oldVal, 'format') ? $oldVal->format('Y-m-d H:i') : (string) $oldVal;
-            $newStr = is_object($newVal) && method_exists($newVal, 'format') ? $newVal->format('Y-m-d H:i') : (string) $newVal;
-            if ($oldStr !== $newStr) {
-                $changes[] = ['field_name' => $f, 'label' => ucfirst(str_replace('_', ' ', $f)), 'old_value' => $oldStr, 'new_value' => $newStr];
+            if (is_array($oldVal) || is_array($newVal)) {
+                $oldJson = json_encode($oldVal ?? []);
+                $newJson = json_encode($newVal ?? []);
+                if ($oldJson !== $newJson) {
+                    $changes[] = ['field_name' => $f, 'label' => ucfirst(str_replace('_', ' ', $f)), 'old_value' => $oldJson, 'new_value' => $newJson];
+                }
+            } else {
+                $oldStr = is_object($oldVal) && method_exists($oldVal, 'format') ? $oldVal->format('Y-m-d H:i') : (string) $oldVal;
+                $newStr = is_object($newVal) && method_exists($newVal, 'format') ? $newVal->format('Y-m-d H:i') : (string) $newVal;
+                if ($oldStr !== $newStr) {
+                    $changes[] = ['field_name' => $f, 'label' => ucfirst(str_replace('_', ' ', $f)), 'old_value' => $oldStr, 'new_value' => $newStr];
+                }
             }
         }
 
@@ -1600,8 +1610,24 @@ class TaskController extends Controller
         $request->validate(['file' => 'required|file|max:10240']);
         $file = $request->file('file');
         $path = $file->store('task-files/'.$task->id, 'public');
+        $fileRecord = $task->files()->create(['name' => $file->getClientOriginalName(), 'url' => '/storage/'.$path]);
 
-        return response()->json(['success' => true, 'message' => 'File uploaded successfully', 'file' => $task->files()->create(['name' => $file->getClientOriginalName(), 'url' => '/storage/'.$path])], 201);
+        TaskChange::create([
+            'task_id' => $task->id,
+            'field_name' => 'file_uploaded',
+            'old_value' => null,
+            'new_value' => $file->getClientOriginalName(),
+            'modified_by' => $user->id,
+            'is_viewed' => false,
+        ]);
+        TaskWorkflowEvent::create([
+            'task_id' => $task->id,
+            'user_id' => $user->id,
+            'action' => 'field_changed',
+            'comment' => 'File uploaded: '.$file->getClientOriginalName(),
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'File uploaded successfully', 'file' => $fileRecord], 201);
     }
 
     /**
@@ -1626,8 +1652,25 @@ class TaskController extends Controller
         }
 
         $validated = $request->validate(['url' => 'required|url|max:2048', 'name' => 'nullable|string|max:255']);
+        $linkName = $validated['name'] ?? $validated['url'];
+        $fileRecord = $task->files()->create(['name' => $linkName, 'url' => $validated['url']]);
 
-        return response()->json(['success' => true, 'message' => 'Link added successfully', 'file' => $task->files()->create(['name' => $validated['name'] ?? $validated['url'], 'url' => $validated['url']])], 201);
+        TaskChange::create([
+            'task_id' => $task->id,
+            'field_name' => 'link_added',
+            'old_value' => null,
+            'new_value' => $linkName,
+            'modified_by' => $user->id,
+            'is_viewed' => false,
+        ]);
+        TaskWorkflowEvent::create([
+            'task_id' => $task->id,
+            'user_id' => $user->id,
+            'action' => 'field_changed',
+            'comment' => 'Link added: '.$linkName,
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Link added successfully', 'file' => $fileRecord], 201);
     }
 
     /**
@@ -1651,11 +1694,27 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Approved tasks cannot be modified.'], 403);
         }
 
+        $fileName = $file->name;
         if ($file->url && str_starts_with($file->url, '/storage/')) {
             $relativePath = str_replace('/storage/', '', $file->url);
             Storage::disk('public')->delete($relativePath);
         }
         $file->delete();
+
+        TaskChange::create([
+            'task_id' => $task->id,
+            'field_name' => 'file_removed',
+            'old_value' => $fileName,
+            'new_value' => null,
+            'modified_by' => $user->id,
+            'is_viewed' => false,
+        ]);
+        TaskWorkflowEvent::create([
+            'task_id' => $task->id,
+            'user_id' => $user->id,
+            'action' => 'field_changed',
+            'comment' => 'File removed: '.$fileName,
+        ]);
 
         return response()->json(['success' => true, 'message' => 'File deleted successfully']);
     }

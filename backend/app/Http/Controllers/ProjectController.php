@@ -433,7 +433,7 @@ class ProjectController extends Controller
         unset($validated['deliverables']);
 
         $oldValues = [];
-        $fieldLabels = ['title' => 'Title', 'description' => 'Description', 'start_date' => 'Start Date', 'end_date' => 'End Date', 'priority' => 'Priority', 'status' => 'Status', 'budget' => 'Budget', 'category' => 'Category', 'client_name' => 'Client Name', 'website_name' => 'Website Name', 'website_link' => 'Website Link', 'goals' => 'Goals'];
+        $fieldLabels = ['title' => 'Title', 'description' => 'Description', 'start_date' => 'Start Date', 'end_date' => 'End Date', 'priority' => 'Priority', 'status' => 'Status', 'budget' => 'Budget', 'category' => 'Category', 'client_name' => 'Client Name', 'website_name' => 'Website Name', 'website_link' => 'Website Link', 'goals' => 'Goals', 'team_id' => 'Team', 'sheets_documents' => 'Documents'];
         foreach (array_keys($fieldLabels) as $f) {
             if (array_key_exists($f, $validated)) {
                 $oldValues[$f] = $project->{$f};
@@ -441,16 +441,24 @@ class ProjectController extends Controller
         }
 
         $oldAssignedUsers = $project->assigned_users ?? [];
+        $oldTeamId = $project->team_id;
         $project->update($validated);
 
         $changes = [];
         foreach ($oldValues as $f => $oldVal) {
+            if ($f === 'team_id') continue;
             $newVal = $project->{$f};
             $oldStr = is_object($oldVal) && method_exists($oldVal, 'format') ? $oldVal->format('Y-m-d H:i') : (string) $oldVal;
             $newStr = is_object($newVal) && method_exists($newVal, 'format') ? $newVal->format('Y-m-d H:i') : (string) $newVal;
             if ($oldStr !== $newStr) {
                 $changes[] = ['field_name' => $f, 'label' => $fieldLabels[$f], 'old_value' => $oldStr, 'new_value' => $newStr];
             }
+        }
+
+        if (array_key_exists('team_id', $validated) && $oldTeamId != $project->team_id) {
+            $oldTeamName = $oldTeamId ? (Team::find($oldTeamId)->name ?? 'Unknown') : 'None';
+            $newTeamName = $project->team_id ? (Team::find($project->team_id)->name ?? 'Unknown') : 'None';
+            $changes[] = ['field_name' => 'team_id', 'label' => 'Team', 'old_value' => $oldTeamName, 'new_value' => $newTeamName];
         }
 
         if (array_key_exists('assigned_users', $validated)) {
@@ -580,6 +588,8 @@ class ProjectController extends Controller
         ]);
 
         $oldStatus = $project->status;
+        $oldGoalsChecklist = $project->goals_checklist;
+        $oldSidebarNotes = $project->sidebar_notes;
         $project->update($validated);
 
         if (array_key_exists('status', $validated)) {
@@ -612,6 +622,48 @@ class ProjectController extends Controller
                 'Previous Status' => $oldStatus,
                 'New Status' => $validated['status'],
             ]);
+        }
+
+        if (array_key_exists('goals_checklist', $validated)) {
+            $newGoalsChecklist = $project->goals_checklist;
+            $oldJson = json_encode($oldGoalsChecklist);
+            $newJson = json_encode($newGoalsChecklist);
+            if ($oldJson !== $newJson) {
+                ProjectChange::create([
+                    'project_id' => $project->id,
+                    'field_name' => 'goals_checklist',
+                    'old_value' => $oldJson,
+                    'new_value' => $newJson,
+                    'modified_by' => $user->id,
+                    'is_viewed' => false,
+                ]);
+                ProjectWorkflowEvent::create([
+                    'project_id' => $project->id,
+                    'user_id' => $user->id,
+                    'action' => 'field_changed',
+                    'comment' => 'Goals checklist updated',
+                ]);
+            }
+        }
+
+        if (array_key_exists('sidebar_notes', $validated)) {
+            $newSidebarNotes = $project->sidebar_notes;
+            if ((string) ($oldSidebarNotes ?? '') !== (string) ($newSidebarNotes ?? '')) {
+                ProjectChange::create([
+                    'project_id' => $project->id,
+                    'field_name' => 'sidebar_notes',
+                    'old_value' => $oldSidebarNotes,
+                    'new_value' => $newSidebarNotes,
+                    'modified_by' => $user->id,
+                    'is_viewed' => false,
+                ]);
+                ProjectWorkflowEvent::create([
+                    'project_id' => $project->id,
+                    'user_id' => $user->id,
+                    'action' => 'field_changed',
+                    'comment' => 'Sidebar notes updated',
+                ]);
+            }
         }
 
         $this->clearDashboardCache($user->id);
@@ -647,6 +699,9 @@ class ProjectController extends Controller
         if (is_string($assignedUserIds)) {
             $assignedUserIds = json_decode($assignedUserIds, true) ?? [];
         }
+        // Filter out deleted/non-existent users
+        $validUserIds = User::whereIn('id', $assignedUserIds)->pluck('id')->map(fn ($id) => (string) $id)->toArray();
+        $assignedUserIds = array_values(array_intersect($assignedUserIds, $validUserIds));
         $notifications = [];
         foreach (array_filter($assignedUserIds, fn ($id) => (int) $id !== (int) $user->id) as $recipientId) {
             $notifications[] = [
@@ -660,7 +715,9 @@ class ProjectController extends Controller
                 'link' => '/projects/'.$project->id,
             ];
         }
-        $this->notificationService->createBulk($notifications);
+        if (! empty($notifications)) {
+            $this->notificationService->createBulk($notifications);
+        }
 
         $this->notificationService->confirmAction($user, 'Completed', 'project', $project->name, [
             'Completed On' => now()->format('d M Y, g:i A'),
@@ -720,6 +777,22 @@ class ProjectController extends Controller
             'url' => '/storage/'.$path,
         ]);
 
+        $user = $request->user();
+        ProjectChange::create([
+            'project_id' => $project->id,
+            'field_name' => 'file_uploaded',
+            'old_value' => null,
+            'new_value' => $file->getClientOriginalName(),
+            'modified_by' => $user->id,
+            'is_viewed' => false,
+        ]);
+        ProjectWorkflowEvent::create([
+            'project_id' => $project->id,
+            'user_id' => $user->id,
+            'action' => 'field_changed',
+            'comment' => 'File uploaded: '.$file->getClientOriginalName(),
+        ]);
+
         return response()->json(['success' => true, 'message' => 'File uploaded successfully', 'file' => $attachment], 201);
     }
 
@@ -737,9 +810,26 @@ class ProjectController extends Controller
             'name' => 'nullable|string|max:255',
         ]);
 
+        $linkName = $validated['name'] ?? $validated['url'];
         $attachment = $project->files()->create([
-            'name' => $validated['name'] ?? $validated['url'],
+            'name' => $linkName,
             'url' => $validated['url'],
+        ]);
+
+        $user = $request->user();
+        ProjectChange::create([
+            'project_id' => $project->id,
+            'field_name' => 'link_added',
+            'old_value' => null,
+            'new_value' => $linkName,
+            'modified_by' => $user->id,
+            'is_viewed' => false,
+        ]);
+        ProjectWorkflowEvent::create([
+            'project_id' => $project->id,
+            'user_id' => $user->id,
+            'action' => 'field_changed',
+            'comment' => 'Link added: '.$linkName,
         ]);
 
         return response()->json(['success' => true, 'message' => 'Link added successfully', 'file' => $attachment], 201);
@@ -853,6 +943,26 @@ class ProjectController extends Controller
             $this->notificationService->createBulk($notifications);
         }
 
+        // Create workflow events for access granted/removed
+        if (! empty($grantedUsers)) {
+            $grantedNames = User::whereIn('id', $grantedUsers)->pluck('name')->implode(', ');
+            ProjectWorkflowEvent::create([
+                'project_id' => $project->id,
+                'user_id' => $user->id,
+                'action' => 'access_granted',
+                'comment' => 'Access granted to '.$grantedNames,
+            ]);
+        }
+        if (! empty($removedIds)) {
+            $removedNames = User::whereIn('id', $removedIds)->pluck('name')->implode(', ');
+            ProjectWorkflowEvent::create([
+                'project_id' => $project->id,
+                'user_id' => $user->id,
+                'action' => 'access_removed',
+                'comment' => 'Access removed from '.$removedNames,
+            ]);
+        }
+
         // Send confirmation email to performer
         if (count($grantedUsers) > 0 || count($removedIds) > 0) {
             $details = [];
@@ -892,11 +1002,28 @@ class ProjectController extends Controller
      */
     public function deleteFile(Project $project, ProjectFile $file)
     {
+        $fileName = $file->name;
         if ($file->url && str_starts_with($file->url, '/storage/')) {
             $relativePath = str_replace('/storage/', '', $file->url);
             Storage::disk('public')->delete($relativePath);
         }
         $file->delete();
+
+        $user = request()->user();
+        ProjectChange::create([
+            'project_id' => $project->id,
+            'field_name' => 'file_removed',
+            'old_value' => $fileName,
+            'new_value' => null,
+            'modified_by' => $user->id,
+            'is_viewed' => false,
+        ]);
+        ProjectWorkflowEvent::create([
+            'project_id' => $project->id,
+            'user_id' => $user->id,
+            'action' => 'field_changed',
+            'comment' => 'File removed: '.$fileName,
+        ]);
 
         return response()->json(['success' => true, 'message' => 'File deleted successfully']);
     }
@@ -1337,6 +1464,8 @@ class ProjectController extends Controller
         if ($rows === null) {
             return;
         }
+
+        $oldMilestones = $project->milestones()->get()->map(fn ($m) => ['title' => $m->title, 'due_date' => $m->due_date, 'status' => $m->status])->toArray();
         $project->milestones()->delete();
 
         $milestones = [];
@@ -1356,6 +1485,27 @@ class ProjectController extends Controller
         if (! empty($milestones)) {
             $project->milestones()->createMany($milestones);
         }
+
+        $newMilestones = collect($milestones)->map(fn ($m) => ['title' => $m['title'], 'due_date' => $m['due_date'], 'status' => $m['status']])->toArray();
+        if (json_encode($oldMilestones) !== json_encode($newMilestones)) {
+            $user = request()->user();
+            if ($user) {
+                ProjectChange::create([
+                    'project_id' => $project->id,
+                    'field_name' => 'milestones',
+                    'old_value' => json_encode($oldMilestones),
+                    'new_value' => json_encode($newMilestones),
+                    'modified_by' => $user->id,
+                    'is_viewed' => false,
+                ]);
+                ProjectWorkflowEvent::create([
+                    'project_id' => $project->id,
+                    'user_id' => $user->id,
+                    'action' => 'field_changed',
+                    'comment' => 'Milestones updated',
+                ]);
+            }
+        }
     }
 
     /**
@@ -1371,6 +1521,10 @@ class ProjectController extends Controller
         if (is_string($assignedUserIds)) {
             $assignedUserIds = json_decode($assignedUserIds, true) ?? [];
         }
+
+        // Filter out deleted/non-existent users to prevent FK constraint violations
+        $validUserIds = User::whereIn('id', $assignedUserIds)->pluck('id')->map(fn ($id) => (string) $id)->toArray();
+        $assignedUserIds = array_values(array_intersect($assignedUserIds, $validUserIds));
 
         $changeLabels = array_map(fn ($c) => $c['label'] ?? ucwords(str_replace('_', ' ', $c['field_name'])), $changes);
         $summary = count($changeLabels) > 0
@@ -1393,7 +1547,9 @@ class ProjectController extends Controller
             ];
         }
 
-        $this->notificationService->createBulk($notifications);
+        if (! empty($notifications)) {
+            $this->notificationService->createBulk($notifications);
+        }
     }
 
     /**

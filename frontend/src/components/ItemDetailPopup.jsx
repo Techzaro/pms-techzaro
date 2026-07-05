@@ -51,12 +51,13 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
   const handleViewDetails = () => {
     if (!rawId) return;
     let path;
-    if (source === "task") path = `/${role}/tasks/task-details/${rawId}`;
-    else if (source === "project") path = `/${role}/projects/project-details/${rawId}`;
-    else if (source === "deliverable") path = `/${role}/deliveries/deliverable-details/${rawId}`;
+    let from;
+    if (source === "task") { path = `/${role}/tasks/task-details/${rawId}`; from = "tasks"; }
+    else if (source === "project") { path = `/${role}/projects/project-details/${rawId}`; from = "projects"; }
+    else if (source === "deliverable") { path = `/${role}/deliveries/deliverable-details/${rawId}`; from = "deliveries"; }
     else return;
     onClose();
-    navigate(path);
+    navigate(`${path}?from=${from}`, { state: { from } });
   };
 
   /** Format a date string using the shared formatEventDate utility */

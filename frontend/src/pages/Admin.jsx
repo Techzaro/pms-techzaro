@@ -126,12 +126,14 @@ const WorkloadItem = memo(function WorkloadItem({ item, index, total, navigate, 
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1, justifyContent: "center" }}>
         {item.assignees.slice(0, 4).map((a, ai) => (
-          <div
-            key={ai}
-            onClick={() => {
-              navigate(getActivityDestination(item), { state: { from: getActivityFrom(item) } });
-            }}
-            title={a.name || a.email}
+        <div
+          key={ai}
+          onClick={() => {
+            const from = getActivityFrom(item);
+            const dest = getActivityDestination(item);
+            navigate(`${dest}${dest.includes("?") ? "&" : "?"}from=${from}`, { state: { from } });
+          }}
+          title={a.name || a.email}
             style={{
               width: "30px", height: "30px", borderRadius: "50%", background: "#1a1a1a",
               color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
@@ -399,6 +401,8 @@ function Admin() {
     leader_changed:  { icon: "★", color: "#F59E0B", bg: "#FFFBEB" },
     member_added:    { icon: "+", color: "#22C55E", bg: "#ECFDF5" },
     member_removed:  { icon: "−", color: "#EF4444", bg: "#FEF2F2" },
+    access_granted:  { icon: "🔓", color: "#22C55E", bg: "#ECFDF5" },
+    access_removed:  { icon: "🔒", color: "#EF4444", bg: "#FEF2F2" },
   };
 
   /** Returns a human-readable label for the activity module (task, project, deliverable) */
@@ -444,6 +448,8 @@ function Admin() {
       leader_changed: "changed team lead for",
       member_added: "added member(s) to",
       member_removed: "removed member(s) from",
+      access_granted: "granted access on",
+      access_removed: "removed access from",
     };
     const verb = verbMap[item.action] || "updated";
 
@@ -653,7 +659,9 @@ function Admin() {
                     className={`activity-item ${isViewed ? "activity-item--read" : "activity-item--unread"}`}
                     onClick={() => {
                       markActivityViewed(item.id);
-                      navigate(getActivityDestination(item), { state: { from: getActivityFrom(item) } });
+                      const from = getActivityFrom(item);
+                      const dest = getActivityDestination(item);
+                      navigate(`${dest}${dest.includes("?") ? "&" : "?"}from=${from}`, { state: { from } });
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "14px", flex: 1, minWidth: 0 }}>
@@ -736,7 +744,9 @@ function Admin() {
                           className={`activity-item ${isViewed ? "activity-item--read" : "activity-item--unread"}`}
                           onClick={() => {
                             markActivityViewed(item.id);
-                            navigate(getActivityDestination(item), { state: { from: getActivityFrom(item) } });
+                            const from = getActivityFrom(item);
+                            const dest = getActivityDestination(item);
+                            navigate(`${dest}${dest.includes("?") ? "&" : "?"}from=${from}`, { state: { from } });
                           }}
                         >
                           <div className="activity-icon-circle" style={{

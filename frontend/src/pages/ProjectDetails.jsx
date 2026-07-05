@@ -498,8 +498,7 @@ function ProjectDetails() {
                   <span className="td-activity-icon">✏️</span>
                   <div className="td-activity-body">
                     <span className="td-activity-text">
-                      <strong>{c.modified_by?.name || 'Unknown'}</strong> changed{' '}
-                      <strong>{c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+                      {c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} changed
                     </span>
                     <span className="td-activity-time">{formatDateTimeInline(c.created_at)}</span>
                   </div>

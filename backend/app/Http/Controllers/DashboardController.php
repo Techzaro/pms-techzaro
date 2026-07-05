@@ -397,13 +397,15 @@ class DashboardController extends Controller
             if (! $isRelated) {
                 continue;
             }
-            $activities[] = $this->formatActivity('task', $event->id, $task->id, $task->title, $event->action, $event->user, true, $taskSubmitters[$task->id] ?? null, $event->comment ?? null, $event->created_at);
+            $item = $this->formatActivity('task', $event->id, $task->id, $task->title, $event->action, $event->user, true, $taskSubmitters[$task->id] ?? null, $event->comment ?? null, $event->created_at);
+            $item['assigned_by'] = $task->assigned_by;
+            $activities[] = $item;
         }
 
         // ── PROJECTS (past) ──
         $projectEvents = ProjectWorkflowEvent::with(['project:id,title,created_by,assigned_users', 'user:id,name,role'])
             ->whereDate('created_at', '<=', $yesterday)
-            ->whereIn('action', ['created', 'assigned', 'submitted', 'resubmitted', 'approved', 'rejected', 'reopened', 'completed', 'field_changed', 'status_updated'])
+            ->whereIn('action', ['created', 'assigned', 'submitted', 'resubmitted', 'approved', 'rejected', 'reopened', 'completed', 'field_changed', 'status_updated', 'access_granted', 'access_removed'])
             ->latest()
             ->limit($limit)->get();
 
@@ -599,6 +601,7 @@ class DashboardController extends Controller
                 continue;
             }
             $item = $this->formatActivity('task', $event->id, $task->id, $task->title, $event->action, $event->user, $isActor, $taskSubmitters[$task->id] ?? null, $event->comment ?? null, $event->created_at);
+            $item['assigned_by'] = $task->assigned_by;
             if ($isActor) {
                 $activities[] = $item;
             } else {
@@ -609,7 +612,7 @@ class DashboardController extends Controller
         // ── PROJECTS ──
         $projectEvents = ProjectWorkflowEvent::with(['project:id,title,created_by,assigned_users', 'user:id,name,role'])
             ->whereDate('created_at', $today)
-            ->whereIn('action', ['created', 'assigned', 'submitted', 'resubmitted', 'approved', 'rejected', 'reopened', 'completed', 'field_changed', 'status_updated'])
+            ->whereIn('action', ['created', 'assigned', 'submitted', 'resubmitted', 'approved', 'rejected', 'reopened', 'completed', 'field_changed', 'status_updated', 'access_granted', 'access_removed'])
             ->limit(50)->get();
 
         $projectIdsNeedingSub = $projectEvents->filter(fn ($e) => in_array($e->action, ['approved', 'rejected', 'reopened']))->pluck('project.id')->filter()->unique()->toArray();
@@ -874,6 +877,10 @@ class DashboardController extends Controller
         // Assigned user in JSON
         $assignedUserIds = $this->normalizeAssignedUserIds($project->assigned_users);
         if (in_array((int) $user->id, $assignedUserIds, true)) {
+            return true;
+        }
+        // Manually granted visibility access
+        if ($project->manuallyVisibleTo()->where('user_id', $user->id)->exists()) {
             return true;
         }
         // Admin/Manager see all

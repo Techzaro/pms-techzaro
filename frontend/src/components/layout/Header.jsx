@@ -185,7 +185,13 @@ function Header() {
   const handleSearchSelect = (path) => {
     setShowSearchDropdown(false);
     setSearchQuery("");
-    navigate(path);
+    let from = "";
+    if (path.includes("/tasks/")) from = "tasks";
+    else if (path.includes("/projects/")) from = "projects";
+    else if (path.includes("/deliveries/")) from = "deliveries";
+    else if (path.includes("/manage-users/")) from = "manage-users";
+    else if (path.includes("/manage-team/")) from = "manage-team";
+    navigate(`${path}${from ? `?from=${from}` : ""}`, { state: { from } });
   };
 
   // Close search dropdown when clicking outside
@@ -226,7 +232,7 @@ function Header() {
           });
 
           const role = getCurrentRole();
-          setUser(role, { name: data.name, email: data.email, role: data.role });
+          setUser(role, { id: data.id, name: data.name, email: data.email, role: data.role });
         }
       })
 

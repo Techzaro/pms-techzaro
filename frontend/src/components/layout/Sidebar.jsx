@@ -179,7 +179,7 @@ function Sidebar() {
       setReportsOpen(false);
       sessionStorage.setItem("reportsOpen", false);
     }
-  }, [location.pathname]);
+  }, [location.pathname, location.state]);
 
   // Broadcast sidebar open/close state to the Header for logo visibility
   useEffect(() => {

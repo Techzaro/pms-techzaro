@@ -47,7 +47,7 @@ const EditProjectModal = ({ project, onClose }) => {
     { value: "UI/UX Design", label: "UI/UX Design" },
   ];
 
-  const isCustomCategory = form.category && !CATEGORIES.some((c) => c.value === form.category);
+  const isCustomCategory = project?.category && !CATEGORIES.some((c) => c.value === project.category);
 
   const [form, setForm] = useState({
     title: project?.title || "",

@@ -882,6 +882,7 @@ class UserController extends Controller
      */
     private function handleFileUploads(Request $request, User $user): void
     {
+        $authUser = $request->user();
         $singleFields = [
             'employment_contract', 'offer_letter', 'techxaro_regulations',
         ];
@@ -903,6 +904,14 @@ class UserController extends Controller
                 $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
 
                 $user->$field = $path;
+
+                \App\Models\UserChange::create([
+                    'user_id' => $user->id,
+                    'field_name' => $field,
+                    'old_value' => null,
+                    'new_value' => $file->getClientOriginalName(),
+                    'modified_by' => $authUser->id,
+                ]);
             }
         }
 
@@ -929,6 +938,14 @@ class UserController extends Controller
                 }
 
                 $user->other_document = !empty($storedPaths) ? json_encode($storedPaths) : null;
+
+                \App\Models\UserChange::create([
+                    'user_id' => $user->id,
+                    'field_name' => 'other_document',
+                    'old_value' => null,
+                    'new_value' => count($storedPaths) . ' file(s) uploaded',
+                    'modified_by' => $authUser->id,
+                ]);
             }
         }
 

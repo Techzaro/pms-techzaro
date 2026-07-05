@@ -10,7 +10,7 @@
  *   - Admin.jsx (dashboard activity click destinations)
  */
 
-import { rolePath, getCurrentRole } from "./auth";
+import { rolePath, getCurrentRole, getUser } from "./auth";
 
 // ── Notification → Destination mapping ──
 
@@ -236,12 +236,35 @@ export function getActivityDestination(item) {
  * This ensures the correct sidebar sub-link is highlighted when
  * navigating to a detail page from the dashboard.
  *
+ * Uses the activity's action to determine the correct "from" value:
+ * - Tasks: "created" → "taskby" (Assigned by You), others → "tasks" (Assigned to You)
+ * - Projects: always "projects"
+ * - Deliverables: always "deliveries"
+ *
  * @param {Object} item - Activity item
  * @returns {string} The "from" query parameter value
  */
 export function getActivityFrom(item) {
-  const mapping = ACTIVITY_MODULE_MAP[item.module];
-  return mapping?.from || item.module || "dashboard";
+  const mod = item.module;
+
+  if (mod === "task") {
+    // Use assigned_by to determine sidebar placement — this is reliable regardless of action type
+    const currentUser = getUser();
+    const currentUserId = currentUser?.id;
+    // If the current user created/assigned this task, it belongs to "Assigned by You"
+    if (currentUserId && item.assigned_by && Number(item.assigned_by) === Number(currentUserId)) {
+      return "taskby";
+    }
+    // Otherwise it's assigned to the current user → "Assigned to You"
+    return "tasks";
+  }
+
+  if (mod === "project") return "projects";
+  if (mod === "deliverable") return "deliveries";
+  if (mod === "user") return "manage-users";
+  if (mod === "team") return "manage-team";
+
+  return mod || "dashboard";
 }
 
 /**
