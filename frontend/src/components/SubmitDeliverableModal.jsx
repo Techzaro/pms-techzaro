@@ -12,7 +12,7 @@ import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { formatDateTimeShort } from "../utils/formatDateTime";
-import { notify } from "../utils/notify";
+import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import SubmissionLinkSection from "./SubmissionLinkSection";
 import LoadingButton from "./LoadingButton";
@@ -89,6 +89,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
 
         const data = await res.json();
         if (res.ok) {
+          showSuccessMessage("Deliverable", "submitted");
           onSubmitSuccess(data.deliverable);
           onClose();
         } else {

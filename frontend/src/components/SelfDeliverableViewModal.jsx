@@ -14,6 +14,7 @@ import { useEscapeKey } from "../hooks/useEscapeKey";
 import ConfirmationDialog from "./ConfirmationDialog";
 import SelfReworkDialog from "./SelfReworkDialog";
 import { formatDateTime } from "../utils/formatDateTime";
+import { showSuccessMessage } from "../utils/notify";
 import "./SelfDeliverableViewModal.css";
 
 /**
@@ -126,6 +127,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
       });
       const data = await res.json();
       if (res.ok) {
+        showSuccessMessage("Deliverable", "approved");
         onActionSuccess(data.deliverable);
         onClose();
       }

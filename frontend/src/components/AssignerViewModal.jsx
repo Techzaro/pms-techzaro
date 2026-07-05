@@ -13,6 +13,7 @@ import { useEscapeKey } from "../hooks/useEscapeKey";
 import ConfirmationDialog from "./ConfirmationDialog";
 import ReopenDialog from "./ReopenDialog";
 import { formatDateTime } from "../utils/formatDateTime";
+import { showSuccessMessage } from "../utils/notify";
 import "./AssignerViewModal.css";
 
 /**
@@ -101,6 +102,8 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
 
       const data = await res.json();
       if (res.ok) {
+        const actionLabel = action === "approve" ? "approved" : action === "reject" ? "rejected" : "reopened";
+        showSuccessMessage("Deliverable", actionLabel);
         onActionSuccess(data.deliverable);
         onClose();
       }

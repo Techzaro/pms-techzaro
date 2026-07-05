@@ -12,7 +12,7 @@ import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { formatDateTime } from "../utils/formatDateTime";
-import { notify } from "../utils/notify";
+import { notify, showSuccessMessage } from "../utils/notify";
 import "./ViewDeliverableModal.css";
 
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
@@ -107,6 +107,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
 
       const data = await res.json();
       if (res.ok) {
+        showSuccessMessage("Deliverable", "resubmitted");
         if (onSubmitSuccess) onSubmitSuccess(data.deliverable);
         onClose();
       } else {
