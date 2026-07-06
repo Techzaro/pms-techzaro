@@ -356,7 +356,7 @@ function Admin() {
   const activeProjects = useMemo(() =>
     (dashboard?.activeProjects || []).map((p) => ({
       id: p.id, name: p.name, client: p.client || '\u2014',
-      progress: p.progress || p.progress_percent || 0, deadline: p.deadline || p.due_date || '\u2014',
+      progress: Number(p.progress || p.progress_percent) || 0, deadline: p.deadline || p.due_date || '\u2014',
       team: p.team || '\u2014', assigned_users: p.assigned_users || [],
     })),
     [dashboard?.activeProjects]

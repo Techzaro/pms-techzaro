@@ -8,13 +8,15 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { MdKeyboardArrowDown, MdNotifications } from "react-icons/md";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import API_URL from "../../config/api";
 import { authToken, getCurrentRole, getUser, setUser, rolePath, normalizeRole } from "../../utils/auth";
 import { subscribe } from "../../utils/eventBus";
 import { requestNotificationPermission, showBrowserNotification } from "../../utils/browserNotification";
 import { initFirebase } from "../../utils/firebase";
+import { formatDateTimeInline } from "../../utils/formatDateTime";
+import { getNotificationDestination } from "../../utils/navigation";
 import "./Header.css";
 
 import CreateTaskModal from "../CreateTaskModal";
@@ -229,10 +231,11 @@ function Header() {
             name: data.name,
             email: data.email,
             role: data.role,
+            professional_email: data.professional_email,
           });
 
           const role = getCurrentRole();
-          setUser(role, { id: data.id, name: data.name, email: data.email, role: data.role });
+          setUser(role, { id: data.id, name: data.name, email: data.email, role: data.role, professional_email: data.professional_email });
         }
       })
 
@@ -471,15 +474,49 @@ function Header() {
           )}
 
           {/* Notification bell with unread badge */}
-          <div className="header-notif">
-            <Link to={rolePath("notifications")} className="header-notif-link">
+          <div className="header-notif" ref={notifRef}>
+            <button className="header-notif-link" onClick={openNotifications}>
               <div className="header-notif-icon-wrap">
                 <MdNotifications fontSize={"22px"} color={unreadCount > 0 ? "#ef4444" : "#6b7280"} />
                 {unreadCount > 0 && (
                   <span className="header-notif-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
                 )}
               </div>
-            </Link>
+            </button>
+
+            {showNotifications && (
+              <div className="notif-panel">
+                <div className="notif-panel-header">
+                  <button className="notif-view-all-sm" onClick={() => { setShowNotifications(false); navigate(rolePath("notifications")); }}>
+                    View All
+                  </button>
+                  <h4>Notifications</h4>
+                  {unreadCount > 0 && (
+                    <button className="notif-mark-all" onClick={markAllAsRead}>Mark all read</button>
+                  )}
+                </div>
+                <div className="notif-panel-list">
+                  {notifications.length === 0 ? (
+                    <div className="notif-panel-empty">No notifications</div>
+                  ) : (
+                    notifications.slice(0, 7).map((n) => (
+                      <div
+                        key={n.id}
+                        className={`notif-panel-item ${!n.is_read ? "notif-panel-item--unread" : "notif-panel-item--read"}`}
+                        onClick={() => { markAsRead(n.id); setShowNotifications(false); navigate(getNotificationDestination(n)); }}
+                      >
+                        <div className={`notif-panel-dot ${!n.is_read ? "notif-panel-dot--unread" : ""}`} />
+                        <div className="notif-panel-content">
+                          <p className={`notif-panel-title ${!n.is_read ? "notif-panel-title--unread" : ""}`}>{n.title || n.type}</p>
+                          <p className="notif-panel-msg">{n.message}</p>
+                          <span className="notif-panel-time">{formatDateTimeInline(n.created_at)}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           <hr />
@@ -539,10 +576,10 @@ function Header() {
                 </div>
 
                 <div className="header-modal-item">
-                  <span>Email</span>
+                  <span>Professional Email</span>
 
                   <strong>
-                    {user.email}
+                    {user.professional_email || "---"}
                   </strong>
                 </div>
 

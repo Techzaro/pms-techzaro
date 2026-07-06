@@ -52,6 +52,7 @@ export default function EditTaskModal({ task, onClose }) {
   const [existingFiles, setExistingFiles] = useState(task.files || []);
   const [links, setLinks] = useState([]);
   const [linkInput, setLinkInput] = useState("");
+  const [linkTitleInput, setLinkTitleInput] = useState("");
   const { submitting, run } = useSubmit();
   const fileInputRef = useRef(null);
   const dropRef = useRef(null);
@@ -141,8 +142,10 @@ export default function EditTaskModal({ task, onClose }) {
     if (!linkInput.trim()) return;
     let url = linkInput.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-    setLinks((prev) => [...prev, { url, name: url }]);
+    const name = linkTitleInput.trim() || url;
+    setLinks((prev) => [...prev, { url, name }]);
     setLinkInput("");
+    setLinkTitleInput("");
   };
 
   const handleRemoveLink = (index) => {
@@ -300,7 +303,7 @@ export default function EditTaskModal({ task, onClose }) {
 
             {/* ATTACHMENTS */}
             <div className="task-field">
-              <label>Attachments</label>
+              <label>Links & Attachment</label>
 
               {existingFiles.length > 0 && (
                 <div className="cp-attachments-list">
@@ -367,22 +370,31 @@ export default function EditTaskModal({ task, onClose }) {
                 <span className="cp-or-line"></span>
               </div>
 
-              <div className="cp-link-input-row">
+              <div className="cp-link-input-row" style={{ flexDirection: "column", gap: "8px" }}>
                 <input
                   type="text"
-                  placeholder="Paste link (Drive, Figma, Website, etc.)"
-                  value={linkInput}
-                  onChange={(e) => setLinkInput(e.target.value)}
-                  onKeyDown={handleLinkKeyDown}
+                  placeholder="Link title (e.g. Figma Design, Drive Folder)"
+                  value={linkTitleInput}
+                  onChange={(e) => setLinkTitleInput(e.target.value)}
                 />
-                <button
-                  type="button"
-                  className="cp-link-add-btn"
-                  onClick={handleAddLink}
-                  disabled={!linkInput.trim()}
-                >
-                  Add Link
-                </button>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <input
+                    type="text"
+                    placeholder="Paste link (Drive, Figma, Website, etc.)"
+                    value={linkInput}
+                    onChange={(e) => setLinkInput(e.target.value)}
+                    onKeyDown={handleLinkKeyDown}
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="cp-link-add-btn"
+                    onClick={handleAddLink}
+                    disabled={!linkInput.trim()}
+                  >
+                    Add Link
+                  </button>
+                </div>
               </div>
 
               {links.length > 0 && (
@@ -390,9 +402,12 @@ export default function EditTaskModal({ task, onClose }) {
                   {links.map((link, index) => (
                     <div key={index} className="cp-attachment-item">
                       <span className="cp-attachment-icon">🔗</span>
-                      <a href={link.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-name cp-attachment-link">
-                        {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
-                      </a>
+                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                        <span className="cp-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{link.name}</span>
+                        <a href={link.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-link" style={{ fontSize: "12px", color: "#6366f1" }}>
+                          {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
+                        </a>
+                      </div>
                       <a href={link.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-open">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />

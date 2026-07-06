@@ -3,7 +3,7 @@
  * Rendered when the user navigates to /projectdetails or related route.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
@@ -262,6 +262,11 @@ function ProjectDetails() {
     publish('data:changed', { type: 'project', action: 'updated' });
   };
 
+  const [loadError, setLoadError] = useState(null);
+  const notifyRef = useRef(notify);
+  notifyRef.current = notify;
+  const loadErrorRef = useRef(false);
+
   const loadProject = useCallback(async () => {
     const token = authToken();
     const res = await fetch(`${API}/projects/${projectId}`, {
@@ -272,26 +277,40 @@ function ProjectDetails() {
       _notifHandled: true,
     });
     if (!res.ok) {
-      throw new Error("Failed to load project");
+      const error = new Error("Failed to load project");
+      error.status = res.status;
+      throw error;
     }
     const data = await res.json();
     const p = data.project;
     if (!p) throw new Error("Invalid response");
     setProject(p);
+    setLoadError(null);
+    loadErrorRef.current = false;
     return p;
   }, [projectId]);
 
   useEffect(() => {
     let cancelled = false;
+    let errored = false;
     (async () => {
       setLoading(true);
       try {
         await loadProject();
       } catch (e) {
-        if (!cancelled) {
+        if (!cancelled && !errored) {
+          errored = true;
+          loadErrorRef.current = true;
           console.error(e);
-          notify.error("Unable to load project details.");
-          setTimeout(() => navigate(rolePath("projects")), 2000);
+          if (e.status === 403) {
+            setLoadError(403);
+            notifyRef.current.error("You don't have access to this project.");
+          } else {
+            notifyRef.current.error("Unable to load project details.");
+          }
+          setTimeout(() => {
+            if (!cancelled) navigate(rolePath("projects"));
+          }, 2000);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -300,9 +319,18 @@ function ProjectDetails() {
     return () => {
       cancelled = true;
     };
-  }, [loadProject, navigate, notify]);
+  }, [loadProject, navigate]);
 
-  useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted', 'project:updated', 'project:deleted', 'deliverable:updated'], loadProject);
+  const handleRefresh = useCallback(async () => {
+    if (loadErrorRef.current) return;
+    try {
+      await loadProject();
+    } catch (e) {
+      loadErrorRef.current = true;
+    }
+  }, [loadProject]);
+
+  useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted', 'project:updated', 'project:deleted', 'deliverable:updated'], handleRefresh);
 
   useEffect(() => {
     if (!project?.id || !project?.unviewed_changes_count) return;
@@ -426,6 +454,15 @@ function ProjectDetails() {
   const currentUser = getUser();
   const currentUserId = currentUser?.id;
 
+  const getTaskFrom = (task) => {
+    if (!currentUserId) return "tasks";
+    const isAssignee = (task.assignees || []).some(a => a.id === currentUserId);
+    const isAssigner = task.assigner?.id === currentUserId;
+    if (isAssigner && !isAssignee) return "taskby";
+    if (isAssignee) return "tasks";
+    return "tasks";
+  };
+
   const isCreator = project.is_creator;
   const isAssigned = project.is_assigned;
   const isAdminOrManager = project.is_admin_or_manager;
@@ -515,14 +552,7 @@ function ProjectDetails() {
     <>
       <div className="pd-shell-split">
         <div className="pd-shell-left">
-          <h2 className="pd-block-title">Project Description</h2>
-          {project.description ? (
-            <div className="pd-rich" dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.description) }} />
-          ) : (
-            <p className="pd-muted">No description.</p>
-          )}
-
-          <h2 className="pd-block-title pd-block-title--gap">Project Goals</h2>
+          <h2 className="pd-block-title">Project Goals</h2>
           {checklist.length > 0 ? (
             <ul className="pd-goals">
               {checklist.map((item, idx) => (
@@ -544,6 +574,27 @@ function ProjectDetails() {
           ) : (
             <p className="pd-muted">No goals recorded.</p>
           )}
+
+          {(() => {
+            if (!project.category) return null;
+            let cats = [];
+            try {
+              const parsed = JSON.parse(project.category);
+              if (Array.isArray(parsed)) cats = parsed;
+              else cats = [project.category];
+            } catch { cats = [project.category]; }
+            if (cats.length === 0) return null;
+            return (
+              <div style={{ marginTop: 20 }}>
+                <h2 className="pd-block-title pd-block-title--gap">Category</h2>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {cats.map((cat, i) => (
+                    <span key={i} style={{ display: "inline-block", padding: "4px 12px", borderRadius: 20, fontSize: 13, fontWeight: 500, background: "#ede9fe", color: "#6d28d9" }}>{cat}</span>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         <aside className="pd-shell-right">
@@ -587,15 +638,6 @@ function ProjectDetails() {
                     {project.priority || "—"}
                   </span>
                 </span>
-              </div>
-            </li>
-            <li>
-              <span className="pd-meta-rows__ic">
-                <FolderOpen size={18} />
-              </span>
-              <div>
-                <span className="pd-meta-rows__label">Category</span>
-                <span className="pd-meta-rows__value">{project.category || "—"}</span>
               </div>
             </li>
             {isAdminOrManager && (
@@ -665,29 +707,6 @@ function ProjectDetails() {
               { label: "Projects", path: rolePath("projects") },
               { label: project.title },
             ]} />
-
-            {isAssigned && project?.unviewed_changes?.length > 0 && (
-              <div className="td-changes-panel" style={{ marginTop: "6px", marginBottom: "12px" }}>
-                <div className="td-changes-header">
-                  <span className="td-changes-icon">&#9654;</span>
-                  <span className="td-changes-title">Recent Changes</span>
-                  <span className="td-changes-count">{project.unviewed_changes.length} update(s)</span>
-                </div>
-                <ul className="td-changes-list">
-                  {project.unviewed_changes.map((c, i) => (
-                    <li key={c.id || i}>
-                      <strong>{c.modified_by?.name || "Someone"}</strong> changed{' '}
-                      <strong>{c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
-                      {c.old_value ? (
-                        <span className="td-change-detail"> — {c.old_value} &rarr; {c.new_value}</span>
-                      ) : (
-                        <span className="td-change-detail"> — {c.new_value}</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
 
             <header className="pd-hero-tx">
               <div className="pd-hero-tx__main">
@@ -832,7 +851,7 @@ function ProjectDetails() {
                                       <div className="ptt-row" key={t.id}>
                                         <div>{isCreator || isAdminOrManager ? ((t.assignees || []).map((a) => a.name).join(", ") || "—") : (t.assigner?.name || "—")}</div>
                                         <div className="ptt-col-name">
-                                          <Link to={rolePath(`tasks/task-details/${t.id}`)} className="ptt-task-link">
+                                          <Link to={rolePath(`tasks/task-details/${t.id}`)} state={{ from: getTaskFrom(t) }} className="ptt-task-link">
                                             {t.title}
                                           </Link>
                                         </div>
@@ -864,7 +883,7 @@ function ProjectDetails() {
                                         <div style={{ whiteSpace: "pre-line" }}>{formatDateTime(t.end_date)}</div>
                                         <div>
                                           <div className="action-btns">
-                                            <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${t.id}`), { state: { from: 'project-details' } })}><IoEyeOutline /></button>
+                                            <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${t.id}`), { state: { from: getTaskFrom(t) } })}><IoEyeOutline /></button>
                                             {(() => {
                                               const isAssigner = t.assigner?.id && t.assigner.id === currentUserId;
                                               const isAssignee = (t.assignees || []).some((a) => a.id === currentUserId);
@@ -996,18 +1015,20 @@ function ProjectDetails() {
                           ) : (
                             <ul className="pd-file-list">
                               {files.map((f) => (
-                                <li key={f.id}>
-                                  <FolderOpen size={18} />
-                                  {f.url ? (
+                                <li key={f.id} style={{ flexDirection: "column", alignItems: "flex-start", gap: "2px" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <FolderOpen size={18} />
+                                    <span style={{ fontWeight: 600, fontSize: "14px" }}>{f.name}</span>
+                                  </div>
+                                  {f.url && (
                                     <a
                                       href={fileUrl(f.url)}
                                       target="_blank"
                                       rel="noopener noreferrer"
+                                      style={{ marginLeft: "26px", fontSize: "13px", color: "#6366f1" }}
                                     >
-                                      {f.name}
+                                      {f.url}
                                     </a>
-                                  ) : (
-                                    <span>{f.name}</span>
                                   )}
                                 </li>
                               ))}

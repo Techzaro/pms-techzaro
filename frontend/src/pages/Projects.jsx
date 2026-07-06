@@ -247,10 +247,10 @@ function Projects() {
 
   /** Compute project completion percentage from total/completed task counts. */
   const calculateProgress = (project) => {
-    const total = project.total_tasks ?? project.total_deliverables ?? 0;
-    const completed = project.completed_tasks ?? project.completed_deliverables ?? 0;
-    if (!total || total === 0) return 0;
-    return Math.round((completed / total) * 100);
+    const total = Number(project.total_tasks ?? project.total_deliverables ?? 0) || 0;
+    const completed = Number(project.completed_tasks ?? project.completed_deliverables ?? 0) || 0;
+    if (!total) return 0;
+    return Math.round((completed / total) * 100) || 0;
   };
 
   const hasPendingDeliverables = (project) => {

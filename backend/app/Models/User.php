@@ -85,9 +85,6 @@ class User extends Authenticatable
         'active' => 'boolean',
         'must_change_password' => 'boolean',
         'last_login_at' => 'datetime',
-        'job_started_date' => 'date',
-        'job_ended_date' => 'date',
-        'gross_salary' => 'decimal:2',
     ];
 
     /**

@@ -101,11 +101,13 @@ Route::middleware('auth:sanctum')->group(function () {
         // Reorder users list
         Route::post('/users/reorder', [UserController::class, 'reorder']);
 
-        // Company documents management (logo, QR code, contracts, etc.)
-        Route::get('/company-documents', [\App\Http\Controllers\CompanyDocumentController::class, 'index']);
+        // Company documents management (logo, QR code, contracts, etc.) - admin/manager only for write operations
         Route::post('/company-documents', [\App\Http\Controllers\CompanyDocumentController::class, 'store']);
         Route::delete('/company-documents/{type}', [\App\Http\Controllers\CompanyDocumentController::class, 'destroy']);
     });
+
+    // Company documents - view only for all authenticated users
+    Route::get('/company-documents', [\App\Http\Controllers\CompanyDocumentController::class, 'index']);
 
     // Get users for team management (all authenticated users)
     Route::get('/team-users', [UserController::class, 'getTeamUsers']);

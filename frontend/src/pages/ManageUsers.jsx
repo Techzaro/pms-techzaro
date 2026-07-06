@@ -17,7 +17,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { MdVisibility } from "react-icons/md";
+import { MdVisibility, MdEdit } from "react-icons/md";
 import { IoSearchOutline } from "react-icons/io5";
 import { CiCirclePlus } from "react-icons/ci";
 import { useNavigate } from "react-router-dom";
@@ -40,29 +40,23 @@ import LoadingButton from "../components/LoadingButton";
 import CompanyDocuments from "../components/CompanyDocuments";
 import "./ManageUsers.css";
 
-/** Predefined department options (includes __custom__ for custom input) */
-const DEPARTMENTS = [
-  "Digital Marketing",
-  "Website Development",
-  "Graphic Design",
-  "Data Entry",
-  "Human Resource",
-  "__custom__",
-];
+/** Formats CNIC number with dashes: XXXXX-XXXXXXX-X */
+const formatCNIC = (value) => {
+  const digits = value.replace(/\D/g, "").slice(0, 13);
+  if (digits.length <= 5) return digits;
+  if (digits.length <= 12) return digits.slice(0, 5) + "-" + digits.slice(5);
+  return digits.slice(0, 5) + "-" + digits.slice(5, 12) + "-" + digits.slice(12);
+};
 
-/** Predefined designation options (includes __custom__ for custom input) */
-const DESIGNATIONS = [
-  "SEO Link Builder Intern",
-  "SEO Intern",
-  "SEO Associate",
-  "WordPress Developer Intern",
-  "Web Developer Intern",
-  "Graphic Design Intern",
-  "Data Entry Operator",
-  "SQA Intern",
-  "HR",
-  "__custom__",
-];
+/** Formats phone number with dashes: 03XX-XXXXXXX */
+const formatPhone = (value) => {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 4) return digits;
+  return digits.slice(0, 4) + "-" + digits.slice(4);
+};
+
+/** Removes dashes from formatted value for API submission */
+const stripDashes = (value) => value.replace(/-/g, "");
 
 /**
  * ManageUsers — Main user management page component.
@@ -135,6 +129,14 @@ function ManageUsers() {
   const [currentUserRole, setCurrentUserRole] = useState(
     getCurrentRole() || ""
   );
+
+  // Dynamic departments and designations from users data
+  const departments = [
+    ...new Set(users.map((u) => u.department).filter(Boolean)),
+  ];
+  const designations = [
+    ...new Set(users.map((u) => u.designation).filter(Boolean)),
+  ];
 
   const ResignIcon = ({ className = "" }) => (
     <svg
@@ -316,47 +318,61 @@ function ManageUsers() {
     setIsAddModalOpen(true);
   };
 
-  const openEditModal = (user) => {
+  const openEditModal = async (user) => {
     setEditingUser(user);
-    const deptVal = user.department || "";
-    const isCustomDept = !DEPARTMENTS.slice(0, -1).includes(deptVal) && deptVal !== "";
-    const desgVal = user.designation || "";
-    const isCustomDesg = !DESIGNATIONS.slice(0, -1).includes(desgVal) && desgVal !== "";
+    setAddErrors({});
 
+    let fullUser = user;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/users/${user.id}`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.user) fullUser = data.user;
+      }
+    } catch {}
+
+    const deptVal = fullUser.department || "";
+    const isCustomDept = !departments.includes(deptVal) && deptVal !== "";
+    const desgVal = fullUser.designation || "";
+    const isCustomDesg = !designations.includes(desgVal) && desgVal !== "";
+
+    setEditingUser(fullUser);
     setNewUser({
-      fullName: user.name || "",
-      fatherName: user.father_name || "",
-      idCardNumber: user.id_card_number || "",
-      presentAddress: user.present_address || user.address || "",
-      permanentAddress: user.permanent_address || "",
-      phoneNumber: user.phone_number || user.contact_no || "",
-      emergencyContactName: user.emergency_contact_name || "",
-      emergencyContactRelation: user.emergency_contact_relation || "",
-      emergencyContactPhone: user.emergency_contact_phone || "",
-      email: user.email || "",
-      personalEmail: user.personal_email || "",
-      professionalEmail: user.professional_email || "",
-      professionalEmailPassword: user.professional_email_password || "",
+      fullName: fullUser.name || "",
+      fatherName: fullUser.father_name || "",
+      idCardNumber: formatCNIC(fullUser.id_card_number || ""),
+      presentAddress: fullUser.present_address || fullUser.address || "",
+      permanentAddress: fullUser.permanent_address || "",
+      phoneNumber: formatPhone(fullUser.phone_number || fullUser.contact_no || ""),
+      emergencyContactName: fullUser.emergency_contact_name || "",
+      emergencyContactRelation: fullUser.emergency_contact_relation || "",
+      emergencyContactPhone: formatPhone(fullUser.emergency_contact_phone || ""),
+      email: fullUser.email || "",
+      personalEmail: fullUser.personal_email || "",
+      professionalEmail: fullUser.professional_email || "",
+      professionalEmailPassword: fullUser.professional_email_password || "",
       department: isCustomDept ? "__custom__" : deptVal,
       departmentCustom: isCustomDept ? deptVal : "",
       designation: isCustomDesg ? "__custom__" : desgVal,
       designationCustom: isCustomDesg ? desgVal : "",
-      hiredFor: user.hired_for || "",
-      employeeCode: user.employee_code || "",
-      jobStartedDate: user.job_started_date ? user.job_started_date.substring(0, 10) : "",
-      jobEndedDate: user.job_ended_date ? user.job_ended_date.substring(0, 10) : "",
-      role: user.role || "member",
-      grossSalary: user.gross_salary || "",
-      appliedVia: user.applied_via || "",
-      bankName: user.bank_name || "",
-      bankAccountNumber: user.bank_account_number || "",
-      bankAccountTitle: user.bank_account_title || "",
+      hiredFor: fullUser.hired_for || "",
+      employeeCode: fullUser.employee_code || "",
+      jobStartedDate: fullUser.job_started_date ? fullUser.job_started_date.substring(0, 10) : "",
+      jobEndedDate: fullUser.job_ended_date ? fullUser.job_ended_date.substring(0, 10) : "",
+      role: fullUser.role || "member",
+      grossSalary: fullUser.gross_salary || "",
+      appliedVia: fullUser.applied_via || "",
+      bankName: fullUser.bank_name || "",
+      bankAccountNumber: fullUser.bank_account_number || "",
+      bankAccountTitle: fullUser.bank_account_title || "",
       employmentContract: null,
       offerLetter: null,
       techxaroRegulations: null,
       otherDocument: [],
     });
-    setAddErrors({});
     setIsAddModalOpen(true);
   };
 
@@ -416,17 +432,17 @@ function ManageUsers() {
     }
     if (!newUser.idCardNumber.trim()) {
       errors.idCardNumber = "ID Card Number is required.";
-    } else if (!/^\d{13}$/.test(newUser.idCardNumber.trim())) {
-      errors.idCardNumber = "CNIC must be exactly 13 digits.";
+    } else if (!/^\d{5}-\d{7}-\d$/.test(newUser.idCardNumber.trim())) {
+      errors.idCardNumber = "CNIC must be in format XXXXX-XXXXXXX-X (13 digits).";
     }
     if (!newUser.presentAddress.trim()) errors.presentAddress = "Present Address is required.";
     if (!newUser.phoneNumber.trim()) {
       errors.phoneNumber = "Phone Number is required.";
-    } else if (!/^0\d{10}$/.test(newUser.phoneNumber.trim())) {
-      errors.phoneNumber = "Phone Number must be 11 digits starting with 0.";
+    } else if (!/^0\d{3}-\d{7}$/.test(newUser.phoneNumber.trim())) {
+      errors.phoneNumber = "Phone Number must be in format 03XX-XXXXXXX.";
     }
-    if (newUser.emergencyContactPhone.trim() && !/^0\d{10}$/.test(newUser.emergencyContactPhone.trim())) {
-      errors.emergencyContactPhone = "Emergency Phone must be 11 digits starting with 0.";
+    if (newUser.emergencyContactPhone.trim() && !/^0\d{3}-\d{7}$/.test(newUser.emergencyContactPhone.trim())) {
+      errors.emergencyContactPhone = "Emergency Phone must be in format 03XX-XXXXXXX.";
     }
     if (!newUser.personalEmail.trim()) {
       errors.personalEmail = "Personal Email Address is required.";
@@ -452,18 +468,21 @@ function ManageUsers() {
     }
     if (!newUser.employeeCode.trim()) errors.employeeCode = "Employee Code is required.";
     if (!newUser.jobStartedDate) errors.jobStartedDate = "Job Start Date is required.";
-    if (newUser.grossSalary && (isNaN(newUser.grossSalary) || Number(newUser.grossSalary) < 0)) {
-      errors.grossSalary = "Gross Salary must be a valid positive number.";
+    if (newUser.grossSalary && newUser.grossSalary.length > 100) {
+      errors.grossSalary = "Gross Salary must be 100 characters or less.";
     }
-    if (newUser.bankAccountNumber.trim() && !/^\d+$/.test(newUser.bankAccountNumber.trim())) {
-      errors.bankAccountNumber = "Bank Account Number must contain only digits.";
+    if (newUser.bankAccountNumber.trim() && !/^[\d\s\-a-zA-Z]+$/.test(newUser.bankAccountNumber.trim())) {
+      errors.bankAccountNumber = "Bank Account Number must contain only digits, letters, spaces, or dashes.";
     }
     return errors;
   };
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-    setNewUser((prev) => ({ ...prev, [name]: value }));
+    let formattedValue = value;
+    if (name === "idCardNumber") formattedValue = formatCNIC(value);
+    if (name === "phoneNumber" || name === "emergencyContactPhone") formattedValue = formatPhone(value);
+    setNewUser((prev) => ({ ...prev, [name]: formattedValue }));
     if (addErrors[name]) {
       setAddErrors((prev) => {
         const next = { ...prev };
@@ -558,7 +577,7 @@ function ManageUsers() {
     const isTargetProtected = user.role === "admin" || user.role === "manager";
     const isResigned = user.active === false && user.must_change_password === false;
     const canModifyUser =
-      user.active !== false && !isSelf && !(currentUserRole === "manager" && isTargetProtected);
+      !isResigned && !isSelf && !(currentUserRole === "manager" && isTargetProtected);
 
     return (
       <tr key={user.id} className={isResigned ? "resigned-row" : ""}>
@@ -589,12 +608,12 @@ function ManageUsers() {
               <MdVisibility size={24} />
             </button>
             <button
-              className="btn-resign"
-              onClick={() => handleResignUser(user.id)}
+              className="btn-view"
+              onClick={() => openEditModal(user)}
               disabled={!canModifyUser}
-              aria-label="Resign user"
+              aria-label="Edit user"
             >
-              <ResignIcon className="resign-icon" />
+              <MdEdit size={20} />
             </button>
           </div>
         </td>
@@ -659,7 +678,7 @@ function ManageUsers() {
         <td style={{ width: "20%" }}>
           <div className="action-buttons">
             <button className="btn-view" onClick={() => navigate(rolePath(`manage-users/user-profile/${user.id}`))} aria-label="View user profile"><MdVisibility size={24} /></button>
-            <button className="btn-resign" onClick={() => handleResignUser(user.id)} disabled={!canModifyUser} aria-label="Resign user"><ResignIcon className="resign-icon" /></button>
+            <button className="btn-view" onClick={() => openEditModal(user)} disabled={!canModifyUser} aria-label="Edit user"><MdEdit size={20} /></button>
           </div>
         </td>
       </tr>
@@ -889,7 +908,8 @@ function ManageUsers() {
                         paginatedUsers.map((user) => {
                         const isSelf = currentUserId === user.id;
                         const isTargetProtected = user.role === "admin" || user.role === "manager";
-                        const canModifyUser = user.active !== false && !isSelf && !(currentUserRole === "manager" && isTargetProtected);
+                        const isResigned = user.active === false && user.must_change_password === false;
+                        const canModifyUser = !isResigned && !isSelf && !(currentUserRole === "manager" && isTargetProtected);
                         return (
                           <SortableUserRow key={user.id} user={user} isActive={user.active !== false} canModifyUser={canModifyUser} isSelf={isSelf} isTargetProtected={isTargetProtected} />
                         );
@@ -926,11 +946,14 @@ function ManageUsers() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="user-modal-header">
-                <div>
-                  <h2>{editingUser ? "Edit User" : "Add New User"}</h2>
-                  <p className="modal-subtitle">
-                    {editingUser ? "Update user information and documents." : "Register a new user and automatically send login credentials via email."}
-                  </p>
+                <div className="user-header-left">
+                  <div className="user-icon-box">👤</div>
+                  <div>
+                    <h2>{editingUser ? "Edit User" : "Add New User"}</h2>
+                    <p className="modal-subtitle">
+                      {editingUser ? "Update user information and documents." : "Register a new user and automatically send login credentials via email."}
+                    </p>
+                  </div>
                 </div>
                 <button className="user-modal-close" onClick={closeModal}>
                   &#10005;
@@ -953,12 +976,12 @@ function ManageUsers() {
                   </div>
                   <div className="form-row">
                     <label htmlFor="idCardNumber">ID Card Number *</label>
-                    <input type="text" id="idCardNumber" name="idCardNumber" value={newUser.idCardNumber} onChange={handleChange} placeholder="Enter ID card number" maxLength={13} className={addErrors.idCardNumber ? "field-error" : ""} />
+                    <input type="text" id="idCardNumber" name="idCardNumber" value={newUser.idCardNumber} onChange={handleChange} placeholder="XXXXX-XXXXXXX-X" maxLength={15} className={addErrors.idCardNumber ? "field-error" : ""} />
                     {addErrors.idCardNumber && <span className="field-error-text">{addErrors.idCardNumber}</span>}
                   </div>
                   <div className="form-row">
                     <label htmlFor="phoneNumber">Phone Number *</label>
-                    <input type="text" id="phoneNumber" name="phoneNumber" value={newUser.phoneNumber} onChange={handleChange} placeholder="Enter phone number" maxLength={11} className={addErrors.phoneNumber ? "field-error" : ""} />
+                    <input type="text" id="phoneNumber" name="phoneNumber" value={newUser.phoneNumber} onChange={handleChange} placeholder="03XX-XXXXXXX" maxLength={12} className={addErrors.phoneNumber ? "field-error" : ""} />
                     {addErrors.phoneNumber && <span className="field-error-text">{addErrors.phoneNumber}</span>}
                   </div>
                 </div>
@@ -990,7 +1013,7 @@ function ManageUsers() {
                   </div>
                   <div className="form-row">
                     <label htmlFor="emergencyContactPhone">Phone</label>
-                    <input type="text" id="emergencyContactPhone" name="emergencyContactPhone" value={newUser.emergencyContactPhone} onChange={handleChange} placeholder="Emergency contact phone" maxLength={11} className={addErrors.emergencyContactPhone ? "field-error" : ""} />
+                    <input type="text" id="emergencyContactPhone" name="emergencyContactPhone" value={newUser.emergencyContactPhone} onChange={handleChange} placeholder="03XX-XXXXXXX" maxLength={12} className={addErrors.emergencyContactPhone ? "field-error" : ""} />
                     {addErrors.emergencyContactPhone && <span className="field-error-text">{addErrors.emergencyContactPhone}</span>}
                   </div>
                 </div>
@@ -1035,13 +1058,10 @@ function ManageUsers() {
                     ) : (
                       <select id="designation" name="designation" value={newUser.designation} onChange={handleChange} className={addErrors.designation ? "field-error" : ""}>
                         <option value="">Select Designation</option>
-                        {DESIGNATIONS.map((d) =>
-                          d === "__custom__" ? (
-                            <option key="custom" value="__custom__">Custom / Type Here</option>
-                          ) : (
-                            <option key={d} value={d}>{d}</option>
-                          )
-                        )}
+                        {designations.map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                        <option value="__custom__">Custom / Type Here</option>
                       </select>
                     )}
                     {addErrors.designation && <span className="field-error-text">{addErrors.designation}</span>}
@@ -1057,13 +1077,10 @@ function ManageUsers() {
                     ) : (
                       <select id="department" name="department" value={newUser.department} onChange={handleChange} className={addErrors.department ? "field-error" : ""}>
                         <option value="">Select Department</option>
-                        {DEPARTMENTS.map((d) =>
-                          d === "__custom__" ? (
-                            <option key="custom" value="__custom__">Custom / Type Here</option>
-                          ) : (
-                            <option key={d} value={d}>{d}</option>
-                          )
-                        )}
+                        {departments.map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                        <option value="__custom__">Custom / Type Here</option>
                       </select>
                     )}
                     {addErrors.department && <span className="field-error-text">{addErrors.department}</span>}
@@ -1089,12 +1106,16 @@ function ManageUsers() {
                   </div>
                   <div className="form-row">
                     <label htmlFor="jobStartedDate">Job Started Date *</label>
-                    <input type="date" id="jobStartedDate" name="jobStartedDate" value={newUser.jobStartedDate} min={new Date().toISOString().split('T')[0]} onChange={handleChange} className={addErrors.jobStartedDate ? "field-error" : ""} />
+                    <input type="date" id="jobStartedDate" name="jobStartedDate" value={newUser.jobStartedDate} onChange={handleChange} className={addErrors.jobStartedDate ? "field-error" : ""} />
                     {addErrors.jobStartedDate && <span className="field-error-text">{addErrors.jobStartedDate}</span>}
                   </div>
                   <div className="form-row">
                     <label htmlFor="jobEndedDate">Job Ended Date</label>
-                    <input type="date" id="jobEndedDate" name="jobEndedDate" value={newUser.jobEndedDate} min={newUser.jobStartedDate || new Date().toISOString().split('T')[0]} onChange={handleChange} />
+                    <input type="date" id="jobEndedDate" name="jobEndedDate" value={newUser.jobEndedDate} onChange={handleChange} />
+                  </div>
+                  <div className="form-row">
+                    <label htmlFor="appliedVia">Applied Via</label>
+                    <input type="text" id="appliedVia" name="appliedVia" value={newUser.appliedVia} onChange={handleChange} placeholder="e.g. Website, Referral, LinkedIn" />
                   </div>
                 </div>
 
@@ -1103,12 +1124,8 @@ function ManageUsers() {
                 <div className="user-form-grid">
                   <div className="form-row">
                     <label htmlFor="grossSalary">Gross Salary</label>
-                    <input type="number" id="grossSalary" name="grossSalary" value={newUser.grossSalary} onChange={handleChange} placeholder="Enter gross salary (PKR)" className={addErrors.grossSalary ? "field-error" : ""} />
+                    <input type="text" id="grossSalary" name="grossSalary" value={newUser.grossSalary} onChange={handleChange} placeholder="e.g. 50000 or Negotiable" className={addErrors.grossSalary ? "field-error" : ""} />
                     {addErrors.grossSalary && <span className="field-error-text">{addErrors.grossSalary}</span>}
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="appliedVia">Applied Via</label>
-                    <input type="text" id="appliedVia" name="appliedVia" value={newUser.appliedVia} onChange={handleChange} placeholder="e.g. Website, Referral, LinkedIn" />
                   </div>
                   <div className="form-row">
                     <label htmlFor="bankName">Bank Name</label>
@@ -1160,21 +1177,37 @@ function ManageUsers() {
                   {/* Other Document — right after Previous Salary Slip */}
                   <div className="form-row">
                     <label htmlFor="otherDocument">Other Document</label>
-                    {editingUser && editingUser.other_document && newUser.otherDocument.length === 0 && (
-                      <div style={{ marginBottom: 6, fontSize: 13, color: "#64748b" }}>
-                        Current: <a href={`${API_URL}/users/${editingUser.id}/documents/other_document?token=${authToken()}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>View uploaded file(s)</a>
-                      </div>
-                    )}
+                    {editingUser && editingUser.other_document && newUser.otherDocument.length === 0 && (() => {
+                      const docs = typeof editingUser.other_document === "string" ? (() => { try { return JSON.parse(editingUser.other_document); } catch { return []; } })() : (editingUser.other_document || []);
+                      return docs.length > 0 ? (
+                        <div style={{ marginBottom: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                          {docs.map((docPath, i) => {
+                            const fileName = docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
+                            return (
+                              <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
+                                <a href={`${API_URL}/users/${editingUser.id}/documents/other_document?token=${authToken()}&file=${encodeURIComponent(docPath)}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                                  {fileName || `Document ${i + 1}`}
+                                </a>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div style={{ marginBottom: 6, fontSize: 13, color: "#64748b" }}>
+                          No documents uploaded
+                        </div>
+                      );
+                    })()}
                     <input
                       type="file"
                       id="otherDocument"
                       multiple
-                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp,.svg,.tiff,.tif"
                       onChange={(e) => {
                         const files = Array.from(e.target.files || []);
                         const valid = [];
                         for (const f of files) {
-                          if (!["application/pdf","image/jpeg","image/png","image/webp"].includes(f.type)) {
+                          if (!["application/pdf","image/jpeg","image/png","image/webp","image/gif","image/bmp","image/svg+xml","image/tiff"].includes(f.type)) {
                             notify.error(`"${f.name}" is not a supported file type. Skipped.`);
                             continue;
                           }

@@ -27,6 +27,32 @@ import { PasswordInput, isPasswordValid } from "../components/PasswordInput";
 import "./UserProfile.css";
 import "./ManageUsers.css";
 
+/** Formats raw phone digits for display: 03XX-XXXXXXX */
+const displayPhone = (value) => {
+  if (!value) return "---";
+  const digits = value.replace(/\D/g, "");
+  if (digits.length <= 4) return digits;
+  return digits.slice(0, 4) + "-" + digits.slice(4);
+};
+
+/** Formats raw CNIC digits for display: XXXXX-XXXXXXX-X */
+const displayCNIC = (value) => {
+  if (!value) return "---";
+  const digits = value.replace(/\D/g, "");
+  if (digits.length <= 5) return digits;
+  if (digits.length <= 12) return digits.slice(0, 5) + "-" + digits.slice(5);
+  return digits.slice(0, 5) + "-" + digits.slice(5, 12) + "-" + digits.slice(12);
+};
+
+/** Formats date string to display format without timezone issues */
+const displayDate = (dateStr) => {
+  if (!dateStr) return "---";
+  const parts = dateStr.substring(0, 10).split("-");
+  if (parts.length !== 3) return dateStr;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${parseInt(parts[2])} ${months[parseInt(parts[1]) - 1]} ${parts[0]}`;
+};
+
 /**
  * MyProfile — self-service profile page for the logged-in user.
  * Fetches profile data on mount and renders read-only sections with a
@@ -49,6 +75,7 @@ function MyProfile() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [changes, setChanges] = useState([]);
+  const [companyDocs, setCompanyDocs] = useState({});
 
   const {
     hasUnread: myHasUnread,
@@ -104,6 +131,20 @@ function MyProfile() {
     }
     fetchProfile();
     fetchChanges();
+
+    // Fetch company documents
+    const fetchCompanyDocs = async () => {
+      try {
+        const res = await fetch(`${API_URL}/company-documents`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCompanyDocs(data.documents || {});
+        }
+      } catch {}
+    };
+    fetchCompanyDocs();
   }, [navigate]);
 
   /** Extract up to 2 uppercase initials from a full name for the avatar. */
@@ -268,11 +309,11 @@ function MyProfile() {
                 </div>
                 <div className="info-row">
                   <span className="info-label">ID Card Number</span>
-                  <span className="info-value">{user.id_card_number || "---"}</span>
+                  <span className="info-value">{displayCNIC(user.id_card_number)}</span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Phone Number</span>
-                  <span className="info-value">{user.phone_number || user.contact_no || "---"}</span>
+                  <span className="info-value">{displayPhone(user.phone_number || user.contact_no)}</span>
                 </div>
               </div>
             </div>
@@ -310,7 +351,7 @@ function MyProfile() {
                 </div>
                 <div className="info-row">
                   <span className="info-label">Phone</span>
-                  <span className="info-value">{user.emergency_contact_phone || "---"}</span>
+                  <span className="info-value">{displayPhone(user.emergency_contact_phone)}</span>
                 </div>
               </div>
             </div>
@@ -371,19 +412,15 @@ function MyProfile() {
                 </div>
                 <div className="info-row">
                   <span className="info-label">Job Started Date</span>
-                  <span className="info-value">
-                    {user.job_started_date
-                      ? new Date(user.job_started_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-                      : "---"}
-                  </span>
+                  <span className="info-value">{displayDate(user.job_started_date)}</span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Job Ended Date</span>
-                  <span className="info-value">
-                    {user.job_ended_date
-                      ? new Date(user.job_ended_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-                      : "---"}
-                  </span>
+                  <span className="info-value">{displayDate(user.job_ended_date)}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Applied Via</span>
+                  <span className="info-value">{user.applied_via || "---"}</span>
                 </div>
               </div>
             </div>
@@ -396,11 +433,7 @@ function MyProfile() {
               <div className="info-card-body">
                 <div className="info-row">
                   <span className="info-label">Gross Salary</span>
-                  <span className="info-value">{user.gross_salary ? `PKR ${Number(user.gross_salary).toLocaleString()}` : "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Applied Via</span>
-                  <span className="info-value">{user.applied_via || "---"}</span>
+                  <span className="info-value">{user.gross_salary || "---"}</span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Bank Name</span>
@@ -427,7 +460,6 @@ function MyProfile() {
                   { label: "Employment Contract", key: "employment_contract" },
                   { label: "Offer Letter", key: "offer_letter" },
                   { label: "Techxaro Regulations", key: "techxaro_regulations" },
-                  { label: "Other Document", key: "other_document" },
                 ].map(({ label, key }) => (
                   <div className="info-row" key={key}>
                     <span className="info-label">{label}</span>
@@ -445,6 +477,89 @@ function MyProfile() {
                     </span>
                   </div>
                 ))}
+                {(() => {
+                  let docs = [];
+                  try {
+                    docs = typeof user.other_document === "string" ? JSON.parse(user.other_document) : (user.other_document || []);
+                  } catch { docs = []; }
+                  if (!Array.isArray(docs)) docs = [];
+                  if (docs.length === 0) {
+                    return (
+                      <div className="info-row">
+                        <span className="info-label">Other Documents</span>
+                        <span className="info-value">---</span>
+                      </div>
+                    );
+                  }
+                  return docs.map((docPath, i) => {
+                    const fileName = docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
+                    const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(fileName);
+                    return (
+                      <div className="info-row" key={`other-${i}`}>
+                        <span className="info-label">{fileName}</span>
+                        <span className="info-value">
+                          <a
+                            href={`${API_URL}/auth/my-documents/other_document?token=${authToken()}&file=${encodeURIComponent(docPath)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "#2563eb", textDecoration: "underline" }}
+                          >
+                            {isImage ? "View Image" : "View File"}
+                          </a>
+                        </span>
+                      </div>
+                    );
+                  });
+                })()}
+                {companyDocs?.company_logo?.exists && (
+                  <div className="info-row">
+                    <span className="info-label">Company Logo</span>
+                    <span className="info-value">
+                      <a
+                        href={`${API_URL.replace("/api", "")}/storage/${companyDocs.company_logo.path}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "#2563eb", textDecoration: "underline" }}
+                      >
+                        View Image
+                      </a>
+                    </span>
+                  </div>
+                )}
+                {companyDocs?.qr_code?.exists && (
+                  <div className="info-row">
+                    <span className="info-label">QR Code</span>
+                    <span className="info-value">
+                      <a
+                        href={`${API_URL.replace("/api", "")}/storage/${companyDocs.qr_code.path}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "#2563eb", textDecoration: "underline" }}
+                      >
+                        View Image
+                      </a>
+                    </span>
+                  </div>
+                )}
+                {companyDocs?.other_documents?.files?.map((file, i) => {
+                  const fileName = file.filename.replace(/^other_document_\d+_/, "").replace(/\.[^.]+$/, "");
+                  const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(file.filename);
+                  return (
+                    <div className="info-row" key={`company-${i}`}>
+                      <span className="info-label">{fileName}</span>
+                      <span className="info-value">
+                        <a
+                          href={`${API_URL.replace("/api", "")}/storage/${file.path}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: "#2563eb", textDecoration: "underline" }}
+                        >
+                          {isImage ? "View Image" : "View File"}
+                        </a>
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

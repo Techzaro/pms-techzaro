@@ -14,6 +14,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { MdEdit, MdArrowBack } from "react-icons/md";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
+import ConfirmModal from "../components/ConfirmModal";
 import { publish } from "../utils/eventBus";
 import API_URL from "../config/api";
 import { useEscapeKey } from "../hooks/useEscapeKey";
@@ -28,6 +29,50 @@ import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "../components/LoadingButton";
 import "./ManageUsers.css";
 import "./TaskDetails.css";
+
+/** Formats CNIC number with dashes: XXXXX-XXXXXXX-X */
+const formatCNIC = (value) => {
+  const digits = value.replace(/\D/g, "").slice(0, 13);
+  if (digits.length <= 5) return digits;
+  if (digits.length <= 12) return digits.slice(0, 5) + "-" + digits.slice(5);
+  return digits.slice(0, 5) + "-" + digits.slice(5, 12) + "-" + digits.slice(12);
+};
+
+/** Formats phone number with dashes: 03XX-XXXXXXX */
+const formatPhone = (value) => {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 4) return digits;
+  return digits.slice(0, 4) + "-" + digits.slice(4);
+};
+
+/** Removes dashes from formatted value for API submission */
+const stripDashes = (value) => value.replace(/-/g, "");
+
+/** Formats raw phone digits for display: 03XX-XXXXXXX */
+const displayPhone = (value) => {
+  if (!value) return "---";
+  const digits = value.replace(/\D/g, "");
+  if (digits.length <= 4) return digits;
+  return digits.slice(0, 4) + "-" + digits.slice(4);
+};
+
+/** Formats raw CNIC digits for display: XXXXX-XXXXXXX-X */
+const displayCNIC = (value) => {
+  if (!value) return "---";
+  const digits = value.replace(/\D/g, "");
+  if (digits.length <= 5) return digits;
+  if (digits.length <= 12) return digits.slice(0, 5) + "-" + digits.slice(5);
+  return digits.slice(0, 5) + "-" + digits.slice(5, 12) + "-" + digits.slice(12);
+};
+
+/** Formats date string to display format without timezone issues */
+const displayDate = (dateStr) => {
+  if (!dateStr) return "---";
+  const parts = dateStr.substring(0, 10).split("-");
+  if (parts.length !== 3) return dateStr;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${parseInt(parts[2])} ${months[parseInt(parts[1]) - 1]} ${parts[0]}`;
+};
 
 /** Main UserProfile page — fetches and displays another user's full profile. */
 function UserProfile() {
@@ -75,6 +120,17 @@ function UserProfile() {
   const [editOtherDocs, setEditOtherDocs] = useState([]);
   const [currentUserRole] = useState(() => getCurrentRole());
   const [changes, setChanges] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [resignConfirmOpen, setResignConfirmOpen] = useState(false);
+  const [companyDocs, setCompanyDocs] = useState({});
+
+  // Dynamic departments and designations from users data
+  const departments = [
+    ...new Set(allUsers.map((u) => u.department).filter(Boolean)),
+  ];
+  const designations = [
+    ...new Set(allUsers.map((u) => u.designation).filter(Boolean)),
+  ];
 
   const {
     hasUnread: userHasUnread,
@@ -84,28 +140,6 @@ function UserProfile() {
 
   useEscapeKey(isEditModalOpen, () => setIsEditModalOpen(false));
 
-  const DEPARTMENTS = [
-    "Digital Marketing",
-    "Website Development",
-    "Graphic Design",
-    "Data Entry",
-    "Human Resource",
-    "__custom__",
-  ];
-
-  const DESIGNATIONS = [
-    "SEO Link Builder Intern",
-    "SEO Intern",
-    "SEO Associate",
-    "WordPress Developer Intern",
-    "Web Developer Intern",
-    "Graphic Design Intern",
-    "Data Entry Operator",
-    "SQA Intern",
-    "HR",
-    "__custom__",
-  ];
-
   /** Build auth headers for API requests. */
   const authHeaders = () => {
     const token = authToken();
@@ -113,6 +147,47 @@ function UserProfile() {
       "Content-Type": "application/json",
       Authorization: token ? `Bearer ${token}` : "",
     };
+  };
+
+  /** Resign icon component */
+  const ResignIcon = ({ className = "" }) => (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M3 7.5h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <rect x="6" y="9" width="12" height="6" rx="1" fill="currentColor" />
+    </svg>
+  );
+
+  /** Handle resign button click */
+  const handleResignUser = () => {
+    setResignConfirmOpen(true);
+  };
+
+  /** Confirm and execute user resignation via API */
+  const confirmResignUser = async () => {
+    setResignConfirmOpen(false);
+    await run(async () => {
+      const res = await fetch(`${API_URL}/users/${userId}/resign`, {
+        method: "PUT",
+        headers: { Accept: "application/json", ...authHeaders() },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Unable to resign user");
+      }
+      setProfileData((prev) => ({ ...prev, active: false }));
+      showSuccessMessage("User", "resigned");
+      publish('data:changed', { type: 'user', action: 'resigned' });
+    });
   };
 
   /** Fetch the target user's profile data from the API. */
@@ -155,6 +230,39 @@ function UserProfile() {
     fetchChanges();
   }, [userId, navigate]);
 
+  // Fetch all users for dynamic department/designation dropdowns
+  useEffect(() => {
+    const fetchAllUsers = async () => {
+      try {
+        const res = await fetch(`${API_URL}/users`, {
+          headers: { Accept: "application/json", ...authHeaders() },
+          _notifHandled: true,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAllUsers(data.users ?? data);
+        }
+      } catch {}
+    };
+    fetchAllUsers();
+  }, []);
+
+  // Fetch company documents
+  useEffect(() => {
+    const fetchCompanyDocs = async () => {
+      try {
+        const res = await fetch(`${API_URL}/company-documents`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${authToken()}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCompanyDocs(data.documents || {});
+        }
+      } catch {}
+    };
+    fetchCompanyDocs();
+  }, []);
+
   const getInitials = (name) => {
     if (!name) return "?";
     return name
@@ -168,20 +276,20 @@ function UserProfile() {
   const openEditModal = () => {
     const u = profileData.user;
     const deptVal = u.department || "";
-    const isCustomDept = !DEPARTMENTS.slice(0, -1).includes(deptVal) && deptVal !== "";
+    const isCustomDept = !departments.includes(deptVal) && deptVal !== "";
     const desgVal = u.designation || "";
-    const isCustomDesg = !DESIGNATIONS.slice(0, -1).includes(desgVal) && desgVal !== "";
+    const isCustomDesg = !designations.includes(desgVal) && desgVal !== "";
 
     setEditUser({
       name: u.name || "",
       father_name: u.father_name || "",
-      id_card_number: u.id_card_number || "",
+      id_card_number: formatCNIC(u.id_card_number || ""),
       present_address: u.present_address || u.address || "",
       permanent_address: u.permanent_address || "",
-      phone_number: u.phone_number || u.contact_no || "",
+      phone_number: formatPhone(u.phone_number || u.contact_no || ""),
       emergency_contact_name: u.emergency_contact_name || "",
       emergency_contact_relation: u.emergency_contact_relation || "",
-      emergency_contact_phone: u.emergency_contact_phone || "",
+      emergency_contact_phone: formatPhone(u.emergency_contact_phone || ""),
       personal_email: u.personal_email || "",
       professional_email: u.professional_email || "",
       professional_email_password: u.professional_email_password || "",
@@ -208,7 +316,10 @@ function UserProfile() {
 
   const handleEditChange = (e) => {
     const { name, value } = e.target;
-    setEditUser((prev) => ({ ...prev, [name]: value }));
+    let formattedValue = value;
+    if (name === "id_card_number") formattedValue = formatCNIC(value);
+    if (name === "phone_number" || name === "emergency_contact_phone") formattedValue = formatPhone(value);
+    setEditUser((prev) => ({ ...prev, [name]: formattedValue }));
     if (editErrors[name]) {
       setEditErrors((prev) => {
         const next = { ...prev };
@@ -238,17 +349,17 @@ function UserProfile() {
     }
     if (!editUser.id_card_number.trim()) {
       errors.id_card_number = "ID Card Number is required.";
-    } else if (!/^\d{13}$/.test(editUser.id_card_number.trim())) {
-      errors.id_card_number = "CNIC must be exactly 13 digits.";
+    } else if (!/^\d{5}-\d{7}-\d$/.test(editUser.id_card_number.trim())) {
+      errors.id_card_number = "CNIC must be in format XXXXX-XXXXXXX-X (13 digits).";
     }
     if (!editUser.present_address.trim()) errors.present_address = "Present Address is required.";
     if (!editUser.phone_number.trim()) {
       errors.phone_number = "Phone Number is required.";
-    } else if (!/^0\d{10}$/.test(editUser.phone_number.trim())) {
-      errors.phone_number = "Phone Number must be 11 digits starting with 0.";
+    } else if (!/^0\d{3}-\d{7}$/.test(editUser.phone_number.trim())) {
+      errors.phone_number = "Phone Number must be in format 03XX-XXXXXXX.";
     }
-    if (editUser.emergency_contact_phone.trim() && !/^0\d{10}$/.test(editUser.emergency_contact_phone.trim())) {
-      errors.emergency_contact_phone = "Emergency Phone must be 11 digits starting with 0.";
+    if (editUser.emergency_contact_phone.trim() && !/^0\d{3}-\d{7}$/.test(editUser.emergency_contact_phone.trim())) {
+      errors.emergency_contact_phone = "Emergency Phone must be in format 03XX-XXXXXXX.";
     }
     if (editUser.personal_email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editUser.personal_email.trim())) {
       errors.personal_email = "Please enter a valid personal email address.";
@@ -272,11 +383,11 @@ function UserProfile() {
     }
     if (!editUser.employee_code.trim()) errors.employee_code = "Employee Code is required.";
     if (!editUser.job_started_date) errors.job_started_date = "Job Start Date is required.";
-    if (editUser.gross_salary && (isNaN(editUser.gross_salary) || Number(editUser.gross_salary) < 0)) {
-      errors.gross_salary = "Gross Salary must be a valid positive number.";
+    if (editUser.gross_salary && editUser.gross_salary.length > 100) {
+      errors.gross_salary = "Gross Salary must be 100 characters or less.";
     }
-    if (editUser.bank_account_number.trim() && !/^\d+$/.test(editUser.bank_account_number.trim())) {
-      errors.bank_account_number = "Bank Account Number must contain only digits.";
+    if (editUser.bank_account_number.trim() && !/^[\d\s\-a-zA-Z]+$/.test(editUser.bank_account_number.trim())) {
+      errors.bank_account_number = "Bank Account Number must contain only digits, letters, spaces, or dashes.";
     }
     return errors;
   };
@@ -435,6 +546,8 @@ function UserProfile() {
   }
 
   const { user, account } = profileData;
+  const isResignedProfile = account?.status === "Resigned" || (user && !user.active && user.must_change_password === false);
+  const isOwnProfile = String(getUser()?.id) === String(userId);
 
   const breadcrumbs = [
     { label: "Users", path: rolePath("manage-users") },
@@ -470,11 +583,18 @@ function UserProfile() {
             <div className="profile-info-card">
               <div className="info-card-header">
                 <h3>Personal Information</h3>
+                <div style={{ display: "flex", gap: "8px" }}>
                 {(!["admin", "manager"].includes(user.role) || currentUserRole === "admin") && (
-                <button className="btn-edit" onClick={openEditModal} disabled={account?.status === "Resigned" || (!account && !user.active)} style={account?.status === "Resigned" || (!account && !user.active) ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
+                <button className="btn-edit" onClick={openEditModal} disabled={isResignedProfile || isOwnProfile} style={isResignedProfile || isOwnProfile ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
                   <MdEdit size={16} /> Edit
                 </button>
                 )}
+                {(!["admin", "manager"].includes(user.role) || currentUserRole === "admin") && user.active !== false && String(getUser()?.id) !== String(userId) && (
+                <button className="btn-edit" onClick={handleResignUser} style={{ background: "#dc2626" }}>
+                  <ResignIcon /> Resign
+                </button>
+                )}
+                </div>
               </div>
               <div className="info-card-body">
                 <div className="info-row">
@@ -487,11 +607,11 @@ function UserProfile() {
                 </div>
                 <div className="info-row">
                   <span className="info-label">ID Card Number</span>
-                  <span className="info-value">{user.id_card_number || "---"}</span>
+                  <span className="info-value">{displayCNIC(user.id_card_number)}</span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Phone Number</span>
-                  <span className="info-value">{user.phone_number || user.contact_no || "---"}</span>
+                  <span className="info-value">{displayPhone(user.phone_number || user.contact_no)}</span>
                 </div>
               </div>
             </div>
@@ -529,7 +649,7 @@ function UserProfile() {
                 </div>
                 <div className="info-row">
                   <span className="info-label">Phone</span>
-                  <span className="info-value">{user.emergency_contact_phone || "---"}</span>
+                  <span className="info-value">{displayPhone(user.emergency_contact_phone)}</span>
                 </div>
               </div>
             </div>
@@ -592,11 +712,15 @@ function UserProfile() {
                 </div>
                 <div className="info-row">
                   <span className="info-label">Job Started Date</span>
-                  <span className="info-value">{user.job_started_date ? new Date(user.job_started_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "---"}</span>
+                  <span className="info-value">{displayDate(user.job_started_date)}</span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Job Ended Date</span>
-                  <span className="info-value">{user.job_ended_date ? new Date(user.job_ended_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "---"}</span>
+                  <span className="info-value">{displayDate(user.job_ended_date)}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Applied Via</span>
+                  <span className="info-value">{user.applied_via || "---"}</span>
                 </div>
               </div>
             </div>
@@ -609,11 +733,7 @@ function UserProfile() {
               <div className="info-card-body">
                 <div className="info-row">
                   <span className="info-label">Gross Salary</span>
-                  <span className="info-value">{user.gross_salary ? `PKR ${Number(user.gross_salary).toLocaleString()}` : "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Applied Via</span>
-                  <span className="info-value">{user.applied_via || "---"}</span>
+                  <span className="info-value">{user.gross_salary || "---"}</span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Bank Name</span>
@@ -640,7 +760,6 @@ function UserProfile() {
                   { label: "Employment Contract", key: "employment_contract" },
                   { label: "Offer Letter", key: "offer_letter" },
                   { label: "Techxaro Regulations", key: "techxaro_regulations" },
-                  { label: "Other Document", key: "other_document" },
                 ].map(({ label, key }) => (
                   <div className="info-row" key={key}>
                     <span className="info-label">{label}</span>
@@ -658,6 +777,89 @@ function UserProfile() {
                     </span>
                   </div>
                 ))}
+                {(() => {
+                  let docs = [];
+                  try {
+                    docs = typeof user.other_document === "string" ? JSON.parse(user.other_document) : (user.other_document || []);
+                  } catch { docs = []; }
+                  if (!Array.isArray(docs)) docs = [];
+                  if (docs.length === 0) {
+                    return (
+                      <div className="info-row">
+                        <span className="info-label">Other Documents</span>
+                        <span className="info-value">---</span>
+                      </div>
+                    );
+                  }
+                  return docs.map((docPath, i) => {
+                    const fileName = docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
+                    const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(fileName);
+                    return (
+                      <div className="info-row" key={`other-${i}`}>
+                        <span className="info-label">{fileName}</span>
+                        <span className="info-value">
+                          <a
+                            href={`${API_URL}/users/${userId}/documents/other_document?token=${authToken()}&file=${encodeURIComponent(docPath)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "#2563eb", textDecoration: "underline" }}
+                          >
+                            {isImage ? "View Image" : "View File"}
+                          </a>
+                        </span>
+                      </div>
+                    );
+                  });
+                })()}
+                {companyDocs?.company_logo?.exists && (
+                  <div className="info-row">
+                    <span className="info-label">Company Logo</span>
+                    <span className="info-value">
+                      <a
+                        href={`${API_URL.replace("/api", "")}/storage/${companyDocs.company_logo.path}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "#2563eb", textDecoration: "underline" }}
+                      >
+                        View Image
+                      </a>
+                    </span>
+                  </div>
+                )}
+                {companyDocs?.qr_code?.exists && (
+                  <div className="info-row">
+                    <span className="info-label">QR Code</span>
+                    <span className="info-value">
+                      <a
+                        href={`${API_URL.replace("/api", "")}/storage/${companyDocs.qr_code.path}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "#2563eb", textDecoration: "underline" }}
+                      >
+                        View Image
+                      </a>
+                    </span>
+                  </div>
+                )}
+                {companyDocs?.other_documents?.files?.map((file, i) => {
+                  const fileName = file.filename.replace(/^other_document_\d+_/, "").replace(/\.[^.]+$/, "");
+                  const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(file.filename);
+                  return (
+                    <div className="info-row" key={`company-${i}`}>
+                      <span className="info-label">{fileName}</span>
+                      <span className="info-value">
+                        <a
+                          href={`${API_URL.replace("/api", "")}/storage/${file.path}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: "#2563eb", textDecoration: "underline" }}
+                        >
+                          {isImage ? "View Image" : "View File"}
+                        </a>
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -748,9 +950,12 @@ function UserProfile() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="user-modal-header">
-              <div>
-                <h2>Edit User</h2>
-                <p className="modal-subtitle">Update user details.</p>
+              <div className="user-header-left">
+                <div className="user-icon-box">👤</div>
+                <div>
+                  <h2>Edit User</h2>
+                  <p className="modal-subtitle">Update user details.</p>
+                </div>
               </div>
               <button className="user-modal-close" onClick={() => setIsEditModalOpen(false)}>
                 &#10005;
@@ -773,12 +978,12 @@ function UserProfile() {
                 </div>
                 <div className="form-row">
                   <label htmlFor="edit-id_card_number">ID Card Number *</label>
-                  <input type="text" id="edit-id_card_number" name="id_card_number" value={editUser.id_card_number} onChange={handleEditChange} placeholder="Enter ID card number" maxLength={13} className={editErrors.id_card_number ? "field-error" : ""} />
+                  <input type="text" id="edit-id_card_number" name="id_card_number" value={editUser.id_card_number} onChange={handleEditChange} placeholder="XXXXX-XXXXXXX-X" maxLength={15} className={editErrors.id_card_number ? "field-error" : ""} />
                   {editErrors.id_card_number && <span className="field-error-text">{editErrors.id_card_number}</span>}
                 </div>
                 <div className="form-row">
                   <label htmlFor="edit-phone_number">Phone Number *</label>
-                  <input type="text" id="edit-phone_number" name="phone_number" value={editUser.phone_number} onChange={handleEditChange} placeholder="Enter phone number" maxLength={11} className={editErrors.phone_number ? "field-error" : ""} />
+                  <input type="text" id="edit-phone_number" name="phone_number" value={editUser.phone_number} onChange={handleEditChange} placeholder="03XX-XXXXXXX" maxLength={12} className={editErrors.phone_number ? "field-error" : ""} />
                   {editErrors.phone_number && <span className="field-error-text">{editErrors.phone_number}</span>}
                 </div>
               </div>
@@ -810,7 +1015,7 @@ function UserProfile() {
                 </div>
                 <div className="form-row">
                   <label htmlFor="edit-emergency_contact_phone">Phone</label>
-                  <input type="text" id="edit-emergency_contact_phone" name="emergency_contact_phone" value={editUser.emergency_contact_phone} onChange={handleEditChange} placeholder="Emergency contact phone" maxLength={11} className={editErrors.emergency_contact_phone ? "field-error" : ""} />
+                  <input type="text" id="edit-emergency_contact_phone" name="emergency_contact_phone" value={editUser.emergency_contact_phone} onChange={handleEditChange} placeholder="03XX-XXXXXXX" maxLength={12} className={editErrors.emergency_contact_phone ? "field-error" : ""} />
                   {editErrors.emergency_contact_phone && <span className="field-error-text">{editErrors.emergency_contact_phone}</span>}
                 </div>
               </div>
@@ -848,13 +1053,10 @@ function UserProfile() {
                   ) : (
                     <select id="edit-designation" name="designation" value={editUser.designation} onChange={handleEditChange} className={editErrors.designation ? "field-error" : ""}>
                       <option value="">Select Designation</option>
-                      {DESIGNATIONS.map((d) =>
-                        d === "__custom__" ? (
-                          <option key="custom" value="__custom__">Custom / Type Here</option>
-                        ) : (
-                          <option key={d} value={d}>{d}</option>
-                        )
-                      )}
+                      {designations.map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                      <option value="__custom__">Custom / Type Here</option>
                     </select>
                   )}
                   {editErrors.designation && <span className="field-error-text">{editErrors.designation}</span>}
@@ -870,13 +1072,10 @@ function UserProfile() {
                   ) : (
                     <select id="edit-department" name="department" value={editUser.department} onChange={handleEditChange} className={editErrors.department ? "field-error" : ""}>
                       <option value="">Select Department</option>
-                      {DEPARTMENTS.map((d) =>
-                        d === "__custom__" ? (
-                          <option key="custom" value="__custom__">Custom / Type Here</option>
-                        ) : (
-                          <option key={d} value={d}>{d}</option>
-                        )
-                      )}
+                      {departments.map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                      <option value="__custom__">Custom / Type Here</option>
                     </select>
                   )}
                   {editErrors.department && <span className="field-error-text">{editErrors.department}</span>}
@@ -909,6 +1108,10 @@ function UserProfile() {
                   <label htmlFor="edit-job_ended_date">Job Ended Date</label>
                   <input type="date" id="edit-job_ended_date" name="job_ended_date" value={editUser.job_ended_date} onChange={handleEditChange} />
                 </div>
+                <div className="form-row">
+                  <label htmlFor="edit-applied_via">Applied Via</label>
+                  <input type="text" id="edit-applied_via" name="applied_via" value={editUser.applied_via} onChange={handleEditChange} placeholder="e.g. Website, Referral, LinkedIn" />
+                </div>
               </div>
 
               {/* ===== Salary & Bank ===== */}
@@ -916,12 +1119,8 @@ function UserProfile() {
               <div className="user-form-grid">
                 <div className="form-row">
                   <label htmlFor="edit-gross_salary">Gross Salary</label>
-                  <input type="number" id="edit-gross_salary" name="gross_salary" value={editUser.gross_salary} onChange={handleEditChange} placeholder="Enter gross salary (PKR)" className={editErrors.gross_salary ? "field-error" : ""} />
+                  <input type="text" id="edit-gross_salary" name="gross_salary" value={editUser.gross_salary} onChange={handleEditChange} placeholder="e.g. 50000 or Negotiable" className={editErrors.gross_salary ? "field-error" : ""} />
                   {editErrors.gross_salary && <span className="field-error-text">{editErrors.gross_salary}</span>}
-                </div>
-                <div className="form-row">
-                  <label htmlFor="edit-applied_via">Applied Via</label>
-                  <input type="text" id="edit-applied_via" name="applied_via" value={editUser.applied_via} onChange={handleEditChange} placeholder="e.g. Website, Referral, LinkedIn" />
                 </div>
                 <div className="form-row">
                   <label htmlFor="edit-bank_name">Bank Name</label>
@@ -981,21 +1180,35 @@ function UserProfile() {
                 {/* Other Document — multi-file with remove buttons */}
                 <div className="form-row">
                   <label htmlFor="edit-other_document">Other Document</label>
-                  {user.other_document && editOtherDocs.length === 0 && (
-                    <div style={{ marginBottom: 6, fontSize: 13, color: "#64748b" }}>
-                      Current: <a href={`${API_URL}/users/${userId}/documents/other_document?token=${authToken()}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>View uploaded file(s)</a>
-                    </div>
-                  )}
+                  {user.other_document && editOtherDocs.length === 0 && (() => {
+                    const docs = typeof user.other_document === "string" ? (() => { try { return JSON.parse(user.other_document); } catch { return []; } })() : (user.other_document || []);
+                    return docs.length > 0 ? (
+                      <div style={{ marginBottom: 6, fontSize: 13, color: "#64748b", display: "flex", flexDirection: "column", gap: 4 }}>
+                        {docs.map((docPath, i) => {
+                          const fileName = docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
+                          return (
+                            <a key={i} href={`${API_URL}/users/${userId}/documents/other_document?token=${authToken()}&file=${encodeURIComponent(docPath)}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>
+                              {fileName || `Document ${i + 1}`}
+                            </a>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div style={{ marginBottom: 6, fontSize: 13, color: "#64748b" }}>
+                        No documents uploaded
+                      </div>
+                    );
+                  })()}
                   <input
                     type="file"
                     id="edit-other_document"
                     multiple
-                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                    accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp,.svg,.tiff,.tif"
                     onChange={(e) => {
                       const files = Array.from(e.target.files || []);
                       const valid = [];
                       for (const f of files) {
-                        if (!["application/pdf","image/jpeg","image/png","image/webp"].includes(f.type)) {
+                        if (!["application/pdf","image/jpeg","image/png","image/webp","image/gif","image/bmp","image/svg+xml","image/tiff"].includes(f.type)) {
                           notify.error(`"${f.name}" is not a supported file type. Skipped.`);
                           continue;
                         }
@@ -1035,6 +1248,14 @@ function UserProfile() {
         </div>,
         document.body
       )}
+      <ConfirmModal
+        isOpen={resignConfirmOpen}
+        onClose={() => setResignConfirmOpen(false)}
+        onConfirm={confirmResignUser}
+        title="Confirm Resignation"
+        message="Are you sure you want to resign this user? This action may affect their access and assigned responsibilities."
+        confirmText="Confirm Resignation"
+      />
     </DashboardLayout>
   );
 }

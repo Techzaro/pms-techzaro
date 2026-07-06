@@ -131,7 +131,7 @@ class ProjectController extends Controller
             'website_name' => 'nullable|string',
             'website_link' => 'nullable|string',
             'client_name' => 'nullable|string|max:255',
-            'category' => 'nullable|string|max:255',
+            'category' => 'nullable|string|max:1000',
             'budget' => 'nullable|numeric|min:0',
             'priority' => 'nullable|string|max:32',
             'sidebar_notes' => 'nullable|string',
@@ -275,18 +275,22 @@ class ProjectController extends Controller
 
         if (! in_array($user->role, ['admin', 'manager'])) {
             try {
-                $project->load('team.members:id', 'manuallyVisibleTo:user_id');
+                $project->load('team.members:id,name');
             } catch (\Exception $e) {
-                $project->load('team.members:id');
+                // fallback: team may not exist
             }
-            $isCreator = (int) $project->created_by === (int) $user->id;
-            $isAssigned = in_array($user->id, $project->assigned_users ?? []);
+            $userId = (int) $user->id;
+            $isCreator = (int) $project->created_by === $userId;
+            $isAssigned = in_array($userId, array_map('intval', $project->assigned_users ?? []));
             $isTeamMember = $project->team_id && $project->team && (
-                $project->team->members->contains('id', $user->id) ||
-                (int) $project->team->leader_id === (int) $user->id
+                $project->team->members->contains('id', $userId) ||
+                (int) $project->team->leader_id === $userId
             );
-            $hasTasksUnderProject = $project->tasks()->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))->exists();
-            $isManuallyVisible = isset($project->manuallyVisibleTo) ? $project->manuallyVisibleTo->isNotEmpty() : false;
+            $hasTasksUnderProject = $project->tasks()->whereHas('assignees', fn ($q) => $q->where('users.id', $userId))->exists();
+            $isManuallyVisible = \App\Models\ProjectVisibility::where('project_id', $project->id)
+                ->where('user_id', $userId)
+                ->where('is_visible', true)
+                ->exists();
             $isTeamLead = $user->role === 'team_lead';
 
             if (! $isCreator && ! $isAssigned && ! $isTeamMember && ! $hasTasksUnderProject && ! $isManuallyVisible && ! $isTeamLead) {
@@ -408,7 +412,7 @@ class ProjectController extends Controller
             'website_name' => 'nullable|string',
             'website_link' => 'nullable|string',
             'client_name' => 'nullable|string|max:255',
-            'category' => 'nullable|string|max:255',
+            'category' => 'nullable|string|max:1000',
             'budget' => 'nullable|numeric|min:0',
             'priority' => 'nullable|string|max:32',
             'sidebar_notes' => 'nullable|string',

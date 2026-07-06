@@ -61,6 +61,11 @@
   border-bottom: 1px solid #e5e7eb;
 
   flex-shrink: 0;
+
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #ffffff;
 }
 
 .task-header-left {

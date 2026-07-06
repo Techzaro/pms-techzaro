@@ -241,7 +241,6 @@
 
 .btn-update,
 .btn-view,
-.btn-delete,
 .btn-resign {
   width: 42px;
   height: 42px;
@@ -265,7 +264,6 @@
 }
 
 .btn-update:hover,
-.btn-delete:hover,
 .btn-resign:hover {
   background: #e5e7eb;
 }
@@ -541,7 +539,6 @@
   scrollbar-width: none;
   background: #fff;
   border-radius: 24px;
-  padding: 30px;
 }
 
 .user-modal-content select,
@@ -558,19 +555,51 @@
 .user-modal-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
+
+  padding: 14px 30px;
+
+  border-bottom: 1px solid #e5e7eb;
+
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #ffffff;
+  border-radius: 24px 24px 0 0;
+}
+
+.user-header-left {
+  display: flex;
+  align-items: center;
   gap: 16px;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
+}
+
+.user-icon-box {
+  width: 44px;
+  height: 44px;
+
+  border-radius: 14px;
+
+  background: #eef2ff;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 18px;
 }
 
 .user-modal-header h2 {
   margin: 0;
-  font-size: 26px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
 }
 
 .modal-subtitle {
-  margin-top: 8px;
+  margin-top: 2px;
+
+  font-size: 13px;
   color: #6b7280;
 }
 
@@ -607,6 +636,10 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px;
+}
+
+.user-form {
+  padding: 24px 30px 30px;
 }
 
 .user-form .user-form-grid {
@@ -834,10 +867,17 @@
     border-radius: 18px;
   }
   .user-modal-header {
-    flex-direction: column;
+    padding: 12px 16px;
+    border-radius: 18px 18px 0 0;
+  }
+  .user-modal-header h2 {
+    font-size: 18px;
   }
   .user-modal-close {
     align-self: flex-end;
+  }
+  .user-form {
+    padding: 20px 16px 24px;
   }
   .close-modal-button {
     width: 100%;
@@ -864,8 +904,7 @@
     font-size: 13px;
   }
   .btn-update,
-  .btn-view,
-  .btn-delete {
+  .btn-view {
     width: 38px;
     height: 38px;
   }

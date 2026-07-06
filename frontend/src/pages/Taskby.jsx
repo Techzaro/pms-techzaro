@@ -179,10 +179,10 @@ const Taskby = () => {
   };
 
   const calculateProgress = (item) => {
-    const total = item.total_tasks ?? 0;
-    const completed = item.completed_tasks ?? 0;
-    if (total === 0) return 0;
-    return Math.round((completed / total) * 100);
+    const total = Number(item.total_tasks ?? 0) || 0;
+    const completed = Number(item.completed_tasks ?? 0) || 0;
+    if (!total) return 0;
+    return Math.round((completed / total) * 100) || 0;
   };
 
   const baseItems = orderedItems.length ? orderedItems : items;

@@ -5,7 +5,7 @@
  * Registers global notification functions for use outside of React components.
  */
 
-import { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
+import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { registerNotificationFns } from "../utils/notify";
 
 /** @type {React.Context<Object>} Notification context */
@@ -78,10 +78,13 @@ export function NotificationProvider({ children }) {
     registerNotificationFns({ success, error, warning, info });
   }, [success, error, warning, info]);
 
+  const value = useMemo(
+    () => ({ notifications, addNotification, removeNotification, success, error, warning, info, clearAll }),
+    [notifications, addNotification, removeNotification, success, error, warning, info, clearAll]
+  );
+
   return (
-    <NotificationContext.Provider
-      value={{ notifications, addNotification, removeNotification, success, error, warning, info, clearAll }}
-    >
+    <NotificationContext.Provider value={value}>
       {children}
     </NotificationContext.Provider>
   );

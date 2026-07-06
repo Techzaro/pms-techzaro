@@ -249,6 +249,16 @@ function Sidebar() {
             <span>Dashboard</span>
           </Link>
 
+          {/* Projects link */}
+          <Link
+            to={rolePath("projects")}
+            className={`sidebar-link ${isActiveOrStart("projects") ? "active" : ""}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MdOutlineDescription />
+            <span>Projects</span>
+          </Link>
+
           {/* Deliverables dropdown – sub-links for assigned/by-you/self */}
           <div className={`sidebar-link ${isActive("deliveries") || isActive("deliveries-by-you") || isActive("self-deliveries") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
             <div
@@ -291,16 +301,6 @@ function Sidebar() {
               </div>
             )}
           </div>
-
-          {/* Projects link */}
-          <Link
-            to={rolePath("projects")}
-            className={`sidebar-link ${isActiveOrStart("projects") ? "active" : ""}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MdOutlineDescription />
-            <span>Projects</span>
-          </Link>
 
           {/* Tasks dropdown – sub-links for assigned/by-you/self */}
           <div className={`sidebar-link ${isActive("tasks") || isActive("taskby") || isActive("self-tasks") || location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>

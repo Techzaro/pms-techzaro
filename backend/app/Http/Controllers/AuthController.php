@@ -313,7 +313,7 @@ class AuthController extends Controller
             'employee_code' => 'nullable|string|max:64',
             'job_started_date' => 'nullable|date',
             'job_ended_date' => 'nullable|date',
-            'gross_salary' => 'nullable|numeric|min:0',
+            'gross_salary' => 'nullable|string|max:255',
             'applied_via' => 'nullable|string|max:255',
             'bank_name' => 'nullable|string|max:255',
             'bank_account_number' => 'nullable|string|max:64',
@@ -321,7 +321,7 @@ class AuthController extends Controller
             'employment_contract' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
             'offer_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
             'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'other_document' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
+            'other_document' => 'nullable|file|mimes:pdf,jpeg,jpg,png,gif,bmp,webp,svg,tiff,tif|max:10240',
         ]);
 
         $fields = [

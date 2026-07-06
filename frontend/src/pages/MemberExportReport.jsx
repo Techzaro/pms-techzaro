@@ -49,10 +49,10 @@ function formatStatus(status) {
  */
 function calculateProgress(item) {
   if (item.item_type === "project") {
-    const t = item.total_tasks ?? 0, c = item.completed_tasks ?? 0;
-    return t === 0 ? 0 : Math.round((c / t) * 100);
+    const t = Number(item.total_tasks ?? 0) || 0, c = Number(item.completed_tasks ?? 0) || 0;
+    return t === 0 ? 0 : Math.round((c / t) * 100) || 0;
   }
-  return item.deliverables_progress || 0;
+  return Number(item.deliverables_progress) || 0;
 }
 
 /** Reusable style presets used for status/priority pills in the review UI. */

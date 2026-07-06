@@ -56,7 +56,7 @@ class UserController extends Controller
      */
     public function index()
     {
-        $users = Cache::remember('all_users_list', 300, fn () =>
+        $users = Cache::remember('all_users_list', 10, fn () =>
             User::select('id', 'name', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password', 'personal_email', 'professional_email')
                 ->orderBy('sort_order')->latest('updated_at')
                 ->get()
@@ -121,7 +121,7 @@ class UserController extends Controller
                 'employee_code' => 'required|string|max:64',
                 'job_started_date' => 'nullable|date',
                 'job_ended_date' => 'nullable|date|after_or_equal:job_started_date',
-                'gross_salary' => 'nullable|numeric|min:0',
+                'gross_salary' => 'nullable|string|max:255',
                 'applied_via' => 'nullable|string|max:255',
                 'bank_name' => 'nullable|string|max:255',
                 'bank_account_number' => 'nullable|string|max:64',
@@ -130,7 +130,7 @@ class UserController extends Controller
                 'offer_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:20480',
                 'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:20480',
                 'other_document' => 'nullable|array',
-                'other_document.*' => 'file|mimes:pdf,jpeg,png,webp|max:20480',
+                'other_document.*' => 'file|mimes:pdf,jpeg,jpg,png,gif,bmp,webp,svg,tiff,tif|max:20480',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('User create validation failed', ['errors' => $e->errors()]);
@@ -299,7 +299,7 @@ class UserController extends Controller
             'employee_code' => 'sometimes|required|string|max:64',
             'job_started_date' => 'nullable|date',
             'job_ended_date' => 'nullable|date',
-            'gross_salary' => 'nullable|numeric|min:0',
+            'gross_salary' => 'nullable|string|max:255',
             'applied_via' => 'nullable|string|max:255',
             'bank_name' => 'nullable|string|max:255',
             'bank_account_number' => 'nullable|string|max:64',
@@ -308,7 +308,7 @@ class UserController extends Controller
             'offer_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:20480',
             'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:20480',
             'other_document' => 'nullable|array',
-            'other_document.*' => 'file|mimes:pdf,jpeg,png,webp|max:20480',
+            'other_document.*' => 'file|mimes:pdf,jpeg,jpg,png,gif,bmp,webp,svg,tiff,tif|max:20480',
         ]);
 
         $authUser = $request->user();
@@ -809,8 +809,22 @@ class UserController extends Controller
         // Handle multiple files stored as JSON array (other_document)
         if ($document === 'other_document') {
             $paths = $this->parseOtherDocumentPaths($path);
-            $index = (int) $request->query('index', 0);
-            $path = $paths[$index] ?? $paths[0] ?? null;
+
+            $fileParam = $request->query('file');
+            if ($fileParam) {
+                $found = false;
+                foreach ($paths as $p) {
+                    if ($p === $fileParam || basename($p) === basename($fileParam)) {
+                        $path = $p;
+                        $found = true;
+                        break;
+                    }
+                }
+                if (!$found) $path = $paths[0] ?? null;
+            } else {
+                $index = (int) $request->query('index', 0);
+                $path = $paths[$index] ?? $paths[0] ?? null;
+            }
 
             if (!$path) {
                 return response()->json(['success' => false, 'message' => 'Document not found.'], 404);
@@ -920,30 +934,26 @@ class UserController extends Controller
             $files = $request->file('other_document');
 
             if (is_array($files)) {
-                // Delete old files if they exist
+                // Keep existing files and append new ones
                 $existingPaths = $this->parseOtherDocumentPaths($user->other_document);
-                foreach ($existingPaths as $oldPath) {
-                    if (Storage::disk('public')->exists($oldPath)) {
-                        Storage::disk('public')->delete($oldPath);
-                    }
-                }
 
                 $storedPaths = [];
                 foreach ($files as $file) {
                     if ($file->isValid()) {
-                        $filename = 'other_document_' . time() . '_' . $file->getClientOriginalName();
+                        $filename = 'other_document_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
                         $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
                         $storedPaths[] = $path;
                     }
                 }
 
-                $user->other_document = !empty($storedPaths) ? json_encode($storedPaths) : null;
+                $allPaths = array_merge($existingPaths, $storedPaths);
+                $user->other_document = !empty($allPaths) ? json_encode($allPaths) : null;
 
                 \App\Models\UserChange::create([
                     'user_id' => $user->id,
                     'field_name' => 'other_document',
-                    'old_value' => null,
-                    'new_value' => count($storedPaths) . ' file(s) uploaded',
+                    'old_value' => count($existingPaths) . ' file(s)',
+                    'new_value' => count($allPaths) . ' file(s) uploaded',
                     'modified_by' => $authUser->id,
                 ]);
             }
@@ -1020,8 +1030,22 @@ class UserController extends Controller
         // Handle multiple files stored as JSON array (other_document)
         if ($document === 'other_document') {
             $paths = $this->parseOtherDocumentPaths($path);
-            $index = (int) $request->query('index', 0);
-            $path = $paths[$index] ?? $paths[0] ?? null;
+
+            $fileParam = $request->query('file');
+            if ($fileParam) {
+                $found = false;
+                foreach ($paths as $p) {
+                    if ($p === $fileParam || basename($p) === basename($fileParam)) {
+                        $path = $p;
+                        $found = true;
+                        break;
+                    }
+                }
+                if (!$found) $path = $paths[0] ?? null;
+            } else {
+                $index = (int) $request->query('index', 0);
+                $path = $paths[$index] ?? $paths[0] ?? null;
+            }
 
             if (!$path) {
                 return response()->json(['success' => false, 'message' => 'Document not found.'], 404);

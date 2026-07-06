@@ -524,6 +524,10 @@
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 28px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #ffffff;
 }
 
 .mt-modal-header h2 {

@@ -27,6 +27,10 @@
   align-items: flex-start;
   padding: 24px 28px 16px;
   border-bottom: 1px solid #e5e7eb;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #ffffff;
 }
 
 .cd-title {

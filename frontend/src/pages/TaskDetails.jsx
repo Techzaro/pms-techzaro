@@ -455,12 +455,6 @@ function TaskDetails() {
                 </div>
               </div>
 
-              {task.description && (
-                <div>
-                  <p className="td-desc">{task.description}</p>
-                </div>
-              )}
-
               <div className="td-badges">
                 <span className="td-badge" style={{ background: statusBgColor(task.status), color: statusColor(task.status) }}>
                   <span className="td-badge-dot" style={{ background: statusColor(task.status) }} />
@@ -842,9 +836,16 @@ function FileUploadSection({ taskId, files }) {
       ) : (
         <ul className="td-files">
           {files.map((f) => (
-            <li key={f.id}>
-              <FolderOpen size={18} />
-              {f.url ? <a href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer">{f.name}</a> : <span>{f.name}</span>}
+            <li key={f.id} style={{ flexDirection: "column", alignItems: "flex-start", gap: "2px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <FolderOpen size={18} />
+                <span style={{ fontWeight: 600, fontSize: "14px" }}>{f.name}</span>
+              </div>
+              {f.url && (
+                <a href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer" style={{ marginLeft: "26px", fontSize: "13px", color: "#6366f1" }}>
+                  {f.url}
+                </a>
+              )}
             </li>
           ))}
         </ul>

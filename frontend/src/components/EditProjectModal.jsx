@@ -40,20 +40,9 @@ const EditProjectModal = ({ project, onClose }) => {
   const [teams, setTeams] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
 
-  const CATEGORIES = [
-    { value: "", label: "Select category" },
-    { value: "Web Development", label: "Web Development" },
-    { value: "Mobile App", label: "Mobile App" },
-    { value: "UI/UX Design", label: "UI/UX Design" },
-  ];
-
-  const isCustomCategory = project?.category && !CATEGORIES.some((c) => c.value === project.category);
-
   const [form, setForm] = useState({
     title: project?.title || "",
     description: project?.description || "",
-    category: isCustomCategory ? "__custom__" : (project?.category || ""),
-    categoryCustom: isCustomCategory ? (project?.category || "") : "",
     team_id: project?.team_id || "",
     assigned_users: project?.assigned_users || [],
     priority: project?.priority || "Medium",
@@ -61,6 +50,19 @@ const EditProjectModal = ({ project, onClose }) => {
     budget: project?.budget || "",
 
   });
+
+  const [categoriesList, setCategoriesList] = useState(() => {
+    if (project?.category) {
+      try {
+        const parsed = JSON.parse(project.category);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        return [project.category];
+      }
+    }
+    return [];
+  });
+  const [categoryInput, setCategoryInput] = useState("");
 
   const [milestones, setMilestones] = useState(() => {
     if (project?.milestones && project.milestones.length > 0) {
@@ -92,6 +94,7 @@ const EditProjectModal = ({ project, onClose }) => {
   const [pendingFiles, setPendingFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const [linkInput, setLinkInput] = useState("");
+  const [linkTitleInput, setLinkTitleInput] = useState("");
   const [deliverablesProj, setDeliverablesProj] = useState([]);
   const [deliverableProjInput, setDeliverableProjInput] = useState({ title: "", due_datetime: "" });
   const fileInputRef = useRef(null);
@@ -186,6 +189,20 @@ const EditProjectModal = ({ project, onClose }) => {
     if (e.key === "Enter") { e.preventDefault(); handleAddGoal(); }
   };
 
+  const handleAddCategory = () => {
+    if (!categoryInput.trim()) return;
+    setCategoriesList((prev) => [...prev, categoryInput.trim()]);
+    setCategoryInput("");
+  };
+
+  const handleRemoveCategory = (index) => {
+    setCategoriesList((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleCategoryKeyDown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); handleAddCategory(); }
+  };
+
   const formatDateDisplay = (dateStr) => {
     if (!dateStr) return "";
     return formatDateTime(dateStr).replace("\n", " ");
@@ -225,8 +242,10 @@ const EditProjectModal = ({ project, onClose }) => {
     if (!linkInput.trim()) return;
     let url = linkInput.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-    setLinks((prev) => [...prev, { url, name: url }]);
+    const name = linkTitleInput.trim() || url;
+    setLinks((prev) => [...prev, { url, name }]);
     setLinkInput("");
+    setLinkTitleInput("");
   };
 
   const handleRemoveLink = (index) => {
@@ -314,7 +333,7 @@ const EditProjectModal = ({ project, onClose }) => {
         const body = {
           title: form.title.trim(),
           description: form.description || null,
-          category: form.category === "__custom__" ? form.categoryCustom.trim() || null : (form.category || null),
+          category: categoriesList.length > 0 ? JSON.stringify(categoriesList) : null,
           goals_checklist: goalsList.length > 0 ? goalsList : [],
           team_id: form.team_id ? parseInt(form.team_id) : null,
           assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
@@ -406,37 +425,40 @@ const EditProjectModal = ({ project, onClose }) => {
 
             <div className="cp-grid-2">
               <div className="cp-field">
-                <label>Category (Optional)</label>
-                {form.category === "__custom__" ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <input
-                      type="text"
-                      name="categoryCustom"
-                      placeholder="Enter custom category"
-                      value={form.categoryCustom}
-                      onChange={handleChange}
-                      style={{ flex: 1 }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setForm((prev) => ({ ...prev, category: "", categoryCustom: "" }))}
-                      title="Back to list"
-                      style={{ flexShrink: 0, width: 36, height: 36, border: "1px solid #d1d5db", borderRadius: 10, background: "#f3f4f6", color: "#6b7280", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-                    >
-                      &times;
-                    </button>
-                  </div>
-                ) : (
-                  <CustomSelect
-                    name="category"
-                    value={form.category}
-                    onChange={(val) => handleChange({ target: { name: "category", value: val } })}
-                    placeholder="Select category"
-                    options={[
-                      ...CATEGORIES,
-                      { value: "__custom__", label: "Custom / Type Here" },
-                    ]}
+                <label>Category</label>
+                <div className="cp-goals-input-row">
+                  <input
+                    type="text"
+                    placeholder="Enter a category"
+                    value={categoryInput}
+                    onChange={(e) => setCategoryInput(e.target.value)}
+                    onKeyDown={handleCategoryKeyDown}
                   />
+                  <button
+                    type="button"
+                    className="cp-goals-add-btn"
+                    onClick={handleAddCategory}
+                    disabled={!categoryInput.trim()}
+                  >
+                    Add
+                  </button>
+                </div>
+
+                {categoriesList.length > 0 && (
+                  <div className="cp-goals-list">
+                    {categoriesList.map((cat, index) => (
+                      <div key={index} className="cp-goals-item">
+                        <span className="cp-goals-item-text">{cat}</span>
+                        <button
+                          type="button"
+                          className="cp-goals-item-remove"
+                          onClick={() => handleRemoveCategory(index)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 
@@ -508,7 +530,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
             {/* ATTACHMENTS */}
             <div className="cp-field">
-              <label>Attachments</label>
+              <label>Links & Attachment</label>
 
               <div
                 className="cp-drop-zone"
@@ -555,22 +577,31 @@ const EditProjectModal = ({ project, onClose }) => {
                 <span className="cp-or-line"></span>
               </div>
 
-              <div className="cp-link-input-row">
+              <div className="cp-link-input-row" style={{ flexDirection: "column", gap: "8px" }}>
                 <input
                   type="text"
-                  placeholder="Paste link (Drive, Figma, Website, etc.)"
-                  value={linkInput}
-                  onChange={(e) => setLinkInput(e.target.value)}
-                  onKeyDown={handleLinkKeyDown}
+                  placeholder="Link title (e.g. Figma Design, Drive Folder)"
+                  value={linkTitleInput}
+                  onChange={(e) => setLinkTitleInput(e.target.value)}
                 />
-                <button
-                  type="button"
-                  className="cp-link-add-btn"
-                  onClick={handleAddLink}
-                  disabled={!linkInput.trim()}
-                >
-                  Add Link
-                </button>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <input
+                    type="text"
+                    placeholder="Paste link (Drive, Figma, Website, etc.)"
+                    value={linkInput}
+                    onChange={(e) => setLinkInput(e.target.value)}
+                    onKeyDown={handleLinkKeyDown}
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="cp-link-add-btn"
+                    onClick={handleAddLink}
+                    disabled={!linkInput.trim()}
+                  >
+                    Add Link
+                  </button>
+                </div>
               </div>
 
               {links.length > 0 && (
@@ -578,9 +609,12 @@ const EditProjectModal = ({ project, onClose }) => {
                   {links.map((link, index) => (
                     <div key={index} className="cp-attachment-item">
                       <span className="cp-attachment-icon">🔗</span>
-                      <a href={link.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-name cp-attachment-link">
-                        {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
-                      </a>
+                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                        <span className="cp-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{link.name}</span>
+                        <a href={link.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-link" style={{ fontSize: "12px", color: "#6366f1" }}>
+                          {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
+                        </a>
+                      </div>
                       <a href={link.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-open">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />

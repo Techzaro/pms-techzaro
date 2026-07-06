@@ -24,6 +24,10 @@
 
 .rd-header {
   padding: 24px 24px 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #ffffff;
 }
 
 .rd-title {
