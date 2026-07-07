@@ -1189,3 +1189,121 @@
     padding: 8px;
   }
 }
+
+/* Custom category input */
+.custom-input-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.custom-input-container input {
+  flex: 1;
+}
+
+.custom-input-revert {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #f3f4f6;
+  color: #6b7280;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.custom-input-revert:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+/* Category multi-select dropdown */
+.cp-category-dropdown {
+  position: relative;
+}
+
+.cp-category-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+  transition: border-color 0.2s;
+}
+
+.cp-category-trigger:hover {
+  border-color: #9ca3af;
+}
+
+.cp-dropdown-placeholder {
+  color: #9ca3af;
+}
+
+.cp-dropdown-arrow {
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.cp-dropdown-arrow.open {
+  transform: rotate(180deg);
+}
+
+.cp-dropdown-custom {
+  color: #6366f1;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cp-dropdown-custom:hover {
+  background: #eef2ff;
+}
+
+.cp-dropdown-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0;
+}
+
+.cp-dropdown-item-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.cp-dropdown-item-check:hover {
+  background: #f3f4f6;
+}
+
+.cp-dropdown-item-delete {
+  background: none;
+  border: none;
+  color: #ef4444;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.cp-dropdown-item-delete:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}

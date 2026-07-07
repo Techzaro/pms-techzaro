@@ -381,6 +381,20 @@ class DashboardController extends Controller
             ->latest()
             ->limit($limit)->get();
 
+        // Filter out field_changed events for tasks that have a 'created' event
+        $taskIdsWithCreatedEvent = $taskEvents
+            ->filter(fn ($e) => $e->action === 'created' && $e->task)
+            ->pluck('task.id')
+            ->filter()
+            ->unique()
+            ->toArray();
+        $taskEvents = $taskEvents->filter(function ($e) use ($taskIdsWithCreatedEvent) {
+            if ($e->action === 'field_changed' && $e->task && in_array($e->task->id, $taskIdsWithCreatedEvent)) {
+                return false;
+            }
+            return true;
+        });
+
         $taskIdsNeedingSub = $taskEvents->filter(fn ($e) => in_array($e->action, ['approved', 'rejected', 'reopened']))->pluck('task.id')->filter()->unique()->toArray();
         $taskSubmitters = $this->loadTaskSubmitters($taskIdsNeedingSub);
 
@@ -408,6 +422,20 @@ class DashboardController extends Controller
             ->whereIn('action', ['created', 'assigned', 'submitted', 'resubmitted', 'approved', 'rejected', 'reopened', 'completed', 'field_changed', 'status_updated', 'access_granted', 'access_removed'])
             ->latest()
             ->limit($limit)->get();
+
+        // Filter out field_changed events for projects that have a 'created' event
+        $projectIdsWithCreatedEvent = $projectEvents
+            ->filter(fn ($e) => $e->action === 'created' && $e->project)
+            ->pluck('project.id')
+            ->filter()
+            ->unique()
+            ->toArray();
+        $projectEvents = $projectEvents->filter(function ($e) use ($projectIdsWithCreatedEvent) {
+            if ($e->action === 'field_changed' && $e->project && in_array($e->project->id, $projectIdsWithCreatedEvent)) {
+                return false;
+            }
+            return true;
+        });
 
         $projectIdsNeedingSub = $projectEvents->filter(fn ($e) => in_array($e->action, ['approved', 'rejected', 'reopened']))->pluck('project.id')->filter()->unique()->toArray();
         $projectSubmitters = $this->loadProjectSubmitters($projectIdsNeedingSub);
@@ -587,6 +615,21 @@ class DashboardController extends Controller
             ->whereIn('action', ['created', 'assigned', 'submitted', 'resubmitted', 'approved', 'rejected', 'reopened', 'completed', 'field_changed', 'status_updated'])
             ->limit(50)->get();
 
+        // Filter out field_changed events for tasks that have a 'created' event on the same day
+        // This ensures only one activity entry shows per task creation (not file/link additions)
+        $taskIdsWithCreatedEvent = $taskEvents
+            ->filter(fn ($e) => $e->action === 'created' && $e->task)
+            ->pluck('task.id')
+            ->filter()
+            ->unique()
+            ->toArray();
+        $taskEvents = $taskEvents->filter(function ($e) use ($taskIdsWithCreatedEvent) {
+            if ($e->action === 'field_changed' && $e->task && in_array($e->task->id, $taskIdsWithCreatedEvent)) {
+                return false;
+            }
+            return true;
+        });
+
         $taskIdsNeedingSub = $taskEvents->filter(fn ($e) => in_array($e->action, ['approved', 'rejected', 'reopened']))->pluck('task.id')->filter()->unique()->toArray();
         $taskSubmitters = $this->loadTaskSubmitters($taskIdsNeedingSub);
 
@@ -614,6 +657,20 @@ class DashboardController extends Controller
             ->whereDate('created_at', $today)
             ->whereIn('action', ['created', 'assigned', 'submitted', 'resubmitted', 'approved', 'rejected', 'reopened', 'completed', 'field_changed', 'status_updated', 'access_granted', 'access_removed'])
             ->limit(50)->get();
+
+        // Filter out field_changed events for projects that have a 'created' event on the same day
+        $projectIdsWithCreatedEvent = $projectEvents
+            ->filter(fn ($e) => $e->action === 'created' && $e->project)
+            ->pluck('project.id')
+            ->filter()
+            ->unique()
+            ->toArray();
+        $projectEvents = $projectEvents->filter(function ($e) use ($projectIdsWithCreatedEvent) {
+            if ($e->action === 'field_changed' && $e->project && in_array($e->project->id, $projectIdsWithCreatedEvent)) {
+                return false;
+            }
+            return true;
+        });
 
         $projectIdsNeedingSub = $projectEvents->filter(fn ($e) => in_array($e->action, ['approved', 'rejected', 'reopened']))->pluck('project.id')->filter()->unique()->toArray();
         $projectSubmitters = $this->loadProjectSubmitters($projectIdsNeedingSub);

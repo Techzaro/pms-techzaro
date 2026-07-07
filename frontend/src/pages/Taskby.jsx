@@ -16,7 +16,10 @@ import { IoIosArrowDown } from "react-icons/io";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
+import { Pencil } from "lucide-react";
 import CreateTaskModal from "../components/CreateTaskModal";
+import EditTaskModal from "../components/EditTaskModal";
+import EditProjectModal from "../components/EditProjectModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
@@ -71,6 +74,8 @@ const Taskby = () => {
   const [orderedItems, setOrderedItems] = useState([]);
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+  const [editingProject, setEditingProject] = useState(null);
   const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
@@ -409,6 +414,15 @@ const Taskby = () => {
                           >
                             <IoEyeOutline />
                           </button>
+                          {item.status?.toLowerCase() !== "approved" && (
+                            <button
+                              className="action-icon-btn action-edit"
+                              title="Edit Project"
+                              onClick={() => setEditingProject(item)}
+                            >
+                              <Pencil size={16} />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -491,6 +505,15 @@ const Taskby = () => {
                         >
                           <IoEyeOutline />
                         </button>
+                        {item.status?.toLowerCase() !== "approved" && (
+                          <button
+                            className="action-icon-btn action-edit"
+                            title="Edit Task"
+                            onClick={() => setEditingTask(item)}
+                          >
+                            <Pencil size={16} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -504,6 +527,20 @@ const Taskby = () => {
           <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
         )}
       </div>
+
+      {editingTask && (
+        <EditTaskModal
+          task={editingTask}
+          onClose={(refresh) => { setEditingTask(null); if (refresh) fetchTasks(); }}
+        />
+      )}
+
+      {editingProject && (
+        <EditProjectModal
+          project={editingProject}
+          onClose={(refresh) => { setEditingProject(null); if (refresh) fetchTasks(); }}
+        />
+      )}
     </DashboardLayout>
   );
 };

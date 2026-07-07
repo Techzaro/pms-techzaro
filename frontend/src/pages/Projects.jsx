@@ -9,23 +9,61 @@
  * can be reordered via drag-and-drop.
  */
 
-import { useEffect, useState, useRef } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CreateProjectModal from "../components/CreateProjectModal";
+import EditProjectModal from "../components/EditProjectModal";
 import SubmitProjectModal from "../components/SubmitProjectModal";
-import { IoSearchOutline, IoEyeOutline, IoClose } from "react-icons/io5";
+import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
+import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import { GoDotFill } from "react-icons/go";
+import { GripVertical } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath, getUser } from "../utils/auth";
 import "./Projects.css";
 import { formatDateTime } from "../utils/formatDateTime";
 import Pagination from "../components/Pagination";
 import "../pages/Task.css";
+
+const PRIORITY_COLORS = {
+  High: "#FEE2E2",
+  Medium: "#FEF3C7",
+  Low: "#DCFCE7",
+};
+
+const PRIORITY_TEXT_COLORS = {
+  High: "#991B1B",
+  Medium: "#92400E",
+  Low: "#166534",
+};
+
+const STATUS_COLORS = {
+  pending: "#FEF3C7",
+  submitted: "#DBEAFE",
+  reopened: "#EDE9FE",
+  approved: "#DCFCE7",
+  rejected: "#FEE2E2",
+  Planning: "#DBEAFE",
+  "In-progress": "#FEF3C7",
+  Pause: "#FEE2E2",
+  Completed: "#DCFCE7",
+};
+
+const STATUS_TEXT_COLORS = {
+  pending: "#92400E",
+  submitted: "#1E40AF",
+  reopened: "#5B21B6",
+  approved: "#166534",
+  rejected: "#991B1B",
+  Planning: "#1E40AF",
+  "In-progress": "#92400E",
+  Pause: "#991B1B",
+  Completed: "#166534",
+};
 
 /** Main Projects page — renders project cards with search, filters and pagination. */
 function Projects() {
@@ -37,17 +75,33 @@ function Projects() {
   const [searchQuery, setSearchQuery] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get("filter") === "active" ? "active" : "");
-  const [visibilityProject, setVisibilityProject] = useState(null);
-  const [visibilityUsers, setVisibilityUsers] = useState([]);
-  const [visibilitySelected, setVisibilitySelected] = useState({});
-  const [visibilitySaving, setVisibilitySaving] = useState(false);
   const [submitProjectModal, setSubmitProjectModal] = useState({ open: false, project: null });
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingProject, setEditingProject] = useState(null);
   const [expandedDesc, setExpandedDesc] = useState({});
   const [overflowDetected, setOverflowDetected] = useState({});
   const descEls = useRef({});
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
+  const [viewMode, setViewMode] = useState("card");
+  const [orderedProjects, setOrderedProjects] = useState([]);
   const ITEMS_PER_PAGE = 10;
+
+  useEffect(() => {
+    setOrderedProjects(projects);
+  }, [projects]);
+
+  const handleProjectReorder = useCallback((reordered) => {
+    setOrderedProjects(reordered);
+    const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
+    const token = authToken();
+    fetch(`${API_URL}/projects/reorder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ items: payload }),
+      _notifHandled: true,
+    }).catch(() => {});
+  }, []);
 
   const toggleDescription = (id) => {
     setExpandedDesc((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -132,60 +186,6 @@ function Projects() {
     }
   };
 
-  /** Open the visibility management modal for a specific project. */
-  const openVisibility = async (project, e) => {
-    e.stopPropagation();
-    setVisibilityProject(project);
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/projects/${project.id}/visibility`, {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Failed to load visibility");
-      const data = await res.json();
-      const users = data.users || [];
-      setVisibilityUsers(users);
-      const selected = {};
-      users.forEach((u) => { if (u.is_visible) selected[u.id] = true; });
-      setVisibilitySelected(selected);
-    } catch {
-      setVisibilityUsers([]);
-      setVisibilitySelected({});
-    }
-  };
-
-  const closeVisibility = () => {
-    setVisibilityProject(null);
-    setVisibilityUsers([]);
-    setVisibilitySelected({});
-  };
-
-  const toggleVisibilityUser = (userId) => {
-    setVisibilitySelected((prev) => ({ ...prev, [userId]: !prev[userId] }));
-  };
-
-  /** Persist the selected user-visibility settings for a project. */
-  const saveVisibility = async () => {
-    if (!visibilityProject) return;
-    setVisibilitySaving(true);
-    try {
-      const token = authToken();
-      const userIds = Object.keys(visibilitySelected).filter((id) => visibilitySelected[id]).map(Number);
-      const res = await fetch(`${API_URL}/projects/${visibilityProject.id}/visibility`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ user_ids: userIds }),
-        _notifHandled: true,
-      });
-      if (!res.ok) throw new Error("Failed to save visibility");
-      closeVisibility();
-    } catch (err) {
-      console.error("Save visibility error:", err);
-    } finally {
-      setVisibilitySaving(false);
-    }
-  };
-
   /** Derive the display status (Completed / Failed / In Progress) from progress and dates. */
   const calculateStatus = (project) => {
     const progress = calculateProgress(project);
@@ -265,7 +265,7 @@ function Projects() {
     );
   };
 
-  const filteredProjects = projects.filter((project) => {
+  const filteredProjects = orderedProjects.filter((project) => {
     if (searchQuery && !project.title?.toLowerCase().includes(searchQuery.toLowerCase())) {
       return false;
     }
@@ -279,11 +279,11 @@ function Projects() {
     }
     if (statusFilter) {
       if (statusFilter === "active") return true;
-      if (statusFilter === "pending" && project.status !== "pending" && project.status !== "Planned" && project.status !== "in_progress") return false;
+      if (statusFilter === "pending" && project.status !== "pending" && project.status !== "Planned" && project.status !== "in_progress" && project.status !== "Planning" && project.status !== "In-progress") return false;
       if (statusFilter === "submitted" && project.status !== "submitted") return false;
       if (statusFilter === "reopened" && project.status !== "reopened") return false;
-      if (statusFilter === "approved" && project.status !== "approved") return false;
-      if (statusFilter === "rejected" && project.status !== "rejected") return false;
+      if (statusFilter === "approved" && project.status !== "approved" && project.status !== "Completed") return false;
+      if (statusFilter === "rejected" && project.status !== "rejected" && project.status !== "Pause") return false;
     }
     return true;
   });
@@ -328,14 +328,27 @@ function Projects() {
           </div>
         </div>
 
-        <div className="projects-search-bar">
-          <IoSearchOutline fontSize={"20px"} />
-          <input
-            type="text"
-            placeholder="Search by project name"
-            value={searchQuery}
-            onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
-          />
+        <div className="projects-toolbar">
+          <div className="projects-search-bar">
+            <IoSearchOutline fontSize={"20px"} />
+            <input
+              type="text"
+              placeholder="Search by project name"
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+            />
+          </div>
+
+          <div className="view-toggle">
+            <button className={viewMode === "card" ? "active-tab" : ""} onClick={() => setViewMode("card")}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5"/></svg>
+              Cards
+            </button>
+            <button className={viewMode === "list" ? "active-tab" : ""} onClick={() => setViewMode("list")}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="2.5" rx="1" fill="currentColor"/><rect x="1" y="6.75" width="14" height="2.5" rx="1" fill="currentColor"/><rect x="1" y="11.5" width="14" height="2.5" rx="1" fill="currentColor"/></svg>
+              List
+            </button>
+          </div>
         </div>
 
         {/* STATUS FILTERS */}
@@ -365,164 +378,230 @@ function Projects() {
         </div>
 
         {/* PROJECTS */}
-        <div className="projects-container">
-          {loading ? (
-            <div className="loading-text">Loading projects...</div>
-          ) : filteredProjects.length === 0 ? (
-            <div className="loading-text">No projects found</div>
-          ) : (
-            paginatedProjects.map((project) => {
-              const progress = calculateProgress(project);
-              const displayStatus = calculateStatus(project);
+        {viewMode === "card" ? (
+          <div className="projects-container">
+            {loading ? (
+              <div className="loading-text">Loading projects...</div>
+            ) : filteredProjects.length === 0 ? (
+              <div className="loading-text">No projects found</div>
+            ) : (
+              <SortableTableWrapper
+                items={paginatedProjects.map((p, i) => ({ ...p, sortableId: `project-${p.id}-${i}` }))}
+                onReorder={handleProjectReorder}
+                idKey="sortableId"
+                as="div"
+              >
+                {(project) => {
+                  const progress = calculateProgress(project);
 
-              return (
-                <div
-                  key={project.id}
-                  className="projects-card"
-                >
-                  {/* HEADER */}
-                  <div className="project-card-header">
-                    <h3>{project.title}</h3>
-                    <div
-                      className={`card-subtitle${!expandedDesc[project.id] ? " clamped" : ""}`}
-                      ref={!expandedDesc[project.id] ? measureRef(project.id) : null}
-                    >
+                  return (
+                    <div className="projects-card" key={project.id}>
+                      {/* DRAG HANDLE */}
+                      <div className="project-card-drag-handle">
+                        <DragHandle />
+                      </div>
+                      {/* HEADER */}
+                      <div className="project-card-header">
+                        <h3>{project.title}</h3>
                       <div
-                        dangerouslySetInnerHTML={{
-                          __html: project.description || "No description available",
-                        }}
-                      />
-                      {overflowDetected[project.id] && !expandedDesc[project.id] && (
-                        <button className="read-more-btn" style={{fontSize: "18px"}} onClick={() => toggleDescription(project.id)}>
-                          Read more
-                        </button>
-                      )}
-                    </div>
-                    {expandedDesc[project.id] && (
-                      <button className="show-less-btn" style={{fontSize: "18px"}} onClick={() => toggleDescription(project.id)}>
-                        Show less
-                      </button>
-                    )}
-                  </div>
-
-                  {/* PROGRESS */}
-                  <div className="progress-section">
-                    <div className="progress-top">
-                      <span>Progress</span>
-                      <span>{progress}%</span>
-                    </div>
-                    <div className="progress-bar">
-                      <div
-                        className="progress-fill"
-                        style={{
-                          width: `${progress}%`,
-                          minWidth: progress === 0 ? "100%" : "0",
-                          background: progress === 0 ? "#d1d5db" : getProgressColor(progress),
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-
-                  {/* FOOTER */}
-                  <div className="card-footer">
-                    <div className="date-info">
-                      <span className="date-icon">📅</span>
-                      {project.end_date ? (
-                        <span>
-                          {formatDateTime(project.end_date).replace("\n", " ")}
-                        </span>
-                      ) : (
-                        <span>No deadline set</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* ACTIONS */}
-                  <div className="project-card-actions">
-                    <span
-                      className="status-badge"
-                      style={{
-                        backgroundColor: project.status && ["submitted","approved","rejected","reopened"].includes(project.status) ? "#FEF3C7" : (project.status === "Planned" || project.status === "in_progress" ? "#FEF3C7" : getStatusBadgeColor(displayStatus)),
-                      }}
-                    >
-                      {project.status && ["submitted","approved","rejected","reopened"].includes(project.status) ? formatStatus(project.status) : (project.status === "Planned" || project.status === "in_progress" ? "Pending" : displayStatus)}
-                    </span>
-
-                    <div className="project-card-actions-right">
-                      {isAdminOrManager && (
-                        <button
-                          className="show-to-btn"
-                          onClick={(e) => openVisibility(project, e)}
-                          title="Manage visibility"
-                        >
-                          <IoEyeOutline /> Show To
-                        </button>
-                      )}
-                      {project.can_submit && (
-                        <div style={{ position: "relative", display: "inline-flex" }}>
-                          <button
-                            className="action-icon-btn action-submit"
-                            title="Submit Project"
-                            onClick={() => setSubmitProjectModal({ open: true, project })}
-                          >
-                            <LuSend />
-                          </button>
-                        </div>
-                      )}
-                      <button
-                        className="view-details-btn"
-                        onClick={() => { sessionStorage.setItem('projectIds', JSON.stringify(filteredProjects.map(p => p.id))); navigate(rolePath(`projects/project-details/${project.id}`)); }}
+                        className={`card-subtitle${!expandedDesc[project.id] ? " clamped" : ""}`}
+                        ref={!expandedDesc[project.id] ? measureRef(project.id) : null}
                       >
-                        View →
-                      </button>
+                        <div
+                          dangerouslySetInnerHTML={{
+                            __html: project.description || "No description available",
+                          }}
+                        />
+                        {overflowDetected[project.id] && !expandedDesc[project.id] && (
+                          <button className="read-more-btn" style={{fontSize: "18px"}} onClick={() => toggleDescription(project.id)}>
+                            Read more
+                          </button>
+                        )}
+                      </div>
+                      {expandedDesc[project.id] && (
+                        <button className="show-less-btn" style={{fontSize: "18px"}} onClick={() => toggleDescription(project.id)}>
+                          Show less
+                        </button>
+                      )}
+                    </div>
+
+                    {/* PROGRESS */}
+                    <div className="progress-section">
+                      <div className="progress-top">
+                        <span>Progress</span>
+                        <span>{progress}%</span>
+                      </div>
+                      <div className="progress-bar">
+                        <div
+                          className="progress-fill"
+                          style={{
+                            width: `${progress}%`,
+                            minWidth: progress === 0 ? "100%" : "0",
+                            background: progress === 0 ? "#d1d5db" : getProgressColor(progress),
+                          }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    {/* FOOTER */}
+                    <div className="card-footer">
+                      <div className="date-info">
+                        <span className="date-icon">📅</span>
+                        {project.end_date ? (
+                          <span>
+                            {formatDateTime(project.end_date).replace("\n", " ")}
+                          </span>
+                        ) : (
+                          <span>No deadline set</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ACTIONS */}
+                    <div className="project-card-actions">
+                      <span
+                        className="status-badge"
+                        style={{
+                          backgroundColor: STATUS_COLORS[project.status] || "#e0e7ff",
+                          color: STATUS_TEXT_COLORS[project.status] || "#374151",
+                        }}
+                      >
+                        {project.status || "Planning"}
+                      </span>
+
+                      <div className="project-card-actions-right">
+                        {project.can_submit && (
+                          <div style={{ position: "relative", display: "inline-flex" }}>
+                            <button
+                              className="action-icon-btn action-submit"
+                              title="Submit Project"
+                              onClick={() => setSubmitProjectModal({ open: true, project })}
+                            >
+                              <LuSend />
+                            </button>
+                          </div>
+                        )}
+                        <button
+                          className="action-icon-btn action-view"
+                          title="View Project"
+                          onClick={() => { sessionStorage.setItem('projectIds', JSON.stringify(filteredProjects.map(p => p.id))); navigate(rolePath(`projects/project-details/${project.id}`)); }}
+                        >
+                          <IoEyeOutline />
+                        </button>
+                        {isAdminOrManager && (
+                          <button
+                            className="action-icon-btn action-view"
+                            title="Edit Project"
+                            onClick={() => { setEditingProject(project); setShowEditModal(true); }}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                          </button>
+                        )}
+                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+                );
+              }}
+              </SortableTableWrapper>
+            )}
+          </div>
+        ) : (
+          <div className="project-list-container">
+            <div className="project-table-header">
+              <div>Project Name</div>
+              <div>Status</div>
+              <div>Progress</div>
+              <div>Priority</div>
+              <div>Due Date</div>
+              <div>Action</div>
+            </div>
+
+            {loading ? (
+              <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
+            ) : filteredProjects.length === 0 ? (
+              <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No projects found</div>
+            ) : (
+              <SortableTableWrapper
+                items={paginatedProjects.map((p, i) => ({ ...p, sortableId: `project-${p.id}-${i}` }))}
+                onReorder={handleProjectReorder}
+                idKey="sortableId"
+                as="div"
+              >
+                {(project) => {
+                  const progress = calculateProgress(project);
+                  const projectStatus = project.status || "Planning";
+
+                  return (
+                    <div className="project-list-row" key={project.id}>
+                      <div className="col-project-name">
+                        <div className="project-name-text">{project.title}</div>
+                      </div>
+
+                    <div className="col-status">
+                      <span className="badge" style={{ background: STATUS_COLORS[projectStatus] || "#F3F4F6", color: STATUS_TEXT_COLORS[projectStatus] || "#374151" }}>
+                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[projectStatus] || "#374151" }}></span>
+                        {projectStatus}
+                      </span>
+                    </div>
+
+                    <div className="col-progress">
+                      <div style={{ display: "flex", justifyContent: "flex-start", alignItems: "center", marginBottom: "4px" }}>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                          {progress}%
+                        </span>
+                      </div>
+                      <div className="progress-bar-track">
+                        <div className="progress-bar-fill" style={{ width: `${progress}%` }}></div>
+                      </div>
+                      <div className="deliverables-approved-text">
+                        {project.completed_tasks || 0}/{project.total_tasks || 0} tasks
+                      </div>
+                    </div>
+
+                    <div className="col-priority">
+                      <span className="badge" style={{ background: PRIORITY_COLORS[project.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[project.priority] || "#374151" }}>
+                        <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[project.priority] || "#374151" }}></span>
+                        {project.priority || "Medium"}
+                      </span>
+                    </div>
+
+                    <div className="col-due-date">
+                      <div className="date-box">
+                        <div style={{ whiteSpace: "pre-line" }}>{project.end_date ? formatDateTime(project.end_date) : "No deadline"}</div>
+                      </div>
+                    </div>
+
+                    <div className="col-action">
+                      <div className="action-btns">
+                        <button className="action-icon-btn action-view" title="View" onClick={() => { sessionStorage.setItem('projectIds', JSON.stringify(filteredProjects.map(p => p.id))); navigate(rolePath(`projects/project-details/${project.id}`)); }}>
+                          <IoEyeOutline />
+                        </button>
+                        {isAdminOrManager && (
+                          <button className="action-icon-btn action-view" title="Edit Project" onClick={() => { setEditingProject(project); setShowEditModal(true); }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                          </button>
+                        )}
+                        {project.can_submit && (
+                          <div style={{ position: "relative", display: "inline-flex" }}>
+                            <button className="action-icon-btn action-submit" title="Submit Project" onClick={() => setSubmitProjectModal({ open: true, project })}>
+                              <LuSend />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              }}
+              </SortableTableWrapper>
+            )}
+          </div>
+        )}
 
         {!showAll && totalPages > 1 && (
           <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
         )}
       </div>
-
-      {/* VISIBILITY MODAL */}
-      {visibilityProject && createPortal(
-        <div className="modal-overlay">
-          <div className="sv-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="sv-modal-header">
-              <h3>Show To — {visibilityProject.title}</h3>
-              <button className="sv-close-btn" onClick={closeVisibility}><IoClose /></button>
-            </div>
-            <div className="sv-modal-body">
-              {visibilityUsers.length === 0 ? (
-                <p className="sv-muted">Loading users...</p>
-              ) : (
-                visibilityUsers.map((u) => (
-                  <label key={u.id} className="sv-user-row">
-                    <input
-                      type="checkbox"
-                      checked={!!visibilitySelected[u.id]}
-                      onChange={() => toggleVisibilityUser(u.id)}
-                    />
-                    <span className="sv-user-name">{u.name}</span>
-                    <span className="sv-user-role">({u.role.replace("_", " ")})</span>
-                  </label>
-                ))
-              )}
-            </div>
-            <div className="sv-modal-footer">
-              <button className="sv-cancel-btn" onClick={closeVisibility}>Cancel</button>
-              <button className="sv-save-btn" onClick={saveVisibility} disabled={visibilitySaving}>
-                {visibilitySaving ? "Saving..." : "Save"}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
 
       {showModal && (
         <div className="modal-overlay">
@@ -542,6 +621,17 @@ function Projects() {
         project={submitProjectModal.project}
         onSubmitSuccess={handleProjectSubmitSuccess}
       />
+
+      {showEditModal && editingProject && (
+        <EditProjectModal
+          project={editingProject}
+          onClose={(refresh) => {
+            setShowEditModal(false);
+            setEditingProject(null);
+            if (refresh) fetchProjects();
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }

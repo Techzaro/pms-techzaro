@@ -1645,4 +1645,36 @@ class ProjectController extends Controller
 
         return $label.': '.($old ?: '—').' → '.($new ?: '—');
     }
+
+    /**
+     * Reorder projects by updating their sort_order values.
+     */
+    public function reorderProjects(Request $request)
+    {
+        $request->validate([
+            'items' => 'required|array',
+            'items.*.id' => 'required|integer|exists:projects,id',
+            'items.*.sort_order' => 'required|integer|min:0',
+        ]);
+
+        $ids = [];
+        $bindings = [];
+        foreach ($request->items as $item) {
+            $ids[] = (int) $item['id'];
+            $bindings[] = (int) $item['id'];
+            $bindings[] = (int) $item['sort_order'];
+        }
+
+        if (! empty($ids)) {
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            DB::statement(
+                'UPDATE projects SET sort_order = CASE id '
+                . implode(' ', array_fill(0, count($ids), 'WHEN ? THEN ?'))
+                . " END WHERE id IN ($ph)",
+                [...$bindings, ...$ids]
+            );
+        }
+
+        return response()->json(['success' => true, 'message' => 'Projects reordered successfully']);
+    }
 }

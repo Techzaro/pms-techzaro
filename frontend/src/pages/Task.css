@@ -534,6 +534,16 @@
   color: white;
 }
 
+.action-icon-btn.action-edit {
+  background: #FEF3C7;
+  color: #D97706;
+}
+
+.action-icon-btn.action-edit:hover {
+  background: #D97706;
+  color: white;
+}
+
 .action-icon-btn.action-complete {
   background: #FEE2E2;
   color: #EF4444;

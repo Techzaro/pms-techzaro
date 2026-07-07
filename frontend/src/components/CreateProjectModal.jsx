@@ -13,6 +13,7 @@ import { useEscapeKey } from "../hooks/useEscapeKey";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
 import LoadingButton from "./LoadingButton";
+import ConfirmModal from "./ConfirmModal";
 
 import { formatDateTime, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
@@ -48,6 +49,7 @@ const CreateProjectModal = ({ onClose }) => {
     team_id: "",
     assigned_users: [],
     priority: "Medium",
+    status: "Planning",
     client_name: "",
     budget: "",
     team_roles: [],
@@ -55,6 +57,15 @@ const CreateProjectModal = ({ onClose }) => {
 
   const [categoriesList, setCategoriesList] = useState([]);
   const [categoryInput, setCategoryInput] = useState("");
+  const [catDeleteOpen, setCatDeleteOpen] = useState(false);
+  const [pendingCatDelete, setPendingCatDelete] = useState("");
+  const [deletedCategories, setDeletedCategories] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("deleted_categories") || "[]"); } catch { return []; }
+  });
+  const [existingCategories, setExistingCategories] = useState([]);
+  const [categoryCustomMode, setCategoryCustomMode] = useState(false);
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const categoryDropdownRef = useRef(null);
 
   const [teamRolesOpen, setTeamRolesOpen] = useState(false);
   const teamRolesRef = useRef(null);
@@ -90,6 +101,9 @@ const CreateProjectModal = ({ onClose }) => {
       if (phaseDropdownRef.current && !phaseDropdownRef.current.contains(e.target)) {
         setPhaseDropdownOpen(false);
       }
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target)) {
+        setCategoryDropdownOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -113,6 +127,38 @@ const CreateProjectModal = ({ onClose }) => {
       })
         .then((res) => (res.ok ? res.json() : { users: [] }))
         .then((data) => setAllUsers(Array.isArray(data) ? data : (data.users || [])))
+        .catch(() => {}),
+
+      fetch(`${API_URL}/projects`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          const projects = Array.isArray(data) ? data : (data.projects || []);
+          const cats = new Set();
+          projects.forEach((p) => {
+            if (p.category) {
+              try {
+                const parsed = JSON.parse(p.category);
+                if (Array.isArray(parsed)) parsed.forEach((c) => cats.add(c));
+                else cats.add(p.category);
+              } catch {
+                cats.add(p.category);
+              }
+            }
+          });
+          // Also load persisted categories from localStorage
+          try {
+            const stored = JSON.parse(localStorage.getItem("persisted_categories") || "[]");
+            if (Array.isArray(stored)) stored.forEach((c) => cats.add(c));
+          } catch {}
+          const deleted = (() => { try { return JSON.parse(localStorage.getItem("deleted_categories") || "[]"); } catch { return []; } })();
+          const filtered = [...cats].filter((c) => !deleted.includes(c));
+          // Save merged list back to localStorage
+          localStorage.setItem("persisted_categories", JSON.stringify(filtered.sort()));
+          setExistingCategories(filtered.sort());
+        })
         .catch(() => {}),
     ]);
   }, []);
@@ -177,12 +223,43 @@ const CreateProjectModal = ({ onClose }) => {
 
   const handleAddCategory = () => {
     if (!categoryInput.trim()) return;
-    setCategoriesList((prev) => [...prev, categoryInput.trim()]);
+    const newCat = categoryInput.trim();
+    if (!categoriesList.includes(newCat)) {
+      setCategoriesList((prev) => [...prev, newCat]);
+    }
+    if (!existingCategories.includes(newCat)) {
+      const updated = [...existingCategories, newCat].sort();
+      setExistingCategories(updated);
+      localStorage.setItem("persisted_categories", JSON.stringify(updated));
+    }
     setCategoryInput("");
+    setCategoryCustomMode(false);
   };
 
   const handleRemoveCategory = (index) => {
     setCategoriesList((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDeleteCategoryPermanent = (cat) => {
+    setPendingCatDelete(cat);
+    setCatDeleteOpen(true);
+  };
+
+  const confirmDeleteCategory = () => {
+    const cat = pendingCatDelete;
+    setDeletedCategories((prev) => {
+      const next = [...prev, cat];
+      localStorage.setItem("deleted_categories", JSON.stringify(next));
+      return next;
+    });
+    setExistingCategories((prev) => {
+      const updated = prev.filter((c) => c !== cat);
+      localStorage.setItem("persisted_categories", JSON.stringify(updated));
+      return updated;
+    });
+    setCategoriesList((prev) => prev.filter((c) => c !== cat));
+    setCatDeleteOpen(false);
+    setPendingCatDelete("");
   };
 
   const handleCategoryKeyDown = (e) => {
@@ -334,6 +411,7 @@ const CreateProjectModal = ({ onClose }) => {
           team_id: form.team_id ? parseInt(form.team_id) : null,
           assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
           priority: form.priority,
+          status: form.status,
           end_date: computedEndDate,
           client_name: form.client_name || null,
           budget: form.budget ? parseFloat(form.budget) : null,
@@ -376,7 +454,7 @@ const CreateProjectModal = ({ onClose }) => {
     });
   };
 
-  return createPortal(
+  const modalContent = createPortal(
     <div className="cp-overlay">
       <div className="cp-modal" onClick={(e) => e.stopPropagation()}>
 
@@ -424,23 +502,67 @@ const CreateProjectModal = ({ onClose }) => {
             <div className="cp-grid-2">
               <div className="cp-field">
                 <label>Category</label>
-                <div className="cp-goals-input-row">
-                  <input
-                    type="text"
-                    placeholder="Enter a category"
-                    value={categoryInput}
-                    onChange={(e) => setCategoryInput(e.target.value)}
-                    onKeyDown={handleCategoryKeyDown}
-                  />
-                  <button
-                    type="button"
-                    className="cp-goals-add-btn"
-                    onClick={handleAddCategory}
-                    disabled={!categoryInput.trim()}
-                  >
-                    Add
-                  </button>
-                </div>
+                {categoryCustomMode ? (
+                  <div className="custom-input-container">
+                    <input
+                      type="text"
+                      placeholder="Enter custom category"
+                      value={categoryInput}
+                      onChange={(e) => setCategoryInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); handleAddCategory(); }
+                        if (e.key === "Escape") { setCategoryCustomMode(false); setCategoryInput(""); }
+                      }}
+                      autoFocus
+                    />
+                    <button type="button" className="custom-input-revert" onClick={() => { setCategoryCustomMode(false); setCategoryInput(""); }} title="Back to list">&times;</button>
+                  </div>
+                ) : (
+                  <div className="cp-category-dropdown" ref={categoryDropdownRef}>
+                    <div className="cp-category-trigger" onClick={() => setCategoryDropdownOpen((prev) => !prev)}>
+                      <span className={categoriesList.length === 0 ? "cp-dropdown-placeholder" : ""}>
+                        {categoriesList.length === 0
+                          ? "Select category"
+                          : `${categoriesList.length} selected`}
+                      </span>
+                      <svg className={`cp-dropdown-arrow ${categoryDropdownOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
+                    </div>
+                    {categoryDropdownOpen && (
+                      <div className="cp-dropdown-menu">
+                        {existingCategories.filter((c) => !categoriesList.includes(c)).map((cat) => (
+                          <div key={cat} className="cp-dropdown-item cp-dropdown-item-row">
+                            <label className="cp-dropdown-item-check">
+                              <input
+                                type="checkbox"
+                                checked={categoriesList.includes(cat)}
+                                onChange={() => {
+                                  if (!categoriesList.includes(cat)) {
+                                    setCategoriesList((prev) => [...prev, cat]);
+                                  }
+                                }}
+                              />
+                              <span>{cat}</span>
+                            </label>
+                            <button
+                              type="button"
+                              className="cp-dropdown-item-delete"
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteCategoryPermanent(cat); }}
+                              title="Delete category"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                        <div
+                          className="cp-dropdown-item cp-dropdown-custom"
+                          onClick={() => { setCategoryCustomMode(true); setCategoryDropdownOpen(false); setCategoryInput(""); }}
+                        >
+                          Custom / Type Here
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {categoriesList.length > 0 && (
                   <div className="cp-goals-list">
@@ -676,6 +798,24 @@ const CreateProjectModal = ({ onClose }) => {
               />
             </div>
 
+            {/* STATUS */}
+            <div className="cp-card">
+              <div className="cp-card-top">
+                <span>Status</span>
+              </div>
+              <CustomSelect
+                name="status"
+                value={form.status}
+                onChange={(val) => handleChange({ target: { name: "status", value: val } })}
+                options={[
+                  { value: "Planning", label: "Planning" },
+                  { value: "In-progress", label: "In-progress" },
+                  { value: "Pause", label: "Pause" },
+                  { value: "Completed", label: "Completed" },
+                ]}
+              />
+            </div>
+
             {/* DEADLINES - PHASE SYSTEM */}
             <div className="cp-card">
               <div className="cp-card-top">
@@ -852,6 +992,22 @@ const CreateProjectModal = ({ onClose }) => {
       </div>
     </div>,
     document.body
+  );
+
+  return (
+    <>
+      {modalContent}
+      <ConfirmModal
+        isOpen={catDeleteOpen}
+        onClose={() => { setCatDeleteOpen(false); setPendingCatDelete(""); }}
+        onConfirm={confirmDeleteCategory}
+        title="Confirm Deletion"
+        message={`Are you sure you want to delete "${pendingCatDelete}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger
+      />
+    </>
   );
 };
 

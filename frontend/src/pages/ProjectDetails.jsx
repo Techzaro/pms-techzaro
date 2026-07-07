@@ -194,6 +194,10 @@ function ProjectDetails() {
   const [acting, setActing] = useState(false);
   const [orderedTasks, setOrderedTasks] = useState([]);
   const [orderedDeliverables, setOrderedDeliverables] = useState([]);
+  const [visibilityOpen, setVisibilityOpen] = useState(false);
+  const [visibilityUsers, setVisibilityUsers] = useState([]);
+  const [visibilitySelected, setVisibilitySelected] = useState({});
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
 
   const memberCount = useMemo(() => {
     if (!project) return 0;
@@ -470,6 +474,57 @@ function ProjectDetails() {
   const canEdit = project.can_edit;
   const canSubmitProject = tasks.length > 0 && tasks.every((t) => t.status === "approved");
 
+  const openVisibility = async () => {
+    setVisibilityOpen(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/projects/${project.id}/visibility`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load visibility");
+      const data = await res.json();
+      const users = data.users || [];
+      setVisibilityUsers(users);
+      const selected = {};
+      users.forEach((u) => { if (u.is_visible) selected[u.id] = true; });
+      setVisibilitySelected(selected);
+    } catch {
+      setVisibilityUsers([]);
+      setVisibilitySelected({});
+    }
+  };
+
+  const closeVisibility = () => {
+    setVisibilityOpen(false);
+    setVisibilityUsers([]);
+    setVisibilitySelected({});
+  };
+
+  const toggleVisibilityUser = (userId) => {
+    setVisibilitySelected((prev) => ({ ...prev, [userId]: !prev[userId] }));
+  };
+
+  const saveVisibility = async () => {
+    if (!project) return;
+    setVisibilitySaving(true);
+    try {
+      const token = authToken();
+      const userIds = Object.keys(visibilitySelected).filter((id) => visibilitySelected[id]).map(Number);
+      const res = await fetch(`${API_URL}/projects/${project.id}/visibility`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ user_ids: userIds }),
+        _notifHandled: true,
+      });
+      if (!res.ok) throw new Error("Failed to save visibility");
+      closeVisibility();
+    } catch (err) {
+      console.error("Save visibility error:", err);
+    } finally {
+      setVisibilitySaving(false);
+    }
+  };
+
   const tabs = [
     { id: "overview", label: "Overview", icon: ListChecks },
     { id: "tasks", label: "Tasks", icon: ClipboardList },
@@ -611,15 +666,6 @@ function ProjectDetails() {
             </li>
             <li>
               <span className="pd-meta-rows__ic">
-                <Building2 size={18} />
-              </span>
-              <div>
-                <span className="pd-meta-rows__label">Client</span>
-                <span className="pd-meta-rows__value">{project.client_name || project.website_name || "—"}</span>
-              </div>
-            </li>
-            <li>
-              <span className="pd-meta-rows__ic">
                 <CalendarDays size={18} />
               </span>
               <div>
@@ -638,6 +684,15 @@ function ProjectDetails() {
                     {project.priority || "—"}
                   </span>
                 </span>
+              </div>
+            </li>
+            <li>
+              <span className="pd-meta-rows__ic">
+                <Building2 size={18} />
+              </span>
+              <div>
+                <span className="pd-meta-rows__label">Client</span>
+                <span className="pd-meta-rows__value">{project.client_name || project.website_name || "—"}</span>
               </div>
             </li>
             {isAdminOrManager && (
@@ -719,10 +774,10 @@ function ProjectDetails() {
                     <button className="td-nav-btn" onClick={() => goToProject(prevProjectId)} disabled={!prevProjectId} title="Previous project"><ChevronLeft size={18} /></button>
                     <button className="td-nav-btn" onClick={() => goToProject(nextProjectId)} disabled={!nextProjectId} title="Next project"><ChevronRight size={18} /></button>
                     <span className={`pd-pill-status pd-pill-status--${statusSlug(project.status)}`}>{project.status}</span>
-                    {canEdit && (
-                      <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => setShowEditModal(true)}>
-                        <Pencil size={16} />
-                        Edit Project
+                    {isAdminOrManager && (
+                      <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={openVisibility}>
+                        <IoEyeOutline size={16} />
+                        Show To
                       </button>
                     )}
                     {isAssigned && ["pending", "reopened", "Planned", "in_progress", "In Progress"].includes(project?.status) && (
@@ -736,6 +791,12 @@ function ProjectDetails() {
                       >
                         <Send size={16} />
                         {project.status === "reopened" ? "Resubmit Project" : "Submit Project"}
+                      </button>
+                    )}
+                    {canEdit && (
+                      <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={() => setShowEditModal(true)}>
+                        <Pencil size={16} />
+                        Edit Project
                       </button>
                     )}
                     {canEdit && (
@@ -1133,6 +1194,40 @@ function ProjectDetails() {
         cancelText="Cancel"
         danger
       />
+
+      {visibilityOpen && (
+        <div className="modal-overlay" onClick={closeVisibility}>
+          <div className="sv-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="sv-modal-header">
+              <h3>Show To — {project.title}</h3>
+              <button className="sv-close-btn" onClick={closeVisibility}>✕</button>
+            </div>
+            <div className="sv-modal-body">
+              {visibilityUsers.length === 0 ? (
+                <p className="sv-muted">Loading users...</p>
+              ) : (
+                visibilityUsers.map((u) => (
+                  <label key={u.id} className="sv-user-row">
+                    <input
+                      type="checkbox"
+                      checked={!!visibilitySelected[u.id]}
+                      onChange={() => toggleVisibilityUser(u.id)}
+                    />
+                    <span className="sv-user-name">{u.name}</span>
+                    <span className="sv-user-role">({u.role.replace("_", " ")})</span>
+                  </label>
+                ))
+              )}
+            </div>
+            <div className="sv-modal-footer">
+              <button className="sv-cancel-btn" onClick={closeVisibility}>Cancel</button>
+              <button className="sv-save-btn" onClick={saveVisibility} disabled={visibilitySaving}>
+                {visibilitySaving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

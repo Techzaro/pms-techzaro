@@ -68,6 +68,12 @@ function ManageUsers() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [showProfPassword, setShowProfPassword] = useState(false);
+  const [desgDropdownOpen, setDesgDropdownOpen] = useState(false);
+  const [deptDropdownOpen, setDeptDropdownOpen] = useState(false);
+  const desgDropdownRef = useRef(null);
+  const deptDropdownRef = useRef(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState({ type: "", value: "" });
   const [newUser, setNewUser] = useState({
     fullName: "",
     fatherName: "",
@@ -130,13 +136,30 @@ function ManageUsers() {
     getCurrentRole() || ""
   );
 
-  // Dynamic departments and designations from users data
+  // Dynamic departments and designations from users data + localStorage persistence
+  const [deletedDesignations, setDeletedDesignations] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("deleted_designations") || "[]"); } catch { return []; }
+  });
+  const [deletedDepartments, setDeletedDepartments] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("deleted_departments") || "[]"); } catch { return []; }
+  });
+
   const departments = [
-    ...new Set(users.map((u) => u.department).filter(Boolean)),
-  ];
+    ...new Set([
+      ...users.map((u) => u.department).filter(Boolean),
+      ...(() => {
+        try { return JSON.parse(localStorage.getItem("persisted_departments") || "[]"); } catch { return []; }
+      })(),
+    ]),
+  ].filter((d) => !deletedDepartments.includes(d));
   const designations = [
-    ...new Set(users.map((u) => u.designation).filter(Boolean)),
-  ];
+    ...new Set([
+      ...users.map((u) => u.designation).filter(Boolean),
+      ...(() => {
+        try { return JSON.parse(localStorage.getItem("persisted_designations") || "[]"); } catch { return []; }
+      })(),
+    ]),
+  ].filter((d) => !deletedDesignations.includes(d));
 
   const ResignIcon = ({ className = "" }) => (
     <svg
@@ -247,6 +270,19 @@ function ManageUsers() {
   useEffect(() => {
     setLocalUsers(users);
   }, [users]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (desgDropdownRef.current && !desgDropdownRef.current.contains(e.target)) {
+        setDesgDropdownOpen(false);
+      }
+      if (deptDropdownRef.current && !deptDropdownRef.current.contains(e.target)) {
+        setDeptDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Drag-and-drop handlers for user row reordering
   const handleDragStart = useCallback((event) => {
@@ -468,8 +504,8 @@ function ManageUsers() {
     }
     if (!newUser.employeeCode.trim()) errors.employeeCode = "Employee Code is required.";
     if (!newUser.jobStartedDate) errors.jobStartedDate = "Job Start Date is required.";
-    if (newUser.grossSalary && newUser.grossSalary.length > 100) {
-      errors.grossSalary = "Gross Salary must be 100 characters or less.";
+    if (newUser.grossSalary && newUser.grossSalary.length > 300) {
+      errors.grossSalary = "Gross Salary must be 300 characters or less.";
     }
     if (newUser.bankAccountNumber.trim() && !/^[\d\s\-a-zA-Z]+$/.test(newUser.bankAccountNumber.trim())) {
       errors.bankAccountNumber = "Bank Account Number must contain only digits, letters, spaces, or dashes.";
@@ -495,6 +531,41 @@ function ManageUsers() {
   const handleCustomRevert = (field) => {
     const customField = field === "department" ? "departmentCustom" : "designationCustom";
     setNewUser((prev) => ({ ...prev, [field]: "", [customField]: "" }));
+  };
+
+  const deleteDesignation = (val) => {
+    setPendingDelete({ type: "designation", value: val });
+    setConfirmDeleteOpen(true);
+  };
+
+  const deleteDepartment = (val) => {
+    setPendingDelete({ type: "department", value: val });
+    setConfirmDeleteOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    const { type, value } = pendingDelete;
+    if (type === "designation") {
+      setDeletedDesignations((prev) => {
+        const next = [...prev, value];
+        localStorage.setItem("deleted_designations", JSON.stringify(next));
+        return next;
+      });
+      if (newUser.designation === value) {
+        setNewUser((prev) => ({ ...prev, designation: "", designationCustom: "" }));
+      }
+    } else if (type === "department") {
+      setDeletedDepartments((prev) => {
+        const next = [...prev, value];
+        localStorage.setItem("deleted_departments", JSON.stringify(next));
+        return next;
+      });
+      if (newUser.department === value) {
+        setNewUser((prev) => ({ ...prev, department: "", departmentCustom: "" }));
+      }
+    }
+    setConfirmDeleteOpen(false);
+    setPendingDelete({ type: "", value: "" });
   };
 
   const handleUpdateUser = async (user) => {
@@ -726,6 +797,22 @@ function ManageUsers() {
       newUser.department === "__custom__" ? newUser.departmentCustom : newUser.department;
     const finalDesignation =
       newUser.designation === "__custom__" ? newUser.designationCustom : newUser.designation;
+
+    // Persist custom department/designation to localStorage so they survive user deletion
+    if (finalDepartment && !departments.includes(finalDepartment)) {
+      const stored = JSON.parse(localStorage.getItem("persisted_departments") || "[]");
+      if (!stored.includes(finalDepartment)) {
+        stored.push(finalDepartment);
+        localStorage.setItem("persisted_departments", JSON.stringify(stored.sort()));
+      }
+    }
+    if (finalDesignation && !designations.includes(finalDesignation)) {
+      const stored = JSON.parse(localStorage.getItem("persisted_designations") || "[]");
+      if (!stored.includes(finalDesignation)) {
+        stored.push(finalDesignation);
+        localStorage.setItem("persisted_designations", JSON.stringify(stored.sort()));
+      }
+    }
 
     const formData = new FormData();
     formData.append("name", newUser.fullName.trim());
@@ -1056,13 +1143,25 @@ function ManageUsers() {
                         <button type="button" className="custom-input-revert" onClick={() => handleCustomRevert("designation")} title="Back to list">&times;</button>
                       </div>
                     ) : (
-                      <select id="designation" name="designation" value={newUser.designation} onChange={handleChange} className={addErrors.designation ? "field-error" : ""}>
-                        <option value="">Select Designation</option>
-                        {designations.map((d) => (
-                          <option key={d} value={d}>{d}</option>
-                        ))}
-                        <option value="__custom__">Custom / Type Here</option>
-                      </select>
+                      <div className="category-dropdown-container" ref={desgDropdownRef}>
+                        <button type="button" className="category-dropdown-trigger" onClick={() => setDesgDropdownOpen((o) => !o)} style={addErrors.designation ? { border: "1px solid #ef4444" } : {}}>
+                          {newUser.designation || "Select Designation"} <span className={`category-dropdown-arrow ${desgDropdownOpen ? "open" : ""}`}>&#9662;</span>
+                        </button>
+                        {desgDropdownOpen && (
+                          <div className="category-dropdown-options">
+                            <div className="category-dropdown-option" onClick={() => { setNewUser((prev) => ({ ...prev, designation: "" })); setDesgDropdownOpen(false); }} style={{ fontWeight: !newUser.designation ? "600" : "400", background: !newUser.designation ? "#f0f9ff" : "transparent" }}>
+                              Select Designation
+                            </div>
+                            {designations.map((d) => (
+                              <div key={d} className="category-dropdown-option" onClick={() => { setNewUser((prev) => ({ ...prev, designation: d })); setDesgDropdownOpen(false); }} style={{ fontWeight: newUser.designation === d ? "600" : "400", background: newUser.designation === d ? "#f0f9ff" : "transparent" }}>
+                                {d}
+                                <span className="category-option-delete" onClick={(e) => { e.stopPropagation(); deleteDesignation(d); }} title="Delete">&times;</span>
+                              </div>
+                            ))}
+                            <div className="category-dropdown-option category-dropdown-custom" onClick={() => { setNewUser((prev) => ({ ...prev, designation: "__custom__" })); setDesgDropdownOpen(false); }}>Custom / Type Here</div>
+                          </div>
+                        )}
+                      </div>
                     )}
                     {addErrors.designation && <span className="field-error-text">{addErrors.designation}</span>}
                     {addErrors.designationCustom && <span className="field-error-text">{addErrors.designationCustom}</span>}
@@ -1075,13 +1174,25 @@ function ManageUsers() {
                         <button type="button" className="custom-input-revert" onClick={() => handleCustomRevert("department")} title="Back to list">&times;</button>
                       </div>
                     ) : (
-                      <select id="department" name="department" value={newUser.department} onChange={handleChange} className={addErrors.department ? "field-error" : ""}>
-                        <option value="">Select Department</option>
-                        {departments.map((d) => (
-                          <option key={d} value={d}>{d}</option>
-                        ))}
-                        <option value="__custom__">Custom / Type Here</option>
-                      </select>
+                      <div className="category-dropdown-container" ref={deptDropdownRef}>
+                        <button type="button" className="category-dropdown-trigger" onClick={() => setDeptDropdownOpen((o) => !o)} style={addErrors.department ? { border: "1px solid #ef4444" } : {}}>
+                          {newUser.department || "Select Department"} <span className={`category-dropdown-arrow ${deptDropdownOpen ? "open" : ""}`}>&#9662;</span>
+                        </button>
+                        {deptDropdownOpen && (
+                          <div className="category-dropdown-options">
+                            <div className="category-dropdown-option" onClick={() => { setNewUser((prev) => ({ ...prev, department: "" })); setDeptDropdownOpen(false); }} style={{ fontWeight: !newUser.department ? "600" : "400", background: !newUser.department ? "#f0f9ff" : "transparent" }}>
+                              Select Department
+                            </div>
+                            {departments.map((d) => (
+                              <div key={d} className="category-dropdown-option" onClick={() => { setNewUser((prev) => ({ ...prev, department: d })); setDeptDropdownOpen(false); }} style={{ fontWeight: newUser.department === d ? "600" : "400", background: newUser.department === d ? "#f0f9ff" : "transparent" }}>
+                                {d}
+                                <span className="category-option-delete" onClick={(e) => { e.stopPropagation(); deleteDepartment(d); }} title="Delete">&times;</span>
+                              </div>
+                            ))}
+                            <div className="category-dropdown-option category-dropdown-custom" onClick={() => { setNewUser((prev) => ({ ...prev, department: "__custom__" })); setDeptDropdownOpen(false); }}>Custom / Type Here</div>
+                          </div>
+                        )}
+                      </div>
                     )}
                     {addErrors.department && <span className="field-error-text">{addErrors.department}</span>}
                     {addErrors.departmentCustom && <span className="field-error-text">{addErrors.departmentCustom}</span>}
@@ -1260,6 +1371,17 @@ function ManageUsers() {
       title="Confirm Resignation"
       message="Are you sure you want to resign? This action may affect your access and assigned responsibilities."
       confirmText="Confirm Resignation"
+      cancelText="Cancel"
+      danger
+    />
+
+    <ConfirmModal
+      isOpen={confirmDeleteOpen}
+      onClose={() => { setConfirmDeleteOpen(false); setPendingDelete({ type: "", value: "" }); }}
+      onConfirm={handleConfirmDelete}
+      title="Confirm Deletion"
+      message={`Are you sure you want to delete "${pendingDelete.value}"? This action cannot be undone.`}
+      confirmText="Delete"
       cancelText="Cancel"
       danger
     />

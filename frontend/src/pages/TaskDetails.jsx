@@ -455,6 +455,10 @@ function TaskDetails() {
                 </div>
               </div>
 
+              {task.description && (
+                <p className="td-desc" style={{ color: "#6b7280", margin: "8px 0 0", fontSize: "14px", lineHeight: 1.6 }}>{task.description}</p>
+              )}
+
               <div className="td-badges">
                 <span className="td-badge" style={{ background: statusBgColor(task.status), color: statusColor(task.status) }}>
                   <span className="td-badge-dot" style={{ background: statusColor(task.status) }} />
@@ -542,12 +546,6 @@ function TaskDetails() {
                             ) : (
                               <p style={{ color: "#6b7280", fontSize: "14px" }}>No requirements added.</p>
                             )}
-                          </div>
-                        </div>
-                        <div className="td-overview-right">
-                          <div className="td-img-placeholder">
-                            <FolderOpen size={48} strokeWidth={1} />
-                            <span>Task Preview</span>
                           </div>
                         </div>
                       </div>

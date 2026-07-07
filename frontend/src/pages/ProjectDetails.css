@@ -182,9 +182,25 @@
   color: #047857;
 }
 
+.pd-pill-status--planning {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
 .pd-pill-status--planned {
   background: #f1f5f9;
   color: #475569;
+}
+
+.pd-pill-status--in_progress,
+.pd-pill-status--in-progress {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.pd-pill-status--pause {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .pd-pill-status--on_hold,
@@ -541,10 +557,10 @@
 }
 
 .pd-shell-right {
-  border: 1px solid var(--tx-border);
+  border: 1px solid #bfdbfe;
   border-radius: 16px;
   padding: 16px 18px;
-  background: #ffffff;
+  background: #eff6ff;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 6px 20px rgba(15, 23, 42, 0.06);
 }
 
@@ -1675,4 +1691,143 @@
   .td-submission-panel {
     grid-template-columns: 1fr !important;
   }
+}
+
+/* ── Visibility Modal ── */
+.sv-modal {
+  background: #ffffff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.sv-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #ffffff;
+  border-radius: 16px 16px 0 0;
+}
+
+.sv-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.sv-close-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  transition: 0.2s;
+}
+
+.sv-close-btn:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.sv-modal-body {
+  padding: 12px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.sv-user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  cursor: pointer;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 14px;
+}
+
+.sv-user-row:last-child {
+  border-bottom: none;
+}
+
+.sv-user-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #4f46e5;
+  cursor: pointer;
+}
+
+.sv-user-name {
+  font-weight: 600;
+  color: #111827;
+}
+
+.sv-user-role {
+  color: #6b7280;
+  font-size: 13px;
+  text-transform: capitalize;
+}
+
+.sv-muted {
+  color: #6b7280;
+  text-align: center;
+  padding: 20px;
+}
+
+.sv-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.sv-cancel-btn {
+  padding: 10px 20px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #374151;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s ease;
+}
+
+.sv-cancel-btn:hover {
+  background: #f3f4f6;
+}
+
+.sv-save-btn {
+  padding: 10px 20px;
+  border: none;
+  background: #4f46e5;
+  color: #ffffff;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s ease;
+}
+
+.sv-save-btn:hover {
+  background: #4338ca;
+}
+
+.sv-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
