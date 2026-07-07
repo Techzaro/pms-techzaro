@@ -1114,6 +1114,32 @@
   text-decoration: underline;
 }
 
+.pd-file-box {
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(0,0,0,0.04);
+  transition: box-shadow 0.2s;
+}
+
+.pd-file-box:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.pd-file-box__name {
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pd-file-box__link {
+  margin-left: 26px;
+  font-size: 13px;
+  word-break: break-all;
+}
+
 .pd-ext-link {
   color: var(--tx-blue);
   font-weight: 600;

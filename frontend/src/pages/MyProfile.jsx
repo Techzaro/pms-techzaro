@@ -120,7 +120,7 @@ function MyProfile() {
       });
       const data = await res.json();
       if (data.success) setChanges(data.changes || []);
-    } catch {}
+    } catch { }
   };
 
   useEffect(() => {
@@ -142,7 +142,7 @@ function MyProfile() {
           const data = await res.json();
           setCompanyDocs(data.documents || {});
         }
-      } catch {}
+      } catch { }
     };
     fetchCompanyDocs();
   }, [navigate]);
@@ -267,239 +267,303 @@ function MyProfile() {
   return (
     <DashboardLayout hideRightSidebar={true}>
       <div className="user-profile-page">
-        <Breadcrumb items={breadcrumbs} />
-        <div className="profile-header">
-          <h1>My Profile</h1>
-          <p>View and manage your personal information and account settings.</p>
-        </div>
-
-        <div className="profile-layout">
-          {/* LEFT SIDE */}
-          <div className="profile-left">
-            {/* User Card */}
-            <div className="profile-user-card">
-              <div className="profile-user-left">
-                <div className="profile-avatar">
-                  {getInitials(user.name)}
-                </div>
-                <div className="profile-user-info">
-                  <h2>{user.name}</h2>
-                  <span className="profile-designation">{user.designation || roleDisplay}</span>
-                  {user.department && <span className="profile-dept">{user.department}</span>}
-                </div>
-              </div>
+        <div className="profile">
+          <div className="profile-layout">
+            <Breadcrumb items={breadcrumbs} />
+            <div className="profile-header-profile">
+              <h1>My Profile</h1>
+              <p>View and manage your personal information and account settings.</p>
             </div>
-
-            {/* Personal Information */}
-            <div className="profile-info-card">
-              <div className="info-card-header">
-                <h3>Personal Information</h3>
-                <button className="btn-edit" onClick={openPasswordModal}>
-                  <MdEdit size={16} /> Update Password
-                </button>
-              </div>
-              <div className="info-card-body">
-                <div className="info-row">
-                  <span className="info-label">Full Name</span>
-                  <span className="info-value">{user.name || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Father Name</span>
-                  <span className="info-value">{user.father_name || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">ID Card Number</span>
-                  <span className="info-value">{displayCNIC(user.id_card_number)}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Phone Number</span>
-                  <span className="info-value">{displayPhone(user.phone_number || user.contact_no)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Address */}
-            <div className="profile-info-card">
-              <div className="info-card-header">
-                <h3>Address</h3>
-              </div>
-              <div className="info-card-body">
-                <div className="info-row">
-                  <span className="info-label">Present Address</span>
-                  <span className="info-value">{user.present_address || user.address || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Permanent Address</span>
-                  <span className="info-value">{user.permanent_address || "---"}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Emergency Contact */}
-            <div className="profile-info-card">
-              <div className="info-card-header">
-                <h3>Emergency Contact</h3>
-              </div>
-              <div className="info-card-body">
-                <div className="info-row">
-                  <span className="info-label">Name</span>
-                  <span className="info-value">{user.emergency_contact_name || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Relation</span>
-                  <span className="info-value">{user.emergency_contact_relation || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Phone</span>
-                  <span className="info-value">{displayPhone(user.emergency_contact_phone)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Email Accounts */}
-            <div className="profile-info-card">
-              <div className="info-card-header">
-                <h3>Email Accounts</h3>
-              </div>
-              <div className="info-card-body">
-                <div className="info-row">
-                  <span className="info-label">Personal Email</span>
-                  <span className="info-value">{user.personal_email || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Professional Email</span>
-                  <span className="info-value">{user.professional_email || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Password of Professional Email</span>
-                  <span className="info-value" style={{display:'flex',alignItems:'center',gap:'8px'}}>
-                    {user.professional_email_password ? (showProfPassword ? user.professional_email_password : "********") : "---"}
-                    {user.professional_email_password && (
-                      <button type="button" onClick={() => setShowProfPassword(!showProfPassword)} style={{background:'none',border:'1px solid #d1d5db',borderRadius:'6px',padding:'2px 8px',cursor:'pointer',fontSize:'12px',color:'#6b7280'}}>
-                        {showProfPassword ? "Hide" : "Show"}
-                      </button>
+            {/* LEFT SIDE */}
+            <div className="profile-left">
+              {/* User Card */}
+              <div className="profile-user-card">
+                <div className="profile-user-left">
+                  <div className="profile-avatar">
+                    {user.avatar ? (
+                      <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      getInitials(user.name)
                     )}
-                  </span>
+                  </div>
+                  <div className="profile-user-info">
+                    <h2>{user.name}</h2>
+                    <span className="profile-designation">{user.designation || roleDisplay}</span>
+                    {user.department && <span className="profile-dept">{user.department}</span>}
+                  </div>
                 </div>
+                         {/* CENTER - Profile Image */}
+            <div className="profile-avatar-center">
+              <div className="profile-avatar-large">
+                {user.avatar ? (
+                  <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} />
+                ) : (
+                  getInitials(user.name)
+                )}
               </div>
             </div>
+              </div>
 
-            {/* Employment Details */}
-            <div className="profile-info-card">
-              <div className="info-card-header">
-                <h3>Employment Details</h3>
-              </div>
-              <div className="info-card-body">
-                <div className="info-row">
-                  <span className="info-label">Designation</span>
-                  <span className="info-value">{user.designation || "---"}</span>
+              {/* Personal Information */}
+              <div className="profile-info-card">
+                <div className="info-card-header">
+                  <h3>Personal Information</h3>
+                  <button className="btn-edit" onClick={openPasswordModal}>
+                    <MdEdit size={16} /> Update Password
+                  </button>
                 </div>
-                <div className="info-row">
-                  <span className="info-label">Department</span>
-                  <span className="info-value">{user.department || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Hired For</span>
-                  <span className="info-value">{user.hired_for || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Employee Code</span>
-                  <span className="info-value">{user.employee_code || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Role</span>
-                  <span className="info-value">{roleDisplay}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Job Started Date</span>
-                  <span className="info-value">{displayDate(user.job_started_date)}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Job Ended Date</span>
-                  <span className="info-value">{displayDate(user.job_ended_date)}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Applied Via</span>
-                  <span className="info-value">{user.applied_via || "---"}</span>
+                <div className="info-card-body">
+                  <div className="info-row">
+                    <span className="info-label">Full Name</span>
+                    <span className="info-value">{user.name || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Father Name</span>
+                    <span className="info-value">{user.father_name || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">ID Card Number</span>
+                    <span className="info-value">{displayCNIC(user.id_card_number)}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Phone Number</span>
+                    <span className="info-value">{displayPhone(user.phone_number || user.contact_no)}</span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Salary & Bank Details */}
-            <div className="profile-info-card">
-              <div className="info-card-header">
-                <h3>Salary & Bank Details</h3>
-              </div>
-              <div className="info-card-body">
-                <div className="info-row">
-                  <span className="info-label">Gross Salary</span>
-                  <span className="info-value">{user.gross_salary || "---"}</span>
+              {/* Address */}
+              <div className="profile-info-card">
+                <div className="info-card-header">
+                  <h3>Address</h3>
                 </div>
-                <div className="info-row">
-                  <span className="info-label">Bank Name</span>
-                  <span className="info-value">{user.bank_name || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Bank Account Number</span>
-                  <span className="info-value">{user.bank_account_number || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Bank Account Title</span>
-                  <span className="info-value">{user.bank_account_title || "---"}</span>
+                <div className="info-card-body">
+                  <div className="info-row">
+                    <span className="info-label">Present Address</span>
+                    <span className="info-value">{user.present_address || user.address || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Permanent Address</span>
+                    <span className="info-value">{user.permanent_address || "---"}</span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Documents */}
-            <div className="profile-info-card">
-              <div className="info-card-header">
-                <h3>Documents</h3>
+              {/* Emergency Contact */}
+              <div className="profile-info-card">
+                <div className="info-card-header">
+                  <h3>Emergency Contact</h3>
+                </div>
+                <div className="info-card-body">
+                  <div className="info-row">
+                    <span className="info-label">Name</span>
+                    <span className="info-value">{user.emergency_contact_name || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Relation</span>
+                    <span className="info-value">{user.emergency_contact_relation || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Phone</span>
+                    <span className="info-value">{displayPhone(user.emergency_contact_phone)}</span>
+                  </div>
+                </div>
               </div>
-              <div className="info-card-body">
-                {[
-                  { label: "Employment Contract", key: "employment_contract" },
-                  { label: "Offer Letter", key: "offer_letter" },
-                  { label: "Techxaro Regulations", key: "techxaro_regulations" },
-                ].map(({ label, key }) => (
-                  <div className="info-row" key={key}>
-                    <span className="info-label">{label}</span>
-                    <span className="info-value">
-                      {user[key] ? (
+
+              {/* Email Accounts */}
+              <div className="profile-info-card">
+                <div className="info-card-header">
+                  <h3>Email Accounts</h3>
+                </div>
+                <div className="info-card-body">
+                  <div className="info-row">
+                    <span className="info-label">Personal Email</span>
+                    <span className="info-value">{user.personal_email || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Professional Email</span>
+                    <span className="info-value">{user.professional_email || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Password of Professional Email</span>
+                    <span className="info-value" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {user.professional_email_password ? (showProfPassword ? user.professional_email_password : "********") : "---"}
+                      {user.professional_email_password && (
+                        <button type="button" onClick={() => setShowProfPassword(!showProfPassword)} style={{ background: 'none', border: '1px solid #d1d5db', borderRadius: '6px', padding: '2px 8px', cursor: 'pointer', fontSize: '12px', color: '#6b7280' }}>
+                          {showProfPassword ? "Hide" : "Show"}
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Employment Details */}
+              <div className="profile-info-card">
+                <div className="info-card-header">
+                  <h3>Employment Details</h3>
+                </div>
+                <div className="info-card-body">
+                  <div className="info-row">
+                    <span className="info-label">Designation</span>
+                    <span className="info-value">{user.designation || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Department</span>
+                    <span className="info-value">{user.department || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Hired For</span>
+                    <span className="info-value">{user.hired_for || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Employee Code</span>
+                    <span className="info-value">{user.employee_code || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Role</span>
+                    <span className="info-value">{roleDisplay}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Job Started Date</span>
+                    <span className="info-value">{displayDate(user.job_started_date)}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Job Ended Date</span>
+                    <span className="info-value">{displayDate(user.job_ended_date)}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Applied Via</span>
+                    <span className="info-value">{user.applied_via || "---"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Salary & Bank Details */}
+              <div className="profile-info-card">
+                <div className="info-card-header">
+                  <h3>Salary & Bank Details</h3>
+                </div>
+                <div className="info-card-body">
+                  <div className="info-row">
+                    <span className="info-label">Gross Salary</span>
+                    <span className="info-value">{user.gross_salary || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Bank Name</span>
+                    <span className="info-value">{user.bank_name || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Bank Account Number</span>
+                    <span className="info-value">{user.bank_account_number || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Bank Account Title</span>
+                    <span className="info-value">{user.bank_account_title || "---"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Documents */}
+              <div className="profile-info-card">
+                <div className="info-card-header">
+                  <h3>Documents</h3>
+                </div>
+                <div className="info-card-body">
+                  {[
+                    { label: "Employment Contract", key: "employment_contract" },
+                    { label: "Offer Letter", key: "offer_letter" },
+                    { label: "Techxaro Regulations", key: "techxaro_regulations" },
+                  ].map(({ label, key }) => (
+                    <div className="info-row" key={key}>
+                      <span className="info-label">{label}</span>
+                      <span className="info-value">
+                        {user[key] ? (
+                          <a
+                            href={`${API_URL}/auth/my-documents/${key}?token=${authToken()}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "#2563eb", textDecoration: "underline" }}
+                          >
+                            View File
+                          </a>
+                        ) : "---"}
+                      </span>
+                    </div>
+                  ))}
+                  {(() => {
+                    let docs = [];
+                    try {
+                      docs = typeof user.other_document === "string" ? JSON.parse(user.other_document) : (user.other_document || []);
+                    } catch { docs = []; }
+                    if (!Array.isArray(docs)) docs = [];
+                    if (docs.length === 0) {
+                      return (
+                        <div className="info-row">
+                          <span className="info-label">Other Documents</span>
+                          <span className="info-value">---</span>
+                        </div>
+                      );
+                    }
+                    return docs.map((docPath, i) => {
+                      const fileName = docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
+                      const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(fileName);
+                      return (
+                        <div className="info-row" key={`other-${i}`}>
+                          <span className="info-label">{fileName}</span>
+                          <span className="info-value">
+                            <a
+                              href={`${API_URL}/auth/my-documents/other_document?token=${authToken()}&file=${encodeURIComponent(docPath)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: "#2563eb", textDecoration: "underline" }}
+                            >
+                              {isImage ? "View Image" : "View File"}
+                            </a>
+                          </span>
+                        </div>
+                      );
+                    });
+                  })()}
+                  {companyDocs?.company_logo?.exists && (
+                    <div className="info-row">
+                      <span className="info-label">Company Logo</span>
+                      <span className="info-value">
                         <a
-                          href={`${API_URL}/auth/my-documents/${key}?token=${authToken()}`}
+                          href={`${API_URL.replace("/api", "")}/storage/${companyDocs.company_logo.path}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{ color: "#2563eb", textDecoration: "underline" }}
                         >
-                          View File
+                          View Image
                         </a>
-                      ) : "---"}
-                    </span>
-                  </div>
-                ))}
-                {(() => {
-                  let docs = [];
-                  try {
-                    docs = typeof user.other_document === "string" ? JSON.parse(user.other_document) : (user.other_document || []);
-                  } catch { docs = []; }
-                  if (!Array.isArray(docs)) docs = [];
-                  if (docs.length === 0) {
+                      </span>
+                    </div>
+                  )}
+                  {companyDocs?.qr_code?.exists && (
+                    <div className="info-row">
+                      <span className="info-label">QR Code</span>
+                      <span className="info-value">
+                        <a
+                          href={`${API_URL.replace("/api", "")}/storage/${companyDocs.qr_code.path}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: "#2563eb", textDecoration: "underline" }}
+                        >
+                          View Image
+                        </a>
+                      </span>
+                    </div>
+                  )}
+                  {companyDocs?.other_documents?.files?.map((file, i) => {
+                    const fileName = file.filename.replace(/^other_document_\d+_/, "").replace(/\.[^.]+$/, "");
+                    const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(file.filename);
                     return (
-                      <div className="info-row">
-                        <span className="info-label">Other Documents</span>
-                        <span className="info-value">---</span>
-                      </div>
-                    );
-                  }
-                  return docs.map((docPath, i) => {
-                    const fileName = docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
-                    const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(fileName);
-                    return (
-                      <div className="info-row" key={`other-${i}`}>
+                      <div className="info-row" key={`company-${i}`}>
                         <span className="info-label">{fileName}</span>
                         <span className="info-value">
                           <a
-                            href={`${API_URL}/auth/my-documents/other_document?token=${authToken()}&file=${encodeURIComponent(docPath)}`}
+                            href={`${API_URL.replace("/api", "")}/storage/${file.path}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ color: "#2563eb", textDecoration: "underline" }}
@@ -509,61 +573,12 @@ function MyProfile() {
                         </span>
                       </div>
                     );
-                  });
-                })()}
-                {companyDocs?.company_logo?.exists && (
-                  <div className="info-row">
-                    <span className="info-label">Company Logo</span>
-                    <span className="info-value">
-                      <a
-                        href={`${API_URL.replace("/api", "")}/storage/${companyDocs.company_logo.path}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: "#2563eb", textDecoration: "underline" }}
-                      >
-                        View Image
-                      </a>
-                    </span>
-                  </div>
-                )}
-                {companyDocs?.qr_code?.exists && (
-                  <div className="info-row">
-                    <span className="info-label">QR Code</span>
-                    <span className="info-value">
-                      <a
-                        href={`${API_URL.replace("/api", "")}/storage/${companyDocs.qr_code.path}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: "#2563eb", textDecoration: "underline" }}
-                      >
-                        View Image
-                      </a>
-                    </span>
-                  </div>
-                )}
-                {companyDocs?.other_documents?.files?.map((file, i) => {
-                  const fileName = file.filename.replace(/^other_document_\d+_/, "").replace(/\.[^.]+$/, "");
-                  const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(file.filename);
-                  return (
-                    <div className="info-row" key={`company-${i}`}>
-                      <span className="info-label">{fileName}</span>
-                      <span className="info-value">
-                        <a
-                          href={`${API_URL.replace("/api", "")}/storage/${file.path}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ color: "#2563eb", textDecoration: "underline" }}
-                        >
-                          {isImage ? "View Image" : "View File"}
-                        </a>
-                      </span>
-                    </div>
-                  );
-                })}
+                  })}
+                </div>
               </div>
             </div>
           </div>
-
+     
           {/* RIGHT SIDE - Account Status */}
           <div className="profile-right">
             <div className="account-status-card">
@@ -593,12 +608,12 @@ function MyProfile() {
                     <span className="status-value">
                       {user.last_login_at
                         ? new Date(user.last_login_at).toLocaleString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                            hour12: true,
-                          })
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                          hour12: true,
+                        })
                         : "Never logged in"}
                     </span>
                   </div>
@@ -638,6 +653,7 @@ function MyProfile() {
               )}
             </div>
           </div>
+
         </div>
       </div>
 
@@ -664,8 +680,8 @@ function MyProfile() {
                   <label htmlFor="old-password">Current Password</label>
                   <div style={{ position: "relative" }}>
                     <svg style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                     </svg>
                     <input
                       type={showCurrentPassword ? "text" : "password"}
@@ -679,9 +695,9 @@ function MyProfile() {
                     />
                     <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: "2px", display: "flex", alignItems: "center" }} tabIndex={-1}>
                       {showCurrentPassword ? (
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
                       ) : (
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
                       )}
                     </button>
                   </div>

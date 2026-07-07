@@ -238,6 +238,39 @@ function ProjectDetails() {
     }).catch(() => { });
   }, []);
 
+  const handleGoalReorder = useCallback((reordered) => {
+    const list = reordered.map((item) => ({ text: item.text, done: item.done }));
+    fetch(`${API}/projects/${projectId}`, {
+      method: 'PATCH',
+      headers: authHeadersLocal(),
+      body: JSON.stringify({ goals_checklist: list }),
+      _notifHandled: true,
+    }).then(() => {
+      setProject((prev) => ({ ...prev, goals_checklist: list }));
+    }).catch(() => { });
+  }, [projectId]);
+
+  const handleMemberReorder = useCallback((reordered) => {
+    const ids = reordered.map((m) => m.id);
+    setProject((prev) => ({ ...prev, members: reordered }));
+    fetch(`${API}/projects/${projectId}`, {
+      method: 'PATCH',
+      headers: authHeadersLocal(),
+      body: JSON.stringify({ assigned_users: ids }),
+      _notifHandled: true,
+    }).catch(() => { });
+  }, [projectId]);
+
+  const handleFileReorder = useCallback((reordered) => {
+    const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
+    fetch(`${API}/projects/${projectId}/files/reorder`, {
+      method: 'POST',
+      headers: authHeadersLocal(),
+      body: JSON.stringify({ items: payload }),
+      _notifHandled: true,
+    }).catch(() => { });
+  }, [projectId]);
+
   const handleDeliverableActionSuccess = (updatedDeliverable) => {
     setProject((prev) => {
       const updatedDeliverables = (prev.deliverables || []).map((d) =>
@@ -474,7 +507,8 @@ function ProjectDetails() {
     { id: "overview", label: "Overview", icon: ListChecks },
     { id: "tasks", label: "Tasks", icon: ClipboardList },
     { id: "deliverables", label: "Deliverables", icon: Calendar },
-    { id: "files", label: "Files", icon: FolderOpen },
+    { id: "files", label: "Platform files & links", icon: FolderOpen },
+    { id: "members", label: "Members", icon: Users },
   ];
 
   const renderRail = () => (
@@ -554,9 +588,14 @@ function ProjectDetails() {
         <div className="pd-shell-left">
           <h2 className="pd-block-title">Project Goals</h2>
           {checklist.length > 0 ? (
-            <ul className="pd-goals">
-              {checklist.map((item, idx) => (
-                <li key={idx} className="pd-goal-row">
+            <SortableTableWrapper
+              items={checklist.map((item, idx) => ({ ...item, sortableId: `goal-${idx}` }))}
+              onReorder={handleGoalReorder}
+              idKey="sortableId"
+              as="div"
+            >
+              {(item, idx, dndProps) => (
+                <div key={item.sortableId} className="pd-goal-row">
                   <button
                     type="button"
                     className={`pd-goal-check ${item.done ? "pd-goal-check--on" : "pd-goal-check--off"}`}
@@ -566,9 +605,9 @@ function ProjectDetails() {
                     {item.done ? "✓" : ""}
                   </button>
                   <span className={item.done ? "pd-goal-done" : ""}>{item.text}</span>
-                </li>
-              ))}
-            </ul>
+                </div>
+              )}
+            </SortableTableWrapper>
           ) : project.goals ? (
             <div className="pd-rich" dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.goals) }} />
           ) : (
@@ -657,44 +696,6 @@ function ProjectDetails() {
         </aside>
       </div>
 
-      <div className="pd-bottom-grid">
-        <section className="pd-card-flat">
-          <div className="pd-card-flat__head">
-            <h2 className="pd-block-title pd-block-title--inline">Team members</h2>
-            <Link to={rolePath("manage-team")} className="pd-link-manage">
-              Manage
-            </Link>
-          </div>
-          <ul className="pd-member-list">
-            {project.creator && (
-              <li className="pd-member">
-                <div className="pd-avatar" aria-hidden>
-                  {initials(project.creator.name)}
-                </div>
-                <div>
-                  <div className="pd-member-name">{project.creator.name}</div>
-                  <div className="pd-member-role">Owner · {project.creator.role || "—"}</div>
-                </div>
-                <span className="pd-badge-owner">Owner</span>
-              </li>
-            )}
-            {members
-              .filter((m) => m.id !== project.creator?.id)
-              .map((m) => (
-                <li key={m.id} className="pd-member">
-                  <div className="pd-avatar" aria-hidden>
-                    {initials(m.name)}
-                  </div>
-                  <div>
-                    <div className="pd-member-name">{m.name}</div>
-                    <div className="pd-member-role">{m.role || "Member"}</div>
-                  </div>
-                  <span className="pd-badge-member">Member</span>
-                </li>
-              ))}
-          </ul>
-        </section>
-      </div>
     </>
   );
 
@@ -1008,33 +1009,88 @@ function ProjectDetails() {
                     {tab === "files" && (
                       <div className="pd-tab-panel">
                         <section className="pd-card-flat">
-                          <h2 className="pd-block-title">Files & links</h2>
+                          <h2 className="pd-block-title">Platform files & links</h2>
 
                           {files.length === 0 ? (
                             <p className="pd-muted">No files attached.</p>
                           ) : (
-                            <ul className="pd-file-list">
-                              {files.map((f) => (
-                                <li key={f.id} style={{ flexDirection: "column", alignItems: "flex-start", gap: "2px" }}>
-                                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                    <FolderOpen size={18} />
-                                    <span style={{ fontWeight: 600, fontSize: "14px" }}>{f.name}</span>
+                            <SortableTableWrapper
+                              items={files}
+                              onReorder={handleFileReorder}
+                              as="div"
+                            >
+                              {(f, idx) => {
+                                const boxColors = [
+                                  "#eef2ff", "#f0fdf4", "#fefce8", "#fef2f2",
+                                  "#f5f3ff", "#ecfeff", "#fff7ed", "#fce7f3",
+                                ];
+                                const bg = boxColors[idx % boxColors.length];
+                                return (
+                                  <div key={f.id} className="pd-file-box" style={{ background: bg }}>
+                                    <div className="pd-file-box__name">
+                                      <FolderOpen size={18} />
+                                      <span>{f.name}</span>
+                                    </div>
+                                    {f.url && (
+                                      <a
+                                        href={fileUrl(f.url)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="pd-file-box__link"
+                                        style={{ color: "#6366f1" }}
+                                      >
+                                        {f.url}
+                                      </a>
+                                    )}
                                   </div>
-                                  {f.url && (
-                                    <a
-                                      href={fileUrl(f.url)}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      style={{ marginLeft: "26px", fontSize: "13px", color: "#6366f1" }}
-                                    >
-                                      {f.url}
-                                    </a>
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
+                                );
+                              }}
+                            </SortableTableWrapper>
                           )}
 
+                        </section>
+                      </div>
+                    )}
+
+                    {tab === "members" && (
+                      <div className="pd-tab-panel">
+                        <section className="pd-card-flat">
+                          <div className="pd-card-flat__head">
+                            <h2 className="pd-block-title pd-block-title--inline">Team members</h2>
+                            <Link to={rolePath("manage-team")} className="pd-link-manage">
+                              Manage
+                            </Link>
+                          </div>
+                          {project.creator && (
+                            <div className="pd-member">
+                              <div className="pd-avatar" aria-hidden>
+                                {initials(project.creator.name)}
+                              </div>
+                              <div>
+                                <div className="pd-member-name">{project.creator.name}</div>
+                                <div className="pd-member-role">Owner · {project.creator.role || "—"}</div>
+                              </div>
+                              <span className="pd-badge-owner">Owner</span>
+                            </div>
+                          )}
+                          <SortableTableWrapper
+                            items={members.filter((m) => m.id !== project.creator?.id)}
+                            onReorder={handleMemberReorder}
+                            as="div"
+                          >
+                            {(m) => (
+                              <div key={m.id} className="pd-member">
+                                <div className="pd-avatar" aria-hidden>
+                                  {initials(m.name)}
+                                </div>
+                                <div>
+                                  <div className="pd-member-name">{m.name}</div>
+                                  <div className="pd-member-role">{m.role || "Member"}</div>
+                                </div>
+                                <span className="pd-badge-member">Member</span>
+                              </div>
+                            )}
+                          </SortableTableWrapper>
                         </section>
                       </div>
                     )}

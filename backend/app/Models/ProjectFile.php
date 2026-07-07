@@ -19,6 +19,7 @@ class ProjectFile extends Model
         'project_id',
         'name',
         'url',
+        'sort_order',
     ];
 
     /** The project this file belongs to. */

@@ -7,7 +7,7 @@
  * A right sidebar shows the user's account status summary.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -152,6 +152,8 @@ function Notifications() {
   const [page, setPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [typeFilterOpen, setTypeFilterOpen] = useState(false);
+  const typeDropdownRef = useRef(null);
 
   const NOTIFICATION_TYPES = [
     { value: "", label: "All Types" },
@@ -220,6 +222,17 @@ function Notifications() {
   useEffect(() => {
     fetchNotifications(1, activeTab, search);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!typeFilterOpen) return;
+    const handleClickOutside = (e) => {
+      if (typeDropdownRef.current && !typeDropdownRef.current.contains(e.target)) {
+        setTypeFilterOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [typeFilterOpen]);
 
   useRefreshOnEvent(["data:changed"], () => fetchNotifications(1, activeTab, search));
 
@@ -350,18 +363,34 @@ function Notifications() {
                 </button>
               )}
             </div>
-            <select
-              className="notif-type-filter"
-              value={typeFilter}
-              onChange={(e) => {
-                setTypeFilter(e.target.value);
-                fetchNotifications(1, activeTab, search, e.target.value);
-              }}
-            >
-              {NOTIFICATION_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
+            <div className="notif-type-dropdown" ref={typeDropdownRef}>
+              <button
+                className="notif-type-btn"
+                onClick={() => setTypeFilterOpen((o) => !o)}
+              >
+                <span>{NOTIFICATION_TYPES.find((t) => t.value === typeFilter)?.label || "All Types"}</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+              {typeFilterOpen && (
+                <div className="notif-type-list">
+                  {NOTIFICATION_TYPES.map((t) => (
+                    <button
+                      key={t.value}
+                      className={`notif-type-item ${typeFilter === t.value ? "notif-type-item--active" : ""}`}
+                      onClick={() => {
+                        setTypeFilter(t.value);
+                        fetchNotifications(1, activeTab, search, t.value);
+                        setTypeFilterOpen(false);
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Tabs + Mark All */}

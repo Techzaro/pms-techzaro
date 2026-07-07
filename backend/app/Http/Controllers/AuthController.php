@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -84,6 +85,7 @@ class AuthController extends Controller
                 'user' => [
                     'id' => $user->id,
                     'name' => $user->name,
+                    'avatar' => $user->avatar,
                     'email' => $user->professional_email,
                     'role' => $role,
                     'active' => $user->active,
@@ -209,6 +211,7 @@ class AuthController extends Controller
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
+                'avatar' => $user->avatar,
                 'email' => $user->email,
                 'role' => $user->role,
                 'active' => $user->active,
@@ -322,6 +325,7 @@ class AuthController extends Controller
             'offer_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
             'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
             'other_document' => 'nullable|file|mimes:pdf,jpeg,jpg,png,gif,bmp,webp,svg,tiff,tif|max:10240',
+            'avatar' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
         ]);
 
         $fields = [
@@ -367,6 +371,19 @@ class AuthController extends Controller
 
         if ($user->role === 'teamlead') {
             $user->role = 'team_lead';
+        }
+
+        // Handle avatar upload
+        if ($request->hasFile('avatar')) {
+            $oldAvatar = $user->avatar;
+            $file = $request->file('avatar');
+            if ($file->isValid()) {
+                if ($oldAvatar && Storage::disk('public')->exists($oldAvatar)) {
+                    Storage::disk('public')->delete($oldAvatar);
+                }
+                $filename = 'avatar_' . time() . '_' . mt_rand(10000, 99999) . '.' . $file->getClientOriginalExtension();
+                $user->avatar = $file->storeAs('avatars/' . $user->id, $filename, 'public');
+            }
         }
 
         $user->save();

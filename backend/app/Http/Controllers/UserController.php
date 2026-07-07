@@ -57,7 +57,7 @@ class UserController extends Controller
     public function index()
     {
         $users = Cache::remember('all_users_list', 10, fn () =>
-            User::select('id', 'name', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password', 'personal_email', 'professional_email')
+            User::select('id', 'name', 'avatar', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password', 'personal_email', 'professional_email')
                 ->orderBy('sort_order')->latest('updated_at')
                 ->get()
                 ->toArray()
@@ -131,6 +131,7 @@ class UserController extends Controller
                 'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:20480',
                 'other_document' => 'nullable|array',
                 'other_document.*' => 'file|mimes:pdf,jpeg,jpg,png,gif,bmp,webp,svg,tiff,tif|max:20480',
+                'avatar' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('User create validation failed', ['errors' => $e->errors()]);
@@ -197,6 +198,12 @@ class UserController extends Controller
 
         // Handle file uploads
         $this->handleFileUploads($request, $user);
+
+        // Handle avatar upload
+        if ($request->hasFile('avatar')) {
+            $user->avatar = $this->handleAvatarUpload($request, $user);
+            $user->save();
+        }
 
         // Collect uploaded file paths for email attachments
         $emailAttachments = [];
@@ -309,6 +316,7 @@ class UserController extends Controller
             'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:20480',
             'other_document' => 'nullable|array',
             'other_document.*' => 'file|mimes:pdf,jpeg,jpg,png,gif,bmp,webp,svg,tiff,tif|max:20480',
+            'avatar' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
         ]);
 
         $authUser = $request->user();
@@ -395,6 +403,11 @@ class UserController extends Controller
         // Normalize role
         if ($user->role === 'teamlead') {
             $user->role = 'team_lead';
+        }
+
+        // Handle avatar upload
+        if ($request->hasFile('avatar')) {
+            $user->avatar = $this->handleAvatarUpload($request, $user);
         }
 
         $user->save();
@@ -734,7 +747,7 @@ class UserController extends Controller
 
             return [
                 'user' => $user->only([
-                    'id', 'name', 'email', 'role', 'active',
+                    'id', 'name', 'avatar', 'email', 'role', 'active',
                     'father_name', 'id_card_number', 'phone_number', 'contact_no',
                     'present_address', 'permanent_address', 'address',
                     'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
@@ -894,6 +907,29 @@ class UserController extends Controller
      * @param  \App\Models\User  $user  The user to upload files for.
      * @return void
      */
+    private function handleAvatarUpload(Request $request, ?User $user): ?string
+    {
+        if (!$request->hasFile('avatar')) {
+            return $user?->avatar;
+        }
+
+        $file = $request->file('avatar');
+        if (!$file->isValid()) {
+            return $user?->avatar;
+        }
+
+        // Delete old avatar if exists
+        if ($user && $user->avatar && Storage::disk('public')->exists($user->avatar)) {
+            Storage::disk('public')->delete($user->avatar);
+        }
+
+        $userId = $user ? $user->id : 'temp_' . time();
+        $filename = 'avatar_' . time() . '_' . mt_rand(10000, 99999) . '.' . $file->getClientOriginalExtension();
+        $path = $file->storeAs('avatars/' . $userId, $filename, 'public');
+
+        return $path;
+    }
+
     private function handleFileUploads(Request $request, User $user): void
     {
         $authUser = $request->user();
