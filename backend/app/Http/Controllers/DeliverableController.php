@@ -393,8 +393,10 @@ class DeliverableController extends Controller
     public function submit(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
-        if ((int) $deliverable->assigned_to !== (int) $user->id) {
-            return response()->json(['success' => false, 'message' => 'Only the assignee can submit this deliverable'], 403);
+        $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
+        $isAuthorizedRole = in_array($user->role, ['admin', 'manager', 'team_lead']);
+        if (! $isAssignee && ! $isAuthorizedRole) {
+            return response()->json(['success' => false, 'message' => 'Only the assignee or authorized roles can submit this deliverable'], 403);
         }
         if (! in_array($deliverable->status, ['pending', 'rejected', 'reopened', 'rework_required'])) {
             return response()->json(['success' => false, 'message' => 'This deliverable cannot be submitted in its current status'], 422);
@@ -509,8 +511,8 @@ class DeliverableController extends Controller
     public function approve(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
-        $isCreator = (int) $deliverable->created_by === (int) $user->id;
-        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
+        if (! $isCreator && ! in_array($user->role, ['admin', 'manager', 'team_lead'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         if ($deliverable->status !== 'submitted') {
@@ -562,8 +564,8 @@ class DeliverableController extends Controller
     public function reject(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
-        $isCreator = (int) $deliverable->created_by === (int) $user->id;
-        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
+        if (! $isCreator && ! in_array($user->role, ['admin', 'manager', 'team_lead'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         if ($deliverable->status !== 'submitted') {
@@ -628,8 +630,8 @@ class DeliverableController extends Controller
     public function reopen(Request $request, Deliverable $deliverable)
     {
         $user = $request->user();
-        $isCreator = (int) $deliverable->created_by === (int) $user->id;
-        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
+        if (! $isCreator && ! in_array($user->role, ['admin', 'manager', 'team_lead'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         if ($deliverable->status !== 'submitted') {
