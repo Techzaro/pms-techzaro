@@ -165,6 +165,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/projects/{project}/links', [ProjectController::class, 'addLink']);
         // Delete project file
         Route::delete('/projects/{project}/files/{file}', [ProjectController::class, 'deleteFile']);
+        // Reorder project files
+        Route::post('/projects/{project}/files/reorder', [ProjectController::class, 'reorderFiles']);
     });
 
     // Project visibility settings (admin and manager only)

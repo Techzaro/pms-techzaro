@@ -1004,3 +1004,77 @@
     min-width: 130px;
   }
 }
+
+/* ── Avatar Upload ── */
+
+.avatar-upload-section {
+  margin-bottom: 4px;
+}
+
+.avatar-upload-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.avatar-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.avatar-preview {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  border: 2px dashed #d1d5db;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.avatar-preview:hover {
+  border-color: #6366f1;
+  background: #eef2ff;
+}
+
+.avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.avatar-upload-hint {
+  font-size: 10px;
+  color: #9ca3af;
+}
+
+.avatar-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.avatar-remove-btn:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}

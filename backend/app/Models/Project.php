@@ -91,7 +91,7 @@ class Project extends Model
     /** File attachments for this project. */
     public function files()
     {
-        return $this->hasMany(ProjectFile::class)->latest();
+        return $this->hasMany(ProjectFile::class)->orderBy('sort_order');
     }
 
     /** Deliverables belonging to this project. */

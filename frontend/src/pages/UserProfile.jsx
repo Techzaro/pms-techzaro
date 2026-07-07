@@ -124,6 +124,7 @@ function UserProfile() {
   const [editFiles, setEditFiles] = useState({});
   const [filePreviews, setFilePreviews] = useState({});
   const [editOtherDocs, setEditOtherDocs] = useState([]);
+  const [editAvatarFile, setEditAvatarFile] = useState(null);
   const [currentUserRole] = useState(() => getCurrentRole());
   const [changes, setChanges] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
@@ -239,7 +240,7 @@ function UserProfile() {
       });
       const data = await res.json();
       if (data.success) setChanges(data.changes || []);
-    } catch {}
+    } catch { }
   };
 
   useEffect(() => {
@@ -265,7 +266,7 @@ function UserProfile() {
           const data = await res.json();
           setAllUsers(data.users ?? data);
         }
-      } catch {}
+      } catch { }
     };
     fetchAllUsers();
   }, []);
@@ -281,7 +282,7 @@ function UserProfile() {
           const data = await res.json();
           setCompanyDocs(data.documents || {});
         }
-      } catch {}
+      } catch { }
     };
     fetchCompanyDocs();
   }, []);
@@ -562,6 +563,11 @@ function UserProfile() {
         });
       }
 
+      // Avatar upload
+      if (editAvatarFile) {
+        formData.append("avatar", editAvatarFile);
+      }
+
       let url = isOwnProfile ? `${API_URL}/auth/update-profile` : `${API_URL}/users/${userId}`;
 
       if (!isOwnProfile) {
@@ -644,249 +650,313 @@ function UserProfile() {
   return (
     <DashboardLayout hideRightSidebar={true}>
       <div className="user-profile-page">
+        <div className="profile">
+          <div className="profile-layout">
         <Breadcrumb items={breadcrumbs} />
-        <div className="profile-header">
-          <h1>User Profile</h1>
-          <p>View and manage your personal information and account settings.</p>
-        </div>
-
-        <div className="profile-layout">
-          {/* LEFT SIDE */}
-          <div className="profile-left">
-            {/* User Card */}
-            <div className="profile-user-card">
-              <div className="profile-user-left">
-                <div className="profile-avatar">
-                  {getInitials(user.name)}
-                </div>
-                <div className="profile-user-info">
-                  <h2>{user.name}</h2>
-                  <span className="profile-designation">{user.designation || normalizeRole(user.role)}</span>
-                </div>
-              </div>
+            <div className="profile-header-profile">
+              <h1>User Profile</h1>
+              <p>View and manage your personal information and account settings.</p>
             </div>
+            {/* LEFT SIDE */}
+            <div className="profile-left">
+              {/* User Card */}
+              <div className="profile-user-card">
+                <div className="profile-user-left">
+                  <div className="profile-avatar">
+                    {user.avatar ? (
+                      <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      getInitials(user.name)
+                    )}
+                  </div>
+                  <div className="profile-user-info">
+                    <h2>{user.name}</h2>
+                    <span className="profile-designation">{user.designation || normalizeRole(user.role)}</span>
+                  </div>
+                </div>
+                {/* CENTER - Profile Image */}
+                <div className="profile-avatar-center">
+                  <div className="profile-avatar-large">
+                    {user.avatar ? (
+                      <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} />
+                    ) : (
+                      getInitials(user.name)
+                    )}
+                  </div>
+                </div>
+              </div>
 
-            {/* Personal Information */}
-            <div className="profile-info-card">
-              <div className="info-card-header">
-                <h3>Personal Information</h3>
-                <div style={{ display: "flex", gap: "8px" }}>
-                {(!["admin", "manager"].includes(user.role) || currentUserRole === "admin") && (
-                <button className="btn-edit" onClick={openEditModal} disabled={isResignedProfile || isOwnProfile} style={isResignedProfile || isOwnProfile ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
-                  <MdEdit size={16} /> Edit
-                </button>
-                )}
-                {(!["admin", "manager"].includes(user.role) || currentUserRole === "admin") && user.active !== false && String(getUser()?.id) !== String(userId) && (
-                <button className="btn-edit" onClick={handleResignUser} style={{ background: "#dc2626" }}>
-                  <ResignIcon /> Resign
-                </button>
-                )}
-                </div>
-              </div>
-              <div className="info-card-body">
-                <div className="info-row">
-                  <span className="info-label">Full Name</span>
-                  <span className="info-value">{user.name || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Father Name</span>
-                  <span className="info-value">{user.father_name || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">ID Card Number</span>
-                  <span className="info-value">{displayCNIC(user.id_card_number)}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Phone Number</span>
-                  <span className="info-value">{displayPhone(user.phone_number || user.contact_no)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Address */}
-            <div className="profile-info-card">
-              <div className="info-card-header">
-                <h3>Address</h3>
-              </div>
-              <div className="info-card-body">
-                <div className="info-row">
-                  <span className="info-label">Present Address</span>
-                  <span className="info-value">{user.present_address || user.address || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Permanent Address</span>
-                  <span className="info-value">{user.permanent_address || "---"}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Emergency Contact */}
-            <div className="profile-info-card">
-              <div className="info-card-header">
-                <h3>Emergency Contact</h3>
-              </div>
-              <div className="info-card-body">
-                <div className="info-row">
-                  <span className="info-label">Name</span>
-                  <span className="info-value">{user.emergency_contact_name || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Relation</span>
-                  <span className="info-value">{user.emergency_contact_relation || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Phone</span>
-                  <span className="info-value">{displayPhone(user.emergency_contact_phone)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Email Accounts */}
-            <div className="profile-info-card">
-              <div className="info-card-header">
-                <h3>Email Accounts</h3>
-              </div>
-              <div className="info-card-body">
-                <div className="info-row">
-                  <span className="info-label">Personal Email</span>
-                  <span className="info-value">{user.personal_email || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Professional Email</span>
-                  <span className="info-value">{user.professional_email || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Password of Professional Email</span>
-                  <span className="info-value" style={{display:'flex',alignItems:'center',gap:'8px'}}>
-                    {user.professional_email_password ? (showProfPassword ? user.professional_email_password : "********") : "---"}
-                    {user.professional_email_password && (
-                      <button type="button" onClick={() => setShowProfPassword(!showProfPassword)} style={{background:'none',border:'1px solid #d1d5db',borderRadius:'6px',padding:'2px 8px',cursor:'pointer',fontSize:'12px',color:'#6b7280'}}>
-                        {showProfPassword ? "Hide" : "Show"}
+              {/* Personal Information */}
+              <div className="profile-info-card">
+                <div className="info-card-header">
+                  <h3>Personal Information</h3>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    {(!["admin", "manager"].includes(user.role) || currentUserRole === "admin") && (
+                      <button className="btn-edit" onClick={openEditModal} disabled={isResignedProfile || isOwnProfile} style={isResignedProfile || isOwnProfile ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
+                        <MdEdit size={16} /> Edit
                       </button>
                     )}
-                  </span>
+                    {(!["admin", "manager"].includes(user.role) || currentUserRole === "admin") && user.active !== false && String(getUser()?.id) !== String(userId) && (
+                      <button className="btn-edit" onClick={handleResignUser} style={{ background: "#dc2626" }}>
+                        <ResignIcon /> Resign
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="info-card-body">
+                  <div className="info-row">
+                    <span className="info-label">Full Name</span>
+                    <span className="info-value">{user.name || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Father Name</span>
+                    <span className="info-value">{user.father_name || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">ID Card Number</span>
+                    <span className="info-value">{displayCNIC(user.id_card_number)}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Phone Number</span>
+                    <span className="info-value">{displayPhone(user.phone_number || user.contact_no)}</span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Employment Details */}
-            <div className="profile-info-card">
-              <div className="info-card-header">
-                <h3>Employment Details</h3>
-              </div>
-              <div className="info-card-body">
-                <div className="info-row">
-                  <span className="info-label">Designation</span>
-                  <span className="info-value">{user.designation || "---"}</span>
+              {/* Address */}
+              <div className="profile-info-card">
+                <div className="info-card-header">
+                  <h3>Address</h3>
                 </div>
-                <div className="info-row">
-                  <span className="info-label">Department</span>
-                  <span className="info-value">{user.department || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Hired For</span>
-                  <span className="info-value">{user.hired_for || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Employee Code</span>
-                  <span className="info-value">{user.employee_code || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Role</span>
-                  <span className="info-value">
-                    {normalizeRole(user.role)}
-                  </span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Job Started Date</span>
-                  <span className="info-value">{displayDate(user.job_started_date)}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Job Ended Date</span>
-                  <span className="info-value">{displayDate(user.job_ended_date)}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Applied Via</span>
-                  <span className="info-value">{user.applied_via || "---"}</span>
+                <div className="info-card-body">
+                  <div className="info-row">
+                    <span className="info-label">Present Address</span>
+                    <span className="info-value">{user.present_address || user.address || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Permanent Address</span>
+                    <span className="info-value">{user.permanent_address || "---"}</span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Salary & Bank Details */}
-            <div className="profile-info-card">
-              <div className="info-card-header">
-                <h3>Salary & Bank Details</h3>
-              </div>
-              <div className="info-card-body">
-                <div className="info-row">
-                  <span className="info-label">Gross Salary</span>
-                  <span className="info-value">{user.gross_salary || "---"}</span>
+              {/* Emergency Contact */}
+              <div className="profile-info-card">
+                <div className="info-card-header">
+                  <h3>Emergency Contact</h3>
                 </div>
-                <div className="info-row">
-                  <span className="info-label">Bank Name</span>
-                  <span className="info-value">{user.bank_name || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Bank Account Number</span>
-                  <span className="info-value">{user.bank_account_number || "---"}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Bank Account Title</span>
-                  <span className="info-value">{user.bank_account_title || "---"}</span>
+                <div className="info-card-body">
+                  <div className="info-row">
+                    <span className="info-label">Name</span>
+                    <span className="info-value">{user.emergency_contact_name || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Relation</span>
+                    <span className="info-value">{user.emergency_contact_relation || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Phone</span>
+                    <span className="info-value">{displayPhone(user.emergency_contact_phone)}</span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Documents */}
-            <div className="profile-info-card">
-              <div className="info-card-header">
-                <h3>Documents</h3>
+              {/* Email Accounts */}
+              <div className="profile-info-card">
+                <div className="info-card-header">
+                  <h3>Email Accounts</h3>
+                </div>
+                <div className="info-card-body">
+                  <div className="info-row">
+                    <span className="info-label">Personal Email</span>
+                    <span className="info-value">{user.personal_email || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Professional Email</span>
+                    <span className="info-value">{user.professional_email || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Password of Professional Email</span>
+                    <span className="info-value" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {user.professional_email_password ? (showProfPassword ? user.professional_email_password : "********") : "---"}
+                      {user.professional_email_password && (
+                        <button type="button" onClick={() => setShowProfPassword(!showProfPassword)} style={{ background: 'none', border: '1px solid #d1d5db', borderRadius: '6px', padding: '2px 8px', cursor: 'pointer', fontSize: '12px', color: '#6b7280' }}>
+                          {showProfPassword ? "Hide" : "Show"}
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="info-card-body">
-                {[
-                  { label: "Employment Contract", key: "employment_contract" },
-                  { label: "Offer Letter", key: "offer_letter" },
-                  { label: "Techxaro Regulations", key: "techxaro_regulations" },
-                ].map(({ label, key }) => (
-                  <div className="info-row" key={key}>
-                    <span className="info-label">{label}</span>
+
+              {/* Employment Details */}
+              <div className="profile-info-card">
+                <div className="info-card-header">
+                  <h3>Employment Details</h3>
+                </div>
+                <div className="info-card-body">
+                  <div className="info-row">
+                    <span className="info-label">Designation</span>
+                    <span className="info-value">{user.designation || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Department</span>
+                    <span className="info-value">{user.department || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Hired For</span>
+                    <span className="info-value">{user.hired_for || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Employee Code</span>
+                    <span className="info-value">{user.employee_code || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Role</span>
                     <span className="info-value">
-                      {user[key] ? (
+                      {normalizeRole(user.role)}
+                    </span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Job Started Date</span>
+                    <span className="info-value">{displayDate(user.job_started_date)}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Job Ended Date</span>
+                    <span className="info-value">{displayDate(user.job_ended_date)}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Applied Via</span>
+                    <span className="info-value">{user.applied_via || "---"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Salary & Bank Details */}
+              <div className="profile-info-card">
+                <div className="info-card-header">
+                  <h3>Salary & Bank Details</h3>
+                </div>
+                <div className="info-card-body">
+                  <div className="info-row">
+                    <span className="info-label">Gross Salary</span>
+                    <span className="info-value">{user.gross_salary || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Bank Name</span>
+                    <span className="info-value">{user.bank_name || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Bank Account Number</span>
+                    <span className="info-value">{user.bank_account_number || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Bank Account Title</span>
+                    <span className="info-value">{user.bank_account_title || "---"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Documents */}
+              <div className="profile-info-card">
+                <div className="info-card-header">
+                  <h3>Documents</h3>
+                </div>
+                <div className="info-card-body">
+                  {[
+                    { label: "Employment Contract", key: "employment_contract" },
+                    { label: "Offer Letter", key: "offer_letter" },
+                    { label: "Techxaro Regulations", key: "techxaro_regulations" },
+                  ].map(({ label, key }) => (
+                    <div className="info-row" key={key}>
+                      <span className="info-label">{label}</span>
+                      <span className="info-value">
+                        {user[key] ? (
+                          <a
+                            href={`${API_URL}/users/${userId}/documents/${key}?token=${authToken()}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "#2563eb", textDecoration: "underline" }}
+                          >
+                            View File
+                          </a>
+                        ) : "---"}
+                      </span>
+                    </div>
+                  ))}
+                  {(() => {
+                    let docs = [];
+                    try {
+                      docs = typeof user.other_document === "string" ? JSON.parse(user.other_document) : (user.other_document || []);
+                    } catch { docs = []; }
+                    if (!Array.isArray(docs)) docs = [];
+                    if (docs.length === 0) {
+                      return (
+                        <div className="info-row">
+                          <span className="info-label">Other Documents</span>
+                          <span className="info-value">---</span>
+                        </div>
+                      );
+                    }
+                    return docs.map((docPath, i) => {
+                      const fileName = docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
+                      const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(fileName);
+                      return (
+                        <div className="info-row" key={`other-${i}`}>
+                          <span className="info-label">{fileName}</span>
+                          <span className="info-value">
+                            <a
+                              href={`${API_URL}/users/${userId}/documents/other_document?token=${authToken()}&file=${encodeURIComponent(docPath)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: "#2563eb", textDecoration: "underline" }}
+                            >
+                              {isImage ? "View Image" : "View File"}
+                            </a>
+                          </span>
+                        </div>
+                      );
+                    });
+                  })()}
+                  {companyDocs?.company_logo?.exists && (
+                    <div className="info-row">
+                      <span className="info-label">Company Logo</span>
+                      <span className="info-value">
                         <a
-                          href={`${API_URL}/users/${userId}/documents/${key}?token=${authToken()}`}
+                          href={`${API_URL.replace("/api", "")}/storage/${companyDocs.company_logo.path}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{ color: "#2563eb", textDecoration: "underline" }}
                         >
-                          View File
+                          View Image
                         </a>
-                      ) : "---"}
-                    </span>
-                  </div>
-                ))}
-                {(() => {
-                  let docs = [];
-                  try {
-                    docs = typeof user.other_document === "string" ? JSON.parse(user.other_document) : (user.other_document || []);
-                  } catch { docs = []; }
-                  if (!Array.isArray(docs)) docs = [];
-                  if (docs.length === 0) {
+                      </span>
+                    </div>
+                  )}
+                  {companyDocs?.qr_code?.exists && (
+                    <div className="info-row">
+                      <span className="info-label">QR Code</span>
+                      <span className="info-value">
+                        <a
+                          href={`${API_URL.replace("/api", "")}/storage/${companyDocs.qr_code.path}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: "#2563eb", textDecoration: "underline" }}
+                        >
+                          View Image
+                        </a>
+                      </span>
+                    </div>
+                  )}
+                  {companyDocs?.other_documents?.files?.map((file, i) => {
+                    const fileName = file.filename.replace(/^other_document_\d+_/, "").replace(/\.[^.]+$/, "");
+                    const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(file.filename);
                     return (
-                      <div className="info-row">
-                        <span className="info-label">Other Documents</span>
-                        <span className="info-value">---</span>
-                      </div>
-                    );
-                  }
-                  return docs.map((docPath, i) => {
-                    const fileName = docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
-                    const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(fileName);
-                    return (
-                      <div className="info-row" key={`other-${i}`}>
+                      <div className="info-row" key={`company-${i}`}>
                         <span className="info-label">{fileName}</span>
                         <span className="info-value">
                           <a
-                            href={`${API_URL}/users/${userId}/documents/other_document?token=${authToken()}&file=${encodeURIComponent(docPath)}`}
+                            href={`${API_URL.replace("/api", "")}/storage/${file.path}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ color: "#2563eb", textDecoration: "underline" }}
@@ -896,136 +966,89 @@ function UserProfile() {
                         </span>
                       </div>
                     );
-                  });
-                })()}
-                {companyDocs?.company_logo?.exists && (
-                  <div className="info-row">
-                    <span className="info-label">Company Logo</span>
-                    <span className="info-value">
-                      <a
-                        href={`${API_URL.replace("/api", "")}/storage/${companyDocs.company_logo.path}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: "#2563eb", textDecoration: "underline" }}
-                      >
-                        View Image
-                      </a>
-                    </span>
-                  </div>
-                )}
-                {companyDocs?.qr_code?.exists && (
-                  <div className="info-row">
-                    <span className="info-label">QR Code</span>
-                    <span className="info-value">
-                      <a
-                        href={`${API_URL.replace("/api", "")}/storage/${companyDocs.qr_code.path}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: "#2563eb", textDecoration: "underline" }}
-                      >
-                        View Image
-                      </a>
-                    </span>
-                  </div>
-                )}
-                {companyDocs?.other_documents?.files?.map((file, i) => {
-                  const fileName = file.filename.replace(/^other_document_\d+_/, "").replace(/\.[^.]+$/, "");
-                  const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(file.filename);
-                  return (
-                    <div className="info-row" key={`company-${i}`}>
-                      <span className="info-label">{fileName}</span>
-                      <span className="info-value">
-                        <a
-                          href={`${API_URL.replace("/api", "")}/storage/${file.path}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ color: "#2563eb", textDecoration: "underline" }}
-                        >
-                          {isImage ? "View Image" : "View File"}
-                        </a>
-                      </span>
-                    </div>
-                  );
-                })}
+                  })}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* RIGHT SIDE - Account Status */}
-          <div className="profile-right">
-            <div className="account-status-card">
-              <h3>Account Status</h3>
-              <div className="status-list">
-                <div className="status-item">
-                  <span className={`status-dot ${account?.status === "Active" ? "dot-active" : "dot-inactive"}`}></span>
-                  <span className="status-text">{account?.status || (user.active ? "Active" : user.must_change_password ? "Inactive" : "Resigned")}</span>
-                </div>
-                <div className="status-item">
-                  <span className="status-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                  </span>
-                  <div className="status-info">
-                    <span className="status-label">Member Since</span>
-                    <span className="status-value">
-                      {user.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "---"}
-                    </span>
+          </div>
+          
+            {/* RIGHT SIDE - Account Status */}
+            <div className="profile-right">
+              <div className="account-status-card">
+                <h3>Account Status</h3>
+                <div className="status-list">
+                  <div className="status-item">
+                    <span className={`status-dot ${account?.status === "Active" ? "dot-active" : "dot-inactive"}`}></span>
+                    <span className="status-text">{account?.status || (user.active ? "Active" : user.must_change_password ? "Inactive" : "Resigned")}</span>
                   </div>
-                </div>
-                <div className="status-item">
-                  <span className="status-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                  </span>
-                  <div className="status-info">
-                    <span className="status-label">Last Login</span>
-                    <span className="status-value">
-                      {user.last_login_at
-                        ? new Date(user.last_login_at).toLocaleString("en-US", {
+                  <div className="status-item">
+                    <span className="status-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    </span>
+                    <div className="status-info">
+                      <span className="status-label">Member Since</span>
+                      <span className="status-value">
+                        {user.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "---"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="status-item">
+                    <span className="status-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    </span>
+                    <div className="status-info">
+                      <span className="status-label">Last Login</span>
+                      <span className="status-value">
+                        {user.last_login_at
+                          ? new Date(user.last_login_at).toLocaleString("en-US", {
                             month: "short",
                             day: "numeric",
                             hour: "numeric",
                             minute: "2-digit",
                             hour12: true,
                           })
-                        : "Never logged in"}
-                    </span>
+                          : "Never logged in"}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div className="status-item">
-                  <span className="status-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 21h18"></path><path d="M9 8h1"></path><path d="M9 12h1"></path><path d="M9 16h1"></path><path d="M14 8h1"></path><path d="M14 12h1"></path><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"></path></svg>
-                  </span>
-                  <div className="status-info">
-                    <span className="status-label">Account Type</span>
-                    <span className="status-value">Employee</span>
+                  <div className="status-item">
+                    <span className="status-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 21h18"></path><path d="M9 8h1"></path><path d="M9 12h1"></path><path d="M9 16h1"></path><path d="M14 8h1"></path><path d="M14 12h1"></path><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"></path></svg>
+                    </span>
+                    <div className="status-info">
+                      <span className="status-label">Account Type</span>
+                      <span className="status-value">Employee</span>
+                    </div>
                   </div>
                 </div>
               </div>
+              <br />
+              <div
+                className={`account-status-card${userHasUnread ? " activity-panel--unread" : ""}`}
+              >
+                <h3>Activity</h3>
+                {changes.length === 0 ? (
+                  <p className="pd-muted" style={{ margin: 0 }}>No activity yet.</p>
+                ) : (
+                  <ul className="td-activity-list">
+                    {changes.map((c, i) => (
+                      <li key={c.id || i} className={`td-activity-item${isUserItemUnread(c) ? " activity-item--unread" : ""}`}>
+                        <span className="td-activity-icon">✏️</span>
+                        <div className="td-activity-body">
+                          <span className="td-activity-text">
+                            {c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} changed
+                          </span>
+                          <span className="td-activity-time">{formatDateTimeInline(c.created_at)}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
-            <br />
-            <div
-              className={`account-status-card${userHasUnread ? " activity-panel--unread" : ""}`}
-            >
-              <h3>Activity</h3>
-              {changes.length === 0 ? (
-                <p className="pd-muted" style={{ margin: 0 }}>No activity yet.</p>
-              ) : (
-                <ul className="td-activity-list">
-                  {changes.map((c, i) => (
-                    <li key={c.id || i} className={`td-activity-item${isUserItemUnread(c) ? " activity-item--unread" : ""}`}>
-                      <span className="td-activity-icon">✏️</span>
-                      <div className="td-activity-body">
-                        <span className="td-activity-text">
-                          {c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} changed
-                        </span>
-                        <span className="td-activity-time">{formatDateTimeInline(c.created_at)}</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
         </div>
+
       </div>
 
       {/* EDIT MODAL */}
@@ -1050,6 +1073,33 @@ function UserProfile() {
             </div>
 
             <form className="user-form" onSubmit={handleEditSubmit}>
+              {/* ===== Profile Photo ===== */}
+              <div className="avatar-upload-section">
+                <label className="avatar-upload-label">Profile Photo</label>
+                <div className="avatar-upload-row">
+                  <div className="avatar-preview" onClick={() => document.getElementById('edit-avatar-input').click()}>
+                    {editAvatarFile ? (
+                      <img src={URL.createObjectURL(editAvatarFile)} alt="Avatar preview" />
+                    ) : user.avatar ? (
+                      <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt="Avatar preview" />
+                    ) : (
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                      </svg>
+                    )}
+                    <span className="avatar-upload-hint">Click to upload</span>
+                  </div>
+                  <input id="edit-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) setEditAvatarFile(file); }} />
+                  {(editAvatarFile || user.avatar) && (
+                    <button type="button" className="avatar-remove-btn" onClick={() => setEditAvatarFile(null)}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* ===== Personal Information ===== */}
               <h3 className="form-section-title">Personal Information</h3>
               <div className="user-form-grid">
@@ -1269,7 +1319,7 @@ function UserProfile() {
                       accept=".pdf,.jpg,.jpeg,.png,.webp"
                       onChange={(e) => {
                         const file = e.target.files[0];
-                        if (file && !["application/pdf","image/jpeg","image/png","image/webp"].includes(file.type)) {
+                        if (file && !["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(file.type)) {
                           notify.error("Only PDF and image files are allowed.");
                           e.target.value = "";
                           return;
@@ -1319,7 +1369,7 @@ function UserProfile() {
                       const files = Array.from(e.target.files || []);
                       const valid = [];
                       for (const f of files) {
-                        if (!["application/pdf","image/jpeg","image/png","image/webp","image/gif","image/bmp","image/svg+xml","image/tiff"].includes(f.type)) {
+                        if (!["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp", "image/svg+xml", "image/tiff"].includes(f.type)) {
                           notify.error(`"${f.name}" is not a supported file type. Skipped.`);
                           continue;
                         }

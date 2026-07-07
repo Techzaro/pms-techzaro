@@ -106,6 +106,7 @@ function ManageUsers() {
     offerLetter: null,
     techxaroRegulations: null,
     otherDocument: [],
+    avatar: null,
   });
   const [loading, setLoading] = useState(false);
   const [savingUserId, setSavingUserId] = useState(null);
@@ -408,6 +409,8 @@ function ManageUsers() {
       offerLetter: null,
       techxaroRegulations: null,
       otherDocument: [],
+      avatar: null,
+      _existingAvatar: fullUser.avatar || null,
     });
     setIsAddModalOpen(true);
   };
@@ -448,6 +451,8 @@ function ManageUsers() {
       offerLetter: null,
       techxaroRegulations: null,
       otherDocument: [],
+      avatar: null,
+      _existingAvatar: null,
     });
   };
 
@@ -654,7 +659,13 @@ function ManageUsers() {
       <tr key={user.id} className={isResigned ? "resigned-row" : ""}>
         <td style={{ width: "40%", textAlign: "left" }}>
           <div className="user-info">
-            <span className="user-avatar">{getInitials(user.name)}</span>
+            <span className="user-avatar">
+              {user.avatar ? (
+                <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                getInitials(user.name)
+              )}
+            </span>
             <div className="user-details">
               <span className="user-name">{user.name}</span>
               <span className="user-email">{user.professional_email || "—"}</span>
@@ -733,7 +744,13 @@ function ManageUsers() {
       <tr ref={setNodeRef} className={isResigned ? "resigned-row" : ""} style={rowStyle} {...listeners} {...attributes}>
         <td style={{ width: "40%", textAlign: "left" }}>
           <div className="user-info">
-            <span className="user-avatar">{getInitials(user.name)}</span>
+            <span className="user-avatar">
+              {user.avatar ? (
+                <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                getInitials(user.name)
+              )}
+            </span>
             <div className="user-details">
               <span className="user-name">{user.name}</span>
               <span className="user-email">{user.professional_email || "—"}</span>
@@ -858,6 +875,11 @@ function ManageUsers() {
       newUser.otherDocument.forEach((f) => {
         formData.append("other_document[]", f);
       });
+    }
+
+    // Avatar upload
+    if (newUser.avatar) {
+      formData.append("avatar", newUser.avatar);
     }
 
     await run(async () => {
@@ -1048,6 +1070,33 @@ function ManageUsers() {
               </div>
 
               <form className="user-form" onSubmit={handleSubmit} style={{ pointerEvents: submitting ? 'none' : 'auto', opacity: submitting ? 0.7 : 1 }}>
+                {/* ===== Profile Photo ===== */}
+                <div className="avatar-upload-section">
+                  <label className="avatar-upload-label">Profile Photo</label>
+                  <div className="avatar-upload-row">
+                    <div className="avatar-preview" onClick={() => document.getElementById('avatar-input').click()}>
+                      {newUser.avatar ? (
+                        <img src={URL.createObjectURL(newUser.avatar)} alt="Avatar preview" />
+                      ) : newUser._existingAvatar ? (
+                        <img src={`${API_URL.replace('/api', '')}/storage/${newUser._existingAvatar}`} alt="Avatar preview" />
+                      ) : (
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
+                      )}
+                      <span className="avatar-upload-hint">Click to upload</span>
+                    </div>
+                    <input id="avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) setNewUser((prev) => ({ ...prev, avatar: file })); }} />
+                    {(newUser.avatar || newUser._existingAvatar) && (
+                      <button type="button" className="avatar-remove-btn" onClick={() => setNewUser((prev) => ({ ...prev, avatar: null, _existingAvatar: null }))}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 {/* ===== Personal Information ===== */}
                 <h3 className="form-section-title">Personal Information</h3>
                 <div className="user-form-grid">

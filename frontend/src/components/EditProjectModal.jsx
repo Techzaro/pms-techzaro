@@ -102,6 +102,7 @@ const EditProjectModal = ({ project, onClose }) => {
   });
   const [goalInput, setGoalInput] = useState("");
 
+  const [existingFiles, setExistingFiles] = useState(project?.files || []);
   const [pendingFiles, setPendingFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const [linkInput, setLinkInput] = useState("");
@@ -321,6 +322,18 @@ const EditProjectModal = ({ project, onClose }) => {
 
   const handleRemoveFile = (index) => {
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDeleteExistingFile = async (fileId) => {
+    try {
+      const token = authToken();
+      await fetch(`${API_URL}/projects/${project.id}/files/${fileId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      setExistingFiles((prev) => prev.filter((f) => f.id !== fileId));
+    } catch {}
   };
 
   const handleAddLink = () => {
@@ -688,6 +701,30 @@ const EditProjectModal = ({ project, onClose }) => {
                 />
               </div>
 
+              {(() => {
+                const existingAttachments = existingFiles.filter(
+                  (f) => !(f.url && f.url.startsWith("http") && !f.url.includes("/storage/"))
+                );
+                return existingAttachments.length > 0 && (
+                  <div className="cp-attachments-list">
+                    {existingAttachments.map((file) => {
+                      const fileUrl = file.url
+                        ? (file.url.startsWith("http") ? file.url : API_URL.replace(/\/api\/?$/, "") + file.url)
+                        : "#";
+                      return (
+                        <div key={file.id} className="cp-attachment-item">
+                          <span className="cp-attachment-icon">📄</span>
+                          <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="cp-attachment-name cp-attachment-link">
+                            {file.name}
+                          </a>
+                          <button type="button" className="cp-attachment-remove" onClick={() => handleDeleteExistingFile(file.id)}>✕</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
               {pendingFiles.length > 0 && (
                 <div className="cp-attachments-list">
                   {pendingFiles.map((file, index) => (
@@ -733,6 +770,25 @@ const EditProjectModal = ({ project, onClose }) => {
                   </button>
                 </div>
               </div>
+
+              {(() => {
+                const existingLinks = existingFiles.filter(
+                  (f) => f.url && f.url.startsWith("http") && !f.url.includes("/storage/")
+                );
+                return existingLinks.length > 0 && (
+                  <div className="cp-attachments-list" style={{ marginTop: "8px" }}>
+                    {existingLinks.map((file) => (
+                      <div key={file.id} className="cp-attachment-item">
+                        <span className="cp-attachment-icon">🔗</span>
+                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-name cp-attachment-link">
+                          {file.name.length > 45 ? file.name.substring(0, 45) + "..." : file.name}
+                        </a>
+                        <button type="button" className="cp-attachment-remove" onClick={() => handleDeleteExistingFile(file.id)}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
 
               {links.length > 0 && (
                 <div className="cp-attachments-list">

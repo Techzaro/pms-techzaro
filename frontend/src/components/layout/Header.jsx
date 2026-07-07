@@ -529,9 +529,11 @@ function Header() {
           >
 
             <div className="user-avatar">
-              {user.name
-                .charAt(0)
-                .toUpperCase()}
+              {user.avatar ? (
+                <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                user.name.charAt(0).toUpperCase()
+              )}
             </div>
 
             <div className="user-text">

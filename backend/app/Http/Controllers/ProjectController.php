@@ -342,7 +342,7 @@ class ProjectController extends Controller
 
         $memberIds = $project->assigned_users ?? [];
         $members = ! empty($memberIds)
-            ? User::whereIn('id', $memberIds)->where('active', true)->orderBy('name')->get(['id', 'name', 'email', 'role'])
+            ? User::whereIn('id', $memberIds)->where('active', true)->orderByRaw('FIELD(id,' . implode(',', $memberIds) . ')')->get(['id', 'name', 'email', 'role'])
             : collect();
 
         $isCreator = (int) $project->created_by === (int) $user->id;
@@ -589,6 +589,8 @@ class ProjectController extends Controller
             'goals_checklist.*.text' => 'required_with:goals_checklist|string',
             'goals_checklist.*.done' => 'nullable|boolean',
             'status' => 'sometimes|string|max:64',
+            'assigned_users' => 'sometimes|nullable|array',
+            'assigned_users.*' => 'integer|exists:users,id',
         ]);
 
         $oldStatus = $project->status;
@@ -995,6 +997,28 @@ class ProjectController extends Controller
         }
 
         return response()->json(['success' => true, 'message' => 'Visibility updated successfully']);
+    }
+
+    /**
+     * Reorder project files.
+     *
+     * @param  Request  $request
+     * @param  Project  $project
+     * @return JsonResponse
+     */
+    public function reorderFiles(Request $request, Project $project)
+    {
+        $request->validate([
+            'items' => 'required|array',
+            'items.*.id' => 'required|integer|exists:project_files,id',
+            'items.*.sort_order' => 'required|integer|min:0',
+        ]);
+
+        foreach ($request->items as $item) {
+            ProjectFile::where('id', $item['id'])->update(['sort_order' => $item['sort_order']]);
+        }
+
+        return response()->json(['success' => true]);
     }
 
     /**

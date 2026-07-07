@@ -305,25 +305,29 @@ export default function EditTaskModal({ task, onClose }) {
             <div className="task-field">
               <label>Links & Attachment</label>
 
-              {existingFiles.length > 0 && (
-                <div className="cp-attachments-list">
-                  {existingFiles.map((file) => (
-                    <div key={file.id} className="cp-attachment-item">
-                      <span className="cp-attachment-icon">{file.url && file.url.startsWith("http") && !file.url.includes("/storage/") ? "🔗" : "📄"}</span>
-                      {file.url && file.url.startsWith("http") && !file.url.includes("/storage/") ? (
-                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-name cp-attachment-link">
-                          {file.name.length > 45 ? file.name.substring(0, 45) + "..." : file.name}
-                        </a>
-                      ) : (
-                        <a href={file.url ? (file.url.startsWith("http") ? file.url : API_URL.replace(/\/api\/?$/, "") + file.url) : "#"} target="_blank" rel="noopener noreferrer" className="cp-attachment-name cp-attachment-link">
-                          {file.name}
-                        </a>
-                      )}
-                      <button type="button" className="cp-attachment-remove" onClick={() => handleDeleteExistingFile(file.id)}>✕</button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {(() => {
+                const existingAttachments = existingFiles.filter(
+                  (f) => !(f.url && f.url.startsWith("http") && !f.url.includes("/storage/"))
+                );
+                return existingAttachments.length > 0 && (
+                  <div className="cp-attachments-list">
+                    {existingAttachments.map((file) => {
+                      const fileUrl = file.url
+                        ? (file.url.startsWith("http") ? file.url : API_URL.replace(/\/api\/?$/, "") + file.url)
+                        : "#";
+                      return (
+                        <div key={file.id} className="cp-attachment-item">
+                          <span className="cp-attachment-icon">📄</span>
+                          <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="cp-attachment-name cp-attachment-link">
+                            {file.name}
+                          </a>
+                          <button type="button" className="cp-attachment-remove" onClick={() => handleDeleteExistingFile(file.id)}>✕</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               <div
                 className="cp-drop-zone"
@@ -396,6 +400,25 @@ export default function EditTaskModal({ task, onClose }) {
                   </button>
                 </div>
               </div>
+
+              {(() => {
+                const existingLinks = existingFiles.filter(
+                  (f) => f.url && f.url.startsWith("http") && !f.url.includes("/storage/")
+                );
+                return existingLinks.length > 0 && (
+                  <div className="cp-attachments-list" style={{ marginTop: "8px" }}>
+                    {existingLinks.map((file) => (
+                      <div key={file.id} className="cp-attachment-item">
+                        <span className="cp-attachment-icon">🔗</span>
+                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-name cp-attachment-link">
+                          {file.name.length > 45 ? file.name.substring(0, 45) + "..." : file.name}
+                        </a>
+                        <button type="button" className="cp-attachment-remove" onClick={() => handleDeleteExistingFile(file.id)}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
 
               {links.length > 0 && (
                 <div className="cp-attachments-list">
