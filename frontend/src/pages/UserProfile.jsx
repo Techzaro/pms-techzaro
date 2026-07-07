@@ -8,7 +8,7 @@
  * non-admin roles unless editing their own profile.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import { MdEdit, MdArrowBack } from "react-icons/md";
@@ -163,6 +163,13 @@ function UserProfile() {
   } = useActivityHighlight("user", userId, profileData?.activity_max_id || 0, changes);
 
   useEscapeKey(isEditModalOpen, () => setIsEditModalOpen(false));
+
+  useEffect(() => {
+    if (isEditModalOpen) {
+      const overlay = document.querySelector(".user-modal-overlay");
+      if (overlay) overlay.scrollTop = 0;
+    }
+  }, [isEditModalOpen]);
 
   /** Build auth headers for API requests. */
   const authHeaders = () => {
@@ -660,21 +667,22 @@ function UserProfile() {
             {/* LEFT SIDE */}
             <div className="profile-left">
               {/* User Card */}
-              <div className="profile-user-card">
-                <div className="profile-user-left">
-                  <div className="profile-avatar">
-                    {user.avatar ? (
-                      <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                    ) : (
-                      getInitials(user.name)
-                    )}
-                  </div>
-                  <div className="profile-user-info">
-                    <h2>{user.name}</h2>
-                    <span className="profile-designation">{user.designation || normalizeRole(user.role)}</span>
+              <div className="profile-top-row">
+                <div className="profile-user-card">
+                  <div className="profile-user-left">
+                    <div className="profile-avatar">
+                      {user.avatar ? (
+                        <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                      ) : (
+                        getInitials(user.name)
+                      )}
+                    </div>
+                    <div className="profile-user-info">
+                      <h2>{user.name}</h2>
+                      <span className="profile-designation">{user.designation || normalizeRole(user.role)}</span>
+                    </div>
                   </div>
                 </div>
-                {/* CENTER - Profile Image */}
                 <div className="profile-avatar-center">
                   <div className="profile-avatar-large">
                     {user.avatar ? (
@@ -1023,29 +1031,7 @@ function UserProfile() {
                   </div>
                 </div>
               </div>
-              <br />
-              <div
-                className={`account-status-card${userHasUnread ? " activity-panel--unread" : ""}`}
-              >
-                <h3>Activity</h3>
-                {changes.length === 0 ? (
-                  <p className="pd-muted" style={{ margin: 0 }}>No activity yet.</p>
-                ) : (
-                  <ul className="td-activity-list">
-                    {changes.map((c, i) => (
-                      <li key={c.id || i} className={`td-activity-item${isUserItemUnread(c) ? " activity-item--unread" : ""}`}>
-                        <span className="td-activity-icon">✏️</span>
-                        <div className="td-activity-body">
-                          <span className="td-activity-text">
-                            {c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} changed
-                          </span>
-                          <span className="td-activity-time">{formatDateTimeInline(c.created_at)}</span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              {/* Activity section hidden for now */}
             </div>
         </div>
 
@@ -1073,55 +1059,61 @@ function UserProfile() {
             </div>
 
             <form className="user-form" onSubmit={handleEditSubmit}>
-              {/* ===== Profile Photo ===== */}
-              <div className="avatar-upload-section">
-                <label className="avatar-upload-label">Profile Photo</label>
-                <div className="avatar-upload-row">
-                  <div className="avatar-preview" onClick={() => document.getElementById('edit-avatar-input').click()}>
-                    {editAvatarFile ? (
-                      <img src={URL.createObjectURL(editAvatarFile)} alt="Avatar preview" />
-                    ) : user.avatar ? (
-                      <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt="Avatar preview" />
-                    ) : (
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
-                      </svg>
-                    )}
-                    <span className="avatar-upload-hint">Click to upload</span>
+              {/* ===== Profile Photo + Personal Information Row ===== */}
+              <div className="personal-info-top-row">
+                <div className="personal-info-fields">
+                  <h3 className="form-section-title">Personal Information</h3>
+                  <div className="user-form-grid">
+                    <div className="form-row">
+                      <label htmlFor="edit-name">Employee Full Name *</label>
+                      <input type="text" id="edit-name" name="name" value={editUser.name} onChange={handleEditChange} placeholder="Enter full name" className={editErrors.name ? "field-error" : ""} />
+                      {editErrors.name && <span className="field-error-text">{editErrors.name}</span>}
+                    </div>
+                    <div className="form-row">
+                      <label htmlFor="edit-father_name">Father Name *</label>
+                      <input type="text" id="edit-father_name" name="father_name" value={editUser.father_name} onChange={handleEditChange} placeholder="Enter father name" className={editErrors.father_name ? "field-error" : ""} />
+                      {editErrors.father_name && <span className="field-error-text">{editErrors.father_name}</span>}
+                    </div>
+                    <div className="form-row">
+                      <label htmlFor="edit-id_card_number">ID Card Number *</label>
+                      <input type="text" id="edit-id_card_number" name="id_card_number" value={editUser.id_card_number} onChange={handleEditChange} placeholder="XXXXX-XXXXXXX-X" maxLength={15} className={editErrors.id_card_number ? "field-error" : ""} />
+                      {editErrors.id_card_number && <span className="field-error-text">{editErrors.id_card_number}</span>}
+                    </div>
+                    <div className="form-row">
+                      <label htmlFor="edit-phone_number">Phone Number *</label>
+                      <input type="text" id="edit-phone_number" name="phone_number" value={editUser.phone_number} onChange={handleEditChange} placeholder="03XX-XXXXXXX" maxLength={12} className={editErrors.phone_number ? "field-error" : ""} />
+                      {editErrors.phone_number && <span className="field-error-text">{editErrors.phone_number}</span>}
+                    </div>
                   </div>
-                  <input id="edit-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) setEditAvatarFile(file); }} />
-                  {(editAvatarFile || user.avatar) && (
-                    <button type="button" className="avatar-remove-btn" onClick={() => setEditAvatarFile(null)}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                      Remove
-                    </button>
-                  )}
                 </div>
-              </div>
 
-              {/* ===== Personal Information ===== */}
-              <h3 className="form-section-title">Personal Information</h3>
-              <div className="user-form-grid">
-                <div className="form-row">
-                  <label htmlFor="edit-name">Employee Full Name *</label>
-                  <input type="text" id="edit-name" name="name" value={editUser.name} onChange={handleEditChange} placeholder="Enter full name" className={editErrors.name ? "field-error" : ""} />
-                  {editErrors.name && <span className="field-error-text">{editErrors.name}</span>}
-                </div>
-                <div className="form-row">
-                  <label htmlFor="edit-father_name">Father Name *</label>
-                  <input type="text" id="edit-father_name" name="father_name" value={editUser.father_name} onChange={handleEditChange} placeholder="Enter father name" className={editErrors.father_name ? "field-error" : ""} />
-                  {editErrors.father_name && <span className="field-error-text">{editErrors.father_name}</span>}
-                </div>
-                <div className="form-row">
-                  <label htmlFor="edit-id_card_number">ID Card Number *</label>
-                  <input type="text" id="edit-id_card_number" name="id_card_number" value={editUser.id_card_number} onChange={handleEditChange} placeholder="XXXXX-XXXXXXX-X" maxLength={15} className={editErrors.id_card_number ? "field-error" : ""} />
-                  {editErrors.id_card_number && <span className="field-error-text">{editErrors.id_card_number}</span>}
-                </div>
-                <div className="form-row">
-                  <label htmlFor="edit-phone_number">Phone Number *</label>
-                  <input type="text" id="edit-phone_number" name="phone_number" value={editUser.phone_number} onChange={handleEditChange} placeholder="03XX-XXXXXXX" maxLength={12} className={editErrors.phone_number ? "field-error" : ""} />
-                  {editErrors.phone_number && <span className="field-error-text">{editErrors.phone_number}</span>}
+                {/* ===== Profile Photo ===== */}
+                <div className="avatar-upload-section">
+                  <label className="avatar-upload-label">Profile Photo</label>
+                  <div className="avatar-upload-row">
+                    <div className="avatar-preview" onClick={() => document.getElementById('edit-avatar-input').click()}>
+                      {editAvatarFile ? (
+                        <img src={URL.createObjectURL(editAvatarFile)} alt="Avatar preview" />
+                      ) : user.avatar ? (
+                        <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt="Avatar preview" />
+                      ) : (
+                        <>
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                          </svg>
+                          <span className="avatar-upload-hint">Click to upload</span>
+                        </>
+                      )}
+                    </div>
+                    <input id="edit-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) setEditAvatarFile(file); }} />
+                    {(editAvatarFile || user.avatar) && (
+                      <button type="button" className="avatar-remove-btn" onClick={() => setEditAvatarFile(null)}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 

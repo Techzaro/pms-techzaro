@@ -1070,55 +1070,61 @@ function ManageUsers() {
               </div>
 
               <form className="user-form" onSubmit={handleSubmit} style={{ pointerEvents: submitting ? 'none' : 'auto', opacity: submitting ? 0.7 : 1 }}>
-                {/* ===== Profile Photo ===== */}
-                <div className="avatar-upload-section">
-                  <label className="avatar-upload-label">Profile Photo</label>
-                  <div className="avatar-upload-row">
-                    <div className="avatar-preview" onClick={() => document.getElementById('avatar-input').click()}>
-                      {newUser.avatar ? (
-                        <img src={URL.createObjectURL(newUser.avatar)} alt="Avatar preview" />
-                      ) : newUser._existingAvatar ? (
-                        <img src={`${API_URL.replace('/api', '')}/storage/${newUser._existingAvatar}`} alt="Avatar preview" />
-                      ) : (
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                          <circle cx="12" cy="7" r="4" />
-                        </svg>
-                      )}
-                      <span className="avatar-upload-hint">Click to upload</span>
+                {/* ===== Profile Photo + Personal Information Row ===== */}
+                <div className="personal-info-top-row">
+                  <div className="personal-info-fields">
+                    <h3 className="form-section-title">Personal Information</h3>
+                    <div className="user-form-grid">
+                      <div className="form-row">
+                        <label htmlFor="fullName">Employee Full Name *</label>
+                        <input type="text" id="fullName" name="fullName" value={newUser.fullName} onChange={handleChange} placeholder="Enter full name" className={addErrors.fullName ? "field-error" : ""} />
+                        {addErrors.fullName && <span className="field-error-text">{addErrors.fullName}</span>}
+                      </div>
+                      <div className="form-row">
+                        <label htmlFor="fatherName">Father Name *</label>
+                        <input type="text" id="fatherName" name="fatherName" value={newUser.fatherName} onChange={handleChange} placeholder="Enter father name" className={addErrors.fatherName ? "field-error" : ""} />
+                        {addErrors.fatherName && <span className="field-error-text">{addErrors.fatherName}</span>}
+                      </div>
+                      <div className="form-row">
+                        <label htmlFor="idCardNumber">ID Card Number *</label>
+                        <input type="text" id="idCardNumber" name="idCardNumber" value={newUser.idCardNumber} onChange={handleChange} placeholder="XXXXX-XXXXXXX-X" maxLength={15} className={addErrors.idCardNumber ? "field-error" : ""} />
+                        {addErrors.idCardNumber && <span className="field-error-text">{addErrors.idCardNumber}</span>}
+                      </div>
+                      <div className="form-row">
+                        <label htmlFor="phoneNumber">Phone Number *</label>
+                        <input type="text" id="phoneNumber" name="phoneNumber" value={newUser.phoneNumber} onChange={handleChange} placeholder="03XX-XXXXXXX" maxLength={12} className={addErrors.phoneNumber ? "field-error" : ""} />
+                        {addErrors.phoneNumber && <span className="field-error-text">{addErrors.phoneNumber}</span>}
+                      </div>
                     </div>
-                    <input id="avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) setNewUser((prev) => ({ ...prev, avatar: file })); }} />
-                    {(newUser.avatar || newUser._existingAvatar) && (
-                      <button type="button" className="avatar-remove-btn" onClick={() => setNewUser((prev) => ({ ...prev, avatar: null, _existingAvatar: null }))}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                        Remove
-                      </button>
-                    )}
                   </div>
-                </div>
 
-                {/* ===== Personal Information ===== */}
-                <h3 className="form-section-title">Personal Information</h3>
-                <div className="user-form-grid">
-                  <div className="form-row">
-                    <label htmlFor="fullName">Employee Full Name *</label>
-                    <input type="text" id="fullName" name="fullName" value={newUser.fullName} onChange={handleChange} placeholder="Enter full name" className={addErrors.fullName ? "field-error" : ""} />
-                    {addErrors.fullName && <span className="field-error-text">{addErrors.fullName}</span>}
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="fatherName">Father Name *</label>
-                    <input type="text" id="fatherName" name="fatherName" value={newUser.fatherName} onChange={handleChange} placeholder="Enter father name" className={addErrors.fatherName ? "field-error" : ""} />
-                    {addErrors.fatherName && <span className="field-error-text">{addErrors.fatherName}</span>}
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="idCardNumber">ID Card Number *</label>
-                    <input type="text" id="idCardNumber" name="idCardNumber" value={newUser.idCardNumber} onChange={handleChange} placeholder="XXXXX-XXXXXXX-X" maxLength={15} className={addErrors.idCardNumber ? "field-error" : ""} />
-                    {addErrors.idCardNumber && <span className="field-error-text">{addErrors.idCardNumber}</span>}
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="phoneNumber">Phone Number *</label>
-                    <input type="text" id="phoneNumber" name="phoneNumber" value={newUser.phoneNumber} onChange={handleChange} placeholder="03XX-XXXXXXX" maxLength={12} className={addErrors.phoneNumber ? "field-error" : ""} />
-                    {addErrors.phoneNumber && <span className="field-error-text">{addErrors.phoneNumber}</span>}
+                  {/* ===== Profile Photo ===== */}
+                  <div className="avatar-upload-section">
+                    <label className="avatar-upload-label">Profile Photo</label>
+                    <div className="avatar-upload-row">
+                      <div className="avatar-preview" onClick={() => document.getElementById('avatar-input').click()}>
+                        {newUser.avatar ? (
+                          <img src={URL.createObjectURL(newUser.avatar)} alt="Avatar preview" />
+                        ) : newUser._existingAvatar ? (
+                          <img src={`${API_URL.replace('/api', '')}/storage/${newUser._existingAvatar}`} alt="Avatar preview" />
+                        ) : (
+                          <>
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                              <circle cx="12" cy="7" r="4" />
+                            </svg>
+                            <span className="avatar-upload-hint">Click to upload</span>
+                          </>
+                        )}
+                      </div>
+                      <input id="avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) setNewUser((prev) => ({ ...prev, avatar: file })); }} />
+                      {(newUser.avatar || newUser._existingAvatar) && (
+                        <button type="button" className="avatar-remove-btn" onClick={() => setNewUser((prev) => ({ ...prev, avatar: null, _existingAvatar: null }))}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                          Remove
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 

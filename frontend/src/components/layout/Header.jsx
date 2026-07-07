@@ -95,6 +95,7 @@ function Header() {
       name: stored?.name || "User",
       email: stored?.email || "user@example.com",
       role: stored?.role || "Member",
+      avatar: stored?.avatar || null,
     };
   });
 
@@ -273,10 +274,20 @@ function Header() {
     const unsub = subscribe('data:changed', fetchNotifications);
     const handleNotifRead = () => fetchNotifications();
     window.addEventListener('notification-read', handleNotifRead);
+
+    const handleUserUpdate = () => {
+      const stored = getUser();
+      if (stored) {
+        setUserState(prev => ({ ...prev, name: stored.name, email: stored.email, role: stored.role, avatar: stored.avatar || null }));
+      }
+    };
+    window.addEventListener('user-updated', handleUserUpdate);
+
     return () => {
       clearInterval(interval);
       unsub();
       window.removeEventListener('notification-read', handleNotifRead);
+      window.removeEventListener('user-updated', handleUserUpdate);
     };
   }, [fetchNotifications]);
 

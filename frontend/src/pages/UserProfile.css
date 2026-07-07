@@ -60,16 +60,20 @@
 
 .profile-avatar-center {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  position: sticky;
-  top: 0;
+  justify-content: center;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 20px 24px;
+  flex-shrink: 0;
+  margin-left: auto;
+  margin-top: -100px;
 }
 
 .profile-avatar-large {
-  width: 120px;
-  height: 120px;
+  width: 160px;
+  height: 160px;
   border-radius: 50%;
   background: linear-gradient(135deg, #6366f1, #8b5cf6);
   color: #fff;
@@ -104,6 +108,12 @@
 
 /* ==================== USER CARD ==================== */
 
+.profile-top-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+}
+
 .profile-user-card {
   background: #fff;
   border: 1px solid #e5e7eb;
@@ -111,8 +121,8 @@
   padding: 20px 24px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  flex: 1;
+  min-width: 0;
 }
 
 .profile-user-left {
@@ -423,9 +433,9 @@
 
 .avatar-upload-label {
   display: block;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: #374151;
+  color: #111827;
   margin-bottom: 8px;
 }
 
@@ -462,6 +472,12 @@
   height: 100%;
   object-fit: cover;
   border-radius: 50%;
+  border: none;
+}
+
+.avatar-preview:has(img) {
+  border: none;
+  background: transparent;
 }
 
 .avatar-upload-hint {
@@ -487,4 +503,54 @@
 .avatar-remove-btn:hover {
   background: #fef2f2;
   color: #b91c1c;
+}
+
+/* ── Personal Info Top Row (fields + avatar side by side) ── */
+
+.personal-info-top-row {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  margin-bottom: 4px;
+}
+
+.personal-info-top-row .personal-info-fields {
+  flex: 0 1 78%;
+  min-width: 0;
+}
+
+.personal-info-top-row .avatar-upload-section {
+  flex: 0 0 160px;
+  width: 160px;
+  margin-top: 48px;
+}
+
+.personal-info-top-row .avatar-upload-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  text-align: center;
+}
+
+.personal-info-top-row .avatar-upload-row {
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.personal-info-top-row .avatar-preview {
+  width: 130px;
+  height: 130px;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+@media (max-width: 992px) {
+  .personal-info-top-row {
+    flex-direction: column;
+  }
+  .personal-info-top-row .avatar-upload-section {
+    margin-top: 0;
+  }
 }

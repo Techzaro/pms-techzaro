@@ -15,7 +15,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import { authToken, getCurrentRole, normalizeRole } from "../utils/auth";
+import { authToken, getCurrentRole, getUser, setUser, normalizeRole } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { formatDateTimeInline } from "../utils/formatDateTime";
@@ -106,6 +106,14 @@ function MyProfile() {
       if (!res.ok) throw new Error("Unable to load profile");
       const data = await res.json();
       setProfileData(data);
+
+      if (data?.user) {
+        const stored = getUser();
+        if (stored) {
+          setUser(stored.role || getCurrentRole(), { ...stored, avatar: data.user.avatar || null });
+          window.dispatchEvent(new Event("user-updated"));
+        }
+      }
     } catch (err) {
       setError(err.message || "Failed to load profile");
     } finally {
@@ -277,31 +285,31 @@ function MyProfile() {
             {/* LEFT SIDE */}
             <div className="profile-left">
               {/* User Card */}
-              <div className="profile-user-card">
-                <div className="profile-user-left">
-                  <div className="profile-avatar">
+              <div className="profile-top-row">
+                <div className="profile-user-card">
+                  <div className="profile-user-left">
+                    <div className="profile-avatar">
+                      {user.avatar ? (
+                        <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                      ) : (
+                        getInitials(user.name)
+                      )}
+                    </div>
+                    <div className="profile-user-info">
+                      <h2>{user.name}</h2>
+                      <span className="profile-designation">{user.designation || roleDisplay}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="profile-avatar-center">
+                  <div className="profile-avatar-large">
                     {user.avatar ? (
-                      <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                      <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} />
                     ) : (
                       getInitials(user.name)
                     )}
                   </div>
-                  <div className="profile-user-info">
-                    <h2>{user.name}</h2>
-                    <span className="profile-designation">{user.designation || roleDisplay}</span>
-                    {user.department && <span className="profile-dept">{user.department}</span>}
-                  </div>
                 </div>
-                         {/* CENTER - Profile Image */}
-            <div className="profile-avatar-center">
-              <div className="profile-avatar-large">
-                {user.avatar ? (
-                  <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} />
-                ) : (
-                  getInitials(user.name)
-                )}
-              </div>
-            </div>
               </div>
 
               {/* Personal Information */}
@@ -629,29 +637,7 @@ function MyProfile() {
                 </div>
               </div>
             </div>
-            <br />
-            <div
-              className={`account-status-card${myHasUnread ? " activity-panel--unread" : ""}`}
-            >
-              <h3>Activity</h3>
-              {changes.length === 0 ? (
-                <p className="pd-muted" style={{ margin: 0 }}>No activity yet.</p>
-              ) : (
-                <ul className="td-activity-list">
-                  {changes.map((c, i) => (
-                    <li key={c.id || i} className={`td-activity-item${isMyItemUnread(c) ? " activity-item--unread" : ""}`}>
-                      <span className="td-activity-icon">✏️</span>
-                      <div className="td-activity-body">
-                        <span className="td-activity-text">
-                          {c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} changed
-                        </span>
-                        <span className="td-activity-time">{formatDateTimeInline(c.created_at)}</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+            {/* Activity section hidden for now */}
           </div>
 
         </div>

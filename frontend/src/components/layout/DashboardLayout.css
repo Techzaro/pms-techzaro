@@ -14,6 +14,7 @@ html, body, #root {
   background: #f5f7fb;
   min-height: 100vh;
   overflow-x: clip;
+  position: relative;
 }
 
 .main-layout {
@@ -55,7 +56,7 @@ html, body, #root {
 
 .dashboard-wave-bg {
   position: absolute;
-  top: 0;
+  top: 80px;
   left: 0;
   width: 100%;
   height: 480px;
