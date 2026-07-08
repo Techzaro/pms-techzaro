@@ -249,6 +249,18 @@ function TaskDetails() {
   const files = task?.files || [];
   const progress = typeof task?.deliverables_progress === "number" ? task.deliverables_progress : 0;
 
+  const handleFileReorder = useCallback((reordered) => {
+    if (!task?.id) return;
+    const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
+    fetch(`${API_URL}/tasks/${task.id}/files/reorder`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${authToken()}` },
+      body: JSON.stringify({ items: payload }),
+      _notifHandled: true,
+    }).catch(() => { });
+    setTask((prev) => prev ? { ...prev, files: reordered } : prev);
+  }, [task?.id]);
+
   useEffect(() => {
     if (!task?.id) return;
     const token = authToken();
@@ -519,7 +531,7 @@ function TaskDetails() {
                   {[
                     { id: "deliverables", label: "Deliverables", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg> },
                     { id: "overview", label: "Overview", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
-                    { id: "files", label: "Files", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg> },
+                    { id: "files", label: "Platform files & links", icon: <FolderOpen size={16} /> },
                   ].map(({ id, label, icon }) => (
                     <button key={id} className={`td-tab ${tab === id ? "td-tab--on" : ""}`} onClick={() => setTab(id)}>
                       {icon}
@@ -621,7 +633,7 @@ function TaskDetails() {
                     </div>
                   )}
 
-                  {tab === "files" && <FileUploadSection taskId={task.id} files={files} />}
+                  {tab === "files" && <FileUploadSection taskId={task.id} files={files} onReorder={handleFileReorder} />}
 
                 </div>
               </div>
@@ -822,31 +834,48 @@ function TaskDetails() {
 }
 
 /* ── File Upload Section Component ── */
-/** Renders the list of files attached to a task, with download links. */
-function FileUploadSection({ taskId, files }) {
+/** Renders the list of files attached to a task, with download links and drag-drop reorder. */
+function FileUploadSection({ taskId, files, onReorder }) {
+  const boxColors = [
+    "#eef2ff", "#f0fdf4", "#fefce8", "#fef2f2",
+    "#f5f3ff", "#ecfeff", "#fff7ed", "#fce7f3",
+  ];
   return (
     <div>
       <div className="td-section-header">
-        <h2 className="td-section-title">Files & Attachments</h2>
+        <h2 className="td-section-title">Platform files & links</h2>
       </div>
       {files.length === 0 ? (
         <p className="td-empty">No files attached to this task.</p>
       ) : (
-        <ul className="td-files">
-          {files.map((f) => (
-            <li key={f.id} style={{ flexDirection: "column", alignItems: "flex-start", gap: "2px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <FolderOpen size={18} />
-                <span style={{ fontWeight: 600, fontSize: "14px" }}>{f.name}</span>
+        <SortableTableWrapper
+          items={files}
+          onReorder={onReorder}
+          as="div"
+        >
+          {(f, idx) => {
+            const bg = boxColors[idx % boxColors.length];
+            return (
+              <div key={f.id} className="pd-file-box" style={{ background: bg }}>
+                <div className="pd-file-box__name">
+                  <FolderOpen size={18} />
+                  <span>{f.name}</span>
+                </div>
+                {f.url && (
+                  <a
+                    href={fileUrl(f.url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="pd-file-box__link"
+                    style={{ color: "#6366f1" }}
+                  >
+                    {f.url}
+                  </a>
+                )}
               </div>
-              {f.url && (
-                <a href={fileUrl(f.url)} target="_blank" rel="noopener noreferrer" style={{ marginLeft: "26px", fontSize: "13px", color: "#6366f1" }}>
-                  {f.url}
-                </a>
-              )}
-            </li>
-          ))}
-        </ul>
+            );
+          }}
+        </SortableTableWrapper>
       )}
     </div>
   );

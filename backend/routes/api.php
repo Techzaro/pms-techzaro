@@ -225,6 +225,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/files', [TaskController::class, 'uploadFile']); // Upload file to task
     Route::post('/tasks/{task}/links', [TaskController::class, 'addLink']); // Add link to task
     Route::delete('/tasks/{task}/files/{file}', [TaskController::class, 'deleteFile']); // Delete task file
+    Route::post('/tasks/{task}/files/reorder', [TaskController::class, 'reorderFiles']); // Reorder task files
 
     // Personal user notes on tasks (private per user)
     Route::get('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'show']); // View own note

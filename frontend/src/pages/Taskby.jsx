@@ -418,7 +418,22 @@ const Taskby = () => {
                             <button
                               className="action-icon-btn action-edit"
                               title="Edit Project"
-                              onClick={() => setEditingProject(item)}
+                              onClick={async () => {
+                                try {
+                                  const token = authToken();
+                                  const res = await fetch(`${API_URL}/projects/${item.id}`, {
+                                    headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+                                  });
+                                  if (res.ok) {
+                                    const data = await res.json();
+                                    setEditingProject(data.project || item);
+                                  } else {
+                                    setEditingProject(item);
+                                  }
+                                } catch {
+                                  setEditingProject(item);
+                                }
+                              }}
                             >
                               <Pencil size={16} />
                             </button>
@@ -509,7 +524,22 @@ const Taskby = () => {
                           <button
                             className="action-icon-btn action-edit"
                             title="Edit Task"
-                            onClick={() => setEditingTask(item)}
+                            onClick={async () => {
+                              try {
+                                const token = authToken();
+                                const res = await fetch(`${API_URL}/tasks/${item.id}`, {
+                                  headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+                                });
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  setEditingTask(data.task || item);
+                                } else {
+                                  setEditingTask(item);
+                                }
+                              } catch {
+                                setEditingTask(item);
+                              }
+                            }}
                           >
                             <Pencil size={16} />
                           </button>

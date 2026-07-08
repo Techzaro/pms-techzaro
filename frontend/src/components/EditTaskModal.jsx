@@ -305,30 +305,6 @@ export default function EditTaskModal({ task, onClose }) {
             <div className="task-field">
               <label>Links & Attachment</label>
 
-              {(() => {
-                const existingAttachments = existingFiles.filter(
-                  (f) => !(f.url && f.url.startsWith("http") && !f.url.includes("/storage/"))
-                );
-                return existingAttachments.length > 0 && (
-                  <div className="cp-attachments-list">
-                    {existingAttachments.map((file) => {
-                      const fileUrl = file.url
-                        ? (file.url.startsWith("http") ? file.url : API_URL.replace(/\/api\/?$/, "") + file.url)
-                        : "#";
-                      return (
-                        <div key={file.id} className="cp-attachment-item">
-                          <span className="cp-attachment-icon">📄</span>
-                          <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="cp-attachment-name cp-attachment-link">
-                            {file.name}
-                          </a>
-                          <button type="button" className="cp-attachment-remove" onClick={() => handleDeleteExistingFile(file.id)}>✕</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-
               <div
                 className="cp-drop-zone"
                 ref={dropRef}
@@ -354,6 +330,30 @@ export default function EditTaskModal({ task, onClose }) {
                   onChange={(e) => { if (e.target.files.length > 0) handleFiles(e.target.files); e.target.value = ""; }}
                 />
               </div>
+
+              {(() => {
+                const existingAttachments = existingFiles.filter(
+                  (f) => !(f.url && f.url.startsWith("http") && !f.url.includes("/storage/"))
+                );
+                return existingAttachments.length > 0 && (
+                  <div className="cp-attachments-list">
+                    {existingAttachments.map((file) => {
+                      const fileUrl = file.url
+                        ? (file.url.startsWith("http") ? file.url : API_URL.replace(/\/api\/?$/, "") + file.url)
+                        : "#";
+                      return (
+                        <div key={file.id} className="cp-attachment-item">
+                          <span className="cp-attachment-icon">📄</span>
+                          <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="cp-attachment-name cp-attachment-link">
+                            {file.name}
+                          </a>
+                          <button type="button" className="cp-attachment-remove" onClick={() => handleDeleteExistingFile(file.id)}>✕</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               {pendingFiles.length > 0 && (
                 <div className="cp-attachments-list">

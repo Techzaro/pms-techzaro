@@ -15,6 +15,7 @@ class TaskFile extends Model
         'task_id',
         'name',
         'url',
+        'sort_order',
     ];
 
     /** The task this file belongs to. */

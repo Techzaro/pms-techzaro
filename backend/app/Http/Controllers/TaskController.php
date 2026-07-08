@@ -1720,6 +1720,28 @@ class TaskController extends Controller
     }
 
     /**
+     * Reorder task files by updating their sort_order values in bulk.
+     *
+     * @param  Request  $request  Input: items[] with id and sort_order.
+     * @param  Task  $task  The task whose files are being reordered.
+     * @return JsonResponse JSON response confirming reorder.
+     */
+    public function reorderFiles(Request $request, Task $task)
+    {
+        $request->validate([
+            'items' => 'required|array',
+            'items.*.id' => 'required|integer|exists:task_files,id',
+            'items.*.sort_order' => 'required|integer|min:0',
+        ]);
+
+        foreach ($request->items as $item) {
+            TaskFile::where('id', $item['id'])->where('task_id', $task->id)->update(['sort_order' => $item['sort_order']]);
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
      * Reorder tasks by updating their sort_order values in bulk.
      *
      * @param  Request  $request  Input: items[] with id and sort_order.
