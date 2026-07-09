@@ -12,17 +12,22 @@ import {
   Building2,
   Calendar,
   CalendarDays,
+  Check,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
   Banknote,
+  Copy,
   Eye,
+  EyeOff,
   FolderOpen,
+  Globe,
   ListChecks,
   Monitor,
   Pencil,
   Plus,
   Send,
+  Shield,
   Tag,
   Trash2,
   UserRound,
@@ -36,6 +41,8 @@ import EditProjectModal from "../components/EditProjectModal";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
 import ViewDeliverableModal from "../components/ViewDeliverableModal";
 import AssignerViewModal from "../components/AssignerViewModal";
+import AddProjectFileModal from "../components/AddProjectFileModal";
+import AddAccessModal from "../components/AddAccessModal";
 import ConfirmModal from "../components/ConfirmModal";
 import SubmitProjectModal from "../components/SubmitProjectModal";
 import ProjectSubmissionPanel from "../components/ProjectSubmissionPanel";
@@ -158,6 +165,103 @@ function sanitizeHtml(html) {
   return String(html || "").replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
 }
 
+function CredentialRow({ credential, onDelete }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyPassword = async () => {
+    try {
+      await navigator.clipboard.writeText(credential.password);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const textArea = document.createElement("textarea");
+      textArea.value = credential.password;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const copyUsername = async () => {
+    try {
+      await navigator.clipboard.writeText(credential.username);
+    } catch {
+      const textArea = document.createElement("textarea");
+      textArea.value = credential.username;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+    }
+  };
+
+  return (
+    <div className="pd-cred-card">
+      <div className="pd-cred-header">
+        <div className="pd-cred-website">
+          <Globe size={18} />
+          <span className="pd-cred-name">{credential.website_name}</span>
+          {credential.website_url && (
+            <a
+              href={credential.website_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="pd-cred-link"
+            >
+              Visit
+            </a>
+          )}
+        </div>
+        <button className="pd-cred-delete" onClick={onDelete} title="Delete credential">
+          <Trash2 size={14} />
+        </button>
+      </div>
+
+      <div className="pd-cred-fields">
+        <div className="pd-cred-field">
+          <label>Username / Email</label>
+          <div className="pd-cred-value-row">
+            <span className="pd-cred-value">{credential.username}</span>
+            <button className="pd-cred-copy" onClick={copyUsername} title="Copy username">
+              <Copy size={14} />
+            </button>
+          </div>
+        </div>
+
+        <div className="pd-cred-field">
+          <label>Password</label>
+          <div className="pd-cred-value-row">
+            <span className="pd-cred-value pd-cred-password">
+              {showPassword ? credential.password : "••••••••"}
+            </span>
+            <button className="pd-cred-copy" onClick={() => setShowPassword(!showPassword)} title={showPassword ? "Hide password" : "Show password"}>
+              {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+            <button className={`pd-cred-copy ${copied ? "pd-cred-copied" : ""}`} onClick={copyPassword} title="Copy password">
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+            </button>
+          </div>
+        </div>
+
+        <div className="pd-cred-field">
+          <label>Assigned To</label>
+          <div className="pd-cred-assigned">
+            {(credential.assigned_users || []).map((u) => (
+              <span key={u.id} className="pd-cred-user-badge">
+                {u.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProjectDetails() {
   const { projectId } = useParams();
   const navigate = useNavigate();
@@ -191,6 +295,7 @@ function ProjectDetails() {
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null });
   const [fileSearch, setFileSearch] = useState("");
+  const [showAddFileModal, setShowAddFileModal] = useState(false);
   const [reopenDialog, setReopenDialog] = useState(false);
   const [acting, setActing] = useState(false);
   const [orderedTasks, setOrderedTasks] = useState([]);
@@ -199,6 +304,9 @@ function ProjectDetails() {
   const [visibilityUsers, setVisibilityUsers] = useState([]);
   const [visibilitySelected, setVisibilitySelected] = useState({});
   const [visibilitySaving, setVisibilitySaving] = useState(false);
+  const [showAddAccessModal, setShowAddAccessModal] = useState(false);
+  const [accessCredentials, setAccessCredentials] = useState([]);
+  const [loadingCredentials, setLoadingCredentials] = useState(false);
 
   const memberCount = useMemo(() => {
     if (!project) return 0;
@@ -220,6 +328,12 @@ function ProjectDetails() {
   useEffect(() => {
     setOrderedDeliverables(project?.deliverables || []);
   }, [project?.deliverables]);
+
+  useEffect(() => {
+    if (tab === "access" && project) {
+      fetchAccessCredentials();
+    }
+  }, [tab, project]);
 
   const handleTaskReorder = useCallback((reordered) => {
     setOrderedTasks(reordered);
@@ -560,12 +674,47 @@ function ProjectDetails() {
     }
   };
 
+  const fetchAccessCredentials = async () => {
+    if (!project) return;
+    setLoadingCredentials(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/projects/${project.id}/access-credentials`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load access credentials");
+      const data = await res.json();
+      setAccessCredentials(data.credentials || []);
+    } catch (err) {
+      console.error("Fetch access credentials error:", err);
+      setAccessCredentials([]);
+    } finally {
+      setLoadingCredentials(false);
+    }
+  };
+
+  const deleteAccessCredential = async (credentialId) => {
+    if (!project || !confirm("Are you sure you want to delete this credential?")) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/projects/${project.id}/access-credentials/${credentialId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to delete access credential");
+      fetchAccessCredentials();
+    } catch (err) {
+      console.error("Delete access credential error:", err);
+    }
+  };
+
   const tabs = [
     { id: "overview", label: "Overview", icon: ListChecks },
     { id: "tasks", label: "Tasks", icon: ClipboardList },
     { id: "deliverables", label: "Deliverables", icon: Calendar },
     { id: "files", label: "Platform files & links", icon: FolderOpen },
     { id: "members", label: "Members", icon: Users },
+    { id: "access", label: "Access", icon: Shield },
   ];
 
   const renderRail = () => (
@@ -1085,7 +1234,14 @@ function ProjectDetails() {
                     {tab === "files" && (
                       <div className="pd-tab-panel">
                         <section className="pd-card-flat">
-                          <h2 className="pd-block-title">Platform files & links</h2>
+                          <div className="pd-card-flat__head">
+                            <h2 className="pd-block-title pd-block-title--inline">Platform files & links ({files.length})</h2>
+                            {isAdminOrManager && (
+                              <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowAddFileModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <Plus size={16} /> Add Files
+                              </button>
+                            )}
+                          </div>
 
                           {files.length > 0 && (
                             <div className="pd-files-search">
@@ -1193,6 +1349,40 @@ function ProjectDetails() {
                               </div>
                             )}
                           </SortableTableWrapper>
+                        </section>
+                      </div>
+                    )}
+
+                    {tab === "access" && (
+                      <div className="pd-tab-panel">
+                        <section className="pd-card-flat">
+                          <div className="pd-card-flat__head">
+                            <h2 className="pd-block-title pd-block-title--inline">Project Access Credentials</h2>
+                            {isAdminOrManager && (
+                              <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowAddAccessModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <Plus size={16} /> Add Access
+                              </button>
+                            )}
+                          </div>
+                          <p className="pd-muted" style={{ margin: "0 0 16px" }}>
+                            Store and manage login credentials for project-related websites. Passwords are encrypted and only visible to assigned users.
+                          </p>
+
+                          {loadingCredentials ? (
+                            <p className="pd-muted">Loading credentials...</p>
+                          ) : accessCredentials.length === 0 ? (
+                            <p className="pd-muted">No access credentials added yet. Click "Add Access" to store login details.</p>
+                          ) : (
+                            <div className="pd-credentials-list">
+                              {accessCredentials.map((cred) => (
+                                <CredentialRow
+                                  key={cred.id}
+                                  credential={cred}
+                                  onDelete={() => deleteAccessCredential(cred.id)}
+                                />
+                              ))}
+                            </div>
+                          )}
                         </section>
                       </div>
                     )}
@@ -1325,6 +1515,22 @@ function ProjectDetails() {
           </div>
         </div>
       )}
+
+      <AddProjectFileModal
+        isOpen={showAddFileModal}
+        onClose={() => setShowAddFileModal(false)}
+        projectId={projectId}
+        onSuccess={loadProject}
+      />
+
+      <AddAccessModal
+        isOpen={showAddAccessModal}
+        onClose={() => setShowAddAccessModal(false)}
+        projectId={projectId}
+        projectName={project?.title || ""}
+        onSuccess={fetchAccessCredentials}
+        files={project?.files || []}
+      />
     </>
   );
 }

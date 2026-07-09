@@ -110,50 +110,63 @@ const SummaryCard = memo(function SummaryCard({ card, onClick }) {
  * Shows task time, title, assignee role labels, assignee avatars, and priority status.
  * Clicking an avatar navigates to the task or project details page.
  */
-const WorkloadItem = memo(function WorkloadItem({ item, index, total, navigate, getInitials, rolePath }) {
+const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, rolePath, cardWidth, getProgressColor, PROJECTS_PER_VIEW, GAP }) {
   return (
-    <div className="workload-item" style={{
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "14px 0", borderBottom: index < total - 1 ? "1px solid #F3F4F6" : "none",
+    <div className="dash-task-card" style={{
+      minWidth: cardWidth > 0 ? `${cardWidth}px` : `calc((100% - ${(PROJECTS_PER_VIEW - 1) * GAP}px) / ${PROJECTS_PER_VIEW})`,
+      flex: cardWidth > 0 ? `0 0 ${cardWidth}px` : `0 0 calc((100% - ${(PROJECTS_PER_VIEW - 1) * GAP}px) / ${PROJECTS_PER_VIEW})`,
+    }} onClick={() => {
+      const from = getActivityFrom(item);
+      const dest = getActivityDestination(item);
+      navigate(`${dest}${dest.includes("?") ? "&" : "?"}from=${from}`, { state: { from } });
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: "220px" }}>
-        <span className="workload-time" style={{ minWidth: "60px", fontSize: "13px", color: "#6b7280" }}>{item.time}</span>
-        <span className="workload-dot" />
-        <div>
-          <p className="workload-title" style={{ margin: 0, fontWeight: 600, fontSize: "14px" }}>{item.title}</p>
-          <span className="workload-member" style={{ fontSize: "12px", color: "#9ca3af" }}>{item.roleLabel}</span>
+      <div className="dash-task-card-header">
+        <h3>{item.title}</h3>
+      </div>
+
+      <div className="dash-progress-section">
+        <div className="dash-progress-top">
+          <span>Progress</span>
+          <span>0%</span>
+        </div>
+        <div className="dash-progress-bar">
+          <div
+            className="dash-progress-fill"
+            style={{
+              width: "0%",
+              minWidth: "100%",
+              background: "#d1d5db",
+            }}
+          ></div>
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1, justifyContent: "center" }}>
+
+      <div className="dash-task-card-footer">
+        <div className="dash-task-date-info">
+          <span className="dash-task-date-icon">&#x1F4C5;</span>
+          {item.end_date ? (
+            <span>{new Date(item.end_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+          ) : (
+            <span>No deadline set</span>
+          )}
+        </div>
+      </div>
+
+      <div className="dash-task-avatars">
         {item.assignees.slice(0, 4).map((a, ai) => (
-        <div
-          key={ai}
-          onClick={() => {
-            const from = getActivityFrom(item);
-            const dest = getActivityDestination(item);
-            navigate(`${dest}${dest.includes("?") ? "&" : "?"}from=${from}`, { state: { from } });
-          }}
-          title={a.name || a.email}
-            style={{
-              width: "30px", height: "30px", borderRadius: "50%", background: "#1a1a1a",
-              color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "2px solid #fff",
-              marginLeft: ai > 0 ? "-8px" : "0",
-            }}
+          <div
+            key={ai}
+            title={a.name || a.email}
+            className="dash-task-avatar"
+            style={{ marginLeft: ai > 0 ? "-8px" : "0" }}
           >
             {getInitials(a.name || a.email)}
           </div>
         ))}
         {item.assignees.length > 4 && (
-          <span style={{ fontSize: "11px", color: "#9ca3af", marginLeft: "-4px" }}>+{item.assignees.length - 4}</span>
+          <span className="dash-task-avatar-overflow">+{item.assignees.length - 4}</span>
         )}
       </div>
-      <span
-        data-priority={item.status}
-        style={{ fontSize: "11px", whiteSpace: "nowrap", minWidth: "100px", textAlign: "right" }}
-      >
-        {item.status}
-      </span>
     </div>
   );
 });
@@ -326,6 +339,8 @@ function Admin() {
         time: w.end_date ? new Date(w.end_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '\u2014',
         title: w.title || w.name || 'Untitled', roleLabel, assignees,
         status: w.priority ? w.priority + ' Priority' : (w.status || '\u2014'),
+        end_date: w.end_date || null,
+        priority: w.priority || 'Medium',
       };
     }),
     [dashboard?.todayWorkload]
@@ -457,6 +472,7 @@ function Admin() {
 
   // Project carousel state management
   const [projectSlide, setProjectSlide] = useState(0);
+  const [taskSlide, setTaskSlide] = useState(0);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [pastActivityOpen, setPastActivityOpen] = useState(false);
   // Fetch past activity data only when the section is expanded
@@ -468,8 +484,11 @@ function Admin() {
   );
   const PROJECTS_PER_VIEW = isMobile ? 1 : 3;
   const sliderRef = useRef(null);
+  const taskSliderRef = useRef(null);
   const [cardWidth, setCardWidth] = useState(0);
+  const [taskCardWidth, setTaskCardWidth] = useState(0);
   const totalProjectSlides = Math.max(0, activeProjects.length - PROJECTS_PER_VIEW);
+  const totalTaskSlides = Math.max(0, todayWorkload.length - PROJECTS_PER_VIEW);
   const GAP = isMobile ? 0 : 20;
 
   // Update mobile breakpoint on window resize
@@ -492,6 +511,20 @@ function Admin() {
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, [activeProjects.length, PROJECTS_PER_VIEW, GAP]);
+
+  // Measure task slider container width
+  useEffect(() => {
+    const measure = () => {
+      if (taskSliderRef.current) {
+        const containerWidth = taskSliderRef.current.offsetWidth;
+        const cw = (containerWidth - (PROJECTS_PER_VIEW - 1) * GAP) / PROJECTS_PER_VIEW;
+        setTaskCardWidth(cw);
+      }
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [todayWorkload.length, PROJECTS_PER_VIEW, GAP]);
 
   return (
     <DashboardLayout>
@@ -517,23 +550,74 @@ function Admin() {
               <h3>Today's Tasks</h3>
               <button className="workload-view-btn" onClick={() => navigate(rolePath("tasks/taskby"))}>View All Tasks</button>
             </div>
-            <div className="workload-list">
-              {todayWorkload.length === 0 ? (
-                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No tasks due today</p>
-              ) : (
-                todayWorkload.map((item, index) => (
-                  <WorkloadItem
-                    key={`${item.id}-${index}`}
-                    item={item}
-                    index={index}
-                    total={todayWorkload.length}
-                    navigate={navigate}
-                    getInitials={getInitials}
-                    rolePath={rolePath}
-                  />
-                ))
-              )}
-            </div>
+            {todayWorkload.length === 0 ? (
+              <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No tasks due today</p>
+            ) : (
+              <>
+                <div ref={taskSliderRef} style={{ overflow: "hidden" }}>
+                  <div style={{
+                    display: "flex", gap: `${GAP}px`, transition: "transform 0.3s ease",
+                    transform: `translateX(-${taskSlide * (taskCardWidth + GAP)}px)`,
+                  }}>
+                    {todayWorkload.map((item, index) => (
+                      <WorkloadItem
+                        key={`${item.id}-${index}`}
+                        item={item}
+                        navigate={navigate}
+                        getInitials={getInitials}
+                        rolePath={rolePath}
+                        cardWidth={taskCardWidth}
+                        getProgressColor={getProgressColor}
+                        PROJECTS_PER_VIEW={PROJECTS_PER_VIEW}
+                        GAP={GAP}
+                      />
+                    ))}
+                  </div>
+                </div>
+                {todayWorkload.length > PROJECTS_PER_VIEW && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "16px", marginTop: "20px" }}>
+                    <button
+                      onClick={() => setTaskSlide((s) => Math.max(0, s - 1))}
+                      disabled={taskSlide === 0}
+                      style={{
+                        background: "transparent", border: "none",
+                        color: taskSlide === 0 ? "#CBD5E1" : "#1E293B",
+                        cursor: taskSlide === 0 ? "default" : "pointer",
+                        fontSize: "24px", fontWeight: 700, padding: "4px 8px", lineHeight: 1,
+                      }}
+                    >
+                      &lt;
+                    </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      {Array.from({ length: totalTaskSlides + 1 }).map((_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setTaskSlide(i)}
+                          style={{
+                            width: i === taskSlide ? "28px" : "10px", height: "10px",
+                            borderRadius: "5px", border: "none",
+                            background: i === taskSlide ? "#1E293B" : "#CBD5E1",
+                            cursor: "pointer", transition: "all 0.2s", padding: 0,
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => setTaskSlide((s) => Math.min(totalTaskSlides, s + 1))}
+                      disabled={taskSlide >= totalTaskSlides}
+                      style={{
+                        background: "transparent", border: "none",
+                        color: taskSlide >= totalTaskSlides ? "#CBD5E1" : "#1E293B",
+                        cursor: taskSlide >= totalTaskSlides ? "default" : "pointer",
+                        fontSize: "24px", fontWeight: 700, padding: "4px 8px", lineHeight: 1,
+                      }}
+                    >
+                      &gt;
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
           <div className="active-projects-section" style={{
             background: "#fff", borderRadius: "20px", padding: "24px",
