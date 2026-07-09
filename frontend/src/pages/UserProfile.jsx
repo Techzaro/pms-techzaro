@@ -129,6 +129,9 @@ function UserProfile() {
   const [changes, setChanges] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [resignConfirmOpen, setResignConfirmOpen] = useState(false);
+  const [removeDocConfirmOpen, setRemoveDocConfirmOpen] = useState(false);
+  const [pendingRemoveDoc, setPendingRemoveDoc] = useState({ source: "", index: -1 });
+  const [existingOtherDocs, setExistingOtherDocs] = useState([]);
   const [companyDocs, setCompanyDocs] = useState({});
 
   // Dynamic departments and designations from users data + localStorage persistence
@@ -162,7 +165,7 @@ function UserProfile() {
     markViewed: markUserViewed,
   } = useActivityHighlight("user", userId, profileData?.activity_max_id || 0, changes);
 
-  useEscapeKey(isEditModalOpen, () => setIsEditModalOpen(false));
+  useEscapeKey(isEditModalOpen, () => { setIsEditModalOpen(false); setExistingOtherDocs([]); });
 
   useEffect(() => {
     if (isEditModalOpen) {
@@ -355,6 +358,14 @@ function UserProfile() {
     setEditErrors({});
     setEditFiles({});
     setFilePreviews({});
+    // Initialize existing other docs with rename state
+    const docs = typeof u.other_document === "string" ? (() => { try { return JSON.parse(u.other_document); } catch { return []; } })() : (u.other_document || []);
+    setExistingOtherDocs((Array.isArray(docs) ? docs : []).filter(d => d).map((doc) => {
+      const docPath = typeof doc === "string" ? doc : (doc && doc.path ? doc.path : null);
+      if (!docPath) return null;
+      const docName = typeof doc === "object" && doc.name ? doc.name : docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
+      return { path: docPath, name: docName, renaming: false };
+    }).filter(Boolean));
     setIsEditModalOpen(true);
   };
 
@@ -565,9 +576,27 @@ function UserProfile() {
       });
 
       if (editOtherDocs.length > 0) {
-        editOtherDocs.forEach((f) => {
-          formData.append("other_document[]", f);
+        editOtherDocs.forEach((item) => {
+          formData.append("other_document[]", item.file);
+          formData.append("other_document_names[]", item.customName || item.file.name.replace(/\.[^.]+$/, ""));
         });
+      }
+
+      // Existing other docs changes (renames / removals)
+      if (user.other_document) {
+        const originalDocs = typeof user.other_document === "string" ? (() => { try { return JSON.parse(user.other_document); } catch { return []; } })() : (user.other_document || []);
+        const safeOriginals = (Array.isArray(originalDocs) ? originalDocs : []).map(d => {
+          if (typeof d === "string") return { path: d, name: null };
+          if (d && d.path) return d;
+          return null;
+        }).filter(Boolean);
+        if (existingOtherDocs.length !== safeOriginals.length || existingOtherDocs.some((doc, i) => {
+          const orig = safeOriginals[i];
+          if (!orig || !doc) return true;
+          return doc.path !== orig.path || doc.name !== (orig.name || null);
+        })) {
+          formData.append("existing_other_docs", JSON.stringify(existingOtherDocs));
+        }
       }
 
       // Avatar upload
@@ -597,6 +626,8 @@ function UserProfile() {
       setIsEditModalOpen(false);
       setEditFiles({});
       setFilePreviews({});
+      setEditOtherDocs([]);
+      setExistingOtherDocs([]);
 
       if (data.user) {
         setProfileData((prev) => ({ ...prev, user: { ...prev.user, ...data.user } }));
@@ -906,12 +937,13 @@ function UserProfile() {
                         </div>
                       );
                     }
-                    return docs.map((docPath, i) => {
-                      const fileName = docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
-                      const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(fileName);
+                    return docs.map((doc, i) => {
+                      const docPath = typeof doc === "string" ? doc : doc.path;
+                      const docName = typeof doc === "object" && doc.name ? doc.name : docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
+                      const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(docName);
                       return (
                         <div className="info-row" key={`other-${i}`}>
-                          <span className="info-label">{fileName}</span>
+                          <span className="info-label">{docName}</span>
                           <span className="info-value">
                             <a
                               href={`${API_URL}/users/${userId}/documents/other_document?token=${authToken()}&file=${encodeURIComponent(docPath)}`}
@@ -926,36 +958,6 @@ function UserProfile() {
                       );
                     });
                   })()}
-                  {companyDocs?.company_logo?.exists && (
-                    <div className="info-row">
-                      <span className="info-label">Company Logo</span>
-                      <span className="info-value">
-                        <a
-                          href={`${API_URL.replace("/api", "")}/storage/${companyDocs.company_logo.path}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ color: "#2563eb", textDecoration: "underline" }}
-                        >
-                          View Image
-                        </a>
-                      </span>
-                    </div>
-                  )}
-                  {companyDocs?.qr_code?.exists && (
-                    <div className="info-row">
-                      <span className="info-label">QR Code</span>
-                      <span className="info-value">
-                        <a
-                          href={`${API_URL.replace("/api", "")}/storage/${companyDocs.qr_code.path}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ color: "#2563eb", textDecoration: "underline" }}
-                        >
-                          View Image
-                        </a>
-                      </span>
-                    </div>
-                  )}
                   {companyDocs?.other_documents?.files?.map((file, i) => {
                     const fileName = file.filename.replace(/^other_document_\d+_/, "").replace(/\.[^.]+$/, "");
                     const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(file.filename);
@@ -1053,9 +1055,18 @@ function UserProfile() {
                   <p className="modal-subtitle">Update user details.</p>
                 </div>
               </div>
-              <button className="user-modal-close" onClick={() => setIsEditModalOpen(false)}>
-                &#10005;
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <LoadingButton
+                  onClick={handleEditSubmit}
+                  className="primary-button"
+                  style={{ fontSize: 14 }}
+                >
+                  Update User
+                </LoadingButton>
+                <button className="user-modal-close" onClick={() => { setIsEditModalOpen(false); setExistingOtherDocs([]); }}>
+                  &#10005;
+                </button>
+              </div>
             </div>
 
             <form className="user-form" onSubmit={handleEditSubmit}>
@@ -1333,25 +1344,6 @@ function UserProfile() {
                 {/* Other Document — multi-file with remove buttons */}
                 <div className="form-row">
                   <label htmlFor="edit-other_document">Other Document</label>
-                  {user.other_document && editOtherDocs.length === 0 && (() => {
-                    const docs = typeof user.other_document === "string" ? (() => { try { return JSON.parse(user.other_document); } catch { return []; } })() : (user.other_document || []);
-                    return docs.length > 0 ? (
-                      <div style={{ marginBottom: 6, fontSize: 13, color: "#64748b", display: "flex", flexDirection: "column", gap: 4 }}>
-                        {docs.map((docPath, i) => {
-                          const fileName = docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
-                          return (
-                            <a key={i} href={`${API_URL}/users/${userId}/documents/other_document?token=${authToken()}&file=${encodeURIComponent(docPath)}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>
-                              {fileName || `Document ${i + 1}`}
-                            </a>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div style={{ marginBottom: 6, fontSize: 13, color: "#64748b" }}>
-                        No documents uploaded
-                      </div>
-                    );
-                  })()}
                   <input
                     type="file"
                     id="edit-other_document"
@@ -1368,33 +1360,152 @@ function UserProfile() {
                         valid.push(f);
                       }
                       if (valid.length > 0) {
-                        setEditOtherDocs((prev) => [...prev, ...valid]);
+                        setEditOtherDocs((prev) => [
+                          ...prev,
+                          ...valid.map((f) => ({ file: f, customName: f.name.replace(/\.[^.]+$/, ""), renaming: false })),
+                        ]);
                       }
                       e.target.value = "";
                     }}
                   />
                   {editOtherDocs.length > 0 && (
                     <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-                      {editOtherDocs.map((f, i) => (
+                      {editOtherDocs.filter(item => item && item.file).map((item, i) => (
                         <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
-                          <span style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{f.name}</span>
-                          <button type="button" onClick={() => {
-                            setEditOtherDocs((prev) => prev.filter((_, idx) => idx !== i));
-                          }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 12, fontWeight: 600, flexShrink: 0, marginLeft: 8 }}>Remove</button>
+                          {item.renaming ? (
+                            <>
+                              <input
+                                autoFocus
+                                type="text"
+                                value={item.customName}
+                                onChange={(e) => {
+                                  setEditOtherDocs((prev) => {
+                                    const updated = [...prev];
+                                    updated[i] = { ...updated[i], customName: e.target.value };
+                                    return updated;
+                                  });
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    setEditOtherDocs((prev) => {
+                                      const updated = [...prev];
+                                      updated[i] = { ...updated[i], renaming: false };
+                                      return updated;
+                                    });
+                                  }
+                                }}
+                                style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
+                              />
+                              <button type="button" onClick={() => {
+                                setEditOtherDocs((prev) => {
+                                  const updated = [...prev];
+                                  updated[i] = { ...updated[i], renaming: false };
+                                  return updated;
+                                });
+                              }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 6 }} title="Save name">&#10003;</button>
+                            </>
+                          ) : (
+                            <span style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }} title={item.customName || item.file.name}>
+                              {item.customName || item.file.name}
+                            </span>
+                          )}
+                          {!item.renaming && (
+                            <div style={{ display: "flex", gap: 10, flexShrink: 0, marginLeft: 8 }}>
+                              <button type="button" onClick={() => {
+                                setEditOtherDocs((prev) => {
+                                  const updated = [...prev];
+                                  updated[i] = { ...updated[i], renaming: true, customName: item.customName || item.file.name.replace(/\.[^.]+$/, "") };
+                                  return updated;
+                                });
+                              }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
+                              <button type="button" onClick={() => {
+                                setPendingRemoveDoc({ source: "new", index: i });
+                                setRemoveDocConfirmOpen(true);
+                              }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1 }} title="Remove">&#10005;</button>
+                            </div>
+                          )}
+                          {item.renaming && (
+                            <button type="button" onClick={() => {
+                              setPendingRemoveDoc({ source: "new", index: i });
+                              setRemoveDocConfirmOpen(true);
+                            }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0, marginLeft: 6 }} title="Remove">&#10005;</button>
+                          )}
                         </div>
                       ))}
                     </div>
                   )}
+                  {existingOtherDocs.length > 0 && editOtherDocs.length === 0 && (
+                    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                      {existingOtherDocs.filter(doc => doc && doc.path).map((doc, i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
+                          {doc.renaming ? (
+                            <>
+                              <input
+                                autoFocus
+                                type="text"
+                                value={doc.name}
+                                onChange={(e) => {
+                                  setExistingOtherDocs((prev) => {
+                                    const updated = [...prev];
+                                    updated[i] = { ...updated[i], name: e.target.value };
+                                    return updated;
+                                  });
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    setExistingOtherDocs((prev) => {
+                                      const updated = [...prev];
+                                      updated[i] = { ...updated[i], renaming: false };
+                                      return updated;
+                                    });
+                                  }
+                                }}
+                                style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
+                              />
+                              <button type="button" onClick={() => {
+                                setExistingOtherDocs((prev) => {
+                                  const updated = [...prev];
+                                  updated[i] = { ...updated[i], renaming: false };
+                                  return updated;
+                                });
+                              }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 6 }} title="Save name">&#10003;</button>
+                            </>
+                          ) : (
+                            <a href={`${API_URL}/users/${userId}/documents/other_document?token=${authToken()}&file=${encodeURIComponent(doc.path)}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }} title={doc.name}>
+                              {doc.name || `Document ${i + 1}`}
+                            </a>
+                          )}
+                          {!doc.renaming && (
+                            <div style={{ display: "flex", gap: 10, flexShrink: 0, marginLeft: 8 }}>
+                              <button type="button" onClick={() => {
+                                setExistingOtherDocs((prev) => {
+                                  const updated = [...prev];
+                                  updated[i] = { ...updated[i], renaming: true };
+                                  return updated;
+                                });
+                              }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
+                              <button type="button" onClick={() => {
+                                setPendingRemoveDoc({ source: "existing", index: i });
+                                setRemoveDocConfirmOpen(true);
+                              }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1 }} title="Remove">&#10005;</button>
+                            </div>
+                          )}
+                          {doc.renaming && (
+                            <button type="button" onClick={() => {
+                              setPendingRemoveDoc({ source: "existing", index: i });
+                              setRemoveDocConfirmOpen(true);
+                            }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0, marginLeft: 6 }} title="Remove">&#10005;</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {existingOtherDocs.length === 0 && editOtherDocs.length === 0 && (
+                    <div style={{ marginTop: 4, fontSize: 13, color: "#64748b" }}>
+                      No documents uploaded
+                    </div>
+                  )}
                 </div>
-              </div>
-
-              <div className="user-form-actions">
-                <button type="button" className="secondary-button" onClick={() => setIsEditModalOpen(false)}>
-                  Cancel
-                </button>
-                <LoadingButton type="submit" className="primary-button" loading={submitting}>
-                  {submitting ? "Saving..." : "Update User"}
-                </LoadingButton>
               </div>
             </form>
           </div>
@@ -1416,6 +1527,24 @@ function UserProfile() {
         title="Confirm Deletion"
         message={`Are you sure you want to delete "${pendingDelete.value}"? This action cannot be undone.`}
         confirmText="Delete"
+        cancelText="Cancel"
+        danger
+      />
+      <ConfirmModal
+        isOpen={removeDocConfirmOpen}
+        onClose={() => { setRemoveDocConfirmOpen(false); setPendingRemoveDoc({ source: "", index: -1 }); }}
+        onConfirm={() => {
+          if (pendingRemoveDoc.source === "new") {
+            setEditOtherDocs((prev) => prev.filter((_, idx) => idx !== pendingRemoveDoc.index));
+          } else if (pendingRemoveDoc.source === "existing") {
+            setExistingOtherDocs((prev) => prev.filter((_, idx) => idx !== pendingRemoveDoc.index));
+          }
+          setRemoveDocConfirmOpen(false);
+          setPendingRemoveDoc({ source: "", index: -1 });
+        }}
+        title="Remove Document"
+        message="Are you sure you want to remove this document?"
+        confirmText="Remove"
         cancelText="Cancel"
         danger
       />

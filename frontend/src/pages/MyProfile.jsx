@@ -513,12 +513,13 @@ function MyProfile() {
                         </div>
                       );
                     }
-                    return docs.map((docPath, i) => {
-                      const fileName = docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
-                      const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(fileName);
+                    return docs.map((doc, i) => {
+                      const docPath = typeof doc === "string" ? doc : doc.path;
+                      const docName = typeof doc === "object" && doc.name ? doc.name : docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
+                      const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(docName);
                       return (
                         <div className="info-row" key={`other-${i}`}>
-                          <span className="info-label">{fileName}</span>
+                          <span className="info-label">{docName}</span>
                           <span className="info-value">
                             <a
                               href={`${API_URL}/auth/my-documents/other_document?token=${authToken()}&file=${encodeURIComponent(docPath)}`}

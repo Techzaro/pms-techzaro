@@ -324,7 +324,10 @@ class AuthController extends Controller
             'employment_contract' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
             'offer_letter' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
             'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:10240',
-            'other_document' => 'nullable|file|mimes:pdf,jpeg,jpg,png,gif,bmp,webp,svg,tiff,tif|max:10240',
+            'other_document' => 'nullable|array',
+            'other_document.*' => 'file|mimes:pdf,jpeg,jpg,png,gif,bmp,webp,svg,tiff,tif|max:10240',
+            'other_document_names' => 'nullable|array',
+            'other_document_names.*' => 'nullable|string|max:255',
             'avatar' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
         ]);
 
@@ -429,7 +432,37 @@ class AuthController extends Controller
 
         $hasFileUploads = false;
         foreach ($documentFields as $field) {
-            if ($request->hasFile($field)) {
+            if ($field === 'other_document' && $request->hasFile('other_document')) {
+                $files = $request->file('other_document');
+                $names = $request->input('other_document_names', []);
+
+                if (is_array($files)) {
+                    $existingDocs = $this->parseOtherDocumentPaths($user->other_document);
+
+                    $newDocs = [];
+                    foreach ($files as $index => $file) {
+                        if ($file->isValid()) {
+                            $filename = $field . '_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
+                            $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+                            $customName = isset($names[$index]) ? $names[$index] : $file->getClientOriginalName();
+                            $customName = preg_replace('/\.[^.]+$/', '', $customName);
+                            $newDocs[] = ['path' => $path, 'name' => $customName];
+                        }
+                    }
+
+                    $allDocs = array_merge($existingDocs, $newDocs);
+                    $user->other_document = !empty($allDocs) ? json_encode($allDocs) : null;
+                    $hasFileUploads = true;
+
+                    UserChange::create([
+                        'user_id' => $user->id,
+                        'field_name' => $field,
+                        'old_value' => count($existingDocs) . ' file(s)',
+                        'new_value' => count($allDocs) . ' file(s) uploaded',
+                        'modified_by' => $user->id,
+                    ]);
+                }
+            } elseif ($request->hasFile($field)) {
                 if ($user->$field && \Storage::disk('public')->exists($user->$field)) {
                     \Storage::disk('public')->delete($user->$field);
                 }
@@ -556,5 +589,32 @@ class AuthController extends Controller
                 'message' => $e->getMessage() ?: 'Server Error',
             ], 500);
         }
+    }
+
+    /**
+     * Parse other_document value which may be a JSON array of paths/objects or a single path.
+     * Returns array of ['path' => ..., 'name' => ...] objects.
+     */
+    private function parseOtherDocumentPaths($value): array
+    {
+        if (empty($value)) {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+        if (is_array($decoded)) {
+            $result = [];
+            foreach ($decoded as $item) {
+                if (is_string($item)) {
+                    $result[] = ['path' => $item, 'name' => null];
+                } elseif (is_array($item) && isset($item['path'])) {
+                    $result[] = $item;
+                }
+            }
+            return $result;
+        }
+
+        // Legacy single file path
+        return [['path' => $value, 'name' => null]];
     }
 }

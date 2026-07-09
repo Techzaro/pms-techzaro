@@ -131,6 +131,8 @@ class UserController extends Controller
                 'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:20480',
                 'other_document' => 'nullable|array',
                 'other_document.*' => 'file|mimes:pdf,jpeg,jpg,png,gif,bmp,webp,svg,tiff,tif|max:20480',
+                'other_document_names' => 'nullable|array',
+                'other_document_names.*' => 'nullable|string|max:255',
                 'avatar' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -210,10 +212,11 @@ class UserController extends Controller
         foreach ($this->documentFields as $field) {
             if ($field === 'other_document') {
                 // other_document may contain multiple files as JSON
-                $paths = $this->parseOtherDocumentPaths($user->other_document);
-                foreach ($paths as $path) {
-                    if (Storage::disk('public')->exists($path)) {
-                        $fullPath = Storage::disk('public')->path($path);
+                $docs = $this->parseOtherDocumentPaths($user->other_document);
+                foreach ($docs as $doc) {
+                    $docPath = is_array($doc) ? $doc['path'] : $doc;
+                    if (Storage::disk('public')->exists($docPath)) {
+                        $fullPath = Storage::disk('public')->path($docPath);
                         $emailAttachments[$fullPath] = 'other_document';
                     }
                 }
@@ -316,6 +319,9 @@ class UserController extends Controller
             'techxaro_regulations' => 'nullable|file|mimes:pdf,jpeg,png,webp|max:20480',
             'other_document' => 'nullable|array',
             'other_document.*' => 'file|mimes:pdf,jpeg,jpg,png,gif,bmp,webp,svg,tiff,tif|max:20480',
+            'other_document_names' => 'nullable|array',
+            'other_document_names.*' => 'nullable|string|max:255',
+            'existing_other_docs' => 'nullable|string',
             'avatar' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
         ]);
 
@@ -821,22 +827,24 @@ class UserController extends Controller
 
         // Handle multiple files stored as JSON array (other_document)
         if ($document === 'other_document') {
-            $paths = $this->parseOtherDocumentPaths($path);
+            $docs = $this->parseOtherDocumentPaths($path);
 
             $fileParam = $request->query('file');
             if ($fileParam) {
                 $found = false;
-                foreach ($paths as $p) {
-                    if ($p === $fileParam || basename($p) === basename($fileParam)) {
-                        $path = $p;
+                foreach ($docs as $doc) {
+                    $docPath = is_array($doc) ? $doc['path'] : $doc;
+                    if ($docPath === $fileParam || basename($docPath) === basename($fileParam)) {
+                        $path = $docPath;
                         $found = true;
                         break;
                     }
                 }
-                if (!$found) $path = $paths[0] ?? null;
+                if (!$found) $path = is_array($docs[0]) ? $docs[0]['path'] : ($docs[0] ?? null);
             } else {
                 $index = (int) $request->query('index', 0);
-                $path = $paths[$index] ?? $paths[0] ?? null;
+                $doc = $docs[$index] ?? $docs[0] ?? null;
+                $path = is_array($doc) ? $doc['path'] : $doc;
             }
 
             if (!$path) {
@@ -968,28 +976,65 @@ class UserController extends Controller
         // Handle multiple other_document files
         if ($request->hasFile('other_document')) {
             $files = $request->file('other_document');
+            $names = $request->input('other_document_names', []);
 
             if (is_array($files)) {
                 // Keep existing files and append new ones
-                $existingPaths = $this->parseOtherDocumentPaths($user->other_document);
+                $existingDocs = $this->parseOtherDocumentPaths($user->other_document);
 
-                $storedPaths = [];
-                foreach ($files as $file) {
+                $newDocs = [];
+                foreach ($files as $index => $file) {
                     if ($file->isValid()) {
                         $filename = 'other_document_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
                         $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
-                        $storedPaths[] = $path;
+                        $customName = isset($names[$index]) ? $names[$index] : $file->getClientOriginalName();
+                        $customName = preg_replace('/\.[^.]+$/', '', $customName);
+                        $newDocs[] = ['path' => $path, 'name' => $customName];
                     }
                 }
 
-                $allPaths = array_merge($existingPaths, $storedPaths);
-                $user->other_document = !empty($allPaths) ? json_encode($allPaths) : null;
+                $allDocs = array_merge($existingDocs, $newDocs);
+                $user->other_document = !empty($allDocs) ? json_encode($allDocs) : null;
 
                 \App\Models\UserChange::create([
                     'user_id' => $user->id,
                     'field_name' => 'other_document',
-                    'old_value' => count($existingPaths) . ' file(s)',
-                    'new_value' => count($allPaths) . ' file(s) uploaded',
+                    'old_value' => count($existingDocs) . ' file(s)',
+                    'new_value' => count($allDocs) . ' file(s) uploaded',
+                    'modified_by' => $authUser->id,
+                ]);
+            }
+        }
+
+        // Handle existing docs renames and removals (when no new files uploaded)
+        if (!$request->hasFile('other_document') && $request->has('existing_other_docs')) {
+            $existingDocsJson = $request->input('existing_other_docs');
+            $updatedDocs = json_decode($existingDocsJson, true);
+
+            if (is_array($updatedDocs)) {
+                $oldDocs = $this->parseOtherDocumentPaths($user->other_document);
+
+                // Find and delete removed files
+                $oldPaths = array_map(function($doc) {
+                    return is_array($doc) ? $doc['path'] : $doc;
+                }, $oldDocs);
+                $newPaths = array_map(function($doc) {
+                    return $doc['path'] ?? null;
+                }, $updatedDocs);
+                $removedPaths = array_diff($oldPaths, $newPaths);
+                foreach ($removedPaths as $removedPath) {
+                    if ($removedPath && Storage::disk('public')->exists($removedPath)) {
+                        Storage::disk('public')->delete($removedPath);
+                    }
+                }
+
+                $user->other_document = !empty($updatedDocs) ? json_encode($updatedDocs) : null;
+
+                \App\Models\UserChange::create([
+                    'user_id' => $user->id,
+                    'field_name' => 'other_document',
+                    'old_value' => count($oldDocs) . ' file(s)',
+                    'new_value' => count($updatedDocs) . ' file(s)',
                     'modified_by' => $authUser->id,
                 ]);
             }
@@ -999,7 +1044,8 @@ class UserController extends Controller
     }
 
     /**
-     * Parse other_document value which may be a JSON array of paths or a single path.
+     * Parse other_document value which may be a JSON array of paths/objects or a single path.
+     * Returns array of ['path' => ..., 'name' => ...] objects.
      */
     private function parseOtherDocumentPaths($value): array
     {
@@ -1009,11 +1055,19 @@ class UserController extends Controller
 
         $decoded = json_decode($value, true);
         if (is_array($decoded)) {
-            return $decoded;
+            $result = [];
+            foreach ($decoded as $item) {
+                if (is_string($item)) {
+                    $result[] = ['path' => $item, 'name' => null];
+                } elseif (is_array($item) && isset($item['path'])) {
+                    $result[] = $item;
+                }
+            }
+            return $result;
         }
 
         // Legacy single file path
-        return [$value];
+        return [['path' => $value, 'name' => null]];
     }
 
     /**
@@ -1026,8 +1080,9 @@ class UserController extends Controller
     {
         foreach ($this->documentFields as $field) {
             if ($field === 'other_document') {
-                $paths = $this->parseOtherDocumentPaths($user->other_document);
-                foreach ($paths as $path) {
+                $docs = $this->parseOtherDocumentPaths($user->other_document);
+                foreach ($docs as $doc) {
+                    $path = is_array($doc) ? $doc['path'] : $doc;
                     if (Storage::disk('public')->exists($path)) {
                         Storage::disk('public')->delete($path);
                     }
@@ -1065,22 +1120,24 @@ class UserController extends Controller
 
         // Handle multiple files stored as JSON array (other_document)
         if ($document === 'other_document') {
-            $paths = $this->parseOtherDocumentPaths($path);
+            $docs = $this->parseOtherDocumentPaths($path);
 
             $fileParam = $request->query('file');
             if ($fileParam) {
                 $found = false;
-                foreach ($paths as $p) {
-                    if ($p === $fileParam || basename($p) === basename($fileParam)) {
-                        $path = $p;
+                foreach ($docs as $doc) {
+                    $docPath = is_array($doc) ? $doc['path'] : $doc;
+                    if ($docPath === $fileParam || basename($docPath) === basename($fileParam)) {
+                        $path = $docPath;
                         $found = true;
                         break;
                     }
                 }
-                if (!$found) $path = $paths[0] ?? null;
+                if (!$found) $path = is_array($docs[0]) ? $docs[0]['path'] : ($docs[0] ?? null);
             } else {
                 $index = (int) $request->query('index', 0);
-                $path = $paths[$index] ?? $paths[0] ?? null;
+                $doc = $docs[$index] ?? $docs[0] ?? null;
+                $path = is_array($doc) ? $doc['path'] : $doc;
             }
 
             if (!$path) {

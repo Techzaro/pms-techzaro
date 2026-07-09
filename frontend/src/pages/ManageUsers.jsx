@@ -119,6 +119,9 @@ function ManageUsers() {
   const [timeFilter, setTimeFilter] = useState("");
   const [resignConfirmOpen, setResignConfirmOpen] = useState(false);
   const [resignUserId, setResignUserId] = useState(null);
+  const [removeDocConfirmOpen, setRemoveDocConfirmOpen] = useState(false);
+  const [pendingRemoveDoc, setPendingRemoveDoc] = useState({ source: "", index: -1 });
+  const [existingOtherDocs, setExistingOtherDocs] = useState([]);
   const [companyDocsOpen, setCompanyDocsOpen] = useState(false);
   const [page, setPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
@@ -147,7 +150,7 @@ function ManageUsers() {
 
   const departments = [
     ...new Set([
-      ...users.map((u) => u.department).filter(Boolean),
+      ...users.filter(Boolean).map((u) => u.department).filter(Boolean),
       ...(() => {
         try { return JSON.parse(localStorage.getItem("persisted_departments") || "[]"); } catch { return []; }
       })(),
@@ -155,7 +158,7 @@ function ManageUsers() {
   ].filter((d) => !deletedDepartments.includes(d));
   const designations = [
     ...new Set([
-      ...users.map((u) => u.designation).filter(Boolean),
+      ...users.filter(Boolean).map((u) => u.designation).filter(Boolean),
       ...(() => {
         try { return JSON.parse(localStorage.getItem("persisted_designations") || "[]"); } catch { return []; }
       })(),
@@ -213,7 +216,7 @@ function ManageUsers() {
       });
       if (!res.ok) throw new Error("Unable to load users");
       const data = await res.json();
-      const usersData = (data.users ?? data).map((user) => ({
+      const usersData = (Array.isArray(data.users ?? data) ? (data.users ?? data) : []).filter(Boolean).map((user) => ({
         ...user,
         active: user.active !== false,
       }));
@@ -318,6 +321,7 @@ function ManageUsers() {
     setEditingUser(null);
     setAddErrors({});
     setShowProfPassword(false);
+    setExistingOtherDocs([]);
     setNewUser({
       fullName: "",
       fatherName: "",
@@ -412,6 +416,14 @@ function ManageUsers() {
       avatar: null,
       _existingAvatar: fullUser.avatar || null,
     });
+    // Initialize existing other docs with rename state
+    const docs = typeof fullUser.other_document === "string" ? (() => { try { return JSON.parse(fullUser.other_document); } catch { return []; } })() : (fullUser.other_document || []);
+    setExistingOtherDocs((Array.isArray(docs) ? docs : []).filter(d => d).map((doc) => {
+      const docPath = typeof doc === "string" ? doc : (doc && doc.path ? doc.path : null);
+      if (!docPath) return null;
+      const docName = typeof doc === "object" && doc.name ? doc.name : docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
+      return { path: docPath, name: docName, renaming: false };
+    }).filter(Boolean));
     setIsAddModalOpen(true);
   };
 
@@ -419,6 +431,7 @@ function ManageUsers() {
     setIsAddModalOpen(false);
     setEditingUser(null);
     setAddErrors({});
+    setExistingOtherDocs([]);
     setNewUser({
       fullName: "",
       fatherName: "",
@@ -704,9 +717,9 @@ function ManageUsers() {
   };
 
   // Apply search, role, and status filters to users list
-  const filteredUsers = localUsers.filter((user) => {
+  const filteredUsers = localUsers.filter(Boolean).filter((user) => {
     const matchesSearch =
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (user.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (user.professional_email || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = roleFilter === "" || user.role === roleFilter;
     const matchesStatus =
@@ -718,7 +731,7 @@ function ManageUsers() {
 
   const sortedUsers = sortOrder
     ? [...filteredUsers].sort((a, b) =>
-        sortOrder === "asc" ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
+        sortOrder === "asc" ? (a.name || "").localeCompare(b.name || "") : (b.name || "").localeCompare(a.name || "")
       )
     : filteredUsers;
 
@@ -801,7 +814,7 @@ function ManageUsers() {
 
   // Submit new user or update existing user via API with FormData (supports file uploads)
   const handleSubmit = async (event) => {
-    event.preventDefault();
+    if (event) event.preventDefault();
 
     const errors = validateAddForm();
     setAddErrors(errors);
@@ -872,9 +885,27 @@ function ManageUsers() {
 
     // otherDocument supports multiple files
     if (newUser.otherDocument && newUser.otherDocument.length > 0) {
-      newUser.otherDocument.forEach((f) => {
-        formData.append("other_document[]", f);
+      newUser.otherDocument.forEach((item) => {
+        formData.append("other_document[]", item.file);
+        formData.append("other_document_names[]", item.customName || item.file.name.replace(/\.[^.]+$/, ""));
       });
+    }
+
+    // Send existing docs changes (renames and removals) when editing
+    if (editingUser && editingUser.other_document) {
+      const originalDocs = typeof editingUser.other_document === "string" ? (() => { try { return JSON.parse(editingUser.other_document); } catch { return []; } })() : (editingUser.other_document || []);
+      const safeOriginals = (Array.isArray(originalDocs) ? originalDocs : []).map(d => {
+        if (typeof d === "string") return { path: d, name: null };
+        if (d && d.path) return d;
+        return null;
+      }).filter(Boolean);
+      if (existingOtherDocs.length !== safeOriginals.length || existingOtherDocs.some((doc, i) => {
+        const orig = safeOriginals[i];
+        if (!orig || !doc) return true;
+        return doc.path !== orig.path || doc.name !== (orig.name || null);
+      })) {
+        formData.append("existing_other_docs", JSON.stringify(existingOtherDocs));
+      }
     }
 
     // Avatar upload
@@ -1006,7 +1037,7 @@ function ManageUsers() {
                   <th style={{ width: "20%" }}>Action</th>
                 </tr>
               </thead>
-              <SortableContext items={paginatedUsers.map((u) => u.id)} strategy={verticalListSortingStrategy}>
+              <SortableContext items={paginatedUsers.filter(Boolean).map((u) => u.id)} strategy={verticalListSortingStrategy}>
                 <tbody>
                   {loading ? (
                     <tr>
@@ -1014,7 +1045,7 @@ function ManageUsers() {
                     </tr>
                   ) : localUsers.length ? (
                       paginatedUsers.length ? (
-                        paginatedUsers.map((user) => {
+                        paginatedUsers.filter(Boolean).map((user) => {
                         const isSelf = currentUserId === user.id;
                         const isTargetProtected = user.role === "admin" || user.role === "manager";
                         const isResigned = user.active === false && user.must_change_password === false;
@@ -1065,7 +1096,7 @@ function ManageUsers() {
                   </div>
                 </div>
                 <div className="user-header-actions">
-                  <LoadingButton type="submit" className="primary-button" loading={submitting}>
+                  <LoadingButton type="button" className="primary-button" loading={submitting} onClick={handleSubmit}>
                     {submitting ? (editingUser ? "Updating User..." : "Creating User...") : (editingUser ? "Update User" : "Create User")}
                   </LoadingButton>
                   <button className="user-modal-close" onClick={closeModal}>
@@ -1074,7 +1105,7 @@ function ManageUsers() {
                 </div>
               </div>
 
-              <form className="user-form" onSubmit={handleSubmit} style={{ pointerEvents: submitting ? 'none' : 'auto', opacity: submitting ? 0.7 : 1 }}>
+              <form id="user-modal-form" className="user-form" onSubmit={handleSubmit} style={{ pointerEvents: submitting ? 'none' : 'auto', opacity: submitting ? 0.7 : 1 }}>
                 {/* ===== Profile Photo + Personal Information Row ===== */}
                 <div className="personal-info-top-row">
                   <div className="personal-info-fields">
@@ -1348,27 +1379,6 @@ function ManageUsers() {
                   {/* Other Document — right after Previous Salary Slip */}
                   <div className="form-row">
                     <label htmlFor="otherDocument">Other Document</label>
-                    {editingUser && editingUser.other_document && newUser.otherDocument.length === 0 && (() => {
-                      const docs = typeof editingUser.other_document === "string" ? (() => { try { return JSON.parse(editingUser.other_document); } catch { return []; } })() : (editingUser.other_document || []);
-                      return docs.length > 0 ? (
-                        <div style={{ marginBottom: 6, display: "flex", flexDirection: "column", gap: 4 }}>
-                          {docs.map((docPath, i) => {
-                            const fileName = docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
-                            return (
-                              <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
-                                <a href={`${API_URL}/users/${editingUser.id}/documents/other_document?token=${authToken()}&file=${encodeURIComponent(docPath)}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-                                  {fileName || `Document ${i + 1}`}
-                                </a>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div style={{ marginBottom: 6, fontSize: 13, color: "#64748b" }}>
-                          No documents uploaded
-                        </div>
-                      );
-                    })()}
                     <input
                       type="file"
                       id="otherDocument"
@@ -1385,21 +1395,152 @@ function ManageUsers() {
                           valid.push(f);
                         }
                         if (valid.length > 0) {
-                          setNewUser((p) => ({ ...p, otherDocument: [...p.otherDocument, ...valid] }));
+                          setNewUser((p) => ({
+                            ...p,
+                            otherDocument: [
+                              ...p.otherDocument,
+                              ...valid.map((f) => ({ file: f, customName: f.name.replace(/\.[^.]+$/, ""), renaming: false })),
+                            ],
+                          }));
                         }
                         e.target.value = "";
                       }}
                     />
                     {newUser.otherDocument.length > 0 && (
                       <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-                        {newUser.otherDocument.map((f, i) => (
+                        {newUser.otherDocument.filter(item => item && item.file).map((item, i) => (
                           <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
-                            <span style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{f.name}</span>
-                            <button type="button" onClick={() => {
-                              setNewUser((p) => ({ ...p, otherDocument: p.otherDocument.filter((_, idx) => idx !== i) }));
-                            }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 12, fontWeight: 600, flexShrink: 0, marginLeft: 8 }}>Remove</button>
+                            {item.renaming ? (
+                              <>
+                                <input
+                                  autoFocus
+                                  type="text"
+                                  value={item.customName}
+                                  onChange={(e) => {
+                                    setNewUser((p) => {
+                                      const updated = [...p.otherDocument];
+                                      updated[i] = { ...updated[i], customName: e.target.value };
+                                      return { ...p, otherDocument: updated };
+                                    });
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      setNewUser((p) => {
+                                        const updated = [...p.otherDocument];
+                                        updated[i] = { ...updated[i], renaming: false };
+                                        return { ...p, otherDocument: updated };
+                                      });
+                                    }
+                                  }}
+                                  style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
+                                />
+                                <button type="button" onClick={() => {
+                                  setNewUser((p) => {
+                                    const updated = [...p.otherDocument];
+                                    updated[i] = { ...updated[i], renaming: false };
+                                    return { ...p, otherDocument: updated };
+                                  });
+                                }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 6 }} title="Save name">&#10003;</button>
+                              </>
+                            ) : (
+                              <span style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }} title={item.customName || item.file.name}>
+                                {item.customName || item.file.name}
+                              </span>
+                            )}
+                            {!item.renaming && (
+                              <div style={{ display: "flex", gap: 10, flexShrink: 0, marginLeft: 8 }}>
+                                <button type="button" onClick={() => {
+                                  setNewUser((p) => {
+                                    const updated = [...p.otherDocument];
+                                    updated[i] = { ...updated[i], renaming: true, customName: item.customName || item.file.name.replace(/\.[^.]+$/, "") };
+                                    return { ...p, otherDocument: updated };
+                                  });
+                                }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
+                                <button type="button" onClick={() => {
+                                  setPendingRemoveDoc({ source: "new", index: i });
+                                  setRemoveDocConfirmOpen(true);
+                                }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1 }} title="Remove">&#10005;</button>
+                              </div>
+                            )}
+                            {item.renaming && (
+                              <button type="button" onClick={() => {
+                                setPendingRemoveDoc({ source: "new", index: i });
+                                setRemoveDocConfirmOpen(true);
+                              }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0, marginLeft: 6 }} title="Remove">&#10005;</button>
+                            )}
                           </div>
                         ))}
+                      </div>
+                    )}
+                    {editingUser && existingOtherDocs.length > 0 && newUser.otherDocument.length === 0 && (
+                      <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                        {existingOtherDocs.filter(doc => doc && doc.path).map((doc, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
+                            {doc.renaming ? (
+                              <>
+                                <input
+                                  autoFocus
+                                  type="text"
+                                  value={doc.name}
+                                  onChange={(e) => {
+                                    setExistingOtherDocs((prev) => {
+                                      const updated = [...prev];
+                                      updated[i] = { ...updated[i], name: e.target.value };
+                                      return updated;
+                                    });
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      setExistingOtherDocs((prev) => {
+                                        const updated = [...prev];
+                                        updated[i] = { ...updated[i], renaming: false };
+                                        return updated;
+                                      });
+                                    }
+                                  }}
+                                  style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
+                                />
+                                <button type="button" onClick={() => {
+                                  setExistingOtherDocs((prev) => {
+                                    const updated = [...prev];
+                                    updated[i] = { ...updated[i], renaming: false };
+                                    return updated;
+                                  });
+                                }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 6 }} title="Save name">&#10003;</button>
+                              </>
+                            ) : (
+                              <a href={`${API_URL}/users/${editingUser.id}/documents/other_document?token=${authToken()}&file=${encodeURIComponent(doc.path)}`} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }} title={doc.name}>
+                                {doc.name || `Document ${i + 1}`}
+                              </a>
+                            )}
+                            {!doc.renaming && (
+                              <div style={{ display: "flex", gap: 10, flexShrink: 0, marginLeft: 8 }}>
+                                <button type="button" onClick={() => {
+                                  setExistingOtherDocs((prev) => {
+                                    const updated = [...prev];
+                                    updated[i] = { ...updated[i], renaming: true };
+                                    return updated;
+                                  });
+                                }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
+                                <button type="button" onClick={() => {
+                                  setPendingRemoveDoc({ source: "existing", index: i });
+                                  setRemoveDocConfirmOpen(true);
+                                }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1 }} title="Remove">&#10005;</button>
+                              </div>
+                            )}
+                            {doc.renaming && (
+                              <button type="button" onClick={() => {
+                                setPendingRemoveDoc({ source: "existing", index: i });
+                                setRemoveDocConfirmOpen(true);
+                              }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0, marginLeft: 6 }} title="Remove">&#10005;</button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {editingUser && existingOtherDocs.length === 0 && newUser.otherDocument.length === 0 && (
+                      <div style={{ marginTop: 4, fontSize: 13, color: "#64748b" }}>
+                        No documents uploaded
                       </div>
                     )}
                   </div>
@@ -1433,6 +1574,25 @@ function ManageUsers() {
       title="Confirm Deletion"
       message={`Are you sure you want to delete "${pendingDelete.value}"? This action cannot be undone.`}
       confirmText="Delete"
+      cancelText="Cancel"
+      danger
+    />
+
+    <ConfirmModal
+      isOpen={removeDocConfirmOpen}
+      onClose={() => { setRemoveDocConfirmOpen(false); setPendingRemoveDoc({ source: "", index: -1 }); }}
+      onConfirm={() => {
+        if (pendingRemoveDoc.source === "new") {
+          setNewUser((p) => ({ ...p, otherDocument: p.otherDocument.filter((_, idx) => idx !== pendingRemoveDoc.index) }));
+        } else if (pendingRemoveDoc.source === "existing") {
+          setExistingOtherDocs((prev) => prev.filter((_, idx) => idx !== pendingRemoveDoc.index));
+        }
+        setRemoveDocConfirmOpen(false);
+        setPendingRemoveDoc({ source: "", index: -1 });
+      }}
+      title="Remove Document"
+      message="Are you sure you want to remove this document?"
+      confirmText="Remove"
       cancelText="Cancel"
       danger
     />
