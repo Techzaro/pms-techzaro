@@ -57,9 +57,14 @@ const CreateDeliverableTask = ({ onClose }) => {
 
           </div>
 
-          <button className="deliverable-close-btn" onClick={onClose}>
-            ✕
-          </button>
+          <div className="deliverable-header-actions">
+            <button className="deliverable-create-btn">
+              ⊕ Create Task
+            </button>
+            <button className="deliverable-close-btn" onClick={onClose}>
+              ✕
+            </button>
+          </div>
 
         </div>
 
@@ -203,22 +208,6 @@ const CreateDeliverableTask = ({ onClose }) => {
             </div>
 
           </div>
-
-        </div>
-
-        {/* ── Footer: Cancel and Create buttons ── */}
-        <div className="deliverable-footer">
-
-          <button
-            className="deliverable-cancel-btn"
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-
-          <button className="deliverable-create-btn">
-            ⊕ Create Task
-          </button>
 
         </div>
 

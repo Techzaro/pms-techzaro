@@ -257,7 +257,7 @@ function TaskDetails() {
       headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${authToken()}` },
       body: JSON.stringify({ items: payload }),
       _notifHandled: true,
-    }).catch(() => { });
+    }).catch((err) => console.error('Task file reorder failed:', err));
     setTask((prev) => prev ? { ...prev, files: reordered } : prev);
   }, [task?.id]);
 
@@ -823,20 +823,39 @@ function TaskDetails() {
 /* ── File Upload Section Component ── */
 /** Renders the list of files attached to a task, with download links and drag-drop reorder. */
 function FileUploadSection({ taskId, files, onReorder }) {
+  const [fileSearch, setFileSearch] = useState("");
   const boxColors = [
     "#eef2ff", "#f0fdf4", "#fefce8", "#fef2f2",
     "#f5f3ff", "#ecfeff", "#fff7ed", "#fce7f3",
   ];
+  const filteredFiles = files.filter((f) => {
+    if (!fileSearch) return true;
+    const q = fileSearch.toLowerCase();
+    return (f.name || "").toLowerCase().includes(q) || (f.url || "").toLowerCase().includes(q);
+  });
   return (
     <div>
       <div className="td-section-header">
         <h2 className="td-section-title">Platform files & links</h2>
       </div>
+      {files.length > 0 && (
+        <div className="td-files-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input
+            type="text"
+            placeholder="Search files & links..."
+            value={fileSearch}
+            onChange={(e) => setFileSearch(e.target.value)}
+          />
+        </div>
+      )}
       {files.length === 0 ? (
         <p className="td-empty">No files attached to this task.</p>
+      ) : filteredFiles.length === 0 ? (
+        <p className="td-empty">No files match your search.</p>
       ) : (
         <SortableTableWrapper
-          items={files}
+          items={filteredFiles}
           onReorder={onReorder}
           as="div"
         >

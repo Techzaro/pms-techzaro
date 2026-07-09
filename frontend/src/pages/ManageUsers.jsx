@@ -1064,9 +1064,14 @@ function ManageUsers() {
                     </p>
                   </div>
                 </div>
-                <button className="user-modal-close" onClick={closeModal}>
-                  &#10005;
-                </button>
+                <div className="user-header-actions">
+                  <LoadingButton type="submit" className="primary-button" loading={submitting}>
+                    {submitting ? (editingUser ? "Updating User..." : "Creating User...") : (editingUser ? "Update User" : "Create User")}
+                  </LoadingButton>
+                  <button className="user-modal-close" onClick={closeModal}>
+                    &#10005;
+                  </button>
+                </div>
               </div>
 
               <form className="user-form" onSubmit={handleSubmit} style={{ pointerEvents: submitting ? 'none' : 'auto', opacity: submitting ? 0.7 : 1 }}>
@@ -1400,15 +1405,6 @@ function ManageUsers() {
                   </div>
 
 
-                </div>
-
-                <div className="user-form-actions">
-                  <button type="button" className="secondary-button" onClick={closeModal} disabled={submitting}>
-                    Cancel
-                  </button>
-                  <LoadingButton type="submit" className="primary-button" loading={submitting}>
-                    {submitting ? (editingUser ? "Updating User..." : "Creating User...") : (editingUser ? "Update User" : "Create User")}
-                  </LoadingButton>
                 </div>
               </form>
             </div>

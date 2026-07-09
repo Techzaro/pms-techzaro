@@ -71,6 +71,8 @@ const EditProjectModal = ({ project, onClose }) => {
   const categoryDropdownRef = useRef(null);
   const [catDeleteOpen, setCatDeleteOpen] = useState(false);
   const [pendingCatDelete, setPendingCatDelete] = useState("");
+  const [goalDeleteOpen, setGoalDeleteOpen] = useState(false);
+  const [pendingGoalIndex, setPendingGoalIndex] = useState(null);
   const [deletedCategories, setDeletedCategories] = useState(() => {
     try { return JSON.parse(localStorage.getItem("deleted_categories") || "[]"); } catch { return []; }
   });
@@ -93,14 +95,17 @@ const EditProjectModal = ({ project, onClose }) => {
       return project.goals_checklist.map((g) => ({
         text: g.text || g,
         done: g.done || false,
+        due_datetime: g.due_datetime || null,
       }));
     }
     if (project?.goals) {
-      return project.goals.split("\n").filter(Boolean).map((g) => ({ text: g.trim(), done: false }));
+      return project.goals.split("\n").filter(Boolean).map((g) => ({ text: g.trim(), done: false, due_datetime: null }));
     }
     return [];
   });
   const [goalInput, setGoalInput] = useState("");
+  const [goalDateTime, setGoalDateTime] = useState("");
+  const goalDateTimeRef = useRef(null);
 
   const [existingFiles, setExistingFiles] = useState(project?.files || []);
   const [pendingFiles, setPendingFiles] = useState([]);
@@ -232,12 +237,20 @@ const EditProjectModal = ({ project, onClose }) => {
 
   const handleAddGoal = () => {
     if (!goalInput.trim()) return;
-    setGoalsList((prev) => [...prev, { text: goalInput.trim(), done: false }]);
+    setGoalsList((prev) => [...prev, { text: goalInput.trim(), done: false, due_datetime: goalDateTime || null }]);
     setGoalInput("");
+    setGoalDateTime("");
   };
 
   const handleRemoveGoal = (index) => {
-    setGoalsList((prev) => prev.filter((_, i) => i !== index));
+    setPendingGoalIndex(index);
+    setGoalDeleteOpen(true);
+  };
+
+  const confirmDeleteGoal = () => {
+    setGoalsList((prev) => prev.filter((_, i) => i !== pendingGoalIndex));
+    setGoalDeleteOpen(false);
+    setPendingGoalIndex(null);
   };
 
   const handleGoalKeyDown = (e) => {
@@ -490,7 +503,12 @@ const EditProjectModal = ({ project, onClose }) => {
               <p>Update project details and settings.</p>
             </div>
           </div>
-          <button className="cp-close-btn" onClick={() => onClose(false)}>✕</button>
+          <div className="cp-header-actions">
+            <LoadingButton className="cp-create-btn" onClick={handleSubmit} loading={submitting}>
+              Save Changes
+            </LoadingButton>
+            <button className="cp-close-btn" onClick={() => onClose(false)}>✕</button>
+          </div>
         </div>
 
         {/* BODY */}
@@ -522,91 +540,8 @@ const EditProjectModal = ({ project, onClose }) => {
               ></textarea>
             </div>
 
-            <div className="cp-grid-2">
-              <div className="cp-field">
-                <label>Category</label>
-                {categoryCustomMode ? (
-                  <div className="custom-input-container">
-                    <input
-                      type="text"
-                      placeholder="Enter custom category"
-                      value={categoryInput}
-                      onChange={(e) => setCategoryInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") { e.preventDefault(); handleAddCategory(); }
-                        if (e.key === "Escape") { setCategoryCustomMode(false); setCategoryInput(""); }
-                      }}
-                      autoFocus
-                    />
-                    <button type="button" className="custom-input-revert" onClick={() => { setCategoryCustomMode(false); setCategoryInput(""); }} title="Back to list">&times;</button>
-                  </div>
-                ) : (
-                  <div className="cp-category-dropdown" ref={categoryDropdownRef}>
-                    <div className="cp-category-trigger" onClick={() => setCategoryDropdownOpen((prev) => !prev)}>
-                      <span className={categoriesList.length === 0 ? "cp-dropdown-placeholder" : ""}>
-                        {categoriesList.length === 0
-                          ? "Select category"
-                          : `${categoriesList.length} selected`}
-                      </span>
-                      <svg className={`cp-dropdown-arrow ${categoryDropdownOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
-                    </div>
-                    {categoryDropdownOpen && (
-                      <div className="cp-dropdown-menu">
-                        {existingCategories.filter((c) => !categoriesList.includes(c)).map((cat) => (
-                          <div key={cat} className="cp-dropdown-item cp-dropdown-item-row">
-                            <label className="cp-dropdown-item-check">
-                              <input
-                                type="checkbox"
-                                checked={categoriesList.includes(cat)}
-                                onChange={() => {
-                                  if (!categoriesList.includes(cat)) {
-                                    setCategoriesList((prev) => [...prev, cat]);
-                                  }
-                                }}
-                              />
-                              <span>{cat}</span>
-                            </label>
-                            <button
-                              type="button"
-                              className="cp-dropdown-item-delete"
-                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteCategoryPermanent(cat); }}
-                              title="Delete category"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                        <div
-                          className="cp-dropdown-item cp-dropdown-custom"
-                          onClick={() => { setCategoryCustomMode(true); setCategoryDropdownOpen(false); setCategoryInput(""); }}
-                        >
-                          Custom / Type Here
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {categoriesList.length > 0 && (
-                  <div className="cp-goals-list">
-                    {categoriesList.map((cat, index) => (
-                      <div key={index} className="cp-goals-item">
-                        <span className="cp-goals-item-text">{cat}</span>
-                        <button
-                          type="button"
-                          className="cp-goals-item-remove"
-                          onClick={() => handleRemoveCategory(index)}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="cp-field">
-                <label>Project Goals</label>
+            <div className="cp-field">
+              <label>Project Goals</label>
                 <div className="cp-goals-input-row">
                   <input
                     type="text"
@@ -614,6 +549,13 @@ const EditProjectModal = ({ project, onClose }) => {
                     value={goalInput}
                     onChange={(e) => setGoalInput(e.target.value)}
                     onKeyDown={handleGoalKeyDown}
+                  />
+                  <input
+                    type="datetime-local"
+                    ref={goalDateTimeRef}
+                    value={goalDateTime}
+                    onChange={(e) => setGoalDateTime(e.target.value)}
+                    className="cp-goals-datetime-input"
                   />
                   <button
                     type="button"
@@ -630,6 +572,11 @@ const EditProjectModal = ({ project, onClose }) => {
                     {goalsList.map((g, index) => (
                       <div key={index} className="cp-goals-item">
                         <span className="cp-goals-item-text">{g.text}</span>
+                        {g.due_datetime && (
+                          <span className="cp-goals-item-datetime">
+                            📅 {new Date(g.due_datetime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} {new Date(g.due_datetime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        )}
                         <button
                           type="button"
                           className="cp-goals-item-remove"
@@ -642,7 +589,6 @@ const EditProjectModal = ({ project, onClose }) => {
                   </div>
                 )}
               </div>
-            </div>
 
             <div className="cp-grid-2">
               <div className="cp-field">
@@ -814,17 +760,14 @@ const EditProjectModal = ({ project, onClose }) => {
                 </div>
               )}
             </div>
-
           </div>
 
           {/* RIGHT */}
           <div className="cp-right">
 
             {/* PRIORITY */}
-            <div className="cp-card">
-              <div className="cp-card-top">
-                <span>Priority</span>
-              </div>
+            <div className="cp-field">
+              <label>Priority</label>
               <CustomSelect
                 name="priority"
                 value={form.priority}
@@ -838,10 +781,8 @@ const EditProjectModal = ({ project, onClose }) => {
             </div>
 
             {/* STATUS */}
-            <div className="cp-card">
-              <div className="cp-card-top">
-                <span>Status</span>
-              </div>
+            <div className="cp-field">
+              <label>Status</label>
               <CustomSelect
                 name="status"
                 value={form.status}
@@ -853,6 +794,88 @@ const EditProjectModal = ({ project, onClose }) => {
                   { value: "Completed", label: "Completed" },
                 ]}
               />
+            </div>
+
+            {/* CATEGORY */}
+            <div className="cp-field">
+              <label>Category</label>
+              {categoryCustomMode ? (
+                <div className="custom-input-container">
+                  <input
+                    type="text"
+                    placeholder="Enter custom category"
+                    value={categoryInput}
+                    onChange={(e) => setCategoryInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); handleAddCategory(); }
+                      if (e.key === "Escape") { setCategoryCustomMode(false); setCategoryInput(""); }
+                    }}
+                    autoFocus
+                  />
+                  <button type="button" className="custom-input-revert" onClick={() => { setCategoryCustomMode(false); setCategoryInput(""); }} title="Back to list">&times;</button>
+                </div>
+              ) : (
+                <div className="cp-category-dropdown" ref={categoryDropdownRef}>
+                  <div className="cp-category-trigger" onClick={() => setCategoryDropdownOpen((prev) => !prev)}>
+                    <span className={categoriesList.length === 0 ? "cp-dropdown-placeholder" : ""}>
+                      {categoriesList.length === 0
+                        ? "Select category"
+                        : `${categoriesList.length} selected`}
+                    </span>
+                    <svg className={`cp-dropdown-arrow ${categoryDropdownOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
+                  </div>
+                  {categoryDropdownOpen && (
+                    <div className="cp-dropdown-menu">
+                      {existingCategories.filter((c) => !categoriesList.includes(c)).map((cat) => (
+                        <div key={cat} className="cp-dropdown-item cp-dropdown-item-row">
+                          <label className="cp-dropdown-item-check">
+                            <input
+                              type="checkbox"
+                              checked={categoriesList.includes(cat)}
+                              onChange={() => {
+                                if (!categoriesList.includes(cat)) {
+                                  setCategoriesList((prev) => [...prev, cat]);
+                                }
+                              }}
+                            />
+                            <span>{cat}</span>
+                          </label>
+                          <button
+                            type="button"
+                            className="cp-dropdown-item-delete"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteCategoryPermanent(cat); }}
+                            title="Delete category"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                      <div
+                        className="cp-dropdown-item cp-dropdown-custom"
+                        onClick={() => { setCategoryCustomMode(true); setCategoryDropdownOpen(false); setCategoryInput(""); }}
+                      >
+                        Custom / Type Here
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {categoriesList.length > 0 && (
+                <div className="cp-goals-list">
+                  {categoriesList.map((cat, index) => (
+                    <div key={index} className="cp-goals-item">
+                      <span className="cp-goals-item-text">{cat}</span>
+                      <button
+                        type="button"
+                        className="cp-goals-item-remove"
+                        onClick={() => handleRemoveCategory(index)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* DEADLINES - PHASE SYSTEM */}
@@ -1007,14 +1030,6 @@ const EditProjectModal = ({ project, onClose }) => {
 
 
 
-        {/* FOOTER */}
-        <div className="cp-footer">
-          <button className="cp-cancel-btn" onClick={() => onClose(false)} disabled={submitting}>Cancel</button>
-          <LoadingButton className="cp-create-btn" onClick={handleSubmit} loading={submitting}>
-            Save Changes
-          </LoadingButton>
-        </div>
-
       </div>
     </div>,
     document.body
@@ -1029,6 +1044,16 @@ const EditProjectModal = ({ project, onClose }) => {
         onConfirm={confirmDeleteCategory}
         title="Confirm Deletion"
         message={`Are you sure you want to delete "${pendingCatDelete}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger
+      />
+      <ConfirmModal
+        isOpen={goalDeleteOpen}
+        onClose={() => { setGoalDeleteOpen(false); setPendingGoalIndex(null); }}
+        onConfirm={confirmDeleteGoal}
+        title="Delete Goal"
+        message="Are you sure you want to delete this goal? This action cannot be undone."
         confirmText="Delete"
         cancelText="Cancel"
         danger

@@ -49,6 +49,7 @@ class Project extends Model
         'reopen_new_deadline',
         'reopen_file_path',
         'reopen_file_name',
+        'sort_order',
     ];
 
     protected $casts = [

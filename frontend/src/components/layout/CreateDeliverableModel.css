@@ -114,6 +114,58 @@
   color: #6b7280;
 }
 
+.deliverable-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.deliverable-header-actions .deliverable-cancel-btn {
+  padding: 10px 20px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #374151;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s ease;
+}
+
+.deliverable-header-actions .deliverable-cancel-btn:hover {
+  background: #f3f4f6;
+}
+
+.deliverable-header-actions .deliverable-create-btn {
+  padding: 10px 20px;
+  border: none;
+  background: #4f46e5;
+  color: #ffffff;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s ease;
+}
+
+.deliverable-header-actions .deliverable-create-btn:hover {
+  background: #4338ca;
+}
+
+.deliverable-header-actions .deliverable-close-btn {
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 12px;
+  background: #f3f4f6;
+  cursor: pointer;
+  font-size: 18px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* BODY */
 
 .deliverable-body {
