@@ -1,29 +1,58 @@
 /**
  * SortableTableWrapper.jsx
- * Provides drag-and-drop reordering for table rows or div lists using @dnd-kit.
- * Manages the local item state, handles drag events, and notifies the parent
- * of reorder changes. Includes a DragOverlay for visual feedback during drag.
+ * Provides drag-and-drop reordering using @dnd-kit.
+ * HandleSensor ensures only [data-dnd-handle] elements can initiate a drag.
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { DndContext, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, DragOverlay, closestCenter, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 
-/** Visual drag handle icon component */
-function DragHandle({ style = {} }) {
+/**
+ * Custom sensor: only activates when pointerdown occurs inside [data-dnd-handle].
+ * Extends PointerSensor so it inherits pointermove/pointerup handling.
+ */
+class HandleSensor extends PointerSensor {
+  static activators = [
+    {
+      eventName: 'onPointerDown',
+      handler: ({ nativeEvent: event }) => {
+        if (!event.isPrimary || event.button !== 0) return false;
+        if (!event.target.closest('[data-dnd-handle]')) return false;
+        return true;
+      },
+    },
+  ];
+}
+
+/** Drag handle — wrap with data-dnd-handle so HandleSensor activates here */
+function DragHandle({ listeners, attributes, style }) {
   return (
-    <span style={{ cursor: 'grab', display: 'inline-flex', alignItems: 'center', padding: '2px 6px', touchAction: 'none', color: '#999', ...style }}>
-      <GripVertical size={16} />
+    <span
+      data-dnd-handle="true"
+      {...listeners}
+      {...attributes}
+      style={{
+        cursor: 'grab',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 28,
+        height: 28,
+        borderRadius: 6,
+        flexShrink: 0,
+        touchAction: 'none',
+        ...style,
+      }}
+    >
+      <GripVertical size={18} />
     </span>
   );
 }
 
-/**
- * Individual sortable item that wraps each row/div in the sortable context.
- * Applies transform styles and passes drag listeners to children.
- */
+/** Sortable item — does NOT spread listeners on wrapper, passes them via render prop */
 function SortableItem({ id, as = 'tr', children, className = '', style = {} }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const itemStyle = {
@@ -34,21 +63,21 @@ function SortableItem({ id, as = 'tr', children, className = '', style = {} }) {
   };
   const Tag = as;
   return (
-    <Tag ref={setNodeRef} className={className} style={itemStyle} {...listeners} {...attributes}>
-      {typeof children === 'function' ? children({ isDragging }) : children}
+    <Tag ref={setNodeRef} className={className} style={itemStyle}>
+      {typeof children === 'function' ? children({ isDragging, listeners, attributes }) : children}
     </Tag>
   );
 }
 
 /**
- * Main wrapper component for sortable lists/tables.
- * @param {Array} items - Array of items to render.
- * @param {Function} onReorder - Callback with the reordered items array.
- * @param {string} [idKey='id'] - Property name used as unique key for each item.
- * @param {Function} children - Render function receiving (item, index, dndProps).
- * @param {string} [as='tr'] - Element type for each sortable item.
- * @param {Function} [overlayRender] - Custom render function for the drag overlay.
- * @param {boolean} [disabled] - Disables drag-and-drop when true.
+ * Main wrapper for sortable lists.
+ * @param {Array} items - Items to render.
+ * @param {Function} onReorder - Callback with reordered items.
+ * @param {string} [idKey='id'] - Unique key property.
+ * @param {Function} children - Render fn receiving (item, index, { isDragging, listeners, attributes }).
+ * @param {string} [as='tr'] - Wrapper element type.
+ * @param {Function} [overlayRender] - Custom drag overlay render.
+ * @param {boolean} [disabled] - Disable drag-and-drop.
  */
 export default function SortableTableWrapper({
   items: externalItems,
@@ -68,7 +97,9 @@ export default function SortableTableWrapper({
     setLocalItems(Array.isArray(externalItems) ? externalItems : []);
   }, [externalItems]);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const sensors = useSensors(
+    useSensor(HandleSensor, { activationConstraint: { distance: 5 } })
+  );
 
   const handleDragStart = useCallback((event) => {
     setActiveId(event.active.id);
@@ -77,7 +108,6 @@ export default function SortableTableWrapper({
   const handleDragEnd = useCallback((event) => {
     setActiveId(null);
     const { active, over } = event;
-    // Exit early if no valid drop target or dropped on same position
     if (!over || active.id === over.id) return;
     const items = localRef.current;
     const oldIndex = items.findIndex((i) => String(i[idKey]) === String(active.id));
@@ -94,8 +124,6 @@ export default function SortableTableWrapper({
 
   const activeItem = activeId ? localItems.find((i) => String(i[idKey]) === String(activeId)) : null;
 
-  // When rendered inside <tbody>, portal the DndKit accessibility <div> to <body>
-  // to avoid "div cannot be a child of tbody" HTML nesting warnings.
   const dndAccessibility = as === 'tr' && typeof document !== 'undefined'
     ? { container: document.body }
     : undefined;
@@ -104,9 +132,9 @@ export default function SortableTableWrapper({
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel} accessibility={dndAccessibility}>
       <SortableContext items={localItems.map((i) => String(i[idKey]))} strategy={verticalListSortingStrategy} disabled={disabled}>
         {localItems.map((item, idx) => (
-          <SortableItem 
+          <SortableItem
             key={`${item[idKey]}-${idx}`}
-            id={String(item[idKey])} 
+            id={String(item[idKey])}
             as={as}
           >
             {(dndProps) => renderRow(item, idx, dndProps)}

@@ -236,7 +236,12 @@ export default function EditTaskModal({ task, onClose }) {
               <p>Update task details</p>
             </div>
           </div>
-          <button className="task-close-btn" onClick={() => onClose(false)}>✕</button>
+          <div className="task-header-actions">
+            <LoadingButton className="task-create-btn" onClick={handleSubmit} loading={submitting}>
+              Save Changes
+            </LoadingButton>
+            <button className="task-close-btn" onClick={() => onClose(false)}>✕</button>
+          </div>
         </div>
 
         {/* BODY */}
@@ -543,14 +548,6 @@ export default function EditTaskModal({ task, onClose }) {
 
 
         </form>
-
-        {/* FOOTER */}
-        <div className="task-footer">
-          <button type="button" className="task-cancel-btn" onClick={() => onClose(false)} disabled={submitting}>Cancel</button>
-          <LoadingButton className="task-create-btn" onClick={handleSubmit} loading={submitting}>
-            Save Changes
-          </LoadingButton>
-        </div>
       </div>
     </div>,
     container

@@ -28,7 +28,7 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
-import SortableTableWrapper from "../components/SortableTableWrapper";
+import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CreateTaskModal from "../components/CreateTaskModal";
@@ -190,6 +190,7 @@ function ProjectDetails() {
   const [submitProjectModal, setSubmitProjectModal] = useState({ open: false, project: null });
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null });
+  const [fileSearch, setFileSearch] = useState("");
   const [reopenDialog, setReopenDialog] = useState(false);
   const [acting, setActing] = useState(false);
   const [orderedTasks, setOrderedTasks] = useState([]);
@@ -251,7 +252,7 @@ function ProjectDetails() {
       _notifHandled: true,
     }).then(() => {
       setProject((prev) => ({ ...prev, goals_checklist: list }));
-    }).catch(() => { });
+    }).catch((err) => console.error('Goal reorder failed:', err));
   }, [projectId]);
 
   const handleMemberReorder = useCallback((reordered) => {
@@ -262,17 +263,18 @@ function ProjectDetails() {
       headers: authHeadersLocal(),
       body: JSON.stringify({ assigned_users: ids }),
       _notifHandled: true,
-    }).catch(() => { });
+    }).catch((err) => console.error('Member reorder failed:', err));
   }, [projectId]);
 
   const handleFileReorder = useCallback((reordered) => {
     const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
+    setProject((prev) => ({ ...prev, files: reordered }));
     fetch(`${API}/projects/${projectId}/files/reorder`, {
       method: 'POST',
       headers: authHeadersLocal(),
       body: JSON.stringify({ items: payload }),
       _notifHandled: true,
-    }).catch(() => { });
+    }).catch((err) => console.error('File reorder failed:', err));
   }, [projectId]);
 
   const handleDeliverableActionSuccess = (updatedDeliverable) => {
@@ -651,6 +653,9 @@ function ProjectDetails() {
             >
               {(item, idx, dndProps) => (
                 <div key={item.sortableId} className="pd-goal-row">
+                  <div className="pd-goal-drag-handle">
+                    <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                  </div>
                   <button
                     type="button"
                     className={`pd-goal-check ${item.done ? "pd-goal-check--on" : "pd-goal-check--off"}`}
@@ -660,6 +665,11 @@ function ProjectDetails() {
                     {item.done ? "✓" : ""}
                   </button>
                   <span className={item.done ? "pd-goal-done" : ""}>{item.text}</span>
+                  {item.due_datetime && (
+                    <span className="pd-goal-datetime">
+                      📅 {new Date(item.due_datetime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} {new Date(item.due_datetime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  )}
                 </div>
               )}
             </SortableTableWrapper>
@@ -699,7 +709,7 @@ function ProjectDetails() {
                 <UserRound size={18} />
               </span>
               <div>
-                <span className="pd-meta-rows__label">Project owner</span>
+                <span className="pd-meta-rows__label">Project manager</span>
                 <span className="pd-meta-rows__value">{project.creator?.name || "—"}</span>
               </div>
             </li>
@@ -1072,42 +1082,68 @@ function ProjectDetails() {
                         <section className="pd-card-flat">
                           <h2 className="pd-block-title">Platform files & links</h2>
 
+                          {files.length > 0 && (
+                            <div className="pd-files-search">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                              <input
+                                type="text"
+                                placeholder="Search files & links..."
+                                value={fileSearch}
+                                onChange={(e) => setFileSearch(e.target.value)}
+                              />
+                            </div>
+                          )}
+
                           {files.length === 0 ? (
                             <p className="pd-muted">No files attached.</p>
-                          ) : (
-                            <SortableTableWrapper
-                              items={files}
-                              onReorder={handleFileReorder}
-                              as="div"
-                            >
-                              {(f, idx) => {
-                                const boxColors = [
-                                  "#eef2ff", "#f0fdf4", "#fefce8", "#fef2f2",
-                                  "#f5f3ff", "#ecfeff", "#fff7ed", "#fce7f3",
-                                ];
-                                const bg = boxColors[idx % boxColors.length];
-                                return (
-                                  <div key={f.id} className="pd-file-box" style={{ background: bg }}>
-                                    <div className="pd-file-box__name">
-                                      <FolderOpen size={18} />
-                                      <span>{f.name}</span>
+                          ) : (() => {
+                            const filteredFiles = files.filter((f) => {
+                              if (!fileSearch) return true;
+                              const q = fileSearch.toLowerCase();
+                              return (f.name || "").toLowerCase().includes(q) || (f.url || "").toLowerCase().includes(q);
+                            });
+                            return filteredFiles.length === 0 ? (
+                              <p className="pd-muted">No files match your search.</p>
+                            ) : (
+                              <SortableTableWrapper
+                                items={filteredFiles}
+                                onReorder={handleFileReorder}
+                                as="div"
+                              >
+                                {(f, idx, dndProps) => {
+                                  const boxColors = [
+                                    "#eef2ff", "#f0fdf4", "#fefce8", "#fef2f2",
+                                    "#f5f3ff", "#ecfeff", "#fff7ed", "#fce7f3",
+                                  ];
+                                  const bg = boxColors[idx % boxColors.length];
+                                  return (
+                                    <div key={f.id} className="pd-file-box" style={{ background: bg }}>
+                                      <div className="pd-file-box__drag-handle">
+                                        <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                                      </div>
+                                      <div className="pd-file-box__content">
+                                        <div className="pd-file-box__name">
+                                          <FolderOpen size={18} />
+                                          <span>{f.name}</span>
+                                        </div>
+                                        {f.url && (
+                                          <a
+                                            href={fileUrl(f.url)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="pd-file-box__link"
+                                            style={{ color: "#6366f1" }}
+                                          >
+                                            {f.url}
+                                          </a>
+                                        )}
+                                      </div>
                                     </div>
-                                    {f.url && (
-                                      <a
-                                        href={fileUrl(f.url)}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="pd-file-box__link"
-                                        style={{ color: "#6366f1" }}
-                                      >
-                                        {f.url}
-                                      </a>
-                                    )}
-                                  </div>
-                                );
-                              }}
-                            </SortableTableWrapper>
-                          )}
+                                  );
+                                }}
+                              </SortableTableWrapper>
+                            );
+                          })()}
 
                         </section>
                       </div>

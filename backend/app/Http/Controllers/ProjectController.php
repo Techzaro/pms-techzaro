@@ -63,7 +63,8 @@ class ProjectController extends Controller
                 ->withCount(['deliverables as pending_deliverables_count' => function ($q) {
                     $q->whereNull('task_id')->where('status', 'pending');
                 }])
-                ->latest();
+                ->orderBy('sort_order')
+                ->latest('id');
         } else {
             $projectsQuery = Project::where(function ($q) use ($user) {
                 $q->whereHas('manuallyVisibleTo', fn ($q) => $q->where('user_id', $user->id))
@@ -86,7 +87,8 @@ class ProjectController extends Controller
                 ->withCount(['deliverables as pending_deliverables_count' => function ($q) {
                     $q->whereNull('task_id')->where('status', 'pending');
                 }])
-                ->latest();
+                ->orderBy('sort_order')
+                ->latest('id');
         }
 
         if ($filter === 'active') {
@@ -127,6 +129,7 @@ class ProjectController extends Controller
             'goals_checklist' => 'nullable|array',
             'goals_checklist.*.text' => 'required_with:goals_checklist|string',
             'goals_checklist.*.done' => 'nullable|boolean',
+            'goals_checklist.*.due_datetime' => 'nullable|date',
             'sheets_documents' => 'nullable|string',
             'website_name' => 'nullable|string',
             'website_link' => 'nullable|string',
@@ -408,6 +411,7 @@ class ProjectController extends Controller
             'goals_checklist' => 'nullable|array',
             'goals_checklist.*.text' => 'required_with:goals_checklist|string',
             'goals_checklist.*.done' => 'nullable|boolean',
+            'goals_checklist.*.due_datetime' => 'nullable|date',
             'sheets_documents' => 'nullable|string',
             'website_name' => 'nullable|string',
             'website_link' => 'nullable|string',
@@ -588,6 +592,7 @@ class ProjectController extends Controller
             'goals_checklist' => 'sometimes|nullable|array',
             'goals_checklist.*.text' => 'required_with:goals_checklist|string',
             'goals_checklist.*.done' => 'nullable|boolean',
+            'goals_checklist.*.due_datetime' => 'nullable|date',
             'status' => 'sometimes|string|max:64',
             'assigned_users' => 'sometimes|nullable|array',
             'assigned_users.*' => 'integer|exists:users,id',

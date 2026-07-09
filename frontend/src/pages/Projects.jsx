@@ -21,7 +21,6 @@ import SortableTableWrapper, { DragHandle } from "../components/SortableTableWra
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import { GoDotFill } from "react-icons/go";
-import { GripVertical } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath, getUser } from "../utils/auth";
 import "./Projects.css";
@@ -100,7 +99,7 @@ function Projects() {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ items: payload }),
       _notifHandled: true,
-    }).catch(() => {});
+    }).catch((err) => console.error('Project reorder failed:', err));
   }, []);
 
   const toggleDescription = (id) => {
@@ -391,14 +390,14 @@ function Projects() {
                 idKey="sortableId"
                 as="div"
               >
-                {(project) => {
+                {(project, idx, dndProps) => {
                   const progress = calculateProgress(project);
 
                   return (
                     <div className="projects-card" key={project.id}>
                       {/* DRAG HANDLE */}
                       <div className="project-card-drag-handle">
-                        <DragHandle />
+                        <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                       </div>
                       {/* HEADER */}
                       <div className="project-card-header">
@@ -543,13 +542,16 @@ function Projects() {
                 idKey="sortableId"
                 as="div"
               >
-                {(project) => {
+                {(project, idx, dndProps) => {
                   const progress = calculateProgress(project);
                   const projectStatus = project.status || "Planning";
 
                   return (
                     <div className="project-list-row" key={project.id}>
                       <div className="col-project-name">
+                        <div className="project-name-drag-handle">
+                          <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                        </div>
                         <div className="project-name-text">{project.title}</div>
                       </div>
 

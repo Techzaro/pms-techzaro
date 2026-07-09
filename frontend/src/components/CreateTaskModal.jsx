@@ -390,9 +390,18 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
               <p>Add task details and assign it to team members.</p>
             </div>
           </div>
-          <button className="task-close-btn" onClick={() => onClose(false)}>
-            ✕
-          </button>
+          <div className="task-header-actions">
+            <LoadingButton
+              className="task-create-btn"
+              onClick={handleSubmit}
+              loading={submitting}
+            >
+              + Create Task
+            </LoadingButton>
+            <button className="task-close-btn" onClick={() => onClose(false)}>
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* BODY */}
@@ -718,23 +727,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
 
 
         </form>
-         <div className="task-footer">
-              <button
-                type="button"
-                className="task-cancel-btn"
-                onClick={() => onClose(false)}
-                disabled={submitting}
-              >
-                Cancel
-              </button>
-              <LoadingButton
-                className="task-create-btn"
-                onClick={handleSubmit}
-                loading={submitting}
-              >
-                + Create Task
-              </LoadingButton>
-            </div>
 
       </div>
     </div>,

@@ -158,102 +158,81 @@ const WorkloadItem = memo(function WorkloadItem({ item, index, total, navigate, 
   );
 });
 
+/** Status badge colors matching the Projects list page */
+const STATUS_COLORS = {
+  pending: "#FEF3C7",
+  submitted: "#DBEAFE",
+  reopened: "#EDE9FE",
+  approved: "#DCFCE7",
+  rejected: "#FEE2E2",
+  Planning: "#DBEAFE",
+  "In-progress": "#FEF3C7",
+  In_progress: "#FEF3C7",
+  Pause: "#FEE2E2",
+  Completed: "#DCFCE7",
+};
+
+const STATUS_TEXT_COLORS = {
+  pending: "#92400E",
+  submitted: "#1E40AF",
+  reopened: "#5B21B6",
+  approved: "#166534",
+  rejected: "#991B1B",
+  Planning: "#1E40AF",
+  "In-progress": "#92400E",
+  In_progress: "#92400E",
+  Pause: "#991B1B",
+  Completed: "#166534",
+};
+
 /**
  * ProjectCard — Displays a single active project in the carousel.
- * Shows project name, client, progress bar, assigned user avatars, and deadline.
- * Supports responsive sizing via cardWidth prop for the slider layout.
+ * Uses the same card design as the Projects list page for visual consistency.
  */
-const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, getInitials, getProgressColor, rolePath, PROJECTS_PER_VIEW, GAP }) {
+const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, getProgressColor, rolePath, PROJECTS_PER_VIEW, GAP }) {
+  const statusKey = project.status || 'In_progress';
   return (
-    <div className="project-card" style={{
+    <div className="dash-project-card" style={{
       minWidth: cardWidth > 0 ? `${cardWidth}px` : `calc((100% - ${(PROJECTS_PER_VIEW - 1) * GAP}px) / ${PROJECTS_PER_VIEW})`,
       flex: cardWidth > 0 ? `0 0 ${cardWidth}px` : `0 0 calc((100% - ${(PROJECTS_PER_VIEW - 1) * GAP}px) / ${PROJECTS_PER_VIEW})`,
-      transition: "box-shadow 0.2s",
     }}
-      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.1)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)"; }}
+      onClick={() => navigate(rolePath(`projects/project-details/${project.id}`), { state: { from: "admin" } })}
     >
-      <div style={{ display: "flex", gap: "14px", marginBottom: "18px" }}>
-        <div style={{
-          width: "58px", height: "58px", borderRadius: "14px", background: "#FEF3C7",
-          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-        }}>
-          <img src="/Vector-5.svg" alt="icon" style={{ width: "24px" }} />
-        </div>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <h4
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(rolePath(`projects/project-details/${project.id}`), { state: { from: "admin" } });
-            }}
-            style={{
-              margin: 0, fontSize: "18px", fontWeight: 600, color: "#374151",
-              cursor: "pointer", wordBreak: "break-word", lineHeight: "1.3",
-            }}
-          >
-            {(() => {
-              const words = (project.name || '').split(' ');
-              if (words.length <= 2) return project.name;
-              return (
-                <>
-                  {words.slice(0, 2).join(' ')}
-                  <br />
-                  {words.slice(2).join(' ')}
-                </>
-              );
-            })()}
-          </h4>
-          <p style={{ marginTop: "5px", color: "#9CA3AF", fontSize: "14px" }}>
-            Client: {project.client}
-          </p>
-        </div>
+      {/* HEADER */}
+      <div className="dash-project-card-header">
+        <h3>{project.title || project.name}</h3>
       </div>
-      <div style={{ marginBottom: "18px", width: "100%", boxSizing: "border-box" }}>
-        <div style={{
-          display: "flex", justifyContent: "space-between", marginBottom: "10px",
-          fontSize: "13px", fontWeight: 600, color: "#6b7280",
-        }}>
+
+      {/* PROGRESS */}
+      <div className="dash-progress-section">
+        <div className="dash-progress-top">
           <span>Progress</span>
           <span>{project.progress}%</span>
         </div>
-        <div style={{ width: "100%", height: "8px", background: "#d1d5db", borderRadius: "999px", overflow: "hidden" }}>
-          <div style={{
-            height: "100%", borderRadius: "999px", transition: "width 0.4s ease, background 0.4s ease",
-            width: `${project.progress}%`, minWidth: project.progress === 0 ? "100%" : "0",
-            background: project.progress === 0 ? "#d1d5db" : getProgressColor(project.progress),
-          }} />
+        <div className="dash-progress-bar">
+          <div
+            className="dash-progress-fill"
+            style={{
+              width: `${project.progress}%`,
+              minWidth: project.progress === 0 ? "100%" : "0",
+              background: project.progress === 0 ? "#d1d5db" : getProgressColor(project.progress),
+            }}
+          ></div>
         </div>
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ display: "flex" }}>
-          {(project.assigned_users || []).slice(0, 3).map((u, ai) => (
-            <div
-              key={u.id || ai}
-              style={{
-                width: "32px", height: "32px", borderRadius: "50%", background: "#111",
-                color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "11px", fontWeight: 600, border: "2px solid #fff",
-                marginLeft: ai > 0 ? "-10px" : "0",
-              }}
-              title={u.name}
-            >
-              {getInitials(u.name)}
-            </div>
-          ))}
-          {(project.assigned_users || []).length > 3 && (
-            <div style={{
-              width: "32px", height: "32px", borderRadius: "50%", background: "#E5E7EB",
-              color: "#374151", display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "11px", fontWeight: 600, border: "2px solid #fff", marginLeft: "-10px",
-            }}>
-              +{project.assigned_users.length - 3}
-            </div>
+
+      {/* FOOTER */}
+      <div className="dash-card-footer">
+        <div className="dash-date-info">
+          <span className="dash-date-icon">📅</span>
+          {project.end_date ? (
+            <span>{new Date(project.end_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+          ) : (
+            <span>No deadline set</span>
           )}
         </div>
-        <div style={{ color: "#9CA3AF", fontSize: "14px" }}>
-          {project.deadline}
-        </div>
       </div>
+
     </div>
   );
 });
@@ -355,8 +334,11 @@ function Admin() {
   // Normalize active projects data from API response
   const activeProjects = useMemo(() =>
     (dashboard?.activeProjects || []).map((p) => ({
-      id: p.id, name: p.name, client: p.client || '\u2014',
+      id: p.id, name: p.name, title: p.title || p.name, client: p.client || '\u2014',
+      description: p.description || '',
       progress: Number(p.progress || p.progress_percent) || 0, deadline: p.deadline || p.due_date || '\u2014',
+      end_date: p.end_date || p.deadline || p.due_date || null,
+      status: p.status || 'In_progress',
       team: p.team || '\u2014', assigned_users: p.assigned_users || [],
     })),
     [dashboard?.activeProjects]
@@ -581,7 +563,6 @@ function Admin() {
                         project={project}
                         cardWidth={cardWidth}
                         navigate={navigate}
-                        getInitials={getInitials}
                         getProgressColor={getProgressColor}
                         rolePath={rolePath}
                         PROJECTS_PER_VIEW={PROJECTS_PER_VIEW}

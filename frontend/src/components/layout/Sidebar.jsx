@@ -259,49 +259,6 @@ function Sidebar() {
             <span>Projects</span>
           </Link>
 
-          {/* Deliverables dropdown – sub-links for assigned/by-you/self */}
-          <div className={`sidebar-link ${isActive("deliveries") || isActive("deliveries-by-you") || isActive("self-deliveries") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
-            <div
-              onClick={toggleDeliverables}
-              style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
-            >
-              <MdAssignment />
-              <span style={{ flex: 1 }}>Deliverables</span>
-              <MdKeyboardArrowDown
-                size={18}
-                style={{
-                  transition: "transform 0.2s",
-                  transform: deliverablesOpen ? "rotate(180deg)" : "rotate(0deg)",
-                }}
-              />
-            </div>
-            {deliverablesOpen && (
-              <div className="sidebar-sub-links">
-                <Link
-                  to={rolePath("deliveries")}
-                  className={`sidebar-sub-link ${isActive("deliveries") || (isDeliverableDetailPage && getDeliverableFrom() === "deliveries") ? "active" : ""}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  Assigned To You
-                </Link>
-                <Link
-                  to={rolePath("deliveries-by-you")}
-                  className={`sidebar-sub-link ${isActive("deliveries-by-you") || (isDeliverableDetailPage && getDeliverableFrom() === "deliveries-by-you") ? "active" : ""}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  Assigned By You
-                </Link>
-                <Link
-                  to={rolePath("self-deliveries")}
-                  className={`sidebar-sub-link ${isActive("self-deliveries") || (isDeliverableDetailPage && getDeliverableFrom() === "self-deliveries") ? "active" : ""}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  Self Deliverables
-                </Link>
-              </div>
-            )}
-          </div>
-
           {/* Tasks dropdown – sub-links for assigned/by-you/self */}
           <div className={`sidebar-link ${isActive("tasks") || isActive("taskby") || isActive("self-tasks") || location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
             <div
@@ -340,6 +297,49 @@ function Sidebar() {
                   onClick={(e) => e.stopPropagation()}
                 >
                   Self Tasks
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* Deliverables dropdown – sub-links for assigned/by-you/self */}
+          <div className={`sidebar-link ${isActive("deliveries") || isActive("deliveries-by-you") || isActive("self-deliveries") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+            <div
+              onClick={toggleDeliverables}
+              style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
+            >
+              <MdAssignment />
+              <span style={{ flex: 1 }}>Deliverables</span>
+              <MdKeyboardArrowDown
+                size={18}
+                style={{
+                  transition: "transform 0.2s",
+                  transform: deliverablesOpen ? "rotate(180deg)" : "rotate(0deg)",
+                }}
+              />
+            </div>
+            {deliverablesOpen && (
+              <div className="sidebar-sub-links">
+                <Link
+                  to={rolePath("deliveries")}
+                  className={`sidebar-sub-link ${isActive("deliveries") || (isDeliverableDetailPage && getDeliverableFrom() === "deliveries") ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Assigned To You
+                </Link>
+                <Link
+                  to={rolePath("deliveries-by-you")}
+                  className={`sidebar-sub-link ${isActive("deliveries-by-you") || (isDeliverableDetailPage && getDeliverableFrom() === "deliveries-by-you") ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Assigned By You
+                </Link>
+                <Link
+                  to={rolePath("self-deliveries")}
+                  className={`sidebar-sub-link ${isActive("self-deliveries") || (isDeliverableDetailPage && getDeliverableFrom() === "self-deliveries") ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Self Deliverables
                 </Link>
               </div>
             )}
