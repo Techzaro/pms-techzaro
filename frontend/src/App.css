@@ -22,3 +22,31 @@
   opacity: 0.9;
   pointer-events: none;
 }
+
+/* Row drag handle dots — visible on hover, used for handleOnly mode */
+.row-drag-handle {
+  cursor: grab;
+  color: #9ca3af;
+  opacity: 0;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.row-drag-handle:hover {
+  color: #6366f1;
+}
+
+.row-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Show drag handle on row hover */
+.taskby-row:hover .row-drag-handle,
+.taskby-row-compact:hover .row-drag-handle,
+.deliveries-table-row:hover .row-drag-handle,
+.ptt-row:hover .row-drag-handle,
+.project-list-row:hover .row-drag-handle {
+  opacity: 1;
+}

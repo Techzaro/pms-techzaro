@@ -21,7 +21,7 @@ import CreateTaskModal from "../components/CreateTaskModal";
 import SubmitProjectModal from "../components/SubmitProjectModal";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal"; // Added missing import
 import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal"; // Added missing import
-import SortableTableWrapper from "../components/SortableTableWrapper";
+import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
@@ -277,6 +277,7 @@ const SelfTasks = () => {
 
       <div className="container">
         <div className="table-header-compact">
+          <div></div>
           <div>Task Name</div>
           <div>Type</div>
           <div>Status</div>
@@ -296,13 +297,15 @@ const SelfTasks = () => {
             items={paginatedItems.map((i) => ({ ...i, sortableId: `${i.item_type}-${i.id}` }))} 
             onReorder={(reordered) => handleTaskReorder(reordered)} 
             idKey="sortableId"
+            handleOnly
           >
-            {(item, idx) => {
+            {(item, idx, dndProps) => {
               const isProject = item.item_type === "project";
 
               if (isProject) {
                 return (
                   <div className="taskby-row-compact" key={item.sortableId}>
+                    <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                     <div><div className="task-title">{item.title}</div></div>
                     <div><span className="badge" style={{ background: "#eef2ff", color: "#4f46e5" }}>Project</span></div>
                     <div>
@@ -348,6 +351,7 @@ const SelfTasks = () => {
 
               return (
                 <div className="taskby-row-compact" key={item.sortableId}>
+                  <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                   <div><div className="task-title">{item.title}</div></div>
                   <div><span className="badge" style={{ background: "#f0fdf4", color: "#16a34a" }}>Task</span></div>
                   <div>

@@ -16,7 +16,7 @@ import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import { authToken, rolePath } from "../utils/auth";
-import SortableTableWrapper from "../components/SortableTableWrapper";
+import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
@@ -212,6 +212,7 @@ function SelfDeliveries() {
 
         <div className="container">
           <div className="deliveries-table-header self-deliveries-grid">
+            <div></div>
             <div>Deliverable</div>
             <div>Related Task/Project</div>
             <div>Status</div>
@@ -224,13 +225,14 @@ function SelfDeliveries() {
           ) : deliverables.length === 0 ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
           ) : (
-            <SortableTableWrapper items={paginatedItems} onReorder={handleDeliverableReorder} idKey="id" as="div">
-              {(item, idx) => {
+            <SortableTableWrapper items={paginatedItems} onReorder={handleDeliverableReorder} idKey="id" as="div" handleOnly>
+              {(item, idx, dndProps) => {
                 const colors = getRandomColors(item.id);
                 const canSubmit = item.status === "pending";
                 const canView = item.status === "submitted" || item.status === "approved" || item.status === "rework_required";
                 return (
                   <div className="deliveries-table-row self-deliveries-grid">
+                    <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                     <div className="user-box">
                       <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                         {getInitials(item.title)}

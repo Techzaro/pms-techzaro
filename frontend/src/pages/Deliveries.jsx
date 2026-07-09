@@ -24,7 +24,7 @@ import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
 import ViewDeliverableModal from "../components/ViewDeliverableModal";
 import { formatDateTime } from "../utils/formatDateTime";
 import "../pages/Deliveries.css";
-import SortableTableWrapper from "../components/SortableTableWrapper";
+import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 
 /** Background colors for status badges */
@@ -259,6 +259,7 @@ function Deliveries() {
 
         <div className="container">
           <div className="deliveries-table-header">
+            <div></div>
             <div>Deliverable</div>
             <div>Task</div>
             <div>Assigned By</div>
@@ -272,11 +273,12 @@ function Deliveries() {
           ) : displayItems.length === 0 ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
           ) : (
-            <SortableTableWrapper items={paginatedItems} onReorder={handleDeliverableReorder} as="div">
-              {(item, idx) => {
+            <SortableTableWrapper items={paginatedItems} onReorder={handleDeliverableReorder} as="div" handleOnly>
+              {(item, idx, dndProps) => {
                 const colors = getRandomColors(item.id);
                 return (
                   <div className="deliveries-table-row" key={item.id}>
+                    <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                     <div className="user-box">
                       <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                         {getInitials(item.title)}

@@ -18,7 +18,7 @@ import { LuSend } from "react-icons/lu";
 import CreateTaskModal from "../components/CreateTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import SubmitProjectModal from "../components/SubmitProjectModal";
-import SortableTableWrapper from "../components/SortableTableWrapper";
+import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
@@ -325,6 +325,7 @@ function Tasks() {
       {/* TABLE */}
       <div className="container">
         <div className="table-header1">
+          <div></div>
           <div>Assigned by</div>
           <div className="task-name-column">Task Name</div>
           <div>Type</div>
@@ -345,14 +346,16 @@ function Tasks() {
             onReorder={(reordered) => handleTaskListReorder(reordered)} 
             idKey="sortableId"
             as="div"
+            handleOnly
           >
-            {(item, idx) => {
+            {(item, idx, dndProps) => {
               const isProject = item.item_type === "project";
               const colors = getRandomColors(item.id);
 
               if (isProject) {
                 return (
                   <div className="taskby-row" key={item.sortableId}>
+                    <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                     <div className="col-assigned-to">
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
@@ -439,6 +442,7 @@ function Tasks() {
               const assigner = item.assigner;
               return (
                 <div className="taskby-row" key={item.sortableId}>
+                  <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                   <div className="col-assigned-to">
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <div className="avatar" style={{ background: colors.bg, color: colors.text }}>{getInitials(assigner?.name)}</div>

@@ -20,7 +20,7 @@ import { Pencil } from "lucide-react";
 import CreateTaskModal from "../components/CreateTaskModal";
 import EditTaskModal from "../components/EditTaskModal";
 import EditProjectModal from "../components/EditProjectModal";
-import SortableTableWrapper from "../components/SortableTableWrapper";
+import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
 import { authToken, rolePath } from "../utils/auth";
@@ -306,6 +306,7 @@ const Taskby = () => {
 
 
         <div className="table-header1">
+          <div></div>
           <div>Assigned To</div>
           <div className="task-name-column">Task Name</div>
           <div>Type</div>
@@ -332,8 +333,9 @@ const Taskby = () => {
               onReorder={(reordered) => handleTaskReorder(reordered)}
               idKey="sortableId"
               as="div"
+              handleOnly
             >
-              {(item, idx) => {
+              {(item, idx, dndProps) => {
                 const isProject = item.item_type === "project";
                 const colors = getRandomColors(item.id);
                 const uniqueKey = `${item.item_type}-${item.id}-${idx}`;
@@ -342,6 +344,7 @@ const Taskby = () => {
                   const primaryUser = item.assigned_user;
                   return (
                     <div className="taskby-row" key={uniqueKey}>
+                      <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                       <div className="col-assigned-to">
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
@@ -448,6 +451,7 @@ const Taskby = () => {
                 const primaryAssignee = assignees[0];
                 return (
                   <div className="taskby-row" key={uniqueKey}>
+                    <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                     <div className="col-assigned-to">
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <div className="avatar" style={{ background: colors.bg, color: colors.text }}>

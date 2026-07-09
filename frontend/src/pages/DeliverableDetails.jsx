@@ -266,29 +266,7 @@ function DeliverableDetails() {
               { label: deliverable.title },
             ]} />
 
-            {/* Recent Changes Summary — assignee only */}
-            {isAssignee && deliverable?.unviewed_changes?.length > 0 && (
-              <div className="td-changes-panel" style={{ marginTop: "6px", marginBottom: "12px" }}>
-                <div className="td-changes-header">
-                  <span className="td-changes-icon">&#9654;</span>
-                  <span className="td-changes-title">Recent Changes</span>
-                  <span className="td-changes-count">{deliverable.unviewed_changes.length} update(s)</span>
-                </div>
-                <ul className="td-changes-list">
-                  {deliverable.unviewed_changes.map((c, i) => (
-                    <li key={c.id || i}>
-                      <strong>{c.modified_by?.name || "Someone"}</strong> changed{' '}
-                      <strong>{c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
-                      {c.old_value ? (
-                        <span className="td-change-detail"> — {c.old_value} &rarr; {c.new_value}</span>
-                      ) : (
-                        <span className="td-change-detail"> — {c.new_value}</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+
 
             <div className="td-title-row">
               <h1 className="td-title">{deliverable.title}</h1>

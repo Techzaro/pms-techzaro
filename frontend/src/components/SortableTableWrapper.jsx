@@ -11,10 +11,15 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 
-/** Visual drag handle icon component */
-function DragHandle({ style = {} }) {
+/** Visual drag handle icon component — use with handleOnly mode */
+function DragHandle({ listeners = {}, attributes = {}, className = '', style = {} }) {
   return (
-    <span style={{ cursor: 'grab', display: 'inline-flex', alignItems: 'center', padding: '2px 6px', touchAction: 'none', color: '#999', ...style }}>
+    <span
+      className={`row-drag-handle ${className}`}
+      style={{ cursor: 'grab', display: 'inline-flex', alignItems: 'center', touchAction: 'none', color: '#9ca3af', ...style }}
+      {...listeners}
+      {...attributes}
+    >
       <GripVertical size={16} />
     </span>
   );
@@ -23,8 +28,9 @@ function DragHandle({ style = {} }) {
 /**
  * Individual sortable item that wraps each row/div in the sortable context.
  * Applies transform styles and passes drag listeners to children.
+ * When handleOnly=true, listeners are NOT spread on the row — only passed to children.
  */
-function SortableItem({ id, as = 'tr', children, className = '', style = {} }) {
+function SortableItem({ id, as = 'tr', children, className = '', style = {}, handleOnly = false }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const itemStyle = {
     transform: CSS.Transform.toString(transform),
@@ -34,8 +40,13 @@ function SortableItem({ id, as = 'tr', children, className = '', style = {} }) {
   };
   const Tag = as;
   return (
-    <Tag ref={setNodeRef} className={className} style={itemStyle} {...listeners} {...attributes}>
-      {typeof children === 'function' ? children({ isDragging }) : children}
+    <Tag
+      ref={setNodeRef}
+      className={className}
+      style={itemStyle}
+      {...(handleOnly ? {} : { ...listeners, ...attributes })}
+    >
+      {typeof children === 'function' ? children({ isDragging, listeners, attributes }) : children}
     </Tag>
   );
 }
@@ -58,6 +69,7 @@ export default function SortableTableWrapper({
   as = 'tr',
   overlayRender,
   disabled = false,
+  handleOnly = false,
 }) {
   const [localItems, setLocalItems] = useState(Array.isArray(externalItems) ? externalItems : []);
   const [activeId, setActiveId] = useState(null);
@@ -108,6 +120,7 @@ export default function SortableTableWrapper({
             key={`${item[idKey]}-${idx}`}
             id={String(item[idKey])} 
             as={as}
+            handleOnly={handleOnly}
           >
             {(dndProps) => renderRow(item, idx, dndProps)}
           </SortableItem>

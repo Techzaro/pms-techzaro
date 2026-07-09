@@ -28,7 +28,7 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
-import SortableTableWrapper from "../components/SortableTableWrapper";
+import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CreateTaskModal from "../components/CreateTaskModal";
@@ -895,6 +895,7 @@ function ProjectDetails() {
                           <div className="pd-table-wrap">
                             <div className="project-task-table">
                               <div className="ptt-header">
+                                <div></div>
                                 <div>{isCreator || isAdminOrManager ? "Assigned To" : "Assigned By"}</div>
                                 <div className="ptt-col-name">Task Name</div>
                                 <div>Status</div>
@@ -906,12 +907,13 @@ function ProjectDetails() {
                               {tasks.length === 0 ? (
                                 <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>No tasks yet.</div>
                               ) : (
-                                <SortableTableWrapper items={tasks} onReorder={handleTaskReorder} as="div">
-                                  {(t) => {
+                                <SortableTableWrapper items={tasks} onReorder={handleTaskReorder} as="div" handleOnly>
+                                  {(t, idx, dndProps) => {
                                     const statusKey = (t.status || "").toLowerCase();
-                                    return (
-                                      <div className="ptt-row" key={t.id}>
-                                        <div>{isCreator || isAdminOrManager ? ((t.assignees || []).map((a) => a.name).join(", ") || "—") : (t.assigner?.name || "—")}</div>
+                                      return (
+                                        <div className="ptt-row" key={t.id}>
+                                          <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                                          <div>{isCreator || isAdminOrManager ? ((t.assignees || []).map((a) => a.name).join(", ") || "—") : (t.assigner?.name || "—")}</div>
                                         <div className="ptt-col-name">
                                           <Link to={rolePath(`tasks/task-details/${t.id}`)} state={{ from: getTaskFrom(t) }} className="ptt-task-link">
                                             {t.title}
@@ -993,6 +995,7 @@ function ProjectDetails() {
                           </div>
                           <div className="pd-table-wrap">
                             <div className="deliveries-table-header pd-deliverables-grid">
+                              <div></div>
                               <div>Deliverable</div>
                               <div>{isAdminOrManager || isCreator ? "Assigned To" : "Assigned By"}</div>
                               <div>Due Date</div>
@@ -1007,8 +1010,9 @@ function ProjectDetails() {
                                 onReorder={handleDeliverableReorder}
                                 idKey="sortableId"
                                 as="div"
+                                handleOnly
                               >
-                                {(d, idx) => {
+                                {(d, idx, dndProps) => {
                                   const deliverableName = d.deliverable_name || d.name || d.title || d.label || d.description || '';
                                   const displayName = deliverableName || `Deliverable ${idx + 1}`;
                                   const isAssigner = d.created_by && d.created_by === currentUserId;
@@ -1020,6 +1024,7 @@ function ProjectDetails() {
 
                                   return (
                                     <div className="deliveries-table-row pd-deliverables-grid" key={d.sortableId}>
+                                      <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                                       <div className="user-box">
                                         <div className="avatar" style={{ background: '#EEF2FF', color: '#4F46E5', width: '42px', height: '42px', fontSize: '14px' }}>
                                           {initials(displayName)}
