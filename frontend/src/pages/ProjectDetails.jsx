@@ -19,8 +19,6 @@ import {
   ClipboardList,
   Banknote,
   Copy,
-  Eye,
-  EyeOff,
   FolderOpen,
   Globe,
   ListChecks,
@@ -168,8 +166,8 @@ function sanitizeHtml(html) {
 }
 
 function CredentialRow({ credential, onDelete }) {
-  const [showPassword, setShowPassword] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedUser, setCopiedUser] = useState(false);
 
   const copyPassword = async () => {
     try {
@@ -179,6 +177,8 @@ function CredentialRow({ credential, onDelete }) {
     } catch {
       const textArea = document.createElement("textarea");
       textArea.value = credential.password;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
       document.body.appendChild(textArea);
       textArea.select();
       document.execCommand("copy");
@@ -191,13 +191,19 @@ function CredentialRow({ credential, onDelete }) {
   const copyUsername = async () => {
     try {
       await navigator.clipboard.writeText(credential.username);
+      setCopiedUser(true);
+      setTimeout(() => setCopiedUser(false), 2000);
     } catch {
       const textArea = document.createElement("textarea");
       textArea.value = credential.username;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
       document.body.appendChild(textArea);
       textArea.select();
       document.execCommand("copy");
       document.body.removeChild(textArea);
+      setCopiedUser(true);
+      setTimeout(() => setCopiedUser(false), 2000);
     }
   };
 
@@ -228,8 +234,8 @@ function CredentialRow({ credential, onDelete }) {
           <label>Username / Email</label>
           <div className="pd-cred-value-row">
             <span className="pd-cred-value">{credential.username}</span>
-            <button className="pd-cred-copy" onClick={copyUsername} title="Copy username">
-              <Copy size={14} />
+            <button className={`pd-cred-copy ${copiedUser ? "pd-cred-copied" : ""}`} onClick={copyUsername} title="Copy username">
+              {copiedUser ? <Check size={14} /> : <Copy size={14} />}
             </button>
           </div>
         </div>
@@ -237,16 +243,12 @@ function CredentialRow({ credential, onDelete }) {
         <div className="pd-cred-field">
           <label>Password</label>
           <div className="pd-cred-value-row">
-            <span className="pd-cred-value pd-cred-password">
-              {showPassword ? credential.password : "••••••••"}
-            </span>
-            <button className="pd-cred-copy" onClick={() => setShowPassword(!showPassword)} title={showPassword ? "Hide password" : "Show password"}>
-              {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-            </button>
+            <span className="pd-cred-value pd-cred-password">{"\u2022".repeat(12)}</span>
             <button className={`pd-cred-copy ${copied ? "pd-cred-copied" : ""}`} onClick={copyPassword} title="Copy password">
               {copied ? <Check size={14} /> : <Copy size={14} />}
             </button>
           </div>
+          <span className="pd-cred-hint">{copied ? "Copied!" : "Click copy to use this password"}</span>
         </div>
 
         <div className="pd-cred-field">
@@ -302,6 +304,8 @@ function ProjectDetails() {
   const [editFileUrl, setEditFileUrl] = useState("");
   const [deleteFileConfirmOpen, setDeleteFileConfirmOpen] = useState(false);
   const [pendingDeleteFile, setPendingDeleteFile] = useState(null);
+  const [deleteCredentialConfirmOpen, setDeleteCredentialConfirmOpen] = useState(false);
+  const [pendingDeleteCredential, setPendingDeleteCredential] = useState(null);
   const [showAddFileModal, setShowAddFileModal] = useState(false);
   const [reopenDialog, setReopenDialog] = useState(false);
   const [acting, setActing] = useState(false);
@@ -762,7 +766,7 @@ function ProjectDetails() {
   };
 
   const deleteAccessCredential = async (credentialId) => {
-    if (!project || !confirm("Are you sure you want to delete this credential?")) return;
+    if (!project) return;
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/projects/${project.id}/access-credentials/${credentialId}`, {
@@ -1510,7 +1514,10 @@ function ProjectDetails() {
                                 <CredentialRow
                                   key={cred.id}
                                   credential={cred}
-                                  onDelete={() => deleteAccessCredential(cred.id)}
+                                  onDelete={() => {
+                                    setPendingDeleteCredential(cred.id);
+                                    setDeleteCredentialConfirmOpen(true);
+                                  }}
                                 />
                               ))}
                             </div>
@@ -1711,6 +1718,20 @@ function ProjectDetails() {
         projectName={project?.title || ""}
         onSuccess={fetchAccessCredentials}
         files={project?.files || []}
+      />
+
+      <ConfirmModal
+        isOpen={deleteCredentialConfirmOpen}
+        onClose={() => { setDeleteCredentialConfirmOpen(false); setPendingDeleteCredential(null); }}
+        onConfirm={() => {
+          deleteAccessCredential(pendingDeleteCredential);
+          setDeleteCredentialConfirmOpen(false);
+          setPendingDeleteCredential(null);
+        }}
+        title="Delete Credential"
+        message="Are you sure you want to delete this access credential? This action cannot be undone."
+        confirmText="Delete"
+        danger
       />
 
       {showManagerModal && (

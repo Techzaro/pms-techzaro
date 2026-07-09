@@ -2232,19 +2232,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border: none;
-  background: transparent;
-  color: #94a3b8;
-  border-radius: 8px;
+  background: #ef4444;
+  color: #ffffff;
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .pd-cred-delete:hover {
-  background: #fee2e2;
-  color: #dc2626;
+  background: #dc2626;
+  color: #ffffff;
+  transform: scale(1.05);
 }
 
 .pd-cred-fields {
@@ -2310,6 +2311,13 @@
 .pd-cred-copied {
   background: #dcfce7;
   color: #16a34a;
+}
+
+.pd-cred-hint {
+  display: block;
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 4px;
 }
 
 .pd-cred-assigned {

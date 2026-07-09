@@ -161,4 +161,10 @@ class Task extends Model
     {
         return $this->hasMany(TaskChange::class)->where('is_viewed', false);
     }
+
+    /** Access credentials attached to this task. */
+    public function accessCredentials()
+    {
+        return $this->hasMany(TaskAccessCredential::class);
+    }
 }

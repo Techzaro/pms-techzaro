@@ -243,6 +243,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/tasks/{task}/files/{file}', [TaskController::class, 'deleteFile']); // Delete task file
     Route::post('/tasks/{task}/files/reorder', [TaskController::class, 'reorderFiles']); // Reorder task files
 
+    // Task access credentials
+    Route::get('/tasks/{task}/access-credentials', [TaskController::class, 'getAccessCredentials']);
+    Route::post('/tasks/{task}/access-credentials', [TaskController::class, 'storeAccessCredential']);
+    Route::put('/tasks/{task}/access-credentials/{credential}', [TaskController::class, 'updateAccessCredential']);
+    Route::delete('/tasks/{task}/access-credentials/{credential}', [TaskController::class, 'deleteAccessCredential']);
+
     // Personal user notes on tasks (private per user)
     Route::get('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'show']); // View own note
     Route::post('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'store']); // Create/update own note

@@ -17,9 +17,15 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Copy,
   FolderOpen,
+  Globe,
   Pencil,
+  Plus,
+  Shield,
   Trash2,
+  Users,
+  X,
 } from "lucide-react";
 import { IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
@@ -33,6 +39,7 @@ import ViewDeliverableModal from "../components/ViewDeliverableModal";
 import AssignerViewModal from "../components/AssignerViewModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import TaskSubmissionPanel from "../components/TaskSubmissionPanel";
+import AddAccessModal from "../components/AddAccessModal";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 
@@ -128,6 +135,100 @@ function formatShortDate(dateString) {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+function CredentialRow({ credential, onDelete }) {
+  const [copied, setCopied] = useState(false);
+  const [copiedUser, setCopiedUser] = useState(false);
+
+  const copyPassword = async () => {
+    try {
+      await navigator.clipboard.writeText(credential.password);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const textArea = document.createElement("textarea");
+      textArea.value = credential.password;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const copyUsername = async () => {
+    try {
+      await navigator.clipboard.writeText(credential.username);
+      setCopiedUser(true);
+      setTimeout(() => setCopiedUser(false), 2000);
+    } catch {
+      const textArea = document.createElement("textarea");
+      textArea.value = credential.username;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+      setCopiedUser(true);
+      setTimeout(() => setCopiedUser(false), 2000);
+    }
+  };
+
+  return (
+    <div className="td-cred-card">
+      <div className="td-cred-header">
+        <div className="td-cred-website">
+          <Globe size={18} />
+          <span className="td-cred-name">{credential.website_name}</span>
+          {credential.website_url && (
+            <a href={credential.website_url} target="_blank" rel="noopener noreferrer" className="td-cred-link">Visit</a>
+          )}
+        </div>
+        <button className="td-cred-delete" onClick={onDelete} title="Delete credential">
+          <Trash2 size={14} />
+        </button>
+      </div>
+
+      <div className="td-cred-fields">
+        <div className="td-cred-field">
+          <label>Username / Email</label>
+          <div className="td-cred-value-row">
+            <span className="td-cred-value">{credential.username}</span>
+            <button className={`td-cred-copy ${copiedUser ? "td-cred-copied" : ""}`} onClick={copyUsername} title="Copy username">
+              {copiedUser ? <Check size={14} /> : <Copy size={14} />}
+            </button>
+          </div>
+        </div>
+
+        <div className="td-cred-field">
+          <label>Password</label>
+          <div className="td-cred-value-row">
+            <span className="td-cred-value">{"\u2022".repeat(12)}</span>
+            <button className={`td-cred-copy ${copied ? "td-cred-copied" : ""}`} onClick={copyPassword} title="Copy password">
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+            </button>
+          </div>
+          <span className="td-cred-hint">{copied ? "Copied!" : "Click copy to use this password"}</span>
+        </div>
+
+        {credential.assigned_users && credential.assigned_users.length > 0 && (
+          <div className="td-cred-field">
+            <label>Assigned To</label>
+            <div className="td-cred-assigned">
+              {credential.assigned_users.map((u) => (
+                <span key={u.id} className="td-cred-badge">{u.name}</span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Main TaskDetails component — renders the full task detail view with
  * sidebar, tabs, deliverables table and submission workflow.
@@ -162,6 +263,11 @@ function TaskDetails() {
   const [noteDeleteOpen, setNoteDeleteOpen] = useState(false);
   const [pendingNoteId, setPendingNoteId] = useState(null);
   const [orderedDeliverables, setOrderedDeliverables] = useState([]);
+  const [showAddAccessModal, setShowAddAccessModal] = useState(false);
+  const [accessCredentials, setAccessCredentials] = useState([]);
+  const [loadingCredentials, setLoadingCredentials] = useState(false);
+  const [deleteCredentialConfirmOpen, setDeleteCredentialConfirmOpen] = useState(false);
+  const [pendingDeleteCredential, setPendingDeleteCredential] = useState(null);
 
   const taskChangesForHighlight = (task?.changes || []).map((c) => ({ ...c, id: c.id || 0 }));
   const {
@@ -238,6 +344,46 @@ function TaskDetails() {
   const canEdit = task?.can_edit ?? (task && currentUser && isCreator && task?.status?.toLowerCase() !== "approved");
   const canSubmitTask = task?.can_submit ?? (task && currentUser && isAssignee && ["pending", "reopened"].includes(task?.status));
   const isApproved = task?.status?.toLowerCase() === "approved";
+
+  const fetchAccessCredentials = useCallback(async () => {
+    if (!task) return;
+    setLoadingCredentials(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${task.id}/access-credentials`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load access credentials");
+      const data = await res.json();
+      setAccessCredentials(data.credentials || []);
+    } catch (err) {
+      console.error("Fetch access credentials error:", err);
+      setAccessCredentials([]);
+    } finally {
+      setLoadingCredentials(false);
+    }
+  }, [task]);
+
+  const deleteAccessCredential = async (credentialId) => {
+    if (!task) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${task.id}/access-credentials/${credentialId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to delete access credential");
+      fetchAccessCredentials();
+    } catch (err) {
+      console.error("Delete access credential error:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "access" && task) {
+      fetchAccessCredentials();
+    }
+  }, [tab, task, fetchAccessCredentials]);
 
   const goToTask = (id) => {
     if (!id) return;
@@ -518,6 +664,7 @@ function TaskDetails() {
                     { id: "deliverables", label: "Deliverables", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg> },
                     { id: "overview", label: "Overview", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
                     { id: "files", label: "Platform files & links", icon: <FolderOpen size={16} /> },
+                    { id: "access", label: "Access", icon: <Shield size={16} /> },
                   ].map(({ id, label, icon }) => (
                     <button key={id} className={`td-tab ${tab === id ? "td-tab--on" : ""}`} onClick={() => setTab(id)}>
                       {icon}
@@ -623,6 +770,40 @@ function TaskDetails() {
                   )}
 
                   {tab === "files" && <FileUploadSection taskId={task.id} files={files} onReorder={handleFileReorder} onFilesChange={() => fetchTask(true)} />}
+
+                  {tab === "access" && (
+                    <div className="td-access-section">
+                      <div className="td-access-header">
+                        <div>
+                          <h2 className="td-section-title">Task Access Credentials</h2>
+                          <p className="td-access-subtitle">
+                            Store and manage login credentials for task-related websites. Passwords are encrypted and only visible to assigned users.
+                          </p>
+                        </div>
+                        <button className="td-access-add-btn" onClick={() => setShowAddAccessModal(true)}>
+                          <Plus size={16} /> Add Access
+                        </button>
+                      </div>
+                      {loadingCredentials ? (
+                        <p className="td-muted">Loading credentials...</p>
+                      ) : accessCredentials.length === 0 ? (
+                        <p className="td-muted">No access credentials added yet. Click "Add Access" to store login details.</p>
+                      ) : (
+                        <div className="td-credentials-list">
+                          {accessCredentials.map((cred) => (
+                            <CredentialRow
+                              key={cred.id}
+                              credential={cred}
+                              onDelete={() => {
+                                setPendingDeleteCredential(cred.id);
+                                setDeleteCredentialConfirmOpen(true);
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                 </div>
               </div>
@@ -826,6 +1007,29 @@ function TaskDetails() {
         message="Are you sure you want to delete this note? This action cannot be undone."
         confirmText="Delete"
         cancelText="Cancel"
+        danger
+      />
+
+      <AddAccessModal
+        isOpen={showAddAccessModal}
+        onClose={() => setShowAddAccessModal(false)}
+        taskId={task?.id}
+        projectName={task?.title || ""}
+        onSuccess={fetchAccessCredentials}
+        files={task?.files || []}
+      />
+
+      <ConfirmModal
+        isOpen={deleteCredentialConfirmOpen}
+        onClose={() => { setDeleteCredentialConfirmOpen(false); setPendingDeleteCredential(null); }}
+        onConfirm={() => {
+          deleteAccessCredential(pendingDeleteCredential);
+          setDeleteCredentialConfirmOpen(false);
+          setPendingDeleteCredential(null);
+        }}
+        title="Delete Credential"
+        message="Are you sure you want to delete this access credential? This action cannot be undone."
+        confirmText="Delete"
         danger
       />
     </>

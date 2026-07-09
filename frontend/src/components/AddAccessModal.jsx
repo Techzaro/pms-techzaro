@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Globe, User, Lock, Users, Eye, EyeOff, ChevronDown, Check } from "lucide-react";
+import { X, Globe, User, Lock, Users, ChevronDown, Check } from "lucide-react";
 import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
+import { showSuccessMessage } from "../utils/notify";
 
-export default function AddAccessModal({ isOpen, onClose, projectId, projectName, onSuccess, files = [] }) {
+export default function AddAccessModal({ isOpen, onClose, projectId, taskId, projectName, onSuccess, files = [] }) {
   const [websiteName, setWebsiteName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [assignedUserIds, setAssignedUserIds] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -36,7 +36,6 @@ export default function AddAccessModal({ isOpen, onClose, projectId, projectName
     setWebsiteName("");
     setUsername("");
     setPassword("");
-    setShowPassword(false);
     setAssignedUserIds([]);
     setError(null);
     setDropdownOpen(false);
@@ -75,7 +74,10 @@ export default function AddAccessModal({ isOpen, onClose, projectId, projectName
 
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/projects/${projectId}/access-credentials`, {
+      const endpoint = taskId
+        ? `${API_URL}/tasks/${taskId}/access-credentials`
+        : `${API_URL}/projects/${projectId}/access-credentials`;
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -88,12 +90,14 @@ export default function AddAccessModal({ isOpen, onClose, projectId, projectName
           password: password,
           assigned_user_ids: assignedUserIds,
         }),
+        _notifHandled: true,
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to create access credential");
 
       onSuccess?.();
+      showSuccessMessage("Access credential", "created");
       onClose();
     } catch (err) {
       setError(err.message);
@@ -158,19 +162,12 @@ export default function AddAccessModal({ isOpen, onClose, projectId, projectName
             </label>
             <div className="aam-password-wrap">
               <input
-                type={showPassword ? "text" : "password"}
+                type="password"
                 placeholder="Enter password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
-              <button
-                type="button"
-                className="aam-toggle-pw"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
             </div>
           </div>
 

@@ -1046,3 +1046,98 @@
   cursor: not-allowed;
 }
 
+/* ── Access Credentials Section ── */
+.td-access-section { padding: 0; }
+.td-access-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+.td-access-subtitle { font-size: 13px; color: #6b7280; margin-top: 4px; }
+.td-access-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.td-access-add-btn:hover { background: #4f46e5; }
+.td-muted { color: #9ca3af; font-size: 14px; padding: 20px 0; text-align: center; }
+.td-credentials-list { display: flex; flex-direction: column; gap: 14px; }
+
+/* ── Credential Card ── */
+.td-cred-card {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 18px 20px;
+  transition: box-shadow 0.15s;
+}
+.td-cred-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.td-cred-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.td-cred-website { display: flex; align-items: center; gap: 8px; color: #374151; font-weight: 600; font-size: 15px; }
+.td-cred-name { font-weight: 600; }
+.td-cred-link { font-size: 12px; color: #6366f1; text-decoration: none; margin-left: 4px; }
+.td-cred-link:hover { text-decoration: underline; }
+.td-cred-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: #ef4444;
+  color: #ffffff;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.td-cred-delete:hover { background: #dc2626; color: #ffffff; transform: scale(1.05); }
+
+.td-cred-fields { display: flex; flex-direction: column; gap: 12px; }
+.td-cred-field label { font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; display: block; }
+.td-cred-value-row { display: flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 12px; }
+.td-cred-value { flex: 1; font-size: 14px; color: #374151; font-family: 'SF Mono', 'Consolas', monospace; }
+.td-cred-copy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.td-cred-copy:hover { background: #f1f5f9; color: #6366f1; }
+
+.td-cred-assigned { display: flex; flex-wrap: wrap; gap: 6px; }
+.td-cred-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  background: #ede9fe;
+  color: #6366f1;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.td-cred-copied {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.td-cred-hint {
+  display: block;
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+

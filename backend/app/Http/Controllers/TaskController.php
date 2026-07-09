@@ -1870,6 +1870,143 @@ class TaskController extends Controller
     }
 
     /**
+     * Get access credentials for a task.
+     * Creator (assigner) sees all; assignees see only credentials assigned to them.
+     */
+    public function getAccessCredentials(Task $task)
+    {
+        $user = request()->user();
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
+        $isAssignee = $task->assignees->contains('id', $user->id);
+
+        if (!$isCreator && !$isAssignee) {
+            return response()->json(['success' => true, 'credentials' => []]);
+        }
+
+        $credentials = $task->accessCredentials()
+            ->with('assignedUsers:id,name,role')
+            ->get()
+            ->filter(function ($cred) use ($user, $isCreator) {
+                if ($isCreator) {
+                    return true;
+                }
+                return $cred->assignedUsers->contains('id', $user->id);
+            })
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'credentials' => $credentials->map(function ($cred) {
+                return [
+                    'id' => $cred->id,
+                    'website_name' => $cred->website_name,
+                    'website_url' => $cred->website_url,
+                    'username' => $cred->username,
+                    'password' => $cred->password_decrypted,
+                    'assigned_users' => $cred->assignedUsers->map(fn($u) => ['id' => $u->id, 'name' => $u->name]),
+                    'created_by' => $cred->creator?->name,
+                    'created_at' => $cred->created_at,
+                ];
+            }),
+        ]);
+    }
+
+    /**
+     * Store a new access credential for a task.
+     * Any authenticated user (assigner or assignee) can create.
+     */
+    public function storeAccessCredential(Request $request, Task $task)
+    {
+        $request->validate([
+            'website_name' => 'required|string|max:255',
+            'username' => 'required|string|max:255',
+            'password' => 'required|string|max:1000',
+            'assigned_user_ids' => 'required|array|min:1',
+            'assigned_user_ids.*' => 'exists:users,id',
+        ]);
+
+        $credential = $task->accessCredentials()->create([
+            'website_name' => $request->website_name,
+            'username' => $request->username,
+            'password' => $request->password,
+            'created_by' => $request->user()->id,
+        ]);
+
+        $credential->assignedUsers()->sync($request->assigned_user_ids);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Access credential created successfully',
+            'credential' => [
+                'id' => $credential->id,
+                'website_name' => $credential->website_name,
+                'website_url' => $credential->website_url,
+                'username' => $credential->username,
+                'password' => $credential->password_decrypted,
+                'assigned_users' => $credential->assignedUsers->map(fn($u) => ['id' => $u->id, 'name' => $u->name]),
+            ],
+        ], 201);
+    }
+
+    /**
+     * Update an access credential for a task.
+     */
+    public function updateAccessCredential(Request $request, Task $task, \App\Models\TaskAccessCredential $credential)
+    {
+        if ($credential->task_id !== $task->id) {
+            return response()->json(['success' => false, 'message' => 'Credential does not belong to this task'], 404);
+        }
+
+        $request->validate([
+            'website_name' => 'required|string|max:255',
+            'website_url' => 'nullable|string|max:500',
+            'username' => 'required|string|max:255',
+            'password' => 'required|string|max:1000',
+            'assigned_user_ids' => 'required|array|min:1',
+            'assigned_user_ids.*' => 'exists:users,id',
+        ]);
+
+        $credential->update([
+            'website_name' => $request->website_name,
+            'website_url' => $request->website_url,
+            'username' => $request->username,
+            'password' => $request->password,
+        ]);
+
+        $credential->assignedUsers()->sync($request->assigned_user_ids);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Access credential updated successfully',
+            'credential' => [
+                'id' => $credential->id,
+                'website_name' => $credential->website_name,
+                'website_url' => $credential->website_url,
+                'username' => $credential->username,
+                'password' => $credential->password_decrypted,
+                'assigned_users' => $credential->assignedUsers->map(fn($u) => ['id' => $u->id, 'name' => $u->name]),
+            ],
+        ]);
+    }
+
+    /**
+     * Delete an access credential for a task.
+     */
+    public function deleteAccessCredential(Task $task, \App\Models\TaskAccessCredential $credential)
+    {
+        if ($credential->task_id !== $task->id) {
+            return response()->json(['success' => false, 'message' => 'Credential does not belong to this task'], 404);
+        }
+
+        $credential->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Access credential deleted successfully',
+        ]);
+    }
+
+    /**
      * Get the list of statuses considered as pending/in-progress for filtering.
      *
      * @return array Array of status strings.
