@@ -271,13 +271,13 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: #6B7280;
+  color: #dc2626;
   transition: background 0.2s, color 0.2s;
 }
 
 .sd-file-remove:hover {
   background: #FEE2E2;
-  color: #EF4444;
+  color: #b91c1c;
 }
 
 .sd-error {

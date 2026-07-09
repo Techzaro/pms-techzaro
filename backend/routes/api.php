@@ -239,6 +239,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Task file attachments and links
     Route::post('/tasks/{task}/files', [TaskController::class, 'uploadFile']); // Upload file to task
     Route::post('/tasks/{task}/links', [TaskController::class, 'addLink']); // Add link to task
+    Route::put('/tasks/{task}/files/{file}', [TaskController::class, 'renameFile']); // Rename task file/link
     Route::delete('/tasks/{task}/files/{file}', [TaskController::class, 'deleteFile']); // Delete task file
     Route::post('/tasks/{task}/files/reorder', [TaskController::class, 'reorderFiles']); // Reorder task files
 

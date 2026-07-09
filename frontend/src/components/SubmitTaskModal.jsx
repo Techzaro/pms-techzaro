@@ -16,6 +16,7 @@ import { notify } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import SubmissionLinkSection from "./SubmissionLinkSection";
 import LoadingButton from "./LoadingButton";
+import ConfirmModal from "./ConfirmModal";
 import "./SubmitDeliverableModal.css";
 import "./layout/CreateTaskModal.css";
 
@@ -33,6 +34,8 @@ function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const { submitting, run } = useSubmit();
+  const [fileRemoveConfirmOpen, setFileRemoveConfirmOpen] = useState(false);
+  const [pendingFileIndex, setPendingFileIndex] = useState(-1);
 
   // Lock body scroll and reset form state when modal opens/closes
   useEffect(() => {
@@ -112,6 +115,7 @@ function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
   const isImageFile = (f) => f.type?.startsWith("image/");
 
   return createPortal(
+    <>
     <div className="sd-overlay">
       <div className="sd-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="sd-header">
@@ -182,7 +186,7 @@ function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
                       <span className="sd-file-name">{f.name}</span>
                       <span className="sd-file-size">{(f.size / 1024 / 1024).toFixed(1)} MB</span>
                     </div>
-                    <button className="sd-file-remove" onClick={() => removeFile(i)}>
+                    <button className="sd-file-remove" onClick={() => { setPendingFileIndex(i); setFileRemoveConfirmOpen(true); }}>
                       <X size={14} />
                     </button>
                   </div>
@@ -203,7 +207,18 @@ function SubmitTaskModal({ isOpen, onClose, task, onSubmitSuccess }) {
           </LoadingButton>
         </div>
       </div>
-    </div>,
+    </div>
+    <ConfirmModal
+      isOpen={fileRemoveConfirmOpen}
+      onClose={() => { setFileRemoveConfirmOpen(false); setPendingFileIndex(-1); }}
+      onConfirm={() => { removeFile(pendingFileIndex); setFileRemoveConfirmOpen(false); setPendingFileIndex(-1); }}
+      title="Remove File"
+      message="Are you sure you want to remove this file?"
+      confirmText="Remove"
+      cancelText="Cancel"
+      danger
+    />
+    </>,
     document.body
   );
 }

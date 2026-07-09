@@ -16,6 +16,7 @@ import { useParams, useLocation } from "react-router-dom";
 import { Download } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
+import ConfirmModal from "../components/ConfirmModal";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { publish } from "../utils/eventBus";
@@ -77,6 +78,8 @@ function DeliverableDetails() {
   const [showRejectForm, setShowRejectForm] = useState(false);
   const fileInputRef = useRef(null);
   const filesInputRef = useRef(null);
+  const [linkRemoveConfirmOpen, setLinkRemoveConfirmOpen] = useState(false);
+  const [pendingLinkIndex, setPendingLinkIndex] = useState(-1);
 
   const notify = useNotification();
 
@@ -255,6 +258,7 @@ function DeliverableDetails() {
   const isRejected = deliverable.status === "rejected";
 
   return (
+    <>
     <DashboardLayout hideRightSidebar>
       <div className="td-page">
 
@@ -395,7 +399,7 @@ function DeliverableDetails() {
                                   <line x1="10" y1="14" x2="21" y2="3" />
                                 </svg>
                               </a>
-                              <button type="button" className="task-attachment-remove" onClick={() => handleRemoveLink(index)}>✕</button>
+                               <button type="button" className="task-attachment-remove" onClick={() => { setPendingLinkIndex(index); setLinkRemoveConfirmOpen(true); }}>✕</button>
                             </div>
                           ))}
                         </div>
@@ -557,6 +561,17 @@ function DeliverableDetails() {
         </div>
       </div>
     </DashboardLayout>
+    <ConfirmModal
+      isOpen={linkRemoveConfirmOpen}
+      onClose={() => { setLinkRemoveConfirmOpen(false); setPendingLinkIndex(-1); }}
+      onConfirm={() => { handleRemoveLink(pendingLinkIndex); setLinkRemoveConfirmOpen(false); setPendingLinkIndex(-1); }}
+      title="Remove Link"
+      message="Are you sure you want to remove this link?"
+      confirmText="Remove"
+      cancelText="Cancel"
+      danger
+    />
+    </>
   );
 }
 

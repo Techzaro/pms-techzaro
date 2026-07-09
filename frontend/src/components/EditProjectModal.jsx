@@ -73,6 +73,8 @@ const EditProjectModal = ({ project, onClose }) => {
   const [pendingCatDelete, setPendingCatDelete] = useState("");
   const [goalDeleteOpen, setGoalDeleteOpen] = useState(false);
   const [pendingGoalIndex, setPendingGoalIndex] = useState(null);
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const [pendingRemoveItem, setPendingRemoveItem] = useState({ type: "", index: -1, id: "" });
   const [deletedCategories, setDeletedCategories] = useState(() => {
     try { return JSON.parse(localStorage.getItem("deleted_categories") || "[]"); } catch { return []; }
   });
@@ -231,6 +233,25 @@ const EditProjectModal = ({ project, onClose }) => {
     setMilestones((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const confirmRemoveItem = () => {
+    const { type, index, id } = pendingRemoveItem;
+    if (type === "existing-file" || type === "existing-link") {
+      handleDeleteExistingFile(id);
+    } else if (type === "pending-file") {
+      handleRemoveFile(index);
+    } else if (type === "pending-link") {
+      handleRemoveLink(index);
+    } else if (type === "category") {
+      handleRemoveCategory(index);
+    } else if (type === "phase") {
+      handleRemovePhase(index);
+    } else if (type === "deliverable") {
+      handleRemoveDeliverableProj(index);
+    }
+    setRemoveConfirmOpen(false);
+    setPendingRemoveItem({ type: "", index: -1, id: "" });
+  };
+
   const handlePhaseKeyDown = (e) => {
     if (e.key === "Enter") { e.preventDefault(); handleAddPhase(); }
   };
@@ -309,7 +330,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
   const handleFiles = (fileList) => {
     const newFiles = Array.from(fileList);
-    setPendingFiles((prev) => [...prev, ...newFiles]);
+    setPendingFiles((prev) => [...prev, ...newFiles.map((f) => ({ file: f, name: f.name, size: f.size, renaming: false }))]);
   };
 
   const handleDrop = (e) => {
@@ -354,7 +375,7 @@ const EditProjectModal = ({ project, onClose }) => {
     let url = linkInput.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     const name = linkTitleInput.trim() || url;
-    setLinks((prev) => [...prev, { url, name }]);
+    setLinks((prev) => [...prev, { url, name, renaming: false }]);
     setLinkInput("");
     setLinkTitleInput("");
   };
@@ -387,7 +408,8 @@ const EditProjectModal = ({ project, onClose }) => {
     await Promise.all([
       ...pendingFiles.map((file) => {
         const fd = new FormData();
-        fd.append("file", file);
+        fd.append("file", file.file);
+        fd.append("name", file.customName || file.name);
         return fetch(`${API_URL}/projects/${projId}/files`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
@@ -403,7 +425,7 @@ const EditProjectModal = ({ project, onClose }) => {
             Accept: "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(link),
+          body: JSON.stringify({ url: link.url, name: link.customName || link.name }),
           _notifHandled: true,
         }).catch(() => {});
       }),
@@ -455,6 +477,12 @@ const EditProjectModal = ({ project, onClose }) => {
           budget: form.budget ? parseFloat(form.budget) : null,
           milestones: milestones.length > 0 ? milestones : [],
           deliverables: deliverablesProj.length > 0 ? deliverablesProj.map(d => ({ title: d.title, due_date: d.due_date || null })) : undefined,
+          existing_file_names: existingFiles.reduce((acc, f) => {
+            if (f.customName && f.customName !== f.name) {
+              acc.push({ id: f.id, name: f.customName });
+            }
+            return acc;
+          }, []),
         };
 
         const response = await fetch(`${API_URL}/projects/${project.id}`, {
@@ -660,10 +688,42 @@ const EditProjectModal = ({ project, onClose }) => {
                       return (
                         <div key={file.id} className="cp-attachment-item">
                           <span className="cp-attachment-icon">📄</span>
-                          <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="cp-attachment-name cp-attachment-link">
-                            {file.name}
-                          </a>
-                          <button type="button" className="cp-attachment-remove" onClick={() => handleDeleteExistingFile(file.id)}>✕</button>
+                          {file.renaming ? (
+                            <>
+                              <input
+                                autoFocus
+                                type="text"
+                                value={file.customName || ""}
+                                onChange={(e) => {
+                                  setExistingFiles((p) => p.map((f) => f.id === file.id ? { ...f, customName: e.target.value } : f));
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    setExistingFiles((p) => p.map((f) => f.id === file.id ? { ...f, renaming: false } : f));
+                                  }
+                                }}
+                                style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
+                              />
+                              <button type="button" onClick={() => {
+                                setExistingFiles((p) => p.map((f) => f.id === file.id ? { ...f, renaming: false } : f));
+                              }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Save name">&#10003;</button>
+                            </>
+                          ) : (
+                            <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="cp-attachment-name cp-attachment-link">
+                              {file.customName || file.name}
+                            </a>
+                          )}
+                          {!file.renaming && (
+                            <div style={{ display: "flex", gap: 10, flexShrink: 0, marginLeft: 8, alignItems: "center" }}>
+                              <button type="button" onClick={() => {
+                                setExistingFiles((p) => p.map((f) => f.id === file.id ? { ...f, renaming: true, customName: f.customName || f.name.replace(/\.[^.]+$/, "") } : f));
+                              }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
+                              <button type="button" className="cp-attachment-remove" onClick={() => { setPendingRemoveItem({ type: "existing-file", index: -1, id: file.id }); setRemoveConfirmOpen(true); }}>✕</button>
+                            </div>
+                          )}
+                          {file.renaming && (
+                            <button type="button" onClick={() => { setPendingRemoveItem({ type: "existing-file", index: -1, id: file.id }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0 }} title="Remove">&#10005;</button>
+                          )}
                         </div>
                       );
                     })}
@@ -676,9 +736,59 @@ const EditProjectModal = ({ project, onClose }) => {
                   {pendingFiles.map((file, index) => (
                     <div key={index} className="cp-attachment-item">
                       <span className="cp-attachment-icon">📄</span>
-                      <span className="cp-attachment-name">{file.name}</span>
-                      <span className="cp-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
-                      <button type="button" className="cp-attachment-remove" onClick={() => handleRemoveFile(index)}>✕</button>
+                      {file.renaming ? (
+                        <>
+                          <input
+                            autoFocus
+                            type="text"
+                            value={file.customName || ""}
+                            onChange={(e) => {
+                              setPendingFiles((p) => {
+                                const updated = [...p];
+                                updated[index] = { ...updated[index], customName: e.target.value };
+                                return updated;
+                              });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                setPendingFiles((p) => {
+                                  const updated = [...p];
+                                  updated[index] = { ...updated[index], renaming: false };
+                                  return updated;
+                                });
+                              }
+                            }}
+                            style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
+                          />
+                          <button type="button" onClick={() => {
+                            setPendingFiles((p) => {
+                              const updated = [...p];
+                              updated[index] = { ...updated[index], renaming: false };
+                              return updated;
+                            });
+                          }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Save name">&#10003;</button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="cp-attachment-name">{file.customName || file.name}</span>
+                          <span className="cp-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
+                        </>
+                      )}
+                      {!file.renaming && (
+                        <div style={{ display: "flex", gap: 10, flexShrink: 0, marginLeft: 8, alignItems: "center" }}>
+                          <button type="button" onClick={() => {
+                            setPendingFiles((p) => {
+                              const updated = [...p];
+                              updated[index] = { ...updated[index], renaming: true, customName: file.customName || file.name.replace(/\.[^.]+$/, "") };
+                              return updated;
+                            });
+                          }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
+                          <button type="button" className="cp-attachment-remove" onClick={() => { setPendingRemoveItem({ type: "pending-file", index }); setRemoveConfirmOpen(true); }}>✕</button>
+                        </div>
+                      )}
+                      {file.renaming && (
+                        <button type="button" onClick={() => { setPendingRemoveItem({ type: "pending-file", index }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0 }} title="Remove">&#10005;</button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -726,10 +836,50 @@ const EditProjectModal = ({ project, onClose }) => {
                     {existingLinks.map((file) => (
                       <div key={file.id} className="cp-attachment-item">
                         <span className="cp-attachment-icon">🔗</span>
-                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-name cp-attachment-link">
-                          {file.name.length > 45 ? file.name.substring(0, 45) + "..." : file.name}
-                        </a>
-                        <button type="button" className="cp-attachment-remove" onClick={() => handleDeleteExistingFile(file.id)}>✕</button>
+                        {file.renaming ? (
+                          <>
+                            <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                              <input
+                                autoFocus
+                                type="text"
+                                value={file.customName || ""}
+                                onChange={(e) => {
+                                  setExistingFiles((p) => p.map((f) => f.id === file.id ? { ...f, customName: e.target.value } : f));
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    setExistingFiles((p) => p.map((f) => f.id === file.id ? { ...f, renaming: false } : f));
+                                  }
+                                }}
+                                style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
+                              />
+                              <a href={file.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-link" style={{ fontSize: "12px", color: "#6366f1", marginTop: 2 }}>
+                                {file.url.length > 45 ? file.url.substring(0, 45) + "..." : file.url}
+                              </a>
+                            </div>
+                            <button type="button" onClick={() => {
+                              setExistingFiles((p) => p.map((f) => f.id === file.id ? { ...f, renaming: false } : f));
+                            }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Save name">&#10003;</button>
+                          </>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                            <span className="cp-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{(file.customName || file.name).length > 45 ? (file.customName || file.name).substring(0, 45) + "..." : (file.customName || file.name)}</span>
+                            <a href={file.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-link" style={{ fontSize: "12px", color: "#6366f1" }}>
+                              {file.url.length > 45 ? file.url.substring(0, 45) + "..." : file.url}
+                            </a>
+                          </div>
+                        )}
+                        {!file.renaming && (
+                          <div style={{ display: "flex", gap: 10, flexShrink: 0, alignItems: "center" }}>
+                            <button type="button" onClick={() => {
+                              setExistingFiles((p) => p.map((f) => f.id === file.id ? { ...f, renaming: true, customName: f.customName || f.name } : f));
+                            }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
+                            <button type="button" className="cp-attachment-remove" onClick={() => { setPendingRemoveItem({ type: "existing-link", index: -1, id: file.id }); setRemoveConfirmOpen(true); }}>✕</button>
+                          </div>
+                        )}
+                        {file.renaming && (
+                          <button type="button" onClick={() => { setPendingRemoveItem({ type: "existing-link", index: -1, id: file.id }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0 }} title="Remove">&#10005;</button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -741,20 +891,66 @@ const EditProjectModal = ({ project, onClose }) => {
                   {links.map((link, index) => (
                     <div key={index} className="cp-attachment-item">
                       <span className="cp-attachment-icon">🔗</span>
-                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                        <span className="cp-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{link.name}</span>
-                        <a href={link.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-link" style={{ fontSize: "12px", color: "#6366f1" }}>
-                          {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
-                        </a>
-                      </div>
-                      <a href={link.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-open">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                          <polyline points="15 3 21 3 21 9" />
-                          <line x1="10" y1="14" x2="21" y2="3" />
-                        </svg>
-                      </a>
-                      <button type="button" className="cp-attachment-remove" onClick={() => handleRemoveLink(index)}>✕</button>
+                      {link.renaming ? (
+                        <>
+                          <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                            <input
+                              autoFocus
+                              type="text"
+                              value={link.customName || ""}
+                              onChange={(e) => {
+                                setLinks((p) => {
+                                  const updated = [...p];
+                                  updated[index] = { ...updated[index], customName: e.target.value };
+                                  return updated;
+                                });
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  setLinks((p) => {
+                                    const updated = [...p];
+                                    updated[index] = { ...updated[index], renaming: false };
+                                    return updated;
+                                  });
+                                }
+                              }}
+                              style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
+                            />
+                            <a href={link.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-link" style={{ fontSize: "12px", color: "#6366f1", marginTop: 2 }}>
+                              {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
+                            </a>
+                          </div>
+                          <button type="button" onClick={() => {
+                            setLinks((p) => {
+                              const updated = [...p];
+                              updated[index] = { ...updated[index], renaming: false };
+                              return updated;
+                            });
+                          }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Save name">&#10003;</button>
+                        </>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                          <span className="cp-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{link.customName || link.name}</span>
+                          <a href={link.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-link" style={{ fontSize: "12px", color: "#6366f1" }}>
+                            {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
+                          </a>
+                        </div>
+                      )}
+                      {!link.renaming && (
+                        <div style={{ display: "flex", gap: 10, flexShrink: 0, alignItems: "center" }}>
+                          <button type="button" onClick={() => {
+                            setLinks((p) => {
+                              const updated = [...p];
+                              updated[index] = { ...updated[index], renaming: true, customName: link.customName || link.name };
+                              return updated;
+                            });
+                          }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
+                          <button type="button" className="cp-attachment-remove" onClick={() => { setPendingRemoveItem({ type: "pending-link", index }); setRemoveConfirmOpen(true); }}>✕</button>
+                        </div>
+                      )}
+                      {link.renaming && (
+                        <button type="button" onClick={() => { setPendingRemoveItem({ type: "pending-link", index }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0 }} title="Remove">&#10005;</button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -868,7 +1064,7 @@ const EditProjectModal = ({ project, onClose }) => {
                       <button
                         type="button"
                         className="cp-goals-item-remove"
-                        onClick={() => handleRemoveCategory(index)}
+                        onClick={() => { setPendingRemoveItem({ type: "category", index, id: "" }); setRemoveConfirmOpen(true); }}
                       >
                         ✕
                       </button>
@@ -933,7 +1129,7 @@ const EditProjectModal = ({ project, onClose }) => {
                       <button
                         type="button"
                         className="cp-phase-item-remove"
-                        onClick={() => handleRemovePhase(index)}
+                        onClick={() => { setPendingRemoveItem({ type: "phase", index, id: "" }); setRemoveConfirmOpen(true); }}
                       >
                         ✕
                       </button>
@@ -999,7 +1195,7 @@ const EditProjectModal = ({ project, onClose }) => {
                       <button
                         type="button"
                         className="cp-phase-item-remove"
-                        onClick={() => handleRemoveDeliverableProj(index)}
+                        onClick={() => { setPendingRemoveItem({ type: "deliverable", index, id: "" }); setRemoveConfirmOpen(true); }}
                       >
                         ✕
                       </button>
@@ -1055,6 +1251,16 @@ const EditProjectModal = ({ project, onClose }) => {
         title="Delete Goal"
         message="Are you sure you want to delete this goal? This action cannot be undone."
         confirmText="Delete"
+        cancelText="Cancel"
+        danger
+      />
+      <ConfirmModal
+        isOpen={removeConfirmOpen}
+        onClose={() => { setRemoveConfirmOpen(false); setPendingRemoveItem({ type: "", index: -1, id: "" }); }}
+        onConfirm={confirmRemoveItem}
+        title="Remove Item"
+        message="Are you sure you want to remove this item? This action cannot be undone."
+        confirmText="Remove"
         cancelText="Cancel"
         danger
       />

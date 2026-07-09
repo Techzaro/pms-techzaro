@@ -159,6 +159,8 @@ function TaskDetails() {
   const [noteInput, setNoteInput] = useState("");
   const [notes, setNotes] = useState([]);
   const [noteSaving, setNoteSaving] = useState(false);
+  const [noteDeleteOpen, setNoteDeleteOpen] = useState(false);
+  const [pendingNoteId, setPendingNoteId] = useState(null);
   const [orderedDeliverables, setOrderedDeliverables] = useState([]);
 
   const taskChangesForHighlight = (task?.changes || []).map((c) => ({ ...c, id: c.id || 0 }));
@@ -620,7 +622,7 @@ function TaskDetails() {
                     </div>
                   )}
 
-                  {tab === "files" && <FileUploadSection taskId={task.id} files={files} onReorder={handleFileReorder} />}
+                  {tab === "files" && <FileUploadSection taskId={task.id} files={files} onReorder={handleFileReorder} onFilesChange={() => fetchTask(true)} />}
 
                 </div>
               </div>
@@ -755,7 +757,7 @@ function TaskDetails() {
                 <div className="td-notes-list">
                   {notes.map((n) => (
                     <div key={n.id} className="td-saved-note">
-                      <button type="button" className="td-note-delete" onClick={() => deleteNote(n.id)} title="Delete note">&times;</button>
+                       <button type="button" className="td-note-delete" onClick={() => { setPendingNoteId(n.id); setNoteDeleteOpen(true); }} title="Delete note">&times;</button>
                       <p className="td-notes">{n.note}</p>
                     </div>
                   ))}
@@ -816,14 +818,30 @@ function TaskDetails() {
         cancelText="Cancel"
         danger
       />
+      <ConfirmModal
+        isOpen={noteDeleteOpen}
+        onClose={() => { setNoteDeleteOpen(false); setPendingNoteId(null); }}
+        onConfirm={() => { deleteNote(pendingNoteId); setNoteDeleteOpen(false); setPendingNoteId(null); }}
+        title="Delete Note"
+        message="Are you sure you want to delete this note? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger
+      />
     </>
   );
 }
 
 /* ── File Upload Section Component ── */
-/** Renders the list of files attached to a task, with download links and drag-drop reorder. */
-function FileUploadSection({ taskId, files, onReorder }) {
+/** Renders the list of files attached to a task, with download links, edit/delete actions, and drag-drop reorder. */
+function FileUploadSection({ taskId, files, onReorder, onFilesChange }) {
   const [fileSearch, setFileSearch] = useState("");
+  const [editItem, setEditItem] = useState(null);
+  const [editName, setEditName] = useState("");
+  const [editUrl, setEditUrl] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
   const boxColors = [
     "#eef2ff", "#f0fdf4", "#fefce8", "#fef2f2",
     "#f5f3ff", "#ecfeff", "#fff7ed", "#fce7f3",
@@ -833,6 +851,69 @@ function FileUploadSection({ taskId, files, onReorder }) {
     const q = fileSearch.toLowerCase();
     return (f.name || "").toLowerCase().includes(q) || (f.url || "").toLowerCase().includes(q);
   });
+
+  const openEdit = (item) => {
+    setEditItem(item);
+    setEditName(item.name || "");
+    setEditUrl(item.url || "");
+  };
+
+  const handleRename = async () => {
+    if (!editItem || !editName.trim()) return;
+    setEditSaving(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/files/${editItem.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name: editName.trim(), url: editUrl.trim() || null }),
+      });
+      if (res.ok) {
+        showSuccessMessage("File renamed successfully");
+        setEditItem(null);
+        if (onFilesChange) onFilesChange();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.message || "Failed to rename file");
+      }
+    } catch {
+      alert("Failed to rename file");
+    }
+    setEditSaving(false);
+  };
+
+  const openDelete = (item) => {
+    setPendingDelete(item);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDelete = async (done) => {
+    if (!pendingDelete) { done?.(); return; }
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/files/${pendingDelete.id}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        showSuccessMessage("File deleted successfully");
+        setDeleteConfirmOpen(false);
+        setPendingDelete(null);
+        if (onFilesChange) onFilesChange();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.message || "Failed to delete file");
+      }
+    } catch {
+      alert("Failed to delete file");
+    }
+    done?.();
+  };
+
   return (
     <div>
       <div className="td-section-header">
@@ -863,26 +944,92 @@ function FileUploadSection({ taskId, files, onReorder }) {
             const bg = boxColors[idx % boxColors.length];
             return (
               <div key={f.id} className="pd-file-box" style={{ background: bg }}>
-                <div className="pd-file-box__name">
-                  <FolderOpen size={18} />
-                  <span>{f.name}</span>
+                <div className="pd-file-box__content">
+                  <div className="pd-file-box__name">
+                    <FolderOpen size={18} />
+                    <span>{f.name}</span>
+                  </div>
+                  {f.url && (
+                    <a
+                      href={fileUrl(f.url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="pd-file-box__link"
+                      style={{ color: "#6366f1" }}
+                    >
+                      {f.url}
+                    </a>
+                  )}
                 </div>
-                {f.url && (
-                  <a
-                    href={fileUrl(f.url)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="pd-file-box__link"
-                    style={{ color: "#6366f1" }}
+                <div className="pd-file-box__actions">
+                  <button
+                    className="pd-file-box__btn pd-file-box__btn--edit"
+                    title="Rename"
+                    onClick={() => openEdit(f)}
                   >
-                    {f.url}
-                  </a>
-                )}
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    className="pd-file-box__btn pd-file-box__btn--delete"
+                    title="Delete"
+                    onClick={() => openDelete(f)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
             );
           }}
         </SortableTableWrapper>
       )}
+      {/* Edit/Rename Popup */}
+      {editItem && (
+        <div className="pd-edit-overlay" onClick={() => setEditItem(null)}>
+          <div className="pd-edit-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="pd-edit-modal__title">Rename File</h3>
+            <div className="pd-edit-modal__field">
+              <label className="pd-edit-modal__label">Name</label>
+              <input
+                className="pd-edit-modal__input"
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => { if (e.key === "Enter") handleRename(); }}
+              />
+            </div>
+            {editItem.url && (
+              <div className="pd-edit-modal__field">
+                <label className="pd-edit-modal__label">URL</label>
+                <input
+                  className="pd-edit-modal__input"
+                  type="text"
+                  value={editUrl}
+                  onChange={(e) => setEditUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleRename(); }}
+                />
+              </div>
+            )}
+            <div className="pd-edit-modal__actions">
+              <button className="pd-edit-modal__cancel" onClick={() => setEditItem(null)} disabled={editSaving}>Cancel</button>
+              <button className="pd-edit-modal__save" onClick={handleRename} disabled={editSaving || !editName.trim()}>
+                {editSaving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Delete Confirmation */}
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        onClose={() => { setDeleteConfirmOpen(false); setPendingDelete(null); }}
+        onConfirm={handleDelete}
+        title="Delete File"
+        message={`Are you sure you want to delete "${pendingDelete?.name || ""}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger
+      />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { useEscapeKey } from "../hooks/useEscapeKey";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
 import LoadingButton from "./LoadingButton";
+import ConfirmModal from "./ConfirmModal";
 
 import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
 import { publish } from "../utils/eventBus";
@@ -57,6 +58,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   const [linkTitleInput, setLinkTitleInput] = useState("");
   const fileInputRef = useRef(null);
   const dropRef = useRef(null);
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const [pendingRemoveItem, setPendingRemoveItem] = useState({ type: "", index: -1 });
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: true } }));
@@ -198,6 +201,16 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     setRequirementsList((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const confirmRemoveItem = () => {
+    const { type, index } = pendingRemoveItem;
+    if (type === "file") handleRemoveFile(index);
+    else if (type === "link") handleRemoveLink(index);
+    else if (type === "requirement") handleRemoveRequirement(index);
+    else if (type === "deliverable") handleRemoveDeliverable(index);
+    setRemoveConfirmOpen(false);
+    setPendingRemoveItem({ type: "", index: -1 });
+  };
+
   const handleReqKeyDown = (e) => {
     if (e.key === "Enter") { e.preventDefault(); handleAddRequirement(); }
   };
@@ -221,7 +234,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
 
   const handleFiles = (fileList) => {
     const newFiles = Array.from(fileList);
-    setPendingFiles((prev) => [...prev, ...newFiles]);
+    setPendingFiles((prev) => [...prev, ...newFiles.map((f) => ({ file: f, name: f.name, size: f.size, renaming: false }))]);
   };
 
   const handleDrop = (e) => {
@@ -254,7 +267,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     let url = linkInput.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     const name = linkTitleInput.trim() || url;
-    setLinks((prev) => [...prev, { url, name }]);
+    setLinks((prev) => [...prev, { url, name, renaming: false }]);
     setLinkInput("");
     setLinkTitleInput("");
   };
@@ -276,7 +289,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     await Promise.all([
       ...pendingFiles.map((file) => {
         const fd = new FormData();
-        fd.append("file", file);
+        fd.append("file", file.file);
+        fd.append("name", file.customName || file.name);
         return fetch(`${API_URL}/tasks/${taskId}/files`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
@@ -292,7 +306,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
             Accept: "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(link),
+          body: JSON.stringify({ url: link.url, name: link.customName || link.name }),
           _notifHandled: true,
         }).catch(() => {});
       }),
@@ -376,9 +390,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   };
 
   return createPortal(
+    <>
     <div className="task-overlay">
       <div className="task-modal" onClick={(e) => e.stopPropagation()}>
-
         {/* HEADER */}
         <div className="task-header">
           <div className="task-header-left">
@@ -510,9 +524,59 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                   {pendingFiles.map((file, index) => (
                     <div key={index} className="task-attachment-item">
                       <span className="task-attachment-icon">📄</span>
-                      <span className="task-attachment-name">{file.name}</span>
-                      <span className="task-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
-                      <button type="button" className="task-attachment-remove" onClick={() => handleRemoveFile(index)}>✕</button>
+                      {file.renaming ? (
+                        <>
+                          <input
+                            autoFocus
+                            type="text"
+                            value={file.customName || ""}
+                            onChange={(e) => {
+                              setPendingFiles((p) => {
+                                const updated = [...p];
+                                updated[index] = { ...updated[index], customName: e.target.value };
+                                return updated;
+                              });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                setPendingFiles((p) => {
+                                  const updated = [...p];
+                                  updated[index] = { ...updated[index], renaming: false };
+                                  return updated;
+                                });
+                              }
+                            }}
+                            style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
+                          />
+                          <button type="button" onClick={() => {
+                            setPendingFiles((p) => {
+                              const updated = [...p];
+                              updated[index] = { ...updated[index], renaming: false };
+                              return updated;
+                            });
+                          }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Save name">&#10003;</button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="task-attachment-name">{file.customName || file.name}</span>
+                          <span className="task-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
+                        </>
+                      )}
+                      {!file.renaming && (
+                        <div style={{ display: "flex", gap: 10, flexShrink: 0, marginLeft: 8, alignItems: "center" }}>
+                          <button type="button" onClick={() => {
+                            setPendingFiles((p) => {
+                              const updated = [...p];
+                              updated[index] = { ...updated[index], renaming: true, customName: file.customName || file.name.replace(/\.[^.]+$/, "") };
+                              return updated;
+                            });
+                          }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
+                          <button type="button" className="task-attachment-remove" onClick={() => { setPendingRemoveItem({ type: "file", index }); setRemoveConfirmOpen(true); }}>✕</button>
+                        </div>
+                      )}
+                      {file.renaming && (
+                        <button type="button" onClick={() => { setPendingRemoveItem({ type: "file", index }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0 }} title="Remove">&#10005;</button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -556,20 +620,66 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                   {links.map((link, index) => (
                     <div key={index} className="task-attachment-item">
                       <span className="task-attachment-icon">🔗</span>
-                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                        <span className="task-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{link.name}</span>
-                        <a href={link.url} target="_blank" rel="noopener noreferrer" className="task-attachment-link" style={{ fontSize: "12px", color: "#6366f1" }}>
-                          {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
-                        </a>
-                      </div>
-                      <a href={link.url} target="_blank" rel="noopener noreferrer" className="task-attachment-open">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                          <polyline points="15 3 21 3 21 9" />
-                          <line x1="10" y1="14" x2="21" y2="3" />
-                        </svg>
-                      </a>
-                      <button type="button" className="task-attachment-remove" onClick={() => handleRemoveLink(index)}>✕</button>
+                      {link.renaming ? (
+                        <>
+                          <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                            <input
+                              autoFocus
+                              type="text"
+                              value={link.customName || ""}
+                              onChange={(e) => {
+                                setLinks((p) => {
+                                  const updated = [...p];
+                                  updated[index] = { ...updated[index], customName: e.target.value };
+                                  return updated;
+                                });
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  setLinks((p) => {
+                                    const updated = [...p];
+                                    updated[index] = { ...updated[index], renaming: false };
+                                    return updated;
+                                  });
+                                }
+                              }}
+                              style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
+                            />
+                            <a href={link.url} target="_blank" rel="noopener noreferrer" className="task-attachment-link" style={{ fontSize: "12px", color: "#6366f1", marginTop: 2 }}>
+                              {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
+                            </a>
+                          </div>
+                          <button type="button" onClick={() => {
+                            setLinks((p) => {
+                              const updated = [...p];
+                              updated[index] = { ...updated[index], renaming: false };
+                              return updated;
+                            });
+                          }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Save name">&#10003;</button>
+                        </>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                          <span className="task-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{link.customName || link.name}</span>
+                          <a href={link.url} target="_blank" rel="noopener noreferrer" className="task-attachment-link" style={{ fontSize: "12px", color: "#6366f1" }}>
+                            {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
+                          </a>
+                        </div>
+                      )}
+                      {!link.renaming && (
+                        <div style={{ display: "flex", gap: 10, flexShrink: 0, alignItems: "center" }}>
+                          <button type="button" onClick={() => {
+                            setLinks((p) => {
+                              const updated = [...p];
+                              updated[index] = { ...updated[index], renaming: true, customName: link.customName || link.name };
+                              return updated;
+                            });
+                          }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
+                          <button type="button" className="task-attachment-remove" onClick={() => { setPendingRemoveItem({ type: "link", index }); setRemoveConfirmOpen(true); }}>✕</button>
+                        </div>
+                      )}
+                      {link.renaming && (
+                        <button type="button" onClick={() => { setPendingRemoveItem({ type: "link", index }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0 }} title="Remove">&#10005;</button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -649,7 +759,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                       <button
                         type="button"
                         className="cp-goals-item-remove"
-                        onClick={() => handleRemoveRequirement(index)}
+                        onClick={() => { setPendingRemoveItem({ type: "requirement", index }); setRemoveConfirmOpen(true); }}
                       >
                         ✕
                       </button>
@@ -708,7 +818,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                       <button
                         type="button"
                         className="task-phase-item-remove"
-                        onClick={() => handleRemoveDeliverable(index)}
+                        onClick={() => { setPendingRemoveItem({ type: "deliverable", index }); setRemoveConfirmOpen(true); }}
                       >
                         ✕
                       </button>
@@ -729,7 +839,18 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         </form>
 
       </div>
-    </div>,
+    </div>
+    <ConfirmModal
+      isOpen={removeConfirmOpen}
+      onClose={() => { setRemoveConfirmOpen(false); setPendingRemoveItem({ type: "", index: -1 }); }}
+      onConfirm={confirmRemoveItem}
+      title="Remove Item"
+      message="Are you sure you want to remove this item? This action cannot be undone."
+      confirmText="Remove"
+      cancelText="Cancel"
+      danger
+    />
+    </>,
     document.body
   );
 };

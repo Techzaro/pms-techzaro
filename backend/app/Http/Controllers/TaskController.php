@@ -926,10 +926,15 @@ class TaskController extends Controller
             'deliverables.*.title' => 'required_with:deliverables|string|max:255',
             'deliverables.*.description' => 'nullable|string|max:2000',
             'deliverables.*.due_date' => 'nullable|date',
+            'existing_file_names' => 'nullable|array',
+            'existing_file_names.*.id' => 'required_with:existing_file_names|exists:task_files,id',
+            'existing_file_names.*.name' => 'required_with:existing_file_names|string|max:255',
         ]);
 
         $assigneeIds = $validated['assigned_to'] ?? null;
         unset($validated['assigned_to']);
+        $existingFileNames = $validated['existing_file_names'] ?? null;
+        unset($validated['existing_file_names']);
 
         $oldValues = [];
         foreach (['title', 'description', 'requirements', 'start_date', 'end_date', 'priority', 'status'] as $f) {
@@ -940,6 +945,15 @@ class TaskController extends Controller
 
         $oldAssigneeIds = $task->assignees()->pluck('users.id')->toArray();
         $task->update($validated);
+
+        // Rename existing files/links if provided
+        if ($existingFileNames) {
+            foreach ($existingFileNames as $item) {
+                \App\Models\TaskFile::where('id', $item['id'])
+                    ->where('task_id', $task->id)
+                    ->update(['name' => $item['name']]);
+            }
+        }
 
         $changes = [];
         foreach ($oldValues as $f => $oldVal) {
@@ -1717,6 +1731,58 @@ class TaskController extends Controller
         ]);
 
         return response()->json(['success' => true, 'message' => 'File deleted successfully']);
+    }
+
+    /**
+     * Rename a task file/link by updating its name (and optionally URL).
+     *
+     * @param  Request  $request  Input: name (required), url (optional).
+     * @param  Task     $task     The task the file belongs to.
+     * @param  TaskFile $file     The file to rename.
+     * @return JsonResponse JSON response with the updated file.
+     */
+    public function renameFile(Request $request, Task $task, TaskFile $file)
+    {
+        $user = request()->user();
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
+
+        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        if (strtolower((string) $task->status) === 'approved') {
+            return response()->json(['success' => false, 'message' => 'Approved tasks cannot be modified.'], 403);
+        }
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'url' => 'nullable|string|max:2048',
+        ]);
+
+        $oldName = $file->name;
+        $file->name = $validated['name'];
+        if (array_key_exists('url', $validated)) {
+            $file->url = $validated['url'];
+        }
+        $file->save();
+
+        TaskChange::create([
+            'task_id' => $task->id,
+            'field_name' => 'file_renamed',
+            'old_value' => $oldName,
+            'new_value' => $file->name,
+            'modified_by' => $user->id,
+            'is_viewed' => false,
+        ]);
+        TaskWorkflowEvent::create([
+            'task_id' => $task->id,
+            'user_id' => $user->id,
+            'action' => 'field_changed',
+            'comment' => 'File renamed: '.$oldName.' → '.$file->name,
+        ]);
+
+        return response()->json(['success' => true, 'file' => $file]);
     }
 
     /**

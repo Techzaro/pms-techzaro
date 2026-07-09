@@ -295,6 +295,11 @@ function ProjectDetails() {
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null });
   const [fileSearch, setFileSearch] = useState("");
+  const [editFileItem, setEditFileItem] = useState(null);
+  const [editFileName, setEditFileName] = useState("");
+  const [editFileUrl, setEditFileUrl] = useState("");
+  const [deleteFileConfirmOpen, setDeleteFileConfirmOpen] = useState(false);
+  const [pendingDeleteFile, setPendingDeleteFile] = useState(null);
   const [showAddFileModal, setShowAddFileModal] = useState(false);
   const [reopenDialog, setReopenDialog] = useState(false);
   const [acting, setActing] = useState(false);
@@ -390,6 +395,51 @@ function ProjectDetails() {
       _notifHandled: true,
     }).catch((err) => console.error('File reorder failed:', err));
   }, [projectId]);
+
+  const handleDeleteFile = useCallback(async () => {
+    if (!pendingDeleteFile) return;
+    const token = authToken();
+    try {
+      const res = await fetch(`${API}/projects/${projectId}/files/${pendingDeleteFile.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        _notifHandled: true,
+      });
+      if (!res.ok) throw new Error("Failed to delete");
+      setProject((prev) => ({ ...prev, files: (prev.files || []).filter((f) => f.id !== pendingDeleteFile.id) }));
+      showSuccessMessage("File", "deleted");
+      publish("data:changed", { type: "project", action: "updated" });
+    } catch (err) {
+      notify.error(err.message);
+    } finally {
+      setDeleteFileConfirmOpen(false);
+      setPendingDeleteFile(null);
+    }
+  }, [pendingDeleteFile, projectId, notify]);
+
+  const handleRenameFile = useCallback(async () => {
+    if (!editFileItem || !editFileName.trim()) return;
+    const token = authToken();
+    try {
+      const res = await fetch(`${API}/projects/${projectId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ existing_file_names: [{ id: editFileItem.id, name: editFileName.trim() }] }),
+        _notifHandled: true,
+      });
+      if (!res.ok) throw new Error("Failed to rename");
+      setProject((prev) => ({
+        ...prev,
+        files: (prev.files || []).map((f) => f.id === editFileItem.id ? { ...f, name: editFileName.trim() } : f),
+      }));
+      showSuccessMessage("File", "renamed");
+      publish("data:changed", { type: "project", action: "updated" });
+    } catch (err) {
+      notify.error(err.message);
+    } finally {
+      setEditFileItem(null);
+    }
+  }, [editFileItem, editFileName, projectId, notify]);
 
   const handleDeliverableActionSuccess = (updatedDeliverable) => {
     setProject((prev) => {
@@ -1299,6 +1349,10 @@ function ProjectDetails() {
                                           </a>
                                         )}
                                       </div>
+                                      <div style={{ display: "flex", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
+                                        <button type="button" onClick={() => { setEditFileItem(f); setEditFileName(f.name); setEditFileUrl(f.url || ""); }} style={{ background: "#2563eb", border: "none", color: "#fff", cursor: "pointer", padding: "5px 8px", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }} title="Edit"><Pencil size={14} /></button>
+                                        <button type="button" onClick={() => { setPendingDeleteFile(f); setDeleteFileConfirmOpen(true); }} style={{ background: "#dc2626", border: "none", color: "#fff", cursor: "pointer", padding: "5px 8px", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }} title="Delete"><Trash2 size={14} /></button>
+                                      </div>
                                     </div>
                                   );
                                 }}
@@ -1515,6 +1569,55 @@ function ProjectDetails() {
           </div>
         </div>
       )}
+
+      {/* Edit File/Link Popup */}
+      {editFileItem && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={() => setEditFileItem(null)}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 460, maxWidth: "90vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#1e293b" }}>Edit File / Link</h3>
+            <p style={{ margin: "6px 0 0", fontSize: 13, color: "#64748b" }}>Rename or update the URL below.</p>
+            <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Title</label>
+                <input
+                  autoFocus
+                  type="text"
+                  value={editFileName}
+                  onChange={(e) => setEditFileName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleRenameFile(); }}
+                  style={{ width: "100%", padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                />
+              </div>
+              {editFileItem.url && (
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>URL</label>
+                  <input
+                    type="text"
+                    value={editFileUrl}
+                    onChange={(e) => setEditFileUrl(e.target.value)}
+                    style={{ width: "100%", padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                  />
+                </div>
+              )}
+            </div>
+            <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button type="button" onClick={() => setEditFileItem(null)} style={{ padding: "8px 18px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "#374151" }}>Cancel</button>
+              <button type="button" onClick={handleRenameFile} disabled={!editFileName.trim()} style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: editFileName.trim() ? "#6366f1" : "#e5e7eb", color: editFileName.trim() ? "#fff" : "#9ca3af", fontSize: 13, fontWeight: 600, cursor: editFileName.trim() ? "pointer" : "not-allowed" }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation */}
+      <ConfirmModal
+        isOpen={deleteFileConfirmOpen}
+        onClose={() => { setDeleteFileConfirmOpen(false); setPendingDeleteFile(null); }}
+        onConfirm={handleDeleteFile}
+        title="Delete File"
+        message={`Are you sure you want to delete "${pendingDeleteFile?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        danger
+      />
 
       <AddProjectFileModal
         isOpen={showAddFileModal}

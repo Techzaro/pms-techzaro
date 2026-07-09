@@ -615,7 +615,7 @@ function ManageTeam() {
                               <button
                                 className="mt-chip-remove"
                                 title="Remove member"
-                                onClick={() => handleRemoveMember(team.id, member.id)}
+                                onClick={() => { setRemoveMemberData({ teamId: team.id, memberId: member.id, memberName: member.name || member.username || "this member" }); setRemoveMemberConfirmOpen(true); }}
                               >
                                 &times;
                               </button>

@@ -90,6 +90,7 @@ function UserProfile() {
   const deptDropdownRef = useRef(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState({ type: "", value: "" });
+  const [avatarRemoveConfirmOpen, setAvatarRemoveConfirmOpen] = useState(false);
   const [editUser, setEditUser] = useState({
     name: "",
     father_name: "",
@@ -1119,7 +1120,7 @@ function UserProfile() {
                     </div>
                     <input id="edit-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) setEditAvatarFile(file); }} />
                     {(editAvatarFile || user.avatar) && (
-                      <button type="button" className="avatar-remove-btn" onClick={() => setEditAvatarFile(null)}>
+                      <button type="button" className="avatar-remove-btn" onClick={() => setAvatarRemoveConfirmOpen(true)}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                         Remove
                       </button>
@@ -1544,6 +1545,16 @@ function UserProfile() {
         }}
         title="Remove Document"
         message="Are you sure you want to remove this document?"
+        confirmText="Remove"
+        cancelText="Cancel"
+        danger
+      />
+      <ConfirmModal
+        isOpen={avatarRemoveConfirmOpen}
+        onClose={() => setAvatarRemoveConfirmOpen(false)}
+        onConfirm={() => { setEditAvatarFile(null); setAvatarRemoveConfirmOpen(false); }}
+        title="Remove Photo"
+        message="Are you sure you want to remove this profile photo?"
         confirmText="Remove"
         cancelText="Cancel"
         danger

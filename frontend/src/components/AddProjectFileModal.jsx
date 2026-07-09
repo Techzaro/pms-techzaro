@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
-import { X, Upload, Link, FileUp, Trash2 } from "lucide-react";
+import { X, Upload, Link, FileUp } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
+import ConfirmModal from "./ConfirmModal";
 
 export default function AddProjectFileModal({ isOpen, onClose, projectId, onSuccess }) {
   const [files, setFiles] = useState([]);
@@ -10,12 +11,14 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
   const [linkTitleInput, setLinkTitleInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const [pendingRemoveItem, setPendingRemoveItem] = useState({ type: "", index: -1 });
 
   if (!isOpen) return null;
 
   const handleFileSelect = (e) => {
     const selected = Array.from(e.target.files);
-    setFiles((prev) => [...prev, ...selected]);
+    setFiles((prev) => [...prev, ...selected.map((f) => ({ file: f, customName: f.name.replace(/\.[^.]+$/, ""), renaming: false }))]);
     e.target.value = "";
   };
 
@@ -28,7 +31,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
     let url = linkInput.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     const name = linkTitleInput.trim() || url;
-    setLinks((prev) => [...prev, { url, name }]);
+    setLinks((prev) => [...prev, { url, name, renaming: false }]);
     setLinkInput("");
     setLinkTitleInput("");
   };
@@ -50,9 +53,10 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
     try {
       const token = authToken();
       await Promise.all([
-        ...files.map((file) => {
+        ...files.map((item) => {
           const fd = new FormData();
-          fd.append("file", file);
+          fd.append("file", item.file);
+          fd.append("name", item.customName || item.file.name);
           return fetch(`${API_URL}/projects/${projectId}/files`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
@@ -68,7 +72,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
               Accept: "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify(link),
+            body: JSON.stringify({ url: link.url, name: link.customName || link.name }),
             _notifHandled: true,
           }).catch(() => {});
         }),
@@ -88,6 +92,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
   const canSubmit = files.length > 0 || links.length > 0;
 
   return (
+    <>
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box" style={{ maxWidth: "520px", width: "95%" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
@@ -119,12 +124,58 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
 
           {files.length > 0 && (
             <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
-              {files.map((f, i) => (
+              {files.map((item, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#f3f4f6", borderRadius: "8px", fontSize: "13px" }}>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{f.name}</span>
-                  <button onClick={() => handleRemoveFile(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", padding: "2px", marginLeft: "8px" }}>
-                    <Trash2 size={14} />
-                  </button>
+                  {item.renaming ? (
+                    <>
+                      <input
+                        autoFocus
+                        type="text"
+                        value={item.customName || ""}
+                        onChange={(e) => {
+                          setFiles((p) => {
+                            const updated = [...p];
+                            updated[i] = { ...updated[i], customName: e.target.value };
+                            return updated;
+                          });
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            setFiles((p) => {
+                              const updated = [...p];
+                              updated[i] = { ...updated[i], renaming: false };
+                              return updated;
+                            });
+                          }
+                        }}
+                        style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
+                      />
+                      <button type="button" onClick={() => {
+                        setFiles((p) => {
+                          const updated = [...p];
+                          updated[i] = { ...updated[i], renaming: false };
+                          return updated;
+                        });
+                      }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Save name">&#10003;</button>
+                    </>
+                  ) : (
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{item.customName || item.file.name}</span>
+                  )}
+                  {!item.renaming && (
+                    <div style={{ display: "flex", gap: 10, flexShrink: 0, marginLeft: 8, alignItems: "center" }}>
+                      <button type="button" onClick={() => {
+                        setFiles((p) => {
+                          const updated = [...p];
+                          updated[i] = { ...updated[i], renaming: true, customName: item.customName || item.file.name.replace(/\.[^.]+$/, "") };
+                          return updated;
+                        });
+                      }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
+                      <button type="button" onClick={() => { setPendingRemoveItem({ type: "file", index: i }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1 }} title="Remove">&#10005;</button>
+                    </div>
+                  )}
+                  {item.renaming && (
+                    <button type="button" onClick={() => { setPendingRemoveItem({ type: "file", index: i }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0, marginLeft: 6 }} title="Remove">&#10005;</button>
+                  )}
                 </div>
               ))}
             </div>
@@ -175,11 +226,68 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
           {links.length > 0 && (
             <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
               {links.map((l, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#f3f4f6", borderRadius: "8px", fontSize: "13px" }}>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "#6366f1" }}>{l.name}</span>
-                  <button onClick={() => handleRemoveLink(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", padding: "2px", marginLeft: "8px" }}>
-                    <Trash2 size={14} />
-                  </button>
+                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
+                  <span style={{ color: "#6366f1", marginRight: 6, flexShrink: 0 }}>&#x1f517;</span>
+                  {l.renaming ? (
+                    <>
+                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                        <input
+                          autoFocus
+                          type="text"
+                          value={l.customName || ""}
+                          onChange={(e) => {
+                            setLinks((p) => {
+                              const updated = [...p];
+                              updated[i] = { ...updated[i], customName: e.target.value };
+                              return updated;
+                            });
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              setLinks((p) => {
+                                const updated = [...p];
+                                updated[i] = { ...updated[i], renaming: false };
+                                return updated;
+                              });
+                            }
+                          }}
+                          style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
+                        />
+                        <a href={l.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#6366f1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>
+                          {l.url.length > 45 ? l.url.substring(0, 45) + "..." : l.url}
+                        </a>
+                      </div>
+                      <button type="button" onClick={() => {
+                        setLinks((p) => {
+                          const updated = [...p];
+                          updated[i] = { ...updated[i], renaming: false };
+                          return updated;
+                        });
+                      }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 6 }} title="Save name">&#10003;</button>
+                    </>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                      <span style={{ fontWeight: 600, fontSize: "13px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.customName || l.name}</span>
+                      <a href={l.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "#6366f1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {l.url.length > 45 ? l.url.substring(0, 45) + "..." : l.url}
+                      </a>
+                    </div>
+                  )}
+                  {!l.renaming && (
+                    <div style={{ display: "flex", gap: 10, flexShrink: 0, marginLeft: 8, alignItems: "center" }}>
+                      <button type="button" onClick={() => {
+                        setLinks((p) => {
+                          const updated = [...p];
+                          updated[i] = { ...updated[i], renaming: true, customName: l.customName || l.name };
+                          return updated;
+                        });
+                      }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
+                      <button type="button" onClick={() => { setPendingRemoveItem({ type: "link", index: i }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1 }} title="Remove">&#10005;</button>
+                    </div>
+                  )}
+                  {l.renaming && (
+                    <button type="button" onClick={() => { setPendingRemoveItem({ type: "link", index: i }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0, marginLeft: 6 }} title="Remove">&#10005;</button>
+                  )}
                 </div>
               ))}
             </div>
@@ -212,5 +320,21 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
         </div>
       </div>
     </div>
+    <ConfirmModal
+      isOpen={removeConfirmOpen}
+      onClose={() => { setRemoveConfirmOpen(false); setPendingRemoveItem({ type: "", index: -1 }); }}
+      onConfirm={() => {
+        if (pendingRemoveItem.type === "file") handleRemoveFile(pendingRemoveItem.index);
+        else if (pendingRemoveItem.type === "link") handleRemoveLink(pendingRemoveItem.index);
+        setRemoveConfirmOpen(false);
+        setPendingRemoveItem({ type: "", index: -1 });
+      }}
+      title="Remove Item"
+      message="Are you sure you want to remove this item?"
+      confirmText="Remove"
+      cancelText="Cancel"
+      danger
+    />
+    </>
   );
 }

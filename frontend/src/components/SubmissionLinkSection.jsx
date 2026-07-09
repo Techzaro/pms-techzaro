@@ -6,6 +6,7 @@
  */
 
 import { useState } from "react";
+import ConfirmModal from "./ConfirmModal";
 
 /**
  * Link management section with add/remove functionality.
@@ -14,6 +15,8 @@ import { useState } from "react";
 function SubmissionLinkSection({ onLinksChange }) {
   const [links, setLinks] = useState([]);
   const [linkInput, setLinkInput] = useState("");
+  const [linkRemoveConfirmOpen, setLinkRemoveConfirmOpen] = useState(false);
+  const [pendingLinkIndex, setPendingLinkIndex] = useState(-1);
 
   /**
    * Normalizes a URL by trimming whitespace and prepending https:// if missing.
@@ -77,14 +80,18 @@ function SubmissionLinkSection({ onLinksChange }) {
           {links.map((link, index) => (
             <div key={index} className="task-attachment-item">
               <span className="task-attachment-icon">🔗</span>
-              <a
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="task-attachment-name task-attachment-link"
-              >
-                {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
-              </a>
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                <span className="task-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{link.name || link.url}</span>
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="task-attachment-link"
+                  style={{ fontSize: "12px", color: "#6366f1" }}
+                >
+                  {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
+                </a>
+              </div>
               <a
                 href={link.url}
                 target="_blank"
@@ -109,7 +116,7 @@ function SubmissionLinkSection({ onLinksChange }) {
               <button
                 type="button"
                 className="task-attachment-remove"
-                onClick={() => handleRemoveLink(index)}
+                onClick={() => { setPendingLinkIndex(index); setLinkRemoveConfirmOpen(true); }}
               >
                 ✕
               </button>
@@ -117,6 +124,16 @@ function SubmissionLinkSection({ onLinksChange }) {
           ))}
         </div>
       )}
+      <ConfirmModal
+        isOpen={linkRemoveConfirmOpen}
+        onClose={() => { setLinkRemoveConfirmOpen(false); setPendingLinkIndex(-1); }}
+        onConfirm={() => { handleRemoveLink(pendingLinkIndex); setLinkRemoveConfirmOpen(false); setPendingLinkIndex(-1); }}
+        title="Remove Link"
+        message="Are you sure you want to remove this link?"
+        confirmText="Remove"
+        cancelText="Cancel"
+        danger
+      />
     </div>
   );
 }

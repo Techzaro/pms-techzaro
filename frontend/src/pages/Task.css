@@ -209,16 +209,16 @@
 /* ===== TABLE HEADER - UPDATED ===== */
 .table-header1 {
   display: grid !important;
-  grid-template-columns: 32px minmax(180px, 2.8fr) minmax(150px, 2.2fr) minmax(80px, 0.9fr) minmax(100px, 1.1fr) minmax(140px, 1.5fr) minmax(100px, 0.8fr) minmax(90px, 0.8fr) minmax(70px, 0.5fr) !important;
+  grid-template-columns: 32px minmax(180px, 2.8fr) minmax(150px, 2.2fr) minmax(80px, 0.9fr) minmax(100px, 1.1fr) minmax(140px, 1.5fr) minmax(100px, 0.8fr) minmax(80px, 0.7fr) minmax(60px, 0.4fr) !important;
   align-items: center;
-  padding: 12px 16px;
+  padding: 12px 12px;
   background-color: #F8FAFC;
   border-bottom: 2px solid #E5E7EB;
   font-size: 16px;
   font-weight: 700;
   color: #1F2937;
-  gap: 12px;
-  min-width: 900px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .table-header1 > div {
@@ -241,15 +241,15 @@
 /* ===== TABLE ROWS - UPDATED ===== */
 .taskby-row {
   display: grid !important;
-  grid-template-columns: 32px minmax(180px, 2.8fr) minmax(150px, 2.2fr) minmax(80px, 0.9fr) minmax(100px, 1.1fr) minmax(140px, 1.5fr) minmax(100px, 0.8fr) minmax(90px, 0.8fr) minmax(70px, 0.5fr) !important;
+  grid-template-columns: 32px minmax(180px, 2.8fr) minmax(150px, 2.2fr) minmax(80px, 0.9fr) minmax(100px, 1.1fr) minmax(140px, 1.5fr) minmax(100px, 0.8fr) minmax(80px, 0.7fr) minmax(60px, 0.4fr) !important;
   align-items: center;
-  padding: 12px 16px;
+  padding: 12px 12px;
   border-bottom: 1px solid #F1F5F9;
-  gap: 12px;
+  gap: 8px;
   transition: background-color 0.2s;
   font-size: 15px;
   font-weight: 500;
-  min-width: 900px;
+  min-width: 0;
 }
 
 .taskby-row:hover {
@@ -506,20 +506,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: nowrap;
 }
 
 .action-icon-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   border: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 14px;
   transition: 0.2s;
   padding: 0;
 }
