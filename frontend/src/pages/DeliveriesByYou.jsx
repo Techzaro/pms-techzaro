@@ -18,7 +18,7 @@ import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import AssignerViewModal from "../components/AssignerViewModal";
 import { formatDateTime } from "../utils/formatDateTime";
-import SortableTableWrapper from "../components/SortableTableWrapper";
+import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
@@ -243,6 +243,7 @@ function DeliveriesByYou() {
         <div className="container">
           {/* Header - Div based */}
           <div className="deliveries-table-header">
+            <div></div>
             <div>Deliverable</div>
             <div>Task</div>
             <div>Assigned To</div>
@@ -257,11 +258,12 @@ function DeliveriesByYou() {
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
           ) : (
             <div className="sortable-table-container">
-              <SortableTableWrapper items={paginatedItems} onReorder={handleDeliverableReorder} as="div">
-              {(item, index) => {
+              <SortableTableWrapper items={paginatedItems} onReorder={handleDeliverableReorder} as="div" handleOnly>
+              {(item, index, dndProps) => {
                 const colors = getRandomColors(item.id);
                 return (
                   <div className="deliveries-table-row" key={`deliverable-${item.id}-${index}`}>
+                    <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                     <div>
                       <div className="user-box">
                         <div className="avatar" style={{ background: colors.bg, color: colors.text }}>

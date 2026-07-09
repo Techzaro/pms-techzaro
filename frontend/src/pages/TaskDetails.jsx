@@ -25,7 +25,7 @@ import { IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
-import SortableTableWrapper from "../components/SortableTableWrapper";
+import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import EditTaskModal from "../components/EditTaskModal";
 import ConfirmModal from "../components/ConfirmModal";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
@@ -416,23 +416,7 @@ function TaskDetails() {
                 { label: task.title },
               ]} />
 
-              {isAssignee && task?.unviewed_changes?.length > 0 && (
-                <div className="td-changes-panel">
-                  <div className="td-changes-header">
-                    <span className="td-changes-icon">&#9654;</span>
-                    <span className="td-changes-title">Recent Changes</span>
-                    <span className="td-changes-count">{task.unviewed_changes.length} update(s)</span>
-                  </div>
-                  <ul className="td-changes-list">
-                    {task.unviewed_changes.map((c, i) => (
-                      <li key={c.id || i}>
-                        <strong>{c.modified_by}</strong> changed <strong>{c.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
-                        {c.old_value ? <span className="td-change-detail"> — {c.old_value} → {c.new_value}</span> : <span className="td-change-detail"> — {c.new_value}</span>}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+
 
               <div className="td-title-row">
                 <h1 className="td-title">
@@ -574,7 +558,8 @@ function TaskDetails() {
                         <p className="td-empty">No deliverables linked to this task.</p>
                       ) : (
                         <div className="pd-table-wrap">
-                          <div className="deliveries-table-header" style={{ gridTemplateColumns: "minmax(150px, 1.6fr) minmax(160px, 1.8fr) minmax(110px, 1.1fr) minmax(90px, 0.9fr) minmax(70px, 0.5fr)" }}>
+                          <div className="deliveries-table-header" style={{ gridTemplateColumns: "32px minmax(150px, 1.6fr) minmax(160px, 1.8fr) minmax(110px, 1.1fr) minmax(90px, 0.9fr) minmax(70px, 0.5fr)" }}>
+                            <div></div>
                             <div>Deliverable</div>
                             <div>{isCreator ? "Assigned To" : "Assigned By"}</div>
                             <div>Due Date</div>
@@ -585,9 +570,11 @@ function TaskDetails() {
                             items={orderedDeliverables.length ? orderedDeliverables : (task.deliverables || [])}
                             onReorder={handleDeliverableReorder}
                             as="div"
+                            handleOnly
                           >
-                            {(d) => (
-                              <div className="deliveries-table-row" style={{ gridTemplateColumns: "minmax(150px, 1.6fr) minmax(160px, 1.8fr) minmax(110px, 1.1fr) minmax(90px, 0.9fr) minmax(70px, 0.5fr)" }}>
+                            {(d, idx, dndProps) => (
+                              <div className="deliveries-table-row" style={{ gridTemplateColumns: "32px minmax(150px, 1.6fr) minmax(160px, 1.8fr) minmax(110px, 1.1fr) minmax(90px, 0.9fr) minmax(70px, 0.5fr)" }}>
+                                <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                                 <div className="user-box">
                                   <div className="avatar" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), width: '42px', height: '42px', fontSize: '14px' }}>
                                     {initials(d.title)}

@@ -87,6 +87,7 @@ export default function SortableTableWrapper({
   as = 'tr',
   overlayRender,
   disabled = false,
+  handleOnly = false,
 }) {
   const [localItems, setLocalItems] = useState(Array.isArray(externalItems) ? externalItems : []);
   const [activeId, setActiveId] = useState(null);
@@ -136,6 +137,7 @@ export default function SortableTableWrapper({
             key={`${item[idKey]}-${idx}`}
             id={String(item[idKey])}
             as={as}
+            handleOnly={handleOnly}
           >
             {(dndProps) => renderRow(item, idx, dndProps)}
           </SortableItem>
