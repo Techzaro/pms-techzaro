@@ -179,6 +179,7 @@ export function getDisplayUser() {
     name: user.name || "User",
     email: user.email || "",
     role: user.role || role,
+    avatar: user.avatar || null,
   };
 }
 

@@ -233,10 +233,11 @@ function Header() {
             email: data.email,
             role: data.role,
             professional_email: data.professional_email,
+            avatar: data.avatar || null,
           });
 
           const role = getCurrentRole();
-          setUser(role, { id: data.id, name: data.name, email: data.email, role: data.role, professional_email: data.professional_email });
+          setUser(role, { id: data.id, name: data.name, email: data.email, role: data.role, professional_email: data.professional_email, avatar: data.avatar || null });
         }
       })
 

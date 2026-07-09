@@ -151,22 +151,6 @@ const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, r
           )}
         </div>
       </div>
-
-      <div className="dash-task-avatars">
-        {item.assignees.slice(0, 4).map((a, ai) => (
-          <div
-            key={ai}
-            title={a.name || a.email}
-            className="dash-task-avatar"
-            style={{ marginLeft: ai > 0 ? "-8px" : "0" }}
-          >
-            {getInitials(a.name || a.email)}
-          </div>
-        ))}
-        {item.assignees.length > 4 && (
-          <span className="dash-task-avatar-overflow">+{item.assignees.length - 4}</span>
-        )}
-      </div>
     </div>
   );
 });
@@ -341,6 +325,7 @@ function Admin() {
         status: w.priority ? w.priority + ' Priority' : (w.status || '\u2014'),
         end_date: w.end_date || null,
         priority: w.priority || 'Medium',
+        assigned_by: w.assigned_by || null,
       };
     }),
     [dashboard?.todayWorkload]
@@ -377,6 +362,7 @@ function Admin() {
         comment: item.comment,
         time_ago: item.time_ago || '—',
         created_at: item.created_at,
+        assigned_by: item.assigned_by || null,
       })),
     [dashboard?.completedToday]
   );
@@ -547,8 +533,8 @@ function Admin() {
           <br />
           <div className="workload-card">
             <div className="workload-card-header">
-              <h3>Today's Tasks</h3>
-              <button className="workload-view-btn" onClick={() => navigate(rolePath("tasks/taskby"))}>View All Tasks</button>
+              <h3 style={{fontSize: "22px", fontWeight: "700"}}>Today's Tasks</h3>
+              <button className="workload-view-btn" onClick={() => navigate(rolePath("taskby"))}>View All Tasks</button>
             </div>
             {todayWorkload.length === 0 ? (
               <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No tasks due today</p>
@@ -704,7 +690,7 @@ function Admin() {
           {/* TODAY'S ACTIVITY */}
           <div className="today-activity-section" style={{ background: "#fff", borderRadius: "20px", padding: "24px", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", marginBottom: "30px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "600" }}>Today's Activity</h3>
+              <h3 style={{ margin: 0,fontSize: "22px", fontWeight: "700"}}>Today's Activity</h3>
               <button
                 onClick={() => setPastActivityOpen(!pastActivityOpen)}
                 style={{ background: "transparent", border: "none", color: "#6366F1", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}

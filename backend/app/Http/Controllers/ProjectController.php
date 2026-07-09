@@ -423,6 +423,7 @@ class ProjectController extends Controller
             'sidebar_notes' => 'nullable|string',
             'team_id' => 'nullable|exists:teams,id',
             'assigned_users' => 'nullable|array',
+            'created_by' => 'nullable|exists:users,id',
             'status' => 'sometimes|nullable|string|max:64',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
