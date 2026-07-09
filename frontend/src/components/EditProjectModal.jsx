@@ -71,6 +71,8 @@ const EditProjectModal = ({ project, onClose }) => {
   const categoryDropdownRef = useRef(null);
   const [catDeleteOpen, setCatDeleteOpen] = useState(false);
   const [pendingCatDelete, setPendingCatDelete] = useState("");
+  const [goalDeleteOpen, setGoalDeleteOpen] = useState(false);
+  const [pendingGoalIndex, setPendingGoalIndex] = useState(null);
   const [deletedCategories, setDeletedCategories] = useState(() => {
     try { return JSON.parse(localStorage.getItem("deleted_categories") || "[]"); } catch { return []; }
   });
@@ -241,7 +243,14 @@ const EditProjectModal = ({ project, onClose }) => {
   };
 
   const handleRemoveGoal = (index) => {
-    setGoalsList((prev) => prev.filter((_, i) => i !== index));
+    setPendingGoalIndex(index);
+    setGoalDeleteOpen(true);
+  };
+
+  const confirmDeleteGoal = () => {
+    setGoalsList((prev) => prev.filter((_, i) => i !== pendingGoalIndex));
+    setGoalDeleteOpen(false);
+    setPendingGoalIndex(null);
   };
 
   const handleGoalKeyDown = (e) => {
@@ -541,23 +550,13 @@ const EditProjectModal = ({ project, onClose }) => {
                     onChange={(e) => setGoalInput(e.target.value)}
                     onKeyDown={handleGoalKeyDown}
                   />
-                  <div className="cp-goals-datetime-wrap">
-                    <input
-                      type="datetime-local"
-                      ref={goalDateTimeRef}
-                      value={goalDateTime}
-                      onChange={(e) => setGoalDateTime(e.target.value)}
-                      className="cp-goals-datetime-hidden"
-                    />
-                    <button
-                      type="button"
-                      className="cp-goals-datetime-icon"
-                      title="Set due date & time"
-                      onClick={() => goalDateTimeRef.current?.showPicker?.()}
-                    >
-                      📅
-                    </button>
-                  </div>
+                  <input
+                    type="datetime-local"
+                    ref={goalDateTimeRef}
+                    value={goalDateTime}
+                    onChange={(e) => setGoalDateTime(e.target.value)}
+                    className="cp-goals-datetime-input"
+                  />
                   <button
                     type="button"
                     className="cp-goals-add-btn"
@@ -590,7 +589,6 @@ const EditProjectModal = ({ project, onClose }) => {
                   </div>
                 )}
               </div>
-            </div>
 
             <div className="cp-grid-2">
               <div className="cp-field">
@@ -762,17 +760,14 @@ const EditProjectModal = ({ project, onClose }) => {
                 </div>
               )}
             </div>
-
           </div>
 
           {/* RIGHT */}
           <div className="cp-right">
 
             {/* PRIORITY */}
-            <div className="cp-card">
-              <div className="cp-card-top">
-                <span>Priority</span>
-              </div>
+            <div className="cp-field">
+              <label>Priority</label>
               <CustomSelect
                 name="priority"
                 value={form.priority}
@@ -786,10 +781,8 @@ const EditProjectModal = ({ project, onClose }) => {
             </div>
 
             {/* STATUS */}
-            <div className="cp-card">
-              <div className="cp-card-top">
-                <span>Status</span>
-              </div>
+            <div className="cp-field">
+              <label>Status</label>
               <CustomSelect
                 name="status"
                 value={form.status}
@@ -804,10 +797,8 @@ const EditProjectModal = ({ project, onClose }) => {
             </div>
 
             {/* CATEGORY */}
-            <div className="cp-card">
-              <div className="cp-card-top">
-                <span>Category</span>
-              </div>
+            <div className="cp-field">
+              <label>Category</label>
               {categoryCustomMode ? (
                 <div className="custom-input-container">
                   <input
@@ -1053,6 +1044,16 @@ const EditProjectModal = ({ project, onClose }) => {
         onConfirm={confirmDeleteCategory}
         title="Confirm Deletion"
         message={`Are you sure you want to delete "${pendingCatDelete}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger
+      />
+      <ConfirmModal
+        isOpen={goalDeleteOpen}
+        onClose={() => { setGoalDeleteOpen(false); setPendingGoalIndex(null); }}
+        onConfirm={confirmDeleteGoal}
+        title="Delete Goal"
+        message="Are you sure you want to delete this goal? This action cannot be undone."
         confirmText="Delete"
         cancelText="Cancel"
         danger
