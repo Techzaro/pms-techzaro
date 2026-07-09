@@ -7,6 +7,7 @@ use App\Models\Deliverable;
 use App\Models\Project;
 use App\Models\ProjectChange;
 use App\Models\ProjectFile;
+use App\Models\ProjectAccessCredential;
 use App\Models\ProjectSubmission;
 use App\Models\ProjectVisibility;
 use App\Models\ProjectWorkflowEvent;
@@ -1705,5 +1706,143 @@ class ProjectController extends Controller
         }
 
         return response()->json(['success' => true, 'message' => 'Projects reordered successfully']);
+    }
+
+    /**
+     * Get access credentials for a project.
+     */
+    public function getAccessCredentials(Project $project)
+    {
+        $user = request()->user();
+        
+        $credentials = $project->accessCredentials()
+            ->with('assignedUsers:id,name,role')
+            ->get()
+            ->filter(function ($cred) use ($user) {
+                // Admin/manager can see all, others only see credentials assigned to them
+                if (in_array($user->role, ['admin', 'manager'])) {
+                    return true;
+                }
+                return $cred->assignedUsers->contains('id', $user->id);
+            })
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'credentials' => $credentials->map(function ($cred) {
+                return [
+                    'id' => $cred->id,
+                    'website_name' => $cred->website_name,
+                    'website_url' => $cred->website_url,
+                    'username' => $cred->username,
+                    'password' => $cred->password_decrypted,
+                    'assigned_users' => $cred->assignedUsers->map(fn($u) => ['id' => $u->id, 'name' => $u->name]),
+                    'created_by' => $cred->creator?->name,
+                    'created_at' => $cred->created_at,
+                ];
+            }),
+        ]);
+    }
+
+    /**
+     * Store a new access credential for a project.
+     */
+    public function storeAccessCredential(Request $request, Project $project)
+    {
+        $request->validate([
+            'website_name' => 'required|string|max:255',
+            'username' => 'required|string|max:255',
+            'password' => 'required|string|max:1000',
+            'assigned_user_ids' => 'required|array|min:1',
+            'assigned_user_ids.*' => 'exists:users,id',
+        ]);
+
+        $credential = $project->accessCredentials()->create([
+            'website_name' => $request->website_name,
+            'username' => $request->username,
+            'password' => $request->password,
+            'created_by' => $request->user()->id,
+        ]);
+
+        $credential->assignedUsers()->sync($request->assigned_user_ids);
+
+        $this->activityService->log(
+            $request->user()->id,
+            'access_credential_added',
+            "Added access credential: {$request->website_name}",
+            'Project',
+            $project->id
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Access credential created successfully',
+            'credential' => [
+                'id' => $credential->id,
+                'website_name' => $credential->website_name,
+                'website_url' => $credential->website_url,
+                'username' => $credential->username,
+                'password' => $credential->password_decrypted,
+                'assigned_users' => $credential->assignedUsers->map(fn($u) => ['id' => $u->id, 'name' => $u->name]),
+            ],
+        ], 201);
+    }
+
+    /**
+     * Update an access credential.
+     */
+    public function updateAccessCredential(Request $request, Project $project, ProjectAccessCredential $credential)
+    {
+        if ($credential->project_id !== $project->id) {
+            return response()->json(['success' => false, 'message' => 'Credential does not belong to this project'], 404);
+        }
+
+        $request->validate([
+            'website_name' => 'required|string|max:255',
+            'website_url' => 'nullable|string|max:500',
+            'username' => 'required|string|max:255',
+            'password' => 'required|string|max:1000',
+            'assigned_user_ids' => 'required|array|min:1',
+            'assigned_user_ids.*' => 'exists:users,id',
+        ]);
+
+        $credential->update([
+            'website_name' => $request->website_name,
+            'website_url' => $request->website_url,
+            'username' => $request->username,
+            'password' => $request->password,
+        ]);
+
+        $credential->assignedUsers()->sync($request->assigned_user_ids);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Access credential updated successfully',
+            'credential' => [
+                'id' => $credential->id,
+                'website_name' => $credential->website_name,
+                'website_url' => $credential->website_url,
+                'username' => $credential->username,
+                'password' => $credential->password_decrypted,
+                'assigned_users' => $credential->assignedUsers->map(fn($u) => ['id' => $u->id, 'name' => $u->name]),
+            ],
+        ]);
+    }
+
+    /**
+     * Delete an access credential.
+     */
+    public function deleteAccessCredential(Project $project, ProjectAccessCredential $credential)
+    {
+        if ($credential->project_id !== $project->id) {
+            return response()->json(['success' => false, 'message' => 'Credential does not belong to this project'], 404);
+        }
+
+        $credential->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Access credential deleted successfully',
+        ]);
     }
 }

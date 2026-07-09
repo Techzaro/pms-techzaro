@@ -178,6 +178,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/projects/{project}/visibility', [ProjectController::class, 'setVisibility']);
     });
 
+    // Project access credentials
+    // Any authenticated user can view credentials they're assigned to
+    Route::get('/projects/{project}/access-credentials', [ProjectController::class, 'getAccessCredentials']);
+
+    // Admin and manager only: create, update, delete access credentials
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
+        // Create access credential
+        Route::post('/projects/{project}/access-credentials', [ProjectController::class, 'storeAccessCredential']);
+        // Update access credential
+        Route::put('/projects/{project}/access-credentials/{credential}', [ProjectController::class, 'updateAccessCredential']);
+        // Delete access credential
+        Route::delete('/projects/{project}/access-credentials/{credential}', [ProjectController::class, 'deleteAccessCredential']);
+    });
+
     // Mark project as complete (any assigned user)
     Route::post('/projects/{project}/complete', [ProjectController::class, 'completeProject']);
 

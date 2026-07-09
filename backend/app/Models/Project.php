@@ -107,6 +107,12 @@ class Project extends Model
         return $this->hasMany(ProjectVisibility::class);
     }
 
+    /** Access credentials for this project. */
+    public function accessCredentials()
+    {
+        return $this->hasMany(ProjectAccessCredential::class);
+    }
+
     /** Users who are explicitly marked as visible for this project. */
     public function manuallyVisibleTo()
     {
