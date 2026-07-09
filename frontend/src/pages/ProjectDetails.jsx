@@ -13,6 +13,7 @@ import {
   Calendar,
   CalendarDays,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -32,6 +33,7 @@ import {
   Trash2,
   UserRound,
   Users,
+  X,
 } from "lucide-react";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -307,6 +309,12 @@ function ProjectDetails() {
   const [showAddAccessModal, setShowAddAccessModal] = useState(false);
   const [accessCredentials, setAccessCredentials] = useState([]);
   const [loadingCredentials, setLoadingCredentials] = useState(false);
+  const [editingManager, setEditingManager] = useState(false);
+  const [managerUsers, setManagerUsers] = useState([]);
+  const [selectedManagerId, setSelectedManagerId] = useState(null);
+  const [managerDropdownOpen, setManagerDropdownOpen] = useState(false);
+  const managerDropdownRef = useRef(null);
+  const [showManagerModal, setShowManagerModal] = useState(false);
 
   const memberCount = useMemo(() => {
     if (!project) return 0;
@@ -334,6 +342,16 @@ function ProjectDetails() {
       fetchAccessCredentials();
     }
   }, [tab, project]);
+
+  useEffect(() => {
+    const handleClickOutsideManager = (e) => {
+      if (managerDropdownRef.current && !managerDropdownRef.current.contains(e.target)) {
+        setManagerDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutsideManager);
+    return () => document.removeEventListener("mousedown", handleClickOutsideManager);
+  }, []);
 
   const handleTaskReorder = useCallback((reordered) => {
     setOrderedTasks(reordered);
@@ -708,13 +726,66 @@ function ProjectDetails() {
     }
   };
 
+  const openManagerEdit = async () => {
+    setSelectedManagerId(project.creator?.id || null);
+    setManagerDropdownOpen(false);
+    setShowManagerModal(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/team-users`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load users");
+      const data = await res.json();
+      setManagerUsers(data.users || data || []);
+    } catch (err) {
+      console.error("Fetch users error:", err);
+      setManagerUsers([]);
+    }
+  };
+
+  const handleManagerSelect = (userId) => {
+    setSelectedManagerId(userId);
+  };
+
+  const saveManagerChange = async () => {
+    if (!selectedManagerId || selectedManagerId === project.creator?.id) {
+      setShowManagerModal(false);
+      return;
+    }
+    await updateProjectManager(selectedManagerId);
+    setShowManagerModal(false);
+  };
+
+  const updateProjectManager = async (userId) => {
+    if (!project) return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/projects/${project.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ created_by: userId }),
+        _notifHandled: true,
+      });
+      if (!res.ok) throw new Error("Failed to update project manager");
+      setEditingManager(false);
+      loadProject();
+    } catch (err) {
+      console.error("Update manager error:", err);
+    }
+  };
+
   const tabs = [
     { id: "overview", label: "Overview", icon: ListChecks },
     { id: "tasks", label: "Tasks", icon: ClipboardList },
     { id: "deliverables", label: "Deliverables", icon: Calendar },
     { id: "files", label: "Platform files & links", icon: FolderOpen },
+    { id: "access", label: "Accessess", icon: Shield },
     { id: "members", label: "Members", icon: Users },
-    { id: "access", label: "Access", icon: Shield },
   ];
 
   const renderRail = () => (
@@ -853,12 +924,19 @@ function ProjectDetails() {
         <aside className="pd-shell-right">
           <h2 className="pd-block-title">Project details</h2>
           <ul className="pd-meta-rows">
-            <li>
+            <li className="pd-meta-rows--manager">
               <span className="pd-meta-rows__ic">
                 <UserRound size={18} />
               </span>
-              <div>
-                <span className="pd-meta-rows__label">Project manager</span>
+              <div className="pd-meta-rows__content">
+                <div className="pd-meta-rows__header">
+                  <span className="pd-meta-rows__label">Project manager</span>
+                  {currentUser?.role === "admin" && (
+                    <button className="pd-manager-edit" onClick={openManagerEdit} title="Change project manager">
+                      Edit
+                    </button>
+                  )}
+                </div>
                 <span className="pd-meta-rows__value">{project.creator?.name || "—"}</span>
               </div>
             </li>
@@ -1531,6 +1609,73 @@ function ProjectDetails() {
         onSuccess={fetchAccessCredentials}
         files={project?.files || []}
       />
+
+      {showManagerModal && (
+        <div className="modal-overlay" onClick={() => setShowManagerModal(false)}>
+          <div className="aam-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="aam-header">
+              <h3>Change Project Manager</h3>
+              <button className="aam-close" onClick={() => setShowManagerModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="aam-body">
+              <div className="aam-field">
+                <label>
+                  <Users size={14} /> Select Manager *
+                </label>
+                <p className="aam-hint">Choose a user to assign as project manager</p>
+                <div className="aam-multiselect" ref={managerDropdownRef}>
+                  <button
+                    type="button"
+                    className={`aam-multiselect-trigger ${managerDropdownOpen ? "aam-multiselect-trigger--open" : ""}`}
+                    onClick={() => setManagerDropdownOpen(!managerDropdownOpen)}
+                  >
+                    <span className="aam-multiselect-value">
+                      {selectedManagerId
+                        ? managerUsers.find((u) => u.id === selectedManagerId)?.name || "1 user selected"
+                        : "Select users"}
+                    </span>
+                    <ChevronDown size={16} className={`aam-multiselect-arrow ${managerDropdownOpen ? "aam-multiselect-arrow--open" : ""}`} />
+                  </button>
+                  {managerDropdownOpen && (
+                    <div className="aam-multiselect-dropdown aam-multiselect-dropdown--down">
+                      {managerUsers.map((u) => (
+                        <label key={u.id} className="aam-multiselect-option" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="radio"
+                            name="project_manager"
+                            checked={selectedManagerId === u.id}
+                            onChange={() => {
+                              setSelectedManagerId(u.id);
+                              setManagerDropdownOpen(false);
+                            }}
+                          />
+                          <span className="aam-multiselect-label">{u.name}</span>
+                          <span className="aam-multiselect-role">({u.role?.replace("_", " ")})</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="aam-footer">
+                <button type="button" className="aam-btn aam-btn-cancel" onClick={() => setShowManagerModal(false)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="aam-btn aam-btn-save"
+                  onClick={saveManagerChange}
+                  disabled={!selectedManagerId || selectedManagerId === project.creator?.id}
+                >
+                  Save Change
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -121,9 +121,9 @@ function Sidebar() {
       .then((res) => res.json())
       .then((data) => {
         if (data && data.name) {
-          setUserState({ name: data.name, email: data.email, role: data.role });
+          setUserState({ name: data.name, email: data.email, role: data.role, avatar: data.avatar || null });
           const role = getCurrentRole();
-          setUser(role, { id: data.id, name: data.name, email: data.email, role: data.role });
+          setUser(role, { id: data.id, name: data.name, email: data.email, role: data.role, avatar: data.avatar || null });
         }
       })
       .catch(() => {});
