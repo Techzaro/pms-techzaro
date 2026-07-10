@@ -839,7 +839,18 @@ function TaskDetails() {
                   <span className="td-dot" style={{ background: "#8b5cf6" }} />
                   <div>
                     <span className="td-info-label">Assigned To</span>
-                    <span className="td-info-val">{assignees.map((a) => a.name).join(", ") || "—"}</span>
+                    <span className="td-info-val" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                      {assignees.length > 0 ? assignees.map((a) => (
+                        <span key={a.id} style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                          <span>{a.name}</span>
+                          {a.pivot?.due_date && (
+                            <span style={{ fontSize: "11px", color: "#ef4444", whiteSpace: "nowrap" }}>
+                              {formatDateTime(a.pivot.due_date)}
+                            </span>
+                          )}
+                        </span>
+                      )) : "—"}
+                    </span>
                   </div>
                 </li>
                 <li>

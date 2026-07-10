@@ -51,7 +51,7 @@ class ProjectController extends Controller
         $user = request()->user();
         $filter = request()->query('filter');
 
-        $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
+        $submittableStatuses = ['pending', 'reopened', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress'];
 
         if (in_array($user->role, ['admin', 'manager'])) {
             $projectsQuery = Project::with(['creator:id,name', 'team:id,name'])
@@ -152,12 +152,16 @@ class ProjectController extends Controller
             'deliverables.*.title' => 'required_with:deliverables|string|max:255',
             'deliverables.*.description' => 'nullable|string|max:2000',
             'deliverables.*.due_date' => 'nullable|date',
+            'user_due_dates' => 'nullable|array',
+            'user_due_dates.*' => 'nullable|date',
         ]);
 
         $milestones = $validated['milestones'] ?? null;
         unset($validated['milestones']);
         $deliverables = $validated['deliverables'] ?? null;
         unset($validated['deliverables']);
+        $userDueDates = $validated['user_due_dates'] ?? null;
+        unset($validated['user_due_dates']);
 
         $validated['created_by'] = $request->user()->id;
         $validated['priority'] = $validated['priority'] ?? 'Medium';
@@ -175,6 +179,7 @@ class ProjectController extends Controller
             $validated['assigned_users'] = $validated['assigned_users'] ?? [];
         }
 
+        $validated['user_due_dates'] = $userDueDates;
         $project = Project::create($validated);
         $this->replaceProjectMilestones($project, $milestones);
 
@@ -352,7 +357,7 @@ class ProjectController extends Controller
         $isCreator = (int) $project->created_by === (int) $user->id;
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
         $isAssigned = in_array($user->id, $project->assigned_users ?? []);
-        $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
+        $submittableStatuses = ['pending', 'reopened', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress'];
 
         $approvalCacheKey = "project_approval_{$project->id}";
         $approvalStatus = Cache::remember($approvalCacheKey, 30, function () use ($project) {
@@ -438,6 +443,8 @@ class ProjectController extends Controller
             'existing_file_names' => 'nullable|array',
             'existing_file_names.*.id' => 'required_with:existing_file_names|exists:project_files,id',
             'existing_file_names.*.name' => 'required_with:existing_file_names|string|max:255',
+            'user_due_dates' => 'nullable|array',
+            'user_due_dates.*' => 'nullable|date',
         ]);
 
         $milestones = $validated['milestones'] ?? null;
@@ -446,6 +453,8 @@ class ProjectController extends Controller
         unset($validated['deliverables']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
+        $userDueDates = $validated['user_due_dates'] ?? null;
+        unset($validated['user_due_dates']);
 
         $oldValues = [];
         $fieldLabels = ['title' => 'Title', 'description' => 'Description', 'start_date' => 'Start Date', 'end_date' => 'End Date', 'priority' => 'Priority', 'status' => 'Status', 'budget' => 'Budget', 'category' => 'Category', 'client_name' => 'Client Name', 'website_name' => 'Website Name', 'website_link' => 'Website Link', 'goals' => 'Goals', 'team_id' => 'Team', 'sheets_documents' => 'Documents'];
@@ -1096,7 +1105,7 @@ class ProjectController extends Controller
             return response()->json(['success' => false, 'message' => 'Only assigned users can submit this project'], 403);
         }
 
-        if (! in_array($project->status, ['pending', 'Planned', 'in_progress', 'In Progress', 'reopened'])) {
+        if (! in_array($project->status, ['pending', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress', 'reopened'])) {
             return response()->json(['success' => false, 'message' => 'This project cannot be submitted in its current status'], 422);
         }
 
