@@ -1161,6 +1161,134 @@ class UserController extends Controller
     }
 
     /**
+     * Remove a document from the authenticated user's own profile.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function removeMyDocument(Request $request)
+    {
+        if (!$this->resolveAuth($request)) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
+        $request->validate([
+            'type' => 'required|string|max:50',
+            'index' => 'nullable|integer|min:0',
+        ]);
+
+        $user = $request->user();
+        $type = $request->input('type');
+        $index = $request->input('index');
+
+        $singleFields = ['employment_contract', 'offer_letter', 'techxaro_regulations'];
+
+        if (in_array($type, $singleFields)) {
+            if ($user->$type && Storage::disk('public')->exists($user->$type)) {
+                Storage::disk('public')->delete($user->$type);
+            }
+            $user->$type = null;
+            $user->save();
+            Cache::forget("user_profile_{$user->id}");
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Document removed successfully.',
+            ]);
+        }
+
+        if ($type === 'other_document') {
+            if ($index === null) {
+                return response()->json(['success' => false, 'message' => 'Index is required for other_document.'], 422);
+            }
+
+            $docs = $this->parseOtherDocumentPaths($user->other_document);
+
+            if ($index < 0 || $index >= count($docs)) {
+                return response()->json(['success' => false, 'message' => 'Invalid document index.'], 422);
+            }
+
+            $removedDoc = $docs[$index];
+            $removedPath = is_array($removedDoc) ? ($removedDoc['path'] ?? null) : $removedDoc;
+
+            if ($removedPath && Storage::disk('public')->exists($removedPath)) {
+                Storage::disk('public')->delete($removedPath);
+            }
+
+            unset($docs[$index]);
+            $docs = array_values($docs);
+
+            $user->other_document = !empty($docs) ? json_encode($docs) : null;
+            $user->save();
+            Cache::forget("user_profile_{$user->id}");
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Document removed successfully.',
+            ]);
+        }
+
+        return response()->json(['success' => false, 'message' => 'Invalid document type.'], 422);
+    }
+
+    /**
+     * Rename a document in the authenticated user's own profile (other_document items only).
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function renameMyDocument(Request $request)
+    {
+        if (!$this->resolveAuth($request)) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
+        $request->validate([
+            'type' => 'required|string|max:50',
+            'index' => 'nullable|integer',
+            'name' => 'required|string|max:255',
+        ]);
+
+        $user = $request->user();
+        $type = $request->input('type');
+        $index = $request->input('index');
+        $name = $request->input('name');
+
+        $singleFields = ['employment_contract', 'offer_letter', 'techxaro_regulations'];
+
+        if (in_array($type, $singleFields)) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Document label updated.',
+            ]);
+        }
+
+        if ($type === 'other_document') {
+            if ($index === null || $index < 0) {
+                return response()->json(['success' => false, 'message' => 'Index is required for other_document.'], 422);
+            }
+
+            $docs = $this->parseOtherDocumentPaths($user->other_document);
+
+            if ($index >= count($docs)) {
+                return response()->json(['success' => false, 'message' => 'Invalid document index.'], 422);
+            }
+
+            $docs[$index]['name'] = $name;
+            $user->other_document = json_encode($docs);
+            $user->save();
+            Cache::forget("user_profile_{$user->id}");
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Document renamed successfully.',
+            ]);
+        }
+
+        return response()->json(['success' => false, 'message' => 'Invalid document type.'], 422);
+    }
+
+    /**
      * Test email sending functionality by sending a test email to the specified address.
      *
      * @param  \Illuminate\Http\Request  $request  Input: email (required).
@@ -1200,5 +1328,366 @@ class UserController extends Controller
                 'message' => 'Email sending failed: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Remove a specific document from a user's profile.
+     *
+     * Supports removing single document fields (employment_contract, offer_letter, techxaro_regulations)
+     * or a specific item from the other_document array by index.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\User  $user
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function removeDocument(Request $request, User $user)
+    {
+        $request->validate([
+            'type' => 'required|string|max:50',
+            'index' => 'nullable|integer|min:0',
+        ]);
+
+        $authUser = $request->user();
+        $type = $request->input('type');
+        $index = $request->input('index');
+
+        $singleFields = ['employment_contract', 'offer_letter', 'techxaro_regulations'];
+
+        if (in_array($type, $singleFields)) {
+            if ($user->$type && Storage::disk('public')->exists($user->$type)) {
+                Storage::disk('public')->delete($user->$type);
+            }
+            $oldValue = $user->$type;
+            $user->$type = null;
+            $user->save();
+            Cache::forget("user_profile_{$user->id}");
+
+            \App\Models\UserChange::create([
+                'user_id' => $user->id,
+                'field_name' => $type,
+                'old_value' => $oldValue ? basename($oldValue) : null,
+                'new_value' => null,
+                'modified_by' => $authUser->id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Document removed successfully.',
+                'user' => $user->only(array_keys($request->all())),
+            ]);
+        }
+
+        if ($type === 'other_document') {
+            if ($index === null) {
+                return response()->json(['success' => false, 'message' => 'Index is required for other_document.'], 422);
+            }
+
+            $docs = $this->parseOtherDocumentPaths($user->other_document);
+
+            if ($index < 0 || $index >= count($docs)) {
+                return response()->json(['success' => false, 'message' => 'Invalid document index.'], 422);
+            }
+
+            $removedDoc = $docs[$index];
+            $removedPath = is_array($removedDoc) ? ($removedDoc['path'] ?? null) : $removedDoc;
+
+            if ($removedPath && Storage::disk('public')->exists($removedPath)) {
+                Storage::disk('public')->delete($removedPath);
+            }
+
+            unset($docs[$index]);
+            $docs = array_values($docs);
+
+            $user->other_document = !empty($docs) ? json_encode($docs) : null;
+            $user->save();
+            Cache::forget("user_profile_{$user->id}");
+
+            \App\Models\UserChange::create([
+                'user_id' => $user->id,
+                'field_name' => 'other_document',
+                'old_value' => (count($docs) + 1) . ' file(s)',
+                'new_value' => count($docs) . ' file(s)',
+                'modified_by' => $authUser->id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Document removed successfully.',
+            ]);
+        }
+
+        return response()->json(['success' => false, 'message' => 'Invalid document type.'], 422);
+    }
+
+    /**
+     * Rename a user document (for other_document items).
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\User  $user
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function renameDocument(Request $request, User $user)
+    {
+        Log::info('renameDocument called', ['user_id' => $user->id, 'type' => $request->input('type'), 'index' => $request->input('index'), 'name' => $request->input('name')]);
+
+        $request->validate([
+            'type' => 'required|string|max:50',
+            'index' => 'nullable|integer|min:0',
+            'name' => 'required|string|max:255',
+        ]);
+
+        $authUser = $request->user();
+        $type = $request->input('type');
+        $index = $request->input('index');
+        $name = $request->input('name');
+
+        $singleFields = ['employment_contract', 'offer_letter', 'techxaro_regulations'];
+
+        if (in_array($type, $singleFields)) {
+            // Single doc — name is the display label, no file rename needed, just return success
+            return response()->json([
+                'success' => true,
+                'message' => 'Document label updated.',
+            ]);
+        }
+
+        if ($type === 'other_document') {
+            if ($index === null || $index < 0) {
+                return response()->json(['success' => false, 'message' => 'Index is required for other_document.'], 422);
+            }
+
+            $docs = $this->parseOtherDocumentPaths($user->other_document);
+
+            if ($index >= count($docs)) {
+                return response()->json(['success' => false, 'message' => 'Invalid document index.'], 422);
+            }
+
+            $oldName = $docs[$index]['name'] ?? null;
+            $docs[$index]['name'] = $name;
+
+            $user->other_document = json_encode($docs);
+            $user->save();
+            Cache::forget("user_profile_{$user->id}");
+
+            \App\Models\UserChange::create([
+                'user_id' => $user->id,
+                'field_name' => 'other_document',
+                'old_value' => $oldName,
+                'new_value' => $name,
+                'modified_by' => $authUser->id,
+            ]);
+
+            // Retrieve fresh data so response always matches DB
+            $freshUser = \App\Models\User::find($user->id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Document renamed successfully.',
+                'user' => [
+                    'other_document' => $freshUser?->other_document,
+                ],
+            ]);
+        }
+
+        return response()->json(['success' => false, 'message' => 'Invalid document type.'], 422);
+    }
+
+    /**
+     * Replace a user document file (and optionally rename it).
+     *
+     * Supports replacing single document fields (employment_contract, offer_letter, techxaro_regulations)
+     * or a specific item from the other_document array.
+     *
+     * @param  \Illuminate\Http\Request  $request  Multipart form with doc_type, doc_file, optional doc_index, doc_name
+     * @param  \App\Models\User  $user
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function replaceDocument(Request $request, User $user)
+    {
+        Log::info('replaceDocument called', ['user_id' => $user->id, 'doc_type' => $request->input('doc_type'), 'doc_index' => $request->input('doc_index'), 'doc_name' => $request->input('doc_name')]);
+
+        $request->validate([
+            'doc_type' => 'required|string|max:50',
+            'doc_index' => 'nullable|integer|min:0',
+            'doc_name' => 'nullable|string|max:255',
+            'doc_file' => 'required|file|mimes:pdf,jpeg,jpg,png,gif,bmp,webp,svg,tiff,tif|max:20480',
+        ]);
+
+        $authUser = $request->user();
+        $type = $request->input('doc_type');
+        $index = $request->input('doc_index');
+        $name = $request->input('doc_name');
+        $file = $request->file('doc_file');
+
+        if (!$file->isValid()) {
+            return response()->json(['success' => false, 'message' => 'Uploaded file is not valid.'], 422);
+        }
+
+        $singleFields = ['employment_contract', 'offer_letter', 'techxaro_regulations'];
+
+        if (in_array($type, $singleFields)) {
+            // Delete old file if exists
+            if ($user->$type && Storage::disk('public')->exists($user->$type)) {
+                Storage::disk('public')->delete($user->$type);
+            }
+
+            $filename = $type . '_' . time() . '_' . $file->getClientOriginalName();
+            $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+
+            $oldValue = $user->$type;
+            $user->$type = $path;
+            $user->save();
+            Cache::forget("user_profile_{$user->id}");
+
+            \App\Models\UserChange::create([
+                'user_id' => $user->id,
+                'field_name' => $type,
+                'old_value' => $oldValue ? basename($oldValue) : null,
+                'new_value' => $file->getClientOriginalName(),
+                'modified_by' => $authUser->id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Document replaced successfully.',
+                'user' => $user->only(['employment_contract', 'offer_letter', 'techxaro_regulations']),
+            ]);
+        }
+
+        if ($type === 'other_document') {
+            if ($index === null) {
+                return response()->json(['success' => false, 'message' => 'Index is required for other_document.'], 422);
+            }
+
+            $docs = $this->parseOtherDocumentPaths($user->other_document);
+
+            if ($index < 0 || $index >= count($docs)) {
+                return response()->json(['success' => false, 'message' => 'Invalid document index.'], 422);
+            }
+
+            // Delete old file
+            $oldDoc = $docs[$index];
+            $oldPath = is_array($oldDoc) ? ($oldDoc['path'] ?? null) : $oldDoc;
+            if ($oldPath && Storage::disk('public')->exists($oldPath)) {
+                Storage::disk('public')->delete($oldPath);
+            }
+
+            // Upload new file
+            $filename = 'other_document_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
+            $newPath = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+            $customName = $name ?: preg_replace('/\.[^.]+$/', '', $file->getClientOriginalName());
+
+            $docs[$index] = ['path' => $newPath, 'name' => $customName];
+
+            $user->other_document = json_encode($docs);
+            $user->save();
+            Cache::forget("user_profile_{$user->id}");
+
+            \App\Models\UserChange::create([
+                'user_id' => $user->id,
+                'field_name' => 'other_document',
+                'old_value' => $oldPath ? basename($oldPath) : null,
+                'new_value' => $file->getClientOriginalName(),
+                'modified_by' => $authUser->id,
+            ]);
+
+            $freshUser = \App\Models\User::find($user->id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Document replaced successfully.',
+                'user' => [
+                    'other_document' => $freshUser?->other_document,
+                ],
+            ]);
+        }
+
+        return response()->json(['success' => false, 'message' => 'Invalid document type.'], 422);
+    }
+
+    /**
+     * Replace a document in the authenticated user's own profile.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function replaceMyDocument(Request $request)
+    {
+        if (!$this->resolveAuth($request)) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
+        $request->validate([
+            'doc_type' => 'required|string|max:50',
+            'doc_index' => 'nullable|integer|min:0',
+            'doc_name' => 'nullable|string|max:255',
+            'doc_file' => 'required|file|mimes:pdf,jpeg,jpg,png,gif,bmp,webp,svg,tiff,tif|max:20480',
+        ]);
+
+        $user = $request->user();
+        $type = $request->input('doc_type');
+        $index = $request->input('doc_index');
+        $name = $request->input('doc_name');
+        $file = $request->file('doc_file');
+
+        if (!$file->isValid()) {
+            return response()->json(['success' => false, 'message' => 'Uploaded file is not valid.'], 422);
+        }
+
+        $singleFields = ['employment_contract', 'offer_letter', 'techxaro_regulations'];
+
+        if (in_array($type, $singleFields)) {
+            if ($user->$type && Storage::disk('public')->exists($user->$type)) {
+                Storage::disk('public')->delete($user->$type);
+            }
+
+            $filename = $type . '_' . time() . '_' . $file->getClientOriginalName();
+            $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+
+            $user->$type = $path;
+            $user->save();
+            Cache::forget("user_profile_{$user->id}");
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Document replaced successfully.',
+                'user' => $user->only(['employment_contract', 'offer_letter', 'techxaro_regulations']),
+            ]);
+        }
+
+        if ($type === 'other_document') {
+            if ($index === null) {
+                return response()->json(['success' => false, 'message' => 'Index is required for other_document.'], 422);
+            }
+
+            $docs = $this->parseOtherDocumentPaths($user->other_document);
+
+            if ($index < 0 || $index >= count($docs)) {
+                return response()->json(['success' => false, 'message' => 'Invalid document index.'], 422);
+            }
+
+            $oldDoc = $docs[$index];
+            $oldPath = is_array($oldDoc) ? ($oldDoc['path'] ?? null) : $oldDoc;
+            if ($oldPath && Storage::disk('public')->exists($oldPath)) {
+                Storage::disk('public')->delete($oldPath);
+            }
+
+            $filename = 'other_document_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
+            $newPath = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
+            $customName = $name ?: preg_replace('/\.[^.]+$/', '', $file->getClientOriginalName());
+
+            $docs[$index] = ['path' => $newPath, 'name' => $customName];
+
+            $user->other_document = json_encode($docs);
+            $user->save();
+            Cache::forget("user_profile_{$user->id}");
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Document replaced successfully.',
+            ]);
+        }
+
+        return response()->json(['success' => false, 'message' => 'Invalid document type.'], 422);
     }
 }

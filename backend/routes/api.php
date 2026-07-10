@@ -57,6 +57,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/my-profile', [AuthController::class, 'myProfile']);
     Route::get('/auth/my-changes', [AuthController::class, 'myChanges']);
 
+    // Self-service document management
+    Route::put('/auth/my-document/rename', [\App\Http\Controllers\UserController::class, 'renameMyDocument']);
+    Route::post('/auth/my-document/replace', [\App\Http\Controllers\UserController::class, 'replaceMyDocument']);
+    Route::delete('/auth/my-document', [\App\Http\Controllers\UserController::class, 'removeMyDocument']);
+
     // Update own profile
     Route::post('/auth/update-profile', [AuthController::class, 'updateProfile']);
 
@@ -96,6 +101,12 @@ Route::middleware('auth:sanctum')->group(function () {
         // View user profile
         Route::get('/users/{id}/profile', [UserController::class, 'profile']);
         Route::get('/users/{id}/changes', [UserController::class, 'changes']);
+        // Rename a user document (single docs label or other_document name)
+        Route::put('/users/{user}/document/rename', [UserController::class, 'renameDocument']);
+        // Replace a user document file (and optionally rename)
+        Route::post('/users/{user}/document/replace', [UserController::class, 'replaceDocument']);
+        // Remove a user document
+        Route::delete('/users/{user}/document', [UserController::class, 'removeDocument']);
         // Test email functionality
         Route::post('/test-email', [UserController::class, 'testEmail']);
         // Reorder users list

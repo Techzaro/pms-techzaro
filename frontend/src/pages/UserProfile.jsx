@@ -12,6 +12,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import { MdEdit, MdArrowBack } from "react-icons/md";
+import { Pencil, Trash2, Eye } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
@@ -134,6 +135,12 @@ function UserProfile() {
   const [pendingRemoveDoc, setPendingRemoveDoc] = useState({ source: "", index: -1 });
   const [existingOtherDocs, setExistingOtherDocs] = useState([]);
   const [companyDocs, setCompanyDocs] = useState({});
+  const [editDocItem, setEditDocItem] = useState(null);
+  const [editDocName, setEditDocName] = useState("");
+  const [editDocFile, setEditDocFile] = useState(null);
+  const [editDocExistingFileName, setEditDocExistingFileName] = useState("");
+  const [deleteDocConfirmOpen, setDeleteDocConfirmOpen] = useState(false);
+  const [pendingDeleteDoc, setPendingDeleteDoc] = useState(null);
 
   // Dynamic departments and designations from users data + localStorage persistence
   const [deletedDesignations, setDeletedDesignations] = useState(() => {
@@ -423,6 +430,151 @@ function UserProfile() {
     }
     setConfirmDeleteOpen(false);
     setPendingDelete({ type: "", value: "" });
+  };
+
+  /** Edit a document — rename and/or replace file via API. */
+  const handleEditDoc = async () => {
+    if (!editDocItem) return;
+    if (!editDocName.trim() && !editDocFile) return;
+
+    const isOther = editDocItem.type === "other_document";
+    const idx = editDocItem.index;
+
+    try {
+      if (editDocFile) {
+        // File replacement — use FormData with POST
+        const formData = new FormData();
+        formData.append("doc_type", editDocItem.type);
+        if (isOther) formData.append("doc_index", idx);
+        if (editDocName.trim()) formData.append("doc_name", editDocName.trim());
+        formData.append("doc_file", editDocFile);
+
+        const res = await fetch(`${API_URL}/users/${userId}/document/replace`, {
+          method: "POST",
+          headers: { Accept: "application/json", Authorization: `Bearer ${authToken()}` },
+          body: formData,
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Failed to replace document");
+
+        // Merge returned user data into profileData
+        if (data.user) {
+          setProfileData((prev) => {
+            if (!prev) return prev;
+            return { ...prev, user: { ...prev.user, ...data.user } };
+          });
+        }
+      } else {
+        // Rename only
+        if (isOther) {
+          // other_document rename — backend stores the new name
+          const res = await fetch(`${API_URL}/users/${userId}/document/rename`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${authToken()}` },
+            body: JSON.stringify({ type: editDocItem.type, index: idx, name: editDocName.trim() }),
+            _notifHandled: true,
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || "Failed to rename document");
+
+          // Merge returned user data (other_document field updated)
+          if (data.user) {
+            setProfileData((prev) => {
+              if (!prev) return prev;
+              return { ...prev, user: { ...prev.user, ...data.user } };
+            });
+          }
+        } else {
+          // Single doc rename — no backend storage for labels, skip API call
+          // The display label is handled locally; no DB change needed.
+        }
+      }
+
+      // Re-fetch profile in background to ensure data sync
+      try {
+        const profileRes = await fetch(`${API_URL}/users/${userId}/profile`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${authToken()}` },
+        });
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          if (profile?.user) setProfileData(profile);
+        }
+      } catch {}
+
+      showSuccessMessage("Document", editDocFile ? "replaced" : "renamed");
+      publish("data:changed", { type: "user", action: "updated" });
+    } catch (err) {
+      notify.error(err.message);
+    } finally {
+      setEditDocItem(null);
+      setEditDocName("");
+      setEditDocFile(null);
+      setEditDocExistingFileName("");
+    }
+  };
+
+  /** Delete a document via API. */
+  const handleDeleteDoc = async () => {
+    if (!pendingDeleteDoc) return;
+    const isOther = pendingDeleteDoc.type === "other_document";
+    const idx = pendingDeleteDoc.index;
+
+    try {
+      const res = await fetch(`${API_URL}/users/${userId}/document`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${authToken()}` },
+        body: JSON.stringify({ type: pendingDeleteDoc.type, index: idx }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to delete document");
+
+      // For delete, merge returned user data if available
+      if (data.user) {
+        setProfileData((prev) => {
+          if (!prev) return prev;
+          return { ...prev, user: { ...prev.user, ...data.user } };
+        });
+      } else {
+        // Fallback: update state directly for other_document removal
+        setProfileData((prev) => {
+          if (!prev) return prev;
+          const user = { ...prev.user };
+          if (isOther) {
+            let docs = [];
+            try { docs = typeof user.other_document === "string" ? JSON.parse(user.other_document) : (user.other_document || []); } catch { docs = []; }
+            if (!Array.isArray(docs)) docs = [];
+            if (idx >= 0 && idx < docs.length) {
+              docs.splice(idx, 1);
+            }
+            user.other_document = docs.length > 0 ? JSON.stringify(docs) : null;
+          } else if (pendingDeleteDoc.type) {
+            user[pendingDeleteDoc.type] = null;
+          }
+          return { ...prev, user };
+        });
+      }
+
+      // Re-fetch profile
+      try {
+        const profileRes = await fetch(`${API_URL}/users/${userId}/profile`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${authToken()}` },
+        });
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          if (profile?.user) setProfileData(profile);
+        }
+      } catch {}
+
+      showSuccessMessage("Document", "deleted");
+      publish("data:changed", { type: "user", action: "updated" });
+    } catch (err) {
+      notify.error(err.message);
+    } finally {
+      setDeleteDocConfirmOpen(false);
+      setPendingDeleteDoc(null);
+    }
   };
 
   /** Validate the edit form fields and return an errors object. */
@@ -908,20 +1060,25 @@ function UserProfile() {
                     { label: "Offer Letter", key: "offer_letter" },
                     { label: "Techxaro Regulations", key: "techxaro_regulations" },
                   ].map(({ label, key }) => (
-                    <div className="info-row" key={key}>
+                    <div className="info-row" key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <span className="info-label">{label}</span>
-                      <span className="info-value">
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
                         {user[key] ? (
-                          <a
-                            href={`${API_URL}/users/${userId}/documents/${key}?token=${authToken()}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: "#2563eb", textDecoration: "underline" }}
-                          >
-                            View File
-                          </a>
+                          <>
+                            <a
+                              href={`${API_URL}/users/${userId}/documents/${key}?token=${authToken()}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ background: "#2563eb", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+                              title="View"
+                            >
+                              <Eye size={16} />
+                            </a>
+                            <button type="button" onClick={() => { setEditDocItem({ type: key, index: -1 }); setEditDocName(label); setEditDocFile(null); setEditDocExistingFileName(user[key] ? user[key].split("/").pop() : ""); }} style={{ background: "#2563eb", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }} title="Edit"><Pencil size={16} /></button>
+                            <button type="button" onClick={() => { setPendingDeleteDoc({ type: key }); setDeleteDocConfirmOpen(true); }} style={{ background: "#dc2626", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }} title="Remove"><Trash2 size={16} /></button>
+                          </>
                         ) : "---"}
-                      </span>
+                      </div>
                     </div>
                   ))}
                   {(() => {
@@ -941,20 +1098,22 @@ function UserProfile() {
                     return docs.map((doc, i) => {
                       const docPath = typeof doc === "string" ? doc : doc.path;
                       const docName = typeof doc === "object" && doc.name ? doc.name : docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
-                      const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(docName);
                       return (
-                        <div className="info-row" key={`other-${i}`}>
+                        <div className="info-row" key={`other-${i}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                           <span className="info-label">{docName}</span>
-                          <span className="info-value">
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
                             <a
                               href={`${API_URL}/users/${userId}/documents/other_document?token=${authToken()}&file=${encodeURIComponent(docPath)}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              style={{ color: "#2563eb", textDecoration: "underline" }}
+                              style={{ background: "#2563eb", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+                              title="View"
                             >
-                              {isImage ? "View Image" : "View File"}
+                              <Eye size={16} />
                             </a>
-                          </span>
+                            <button type="button" onClick={() => { setEditDocItem({ type: "other_document", index: i }); setEditDocName(docName); setEditDocFile(null); setEditDocExistingFileName(docPath.split("/").pop()); }} style={{ background: "#2563eb", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }} title="Edit"><Pencil size={16} /></button>
+                            <button type="button" onClick={() => { setPendingDeleteDoc({ type: "other_document", index: i }); setDeleteDocConfirmOpen(true); }} style={{ background: "#dc2626", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }} title="Remove"><Trash2 size={16} /></button>
+                          </div>
                         </div>
                       );
                     });
@@ -1557,6 +1716,87 @@ function UserProfile() {
         message="Are you sure you want to remove this profile photo?"
         confirmText="Remove"
         cancelText="Cancel"
+        danger
+      />
+
+      {/* Edit Document Popup — Rename + Replace File */}
+      {editDocItem && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={() => { setEditDocItem(null); setEditDocFile(null); }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 460, maxWidth: "90vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#1e293b" }}>Edit Document</h3>
+            <p style={{ margin: "6px 0 0", fontSize: 13, color: "#64748b" }}>Rename or replace the file below.</p>
+
+            <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Name</label>
+                <input
+                  autoFocus
+                  type="text"
+                  value={editDocName}
+                  onChange={(e) => setEditDocName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && (editDocName.trim() || editDocFile)) handleEditDoc(); }}
+                  style={{ width: "100%", padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                />
+              </div>
+
+              {editDocExistingFileName && (
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Current File</label>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
+                    <span style={{ color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }} title={editDocExistingFileName}>{editDocExistingFileName}</span>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Replace File (optional)</label>
+                {editDocFile ? (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
+                    <span style={{ color: "#16a34a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }} title={editDocFile.name}>{editDocFile.name}</span>
+                    <button type="button" onClick={() => setEditDocFile(null)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0, marginLeft: 8 }} title="Remove selected file">&#10005;</button>
+                  </div>
+                ) : (
+                  <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "2px dashed #d1d5db", borderRadius: 8, padding: "16px 12px", cursor: "pointer", background: "#f8fafc", transition: "border-color 0.2s" }}
+                    onMouseEnter={(e) => e.currentTarget.style.borderColor = "#6366f1"}
+                    onMouseLeave={(e) => e.currentTarget.style.borderColor = "#d1d5db"}
+                  >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 6 }}>
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="17 8 12 3 7 8" />
+                      <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    <span style={{ fontSize: 12, color: "#64748b" }}>Click to upload new file</span>
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.bmp,.svg,.tiff,.tif"
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) setEditDocFile(file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+            </div>
+
+            <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button type="button" onClick={() => { setEditDocItem(null); setEditDocFile(null); }} style={{ padding: "8px 18px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "#374151" }}>Cancel</button>
+              <button type="button" onClick={handleEditDoc} disabled={!editDocName.trim() && !editDocFile} style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: (editDocName.trim() || editDocFile) ? "#6366f1" : "#e5e7eb", color: (editDocName.trim() || editDocFile) ? "#fff" : "#9ca3af", fontSize: 13, fontWeight: 600, cursor: (editDocName.trim() || editDocFile) ? "pointer" : "not-allowed" }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Document Confirmation */}
+      <ConfirmModal
+        isOpen={deleteDocConfirmOpen}
+        onClose={() => { setDeleteDocConfirmOpen(false); setPendingDeleteDoc(null); }}
+        onConfirm={handleDeleteDoc}
+        title="Delete Document"
+        message={`Are you sure you want to delete this document? This action cannot be undone.`}
+        confirmText="Delete"
         danger
       />
     </DashboardLayout>
