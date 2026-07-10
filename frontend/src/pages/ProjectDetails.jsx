@@ -1072,7 +1072,7 @@ function ProjectDetails() {
                         Show To
                       </button>
                     )}
-                    {isAssigned && ["pending", "reopened", "Planned", "in_progress", "In Progress"].includes(project?.status) && (
+                    {isAssigned && ["pending", "reopened", "Planned", "Planning", "in_progress", "In Progress", "In-progress"].includes(project?.status) && (
                       <button
                         type="button"
                         className="pd-btn-tx pd-btn-tx--primary"

@@ -230,7 +230,7 @@ function UserPerformance() {
   };
 
   const baseItems = orderedItems.length ? orderedItems : items;
-  const pendingStatuses = ["pending", "in_progress", "In Progress", "Planned", "submitted", "reopened", "rejected"];
+  const pendingStatuses = ["pending", "in_progress", "In Progress", "In-progress", "planned", "Planning", "Planned", "submitted", "reopened", "rejected"];
 
   const filteredItems = baseItems.filter((item) => {
     if (statusFilter === "due_today") {

@@ -54,11 +54,11 @@ class DashboardController extends Controller
             [$completedToday, $todayNotifications] = $this->getTodayActivityFeedAndNotifications($user, $role, $projectIds);
 
             return [
-                'summary' => $this->getCachedSummary($user, $role, $projectIds),
-                'todayWorkload' => $this->getCachedTodayWorkload($user, $role),
-                'activeProjects' => $this->getCachedActiveProjects($user, $projectIds),
+                'summary' => $this->computeSummary($user, $role, $projectIds),
+                'todayWorkload' => $this->getTodayWorkload($user, $role),
+                'activeProjects' => $this->computeActiveProjects($user, $projectIds),
                 'recentActivity' => $this->getRecentActivity($user, $role, $projectIds),
-                'upcomingDeadlines' => $this->getCachedUpcomingDeadlines($user, $role, $projectIds),
+                'upcomingDeadlines' => $this->getUpcomingDeadlines($user, $role, $projectIds),
                 'completedToday' => $completedToday,
                 'todayNotifications' => $todayNotifications,
             ];
@@ -74,23 +74,6 @@ class DashboardController extends Controller
     {
         return Cache::remember(self::ADMIN_MANAGER_CACHE_KEY, 300, fn () => User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray()
         );
-    }
-
-    /**
-     * Get cached dashboard summary stats for the user.
-     *
-     * @param  User  $user  The authenticated user.
-     * @param  string  $role  The user's role.
-     * @param  array  $projectIds  IDs of projects visible to the user.
-     * @return array Summary stats: active_projects, tasks_due_today, completed/approved/pending/total_tasks.
-     */
-    private function getCachedSummary(User $user, string $role, array $projectIds): array
-    {
-        $cacheKey = "dashboard_summary_{$user->id}";
-
-        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($user, $role, $projectIds) {
-            return $this->computeSummary($user, $role, $projectIds);
-        });
     }
 
     /**
@@ -110,30 +93,92 @@ class DashboardController extends Controller
 
         if ($isAdminOrManager) {
             $adminManagerIds = $this->getAdminManagerIds();
+            $pendingStatuses = ['pending','in_progress','In Progress','In-progress','planned','Planning','submitted','reopened','rejected'];
 
             $activeProjects = Project::whereIn('id', $projectIds)
                 ->whereNotIn('status', $this->inactiveProjectStatuses())->count();
 
-            $tasksDueToday = Task::whereIn('assigned_by', $adminManagerIds)
+            // Tasks due today — expanded count (one row per assignee, excluding self-assign)
+            $tasksDueToday = DB::table('tasks')
+                ->join('task_user', 'tasks.id', '=', 'task_user.task_id')
+                ->whereIn('tasks.assigned_by', $adminManagerIds)
+                ->whereColumn('task_user.user_id', '!=', 'tasks.assigned_by')
+                ->whereDate('tasks.end_date', today())
+                ->whereNotIn('tasks.status', $this->dueTodayCompletedStatuses())
+                ->count('tasks.id');
+
+            // Tasks due today — fallback for assigned_to without pivot entry
+            $tasksDueToday += Task::whereIn('assigned_by', $adminManagerIds)
+                ->where('assigned_to', '!=', DB::raw('assigned_by'))
+                ->whereNotIn('id', function ($q) {
+                    $q->select('task_id')->from('task_user');
+                })
                 ->whereDate('end_date', today())
                 ->whereNotIn('status', $this->dueTodayCompletedStatuses())
                 ->count();
 
-            // Single aggregated query for task stats
-            $taskStats = Task::selectRaw("
-                COUNT(*) as total,
-                SUM(CASE WHEN status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
-                SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
-                SUM(CASE WHEN status IN ('pending','in_progress','In Progress','Planned','submitted','reopened','rejected') THEN 1 ELSE 0 END) as pending
-            ")->whereIn('assigned_by', $adminManagerIds)->first();
+            // Projects as tasks due today — expanded count (one row per assigned_user)
+            $projectsDueToday = Project::whereIn('created_by', $adminManagerIds)
+                ->whereNotNull('assigned_users')
+                ->whereRaw('JSON_LENGTH(assigned_users) > 0')
+                ->whereDate('end_date', today())
+                ->whereNotIn('status', $this->inactiveProjectStatuses())
+                ->whereNotIn('status', $this->dueTodayCompletedStatuses())
+                ->sum(DB::raw('JSON_LENGTH(assigned_users)'));
+
+            // Task stats — expanded count matching assignedByMe (one row per assignee, excluding self-assign)
+            $taskStats = DB::table('tasks')
+                ->join('task_user', 'tasks.id', '=', 'task_user.task_id')
+                ->whereIn('tasks.assigned_by', $adminManagerIds)
+                ->whereColumn('task_user.user_id', '!=', 'tasks.assigned_by')
+                ->selectRaw("
+                    COUNT(*) as total,
+                    SUM(CASE WHEN tasks.status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN tasks.status = 'approved' THEN 1 ELSE 0 END) as approved,
+                    SUM(CASE WHEN tasks.status IN ('".implode("','", $pendingStatuses)."') THEN 1 ELSE 0 END) as pending
+                ")->first();
+
+            // Projects-as-task stats — expanded count matching assignedByMe (one row per assigned_user)
+            $projectAsTaskStats = Project::whereIn('created_by', $adminManagerIds)
+                ->where(function ($q) {
+                    $q->whereNotNull('assigned_users')->whereRaw('JSON_LENGTH(assigned_users) > 0');
+                })
+                ->selectRaw("
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status IN ('approved','completed','done') THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
+                    SUM(CASE WHEN status IN ('".implode("','", $pendingStatuses)."') THEN 1 ELSE 0 END) as pending,
+                    SUM(JSON_LENGTH(assigned_users)) as expanded_total,
+                    SUM(CASE WHEN status IN ('approved','completed','done') THEN JSON_LENGTH(assigned_users) ELSE 0 END) as expanded_completed,
+                    SUM(CASE WHEN status = 'approved' THEN JSON_LENGTH(assigned_users) ELSE 0 END) as expanded_approved,
+                    SUM(CASE WHEN status IN ('".implode("','", $pendingStatuses)."') THEN JSON_LENGTH(assigned_users) ELSE 0 END) as expanded_pending
+                ")->first();
+
+            // Count tasks with assigned_to but no pivot entry (fallback assignee)
+            $taskAssignedToCount = Task::whereIn('assigned_by', $adminManagerIds)
+                ->where('assigned_to', '!=', DB::raw('assigned_by'))
+                ->whereNotIn('id', function ($q) {
+                    $q->select('task_id')->from('task_user');
+                })
+                ->selectRaw("
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
+                    SUM(CASE WHEN status IN ('".implode("','", $pendingStatuses)."') THEN 1 ELSE 0 END) as pending
+                ")->first();
+
+            $expandedTaskTotal = (int) $taskStats->total + (int) $taskAssignedToCount->total;
+            $expandedTaskCompleted = (int) $taskStats->completed + (int) $taskAssignedToCount->completed;
+            $expandedTaskApproved = (int) $taskStats->approved + (int) $taskAssignedToCount->approved;
+            $expandedTaskPending = (int) $taskStats->pending + (int) $taskAssignedToCount->pending;
 
             return [
                 'active_projects' => $activeProjects,
-                'tasks_due_today' => $tasksDueToday,
-                'completed_tasks' => (int) $taskStats->completed,
-                'approved_tasks' => (int) $taskStats->approved,
-                'pending_tasks' => (int) $taskStats->pending,
-                'total_tasks' => (int) $taskStats->total,
+                'tasks_due_today' => $tasksDueToday + $projectsDueToday,
+                'completed_tasks' => $expandedTaskCompleted + (int) $projectAsTaskStats->expanded_completed,
+                'approved_tasks' => $expandedTaskApproved + (int) $projectAsTaskStats->expanded_approved,
+                'pending_tasks' => $expandedTaskPending + (int) $projectAsTaskStats->expanded_pending,
+                'total_tasks' => $expandedTaskTotal + (int) $projectAsTaskStats->expanded_total,
             ];
         }
 
@@ -147,6 +192,15 @@ class DashboardController extends Controller
             ->whereNotIn('status', $this->dueTodayCompletedStatuses())
             ->count();
 
+        // Projects as tasks due today for regular user
+        $projectsDueToday = Project::whereJsonContains('assigned_users', $user->id)
+            ->whereDate('end_date', today())
+            ->whereNotIn('status', $this->inactiveProjectStatuses())
+            ->whereNotIn('status', $this->dueTodayCompletedStatuses())
+            ->count();
+
+        $pendingStatuses = ['pending','in_progress','In Progress','In-progress','planned','Planning','submitted','reopened','rejected'];
+
         $taskStats = Task::where(function ($q) use ($user) {
             $q->where('assigned_by', $user->id)
                 ->orWhere('assigned_to', $user->id)
@@ -155,16 +209,25 @@ class DashboardController extends Controller
             COUNT(*) as total,
             SUM(CASE WHEN status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
             SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
-            SUM(CASE WHEN status IN ('pending','in_progress','In Progress','Planned','submitted','reopened','rejected') THEN 1 ELSE 0 END) as pending
+            SUM(CASE WHEN status IN ('".implode("','", $pendingStatuses)."') THEN 1 ELSE 0 END) as pending
         ")->first();
+
+        // Projects as tasks stats for regular user
+        $projectAsTaskStats = Project::whereJsonContains('assigned_users', $user->id)
+            ->selectRaw("
+                COUNT(*) as total,
+                SUM(CASE WHEN status IN ('approved','completed','done') THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
+                SUM(CASE WHEN status IN ('".implode("','", $pendingStatuses)."') THEN 1 ELSE 0 END) as pending
+            ")->first();
 
         return [
             'active_projects' => $activeProjects,
-            'tasks_due_today' => $tasksDueToday,
-            'completed_tasks' => (int) $taskStats->completed,
-            'approved_tasks' => (int) $taskStats->approved,
-            'pending_tasks' => (int) $taskStats->pending,
-            'total_tasks' => (int) $taskStats->total,
+            'tasks_due_today' => $tasksDueToday + $projectsDueToday,
+            'completed_tasks' => (int) $taskStats->completed + (int) $projectAsTaskStats->completed,
+            'approved_tasks' => (int) $taskStats->approved + (int) $projectAsTaskStats->approved,
+            'pending_tasks' => (int) $taskStats->pending + (int) $projectAsTaskStats->pending,
+            'total_tasks' => (int) $taskStats->total + (int) $projectAsTaskStats->total,
         ];
     }
 
@@ -175,59 +238,86 @@ class DashboardController extends Controller
      * @param  string  $role  The user's role.
      * @return array Array of task objects due today (up to 10).
      */
-    private function getCachedTodayWorkload(User $user, string $role): array
+    private function getTodayWorkload(User $user, string $role): array
     {
-        $cacheKey = "dashboard_workload_{$user->id}";
+        $isAdminOrManager = in_array($role, ['admin', 'manager']);
+        $limit = 10;
 
-        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($user, $role) {
-            $isAdminOrManager = in_array($role, ['admin', 'manager']);
-            $limit = 10;
+        if ($isAdminOrManager) {
+            $adminManagerIds = $this->getAdminManagerIds();
+            $tasks = Task::with(['project:id,title', 'assignees:id,name,role'])
+                ->whereIn('assigned_by', $adminManagerIds)
+                ->where(function ($q) use ($user) {
+                    $q->whereDoesntHave('assignees', fn ($q) => $q->where('users.id', $user->id))
+                        ->orWhere(function ($q) use ($user) {
+                            $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+                                ->where('assigned_to', '!=', $user->id);
+                        });
+                })
+                ->whereDate('end_date', today())
+                ->whereNotIn('status', $this->inactiveTaskStatuses())
+                ->latest()->limit($limit)->get();
 
-            if ($isAdminOrManager) {
-                $adminManagerIds = $this->getAdminManagerIds();
-                $tasks = Task::with(['project:id,title', 'assignees:id,name,role'])
-                    ->whereIn('assigned_by', $adminManagerIds)
-                    ->where(function ($q) use ($user) {
-                        $q->whereDoesntHave('assignees', fn ($q) => $q->where('users.id', $user->id))
-                            ->orWhere(function ($q) use ($user) {
-                                $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
-                                    ->where('assigned_to', '!=', $user->id);
-                            });
-                    })
-                    ->whereDate('end_date', today())
-                    ->whereNotIn('status', $this->inactiveTaskStatuses())
-                    ->latest()->limit($limit)->get();
-            } else {
-                $tasks = Task::with(['project:id,title', 'assignees:id,name,role'])
-                    ->where(function ($q) use ($user) {
-                        $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
-                            ->orWhere('assigned_to', $user->id);
-                    })
-                    ->whereDate('end_date', today())
-                    ->whereNotIn('status', $this->inactiveTaskStatuses())
-                    ->latest()->limit($limit)->get();
-            }
+            // Projects as tasks due today
+            $projects = Project::with('creator:id,name,role')
+                ->whereNotNull('assigned_users')
+                ->whereRaw('JSON_LENGTH(assigned_users) > 0')
+                ->whereDate('end_date', today())
+                ->whereNotIn('status', $this->inactiveProjectStatuses())
+                ->latest()->limit($limit)->get();
 
-            return $tasks->map(fn ($task) => array_merge($task->toArray(), [
+            $projectItems = $projects->map(function ($project) {
+                $assigneeIds = $project->assigned_users ?? [];
+                $assigneeModels = \App\Models\User::whereIn('id', $assigneeIds)->select('id', 'name', 'role')->get();
+                return array_merge($project->toArray(), [
+                    'module' => 'project', 'item_type' => 'project', 'entity_id' => $project->id,
+                    'assignees' => $assigneeModels->toArray(),
+                ]);
+            })->toArray();
+
+            $taskItems = $tasks->map(fn ($task) => array_merge($task->toArray(), [
                 'module' => 'task', 'item_type' => 'task', 'entity_id' => $task->id,
             ]))->toArray();
-        });
-    }
 
-    /**
-     * Get cached list of active projects for the dashboard.
-     *
-     * @param  User  $user  The authenticated user.
-     * @param  array  $projectIds  IDs of projects visible to the user.
-     * @return array Array of project data with progress percentages and team info.
-     */
-    private function getCachedActiveProjects(User $user, array $projectIds): array
-    {
-        $cacheKey = "dashboard_active_projects_{$user->id}";
+            $allItems = array_merge($taskItems, $projectItems);
+            usort($allItems, fn ($a, $b) => strtotime($b['end_date'] ?? 'now') - strtotime($a['end_date'] ?? 'now'));
 
-        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($user, $projectIds) {
-            return $this->computeActiveProjects($user, $projectIds);
-        });
+            return array_slice($allItems, 0, $limit);
+        } else {
+            $tasks = Task::with(['project:id,title', 'assignees:id,name,role'])
+                ->where(function ($q) use ($user) {
+                    $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+                        ->orWhere('assigned_to', $user->id);
+                })
+                ->whereDate('end_date', today())
+                ->whereNotIn('status', $this->inactiveTaskStatuses())
+                ->latest()->limit($limit)->get();
+
+            // Projects as tasks due today for regular user
+            $projects = Project::with('creator:id,name,role')
+                ->whereJsonContains('assigned_users', $user->id)
+                ->whereDate('end_date', today())
+                ->whereNotIn('status', $this->inactiveProjectStatuses())
+                ->latest()->limit($limit)->get();
+
+            $projectItems = $projects->map(function ($project) {
+                $assigneeIds = $project->assigned_users ?? [];
+                $assigneeModels = \App\Models\User::whereIn('id', $assigneeIds)->select('id', 'name', 'role')->get();
+                return array_merge($project->toArray(), [
+                    'module' => 'project', 'item_type' => 'project', 'entity_id' => $project->id,
+                    'assignees' => $assigneeModels->toArray(),
+                ]);
+            })->toArray();
+
+            $taskItems = $tasks->map(fn ($task) => array_merge($task->toArray(), [
+                'module' => 'task', 'item_type' => 'task', 'entity_id' => $task->id,
+            ]))->toArray();
+
+            $allItems = array_merge($taskItems, $projectItems);
+            usort($allItems, fn ($a, $b) => strtotime($b['end_date'] ?? 'now') - strtotime($a['end_date'] ?? 'now'));
+
+            return array_slice($allItems, 0, $limit);
+        }
     }
 
     /**
@@ -309,43 +399,39 @@ class DashboardController extends Controller
     }
 
     /**
-     * Get cached list of tasks with upcoming deadlines (within 7 days).
+     * Get tasks with upcoming deadlines (within 7 days).
      *
      * @param  User  $user  The authenticated user.
      * @param  string  $role  The user's role.
      * @param  array  $projectIds  IDs of projects visible to the user.
      * @return array Array of tasks sorted by end date (up to 10).
      */
-    private function getCachedUpcomingDeadlines(User $user, string $role, array $projectIds): array
+    private function getUpcomingDeadlines(User $user, string $role, array $projectIds): array
     {
-        $cacheKey = "dashboard_upcoming_deadlines_{$user->id}";
+        $query = Task::with(['project:id,title'])
+            ->whereNotIn('status', $this->inactiveTaskStatuses())
+            ->where('end_date', '>=', now())
+            ->where('end_date', '<=', now()->addDays(7));
 
-        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($user, $role) {
-            $query = Task::with(['project:id,title'])
-                ->whereNotIn('status', $this->inactiveTaskStatuses())
-                ->where('end_date', '>=', now())
-                ->where('end_date', '<=', now()->addDays(7));
+        if (in_array($role, ['admin', 'manager'])) {
+            $query->whereIn('assigned_by', $this->getAdminManagerIds());
+        } else {
+            $query->where(function ($q) use ($user) {
+                $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+                    ->orWhere('assigned_to', $user->id);
+            });
+        }
 
-            if (in_array($role, ['admin', 'manager'])) {
-                $query->whereIn('assigned_by', $this->getAdminManagerIds());
-            } else {
-                $query->where(function ($q) use ($user) {
-                    $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
-                        ->orWhere('assigned_to', $user->id);
-                });
-            }
+        return $query->limit(10)->get()->map(fn ($task) => [
+            'id' => $task->id, 'entity_id' => $task->id, 'module' => 'task',
+            'title' => $task->title, 'project' => $task->project?->title,
+            'end_date' => $task->end_date?->format('M d, Y h:i A'),
+            'sort_date' => $task->end_date,
+        ])->sortBy('sort_date')->values()->map(function ($item) {
+            unset($item['sort_date']);
 
-            return $query->limit(10)->get()->map(fn ($task) => [
-                'id' => $task->id, 'entity_id' => $task->id, 'module' => 'task',
-                'title' => $task->title, 'project' => $task->project?->title,
-                'end_date' => $task->end_date?->format('M d, Y h:i A'),
-                'sort_date' => $task->end_date,
-            ])->sortBy('sort_date')->values()->map(function ($item) {
-                unset($item['sort_date']);
-
-                return $item;
-            })->toArray();
-        });
+            return $item;
+        })->toArray();
     }
 
     // ──────────────────────────────────────────────────────────────────

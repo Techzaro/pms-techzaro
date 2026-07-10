@@ -216,7 +216,7 @@ function Tasks() {
 
 
   const baseItems = orderedItems.length ? orderedItems : items;
-  const pendingStatuses = ["pending", "in_progress", "In Progress", "Planned", "submitted", "reopened", "rejected"];
+  const pendingStatuses = ["pending", "in_progress", "In Progress", "In-progress", "planned", "Planning", "Planned", "submitted", "reopened", "rejected"];
   const filteredItems = statusFilter && statusFilter !== "due_today"
     ? items.filter((item) => {
         if (item.item_type === "project") {

@@ -115,7 +115,7 @@ class TaskController extends Controller
             $project->item_type = 'project';
             $project->sort_order = null;
             $isAssigned = in_array($user->id, $project->assigned_users ?? []);
-            $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
+            $submittableStatuses = ['pending', 'reopened', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress'];
             $project->is_assigned = $isAssigned;
             $project->can_submit = in_array($project->status, $submittableStatuses) && $isAssigned;
 
@@ -205,7 +205,7 @@ class TaskController extends Controller
                 $project->item_type = 'project';
                 $project->sort_order = null;
                 $isAssigned = in_array($user->id, $project->assigned_users ?? []);
-                $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
+            $submittableStatuses = ['pending', 'reopened', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress'];
                 $project->is_assigned = $isAssigned;
                 $project->can_submit = in_array($project->status, $submittableStatuses) && $isAssigned;
 
@@ -325,7 +325,7 @@ class TaskController extends Controller
         $projects = $projectsQuery->get();
 
         $expandedProjects = collect();
-        $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
+        $submittableStatuses = ['pending', 'reopened', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress'];
         foreach ($projects as $project) {
             $clone = clone $project;
             $clone->item_type = 'project';
@@ -450,7 +450,7 @@ class TaskController extends Controller
             ->limit(100)->get();
 
         $expandedProjects = collect();
-        $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
+        $submittableStatuses = ['pending', 'reopened', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress'];
 
         // Bulk-load all assigned user IDs across projects
         $allUserIds = $projects->flatMap(fn ($p) => is_string($p->assigned_users) ? json_decode($p->assigned_users, true) ?? [] : ($p->assigned_users ?? []))
@@ -2013,7 +2013,7 @@ class TaskController extends Controller
      */
     private function pendingTaskStatuses(): array
     {
-        return ['pending', 'in_progress', 'In Progress', 'Planned', 'submitted', 'reopened', 'rejected'];
+        return ['pending', 'in_progress', 'In Progress', 'In-progress', 'planned', 'Planning', 'Planned', 'submitted', 'reopened', 'rejected'];
     }
 
     /**

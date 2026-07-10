@@ -110,16 +110,43 @@ const SummaryCard = memo(function SummaryCard({ card, onClick }) {
  * Shows task time, title, assignee role labels, assignee avatars, and priority status.
  * Clicking an avatar navigates to the task or project details page.
  */
-const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, rolePath, cardWidth, getProgressColor, PROJECTS_PER_VIEW, GAP }) {
+const AVATAR_COLORS = [
+  { bg: "#E0E7FF", text: "#4338CA" },
+  { bg: "#FEE2E2", text: "#B91C1C" },
+  { bg: "#DCFCE7", text: "#22C55E" },
+  { bg: "#FEF3C7", text: "#D97706" },
+  { bg: "#EDE9FE", text: "#7C3AED" },
+  { bg: "#FCE7F3", text: "#DB2777" },
+];
+
+const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, rolePath, cardWidth, getProgressColor, PROJECTS_PER_VIEW, GAP, currentRole }) {
+  const isManager = currentRole === "admin" || currentRole === "manager";
+  const assignees = item.assignees || [];
+
+  const handleCardClick = (e) => {
+    if (isManager) {
+      navigate(`${rolePath("taskby")}?status=due_today`, { state: { from: "taskby" } });
+    } else {
+      const from = getActivityFrom(item);
+      const dest = getActivityDestination(item);
+      navigate(`${dest}${dest.includes("?") ? "&" : "?"}from=${from}`, { state: { from } });
+    }
+  };
+
+  const handleAvatarClick = (e, assignee) => {
+    e.stopPropagation();
+    if (item.module === "project") {
+      navigate(rolePath(`projects/project-details/${item.entity_id}`), { state: { from: "taskby" } });
+    } else {
+      navigate(rolePath(`tasks/task-details/${item.entity_id}`), { state: { from: "taskby" } });
+    }
+  };
+
   return (
     <div className="dash-task-card" style={{
       minWidth: cardWidth > 0 ? `${cardWidth}px` : `calc((100% - ${(PROJECTS_PER_VIEW - 1) * GAP}px) / ${PROJECTS_PER_VIEW})`,
       flex: cardWidth > 0 ? `0 0 ${cardWidth}px` : `0 0 calc((100% - ${(PROJECTS_PER_VIEW - 1) * GAP}px) / ${PROJECTS_PER_VIEW})`,
-    }} onClick={() => {
-      const from = getActivityFrom(item);
-      const dest = getActivityDestination(item);
-      navigate(`${dest}${dest.includes("?") ? "&" : "?"}from=${from}`, { state: { from } });
-    }}>
+    }} onClick={handleCardClick}>
       <div className="dash-task-card-header">
         <h3>{item.title}</h3>
       </div>
@@ -140,8 +167,7 @@ const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, r
           ></div>
         </div>
       </div>
-
-      <div className="dash-task-card-footer">
+          <div className="dash-task-card-footer">
         <div className="dash-task-date-info">
           <span className="dash-task-date-icon">&#x1F4C5;</span>
           {item.end_date ? (
@@ -151,6 +177,33 @@ const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, r
           )}
         </div>
       </div>
+
+
+      {isManager && assignees.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "10px", flexWrap: "wrap" }}>
+          {assignees.map((a) => {
+            const colorIdx = (a.id || 0) % AVATAR_COLORS.length;
+            const colors = AVATAR_COLORS[colorIdx];
+            return (
+              <div
+                key={a.id}
+                onClick={(e) => handleAvatarClick(e, a)}
+                title={a.name}
+                style={{
+                  width: 50, height: 50, borderRadius: "50%",
+                  background: colors.bg, color: colors.text,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "10px", fontWeight: 700, cursor: "pointer",
+                  border: "2px solid #fff", flexShrink: 0,
+                }}
+              >
+                {getInitials(a.name)}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
     </div>
   );
 });
@@ -556,6 +609,7 @@ function Admin() {
                         getProgressColor={getProgressColor}
                         PROJECTS_PER_VIEW={PROJECTS_PER_VIEW}
                         GAP={GAP}
+                        currentRole={currentRole}
                       />
                     ))}
                   </div>

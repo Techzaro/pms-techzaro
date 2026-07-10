@@ -51,7 +51,7 @@ class ProjectController extends Controller
         $user = request()->user();
         $filter = request()->query('filter');
 
-        $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
+        $submittableStatuses = ['pending', 'reopened', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress'];
 
         if (in_array($user->role, ['admin', 'manager'])) {
             $projectsQuery = Project::with(['creator:id,name', 'team:id,name'])
@@ -352,7 +352,7 @@ class ProjectController extends Controller
         $isCreator = (int) $project->created_by === (int) $user->id;
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
         $isAssigned = in_array($user->id, $project->assigned_users ?? []);
-        $submittableStatuses = ['pending', 'reopened', 'Planned', 'in_progress', 'In Progress'];
+        $submittableStatuses = ['pending', 'reopened', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress'];
 
         $approvalCacheKey = "project_approval_{$project->id}";
         $approvalStatus = Cache::remember($approvalCacheKey, 30, function () use ($project) {
@@ -1096,7 +1096,7 @@ class ProjectController extends Controller
             return response()->json(['success' => false, 'message' => 'Only assigned users can submit this project'], 403);
         }
 
-        if (! in_array($project->status, ['pending', 'Planned', 'in_progress', 'In Progress', 'reopened'])) {
+        if (! in_array($project->status, ['pending', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress', 'reopened'])) {
             return response()->json(['success' => false, 'message' => 'This project cannot be submitted in its current status'], 422);
         }
 
