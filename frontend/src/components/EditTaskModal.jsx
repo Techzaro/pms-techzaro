@@ -47,6 +47,15 @@ export default function EditTaskModal({ task, onClose }) {
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState(
     task.assignees?.map((a) => a.id) || []
   );
+  const [dueDates, setDueDates] = useState(() => {
+    const initial = {};
+    if (task.assignees) {
+      task.assignees.forEach((a) => {
+        if (a.pivot?.due_date) initial[a.id] = a.pivot.due_date.slice(0, 16);
+      });
+    }
+    return initial;
+  });
   const [deliverables, setDeliverables] = useState([]);
   const [deliverableInput, setDeliverableInput] = useState({ title: "", due_datetime: "" });
   const [pendingFiles, setPendingFiles] = useState([]);
@@ -84,6 +93,17 @@ export default function EditTaskModal({ task, onClose }) {
 
   const handleAssignedToChange = (ids) => {
     setSelectedAssigneeIds(ids);
+    setDueDates((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((k) => {
+        if (!ids.includes(Number(k))) delete next[k];
+      });
+      return next;
+    });
+  };
+
+  const handleDueDateChange = (userId, value) => {
+    setDueDates((prev) => ({ ...prev, [userId]: value }));
   };
 
   const handleAddDeliverable = () => {
@@ -214,6 +234,7 @@ export default function EditTaskModal({ task, onClose }) {
           start_date: toUTCIso(form.start_date),
           end_date: toUTCIso(form.end_date),
           assigned_to: selectedAssigneeIds,
+          due_dates: Object.keys(dueDates).length > 0 ? dueDates : undefined,
           existing_file_names: existingFiles.reduce((acc, f) => {
             if (f.customName && f.customName !== f.name) {
               acc.push({ id: f.id, name: f.customName });
@@ -292,6 +313,9 @@ export default function EditTaskModal({ task, onClose }) {
                     users={displayUsers}
                     selectedIds={selectedAssigneeIds}
                     onChange={handleAssignedToChange}
+                    showDueDate={true}
+                    dueDates={dueDates}
+                    onDueDateChange={handleDueDateChange}
                     placeholder="Click to select members"
                   />
                 )}

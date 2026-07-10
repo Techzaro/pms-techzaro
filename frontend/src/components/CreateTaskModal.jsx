@@ -46,6 +46,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     start_date: "",
     end_date: "",
   });
+  const [dueDates, setDueDates] = useState({});
 
   const [requirementsList, setRequirementsList] = useState([]);
   const [reqInput, setReqInput] = useState("");
@@ -182,6 +183,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
 
   const handleAssignedToChange = (ids) => {
     setForm((prev) => ({ ...prev, assigned_to: ids }));
+    setDueDates((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((k) => {
+        if (!ids.includes(Number(k))) delete next[k];
+      });
+      return next;
+    });
     if (formErrors.assigned_to) {
       setFormErrors((prev) => {
         const next = { ...prev };
@@ -189,6 +197,10 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         return next;
       });
     }
+  };
+
+  const handleDueDateChange = (userId, value) => {
+    setDueDates((prev) => ({ ...prev, [userId]: value }));
   };
 
   const handleAddRequirement = () => {
@@ -348,6 +360,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
           start_date: toUTCIso(form.start_date),
           end_date: toUTCIso(form.end_date),
           assigned_to: form.assigned_to,
+          due_dates: Object.keys(dueDates).length > 0 ? dueDates : undefined,
           priority: form.priority,
           deliverables: deliverables.length > 0 ? deliverables.map(d => ({ title: d.title, due_date: d.due_date || null })) : undefined,
         };
@@ -455,6 +468,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                   users={displayUsers}
                   selectedIds={form.assigned_to}
                   onChange={handleAssignedToChange}
+                  showDueDate={true}
+                  dueDates={dueDates}
+                  onDueDateChange={handleDueDateChange}
                   placeholder="Click to select members"
                   error={!!formErrors.assigned_to}
                 />

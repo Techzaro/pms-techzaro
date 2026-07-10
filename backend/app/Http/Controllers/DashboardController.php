@@ -254,7 +254,10 @@ class DashboardController extends Controller
                                 ->where('assigned_to', '!=', $user->id);
                         });
                 })
-                ->whereDate('end_date', today())
+                ->where(function ($q) {
+                    $q->whereDate('end_date', today())
+                        ->orWhereHas('assignees', fn ($q) => $q->whereDate('task_user.due_date', today()));
+                })
                 ->whereNotIn('status', $this->inactiveTaskStatuses())
                 ->latest()->limit($limit)->get();
 
@@ -289,7 +292,13 @@ class DashboardController extends Controller
                     $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
                         ->orWhere('assigned_to', $user->id);
                 })
-                ->whereDate('end_date', today())
+                ->where(function ($q) use ($user) {
+                    $q->whereDate('end_date', today())
+                        ->orWhereHas('assignees', function ($q) use ($user) {
+                            $q->where('users.id', $user->id)
+                                ->whereDate('task_user.due_date', today());
+                        });
+                })
                 ->whereNotIn('status', $this->inactiveTaskStatuses())
                 ->latest()->limit($limit)->get();
 
@@ -408,10 +417,12 @@ class DashboardController extends Controller
      */
     private function getUpcomingDeadlines(User $user, string $role, array $projectIds): array
     {
-        $query = Task::with(['project:id,title'])
+        $query = Task::with(['project:id,title', 'assignees'])
             ->whereNotIn('status', $this->inactiveTaskStatuses())
-            ->where('end_date', '>=', now())
-            ->where('end_date', '<=', now()->addDays(7));
+            ->where(function ($q) {
+                $q->whereBetween('end_date', [now(), now()->addDays(7)])
+                    ->orWhereHas('assignees', fn ($q) => $q->whereBetween('task_user.due_date', [now(), now()->addDays(7)]));
+            });
 
         if (in_array($role, ['admin', 'manager'])) {
             $query->whereIn('assigned_by', $this->getAdminManagerIds());
@@ -422,14 +433,18 @@ class DashboardController extends Controller
             });
         }
 
-        return $query->limit(10)->get()->map(fn ($task) => [
-            'id' => $task->id, 'entity_id' => $task->id, 'module' => 'task',
-            'title' => $task->title, 'project' => $task->project?->title,
-            'end_date' => $task->end_date?->format('M d, Y h:i A'),
-            'sort_date' => $task->end_date,
-        ])->sortBy('sort_date')->values()->map(function ($item) {
+        return $query->limit(10)->get()->map(function ($task) use ($user) {
+            $perUserDate = $task->assignees->firstWhere('id', $user->id)?->pivot?->due_date;
+            $displayDate = $perUserDate ?? $task->end_date;
+            return [
+                'id' => $task->id, 'entity_id' => $task->id, 'module' => 'task',
+                'title' => $task->title, 'project' => $task->project?->title,
+                'end_date' => $displayDate
+                    ? (\Carbon\Carbon::parse($displayDate))->format('M d, Y h:i A') : null,
+                'sort_date' => $displayDate,
+            ];
+        })->sortBy('sort_date')->values()->map(function ($item) {
             unset($item['sort_date']);
-
             return $item;
         })->toArray();
     }

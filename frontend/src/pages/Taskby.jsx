@@ -473,10 +473,17 @@ const Taskby = () => {
                     </div>
 
                     <div className="col-status">
-                      <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
-                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                        {formatStatus(item.status)}
-                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
+                          <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                          {formatStatus(item.status)}
+                        </span>
+                        {!isProject && item.assignees?.[0]?.pivot?.status === "submitted" && (
+                          <span className="badge" style={{ background: "#DBEAFE", color: "#1E40AF", fontSize: "10px" }}>
+                            Submitted
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="col-progress">
@@ -511,7 +518,11 @@ const Taskby = () => {
 
                     <div className="col-due-date">
                       <div className="date-box">
-                        <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
+                        <div style={{ whiteSpace: "pre-line" }}>
+                          {!isProject && item.assignees?.[0]?.pivot?.due_date
+                            ? formatDate(item.assignees[0].pivot.due_date)
+                            : formatDate(item.end_date)}
+                        </div>
                       </div>
                     </div>
 

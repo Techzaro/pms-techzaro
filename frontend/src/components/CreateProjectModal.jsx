@@ -54,6 +54,7 @@ const CreateProjectModal = ({ onClose }) => {
     budget: "",
     team_roles: [],
   });
+  const [dueDates, setDueDates] = useState({});
 
   const [categoriesList, setCategoriesList] = useState([]);
   const [categoryInput, setCategoryInput] = useState("");
@@ -199,6 +200,17 @@ const CreateProjectModal = ({ onClose }) => {
 
   const handleAssignedUsersChange = (ids) => {
     setForm((prev) => ({ ...prev, assigned_users: ids }));
+    setDueDates((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((k) => {
+        if (!ids.includes(Number(k))) delete next[k];
+      });
+      return next;
+    });
+  };
+
+  const handleDueDateChange = (userId, value) => {
+    setDueDates((prev) => ({ ...prev, [userId]: value }));
   };
 
   const handleAddPhase = () => {
@@ -436,6 +448,7 @@ const CreateProjectModal = ({ onClose }) => {
           goals_checklist: goalsList.length > 0 ? goalsList : [],
           team_id: form.team_id ? parseInt(form.team_id) : null,
           assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
+          user_due_dates: Object.keys(dueDates).length > 0 ? dueDates : undefined,
           priority: form.priority,
           status: form.status,
           end_date: computedEndDate,
@@ -626,6 +639,9 @@ const CreateProjectModal = ({ onClose }) => {
                   users={displayUsers}
                   selectedIds={form.assigned_users}
                   onChange={handleAssignedUsersChange}
+                  showDueDate={true}
+                  dueDates={dueDates}
+                  onDueDateChange={handleDueDateChange}
                   placeholder="Click to select members"
                   viewOnly={!!form.team_id}
                 />

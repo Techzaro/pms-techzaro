@@ -112,7 +112,7 @@
 }
 
 .usd-dropdown-items {
-  max-height: 220px;
+  max-height: 260px;
   overflow-y: auto;
 }
 
@@ -128,9 +128,11 @@
 .usd-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 11px 14px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 14px;
   cursor: pointer;
+  position: relative;
   transition: background 0.15s;
   border-bottom: 1px solid #f8fafc;
 }
@@ -143,7 +145,20 @@
   background: #f8fafc;
 }
 
-.usd-item input[type="checkbox"] {
+.usd-item--selected {
+  background: #f0f4ff;
+}
+
+.usd-item-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.usd-item-left input[type="checkbox"] {
   width: 16px;
   height: 16px;
   accent-color: #4f46e5;
@@ -151,11 +166,18 @@
   flex-shrink: 0;
 }
 
+.usd-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
 .usd-name {
   font-size: 14px;
   font-weight: 500;
   color: #1e293b;
-  flex: 1;
 }
 
 .usd-role {
@@ -163,9 +185,61 @@
   font-weight: 500;
   color: #64748b;
   background: #f1f5f9;
-  padding: 2px 8px;
-  border-radius: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
   text-transform: capitalize;
+  width: fit-content;
+}
+
+.usd-due-date {
+  font-size: 11px;
+  padding: 3px 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+  flex-shrink: 0;
+  max-width: 170px;
+}
+
+.usd-due-date:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+
+.usd-date-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.usd-date-text {
+  font-size: 11px;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.usd-cal-icon {
+  color: #6b7280;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+
+.usd-cal-icon:hover {
+  color: #4f46e5;
+}
+
+.usd-date-input-hidden {
+  position: absolute;
+  width: 0;
+  height: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .usd-empty {

@@ -21,7 +21,7 @@ import SubmitProjectModal from "../components/SubmitProjectModal";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
-import { authToken, rolePath } from "../utils/auth";
+import { authToken, getUser, rolePath } from "../utils/auth";
 import { formatDateTime } from "../utils/formatDateTime";
 import "../pages/Task.css";
 
@@ -64,6 +64,7 @@ function Tasks() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [orderedItems, setOrderedItems] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
+  const currentUser = getUser();
   const [statusFilter, setStatusFilter] = useState(() => {
     const status = searchParams.get("status");
     if (status) return status;
@@ -500,14 +501,22 @@ function Tasks() {
                   
                   <div className="col-due-date">
                     <div className="date-box">
-                      <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
+                      <div style={{ whiteSpace: "pre-line" }}>
+                        {(() => {
+                          const myPivot = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.due_date;
+                          return formatDate(myPivot || item.end_date);
+                        })()}
+                      </div>
                     </div>
                   </div>
                   
                   <div className="col-action">
                     <div className="action-btns">
                       <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}><IoEyeOutline /></button>
-                      {(item.status === "pending" || item.status === "reopened") && (
+                      {(() => {
+                        const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
+                        const canSubmit = (item.status === "pending" || item.status === "reopened") && myPivotStatus !== "submitted";
+                        return canSubmit && (
                         <div style={{ position: "relative", display: "inline-flex" }}>
                           <button 
                             className="action-icon-btn action-submit" 
@@ -519,7 +528,8 @@ function Tasks() {
                             <LuSend />
                           </button>
                         </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>

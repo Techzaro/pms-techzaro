@@ -99,7 +99,7 @@ class Task extends Model
     /** All users assigned to this task (many-to-many). */
     public function assignees(): BelongsToMany
     {
-        return $this->belongsToMany(User::class, 'task_user')->withTimestamps();
+        return $this->belongsToMany(User::class, 'task_user')->withPivot('due_date', 'status', 'submitted_at')->withTimestamps();
     }
 
     /** Deliverables belonging to this task, ordered by sort order. */

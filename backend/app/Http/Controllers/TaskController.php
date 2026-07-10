@@ -62,7 +62,7 @@ class TaskController extends Controller
                 ->orWhere('assigned_to', $user->id);
         })
             ->where('assigned_by', '!=', $user->id)
-            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
+            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
             ->orderBy('sort_order')->latest('updated_at')
@@ -96,7 +96,7 @@ class TaskController extends Controller
 
         $projects = Project::whereJsonContains('assigned_users', $user->id)
             ->where('created_by', '!=', $user->id)
-            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
+            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
             ->where(function ($q) {
                 $q->whereNotNull('assigned_users')->whereRaw('JSON_LENGTH(assigned_users) > 0');
             })
@@ -271,7 +271,7 @@ class TaskController extends Controller
         })
             // If team lead is viewing member, only show tasks assigned BY the team lead
             ->when($isTeamLeadViewingMember, fn ($q) => $q->where('tasks.assigned_by', $requestingUser->id))
-            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
+            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $userId))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->when($search, fn ($q) => $q->where('title', 'like', '%'.$search.'%'))
             ->when($statusFilter && ! $isDueTodayFilter && ! $isPendingFilter, fn ($q) => $q->where('status', $statusFilter))
@@ -382,7 +382,7 @@ class TaskController extends Controller
 
         $tasks = $tasksQuery->orderBy('sort_order')->latest('updated_at')
             ->when($request->filled('search'), fn ($q) => $q->where('title', 'like', '%'.$request->input('search').'%'))
-            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
+            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $userId))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->when($request->filled('status') && ! $isDueTodayFilter && ! $isPendingFilter, fn ($q) => $q->where('status', $request->input('status')))
             ->limit(100)->get();
@@ -438,7 +438,7 @@ class TaskController extends Controller
         }
 
         $projects = $projectsQuery
-            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
+            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $userId))
             ->when($isApprovedFilter, fn ($q) => $q->where('status', 'approved'))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->when($isSubmittedFilter, fn ($q) => $q->where('status', 'submitted'))
@@ -589,7 +589,11 @@ class TaskController extends Controller
         $payload['is_creator'] = $isCreator;
         $payload['is_assignee'] = $isAssignee;
         $payload['can_edit'] = $isCreator && ! $isApproved;
-        $payload['can_submit'] = $isAssignee && in_array($task->status, $pendingStatuses) && $allDeliverablesSubmitted;
+        $userPivot = $isAssignee ? $task->assignees()->where('users.id', $user->id)->first()?->pivot : null;
+        $payload['my_status'] = $userPivot?->status ?? 'pending';
+        $payload['my_submitted_at'] = $userPivot?->submitted_at;
+        $payload['can_submit'] = $isAssignee && in_array($task->status, $pendingStatuses) && $allDeliverablesSubmitted
+            && ($userPivot?->status !== 'submitted');
 
         $taskChangeMax = (int) TaskChange::where('task_id', $task->id)->max('id');
         $taskEventMax = (int) TaskWorkflowEvent::where('task_id', $task->id)->max('id');
@@ -626,12 +630,15 @@ class TaskController extends Controller
             'deliverables.*.title' => 'required_with:deliverables|string|max:255',
             'deliverables.*.description' => 'nullable|string|max:2000',
             'deliverables.*.due_date' => 'nullable|date',
+            'due_dates' => 'nullable|array',
+            'due_dates.*' => 'nullable|date',
         ]);
 
         $createdTasks = [];
         $deliverablesToCreate = [];
         $deliverableNotifications = [];
         $workflowRecords = [];
+        $dueDates = $validated['due_dates'] ?? [];
         $assignees = User::whereIn('id', $validated['assigned_to'])->get()->keyBy('id');
 
         foreach ($validated['assigned_to'] as $userId) {
@@ -646,7 +653,7 @@ class TaskController extends Controller
                 'priority' => $validated['priority'],
                 'status' => 'pending',
             ]);
-            $task->assignees()->sync([$userId]);
+            $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
 
             $assignee = $assignees->get($userId);
 
@@ -784,11 +791,14 @@ class TaskController extends Controller
             'deliverables.*.title' => 'required_with:deliverables|string|max:255',
             'deliverables.*.description' => 'nullable|string|max:2000',
             'deliverables.*.due_date' => 'nullable|date',
+            'due_dates' => 'nullable|array',
+            'due_dates.*' => 'nullable|date',
         ]);
 
         $createdTasks = [];
         $deliverableNotifications = [];
         $workflowRecords = [];
+        $dueDates = $validated['due_dates'] ?? [];
         $assignees = User::whereIn('id', $validated['assigned_to'])->get()->keyBy('id');
 
         foreach ($validated['assigned_to'] as $userId) {
@@ -804,7 +814,7 @@ class TaskController extends Controller
                 'status' => 'pending',
                 'project_id' => null,
             ]);
-            $task->assignees()->sync([$userId]);
+            $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
 
             $assignee = $assignees->get($userId);
 
@@ -929,10 +939,14 @@ class TaskController extends Controller
             'existing_file_names' => 'nullable|array',
             'existing_file_names.*.id' => 'required_with:existing_file_names|exists:task_files,id',
             'existing_file_names.*.name' => 'required_with:existing_file_names|string|max:255',
+            'due_dates' => 'nullable|array',
+            'due_dates.*' => 'nullable|date',
         ]);
 
         $assigneeIds = $validated['assigned_to'] ?? null;
         unset($validated['assigned_to']);
+        $dueDates = $validated['due_dates'] ?? [];
+        unset($validated['due_dates']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
 
@@ -979,7 +993,11 @@ class TaskController extends Controller
             $oldNames = collect($oldAssigneeIds)->map(fn ($id) => $userNames->get($id))->implode(', ');
             $newNames = collect($assigneeIds)->map(fn ($id) => $userNames->get($id))->implode(', ');
             $changes[] = ['field_name' => 'assigned_to', 'label' => 'Assignee', 'old_value' => $oldNames ?: 'None', 'new_value' => $newNames ?: 'None'];
-            $task->assignees()->sync($assigneeIds);
+            $syncData = [];
+            foreach ($assigneeIds as $id) {
+                $syncData[$id] = ['due_date' => $dueDates[$id] ?? null];
+            }
+            $task->assignees()->sync($syncData);
             $task->update(['assigned_to' => $assigneeIds[0]]);
 
             $newlyAssignedIds = array_values(array_diff($assigneeIds, $oldAssigneeIds));
@@ -1001,6 +1019,12 @@ class TaskController extends Controller
                     $this->notificationService->createBulk($newAssignNotifications);
                 }
             }
+        } elseif (!empty($dueDates) && !empty($assigneeIds)) {
+            $syncData = [];
+            foreach ($assigneeIds as $id) {
+                $syncData[$id] = ['due_date' => $dueDates[$id] ?? null];
+            }
+            $task->assignees()->sync($syncData);
         }
 
         $addedDeliverables = [];
@@ -1266,6 +1290,12 @@ class TaskController extends Controller
         }
 
         $task->update($updateData);
+
+        // Update the submitting user's pivot status for per-user tracking
+        $task->assignees()->updateExistingPivot($user->id, [
+            'status' => 'submitted',
+            'submitted_at' => now(),
+        ]);
 
         $task->load('project:id,title');
 
@@ -2032,8 +2062,16 @@ class TaskController extends Controller
      * @param  Builder  $query  The query to filter.
      * @return Builder The filtered query.
      */
-    private function applyDueTodayFilter($query)
+    private function applyDueTodayFilter($query, $userId = null)
     {
-        return $query->whereDate('end_date', today())->whereNotIn('status', $this->incompleteDueTodayStatuses());
+        return $query->where(function ($q) use ($userId) {
+            $q->whereDate('end_date', today());
+            if ($userId) {
+                $q->orWhereHas('assignees', function ($aq) use ($userId) {
+                    $aq->where('users.id', $userId)
+                        ->whereDate('task_user.due_date', today());
+                });
+            }
+        })->whereNotIn('status', $this->incompleteDueTodayStatuses());
     }
 }
