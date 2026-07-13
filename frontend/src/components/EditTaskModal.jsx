@@ -56,6 +56,8 @@ export default function EditTaskModal({ task, onClose }) {
     }
     return initial;
   });
+  const [requirementsList, setRequirementsList] = useState(task.requirements || []);
+  const [reqInput, setReqInput] = useState("");
   const [deliverables, setDeliverables] = useState([]);
   const [deliverableInput, setDeliverableInput] = useState({ title: "", due_datetime: "" });
   const [pendingFiles, setPendingFiles] = useState([]);
@@ -68,6 +70,13 @@ export default function EditTaskModal({ task, onClose }) {
   const dropRef = useRef(null);
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [pendingRemoveItem, setPendingRemoveItem] = useState({ type: "", index: -1, id: "" });
+  const [editingLink, setEditingLink] = useState(null);
+  const [editLinkForm, setEditLinkForm] = useState({ title: "", url: "" });
+  const [editingFile, setEditingFile] = useState(null);
+  const [editFileForm, setEditFileForm] = useState({ title: "" });
+  const [editFileNewFile, setEditFileNewFile] = useState(null);
+  const [editFileDeleted, setEditFileDeleted] = useState(false);
+  const [editFileDeleteConfirm, setEditFileDeleteConfirm] = useState(false);
 
   // Determine if this is a self-assigned task (created by current user and assigned only to themselves)
   const isSelfTask = currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10) && selectedAssigneeIds.length === 1 && selectedAssigneeIds[0] === parseInt(currentUser.id, 10);
@@ -106,6 +115,20 @@ export default function EditTaskModal({ task, onClose }) {
     setDueDates((prev) => ({ ...prev, [userId]: value }));
   };
 
+  const handleAddRequirement = () => {
+    if (!reqInput.trim()) return;
+    setRequirementsList((prev) => [...prev, reqInput.trim()]);
+    setReqInput("");
+  };
+
+  const handleRemoveRequirement = (index) => {
+    setRequirementsList((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleReqKeyDown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); handleAddRequirement(); }
+  };
+
   const handleAddDeliverable = () => {
     if (!deliverableInput.title.trim()) return;
     const dt = deliverableInput.due_datetime;
@@ -128,6 +151,8 @@ export default function EditTaskModal({ task, onClose }) {
       handleRemoveLink(index);
     } else if (type === "deliverable") {
       handleRemoveDeliverable(index);
+    } else if (type === "requirement") {
+      handleRemoveRequirement(index);
     }
     setRemoveConfirmOpen(false);
     setPendingRemoveItem({ type: "", index: -1, id: "" });
@@ -242,6 +267,9 @@ export default function EditTaskModal({ task, onClose }) {
             return acc;
           }, []),
         };
+        if (requirementsList.length > 0) {
+          body.requirements = requirementsList;
+        }
         if (deliverables.length > 0) {
           body.deliverables = deliverables.map((d) => ({ title: d.title, due_date: d.due_date || null }));
         }
@@ -270,7 +298,7 @@ export default function EditTaskModal({ task, onClose }) {
 
   if (!container) return null;
 
-  return createPortal(
+  const modalContent = createPortal(
     <>
     <div className="task-overlay">
       <div className="task-modal" onClick={(e) => e.stopPropagation()}>
@@ -343,19 +371,6 @@ export default function EditTaskModal({ task, onClose }) {
               />
             </div>
 
-            {Array.isArray(task.requirements) && task.requirements.length > 0 && (
-              <div className="task-field">
-                <label>Requirements</label>
-                <div className="cp-goals-list">
-                  {task.requirements.map((req, idx) => (
-                    <div key={idx} className="cp-goals-item">
-                      <span className="cp-goals-item-text">{req}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* ATTACHMENTS */}
             <div className="task-field">
               <label>Links & Attachment</label>
@@ -398,43 +413,28 @@ export default function EditTaskModal({ task, onClose }) {
                         : "#";
                       return (
                         <div key={file.id} className="cp-attachment-item">
+                          <span className="cp-attachment-drag" title="Drag to reorder">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                          </span>
                           <span className="cp-attachment-icon">📄</span>
-                          {file.renaming ? (
-                            <>
-                              <input
-                                autoFocus
-                                type="text"
-                                value={file.customName || ""}
-                                onChange={(e) => {
-                                  setExistingFiles((p) => p.map((f) => f.id === file.id ? { ...f, customName: e.target.value } : f));
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    setExistingFiles((p) => p.map((f) => f.id === file.id ? { ...f, renaming: false } : f));
-                                  }
-                                }}
-                                style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
-                              />
-                              <button type="button" onClick={() => {
-                                setExistingFiles((p) => p.map((f) => f.id === file.id ? { ...f, renaming: false } : f));
-                              }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Save name">&#10003;</button>
-                            </>
-                          ) : (
-                            <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="cp-attachment-name cp-attachment-link">
+                          <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                            <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="cp-attachment-name cp-attachment-link" style={{ fontWeight: 600, fontSize: "13px" }}>
                               {file.customName || file.name}
                             </a>
-                          )}
-                          {!file.renaming && (
-                            <div style={{ display: "flex", gap: 10, flexShrink: 0, marginLeft: 8, alignItems: "center" }}>
-                              <button type="button" onClick={() => {
-                                setExistingFiles((p) => p.map((f) => f.id === file.id ? { ...f, renaming: true, customName: f.customName || f.name.replace(/\.[^.]+$/, "") } : f));
-                              }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
-                              <button type="button" className="cp-attachment-remove" onClick={() => { setPendingRemoveItem({ type: "existing-file", index: -1, id: file.id }); setRemoveConfirmOpen(true); }}>✕</button>
-                            </div>
-                          )}
-                          {file.renaming && (
-                            <button type="button" onClick={() => { setPendingRemoveItem({ type: "existing-file", index: -1, id: file.id }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0 }} title="Remove">&#10005;</button>
-                          )}
+                          </div>
+                          <div className="cp-attachment-actions">
+                            <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Name" onClick={() => {
+                              setEditingFile({ type: "existing", id: file.id, currentName: file.customName || file.name });
+                              setEditFileForm({ title: file.customName || file.name.replace(/\.[^.]+$/, "") });
+                              setEditFileNewFile(null);
+                              setEditFileDeleted(false);
+                            }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                            </button>
+                            <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete File" onClick={() => { setPendingRemoveItem({ type: "existing-file", index: -1, id: file.id }); setRemoveConfirmOpen(true); }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -446,60 +446,27 @@ export default function EditTaskModal({ task, onClose }) {
                 <div className="cp-attachments-list">
                   {pendingFiles.map((file, index) => (
                     <div key={index} className="cp-attachment-item">
+                      <span className="cp-attachment-drag" title="Drag to reorder">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                      </span>
                       <span className="cp-attachment-icon">📄</span>
-                      {file.renaming ? (
-                        <>
-                          <input
-                            autoFocus
-                            type="text"
-                            value={file.customName || ""}
-                            onChange={(e) => {
-                              setPendingFiles((p) => {
-                                const updated = [...p];
-                                updated[index] = { ...updated[index], customName: e.target.value };
-                                return updated;
-                              });
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                setPendingFiles((p) => {
-                                  const updated = [...p];
-                                  updated[index] = { ...updated[index], renaming: false };
-                                  return updated;
-                                });
-                              }
-                            }}
-                            style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
-                          />
-                          <button type="button" onClick={() => {
-                            setPendingFiles((p) => {
-                              const updated = [...p];
-                              updated[index] = { ...updated[index], renaming: false };
-                              return updated;
-                            });
-                          }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Save name">&#10003;</button>
-                        </>
-                      ) : (
-                        <>
-                          <span className="cp-attachment-name">{file.customName || file.name}</span>
-                          <span className="cp-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
-                        </>
-                      )}
-                      {!file.renaming && (
-                        <div style={{ display: "flex", gap: 10, flexShrink: 0, marginLeft: 8, alignItems: "center" }}>
-                          <button type="button" onClick={() => {
-                            setPendingFiles((p) => {
-                              const updated = [...p];
-                              updated[index] = { ...updated[index], renaming: true, customName: file.customName || file.name.replace(/\.[^.]+$/, "") };
-                              return updated;
-                            });
-                          }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
-                          <button type="button" className="cp-attachment-remove" onClick={() => { setPendingRemoveItem({ type: "pending-file", index, id: "" }); setRemoveConfirmOpen(true); }}>✕</button>
-                        </div>
-                      )}
-                      {file.renaming && (
-                        <button type="button" onClick={() => { setPendingRemoveItem({ type: "pending-file", index, id: "" }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0 }} title="Remove">&#10005;</button>
-                      )}
+                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                        <span className="cp-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{file.customName || file.name}</span>
+                        <span className="cp-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
+                      </div>
+                      <div className="cp-attachment-actions">
+                        <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Name" onClick={() => {
+                          setEditingFile({ type: "pending", index, currentName: file.customName || file.name });
+                          setEditFileForm({ title: file.customName || file.name.replace(/\.[^.]+$/, "") });
+                          setEditFileNewFile(null);
+                          setEditFileDeleted(false);
+                        }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                        </button>
+                        <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete File" onClick={() => { setPendingRemoveItem({ type: "pending-file", index, id: "" }); setRemoveConfirmOpen(true); }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -546,51 +513,27 @@ export default function EditTaskModal({ task, onClose }) {
                   <div className="cp-attachments-list" style={{ marginTop: "8px" }}>
                     {existingLinks.map((file) => (
                       <div key={file.id} className="cp-attachment-item">
+                        <span className="cp-attachment-drag" title="Drag to reorder">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                        </span>
                         <span className="cp-attachment-icon">🔗</span>
-                        {file.renaming ? (
-                          <>
-                            <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                              <input
-                                autoFocus
-                                type="text"
-                                value={file.customName || ""}
-                                onChange={(e) => {
-                                  setExistingFiles((p) => p.map((f) => f.id === file.id ? { ...f, customName: e.target.value } : f));
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    setExistingFiles((p) => p.map((f) => f.id === file.id ? { ...f, renaming: false } : f));
-                                  }
-                                }}
-                                style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
-                              />
-                              <a href={file.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-link" style={{ fontSize: "12px", color: "#6366f1", marginTop: 2 }}>
-                                {file.url.length > 45 ? file.url.substring(0, 45) + "..." : file.url}
-                              </a>
-                            </div>
-                            <button type="button" onClick={() => {
-                              setExistingFiles((p) => p.map((f) => f.id === file.id ? { ...f, renaming: false } : f));
-                            }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Save name">&#10003;</button>
-                          </>
-                        ) : (
-                          <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                            <span className="cp-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{(file.customName || file.name).length > 45 ? (file.customName || file.name).substring(0, 45) + "..." : (file.customName || file.name)}</span>
-                            <a href={file.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-link" style={{ fontSize: "12px", color: "#6366f1" }}>
-                              {file.url.length > 45 ? file.url.substring(0, 45) + "..." : file.url}
-                            </a>
-                          </div>
-                        )}
-                        {!file.renaming && (
-                          <div style={{ display: "flex", gap: 10, flexShrink: 0, alignItems: "center" }}>
-                            <button type="button" onClick={() => {
-                              setExistingFiles((p) => p.map((f) => f.id === file.id ? { ...f, renaming: true, customName: f.customName || f.name } : f));
-                            }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
-                            <button type="button" className="cp-attachment-remove" onClick={() => { setPendingRemoveItem({ type: "existing-link", index: -1, id: file.id }); setRemoveConfirmOpen(true); }}>✕</button>
-                          </div>
-                        )}
-                        {file.renaming && (
-                          <button type="button" onClick={() => { setPendingRemoveItem({ type: "existing-link", index: -1, id: file.id }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0 }} title="Remove">&#10005;</button>
-                        )}
+                        <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                          <span className="cp-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{(file.customName || file.name).length > 45 ? (file.customName || file.name).substring(0, 45) + "..." : (file.customName || file.name)}</span>
+                          <a href={file.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-link" style={{ fontSize: "12px", color: "#6366f1" }}>
+                            {file.url.length > 45 ? file.url.substring(0, 45) + "..." : file.url}
+                          </a>
+                        </div>
+                        <div className="cp-attachment-actions">
+                          <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Link" onClick={() => {
+                            setEditingLink({ type: "existing", index: -1, id: file.id });
+                            setEditLinkForm({ title: file.customName || file.name, url: file.url });
+                          }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                          </button>
+                          <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete Link" onClick={() => { setPendingRemoveItem({ type: "existing-link", index: -1, id: file.id }); setRemoveConfirmOpen(true); }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -601,67 +544,27 @@ export default function EditTaskModal({ task, onClose }) {
                 <div className="cp-attachments-list">
                   {links.map((link, index) => (
                     <div key={index} className="cp-attachment-item">
+                      <span className="cp-attachment-drag" title="Drag to reorder">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                      </span>
                       <span className="cp-attachment-icon">🔗</span>
-                      {link.renaming ? (
-                        <>
-                          <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                            <input
-                              autoFocus
-                              type="text"
-                              value={link.customName || ""}
-                              onChange={(e) => {
-                                setLinks((p) => {
-                                  const updated = [...p];
-                                  updated[index] = { ...updated[index], customName: e.target.value };
-                                  return updated;
-                                });
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  setLinks((p) => {
-                                    const updated = [...p];
-                                    updated[index] = { ...updated[index], renaming: false };
-                                    return updated;
-                                  });
-                                }
-                              }}
-                              style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
-                            />
-                            <a href={link.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-link" style={{ fontSize: "12px", color: "#6366f1", marginTop: 2 }}>
-                              {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
-                            </a>
-                          </div>
-                          <button type="button" onClick={() => {
-                            setLinks((p) => {
-                              const updated = [...p];
-                              updated[index] = { ...updated[index], renaming: false };
-                              return updated;
-                            });
-                          }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Save name">&#10003;</button>
-                        </>
-                      ) : (
-                        <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                          <span className="cp-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{link.customName || link.name}</span>
-                          <a href={link.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-link" style={{ fontSize: "12px", color: "#6366f1" }}>
-                            {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
-                          </a>
-                        </div>
-                      )}
-                      {!link.renaming && (
-                        <div style={{ display: "flex", gap: 10, flexShrink: 0, alignItems: "center" }}>
-                          <button type="button" onClick={() => {
-                            setLinks((p) => {
-                              const updated = [...p];
-                              updated[index] = { ...updated[index], renaming: true, customName: link.customName || link.name };
-                              return updated;
-                            });
-                          }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
-                          <button type="button" className="cp-attachment-remove" onClick={() => { setPendingRemoveItem({ type: "pending-link", index, id: "" }); setRemoveConfirmOpen(true); }}>✕</button>
-                        </div>
-                      )}
-                      {link.renaming && (
-                        <button type="button" onClick={() => { setPendingRemoveItem({ type: "pending-link", index, id: "" }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0 }} title="Remove">&#10005;</button>
-                      )}
+                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                        <span className="cp-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{link.customName || link.name}</span>
+                        <a href={link.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-link" style={{ fontSize: "12px", color: "#6366f1" }}>
+                          {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
+                        </a>
+                      </div>
+                      <div className="cp-attachment-actions">
+                        <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Link" onClick={() => {
+                          setEditingLink({ type: "pending", index });
+                          setEditLinkForm({ title: link.customName || link.name, url: link.url });
+                        }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                        </button>
+                        <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete Link" onClick={() => { setPendingRemoveItem({ type: "pending-link", index, id: "" }); setRemoveConfirmOpen(true); }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -685,6 +588,44 @@ export default function EditTaskModal({ task, onClose }) {
                   { value: "High", label: "High" },
                 ]}
               />
+            </div>
+
+            <div className="task-field">
+              <label>Requirements</label>
+              <div className="cp-goals-input-row">
+                <input
+                  type="text"
+                  placeholder="Enter a requirement"
+                  value={reqInput}
+                  onChange={(e) => setReqInput(e.target.value)}
+                  onKeyDown={handleReqKeyDown}
+                />
+                <button
+                  type="button"
+                  className="cp-goals-add-btn"
+                  onClick={handleAddRequirement}
+                  disabled={!reqInput.trim()}
+                >
+                  Add
+                </button>
+              </div>
+
+              {requirementsList.length > 0 && (
+                <div className="cp-goals-list">
+                  {requirementsList.map((req, index) => (
+                    <div key={index} className="cp-goals-item">
+                      <span className="cp-goals-item-text">{req}</span>
+                      <button
+                        type="button"
+                        className="cp-goals-item-remove"
+                        onClick={() => { setPendingRemoveItem({ type: "requirement", index, id: "" }); setRemoveConfirmOpen(true); }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="task-card">
@@ -780,5 +721,183 @@ export default function EditTaskModal({ task, onClose }) {
     />
     </>,
     container
+  );
+
+  return (
+    <>
+      {modalContent}
+
+      {/* Edit Link Modal */}
+      {editingLink && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => setEditingLink(null)}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 400, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>Edit File / Link</h3>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or update the URL below.</p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Title</label>
+              <input
+                type="text"
+                value={editLinkForm.title}
+                onChange={(e) => setEditLinkForm((p) => ({ ...p, title: e.target.value }))}
+                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
+              />
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>URL</label>
+              <input
+                type="url"
+                value={editLinkForm.url}
+                onChange={(e) => setEditLinkForm((p) => ({ ...p, url: e.target.value }))}
+                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
+              />
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button type="button" onClick={() => setEditingLink(null)} style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#f9fafb"} onMouseLeave={(e) => e.target.style.background = "#fff"}>Cancel</button>
+              <button type="button" onClick={() => {
+                if (editingLink.type === "existing") {
+                  setExistingFiles((p) => p.map((f) => f.id === editingLink.id ? { ...f, customName: editLinkForm.title, url: editLinkForm.url } : f));
+                } else {
+                  setLinks((p) => {
+                    const updated = [...p];
+                    updated[editingLink.index] = { ...updated[editingLink.index], customName: editLinkForm.title, url: editLinkForm.url };
+                    return updated;
+                  });
+                }
+                setEditingLink(null);
+              }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "#6366f1", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#4f46e5"} onMouseLeave={(e) => e.target.style.background = "#6366f1"}>Save</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Edit File Modal */}
+      {editingFile && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditingFile(null); setEditFileNewFile(null); setEditFileDeleted(false); setEditFileDeleteConfirm(false); }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>Edit File</h3>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or replace this file.</p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Title</label>
+              <input
+                type="text"
+                value={editFileForm.title}
+                onChange={(e) => setEditFileForm({ title: e.target.value })}
+                autoFocus
+                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
+              />
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>File</label>
+              {editingFile.type === "existing" && !editFileDeleted && !editFileNewFile ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8 }}>
+                  <span style={{ fontSize: 14 }}>📄</span>
+                  <span style={{ flex: 1, fontSize: 13, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editingFile.currentName || "Current file"}</span>
+                  <button type="button" onClick={() => setEditFileDeleteConfirm(true)} className="cp-action-btn cp-action-btn-delete" title="Delete current file" style={{ width: 24, height: 24 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                  </button>
+                </div>
+              ) : editFileNewFile ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8 }}>
+                  <span style={{ fontSize: 14 }}>📄</span>
+                  <span style={{ flex: 1, fontSize: 13, color: "#166534", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editFileNewFile.name}</span>
+                  <span style={{ fontSize: 11, color: "#6b7280" }}>{(editFileNewFile.size / 1024).toFixed(1)} KB</span>
+                  <button type="button" onClick={() => { setEditFileNewFile(null); setEditFileDeleted(false); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: 0 }}>✕</button>
+                </div>
+              ) : (
+                <>
+                  {editingFile.type === "pending" && pendingFiles[editingFile.index] && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 8, marginBottom: 8 }}>
+                      <span style={{ fontSize: 14 }}>📄</span>
+                      <span style={{ flex: 1, fontSize: 13, color: "#3730a3", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pendingFiles[editingFile.index].name}</span>
+                      <span style={{ fontSize: 11, color: "#6b7280" }}>{(pendingFiles[editingFile.index].size / 1024).toFixed(1)} KB</span>
+                    </div>
+                  )}
+                  <label style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "10px 12px", border: "1px dashed #d1d5db", borderRadius: 8, background: "#f9fafb", color: "#6b7280", fontSize: 13, cursor: "pointer", textAlign: "center" }}>
+                    {editingFile.type === "pending" ? "Click to replace with a new file" : "Click to select a file"}
+                    <input
+                      type="file"
+                      style={{ display: "none" }}
+                      onChange={(e) => { if (e.target.files.length > 0) { const f = e.target.files[0]; setEditFileNewFile(f); setEditFileDeleted(false); if (!editFileForm.title) setEditFileForm({ title: f.name.replace(/\.[^.]+$/, "") }); } e.target.value = ""; }}
+                    />
+                  </label>
+                </>
+              )}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button type="button" onClick={() => { setEditingFile(null); setEditFileNewFile(null); setEditFileDeleted(false); setEditFileDeleteConfirm(false); }} style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#f9fafb"} onMouseLeave={(e) => e.target.style.background = "#fff"}>Cancel</button>
+              <button type="button" onClick={async () => {
+                if (editingFile.type === "existing") {
+                  if (editFileDeleted && !editFileNewFile) {
+                    const token = authToken();
+                    try {
+                      await fetch(`${API_URL}/tasks/${task.id}/files/${editingFile.id}`, {
+                        method: "DELETE",
+                        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+                        _notifHandled: true,
+                      });
+                    } catch (_) {}
+                    setExistingFiles((p) => p.filter((f) => f.id !== editingFile.id));
+                  } else if (editFileNewFile) {
+                    const token = authToken();
+                    try {
+                      await fetch(`${API_URL}/tasks/${task.id}/files/${editingFile.id}`, {
+                        method: "DELETE",
+                        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+                        _notifHandled: true,
+                      });
+                    } catch (_) {}
+                    const fd = new FormData();
+                    fd.append("file", editFileNewFile);
+                    fd.append("name", editFileForm.title || editFileNewFile.name);
+                    try {
+                      const res = await fetch(`${API_URL}/tasks/${task.id}/files`, {
+                        method: "POST",
+                        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+                        body: fd,
+                        _notifHandled: true,
+                      });
+                      const data = await res.json();
+                      if (data.file) {
+                        setExistingFiles((p) => p.map((f) => f.id === editingFile.id ? { ...data.file, customName: editFileForm.title } : f));
+                      } else {
+                        setExistingFiles((p) => p.map((f) => f.id === editingFile.id ? { ...f, customName: editFileForm.title, name: editFileForm.title } : f));
+                      }
+                    } catch (_) {
+                      setExistingFiles((p) => p.map((f) => f.id === editingFile.id ? { ...f, customName: editFileForm.title, name: editFileForm.title } : f));
+                    }
+                  } else {
+                    setExistingFiles((p) => p.map((f) => f.id === editingFile.id ? { ...f, customName: editFileForm.title } : f));
+                  }
+                } else {
+                  setPendingFiles((p) => {
+                    const updated = [...p];
+                    updated[editingFile.index] = { ...updated[editingFile.index], customName: editFileForm.title, ...(editFileNewFile ? { file: editFileNewFile, name: editFileNewFile.name, size: editFileNewFile.size } : {}) };
+                    return updated;
+                  });
+                }
+                setEditingFile(null);
+                setEditFileNewFile(null);
+                setEditFileDeleted(false);
+                setEditFileDeleteConfirm(false);
+              }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "#6366f1", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#4f46e5"} onMouseLeave={(e) => e.target.style.background = "#6366f1"}>Save</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Edit File Delete Confirmation */}
+      <ConfirmModal
+        isOpen={editFileDeleteConfirm}
+        onClose={() => setEditFileDeleteConfirm(false)}
+        onConfirm={() => { setEditFileDeleteConfirm(false); setEditFileDeleted(true); setEditFileNewFile(null); }}
+        title="Delete File"
+        message="Are you sure you want to delete this file? You can upload a new file after."
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger
+      />
+    </>
   );
 }

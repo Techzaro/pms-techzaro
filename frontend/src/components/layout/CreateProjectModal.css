@@ -742,6 +742,58 @@
   color: #b91c1c;
 }
 
+/* Drag Handle */
+.cp-attachment-drag {
+  display: flex;
+  align-items: center;
+  color: #9ca3af;
+  cursor: grab;
+  flex-shrink: 0;
+  padding: 2px;
+}
+
+.cp-attachment-drag:active {
+  cursor: grabbing;
+}
+
+/* Circular Action Buttons */
+.cp-attachment-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.cp-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cp-action-btn-edit {
+  background: #22c55e;
+  color: #fff;
+}
+
+.cp-action-btn-edit:hover {
+  background: #16a34a;
+}
+
+.cp-action-btn-delete {
+  background: #ef4444;
+  color: #fff;
+}
+
+.cp-action-btn-delete:hover {
+  background: #dc2626;
+}
+
 /* RIGHT */
 
 .cp-right {

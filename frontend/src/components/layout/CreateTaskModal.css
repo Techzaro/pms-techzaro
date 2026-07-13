@@ -847,6 +847,64 @@
   color: #b91c1c;
 }
 
+/* Drag handle, actions, action buttons */
+
+.cp-attachment-drag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  cursor: grab;
+  flex-shrink: 0;
+  padding: 2px;
+}
+
+.cp-attachment-drag:hover {
+  color: #6b7280;
+}
+
+.cp-attachment-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: 8px;
+  align-items: center;
+}
+
+.cp-action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.cp-action-btn-edit {
+  background: #e8f5e9;
+  color: #22c55e;
+}
+
+.cp-action-btn-edit:hover {
+  background: #c8e6c9;
+  color: #16a34a;
+}
+
+.cp-action-btn-delete {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.cp-action-btn-delete:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
 /* OR DIVIDER */
 
 .task-or-divider {
