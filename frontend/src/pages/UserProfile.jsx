@@ -1074,8 +1074,6 @@ function UserProfile() {
                             >
                               <Eye size={16} />
                             </a>
-                            <button type="button" onClick={() => { setEditDocItem({ type: key, index: -1 }); setEditDocName(label); setEditDocFile(null); setEditDocExistingFileName(user[key] ? user[key].split("/").pop() : ""); }} style={{ background: "#2563eb", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }} title="Edit"><Pencil size={16} /></button>
-                            <button type="button" onClick={() => { setPendingDeleteDoc({ type: key }); setDeleteDocConfirmOpen(true); }} style={{ background: "#dc2626", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }} title="Remove"><Trash2 size={16} /></button>
                           </>
                         ) : "---"}
                       </div>
@@ -1111,8 +1109,6 @@ function UserProfile() {
                             >
                               <Eye size={16} />
                             </a>
-                            <button type="button" onClick={() => { setEditDocItem({ type: "other_document", index: i }); setEditDocName(docName); setEditDocFile(null); setEditDocExistingFileName(docPath.split("/").pop()); }} style={{ background: "#2563eb", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }} title="Edit"><Pencil size={16} /></button>
-                            <button type="button" onClick={() => { setPendingDeleteDoc({ type: "other_document", index: i }); setDeleteDocConfirmOpen(true); }} style={{ background: "#dc2626", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }} title="Remove"><Trash2 size={16} /></button>
                           </div>
                         </div>
                       );

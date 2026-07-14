@@ -94,6 +94,11 @@
   margin-top: auto;
 }
 
+/* Settings dropdown */
+.sidebar-settings-flyout {
+  position: relative;
+}
+
 .profile-link {
   text-align: left;
 }

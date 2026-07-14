@@ -80,7 +80,7 @@ function AuditLogDetailModal({ log, onClose }) {
               </div>
               <div className="ald-field">
                 <span className="ald-label">Email</span>
-                <span className="ald-value">{log.user?.email || "-"}</span>
+                <span className="ald-value">{log.user?.professional_email || log.user?.email || "-"}</span>
               </div>
               <div className="ald-field">
                 <span className="ald-label">Role</span>

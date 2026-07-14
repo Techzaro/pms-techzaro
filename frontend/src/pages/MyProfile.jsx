@@ -11,6 +11,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { MdEdit } from "react-icons/md";
+import { Eye } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
@@ -483,20 +484,21 @@ function MyProfile() {
                     { label: "Offer Letter", key: "offer_letter" },
                     { label: "Techxaro Regulations", key: "techxaro_regulations" },
                   ].map(({ label, key }) => (
-                    <div className="info-row" key={key}>
+                    <div className="info-row" key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <span className="info-label">{label}</span>
-                      <span className="info-value">
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1 }}>
                         {user[key] ? (
                           <a
                             href={`${API_URL}/auth/my-documents/${key}?token=${authToken()}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            style={{ color: "#2563eb", textDecoration: "underline" }}
+                            style={{ background: "#2563eb", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+                            title="View"
                           >
-                            View File
+                            <Eye size={16} />
                           </a>
-                        ) : "---"}
-                      </span>
+                        ) : <span style={{ color: "#6b7280" }}>---</span>}
+                      </div>
                     </div>
                   ))}
                   {(() => {
@@ -518,18 +520,19 @@ function MyProfile() {
                       const docName = typeof doc === "object" && doc.name ? doc.name : docPath.split("/").pop().replace(/^other_document_\d+_\d+_/, "").replace(/\.[^.]+$/, "");
                       const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(docName);
                       return (
-                        <div className="info-row" key={`other-${i}`}>
+                        <div className="info-row" key={`other-${i}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                           <span className="info-label">{docName}</span>
-                          <span className="info-value">
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1 }}>
                             <a
                               href={`${API_URL}/auth/my-documents/other_document?token=${authToken()}&file=${encodeURIComponent(docPath)}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              style={{ color: "#2563eb", textDecoration: "underline" }}
+                              style={{ background: "#2563eb", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+                              title="View"
                             >
-                              {isImage ? "View Image" : "View File"}
+                              <Eye size={16} />
                             </a>
-                          </span>
+                          </div>
                         </div>
                       );
                     });

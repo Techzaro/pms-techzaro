@@ -182,17 +182,17 @@
   padding: 9px 16px;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
-  background: #fff;
-  color: #374151;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
+  background: rgb(117, 117, 247);
+  color: white;
 }
 
 .audit-export-btn:hover {
-  background: #f3f4f6;
+  background: rgb(21, 21, 226);
   border-color: #d1d5db;
 }
 
@@ -385,10 +385,10 @@
 .audit-action-btn {
   width: 32px;
   height: 32px;
-  border: none;
-  background: transparent;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
   border-radius: 8px;
-  color: #9ca3af;
+  color: #3b82f6;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -397,8 +397,9 @@
 }
 
 .audit-action-btn:hover {
-  background: #f3f4f6;
-  color: #6366f1;
+  background: #3b82f6;
+  color: #fff;
+  border-color: #3b82f6;
 }
 
 /* ── Empty / Loading ── */
@@ -598,13 +599,6 @@
 
 /* ── Company Header ── */
 
-.audit-company-header {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  padding: 20px 24px;
-  margin-bottom: 4px;
-}
 
 .audit-company-header-inner {
   display: flex;

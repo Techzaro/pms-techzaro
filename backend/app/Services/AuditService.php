@@ -60,7 +60,7 @@ class AuditService
 
     public function getLogs(array $filters = [], int $perPage = 50)
     {
-        $query = AuditLog::with('user:id,name,email,role');
+        $query = AuditLog::with('user:id,name,email,role,professional_email');
 
         if (!empty($filters['module'])) {
             $query->module($filters['module']);
@@ -90,7 +90,7 @@ class AuditService
 
     public function getRecentActivities(int $limit = 10)
     {
-        return AuditLog::with('user:id,name,email,role')
+        return AuditLog::with('user:id,name,email,role,professional_email')
             ->where('status', 'success')
             ->latest()
             ->limit($limit)

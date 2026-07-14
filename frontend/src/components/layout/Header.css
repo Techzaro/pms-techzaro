@@ -322,13 +322,14 @@
 
   border-radius: 24px;
 
-  padding: 22px;
+  padding: 0 22px 16px;
 
   border: 1px solid #e5e7eb;
 
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.14);
 
   z-index: 9999;
+  overflow: hidden;
 }
 
 /* MODAL TOP */
@@ -385,6 +386,126 @@
 .header-modal-item strong {
   font-size: 15px;
   color: #111827;
+}
+
+/* ── Profile dropdown menu ── */
+.hmc-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 18px 18px;
+  background: linear-gradient(135deg, #818cf8, #a5b4fc, #c7d2fe);
+  border-radius: 20px 20px 0 0;
+  margin: 0 -22px;
+}
+
+.hmc-avatar {
+  width: 64px;
+  height: 74px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: 3px solid rgba(255, 255, 255, 0.4);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 700;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.hmc-user-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hmc-name {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hmc-email {
+  font-size: 17px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hmc-role-text {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 500;
+}
+
+.hmc-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 8px 0;
+}
+
+.hmc-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+  transition: background 0.15s;
+  text-align: left;
+}
+
+.hmc-menu-item:hover {
+  background: #f3f4f6;
+}
+
+.hmc-menu-item--danger {
+  color: #ef4444;
+}
+
+.hmc-menu-item--danger:hover {
+  background: #fef2f2;
+}
+
+.hmc-logout-wrap {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.hmc-logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  background: transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+  transition: all 0.15s;
+  text-align: left;
+}
+
+.hmc-logout-btn:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
 }
 
 /* NOTIFICATION BELL */

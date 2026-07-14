@@ -479,6 +479,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
               {/* ATTACHMENTS */}
               <div className="task-field">
                 <label>Links & Attachment</label>
@@ -571,6 +574,11 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                         </button>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* RECURRING SETTINGS */}
               {form.task_type === "recurring" && (
                 <>
@@ -766,13 +774,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
       <ConfirmModal isOpen={removeConfirmOpen} onClose={() => { setRemoveConfirmOpen(false); setPendingRemoveItem({ type: "", index: -1 }); }}
         onConfirm={confirmRemoveItem} title="Remove Item" message="Are you sure you want to remove this item? This action cannot be undone."
         confirmText="Remove" cancelText="Cancel" danger />
-    </>,
-    document.body
-  );
-
-  return (
-    <>
-      {modalContent}
 
       {/* Edit Link Modal */}
       {editingLink && createPortal(
