@@ -1,0 +1,245 @@
+/* ── Audit Log Detail Modal ── */
+
+.ald-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 9999;
+  padding: 40px 16px;
+  overflow-y: auto;
+  backdrop-filter: blur(2px);
+}
+
+.ald-modal {
+  background: #fff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 680px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 80px);
+}
+
+.ald-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px 24px 0;
+  gap: 16px;
+}
+
+.ald-header-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.ald-header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.ald-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.ald-subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.ald-close-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 8px;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.ald-close-btn:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.ald-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.ald-section {
+  margin-bottom: 20px;
+}
+
+.ald-section:last-child {
+  margin-bottom: 0;
+}
+
+.ald-section-title {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.ald-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.ald-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ald-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.ald-value {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.ald-mono {
+  font-family: monospace;
+  font-size: 13px;
+}
+
+.ald-url {
+  font-size: 12px;
+  color: #6366f1;
+  word-break: break-all;
+}
+
+.ald-description-text {
+  margin: 0;
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.ald-status-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  align-self: flex-start;
+}
+
+.ald-status-success {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.ald-status-failed {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.ald-json {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 12px;
+  font-family: monospace;
+  color: #374151;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.ald-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #f3f4f6;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ald-close-footer-btn {
+  width: auto;
+  height: auto;
+  padding: 8px 24px;
+  background: #f3f4f6;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.ald-close-footer-btn:hover {
+  background: #e5e7eb;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 600px) {
+  .ald-overlay {
+    padding: 16px 12px;
+    align-items: stretch;
+  }
+
+  .ald-modal {
+    max-height: calc(100vh - 32px);
+    border-radius: 12px;
+  }
+
+  .ald-header {
+    padding: 16px 16px 0;
+  }
+
+  .ald-body {
+    padding: 16px;
+  }
+
+  .ald-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ald-footer {
+    padding: 12px 16px;
+  }
+}

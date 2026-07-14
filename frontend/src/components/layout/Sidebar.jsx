@@ -26,6 +26,7 @@ import {
   MdBarChart,
   MdLogout,
   MdKeyboardArrowDown,
+  MdHistory,
 } from "react-icons/md";
 
 import "./Sidebar.css";
@@ -380,6 +381,18 @@ function Sidebar() {
             </Link>
           )}
 
+          {/* Application Logs - admin/manager only */}
+          {(user.role === "admin" || user.role === "manager") && (
+            <Link
+              to={rolePath("audit-logs")}
+              className={`sidebar-link ${isActive("audit-logs") ? "active" : ""}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MdHistory fontSize={22} />
+              <span>Application Logs</span>
+            </Link>
+          )}
+
           {/* Member/Team Lead – read-only Team link */}
           {(user.role === "member" || user.role === "team_lead" || user.role === "teamlead") && (
             <Link
@@ -440,8 +453,18 @@ function Sidebar() {
 
         </div>
 
-        {/* ── Bottom section: Profile + Logout ── */}
+        {/* ── Bottom section: My Activity, Profile + Logout ── */}
         <div className="sidebar-bottom">
+
+          {/* My Activity link (all roles) */}
+          <Link
+            to={rolePath("history")}
+            className={`sidebar-link ${isActive("history") ? "active" : ""}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MdHistory fontSize={22} />
+            <span>My Activity</span>
+          </Link>
 
           {/* Profile link */}
           <Link

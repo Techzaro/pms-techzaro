@@ -2,33 +2,27 @@
 
 namespace App\Providers;
 
+use App\Listeners\LogAuthenticationEvents;
+use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
+use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
-/**
- * Bootstrap and register application-wide services.
- *
- * This is the primary service provider for the application.
- * Use boot() for shared bindings and register() for container bindings.
- */
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services into the container.
-     *
-     * @return void
-     */
     public function register(): void
     {
-        //
+        $this->app->singleton(\App\Services\AuditService::class);
+        $this->app->singleton(\App\Services\AuditExportService::class);
     }
 
-    /**
-     * Bootstrap any application services (run on every request).
-     *
-     * @return void
-     */
     public function boot(): void
     {
-        //
+        Event::listen(Login::class, [LogAuthenticationEvents::class, 'handleLogin']);
+        Event::listen(Logout::class, [LogAuthenticationEvents::class, 'handleLogout']);
+        Event::listen(Failed::class, [LogAuthenticationEvents::class, 'handleFailedLogin']);
+        Event::listen(PasswordReset::class, [LogAuthenticationEvents::class, 'handlePasswordReset']);
     }
 }

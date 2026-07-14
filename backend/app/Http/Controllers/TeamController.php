@@ -17,6 +17,7 @@ namespace App\Http\Controllers;
 use App\Models\Team;
 use App\Models\User;
 use App\Models\Activity;
+use App\Services\AuditService;
 use App\Services\NotificationService;
 use App\Services\ActivityService;
 use Illuminate\Http\Request;
@@ -26,7 +27,8 @@ class TeamController extends Controller
 {
     public function __construct(
         private NotificationService $notificationService,
-        private ActivityService $activityService
+        private ActivityService $activityService,
+        private AuditService $auditService
     ) {}
 
     public function index()
@@ -111,6 +113,20 @@ class TeamController extends Controller
         }
         $this->activityService->log($user->id, 'team_created', $activityDesc, 'team', $team->id, 'created', $team->name);
         $this->clearDashboardCache($user->id);
+
+        try {
+            $this->auditService->log(
+                module: 'team_management',
+                action: 'create',
+                description: "Created team {$team->name}",
+                user: $user,
+                entityType: 'Team',
+                entityId: $team->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         $this->notificationService->confirmAction($user, 'Created', 'team', $team->name, [
             'Team Lead' => $leaderName,
@@ -227,6 +243,20 @@ class TeamController extends Controller
         $activityDesc = 'You updated team "' . $team->name . '"';
         if (!empty($changes)) $activityDesc .= ' — ' . implode('; ', $changes);
         $this->activityService->log($user->id, 'team_updated', $activityDesc, 'team', $team->id, 'updated', $team->name);
+
+        try {
+            $this->auditService->log(
+                module: 'team_management',
+                action: 'update',
+                description: "Updated team {$team->name}",
+                user: $user,
+                entityType: 'Team',
+                entityId: $team->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         $confirmDetails = ['Team Lead' => $leaderName];
         if ($nameChanged) $confirmDetails['Name Changed'] = '"' . $oldName . '" to "' . $team->name . '"';
@@ -503,6 +533,20 @@ class TeamController extends Controller
             'team', $team->id, 'member_added', $team->name
         );
 
+        try {
+            $this->auditService->log(
+                module: 'team_management',
+                action: 'add_member',
+                description: "Added member(s) to team {$team->name}",
+                user: $authUser,
+                entityType: 'Team',
+                entityId: $team->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
         $this->notificationService->confirmAction($authUser, 'Updated', 'team', $team->name, [
             'Action' => 'Added member(s)',
             'Members Added' => implode(', ', $addedNames),
@@ -603,6 +647,20 @@ class TeamController extends Controller
             'You removed ' . $user->name . ' from team "' . $team->name . '"',
             'team', $team->id, 'member_removed', $team->name
         );
+
+        try {
+            $this->auditService->log(
+                module: 'team_management',
+                action: 'remove_member',
+                description: "Removed member {$user->name} from team {$team->name}",
+                user: $authUser,
+                entityType: 'Team',
+                entityId: $team->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         $confirmDetails = [
             'Member Removed' => $user->name,
@@ -721,6 +779,20 @@ class TeamController extends Controller
             }
             Activity::insert($bulkActivities);
             $this->notificationService->createBulk($bulkNotifications);
+        }
+
+        try {
+            $this->auditService->log(
+                module: 'team_management',
+                action: 'delete',
+                description: "Deleted team {$teamName}",
+                user: $authUser,
+                entityType: 'Team',
+                entityId: $team->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
         }
 
         $team->delete();

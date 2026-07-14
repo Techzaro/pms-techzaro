@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Deliverable;
 use App\Models\DeliverableSubmission;
+use App\Models\DeliverableTemplate;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TaskChange;
@@ -12,7 +13,9 @@ use App\Models\TaskSubmission;
 use App\Models\TaskWorkflowEvent;
 use App\Models\User;
 use App\Services\ActivityService;
+use App\Services\AuditService;
 use App\Services\NotificationService;
+use App\Services\RecurringService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,7 +35,8 @@ class TaskController extends Controller
 {
     public function __construct(
         private NotificationService $notificationService,
-        private ActivityService $activityService
+        private ActivityService $activityService,
+        private AuditService $auditService
     ) {}
 
     /**
@@ -527,6 +531,7 @@ class TaskController extends Controller
             'reopenedBy:id,name',
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'changes' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
+            'deliverableTemplates',
         ]);
 
         $isCreator = (int) $task->assigned_by === (int) $user->id;
@@ -632,6 +637,15 @@ class TaskController extends Controller
             'deliverables.*.due_date' => 'nullable|date',
             'due_dates' => 'nullable|array',
             'due_dates.*' => 'nullable|date',
+            'task_type' => 'nullable|in:standard,recurring',
+            'recurrence_settings' => 'nullable|array|required_if:task_type,recurring',
+            'recurrence_settings.repeat' => 'required_with:recurrence_settings|in:daily,weekly,monthly,custom',
+            'recurrence_settings.skip_weekends' => 'nullable|boolean',
+            'deliverable_templates' => 'nullable|array|required_if:task_type,recurring|min:1',
+            'deliverable_templates.*.title' => 'required_with:deliverable_templates|string|max:255',
+            'deliverable_templates.*.description' => 'nullable|string|max:2000',
+            'deliverable_templates.*.quantity' => 'nullable|integer|min:1|max:100',
+            'deliverable_templates.*.combined' => 'nullable|boolean',
         ]);
 
         $createdTasks = [];
@@ -652,6 +666,8 @@ class TaskController extends Controller
                 'assigned_by' => $user->id,
                 'priority' => $validated['priority'],
                 'status' => 'pending',
+                'task_type' => $validated['task_type'] ?? 'standard',
+                'recurrence_settings' => $validated['recurrence_settings'] ?? null,
             ]);
             $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
 
@@ -679,6 +695,60 @@ class TaskController extends Controller
                         'assigned_to' => $userId,
                         'created_by' => $user->id,
                     ];
+                }
+            }
+
+            // Save deliverable templates for recurring tasks
+            if (! empty($validated['deliverable_templates'])) {
+                $templateData = [];
+                foreach ($validated['deliverable_templates'] as $order => $tmpl) {
+                    $templateData[] = [
+                        'task_id' => $task->id,
+                        'title' => $tmpl['title'],
+                        'description' => $tmpl['description'] ?? null,
+                        'quantity' => $tmpl['quantity'] ?? 1,
+                        'combined' => $tmpl['combined'] ?? false,
+                        'sort_order' => $order,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                }
+                DB::table('deliverable_templates')->insert($templateData);
+
+                // Generate ALL deliverables immediately for recurring tasks
+                if (($validated['task_type'] ?? 'standard') === 'recurring') {
+                    $recurringSvc = app(RecurringService::class);
+                    $settings = $validated['recurrence_settings'];
+                    $taskStartDate = $validated['start_date'] ?? now()->toDateTimeString();
+                    $taskEndDate = $validated['end_date'] ?? now()->addDays(30)->toDateTimeString();
+                    $totalPeriods = $recurringSvc->calculateTotalPeriods($settings, $taskStartDate, $taskEndDate);
+                    $allDlvs = collect();
+                    for ($p = 1; $p <= $totalPeriods; $p++) {
+                        $date = $recurringSvc->getPeriodDate(
+                            $taskStartDate,
+                            $settings['repeat'] ?? 'daily',
+                            $p,
+                            (bool) ($settings['skip_weekends'] ?? false)
+                        );
+                        $created = $recurringSvc->generateOccurrenceDeliverables($task, $p, $date->format('Y-m-d'));
+                        $allDlvs = $allDlvs->concat($created);
+                    }
+                    $task->update([
+                        'deliverables_generated' => $totalPeriods,
+                        'recurrence_status' => 'completed',
+                    ]);
+                    foreach ($allDlvs as $dlv) {
+                        if ((int) $dlv->assigned_to !== (int) $user->id) {
+                            $deliverableNotifications[] = [
+                                'user_id' => $dlv->assigned_to, 'sender_user_id' => $user->id,
+                                'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
+                                'related_id' => $dlv->id,
+                                'title' => 'Deliverable Assigned',
+                                'message' => 'A new recurring deliverable "'.$dlv->title.'" has been created.',
+                                'link' => '/deliveries?selectedDeliverable='.$dlv->id,
+                            ];
+                        }
+                    }
                 }
             }
 
@@ -754,6 +824,20 @@ class TaskController extends Controller
         $this->activityService->log($user->id, 'task_created', 'You created '.$taskCount.' task(s) and assigned them to '.$assigneeNames, 'task', $createdTasks[0]->id);
         $this->clearDashboardCache($user->id);
 
+        try {
+            $this->auditService->log(
+                module: 'task_management',
+                action: 'create',
+                description: "Created {$taskCount} task(s) in project {$project->title}",
+                user: $user,
+                entityType: 'Task',
+                entityId: $createdTasks[0]->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
         $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');
 
         return response()->json([
@@ -762,6 +846,40 @@ class TaskController extends Controller
             'task' => $firstTask,
             'tasks' => array_map(fn ($t) => ['id' => $t->id, 'assigned_to' => $t->assigned_to], $createdTasks),
         ], 201);
+    }
+
+    /**
+     * Preview recurring deliverable generation without saving.
+     * Used by the frontend to show a live preview before task creation.
+     *
+     * @param  Request  $request  Templates and recurrence settings.
+     * @return JsonResponse Preview data.
+     */
+    public function recurringPreview(Request $request, RecurringService $recurringService): JsonResponse
+    {
+        $validated = $request->validate([
+            'templates' => 'required|array|min:1',
+            'templates.*.title' => 'required|string|max:255',
+            'templates.*.description' => 'nullable|string|max:2000',
+            'templates.*.quantity' => 'nullable|integer|min:1|max:100',
+            'settings' => 'required|array',
+            'settings.repeat' => 'required|in:daily,weekly,monthly,custom',
+            'settings.skip_weekends' => 'nullable|boolean',
+            'task_start_date' => 'required|date',
+            'task_end_date' => 'required|date',
+        ]);
+
+        $preview = $recurringService->generatePreview(
+            $validated['templates'],
+            $validated['settings'],
+            $validated['task_start_date'],
+            $validated['task_end_date']
+        );
+
+        return response()->json([
+            'success' => true,
+            'preview' => $preview,
+        ]);
     }
 
     /**
@@ -793,6 +911,15 @@ class TaskController extends Controller
             'deliverables.*.due_date' => 'nullable|date',
             'due_dates' => 'nullable|array',
             'due_dates.*' => 'nullable|date',
+            'task_type' => 'nullable|in:standard,recurring',
+            'recurrence_settings' => 'nullable|array|required_if:task_type,recurring',
+            'recurrence_settings.repeat' => 'required_with:recurrence_settings|in:daily,weekly,monthly,custom',
+            'recurrence_settings.skip_weekends' => 'nullable|boolean',
+            'deliverable_templates' => 'nullable|array|required_if:task_type,recurring|min:1',
+            'deliverable_templates.*.title' => 'required_with:deliverable_templates|string|max:255',
+            'deliverable_templates.*.description' => 'nullable|string|max:2000',
+            'deliverable_templates.*.quantity' => 'nullable|integer|min:1|max:100',
+            'deliverable_templates.*.combined' => 'nullable|boolean',
         ]);
 
         $createdTasks = [];
@@ -813,6 +940,8 @@ class TaskController extends Controller
                 'priority' => $validated['priority'],
                 'status' => 'pending',
                 'project_id' => null,
+                'task_type' => $validated['task_type'] ?? 'standard',
+                'recurrence_settings' => $validated['recurrence_settings'] ?? null,
             ]);
             $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
 
@@ -846,6 +975,60 @@ class TaskController extends Controller
                             'message' => 'A new deliverable "'.$dlv->title.'" has been assigned to you by '.$user->name.'.',
                             'link' => '/deliveries?selectedDeliverable='.$dlv->id,
                         ];
+                    }
+                }
+            }
+
+            // Save deliverable templates for recurring standalone tasks
+            if (! empty($validated['deliverable_templates'])) {
+                $templateData = [];
+                foreach ($validated['deliverable_templates'] as $order => $tmpl) {
+                    $templateData[] = [
+                        'task_id' => $task->id,
+                        'title' => $tmpl['title'],
+                        'description' => $tmpl['description'] ?? null,
+                        'quantity' => $tmpl['quantity'] ?? 1,
+                        'combined' => $tmpl['combined'] ?? false,
+                        'sort_order' => $order,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                }
+                DB::table('deliverable_templates')->insert($templateData);
+
+                // Generate ALL deliverables immediately for recurring standalone tasks
+                if (($validated['task_type'] ?? 'standard') === 'recurring') {
+                    $recurringSvc = app(RecurringService::class);
+                    $settings = $validated['recurrence_settings'];
+                    $taskStartDate = $validated['start_date'] ?? now()->toDateTimeString();
+                    $taskEndDate = $validated['end_date'] ?? now()->addDays(30)->toDateTimeString();
+                    $totalPeriods = $recurringSvc->calculateTotalPeriods($settings, $taskStartDate, $taskEndDate);
+                    $allDlvs = collect();
+                    for ($p = 1; $p <= $totalPeriods; $p++) {
+                        $date = $recurringSvc->getPeriodDate(
+                            $taskStartDate,
+                            $settings['repeat'] ?? 'daily',
+                            $p,
+                            (bool) ($settings['skip_weekends'] ?? false)
+                        );
+                        $created = $recurringSvc->generateOccurrenceDeliverables($task, $p, $date->format('Y-m-d'));
+                        $allDlvs = $allDlvs->concat($created);
+                    }
+                    $task->update([
+                        'deliverables_generated' => $totalPeriods,
+                        'recurrence_status' => 'completed',
+                    ]);
+                    foreach ($allDlvs as $dlv) {
+                        if ((int) $dlv->assigned_to !== (int) $user->id) {
+                            $deliverableNotifications[] = [
+                                'user_id' => $dlv->assigned_to, 'sender_user_id' => $user->id,
+                                'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
+                                'related_id' => $dlv->id,
+                                'title' => 'Deliverable Assigned',
+                                'message' => 'A new recurring deliverable "'.$dlv->title.'" has been created.',
+                                'link' => '/deliveries?selectedDeliverable='.$dlv->id,
+                            ];
+                        }
                     }
                 }
             }
@@ -890,6 +1073,20 @@ class TaskController extends Controller
         // Log activity
         $this->activityService->log($user->id, 'task_created', 'You created '.$taskCount.' task(s) and assigned them to '.$assigneeNames, 'task', $createdTasks[0]->id);
         $this->clearDashboardCache($user->id);
+
+        try {
+            $this->auditService->log(
+                module: 'task_management',
+                action: 'create',
+                description: "Created {$taskCount} standalone task(s)",
+                user: $user,
+                entityType: 'Task',
+                entityId: $createdTasks[0]->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         $firstTask = $createdTasks[0]->load('assignees:id,name,email,role');
 
@@ -1070,11 +1267,128 @@ class TaskController extends Controller
 
         $this->clearDashboardCache($user->id);
 
+        try {
+            $this->auditService->log(
+                module: 'task_management',
+                action: 'update',
+                description: "Updated task {$task->title}",
+                user: $user,
+                entityType: 'Task',
+                entityId: $task->id,
+                oldValues: $oldValues,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => count($changes) > 0 ? 'Task updated — '.count($changes).' change(s) made' : 'Task updated successfully',
             'task' => $task->fresh()->load('assignees:id,name,email,role'),
             'changes_count' => count($changes),
+        ]);
+    }
+
+    /**
+     * Update a recurring task's templates, settings, and optionally regenerate future deliverables.
+     *
+     * Completed deliverables are never modified. Only future deliverables may be regenerated.
+     * Regeneration requires explicit confirmation via regenerate=true.
+     *
+     * @param  Request  $request  Recurrence settings, templates, and regenerate flag.
+     * @param  Task  $task  The recurring task.
+     * @return JsonResponse
+     */
+    public function updateRecurring(Request $request, Task $task, RecurringService $recurringService): JsonResponse
+    {
+        $user = $request->user();
+        if ((int) $task->assigned_by !== (int) $user->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate([
+            'recurrence_settings' => 'nullable|array',
+            'recurrence_settings.repeat' => 'sometimes|in:daily,weekly,monthly,custom',
+            'recurrence_settings.skip_weekends' => 'nullable|boolean',
+            'deliverable_templates' => 'nullable|array|min:1',
+            'deliverable_templates.*.title' => 'required_with:deliverable_templates|string|max:255',
+            'deliverable_templates.*.description' => 'nullable|string|max:2000',
+            'deliverable_templates.*.quantity' => 'nullable|integer|min:1|max:100',
+            'deliverable_templates.*.combined' => 'nullable|boolean',
+            'regenerate' => 'required|boolean',
+        ]);
+
+        // Ensure task is marked as recurring
+        if ($task->task_type !== 'recurring') {
+            $task->update(['task_type' => 'recurring']);
+        }
+
+        // Update recurrence settings
+        if (!empty($validated['recurrence_settings'])) {
+            $task->update(['recurrence_settings' => $validated['recurrence_settings']]);
+        }
+
+        // Update templates
+        if (!empty($validated['deliverable_templates'])) {
+            DB::table('deliverable_templates')->where('task_id', $task->id)->delete();
+            $templateData = [];
+            foreach ($validated['deliverable_templates'] as $order => $tmpl) {
+                $templateData[] = [
+                    'task_id' => $task->id,
+                    'title' => $tmpl['title'],
+                    'description' => $tmpl['description'] ?? null,
+                    'quantity' => $tmpl['quantity'] ?? 1,
+                    'combined' => $tmpl['combined'] ?? false,
+                    'sort_order' => $order,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+            DB::table('deliverable_templates')->insert($templateData);
+        }
+
+        // Regenerate future deliverables if requested
+        $regeneratedCount = 0;
+        if ($validated['regenerate']) {
+            $today = now()->startOfDay();
+            $generated = (int) $task->deliverables_generated;
+
+            // Find non-completed deliverables with due_date >= today
+            $futureDeliverables = $task->deliverables()
+                ->where('status', '!=', 'approved')
+                ->whereDate('due_date', '>=', $today)
+                ->get();
+
+            // Delete future non-completed deliverables
+            $futureDeliverables->each(function ($dlv) {
+                $dlv->submissions()->delete();
+                $dlv->workflowEvents()->delete();
+                $dlv->changes()->delete();
+                $dlv->delete();
+            });
+
+            // Recalculate delivered count
+            $remainingDeliverables = $task->deliverables()->count();
+            $totalPerPeriod = array_sum(
+                array_map(fn($t) => (int) ($t['quantity'] ?? 1), $validated['deliverable_templates'] ?? $task->deliverableTemplates()->get()->toArray())
+            );
+            $completedPeriods = $totalPerPeriod > 0 ? (int) floor($remainingDeliverables / $totalPerPeriod) : 0;
+
+            // Reset deliverables_generated to remaining completed periods
+            $task->update(['deliverables_generated' => $completedPeriods]);
+            $regeneratedCount = $futureDeliverables->count();
+        }
+
+        $task->fresh()->load('deliverableTemplates');
+
+        return response()->json([
+            'success' => true,
+            'message' => $regeneratedCount > 0
+                ? "Task updated and {$regeneratedCount} future deliverable(s) regenerated"
+                : 'Task updated successfully',
+            'task' => $task,
+            'regenerated_count' => $regeneratedCount,
         ]);
     }
 
@@ -1193,6 +1507,20 @@ class TaskController extends Controller
             // Log activity
             $this->activityService->log($user->id, 'task_completed', 'You completed task "'.$task->title.'"', 'task', $task->id);
             $this->clearDashboardCache($user->id);
+
+            try {
+                $this->auditService->log(
+                    module: 'task_management',
+                    action: 'complete',
+                    description: "Completed task {$task->title}",
+                    user: $user,
+                    entityType: 'Task',
+                    entityId: $task->id,
+                    status: 'success'
+                );
+            } catch (\Throwable $e) {
+                \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+            }
 
             return response()->json([
                 'success' => true,
@@ -1323,6 +1651,20 @@ class TaskController extends Controller
         $this->activityService->log($user->id, 'task_'.$isResubmitLabel, 'You '.$isResubmitLabel.' task "'.$task->title.'" for review', 'task', $task->id);
         $this->clearDashboardCache($user->id);
 
+        try {
+            $this->auditService->log(
+                module: 'task_management',
+                action: 'submit',
+                description: ($isResubmit ? 'Resubmitted' : 'Submitted')." task {$task->title}",
+                user: $user,
+                entityType: 'Task',
+                entityId: $task->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Task submitted successfully',
@@ -1380,6 +1722,20 @@ class TaskController extends Controller
         // Log activity
         $this->activityService->log($user->id, 'task_approved', 'You approved task "'.$task->title.'"', 'task', $task->id);
         $this->clearDashboardCache($user->id);
+
+        try {
+            $this->auditService->log(
+                module: 'task_management',
+                action: 'approve',
+                description: "Approved task {$task->title}",
+                user: $user,
+                entityType: 'Task',
+                entityId: $task->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -1444,6 +1800,20 @@ class TaskController extends Controller
         // Log activity
         $this->activityService->log($user->id, 'task_rejected', 'You rejected task "'.$task->title.'"', 'task', $task->id);
         $this->clearDashboardCache($user->id);
+
+        try {
+            $this->auditService->log(
+                module: 'task_management',
+                action: 'reject',
+                description: "Rejected task {$task->title}",
+                user: $user,
+                entityType: 'Task',
+                entityId: $task->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -1540,6 +1910,20 @@ class TaskController extends Controller
         $this->activityService->log($user->id, 'task_reopened', 'You reopened task "'.$task->title.'" for revision', 'task', $task->id);
         $this->clearDashboardCache($user->id);
 
+        try {
+            $this->auditService->log(
+                module: 'task_management',
+                action: 'reopen',
+                description: "Reopened task {$task->title}",
+                user: $user,
+                entityType: 'Task',
+                entityId: $task->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Task reopened successfully',
@@ -1626,6 +2010,20 @@ class TaskController extends Controller
         $task->deliverables()->delete();
         $task->files()->delete();
         $task->delete();
+
+        try {
+            $this->auditService->log(
+                module: 'task_management',
+                action: 'delete',
+                description: "Deleted task {$task->title}",
+                user: $user,
+                entityType: 'Task',
+                entityId: $task->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json(['success' => true, 'message' => 'Task deleted successfully']);
     }

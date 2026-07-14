@@ -19,6 +19,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\DeliverableController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\ActivityController;
+use App\Http\Controllers\AuditLogController;
 
 /*
 | Public Routes
@@ -214,6 +215,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Create standalone task (no project required)
     Route::post('/tasks', [TaskController::class, 'storeStandalone']);
 
+    // Preview recurring deliverables calculation
+    Route::post('/tasks/recurring-preview', [TaskController::class, 'recurringPreview']);
+
     // Create task under a project (any authenticated user)
     Route::post('/projects/{project}/tasks', [TaskController::class, 'store']);
 
@@ -223,6 +227,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/tasks/{task}/status', [TaskController::class, 'updateStatus']); // Update task status
     Route::post('/tasks/{task}/complete', [TaskController::class, 'completeTask']); // Mark task as complete
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy']); // Delete task
+    Route::post('/tasks/{task}/update-recurring', [TaskController::class, 'updateRecurring']); // Update recurring task with confirmation
 
     // Task submission workflow (submit for review, approve, reject, reopen)
     Route::post('/tasks/{task}/submit', [TaskController::class, 'submit']); // Submit task for review
@@ -322,6 +327,26 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/activities/today', [ActivityController::class, 'today']); // Today's activities
     Route::get('/activities/past', [ActivityController::class, 'past']); // Past activities
     Route::get('/activities', [ActivityController::class, 'index']); // All activities
+
+    /*
+    | My Activity (all authenticated users)
+    | Personal audit log entries for the current user.
+    */
+    Route::get('/my-activity', [AuditLogController::class, 'myActivity']);
+
+    /*
+    | Audit Log Routes
+    | Admin and manager only: view and export application audit logs.
+    */
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
+        Route::get('/audit-logs', [AuditLogController::class, 'index']);
+        Route::get('/audit-logs/recent', [AuditLogController::class, 'recent']);
+        Route::get('/audit-logs/modules', [AuditLogController::class, 'modules']);
+        Route::get('/audit-logs/actions', [AuditLogController::class, 'actions']);
+        Route::get('/audit-logs/users', [AuditLogController::class, 'users']);
+        Route::post('/audit-logs/export', [AuditLogController::class, 'export']);
+        Route::get('/audit-logs/{auditLog}', [AuditLogController::class, 'show']);
+    });
 
     /*
     | Calendar / Event Routes

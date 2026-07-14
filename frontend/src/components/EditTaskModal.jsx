@@ -5,7 +5,7 @@
  * Includes special handling for self-assigned tasks.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
@@ -19,6 +19,106 @@ import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import "./layout/CreateTaskModal.css";
+
+const REPEAT_OPTIONS = [
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+  { value: "custom", label: "Custom" },
+];
+
+const VARIABLES = [
+  { token: "{{number}}", desc: "Global counter (1, 2, 3...)" },
+  { token: "{{day}}", desc: "Day number (1, 2, 3...)" },
+  { token: "{{date}}", desc: "Date (15 Jul 2026)" },
+  { token: "{{week}}", desc: "Week number (28, 29...)" },
+  { token: "{{month}}", desc: "Month name (July)" },
+  { token: "{{year}}", desc: "Year (2026)" },
+];
+
+function parseVariables(text, dayNumber, dateStr, globalNumber) {
+  const d = new Date(dateStr);
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const fullMonths = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const weekNum = Math.ceil((d.getDate() + new Date(d.getFullYear(), d.getMonth(), 1).getDay()) / 7);
+  return text
+    .replace(/\{\{number\}\}/g, globalNumber ?? dayNumber)
+    .replace(/\{\{day\}\}/g, dayNumber)
+    .replace(/\{\{date\}\}/g, `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`)
+    .replace(/\{\{week\}\}/g, weekNum)
+    .replace(/\{\{month\}\}/g, fullMonths[d.getMonth()])
+    .replace(/\{\{year\}\}/g, d.getFullYear());
+}
+
+function getNextWorkingDay(date, skipWeekends) {
+  if (!skipWeekends) return new Date(date);
+  const d = new Date(date);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+function getPeriodDate(start, repeat, periodNumber, skipWeekends) {
+  const d = new Date(start);
+  if (repeat === "daily" || repeat === "custom") {
+    d.setDate(start.getDate() + periodNumber - 1);
+    return getNextWorkingDay(d, skipWeekends);
+  } else if (repeat === "weekly") {
+    d.setDate(start.getDate() + (periodNumber - 1) * 7);
+    return d;
+  } else if (repeat === "monthly") {
+    d.setMonth(start.getMonth() + periodNumber - 1);
+    return d;
+  }
+  d.setDate(start.getDate() + periodNumber - 1);
+  return d;
+}
+
+function calculateTotalPeriods(startDate, endDate, repeat) {
+  if (!startDate || !endDate) return repeat === "daily" ? 30 : repeat === "weekly" ? 4 : 3;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const diffMs = end - start;
+  const diffDays = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1);
+  if (repeat === "weekly") return Math.max(1, Math.ceil(diffDays / 7));
+  if (repeat === "monthly") return Math.max(1, Math.ceil(diffDays / 30));
+  return diffDays;
+}
+
+function generatePreview(templates, settings, startDate, endDate) {
+  const repeat = settings.repeat || "daily";
+  const skipWeekends = settings.skip_weekends || false;
+  const start = startDate ? new Date(startDate) : new Date();
+  const totalPeriods = calculateTotalPeriods(startDate, endDate, repeat);
+  const showPeriods = Math.min(totalPeriods, 5);
+  let globalCounter = 0;
+  const previewPeriods = [];
+  for (let p = 1; p <= showPeriods; p++) {
+    const date = getPeriodDate(start, repeat, p, skipWeekends);
+    const dateStr = date.toISOString().split("T")[0];
+    const items = [];
+    templates.forEach((t) => {
+      const qty = parseInt(t.quantity) || 1;
+      if (t.combined) {
+        globalCounter++;
+        const title = parseVariables(t.title, p, dateStr, globalCounter);
+        items.push({ number: globalCounter, title: `${qty} \u00d7 ${title} (combined)`, description: t.description ? parseVariables(t.description, p, dateStr, globalCounter) : null, count: qty });
+      } else {
+        for (let i = 0; i < qty; i++) {
+          globalCounter++;
+          items.push({ number: globalCounter, title: parseVariables(t.title, p, dateStr, globalCounter), description: t.description ? parseVariables(t.description, p, dateStr, globalCounter) : null });
+        }
+      }
+    });
+    previewPeriods.push({ period: p, date: dateStr, label: `Day ${p}`, items, count: items.length });
+  }
+  const remainingTemplatesTotal = (totalPeriods - showPeriods) * templates.reduce((s, t) => s + (parseInt(t.quantity) || 1), 0);
+  return {
+    previewPeriods, totalPeriods,
+    totalDeliverables: globalCounter + remainingTemplatesTotal,
+    hasMore: totalPeriods > showPeriods,
+    remainingPeriods: totalPeriods - showPeriods,
+  };
+}
 
 /**
  * Modal form for editing an existing task.
@@ -39,9 +139,28 @@ export default function EditTaskModal({ task, onClose }) {
     title: task.title || "",
     description: task.description || "",
     priority: task.priority || "Medium",
+    task_type: task.task_type || "standard",
     start_date: task.start_date ? toDatetimeLocal(task.start_date) : "",
     end_date: task.end_date ? toDatetimeLocal(task.end_date) : "",
   });
+  const [recurrenceSettings, setRecurrenceSettings] = useState({
+    repeat: task.recurrence_settings?.repeat || "daily",
+    skip_weekends: task.recurrence_settings?.skip_weekends || false,
+  });
+  const [recurringTemplates, setRecurringTemplates] = useState(() => {
+    if (task.deliverable_templates && task.deliverable_templates.length > 0) {
+      return task.deliverable_templates.map((t) => ({ title: t.title, description: t.description || "", quantity: t.quantity || 1, combined: t.combined || false }));
+    }
+    return task.task_type === "recurring" ? [{ title: "", description: "", quantity: 1, combined: false }] : [];
+  });
+  const [showVariablesHint, setShowVariablesHint] = useState(false);
+
+  const preview = useMemo(() => {
+    if (form.task_type !== "recurring") return null;
+    const validTemplates = recurringTemplates.filter((t) => t.title.trim());
+    if (validTemplates.length === 0) return null;
+    return generatePreview(validTemplates, recurrenceSettings, form.start_date, form.end_date);
+  }, [form.task_type, form.start_date, form.end_date, recurrenceSettings, recurringTemplates]);
   const [allUsers, setAllUsers] = useState([]);
   const [displayUsers, setDisplayUsers] = useState([]);
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState(
@@ -91,6 +210,16 @@ export default function EditTaskModal({ task, onClose }) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
+  const handleRecurringSettingChange = (field, value) => setRecurrenceSettings((prev) => ({ ...prev, [field]: value }));
+
+  const handleAddTemplate = () => setRecurringTemplates((prev) => [...prev, { title: "", description: "", quantity: 1, combined: false }]);
+  const handleRemoveTemplate = (index) => setRecurringTemplates((prev) => prev.filter((_, i) => i !== index));
+  const handleTemplateChange = (index, field, value) => setRecurringTemplates((prev) => {
+    const next = [...prev];
+    next[index] = { ...next[index], [field]: value };
+    return next;
+  });
+
   const handleAssignedToChange = (ids) => {
     setSelectedAssigneeIds(ids);
     setDueDates((prev) => {
@@ -128,6 +257,8 @@ export default function EditTaskModal({ task, onClose }) {
       handleRemoveLink(index);
     } else if (type === "deliverable") {
       handleRemoveDeliverable(index);
+    } else if (type === "template") {
+      handleRemoveTemplate(index);
     }
     setRemoveConfirmOpen(false);
     setPendingRemoveItem({ type: "", index: -1, id: "" });
@@ -229,28 +360,47 @@ export default function EditTaskModal({ task, onClose }) {
     if (e?.preventDefault) e.preventDefault();
     await run(async () => {
       try {
-        const body = {
-          ...form,
-          start_date: toUTCIso(form.start_date),
-          end_date: toUTCIso(form.end_date),
-          assigned_to: selectedAssigneeIds,
-          due_dates: Object.keys(dueDates).length > 0 ? dueDates : undefined,
-          existing_file_names: existingFiles.reduce((acc, f) => {
-            if (f.customName && f.customName !== f.name) {
-              acc.push({ id: f.id, name: f.customName });
-            }
-            return acc;
-          }, []),
-        };
-        if (deliverables.length > 0) {
-          body.deliverables = deliverables.map((d) => ({ title: d.title, due_date: d.due_date || null }));
+        let body;
+        let url;
+        const token = authToken();
+
+        if (form.task_type === "recurring") {
+          const validTemplates = recurringTemplates.filter((t) => t.title.trim());
+          body = {
+            recurrence_settings: {
+              repeat: recurrenceSettings.repeat,
+              skip_weekends: recurrenceSettings.skip_weekends || false,
+            },
+            deliverable_templates: validTemplates.length > 0 ? validTemplates.map((t) => ({ title: t.title.trim(), description: t.description || null, quantity: t.quantity || 1, combined: t.combined || false })) : undefined,
+            regenerate: true,
+          };
+          url = `${API_URL}/tasks/${task.id}/update-recurring`;
+        } else {
+          body = {
+            ...form,
+            start_date: toUTCIso(form.start_date),
+            end_date: toUTCIso(form.end_date),
+            assigned_to: selectedAssigneeIds,
+            due_dates: Object.keys(dueDates).length > 0 ? dueDates : undefined,
+            existing_file_names: existingFiles.reduce((acc, f) => {
+              if (f.customName && f.customName !== f.name) {
+                acc.push({ id: f.id, name: f.customName });
+              }
+              return acc;
+            }, []),
+          };
+          if (deliverables.length > 0) {
+            body.deliverables = deliverables.map((d) => ({ title: d.title, due_date: d.due_date || null }));
+          }
+          url = `${API_URL}/tasks/${task.id}`;
         }
-        const res = await fetch(`${API_URL}/tasks/${task.id}`, {
-          method: "PUT",
+
+        const res = await fetch(url, {
+          method: form.task_type === "recurring" ? "POST" : "PUT",
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
-            Authorization: `Bearer ${authToken()}`,
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(body),
           _notifHandled: true,
@@ -686,6 +836,128 @@ export default function EditTaskModal({ task, onClose }) {
                 ]}
               />
             </div>
+
+            {/* TASK TYPE */}
+            <div className="task-card">
+              <label>Task Type</label>
+              <CustomSelect name="task_type" value={form.task_type}
+                onChange={(val) => {
+                  setForm((prev) => ({ ...prev, task_type: val }));
+                  if (val === "recurring" && recurringTemplates.length === 0) {
+                    setRecurringTemplates([{ title: "", description: "", quantity: 1, combined: false }]);
+                  }
+                }}
+                options={[{ value: "standard", label: "Standard" }, { value: "recurring", label: "Recurring" }]} />
+            </div>
+
+            {form.task_type === "recurring" && (
+              <>
+                <div className="task-card">
+                  <div className="task-card-top"><span>Recurrence Settings</span></div>
+                  <div className="task-field" style={{ marginBottom: 10 }}>
+                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Repeat</label>
+                    <CustomSelect name="repeat" value={recurrenceSettings.repeat}
+                      onChange={(val) => handleRecurringSettingChange("repeat", val)}
+                      options={REPEAT_OPTIONS} />
+                  </div>
+                  {(recurrenceSettings.repeat === "daily" || recurrenceSettings.repeat === "custom") && (
+                    <div className="task-field" style={{ marginBottom: 10 }}>
+                      <label style={{ fontSize: 13, color: "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                        <input type="checkbox" checked={recurrenceSettings.skip_weekends}
+                          onChange={(e) => handleRecurringSettingChange("skip_weekends", e.target.checked)}
+                          style={{ width: 16, height: 16, accentColor: "#6366f1" }} />
+                        Skip weekends (Sat/Sun)
+                      </label>
+                    </div>
+                  )}
+                  <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>
+                    Deliverables auto-distribute between <strong>Start Date</strong> and <strong>Due Date</strong>.
+                  </p>
+                </div>
+
+                <div className="task-card">
+                  <div className="task-card-top">
+                    <span>Deliverable Templates</span>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <button type="button" className="task-icon-btn" title="Available variables" onClick={() => setShowVariablesHint(!showVariablesHint)}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                      </button>
+                      <button type="button" className="task-add-phase-btn" onClick={handleAddTemplate} style={{ padding: "3px 10px", fontSize: 12 }}>+ Add</button>
+                    </div>
+                  </div>
+
+                  {showVariablesHint && (
+                    <div style={{ background: "#f0f4ff", border: "1px solid #c7d2fe", borderRadius: 6, padding: "8px 10px", marginBottom: 10, fontSize: 12, color: "#4338ca" }}>
+                      <strong>Variables:</strong> Use these in titles/descriptions
+                      <div style={{ marginTop: 4, display: "flex", flexWrap: "wrap", gap: "4px 12px" }}>
+                        {VARIABLES.map((v) => (
+                          <span key={v.token} style={{ cursor: "pointer" }} onClick={() => setShowVariablesHint(false)}
+                            title={v.desc}><code style={{ background: "#e0e7ff", padding: "1px 5px", borderRadius: 3 }}>{v.token}</code> — {v.desc}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {recurringTemplates.map((tmpl, index) => (
+                    <div key={index} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 10, marginBottom: 8, background: "#fafafa" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", minWidth: 40 }}>#{index + 1}</span>
+                        <input type="text" placeholder="Template title (use {{day}}, {{date}}...)" value={tmpl.title}
+                          onChange={(e) => handleTemplateChange(index, "title", e.target.value)}
+                          style={{ flex: 1, fontSize: 13, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 4 }} />
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, border: "1px solid #d1d5db", borderRadius: 4, padding: "2px 6px", background: "#fff" }}>
+                          <span style={{ fontSize: 11, color: "#6b7280" }}>Qty:</span>
+                          <input type="number" min="1" max="100" value={tmpl.quantity}
+                            onChange={(e) => handleTemplateChange(index, "quantity", Math.max(1, parseInt(e.target.value) || 1))}
+                            style={{ width: 40, fontSize: 12, border: "none", outline: "none", textAlign: "center" }} />
+                        </div>
+                        <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "template", index, id: "" }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <input type="text" placeholder="Description (optional)" value={tmpl.description}
+                          onChange={(e) => handleTemplateChange(index, "description", e.target.value)}
+                          style={{ flex: 1, fontSize: 12, padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 4, color: "#6b7280" }} />
+                        <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 11, color: "#6b7280", whiteSpace: "nowrap" }}>
+                          <input type="checkbox" checked={tmpl.combined}
+                            onChange={(e) => handleTemplateChange(index, "combined", e.target.checked)}
+                            style={{ width: 14, height: 14, accentColor: "#6366f1" }} />
+                          Combined
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {preview && (
+                  <div className="task-card" style={{ border: "1px solid #c7d2fe", background: "#f8faff" }}>
+                    <div className="task-card-top">
+                      <span>Recurring Preview</span>
+                      <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 600 }}>{preview.totalDeliverables} Total</span>
+                    </div>
+                    <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                      {preview.previewPeriods.map((pd) => (
+                        <div key={pd.period} style={{ marginBottom: 8, padding: "6px 0", borderBottom: "1px solid #eef2ff" }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#4338ca", marginBottom: 4 }}>{pd.label} — {pd.date}</div>
+                          {pd.items.map((item, i) => (
+                            <div key={i} style={{ fontSize: 12, color: "#374151", paddingLeft: 16, display: "flex", alignItems: "center", gap: 6 }}>
+                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#6366f1", display: "inline-block", flexShrink: 0 }}></span>
+                              #{item.number} {item.title}
+                              {item.count > 1 && <span style={{ color: "#6366f1", fontWeight: 600, fontSize: 11 }}>(qty {item.count})</span>}
+                              {item.description && <span style={{ color: "#9ca3af" }}>— {item.description}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                    {preview.hasMore && (
+                      <p style={{ fontSize: 11, color: "#9ca3af", textAlign: "center", marginTop: 4 }}>
+                        ... and {preview.remainingPeriods} more days · {preview.totalPeriods} days total
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
 
             <div className="task-card">
               <div className="task-card-top"><span>Dates</span></div>

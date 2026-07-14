@@ -14,6 +14,7 @@ use App\Models\ProjectWorkflowEvent;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\ActivityService;
+use App\Services\AuditService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,7 +35,8 @@ class ProjectController extends Controller
 
     public function __construct(
         private NotificationService $notificationService,
-        private ActivityService $activityService
+        private ActivityService $activityService,
+        private AuditService $auditService
     ) {}
 
     /**
@@ -225,6 +227,20 @@ class ProjectController extends Controller
             : 'You created project "'.$project->title.'"';
         $this->activityService->log($request->user()->id, 'project_created', $activityDesc, 'project', $project->id);
         $this->clearDashboardCache($request->user()->id);
+
+        try {
+            $this->auditService->log(
+                module: 'project_management',
+                action: 'create',
+                description: "Created project {$project->title}",
+                user: $request->user(),
+                entityType: 'Project',
+                entityId: $project->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         if (! empty($deliverables)) {
             $assignedUsers = $validated['assigned_users'] ?? [];
@@ -586,6 +602,21 @@ class ProjectController extends Controller
             }
             $this->activityService->log($user->id, 'project_updated', $activityDesc, 'project', $project->id);
             $this->clearDashboardCache($user->id);
+
+            try {
+                $this->auditService->log(
+                    module: 'project_management',
+                    action: 'update',
+                    description: "Updated project {$project->title}",
+                    user: $user,
+                    entityType: 'Project',
+                    entityId: $project->id,
+                    oldValues: $oldValues,
+                    status: 'success'
+                );
+            } catch (\Throwable $e) {
+                \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+            }
         }
 
         return response()->json([
@@ -791,6 +822,20 @@ class ProjectController extends Controller
         }
 
         $project->delete();
+
+        try {
+            $this->auditService->log(
+                module: 'project_management',
+                action: 'delete',
+                description: "Deleted project {$project->title}",
+                user: $user,
+                entityType: 'Project',
+                entityId: $project->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json(['success' => true, 'message' => 'Project deleted successfully']);
     }
@@ -1219,6 +1264,20 @@ class ProjectController extends Controller
         $this->activityService->log($user->id, 'project_'.$isResubmitLabel, 'You '.$isResubmitLabel.' project "'.$project->title.'" for review', 'project', $project->id);
         $this->clearDashboardCache($user->id);
 
+        try {
+            $this->auditService->log(
+                module: 'project_management',
+                action: 'submit',
+                description: ($isResubmit ? 'Resubmitted' : 'Submitted')." project {$project->title}",
+                user: $user,
+                entityType: 'Project',
+                entityId: $project->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Project submitted successfully',
@@ -1275,6 +1334,20 @@ class ProjectController extends Controller
         // Log activity
         $this->activityService->log($user->id, 'project_approved', 'You approved project "'.$project->title.'"', 'project', $project->id);
         $this->clearDashboardCache($user->id);
+
+        try {
+            $this->auditService->log(
+                module: 'project_management',
+                action: 'approve',
+                description: "Approved project {$project->title}",
+                user: $user,
+                entityType: 'Project',
+                entityId: $project->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -1347,6 +1420,20 @@ class ProjectController extends Controller
         // Log activity
         $this->activityService->log($user->id, 'project_rejected', 'You rejected project "'.$project->title.'"', 'project', $project->id);
         $this->clearDashboardCache($user->id);
+
+        try {
+            $this->auditService->log(
+                module: 'project_management',
+                action: 'reject',
+                description: "Rejected project {$project->title}",
+                user: $user,
+                entityType: 'Project',
+                entityId: $project->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -1449,6 +1536,20 @@ class ProjectController extends Controller
         // Log activity
         $this->activityService->log($user->id, 'project_reopened', 'You reopened project "'.$project->title.'" for revision', 'project', $project->id);
         $this->clearDashboardCache($user->id);
+
+        try {
+            $this->auditService->log(
+                module: 'project_management',
+                action: 'reopen',
+                description: "Reopened project {$project->title}",
+                user: $user,
+                entityType: 'Project',
+                entityId: $project->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,

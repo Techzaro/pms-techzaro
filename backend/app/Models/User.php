@@ -161,4 +161,10 @@ class User extends Authenticatable
     {
         return $this->hasMany(\App\Models\UserDeviceToken::class);
     }
+
+    /** Audit log entries created by this user. */
+    public function auditLogs(): HasMany
+    {
+        return $this->hasMany(\App\Models\AuditLog::class);
+    }
 }

@@ -16,6 +16,7 @@ use App\Jobs\SendUserCreatedEmails;
 use App\Mail\UserCreated;
 use App\Mail\UserResigned;
 use App\Mail\UserProfileUpdated;
+use App\Services\AuditService;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -37,7 +38,8 @@ class UserController extends Controller
 {
     public function __construct(
         private ActivityService $activityService,
-        private NotificationService $notificationService
+        private NotificationService $notificationService,
+        private AuditService $auditService
     ) {}
 
     private array $documentFields = [
@@ -240,6 +242,20 @@ class UserController extends Controller
             $user->id,
         );
         $this->clearDashboardCache($authUser->id);
+
+        try {
+            $this->auditService->log(
+                module: 'user_management',
+                action: 'create',
+                description: "Created user {$user->name}",
+                user: $authUser,
+                entityType: 'User',
+                entityId: $user->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         $loginUrl = config('app.frontend_url');
 
@@ -513,6 +529,21 @@ class UserController extends Controller
                 $user->id,
                 ['changes' => $changes]
             );
+            try {
+                $this->auditService->log(
+                    module: 'user_management',
+                    action: 'update',
+                    description: "Updated user {$user->name}",
+                    user: $authUser,
+                    entityType: 'User',
+                    entityId: $user->id,
+                    oldValues: $oldValues,
+                    newValues: $request->all(),
+                    status: 'success'
+                );
+            } catch (\Throwable $e) {
+                \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+            }
         }
 
         $message = 'User updated successfully';
@@ -581,6 +612,20 @@ class UserController extends Controller
         Cache::forget('all_users_list');
         Cache::forget('admin_manager_ids');
 
+        try {
+            $this->auditService->log(
+                module: 'user_management',
+                action: 'delete',
+                description: "Deleted user {$user->name}",
+                user: $authUser,
+                entityType: 'User',
+                entityId: $user->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'User deleted successfully',
@@ -644,6 +689,20 @@ class UserController extends Controller
                 $user->name,
                 $user->id,
             );
+
+            try {
+                $this->auditService->log(
+                    module: 'user_management',
+                    action: 'resign',
+                    description: "Resigned user {$user->name}",
+                    user: $authUser,
+                    entityType: 'User',
+                    entityId: $user->id,
+                    status: 'success'
+                );
+            } catch (\Throwable $e) {
+                \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+            }
 
             $emailSent = false;
             $emailError = null;
