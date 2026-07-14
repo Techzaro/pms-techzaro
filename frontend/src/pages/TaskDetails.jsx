@@ -263,6 +263,9 @@ function TaskDetails() {
   const [noteDeleteOpen, setNoteDeleteOpen] = useState(false);
   const [pendingNoteId, setPendingNoteId] = useState(null);
   const [orderedDeliverables, setOrderedDeliverables] = useState([]);
+  const [deliverableSearch, setDeliverableSearch] = useState("");
+  const [overviewSearch, setOverviewSearch] = useState("");
+  const [accessSearch, setAccessSearch] = useState("");
   const [showAddAccessModal, setShowAddAccessModal] = useState(false);
   const [accessCredentials, setAccessCredentials] = useState([]);
   const [loadingCredentials, setLoadingCredentials] = useState(false);
@@ -676,21 +679,33 @@ function TaskDetails() {
 
                   {tab === "overview" && (
                     <div className="td-overview">
-                      <h2 className="td-section-title">Task Details</h2>
+                      <div className="td-section-header">
+                        <h2 className="td-section-title">Task Details</h2>
+                        {Array.isArray(task.requirements) && task.requirements.length > 0 && (
+                          <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                            <input type="text" placeholder="Search requirements..." value={overviewSearch} onChange={(e) => setOverviewSearch(e.target.value)} />
+                          </div>
+                        )}
+                      </div>
                       <div className="td-overview-grid">
                         <div className="td-overview-left">
                           <p>{task.description || "No description provided for this task."}</p>
                           <div className="td-reqs">
                             <h3>Requirements</h3>
-                            {Array.isArray(task.requirements) && task.requirements.length > 0 ? (
-                              <ul>
-                                {task.requirements.map((req, idx) => (
-                                  <li key={idx}><CheckCircle2 size={16} /> {req}</li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p style={{ color: "#6b7280", fontSize: "14px" }}>No requirements added.</p>
-                            )}
+                            {(() => {
+                              const allReqs = Array.isArray(task.requirements) ? task.requirements : [];
+                              const filteredReqs = overviewSearch ? allReqs.filter((r) => r.toLowerCase().includes(overviewSearch.toLowerCase())) : allReqs;
+                              return filteredReqs.length > 0 ? (
+                                <ul>
+                                  {filteredReqs.map((req, idx) => (
+                                    <li key={idx}><CheckCircle2 size={16} /> {req}</li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p style={{ color: "#6b7280", fontSize: "14px" }}>{overviewSearch ? "No requirements match your search." : "No requirements added."}</p>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -701,22 +716,32 @@ function TaskDetails() {
                     <div>
                       <div className="td-section-header">
                         <h2 className="td-section-title">Deliverables</h2>
+                        <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                          <input type="text" placeholder="Search deliverables..." value={deliverableSearch} onChange={(e) => setDeliverableSearch(e.target.value)} />
+                        </div>
                         <span className="td-section-count">{task.completed_deliverables || 0}/{task.total_deliverables || 0} Completed</span>
                       </div>
-                      {(orderedDeliverables.length === 0 && (task.deliverables || []).length === 0) ? (
-                        <p className="td-empty">No deliverables linked to this task.</p>
-                      ) : (
-                        <div className="pd-table-wrap">
-                          <div className="deliveries-table-header" style={{ gridTemplateColumns: "32px minmax(150px, 1.6fr) minmax(160px, 1.8fr) minmax(110px, 1.1fr) minmax(90px, 0.9fr) minmax(70px, 0.5fr)" }}>
-                            <div></div>
-                            <div>Deliverable</div>
-                            <div>{isCreator ? "Assigned To" : "Assigned By"}</div>
-                            <div>Due Date</div>
-                            <div>Status</div>
-                            <div>Action</div>
-                          </div>
-                          <SortableTableWrapper
-                            items={orderedDeliverables.length ? orderedDeliverables : (task.deliverables || [])}
+                      {(() => {
+                        const allDeliverables = orderedDeliverables.length ? orderedDeliverables : (task.deliverables || []);
+                        const filteredDeliverables = deliverableSearch ? allDeliverables.filter((d) => {
+                          const q = deliverableSearch.toLowerCase();
+                          return (d.title || "").toLowerCase().includes(q) || (d.description || "").toLowerCase().includes(q);
+                        }) : allDeliverables;
+                        return filteredDeliverables.length === 0 ? (
+                          <p className="td-empty">{deliverableSearch ? "No deliverables match your search." : "No deliverables linked to this task."}</p>
+                        ) : (
+                          <div className="pd-table-wrap">
+                            <div className="deliveries-table-header" style={{ gridTemplateColumns: "32px minmax(150px, 1.6fr) minmax(160px, 1.8fr) minmax(110px, 1.1fr) minmax(90px, 0.9fr) minmax(70px, 0.5fr)" }}>
+                              <div></div>
+                              <div>Deliverable</div>
+                              <div>{isCreator ? "Assigned To" : "Assigned By"}</div>
+                              <div>Due Date</div>
+                              <div>Status</div>
+                              <div>Action</div>
+                            </div>
+                            <SortableTableWrapper
+                              items={filteredDeliverables}
                             onReorder={handleDeliverableReorder}
                             as="div"
                             handleOnly
@@ -765,7 +790,8 @@ function TaskDetails() {
                             )}
                           </SortableTableWrapper>
                         </div>
-                      )}
+                      );
+                      })()}
                     </div>
                   )}
 
@@ -773,12 +799,11 @@ function TaskDetails() {
 
                   {tab === "access" && (
                     <div className="td-access-section">
-                      <div className="td-access-header">
-                        <div>
-                          <h2 className="td-section-title">Task Access Credentials</h2>
-                          <p className="td-access-subtitle">
-                            Store and manage login credentials for task-related websites. Passwords are encrypted and only visible to assigned users.
-                          </p>
+                      <div className="td-section-header">
+                        <h2 className="td-section-title">Task Access Credentials</h2>
+                        <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                          <input type="text" placeholder="Search access..." value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
                         </div>
                         <button className="td-access-add-btn" onClick={() => setShowAddAccessModal(true)}>
                           <Plus size={16} /> Add Access
@@ -790,7 +815,11 @@ function TaskDetails() {
                         <p className="td-muted">No access credentials added yet. Click "Add Access" to store login details.</p>
                       ) : (
                         <div className="td-credentials-list">
-                          {accessCredentials.map((cred) => (
+                          {accessCredentials.filter((cred) => {
+                            if (!accessSearch) return true;
+                            const q = accessSearch.toLowerCase();
+                            return (cred.name || "").toLowerCase().includes(q) || (cred.url || "").toLowerCase().includes(q) || (cred.username || "").toLowerCase().includes(q);
+                          }).map((cred) => (
                             <CredentialRow
                               key={cred.id}
                               credential={cred}
@@ -800,6 +829,12 @@ function TaskDetails() {
                               }}
                             />
                           ))}
+                          {accessSearch && accessCredentials.filter((cred) => {
+                            const q = accessSearch.toLowerCase();
+                            return (cred.name || "").toLowerCase().includes(q) || (cred.url || "").toLowerCase().includes(q) || (cred.username || "").toLowerCase().includes(q);
+                          }).length === 0 && (
+                            <p className="td-muted" style={{ textAlign: "center" }}>No credentials match your search.</p>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1133,18 +1168,18 @@ function FileUploadSection({ taskId, files, onReorder, onFilesChange }) {
     <div>
       <div className="td-section-header">
         <h2 className="td-section-title">Platform files & links</h2>
+        {files.length > 0 && (
+          <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input
+              type="text"
+              placeholder="Search files & links..."
+              value={fileSearch}
+              onChange={(e) => setFileSearch(e.target.value)}
+            />
+          </div>
+        )}
       </div>
-      {files.length > 0 && (
-        <div className="td-files-search">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <input
-            type="text"
-            placeholder="Search files & links..."
-            value={fileSearch}
-            onChange={(e) => setFileSearch(e.target.value)}
-          />
-        </div>
-      )}
       {files.length === 0 ? (
         <p className="td-empty">No files attached to this task.</p>
       ) : filteredFiles.length === 0 ? (
@@ -1175,22 +1210,6 @@ function FileUploadSection({ taskId, files, onReorder, onFilesChange }) {
                       {f.url}
                     </a>
                   )}
-                </div>
-                <div className="pd-file-box__actions">
-                  <button
-                    className="pd-file-box__btn pd-file-box__btn--edit"
-                    title="Rename"
-                    onClick={() => openEdit(f)}
-                  >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    className="pd-file-box__btn pd-file-box__btn--delete"
-                    title="Delete"
-                    onClick={() => openDelete(f)}
-                  >
-                    <Trash2 size={14} />
-                  </button>
                 </div>
               </div>
             );

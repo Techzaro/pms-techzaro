@@ -2200,6 +2200,11 @@
   border-bottom: 1px solid #e2e8f0;
 }
 
+.pd-cred-header .pd-cred-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .pd-cred-website {
   display: flex;
   align-items: center;
@@ -2244,6 +2249,26 @@
 
 .pd-cred-delete:hover {
   background: #dc2626;
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
+.pd-cred-edit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: #22c55e;
+  color: #ffffff;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pd-cred-edit:hover {
+  background: #16a34a;
   color: #ffffff;
   transform: scale(1.05);
 }
@@ -2679,6 +2704,47 @@
 .aam-tag button:hover {
   background: #dbeafe;
   color: #1d4ed8;
+}
+
+.aam-tag--confirm {
+  background: #fef2f2;
+  color: #991b1b;
+  gap: 6px;
+}
+
+.aam-tag-confirm-msg {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.aam-tag-confirm-yes,
+.aam-tag-confirm-no {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  cursor: pointer;
+}
+
+.aam-tag-confirm-yes {
+  background: #dc2626 !important;
+  color: #fff !important;
+}
+
+.aam-tag-confirm-yes:hover {
+  background: #b91c1c !important;
+  color: #fff !important;
+}
+
+.aam-tag-confirm-no {
+  background: #e5e7eb !important;
+  color: #374151 !important;
+}
+
+.aam-tag-confirm-no:hover {
+  background: #d1d5db !important;
+  color: #111827 !important;
 }
 
 .aam-user-list {

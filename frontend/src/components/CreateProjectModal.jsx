@@ -85,6 +85,8 @@ const CreateProjectModal = ({ onClose }) => {
   const [goalInput, setGoalInput] = useState("");
   const [goalDateTime, setGoalDateTime] = useState("");
   const goalDateTimeRef = useRef(null);
+  const [editingGoal, setEditingGoal] = useState(null);
+  const [editGoalForm, setEditGoalForm] = useState({ text: "", due_datetime: "" });
 
   const [pendingFiles, setPendingFiles] = useState([]);
   const [links, setLinks] = useState([]);
@@ -94,6 +96,11 @@ const CreateProjectModal = ({ onClose }) => {
   const [deliverableProjInput, setDeliverableProjInput] = useState({ title: "", due_datetime: "" });
   const fileInputRef = useRef(null);
   const dropRef = useRef(null);
+  const [editingLink, setEditingLink] = useState(null);
+  const [editLinkForm, setEditLinkForm] = useState({ title: "", url: "" });
+  const [editingFile, setEditingFile] = useState(null);
+  const [editFileForm, setEditFileForm] = useState({ title: "" });
+  const [editFileNewFile, setEditFileNewFile] = useState(null);
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: true } }));
@@ -305,6 +312,19 @@ const CreateProjectModal = ({ onClose }) => {
 
   const handleGoalKeyDown = (e) => {
     if (e.key === "Enter") { e.preventDefault(); handleAddGoal(); }
+  };
+
+  const handleEditGoal = (index) => {
+    const goal = goalsList[index];
+    setEditGoalForm({ text: goal.text, due_datetime: goal.due_datetime || "" });
+    setEditingGoal(index);
+  };
+
+  const handleSaveGoalEdit = () => {
+    if (!editGoalForm.text.trim()) return;
+    setGoalsList((prev) => prev.map((g, i) => i === editingGoal ? { ...g, text: editGoalForm.text.trim(), due_datetime: editGoalForm.due_datetime || null } : g));
+    setEditingGoal(null);
+    setEditGoalForm({ text: "", due_datetime: "" });
   };
 
   const formatDateDisplay = (dateStr) => {
@@ -580,13 +600,10 @@ const CreateProjectModal = ({ onClose }) => {
                             📅 {new Date(g.due_datetime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} {new Date(g.due_datetime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                           </span>
                         )}
-                        <button
-                          type="button"
-                          className="cp-goals-item-remove"
-                          onClick={() => handleRemoveGoal(index)}
-                        >
-                          ✕
-                        </button>
+                        <div className="cp-attachment-actions">
+                          <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Goal" onClick={() => handleEditGoal(index)}>✎</button>
+                          <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete Goal" onClick={() => handleRemoveGoal(index)}>✕</button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -683,60 +700,26 @@ const CreateProjectModal = ({ onClose }) => {
                 <div className="cp-attachments-list">
                   {pendingFiles.map((file, index) => (
                     <div key={index} className="cp-attachment-item">
+                      <span className="cp-attachment-drag" title="Drag to reorder">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                      </span>
                       <span className="cp-attachment-icon">📄</span>
-                      {file.renaming ? (
-                        <>
-                          <input
-                            autoFocus
-                            type="text"
-                            value={file.customName || ""}
-                            onChange={(e) => {
-                              setPendingFiles((p) => {
-                                const updated = [...p];
-                                updated[index] = { ...updated[index], customName: e.target.value };
-                                return updated;
-                              });
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                setPendingFiles((p) => {
-                                  const updated = [...p];
-                                  updated[index] = { ...updated[index], renaming: false };
-                                  return updated;
-                                });
-                              }
-                            }}
-                            style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
-                          />
-                          <button type="button" onClick={() => {
-                            setPendingFiles((p) => {
-                              const updated = [...p];
-                              updated[index] = { ...updated[index], renaming: false };
-                              return updated;
-                            });
-                          }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Save name">&#10003;</button>
-                        </>
-                      ) : (
-                        <>
-                          <span className="cp-attachment-name">{file.customName || file.name}</span>
-                          <span className="cp-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
-                        </>
-                      )}
-                      {!file.renaming && (
-                        <div style={{ display: "flex", gap: 10, flexShrink: 0, marginLeft: 8, alignItems: "center" }}>
-                          <button type="button" onClick={() => {
-                            setPendingFiles((p) => {
-                              const updated = [...p];
-                              updated[index] = { ...updated[index], renaming: true, customName: file.customName || file.name.replace(/\.[^.]+$/, "") };
-                              return updated;
-                            });
-                          }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
-                          <button type="button" className="cp-attachment-remove" onClick={() => { setPendingRemoveItem({ type: "file", index }); setRemoveConfirmOpen(true); }}>✕</button>
-                        </div>
-                      )}
-                      {file.renaming && (
-                        <button type="button" onClick={() => { setPendingRemoveItem({ type: "file", index }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0 }} title="Remove">&#10005;</button>
-                      )}
+                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                        <span className="cp-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{file.customName || file.name}</span>
+                        <span className="cp-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
+                      </div>
+                      <div className="cp-attachment-actions">
+                        <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Name" onClick={() => {
+                          setEditingFile({ type: "pending", index, currentName: file.customName || file.name });
+                          setEditFileForm({ title: file.customName || file.name.replace(/\.[^.]+$/, "") });
+                          setEditFileNewFile(null);
+                        }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                        </button>
+                        <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete File" onClick={() => { setPendingRemoveItem({ type: "file", index }); setRemoveConfirmOpen(true); }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -780,67 +763,27 @@ const CreateProjectModal = ({ onClose }) => {
                 <div className="cp-attachments-list">
                   {links.map((link, index) => (
                     <div key={index} className="cp-attachment-item">
+                      <span className="cp-attachment-drag" title="Drag to reorder">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                      </span>
                       <span className="cp-attachment-icon">🔗</span>
-                      {link.renaming ? (
-                        <>
-                          <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                            <input
-                              autoFocus
-                              type="text"
-                              value={link.customName || ""}
-                              onChange={(e) => {
-                                setLinks((p) => {
-                                  const updated = [...p];
-                                  updated[index] = { ...updated[index], customName: e.target.value };
-                                  return updated;
-                                });
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  setLinks((p) => {
-                                    const updated = [...p];
-                                    updated[index] = { ...updated[index], renaming: false };
-                                    return updated;
-                                  });
-                                }
-                              }}
-                              style={{ flex: 1, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 6px", fontSize: 13, outline: "none" }}
-                            />
-                            <a href={link.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-link" style={{ fontSize: "12px", color: "#6366f1", marginTop: 2 }}>
-                              {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
-                            </a>
-                          </div>
-                          <button type="button" onClick={() => {
-                            setLinks((p) => {
-                              const updated = [...p];
-                              updated[index] = { ...updated[index], renaming: false };
-                              return updated;
-                            });
-                          }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Save name">&#10003;</button>
-                        </>
-                      ) : (
-                        <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                          <span className="cp-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{link.customName || link.name}</span>
-                          <a href={link.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-link" style={{ fontSize: "12px", color: "#6366f1" }}>
-                            {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
-                          </a>
-                        </div>
-                      )}
-                      {!link.renaming && (
-                        <div style={{ display: "flex", gap: 10, flexShrink: 0, alignItems: "center" }}>
-                          <button type="button" onClick={() => {
-                            setLinks((p) => {
-                              const updated = [...p];
-                              updated[index] = { ...updated[index], renaming: true, customName: link.customName || link.name };
-                              return updated;
-                            });
-                          }} style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Rename</button>
-                          <button type="button" className="cp-attachment-remove" onClick={() => { setPendingRemoveItem({ type: "link", index }); setRemoveConfirmOpen(true); }}>✕</button>
-                        </div>
-                      )}
-                      {link.renaming && (
-                        <button type="button" onClick={() => { setPendingRemoveItem({ type: "link", index }); setRemoveConfirmOpen(true); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700, lineHeight: 1, flexShrink: 0 }} title="Remove">&#10005;</button>
-                      )}
+                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                        <span className="cp-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{link.customName || link.name}</span>
+                        <a href={link.url} target="_blank" rel="noopener noreferrer" className="cp-attachment-link" style={{ fontSize: "12px", color: "#6366f1" }}>
+                          {link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}
+                        </a>
+                      </div>
+                      <div className="cp-attachment-actions">
+                        <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Link" onClick={() => {
+                          setEditingLink({ type: "pending", index });
+                          setEditLinkForm({ title: link.customName || link.name, url: link.url });
+                        }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                        </button>
+                        <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete Link" onClick={() => { setPendingRemoveItem({ type: "link", index }); setRemoveConfirmOpen(true); }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1167,6 +1110,134 @@ const CreateProjectModal = ({ onClose }) => {
         cancelText="Cancel"
         danger
       />
+
+      {/* Edit Goal Modal */}
+      {editingGoal !== null && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditingGoal(null); setEditGoalForm({ text: "", due_datetime: "" }); }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 400, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>Edit Goal</h3>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Update the goal text and due date below.</p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Goal</label>
+              <input
+                type="text"
+                value={editGoalForm.text}
+                onChange={(e) => setEditGoalForm((p) => ({ ...p, text: e.target.value }))}
+                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
+              />
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Due Date & Time (optional)</label>
+              <input
+                type="datetime-local"
+                value={editGoalForm.due_datetime}
+                onChange={(e) => setEditGoalForm((p) => ({ ...p, due_datetime: e.target.value }))}
+                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button type="button" onClick={() => { setEditingGoal(null); setEditGoalForm({ text: "", due_datetime: "" }); }} style={{ padding: "10px 20px", border: "1px solid #d1d5db", borderRadius: 8, background: "#fff", color: "#374151", fontSize: 14, fontWeight: 600, cursor: "pointer" }} onMouseEnter={(e) => e.currentTarget.style.background = "#f3f4f6"} onMouseLeave={(e) => e.currentTarget.style.background = "#fff"}>Cancel</button>
+              <button type="button" onClick={handleSaveGoalEdit} disabled={!editGoalForm.text.trim()} style={{ padding: "10px 20px", border: "none", borderRadius: 8, background: "#2563eb", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: editGoalForm.text.trim() ? 1 : 0.5 }} onMouseEnter={(e) => { if (editGoalForm.text.trim()) e.currentTarget.style.background = "#1d4ed8"; }} onMouseLeave={(e) => { if (editGoalForm.text.trim()) e.currentTarget.style.background = "#2563eb"; }}>Save</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Edit Link Modal */}
+      {editingLink && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => setEditingLink(null)}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 400, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>Edit File / Link</h3>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or update the URL below.</p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Title</label>
+              <input
+                type="text"
+                value={editLinkForm.title}
+                onChange={(e) => setEditLinkForm((p) => ({ ...p, title: e.target.value }))}
+                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
+              />
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>URL</label>
+              <input
+                type="url"
+                value={editLinkForm.url}
+                onChange={(e) => setEditLinkForm((p) => ({ ...p, url: e.target.value }))}
+                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
+              />
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button type="button" onClick={() => setEditingLink(null)} style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#f9fafb"} onMouseLeave={(e) => e.target.style.background = "#fff"}>Cancel</button>
+              <button type="button" onClick={() => {
+                if (editingLink.type === "pending") {
+                  setLinks((p) => {
+                    const updated = [...p];
+                    updated[editingLink.index] = { ...updated[editingLink.index], customName: editLinkForm.title, url: editLinkForm.url };
+                    return updated;
+                  });
+                }
+                setEditingLink(null);
+              }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "#6366f1", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#4f46e5"} onMouseLeave={(e) => e.target.style.background = "#6366f1"}>Save</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Edit File Modal */}
+      {editingFile && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditingFile(null); setEditFileNewFile(null); }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>Edit File</h3>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or replace this file.</p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Title</label>
+              <input
+                type="text"
+                value={editFileForm.title}
+                onChange={(e) => setEditFileForm({ title: e.target.value })}
+                autoFocus
+                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
+              />
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>File</label>
+              {editFileNewFile ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8 }}>
+                  <span style={{ fontSize: 14 }}>📄</span>
+                  <span style={{ flex: 1, fontSize: 13, color: "#166534", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editFileNewFile.name}</span>
+                  <span style={{ fontSize: 11, color: "#6b7280" }}>{(editFileNewFile.size / 1024).toFixed(1)} KB</span>
+                  <button type="button" onClick={() => setEditFileNewFile(null)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: 0 }}>✕</button>
+                </div>
+              ) : (
+                <label style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "10px 12px", border: "1px dashed #d1d5db", borderRadius: 8, background: "#f9fafb", color: "#6b7280", fontSize: 13, cursor: "pointer", textAlign: "center" }}>
+                  Click to select a file
+                  <input
+                    type="file"
+                    style={{ display: "none" }}
+                    onChange={(e) => { if (e.target.files.length > 0) { const f = e.target.files[0]; setEditFileNewFile(f); if (!editFileForm.title) setEditFileForm({ title: f.name.replace(/\.[^.]+$/, "") }); } e.target.value = ""; }}
+                  />
+                </label>
+              )}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button type="button" onClick={() => { setEditingFile(null); setEditFileNewFile(null); }} style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#f9fafb"} onMouseLeave={(e) => e.target.style.background = "#fff"}>Cancel</button>
+              <button type="button" onClick={() => {
+                setPendingFiles((p) => {
+                  const updated = [...p];
+                  updated[editingFile.index] = { ...updated[editingFile.index], customName: editFileForm.title, ...(editFileNewFile ? { file: editFileNewFile, name: editFileNewFile.name, size: editFileNewFile.size } : {}) };
+                  return updated;
+                });
+                setEditingFile(null);
+                setEditFileNewFile(null);
+              }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "#6366f1", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#4f46e5"} onMouseLeave={(e) => e.target.style.background = "#6366f1"}>Save</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 };

@@ -4,7 +4,7 @@ import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
 import { showSuccessMessage } from "../utils/notify";
 
-export default function AddAccessModal({ isOpen, onClose, projectId, taskId, projectName, onSuccess, files = [] }) {
+export default function AddAccessModal({ isOpen, onClose, projectId, taskId, projectName, onSuccess, files = [], credential }) {
   const [websiteName, setWebsiteName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -14,13 +14,23 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
   const [error, setError] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const [pendingRemoveUser, setPendingRemoveUser] = useState(null);
+
+  const isEdit = !!credential;
 
   useEffect(() => {
     if (isOpen) {
       fetchUsers();
-      resetForm();
+      if (credential) {
+        setWebsiteName(credential.website_name || "");
+        setUsername(credential.username || "");
+        setPassword(credential.password || "");
+        setAssignedUserIds((credential.assigned_users || []).map((u) => u.id));
+      } else {
+        resetForm();
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, credential]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -74,11 +84,19 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
 
     try {
       const token = authToken();
-      const endpoint = taskId
-        ? `${API_URL}/tasks/${taskId}/access-credentials`
-        : `${API_URL}/projects/${projectId}/access-credentials`;
+      const isEdit = !!credential;
+      let endpoint;
+      if (isEdit) {
+        endpoint = taskId
+          ? `${API_URL}/tasks/${taskId}/access-credentials/${credential.id}`
+          : `${API_URL}/projects/${projectId}/access-credentials/${credential.id}`;
+      } else {
+        endpoint = taskId
+          ? `${API_URL}/tasks/${taskId}/access-credentials`
+          : `${API_URL}/projects/${projectId}/access-credentials`;
+      }
       const res = await fetch(endpoint, {
-        method: "POST",
+        method: isEdit ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
@@ -94,10 +112,10 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to create access credential");
+      if (!res.ok) throw new Error(data.message || `Failed to ${isEdit ? "update" : "create"} access credential`);
 
       onSuccess?.();
-      showSuccessMessage("Access credential", "created");
+      showSuccessMessage("Access credential", isEdit ? "updated" : "created");
       onClose();
     } catch (err) {
       setError(err.message);
@@ -112,7 +130,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
     <div className="modal-overlay" onClick={onClose}>
       <div className="aam-modal" onClick={(e) => e.stopPropagation()}>
         <div className="aam-header">
-          <h3>Add Access Credential</h3>
+          <h3>{isEdit ? "Edit Access Credential" : "Add Access Credential"}</h3>
           <span className="aam-project-name">{projectName}</span>
           <button className="aam-close" onClick={onClose}>
             <X size={18} />
@@ -229,14 +247,24 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
               <div className="aam-selected-tags">
                 {assignedUserIds.map((id) => {
                   const u = users.find((usr) => usr.id === id);
-                  return u ? (
+                  if (!u) return null;
+                  if (pendingRemoveUser === id) {
+                    return (
+                      <span key={id} className="aam-tag aam-tag--confirm">
+                        <span className="aam-tag-confirm-msg">Remove {u.name}?</span>
+                        <button type="button" className="aam-tag-confirm-yes" onClick={() => { toggleUser(id); setPendingRemoveUser(null); }}>Yes</button>
+                        <button type="button" className="aam-tag-confirm-no" onClick={() => setPendingRemoveUser(null)}>No</button>
+                      </span>
+                    );
+                  }
+                  return (
                     <span key={id} className="aam-tag">
                       {u.name}
-                      <button type="button" onClick={() => toggleUser(id)}>
+                      <button type="button" onClick={() => setPendingRemoveUser(id)}>
                         <X size={12} />
                       </button>
                     </span>
-                  ) : null;
+                  );
                 })}
               </div>
             )}
@@ -247,7 +275,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
               Cancel
             </button>
             <button type="submit" className="aam-btn aam-btn-save" disabled={loading}>
-              {loading ? "Saving..." : "Save Credential"}
+              {loading ? (isEdit ? "Updating..." : "Saving...") : (isEdit ? "Update Credential" : "Save Credential")}
             </button>
           </div>
         </form>

@@ -165,7 +165,7 @@ function sanitizeHtml(html) {
   return String(html || "").replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
 }
 
-function CredentialRow({ credential, onDelete }) {
+function CredentialRow({ credential, onDelete, onEdit }) {
   const [copied, setCopied] = useState(false);
   const [copiedUser, setCopiedUser] = useState(false);
 
@@ -224,9 +224,14 @@ function CredentialRow({ credential, onDelete }) {
             </a>
           )}
         </div>
-        <button className="pd-cred-delete" onClick={onDelete} title="Delete credential">
-          <Trash2 size={14} />
-        </button>
+        <div className="pd-cred-actions">
+          <button className="pd-cred-edit" onClick={() => onEdit?.(credential)} title="Edit credential">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+          </button>
+          <button className="pd-cred-delete" onClick={onDelete} title="Delete credential">
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
 
       <div className="pd-cred-fields">
@@ -299,6 +304,10 @@ function ProjectDetails() {
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null });
   const [fileSearch, setFileSearch] = useState("");
+  const [taskSearch, setTaskSearch] = useState("");
+  const [deliverableSearch, setDeliverableSearch] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
+  const [accessSearch, setAccessSearch] = useState("");
   const [editFileItem, setEditFileItem] = useState(null);
   const [editFileName, setEditFileName] = useState("");
   const [editFileUrl, setEditFileUrl] = useState("");
@@ -311,11 +320,13 @@ function ProjectDetails() {
   const [acting, setActing] = useState(false);
   const [orderedTasks, setOrderedTasks] = useState([]);
   const [orderedDeliverables, setOrderedDeliverables] = useState([]);
+  const [goalsChecklist, setGoalsChecklist] = useState([]);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [visibilityUsers, setVisibilityUsers] = useState([]);
   const [visibilitySelected, setVisibilitySelected] = useState({});
   const [visibilitySaving, setVisibilitySaving] = useState(false);
   const [showAddAccessModal, setShowAddAccessModal] = useState(false);
+  const [editingCredential, setEditingCredential] = useState(null);
   const [accessCredentials, setAccessCredentials] = useState([]);
   const [loadingCredentials, setLoadingCredentials] = useState(false);
   const [editingManager, setEditingManager] = useState(false);
@@ -345,6 +356,10 @@ function ProjectDetails() {
   useEffect(() => {
     setOrderedDeliverables(project?.deliverables || []);
   }, [project?.deliverables]);
+
+  useEffect(() => {
+    setGoalsChecklist(Array.isArray(project?.goals_checklist) ? project.goals_checklist : []);
+  }, [project?.goals_checklist]);
 
   useEffect(() => {
     if (tab === "access" && project) {
@@ -385,7 +400,8 @@ function ProjectDetails() {
   }, []);
 
   const handleGoalReorder = useCallback((reordered) => {
-    const list = reordered.map((item) => ({ text: item.text, done: item.done }));
+    const list = reordered.map((item) => ({ text: item.text, done: item.done, due_datetime: item.due_datetime, completed_at: item.completed_at }));
+    setGoalsChecklist(list);
     fetch(`${API}/projects/${projectId}`, {
       method: 'PATCH',
       headers: authHeadersLocal(),
@@ -558,6 +574,12 @@ function ProjectDetails() {
   useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted', 'project:updated', 'project:deleted', 'deliverable:updated'], handleRefresh);
 
   useEffect(() => {
+    const handler = () => loadProject();
+    window.addEventListener('project-file-refresh', handler);
+    return () => window.removeEventListener('project-file-refresh', handler);
+  }, [loadProject]);
+
+  useEffect(() => {
     if (!project?.id || !project?.unviewed_changes_count) return;
     const token = authToken();
     fetch(`${API}/projects/${project.id}/changes/mark-read`, {
@@ -596,12 +618,14 @@ function ProjectDetails() {
   };
 
   const handleToggleGoal = async (index) => {
-    const list = Array.isArray(project.goals_checklist) ? [...project.goals_checklist] : [];
-    if (!list[index]) return;
-    list[index] = { ...list[index], done: !list[index].done };
+    const list = [...goalsChecklist];
+    if (!list[index] || list[index].done) return;
+    list[index] = { ...list[index], done: true, completed_at: new Date().toISOString() };
+    setGoalsChecklist(list);
+    setProject((prev) => ({ ...prev, goals_checklist: list }));
     try {
       const token = authToken();
-      const res = await fetch(`${API}/projects/${projectId}`, {
+      await fetch(`${API}/projects/${projectId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -611,9 +635,6 @@ function ProjectDetails() {
         body: JSON.stringify({ goals_checklist: list }),
         _notifHandled: true,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Update failed");
-      setProject((prev) => ({ ...prev, ...data.project }));
     } catch (err) {
       console.error(err);
       notify.error("Could not update goals.");
@@ -670,11 +691,20 @@ function ProjectDetails() {
   }
 
   const members = project.members || [];
+  const filteredMembers = memberSearch ? members.filter((m) => (m.name || "").toLowerCase().includes(memberSearch.toLowerCase())) : members;
   const milestones = project.milestones || [];
   const files = project.files || [];
-  const checklist = Array.isArray(project.goals_checklist) ? project.goals_checklist : [];
+  const checklist = goalsChecklist;
   const tasks = orderedTasks.length ? orderedTasks : (project.tasks || []);
+  const filteredTasks = taskSearch ? tasks.filter((t) => (t.title || "").toLowerCase().includes(taskSearch.toLowerCase())) : tasks;
   const progress = typeof project.progress_percent === "number" ? project.progress_percent : calculateProjectProgress(project.tasks || []);
+
+  const deliverablesList = orderedDeliverables.length ? orderedDeliverables : (project.deliverables || []);
+  const filteredDeliverables = deliverableSearch ? deliverablesList.filter((d) => {
+    const q = deliverableSearch.toLowerCase();
+    const name = d.deliverable_name || d.name || d.title || d.label || d.description || "";
+    return name.toLowerCase().includes(q);
+  }) : deliverablesList;
 
   const currentUser = getUser();
   const currentUserId = currentUser?.id;
@@ -919,34 +949,34 @@ function ProjectDetails() {
         <div className="pd-shell-left">
           <h2 className="pd-block-title">Project Goals</h2>
           {checklist.length > 0 ? (
-            <SortableTableWrapper
-              items={checklist.map((item, idx) => ({ ...item, sortableId: `goal-${idx}` }))}
-              onReorder={handleGoalReorder}
-              idKey="sortableId"
-              as="div"
-            >
-              {(item, idx, dndProps) => (
-                <div key={item.sortableId} className="pd-goal-row">
-                  <div className="pd-goal-drag-handle">
-                    <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
-                  </div>
+            <div>
+              {checklist.map((item, idx) => (
+                <div key={`goal-${idx}`} className="pd-goal-row">
                   <button
                     type="button"
                     className={`pd-goal-check ${item.done ? "pd-goal-check--on" : "pd-goal-check--off"}`}
-                    onClick={() => handleToggleGoal(idx)}
+                    onClick={() => { if (!item.done) handleToggleGoal(idx); }}
                     aria-pressed={!!item.done}
+                    disabled={item.done}
                   >
                     {item.done ? "✓" : ""}
                   </button>
-                  <span className={item.done ? "pd-goal-done" : ""}>{item.text}</span>
-                  {item.due_datetime && (
-                    <span className="pd-goal-datetime">
-                      📅 {new Date(item.due_datetime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} {new Date(item.due_datetime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                  )}
+                  <span style={{ flex: 1 }} className={item.done ? "pd-goal-done" : ""}>{item.text}</span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, marginLeft: "auto" }}>
+                    {item.due_datetime && (
+                      <span className="pd-goal-datetime">
+                        📅 {new Date(item.due_datetime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} {new Date(item.due_datetime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    )}
+                    {item.done && (
+                      <span className="pd-goal-datetime" style={{ color: item.completed_at ? "#16a34a" : "#9ca3af" }}>
+                        ✅ {item.completed_at ? new Date(item.completed_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + " " + new Date(item.completed_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "Just now"}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              )}
-            </SortableTableWrapper>
+              ))}
+            </div>
           ) : project.goals ? (
             <div className="pd-rich" dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.goals) }} />
           ) : (
@@ -1179,6 +1209,10 @@ function ProjectDetails() {
                         <section className="pd-card-flat pd-card-flat--table">
                           <div className="pd-card-flat__head">
                             <h2 className="pd-block-title pd-block-title--inline">Tasks ({tasks.length})</h2>
+                            <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                              <input type="text" placeholder="Search tasks..." value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} />
+                            </div>
                             <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowTaskModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                               <Plus size={16} /> Add Task
                             </button>
@@ -1195,10 +1229,10 @@ function ProjectDetails() {
                                 <div>Due Date</div>
                                 <div>Action</div>
                               </div>
-                              {tasks.length === 0 ? (
-                                <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>No tasks yet.</div>
+                              {filteredTasks.length === 0 ? (
+                                <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>{taskSearch ? "No tasks match your search." : "No tasks yet."}</div>
                               ) : (
-                                <SortableTableWrapper items={tasks} onReorder={handleTaskReorder} as="div" handleOnly>
+                                <SortableTableWrapper items={filteredTasks} onReorder={handleTaskReorder} as="div" handleOnly>
                                   {(t, idx, dndProps) => {
                                     const statusKey = (t.status || "").toLowerCase();
                                       return (
@@ -1283,6 +1317,10 @@ function ProjectDetails() {
                         <section className="pd-card-flat pd-card-flat--table">
                           <div className="pd-card-flat__head">
                             <h2 className="pd-block-title pd-block-title--inline">Deliverables</h2>
+                            <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                              <input type="text" placeholder="Search deliverables..." value={deliverableSearch} onChange={(e) => setDeliverableSearch(e.target.value)} />
+                            </div>
                           </div>
                           <div className="pd-table-wrap">
                             <div className="deliveries-table-header pd-deliverables-grid">
@@ -1293,11 +1331,11 @@ function ProjectDetails() {
                               <div>Status</div>
                               <div>Action</div>
                             </div>
-                            {(orderedDeliverables.length === 0 && (project.deliverables || []).length === 0) ? (
-                              <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>No deliverables.</div>
+                            {(filteredDeliverables.length === 0) ? (
+                              <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>{deliverableSearch ? "No deliverables match your search." : "No deliverables."}</div>
                             ) : (
                               <SortableTableWrapper
-                                items={(orderedDeliverables.length ? orderedDeliverables : (project.deliverables || [])).map((d, idx) => ({ ...d, sortableId: `del-${d.id || idx}` }))}
+                                items={filteredDeliverables.map((d, idx) => ({ ...d, sortableId: `del-${d.id || idx}` }))}
                                 onReorder={handleDeliverableReorder}
                                 idKey="sortableId"
                                 as="div"
@@ -1368,24 +1406,23 @@ function ProjectDetails() {
                         <section className="pd-card-flat">
                           <div className="pd-card-flat__head">
                             <h2 className="pd-block-title pd-block-title--inline">Platform files & links ({files.length})</h2>
+                            {files.length > 0 && (
+                              <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                <input
+                                  type="text"
+                                  placeholder="Search files & links..."
+                                  value={fileSearch}
+                                  onChange={(e) => setFileSearch(e.target.value)}
+                                />
+                              </div>
+                            )}
                             {isAdminOrManager && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowAddFileModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <Plus size={16} /> Add Files
                               </button>
                             )}
                           </div>
-
-                          {files.length > 0 && (
-                            <div className="pd-files-search">
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                              <input
-                                type="text"
-                                placeholder="Search files & links..."
-                                value={fileSearch}
-                                onChange={(e) => setFileSearch(e.target.value)}
-                              />
-                            </div>
-                          )}
 
                           {files.length === 0 ? (
                             <p className="pd-muted">No files attached.</p>
@@ -1431,10 +1468,6 @@ function ProjectDetails() {
                                           </a>
                                         )}
                                       </div>
-                                      <div style={{ display: "flex", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
-                                        <button type="button" onClick={() => { setEditFileItem(f); setEditFileName(f.name); setEditFileUrl(f.url || ""); }} style={{ background: "#2563eb", border: "none", color: "#fff", cursor: "pointer", padding: "5px 8px", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }} title="Edit"><Pencil size={14} /></button>
-                                        <button type="button" onClick={() => { setPendingDeleteFile(f); setDeleteFileConfirmOpen(true); }} style={{ background: "#dc2626", border: "none", color: "#fff", cursor: "pointer", padding: "5px 8px", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }} title="Delete"><Trash2 size={14} /></button>
-                                      </div>
                                     </div>
                                   );
                                 }}
@@ -1451,6 +1484,10 @@ function ProjectDetails() {
                         <section className="pd-card-flat">
                           <div className="pd-card-flat__head">
                             <h2 className="pd-block-title pd-block-title--inline">Team members</h2>
+                            <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                              <input type="text" placeholder="Search members..." value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} />
+                            </div>
                             <Link to={rolePath("manage-team")} className="pd-link-manage">
                               Manage
                             </Link>
@@ -1468,7 +1505,7 @@ function ProjectDetails() {
                             </div>
                           )}
                           <SortableTableWrapper
-                            items={members.filter((m) => m.id !== project.creator?.id)}
+                            items={filteredMembers.filter((m) => m.id !== project.creator?.id)}
                             onReorder={handleMemberReorder}
                             as="div"
                           >
@@ -1494,6 +1531,10 @@ function ProjectDetails() {
                         <section className="pd-card-flat">
                           <div className="pd-card-flat__head">
                             <h2 className="pd-block-title pd-block-title--inline">Project Access Credentials</h2>
+                            <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                              <input type="text" placeholder="Search access..." value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
+                            </div>
                             {isAdminOrManager && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowAddAccessModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <Plus size={16} /> Add Access
@@ -1508,9 +1549,16 @@ function ProjectDetails() {
                             <p className="pd-muted">Loading credentials...</p>
                           ) : accessCredentials.length === 0 ? (
                             <p className="pd-muted">No access credentials added yet. Click "Add Access" to store login details.</p>
-                          ) : (
-                            <div className="pd-credentials-list">
-                              {accessCredentials.map((cred) => (
+                          ) : (() => {
+                            const filteredAccess = accessSearch ? accessCredentials.filter((cred) => {
+                              const q = accessSearch.toLowerCase();
+                              return (cred.title || "").toLowerCase().includes(q) || (cred.username || "").toLowerCase().includes(q) || (cred.url || "").toLowerCase().includes(q);
+                            }) : accessCredentials;
+                            return filteredAccess.length === 0 ? (
+                              <p className="pd-muted">No access credentials match your search.</p>
+                            ) : (
+                              <div className="pd-credentials-list">
+                                {filteredAccess.map((cred) => (
                                 <CredentialRow
                                   key={cred.id}
                                   credential={cred}
@@ -1518,10 +1566,11 @@ function ProjectDetails() {
                                     setPendingDeleteCredential(cred.id);
                                     setDeleteCredentialConfirmOpen(true);
                                   }}
+                                  onEdit={(c) => setEditingCredential(c)}
                                 />
                               ))}
                             </div>
-                          )}
+                          )})()}
                         </section>
                       </div>
                     )}
@@ -1712,12 +1761,13 @@ function ProjectDetails() {
       />
 
       <AddAccessModal
-        isOpen={showAddAccessModal}
-        onClose={() => setShowAddAccessModal(false)}
+        isOpen={showAddAccessModal || !!editingCredential}
+        onClose={() => { setShowAddAccessModal(false); setEditingCredential(null); }}
         projectId={projectId}
         projectName={project?.title || ""}
-        onSuccess={fetchAccessCredentials}
+        onSuccess={() => { fetchAccessCredentials(); setEditingCredential(null); }}
         files={project?.files || []}
+        credential={editingCredential}
       />
 
       <ConfirmModal
