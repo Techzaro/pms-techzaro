@@ -23,7 +23,7 @@ import API_URL from "../config/api";
 import { timeAgo, formatDateTime } from "../utils/formatDateTime";
 import { useApiQuery } from "../hooks/useApi";
 import { useRelativeTime } from "../hooks/useRelativeTime";
-import { IoPerson, IoPeople, IoEyeOutline } from "react-icons/io5";
+import { IoPerson, IoPeople } from "react-icons/io5";
 import "./Admin.css";
 
 /** Extracts up to 2 initials from a name string (e.g. "John Doe" → "JD") */
@@ -245,7 +245,9 @@ const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, ge
     <div className="dash-project-card" style={{
       minWidth: cardWidth > 0 ? `${cardWidth}px` : `calc((100% - ${(PROJECTS_PER_VIEW - 1) * GAP}px) / ${PROJECTS_PER_VIEW})`,
       flex: cardWidth > 0 ? `0 0 ${cardWidth}px` : `0 0 calc((100% - ${(PROJECTS_PER_VIEW - 1) * GAP}px) / ${PROJECTS_PER_VIEW})`,
+      cursor: "pointer",
     }}
+    onClick={() => navigate(rolePath(`projects/project-details/${project.id}`))}
     >
       {/* HEADER */}
       <div className="dash-project-card-header">
@@ -280,13 +282,6 @@ const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, ge
             <span>No deadline set</span>
           )}
         </div>
-        <button
-          className="action-icon-btn action-view"
-          title="View Project"
-          onClick={(e) => { e.stopPropagation(); navigate(rolePath(`projects/project-details/${project.id}`)); }}
-        >
-          <IoEyeOutline />
-        </button>
       </div>
 
     </div>
