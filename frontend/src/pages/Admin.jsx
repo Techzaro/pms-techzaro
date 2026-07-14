@@ -261,7 +261,9 @@ const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, ge
     <div className="dash-project-card" style={{
       minWidth: cardWidth > 0 ? `${cardWidth}px` : `calc((100% - ${(PROJECTS_PER_VIEW - 1) * GAP}px) / ${PROJECTS_PER_VIEW})`,
       flex: cardWidth > 0 ? `0 0 ${cardWidth}px` : `0 0 calc((100% - ${(PROJECTS_PER_VIEW - 1) * GAP}px) / ${PROJECTS_PER_VIEW})`,
+      cursor: "pointer",
     }}
+    onClick={() => navigate(rolePath(`projects/project-details/${project.id}`))}
     >
       {/* HEADER */}
       <div className="dash-project-card-header">

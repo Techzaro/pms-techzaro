@@ -1432,7 +1432,7 @@ class UserController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Document removed successfully.',
-                'user' => $user->only(array_keys($request->all())),
+                'user' => $user,
             ]);
         }
 
@@ -1472,6 +1472,7 @@ class UserController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Document removed successfully.',
+                'user' => $user,
             ]);
         }
 

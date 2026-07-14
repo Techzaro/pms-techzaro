@@ -39,7 +39,7 @@ class AuditLogController extends Controller
 
     public function show(AuditLog $auditLog): JsonResponse
     {
-        $auditLog->load('user:id,name,email,role');
+        $auditLog->load('user:id,name,email,role,professional_email');
         return response()->json(['data' => $auditLog]);
     }
 

@@ -21,61 +21,34 @@ function AuditLogExportModal({ onClose }) {
     const token = authToken();
     if (!token) return;
     try {
-      const [logRes, docRes] = await Promise.all([
-        fetch(`${API_URL}/audit-logs?per_page=10000`, {
-          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-          skipLoader: true,
-        }),
-        fetch(`${API_URL}/company-documents`, {
-          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-          skipLoader: true,
-        }),
-      ]);
-      if (!logRes.ok) throw new Error("Failed to fetch audit logs");
-      const data = await logRes.json();
+      const res = await fetch(`${API_URL}/audit-logs?per_page=10000`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      });
+      if (!res.ok) throw new Error("Failed to fetch audit logs");
+      const data = await res.json();
       const logs = data.data || [];
 
-      let logoBase64 = null;
-      let logoMime = "image/png";
-      if (docRes.ok) {
-        const docData = await docRes.json();
-        const logoInfo = docData?.documents?.company_logo;
-        if (logoInfo?.exists && logoInfo?.url) {
-          try {
-            const logoResp = await fetch(logoInfo.url, { skipLoader: true });
-            if (logoResp.ok) {
-              logoMime = logoResp.headers.get("content-type") || "image/png";
-              const blob = await logoResp.blob();
-              logoBase64 = await new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result);
-                reader.readAsDataURL(blob);
-              });
-            }
-          } catch (_) {}
-        }
-      }
-
       const doc = new jsPDF({ orientation: "landscape" });
-      const pageWidth = doc.internal.pageSize.getWidth();
+      const PW = doc.internal.pageSize.getWidth();
+      const PH = doc.internal.pageSize.getHeight();
+      const M = 14;
+      const genDate = new Date().toLocaleDateString();
+      const genTime = new Date().toLocaleTimeString();
 
-      if (logoBase64) {
-        doc.addImage(logoBase64, logoMime === "image/jpeg" ? "JPEG" : "PNG", 14, 8, 22, 22);
-        doc.setFontSize(18);
-        doc.setFont("helvetica", "bold");
-        doc.text("Techxaro Solutions", 40, 18);
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "normal");
-        doc.text("Application Audit Logs Report", 40, 25);
-      } else {
-        doc.setFontSize(16);
-        doc.setFont("helvetica", "bold");
-        doc.text("Application Audit Logs", pageWidth / 2, 20, { align: "center" });
-      }
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "normal");
-      doc.text(`Generated on ${new Date().toLocaleString()}`, pageWidth / 2, logoBase64 ? 32 : 27, { align: "center" });
+      // ── HEADER ──
+      doc.setFillColor(15, 23, 42); doc.rect(0, 0, PW, 14, "F");
+      doc.setFillColor(79, 70, 229); doc.roundedRect(M, 2.5, 8, 8, 1.5, 1.5, "F");
+      doc.setFontSize(5.5); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
+      doc.text("TX", M + 4, 8, { align: "center" });
+      doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
+      doc.text("Techxaro", M + 12, 6.5);
+      doc.setFontSize(5.5); doc.setFont("helvetica", "normal"); doc.setTextColor(148, 163, 184);
+      doc.text("PMS Portal", M + 12, 10.5);
+      doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
+      doc.text("APPLICATION AUDIT LOGS REPORT", PW / 2, 8, { align: "center" });
 
+      // ── TABLE ──
       const headers = ["Date & Time", "User", "Module", "Action", "Description", "Status", "IP Address", "Browser", "Device"];
       const rows = logs.map((l) => [
         l.created_at ? new Date(l.created_at).toLocaleString() : "-",
@@ -90,34 +63,42 @@ function AuditLogExportModal({ onClose }) {
       ]);
 
       autoTable(doc, {
-        startY: logoBase64 ? 39 : 34,
+        startY: 18,
+        margin: { left: M, right: M },
         head: [headers],
         body: rows,
         theme: "plain",
         styles: { fontSize: 7, cellPadding: 3, textColor: [31, 41, 55], lineColor: [229, 231, 235], lineWidth: 0.1 },
-        headStyles: { fillColor: [249, 250, 251], textColor: [107, 114, 128], fontStyle: "bold", fontSize: 7 },
-        didDrawCell: (data) => {
+        headStyles: { fillColor: [17, 24, 39], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
+        alternateRowStyles: { fillColor: [249, 250, 251] },
+        didParseCell: (data) => {
           if (data.section === "body" && data.column.index === 5) {
             const status = logs[data.row.index]?.status;
             const color = status === "success" ? [5, 150, 105] : [220, 38, 38];
-            doc.setTextColor(...color);
-            doc.setFont("helvetica", "bold");
-            doc.text(String(data.cell.raw), data.cell.x + data.cell.padding("left"), data.cell.y + data.cell.padding("top") + 4);
-            doc.setTextColor(31, 41, 55);
-            doc.setFont("helvetica", "normal");
+            data.cell.styles.textColor = color;
+            data.cell.styles.fontStyle = "bold";
           }
         },
       });
 
+      // ── FOOTER ──
       const totalPages = doc.internal.getNumberOfPages();
       for (let i = 1; i <= totalPages; i++) {
         doc.setPage(i);
-        doc.setDrawColor(229, 231, 235);
-        doc.line(14, 195, pageWidth - 14, 195);
-        doc.setFontSize(6);
-        doc.setTextColor(156, 163, 175);
-        doc.text("Techxaro Solutions - PMS Audit Trail", 14, 199);
-        doc.text(`Page ${i} of ${totalPages}`, pageWidth - 14, 199, { align: "right" });
+        const fY = PH - 10;
+        doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
+        doc.line(M, fY, PW - M, fY);
+        doc.setFillColor(79, 70, 229); doc.roundedRect(M, fY + 1.5, 5.5, 5.5, 1, 1, "F");
+        doc.setFontSize(4); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
+        doc.text("TX", M + 2.75, fY + 5, { align: "center" });
+        doc.setFontSize(5); doc.setFont("helvetica", "bold"); doc.setTextColor(107, 114, 128);
+        doc.text("Techxaro", M + 8.5, fY + 4);
+        doc.setFontSize(4.5); doc.setFont("helvetica", "normal"); doc.setTextColor(156, 163, 175);
+        doc.text("PMS Portal", M + 8.5, fY + 7.5);
+        doc.text(`Generated Date:   ${genDate}`, M + 38, fY + 4);
+        doc.text(`Generated Time:   ${genTime}`, M + 38, fY + 7.5);
+        doc.text("Report Type:  Application Audit Logs", PW - M - 42, fY + 4);
+        doc.text(`Page ${i} of ${totalPages}`, PW - M, fY + 7.5, { align: "right" });
       }
 
       doc.save(`audit-logs-${new Date().toISOString().slice(0, 10)}.pdf`);

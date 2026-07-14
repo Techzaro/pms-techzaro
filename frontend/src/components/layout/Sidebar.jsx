@@ -13,7 +13,7 @@
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import API_URL from "../../config/api";
-import { authToken, getCurrentRole, getUser, setUser, clearSession, getToken, rolePath, getUrlRole } from "../../utils/auth";
+import { authToken, getCurrentRole, getUser, setUser, rolePath, getUrlRole } from "../../utils/auth";
 
 import {
   MdDashboard,
@@ -24,9 +24,9 @@ import {
   MdPeople,
   MdCalendarToday,
   MdBarChart,
-  MdLogout,
   MdKeyboardArrowDown,
   MdHistory,
+  MdSettings,
 } from "react-icons/md";
 
 import "./Sidebar.css";
@@ -68,6 +68,8 @@ function Sidebar() {
       return next;
     });
   };
+
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   /** Current user info – initialised from local storage. */
   const [user, setUserState] = useState(() => {
@@ -381,18 +383,6 @@ function Sidebar() {
             </Link>
           )}
 
-          {/* Application Logs - admin/manager only */}
-          {(user.role === "admin" || user.role === "manager") && (
-            <Link
-              to={rolePath("audit-logs")}
-              className={`sidebar-link ${isActive("audit-logs") ? "active" : ""}`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MdHistory fontSize={22} />
-              <span>Application Logs</span>
-            </Link>
-          )}
-
           {/* Member/Team Lead – read-only Team link */}
           {(user.role === "member" || user.role === "team_lead" || user.role === "teamlead") && (
             <Link
@@ -451,62 +441,36 @@ function Sidebar() {
             </Link>
           )}
 
-        </div>
-
-        {/* ── Bottom section: My Activity, Profile + Logout ── */}
-        <div className="sidebar-bottom">
-
-          {/* My Activity link (all roles) */}
-          <Link
-            to={rolePath("history")}
-            className={`sidebar-link ${isActive("history") ? "active" : ""}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MdHistory fontSize={22} />
-            <span>My Activity</span>
-          </Link>
-
-          {/* Profile link */}
-          <Link
-            to={rolePath("my-profile")}
-            className={`sidebar-link profile-link ${isActive("my-profile") ? "active" : ""}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MdPerson />
-            <span>Profile</span>
-          </Link>
-
-          {/* Logout link – calls the logout API then clears local session */}
-          <Link
-            to="/"
-            className="sidebar-link logout-link"
-            onClick={async (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const role = getCurrentRole();
-              const token = getToken(role);
-              if (token) {
-                try {
-                  await fetch(`${API_URL}/logout`, {
-                    method: "POST",
-                    headers: {
-                      Accept: "application/json",
-                      Authorization: `Bearer ${token}`,
-                    },
-                    skipLoader: true,
-                    _notifHandled: true,
-                  });
-                } catch {
-                  // ignore logout API errors
-                }
-              }
-              clearSession(role);
-              window.location.href = "/logged-out";
-            }}
-          >
-            <MdLogout />
-            <span>Logout</span>
-          </Link>
+          {/* Settings dropdown – click to toggle like Tasks */}
+          {(user.role === "admin" || user.role === "manager") && (
+            <div className={`sidebar-link ${isActive("audit-logs") ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+              <div
+                onClick={() => setSettingsOpen((p) => !p)}
+                style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
+              >
+                <MdSettings fontSize={22} />
+                <span style={{ flex: 1 }}>Settings</span>
+                <MdKeyboardArrowDown
+                  size={18}
+                  style={{
+                    transition: "transform 0.2s",
+                    transform: settingsOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  }}
+                />
+              </div>
+              {settingsOpen && (
+                <div className="sidebar-sub-links">
+                  <Link
+                    to={rolePath("audit-logs")}
+                    className={`sidebar-sub-link ${isActive("audit-logs") ? "active" : ""}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Application Logs
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
 
         </div>
 

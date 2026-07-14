@@ -7,11 +7,11 @@
  */
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { MdKeyboardArrowDown, MdNotifications } from "react-icons/md";
+import { MdKeyboardArrowDown, MdNotifications, MdPerson, MdHistory, MdLogout, MdLock } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 
 import API_URL from "../../config/api";
-import { authToken, getCurrentRole, getUser, setUser, rolePath, normalizeRole } from "../../utils/auth";
+import { authToken, getCurrentRole, getUser, setUser, clearSession, getToken, rolePath, normalizeRole } from "../../utils/auth";
 import { subscribe } from "../../utils/eventBus";
 import { requestNotificationPermission, showBrowserNotification } from "../../utils/browserNotification";
 import { initFirebase } from "../../utils/firebase";
@@ -21,6 +21,7 @@ import "./Header.css";
 
 import CreateTaskModal from "../CreateTaskModal";
 import CreateProjectModal from "../CreateProjectModal";
+import ChangePasswordModal from "../ChangePasswordModal";
 
 /**
  * Header component – renders the top navigation bar.
@@ -40,6 +41,7 @@ function Header() {
   const [unreadCount, setUnreadCount] = useState(0);
   const prevCountRef = useRef(0);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   // Request browser notification permission and initialise Firebase on mount
   useEffect(() => {
@@ -570,39 +572,58 @@ function Header() {
                   e.stopPropagation()
                 }
               >
-
-                <div className="header-modal-top">
-
-                  <h3>Your Profile</h3>
-
-                  <p className="modal-subtitle">
-                    Latest account details
-                  </p>
-
+                {/* Profile header: gradient with photo + name + role */}
+                <div className="hmc-header">
+                  <div className="hmc-avatar">
+                    {user.avatar ? (
+                      <img src={`${API_URL.replace('/api', '')}/storage/${user.avatar}`} alt={user.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      user.name.charAt(0).toUpperCase()
+                    )}
+                  </div>
+                  <div className="hmc-user-text">
+                    <h4 className="hmc-name">{user.name}</h4>
+                    <span className="hmc-email">{user.professional_email || ""}</span>
+                    <span className="hmc-role-text">{normalizeRole(user.role)}</span>
+                  </div>
                 </div>
 
-                <div className="header-modal-item">
-                  <span>Name</span>
+                {/* Divider */}
+                <div className="hmc-divider" />
 
-                  <strong>
-                    {user.name}
-                  </strong>
-                </div>
-
-                <div className="header-modal-item">
-                  <span>Professional Email</span>
-
-                  <strong>
-                    {user.professional_email || "---"}
-                  </strong>
-                </div>
-
-                <div className="header-modal-item">
-                  <span>Role</span>
-
-                  <strong>
-                    {normalizeRole(user.role)}
-                  </strong>
+                {/* Menu items */}
+                <button className="hmc-menu-item" onClick={() => { setIsProfileOpen(false); navigate(rolePath("my-profile")); }}>
+                  <MdPerson size={20} />
+                  <span>My Profile</span>
+                </button>
+                <button className="hmc-menu-item" onClick={() => { setIsProfileOpen(false); setShowProfileModal(true); }}>
+                  <MdLock size={20} />
+                  <span>Change Password</span>
+                </button>
+                <button className="hmc-menu-item" onClick={() => { setIsProfileOpen(false); navigate(rolePath("history")); }}>
+                  <MdHistory size={20} />
+                  <span>My Activity</span>
+                </button>
+                <div className="hmc-logout-wrap">
+                  <button className="hmc-logout-btn" onClick={async () => {
+                    const role = getCurrentRole();
+                    const token = getToken(role);
+                    if (token) {
+                      try {
+                        await fetch(`${API_URL}/logout`, {
+                          method: "POST",
+                          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+                          skipLoader: true,
+                          _notifHandled: true,
+                        });
+                      } catch { /* ignore */ }
+                    }
+                    clearSession(role);
+                    window.location.href = "/logged-out";
+                  }}>
+                    <MdLogout size={18} />
+                    <span>Logout</span>
+                  </button>
                 </div>
 
               </div>
@@ -637,6 +658,10 @@ function Header() {
             }}
           />
         </div>
+      )}
+
+      {showProfileModal && (
+        <ChangePasswordModal onClose={() => setShowProfileModal(false)} />
       )}
 
     </>

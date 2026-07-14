@@ -549,42 +549,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 </div>
               )}
 
-            </div>
-
-            {/* RIGHT SIDE */}
-            <div className="task-right">
-              {/* PRIORITY */}
-              <div className="task-card">
-                <label>Priority <span style={{ color: "#ef4444" }}>*</span></label>
-                <CustomSelect name="priority" value={form.priority}
-                  onChange={(val) => handleChange({ target: { name: "priority", value: val } })}
-                  options={[{ value: "Medium", label: "Medium" }, { value: "Low", label: "Low" }, { value: "High", label: "High" }]} />
-                {formErrors.priority && <span className="field-error-text">{formErrors.priority}</span>}
-              </div>
-
-              {/* DUE DATE & TIME */}
-              <div className="task-card">
-                <div className="task-card-top"><span>Due Date & Time</span></div>
-                <div className="task-deadline-grid">
-                  <div>
-                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
-                    <input type="datetime-local" value={form.start_date} onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))} min={getNowDatetimeLocal()} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
-                    <input type="datetime-local" value={form.end_date} onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))} min={form.start_date || getNowDatetimeLocal()} />
-                  </div>
-                </div>
-              </div>
-
-              {/* TASK TYPE */}
-              <div className="task-card">
-                <label>Task Type</label>
-                <CustomSelect name="task_type" value={form.task_type}
-                  onChange={(val) => handleChange({ target: { name: "task_type", value: val } })}
-                  options={[{ value: "standard", label: "Standard" }, { value: "recurring", label: "Recurring" }]} />
-              </div>
-
               {/* RECURRING SETTINGS */}
               {form.task_type === "recurring" && (
                 <>
