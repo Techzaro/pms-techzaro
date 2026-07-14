@@ -483,6 +483,21 @@
 .td-toast--success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
 .td-toast--error { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
 
+.pd-files-search{
+  display: flex;
+  align-items: center;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  gap: 10px;
+  width: 300px;
+  padding: 10px 10px;
+}
+.pd-files-search input{
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: #374151;
+}
 /* RESPONSIVE */
 @media (max-width: 1100px) {
   .td-page { flex-direction: column; }

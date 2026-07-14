@@ -438,7 +438,7 @@ const Taskby = () => {
                                 }
                               }}
                             >
-                              <Pencil size={16} />
+                              <Pencil size={20} />
                             </button>
                           )}
                         </div>
@@ -556,7 +556,7 @@ const Taskby = () => {
                               }
                             }}
                           >
-                            <Pencil size={16} />
+                            <Pencil size={20} />
                           </button>
                         )}
                       </div>
