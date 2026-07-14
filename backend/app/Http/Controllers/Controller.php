@@ -23,6 +23,9 @@ abstract class Controller extends BaseController
      */
     protected function clearDashboardCache(int $userId): void
     {
-        Cache::forget("dashboard_{$userId}");
+        Cache::forget("dashboard_{$userId}_my");
+        Cache::forget("dashboard_{$userId}_user");
+        Cache::forget("user_project_ids_{$userId}");
+        Cache::forget("dashboard_recent_activity_{$userId}");
     }
 }

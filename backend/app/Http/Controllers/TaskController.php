@@ -146,13 +146,14 @@ class TaskController extends Controller
     public function mySelfTasks(Request $request)
     {
         $user = $request->user();
+        $isDueTodayFilter = $request->input('status') === 'due_today';
         $isApprovedFilter = $request->input('status') === 'approved';
         $isPendingFilter = $request->input('status') === 'pending';
         $isSubmittedFilter = $request->input('status') === 'submitted';
         $isReopenedFilter = $request->input('status') === 'reopened';
         $isRejectedFilter = $request->input('status') === 'rejected';
         $filters = $request->query();
-        if ($isPendingFilter) {
+        if ($isPendingFilter || $isDueTodayFilter) {
             unset($filters['status']);
         }
 
@@ -161,8 +162,9 @@ class TaskController extends Controller
                 $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
                     ->orWhere('assigned_to', $user->id);
             })
+            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
-            ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
+            ->with(['project:id,title,team_id', 'assigners:id,name,email,role', 'assigner:id,name,email,role'])
             ->orderBy('sort_order')->latest('updated_at')
             ->filter($filters)
             ->limit(200)
@@ -197,6 +199,7 @@ class TaskController extends Controller
             ->where(function ($q) {
                 $q->whereNotNull('assigned_users')->whereRaw('JSON_LENGTH(assigned_users) > 0');
             })
+            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
             ->when($isApprovedFilter, fn ($q) => $q->where('status', 'approved'))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->when($isSubmittedFilter, fn ($q) => $q->where('status', 'submitted'))
@@ -386,7 +389,10 @@ class TaskController extends Controller
 
         $tasks = $tasksQuery->orderBy('sort_order')->latest('updated_at')
             ->when($request->filled('search'), fn ($q) => $q->where('title', 'like', '%'.$request->input('search').'%'))
-            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $userId))
+            ->when($isDueTodayFilter, fn ($q) => $q->where(function ($sub) {
+                $sub->whereDate('tasks.end_date', today())
+                    ->orWhereHas('assignees', fn ($aq) => $aq->whereDate('task_user.due_date', today()));
+            })->whereNotIn('tasks.status', $this->incompleteDueTodayStatuses()))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->when($request->filled('status') && ! $isDueTodayFilter && ! $isPendingFilter, fn ($q) => $q->where('status', $request->input('status')))
             ->limit(100)->get();
@@ -419,9 +425,15 @@ class TaskController extends Controller
                 if (! $assignee && (int) $task->assigned_to === (int) $task->assigned_by) {
                     continue;
                 }
+                if ($isDueTodayFilter && $assignee) {
+                    $effectiveDueDate = ($assignee->pivot->due_date ?? null) ?: $task->end_date;
+                    if (! $effectiveDueDate || \Carbon\Carbon::parse($effectiveDueDate)->toDateString() !== today()->toDateString()) {
+                        continue;
+                    }
+                }
 
                 $clone = clone $task;
-                $clone->assignees = $assignee ? collect([$assignee]) : collect();
+                $clone->setRelation('assignees', $assignee ? collect([$assignee]) : collect());
                 $clone->item_type = 'task';
                 $clone->total_deliverables = $progress['total'];
                 $clone->completed_deliverables = $progress['completed'];
@@ -442,7 +454,7 @@ class TaskController extends Controller
         }
 
         $projects = $projectsQuery
-            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $userId))
+            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
             ->when($isApprovedFilter, fn ($q) => $q->where('status', 'approved'))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->when($isSubmittedFilter, fn ($q) => $q->where('status', 'submitted'))
@@ -635,6 +647,7 @@ class TaskController extends Controller
             'deliverables.*.title' => 'required_with:deliverables|string|max:255',
             'deliverables.*.description' => 'nullable|string|max:2000',
             'deliverables.*.due_date' => 'nullable|date',
+            'deliverables.*.assigned_to' => 'nullable|exists:users,id',
             'due_dates' => 'nullable|array',
             'due_dates.*' => 'nullable|date',
             'task_type' => 'nullable|in:standard,recurring',
@@ -647,6 +660,21 @@ class TaskController extends Controller
             'deliverable_templates.*.quantity' => 'nullable|integer|min:1|max:100',
             'deliverable_templates.*.combined' => 'nullable|boolean',
         ]);
+
+        // Validate deliverable due_date does not exceed task end_date
+        if (! empty($validated['end_date']) && ! empty($validated['deliverables'])) {
+            $endDateTime = \Carbon\Carbon::parse($validated['end_date']);
+            foreach ($validated['deliverables'] as $index => $del) {
+                if (! empty($del['due_date'])) {
+                    $deliverableDateTime = \Carbon\Carbon::parse($del['due_date']);
+                    if ($deliverableDateTime->gt($endDateTime)) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            "deliverables.{$index}.due_date" => 'Deliverable due date cannot exceed the task end date.',
+                        ]);
+                    }
+                }
+            }
+        }
 
         $createdTasks = [];
         $deliverablesToCreate = [];
@@ -684,6 +712,10 @@ class TaskController extends Controller
 
             if (! empty($validated['deliverables'])) {
                 foreach ($validated['deliverables'] as $del) {
+                    // Skip if deliverable is assigned to a different user
+                    if (! empty($del['assigned_to']) && (int) $del['assigned_to'] !== (int) $userId) {
+                        continue;
+                    }
                     $deliverablesToCreate[] = [
                         'project_id' => $project->id,
                         'task_id' => $task->id,
@@ -824,6 +856,13 @@ class TaskController extends Controller
         $this->activityService->log($user->id, 'task_created', 'You created '.$taskCount.' task(s) and assigned them to '.$assigneeNames, 'task', $createdTasks[0]->id);
         $this->clearDashboardCache($user->id);
 
+        // Clear cache for all assignees
+        foreach ($validated['assigned_to'] as $assigneeId) {
+            if ((int) $assigneeId !== (int) $user->id) {
+                $this->clearDashboardCache((int) $assigneeId);
+            }
+        }
+
         try {
             $this->auditService->log(
                 module: 'task_management',
@@ -909,6 +948,7 @@ class TaskController extends Controller
             'deliverables.*.title' => 'required_with:deliverables|string|max:255',
             'deliverables.*.description' => 'nullable|string|max:2000',
             'deliverables.*.due_date' => 'nullable|date',
+            'deliverables.*.assigned_to' => 'nullable|exists:users,id',
             'due_dates' => 'nullable|array',
             'due_dates.*' => 'nullable|date',
             'task_type' => 'nullable|in:standard,recurring',
@@ -921,6 +961,21 @@ class TaskController extends Controller
             'deliverable_templates.*.quantity' => 'nullable|integer|min:1|max:100',
             'deliverable_templates.*.combined' => 'nullable|boolean',
         ]);
+
+        // Validate deliverable due_date does not exceed task end_date
+        if (! empty($validated['end_date']) && ! empty($validated['deliverables'])) {
+            $endDateTime = \Carbon\Carbon::parse($validated['end_date']);
+            foreach ($validated['deliverables'] as $index => $del) {
+                if (! empty($del['due_date'])) {
+                    $deliverableDateTime = \Carbon\Carbon::parse($del['due_date']);
+                    if ($deliverableDateTime->gt($endDateTime)) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            "deliverables.{$index}.due_date" => 'Deliverable due date cannot exceed the task end date.',
+                        ]);
+                    }
+                }
+            }
+        }
 
         $createdTasks = [];
         $deliverableNotifications = [];
@@ -957,7 +1012,9 @@ class TaskController extends Controller
             ];
 
             if (! empty($validated['deliverables'])) {
-                $deliverableData = collect($validated['deliverables'])->map(fn ($del) => [
+                $deliverableData = collect($validated['deliverables'])
+                    ->filter(fn ($del) => empty($del['assigned_to']) || (int) $del['assigned_to'] === (int) $userId)
+                    ->map(fn ($del) => [
                     'title' => $del['title'], 'description' => $del['description'] ?? null,
                     'status' => 'pending', 'priority' => $validated['priority'],
                     'due_date' => $del['due_date'] ?? $validated['end_date'] ?? null,
@@ -1074,6 +1131,13 @@ class TaskController extends Controller
         $this->activityService->log($user->id, 'task_created', 'You created '.$taskCount.' task(s) and assigned them to '.$assigneeNames, 'task', $createdTasks[0]->id);
         $this->clearDashboardCache($user->id);
 
+        // Clear cache for all assignees
+        foreach ($validated['assigned_to'] as $assigneeId) {
+            if ((int) $assigneeId !== (int) $user->id) {
+                $this->clearDashboardCache((int) $assigneeId);
+            }
+        }
+
         try {
             $this->auditService->log(
                 module: 'task_management',
@@ -1130,9 +1194,11 @@ class TaskController extends Controller
             'assigned_to' => 'nullable|array',
             'assigned_to.*' => 'integer|exists:users,id',
             'deliverables' => 'nullable|array',
+            'deliverables.*.id' => 'nullable|integer|exists:deliverables,id',
             'deliverables.*.title' => 'required_with:deliverables|string|max:255',
             'deliverables.*.description' => 'nullable|string|max:2000',
             'deliverables.*.due_date' => 'nullable|date',
+            'deliverables.*.assigned_to' => 'nullable|exists:users,id',
             'existing_file_names' => 'nullable|array',
             'existing_file_names.*.id' => 'required_with:existing_file_names|exists:task_files,id',
             'existing_file_names.*.name' => 'required_with:existing_file_names|string|max:255',
@@ -1226,14 +1292,32 @@ class TaskController extends Controller
 
         $addedDeliverables = [];
         if (! empty($validated['deliverables'])) {
-            $delData = collect($validated['deliverables'])->map(fn ($del) => [
-                'title' => $del['title'], 'description' => $del['description'] ?? null,
-                'due_date' => $del['due_date'] ?? null, 'assigned_to' => $task->assigned_to,
-                'created_by' => $user->id,
-            ])->toArray();
-            $createdDeliverables = $task->deliverables()->createMany($delData);
-            $addedDeliverables = array_column($delData, 'title');
-            $changes[] = ['field_name' => 'deliverables', 'label' => 'Deliverable Added', 'old_value' => '', 'new_value' => implode(', ', $addedDeliverables)];
+            $existingDeliverableIds = $task->deliverables()->pluck('id')->toArray();
+            $submittedIds = collect($validated['deliverables'])->pluck('id')->filter()->values()->toArray();
+
+            // Update existing deliverables
+            foreach ($validated['deliverables'] as $del) {
+                if (! empty($del['id'])) {
+                    $task->deliverables()->where('id', $del['id'])->update([
+                        'title' => $del['title'],
+                        'due_date' => $del['due_date'] ?? null,
+                        'assigned_to' => $del['assigned_to'] ?? $task->assigned_to,
+                    ]);
+                }
+            }
+
+            // Create only new deliverables (ones without id)
+            $newDeliverables = collect($validated['deliverables'])->filter(fn ($del) => empty($del['id']));
+            if ($newDeliverables->isNotEmpty()) {
+                $delData = $newDeliverables->map(fn ($del) => [
+                    'title' => $del['title'], 'description' => $del['description'] ?? null,
+                    'due_date' => $del['due_date'] ?? null, 'assigned_to' => $del['assigned_to'] ?? $task->assigned_to,
+                    'created_by' => $user->id,
+                ])->toArray();
+                $createdDeliverables = $task->deliverables()->createMany($delData);
+                $addedDeliverables = array_column($delData, 'title');
+                $changes[] = ['field_name' => 'deliverables', 'label' => 'Deliverable Added', 'old_value' => '', 'new_value' => implode(', ', $addedDeliverables)];
+            }
         }
 
         // Bulk create changes and workflow events
@@ -1448,6 +1532,13 @@ class TaskController extends Controller
 
         $this->clearDashboardCache($user->id);
 
+        // Clear cache for all assignees
+        foreach ($assigneeIds as $assigneeId) {
+            if ((int) $assigneeId !== (int) $user->id) {
+                $this->clearDashboardCache((int) $assigneeId);
+            }
+        }
+
         return response()->json(['success' => true, 'message' => 'Task status updated', 'task' => $task->fresh()->load('assignees:id,name,email,role')]);
     }
 
@@ -1506,9 +1597,17 @@ class TaskController extends Controller
 
             // Log activity
             $this->activityService->log($user->id, 'task_completed', 'You completed task "'.$task->title.'"', 'task', $task->id);
-            $this->clearDashboardCache($user->id);
+        $this->clearDashboardCache($user->id);
 
-            try {
+        // Also clear dashboard cache for all assignees so their "today tasks" and summary refresh
+        $taskAssigneeIds = $task->assignees()->pluck('users.id')->toArray();
+        foreach ($taskAssigneeIds as $assigneeId) {
+            if ((int) $assigneeId !== (int) $user->id) {
+                $this->clearDashboardCache((int) $assigneeId);
+            }
+        }
+
+        try {
                 $this->auditService->log(
                     module: 'task_management',
                     action: 'complete',
@@ -2463,12 +2562,10 @@ class TaskController extends Controller
     private function applyDueTodayFilter($query, $userId = null)
     {
         return $query->where(function ($q) use ($userId) {
-            $q->whereDate('end_date', today());
             if ($userId) {
-                $q->orWhereHas('assignees', function ($aq) use ($userId) {
-                    $aq->where('users.id', $userId)
-                        ->whereDate('task_user.due_date', today());
-                });
+                $q->whereRaw('DATE(COALESCE((SELECT pu.due_date FROM task_user pu WHERE pu.task_id = tasks.id AND pu.user_id = ? LIMIT 1), tasks.end_date)) = ?', [$userId, today()->toDateString()]);
+            } else {
+                $q->whereDate('end_date', today());
             }
         })->whereNotIn('status', $this->incompleteDueTodayStatuses());
     }

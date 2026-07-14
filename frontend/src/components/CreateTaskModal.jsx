@@ -164,6 +164,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
 
   const [deliverables, setDeliverables] = useState([]);
   const [deliverableInput, setDeliverableInput] = useState({ title: "", due_datetime: "" });
+  const [openDeliverableDropdown, setOpenDeliverableDropdown] = useState(null);
 
   const [dueDates, setDueDates] = useState({});
   const [requirementsList, setRequirementsList] = useState([]);
@@ -196,6 +197,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: true } }));
     return () => window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: false } }));
   }, []);
+
+  useEffect(() => {
+    if (openDeliverableDropdown === null) return;
+    const handleClick = () => setOpenDeliverableDropdown(null);
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [openDeliverableDropdown]);
 
   useEffect(() => {
     const token = authToken();
@@ -273,11 +281,15 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     if (!deliverableInput.title.trim()) return;
     const dt = deliverableInput.due_datetime;
     const dueDate = toUTCIso(dt);
-    setDeliverables((prev) => [...prev, { title: deliverableInput.title.trim(), due_date: dueDate }]);
+    setDeliverables((prev) => [...prev, { title: deliverableInput.title.trim(), due_date: dueDate, assigned_to: null }]);
     setDeliverableInput({ title: "", due_datetime: "" });
   };
   const handleRemoveDeliverable = (index) => setDeliverables((prev) => prev.filter((_, i) => i !== index));
   const handleDeliverableKeyDown = (e) => { if (e.key === "Enter") { e.preventDefault(); handleAddDeliverable(); } };
+  const handleDeliverableAssignee = (index, userId) => {
+    setDeliverables((prev) => prev.map((d, i) => i === index ? { ...d, assigned_to: userId || null } : d));
+    setOpenDeliverableDropdown(null);
+  };
 
   const confirmRemoveItem = () => {
     const { type, index } = pendingRemoveItem;
@@ -360,7 +372,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
           task_type: form.task_type,
           recurrence_settings: settings,
           deliverable_templates: validTemplates.length > 0 ? validTemplates.map((t) => ({ title: t.title.trim(), description: t.description || null, quantity: t.quantity || 1, combined: t.combined || false })) : undefined,
-          deliverables: deliverables.length > 0 ? deliverables.map((d) => ({ title: d.title, due_date: d.due_date || null })) : undefined,
+          deliverables: deliverables.length > 0 ? deliverables.map((d) => ({ title: d.title, due_date: d.due_date || null, assigned_to: d.assigned_to || null })) : undefined,
         };
 
         const pid = projectId || form.project_id;
@@ -451,35 +463,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 <textarea name="description" placeholder="Enter task description.." value={form.description} onChange={handleChange}></textarea>
               </div>
 
-              {pendingFiles.length > 0 && (
-                <div className="cp-attachments-list">
-                  {pendingFiles.map((file, index) => (
-                    <div key={index} className="cp-attachment-item">
-                      <span className="cp-attachment-drag" title="Drag to reorder">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
-                      </span>
-                      <span className="task-attachment-icon">📄</span>
-                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                        <span className="task-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{file.customName || file.name}</span>
-                        <span className="task-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
-                      </div>
-                      <div className="cp-attachment-actions">
-                        <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Name" onClick={() => {
-                          setEditingFile({ type: "pending", index, currentName: file.customName || file.name });
-                          setEditFileForm({ title: file.customName || file.name.replace(/\.[^.]+$/, "") });
-                          setEditFileNewFile(null);
-                          setEditFileDeleted(false);
-                          setEditFileDeleteConfirm(false);
-                        }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                        </button>
-                        <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete File" onClick={() => { setPendingRemoveItem({ type: "file", index }); setRemoveConfirmOpen(true); }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-              {/* ATTACHMENTS */}
+              {/* LINKS & ATTACHMENTS */}
               <div className="task-field">
                 <label>Links & Attachment</label>
                 <div className="task-drop-zone" ref={dropRef} onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onClick={() => fileInputRef.current?.click()}>
@@ -492,19 +476,40 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                   <span className="task-drop-browse">or browse</span>
                   <input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { if (e.target.files.length > 0) handleFiles(e.target.files); e.target.value = ""; }} />
                 </div>
+
                 {pendingFiles.length > 0 && (
-                  <div className="task-attachments-list">
+                  <div className="cp-attachments-list">
                     {pendingFiles.map((file, index) => (
-                      <div key={index} className="task-attachment-item">
+                      <div key={index} className="cp-attachment-item">
+                        <span className="cp-attachment-drag" title="Drag to reorder">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                        </span>
                         <span className="task-attachment-icon">📄</span>
-                        <span className="task-attachment-name">{file.customName || file.name}</span>
-                        <span className="task-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
-                        <button type="button" className="task-attachment-remove" onClick={() => { setPendingRemoveItem({ type: "file", index }); setRemoveConfirmOpen(true); }}>✕</button>
+                        <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                          <span className="task-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{file.customName || file.name}</span>
+                          <span className="task-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
+                        </div>
+                        <div className="cp-attachment-actions">
+                          <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Name" onClick={() => {
+                            setEditingFile({ type: "pending", index, currentName: file.customName || file.name });
+                            setEditFileForm({ title: file.customName || file.name.replace(/\.[^.]+$/, "") });
+                            setEditFileNewFile(null);
+                            setEditFileDeleted(false);
+                            setEditFileDeleteConfirm(false);
+                          }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                          </button>
+                          <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete File" onClick={() => { setPendingRemoveItem({ type: "file", index }); setRemoveConfirmOpen(true); }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
+
                 <div className="task-or-divider"><span className="task-or-line"></span><span className="task-or-text">OR</span><span className="task-or-line"></span></div>
+
                 <div className="task-link-input-row" style={{ flexDirection: "column", gap: "8px" }}>
                   <input type="text" placeholder="Link title (e.g. Figma Design, Drive Folder)" value={linkTitleInput} onChange={(e) => setLinkTitleInput(e.target.value)} />
                   <div style={{ display: "flex", gap: "8px" }}>
@@ -512,38 +517,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                     <button type="button" className="task-link-add-btn" onClick={handleAddLink} disabled={!linkInput.trim()}>Add Link</button>
                   </div>
                 </div>
-                {links.length > 0 && (
-                  <div className="task-attachments-list">
-                    {links.map((link, index) => (
-                      <div key={index} className="task-attachment-item">
-                        <span className="task-attachment-icon">🔗</span>
-                        <span className="task-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{link.customName || link.name}</span>
-                        <a href={link.url} target="_blank" rel="noopener noreferrer" className="task-attachment-link" style={{ fontSize: "12px", color: "#6366f1", flex: 1 }}>{link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}</a>
-                        <button type="button" className="task-attachment-remove" onClick={() => { setPendingRemoveItem({ type: "link", index }); setRemoveConfirmOpen(true); }}>✕</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* RIGHT SIDE */}
-            <div className="task-right">
-              {/* PRIORITY */}
-              <div className="task-card">
-                <label>Priority <span style={{ color: "#ef4444" }}>*</span></label>
-                <CustomSelect name="priority" value={form.priority}
-                  onChange={(val) => handleChange({ target: { name: "priority", value: val } })}
-                  options={[{ value: "Medium", label: "Medium" }, { value: "Low", label: "Low" }, { value: "High", label: "High" }]} />
-                {formErrors.priority && <span className="field-error-text">{formErrors.priority}</span>}
-              </div>
-
-              {/* TASK TYPE */}
-              <div className="task-card">
-                <label>Task Type</label>
-                <CustomSelect name="task_type" value={form.task_type}
-                  onChange={(val) => handleChange({ target: { name: "task_type", value: val } })}
-                  options={[{ value: "standard", label: "Standard" }, { value: "recurring", label: "Recurring" }]} />
               </div>
 
               {links.length > 0 && (
@@ -571,6 +544,47 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                         </button>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+            </div>
+
+            {/* RIGHT SIDE */}
+            <div className="task-right">
+              {/* PRIORITY */}
+              <div className="task-card">
+                <label>Priority <span style={{ color: "#ef4444" }}>*</span></label>
+                <CustomSelect name="priority" value={form.priority}
+                  onChange={(val) => handleChange({ target: { name: "priority", value: val } })}
+                  options={[{ value: "Medium", label: "Medium" }, { value: "Low", label: "Low" }, { value: "High", label: "High" }]} />
+                {formErrors.priority && <span className="field-error-text">{formErrors.priority}</span>}
+              </div>
+
+              {/* DUE DATE & TIME */}
+              <div className="task-card">
+                <div className="task-card-top"><span>Due Date & Time</span></div>
+                <div className="task-deadline-grid">
+                  <div>
+                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
+                    <input type="datetime-local" value={form.start_date} onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))} min={getNowDatetimeLocal()} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
+                    <input type="datetime-local" value={form.end_date} onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))} min={form.start_date || getNowDatetimeLocal()} />
+                  </div>
+                </div>
+              </div>
+
+              {/* TASK TYPE */}
+              <div className="task-card">
+                <label>Task Type</label>
+                <CustomSelect name="task_type" value={form.task_type}
+                  onChange={(val) => handleChange({ target: { name: "task_type", value: val } })}
+                  options={[{ value: "standard", label: "Standard" }, { value: "recurring", label: "Recurring" }]} />
+              </div>
+
               {/* RECURRING SETTINGS */}
               {form.task_type === "recurring" && (
                 <>
@@ -706,7 +720,19 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                   <div>
                     <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Due Date & Time</label>
                     <input type="datetime-local" value={deliverableInput.due_datetime}
-                      onChange={(e) => setDeliverableInput((prev) => ({ ...prev, due_datetime: e.target.value }))} />
+                      min={getNowDatetimeLocal()}
+                      max={form.end_date || undefined}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (form.end_date && val && val > form.end_date) {
+                          setDeliverableInput((prev) => ({ ...prev, due_datetime: form.end_date }));
+                        } else {
+                          setDeliverableInput((prev) => ({ ...prev, due_datetime: val }));
+                        }
+                      }} />
+                    {form.end_date && (
+                      <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(form.end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                    )}
                   </div>
                 </div>
                 <button type="button" className="task-add-phase-btn" onClick={handleAddDeliverable}
@@ -714,31 +740,67 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
 
                 {deliverables.length > 0 && (
                   <div className="task-phase-list" style={{ marginTop: 10 }}>
-                    {deliverables.map((d, index) => (
-                      <div key={index} className="task-phase-item" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #f3f4f6" }}>
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7c3aed", display: "inline-block", flexShrink: 0 }}></span>
-                        <span style={{ flex: 1, fontSize: 13, color: "#374151" }}>{d.title}</span>
-                        <span style={{ fontSize: 11, color: "#6b7280" }}>{d.due_date ? new Date(d.due_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "No due date"}</span>
-                        <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "deliverable", index }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
-                      </div>
-                    ))}
+                    {deliverables.map((d, index) => {
+                      const assignedUser = d.assigned_to ? displayUsers.find(u => String(u.id) === String(d.assigned_to)) : null;
+                      const isDropdownOpen = openDeliverableDropdown === index;
+                      return (
+                        <div key={index} className="task-phase-item" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #f3f4f6", position: "relative" }}>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7c3aed", display: "inline-block", flexShrink: 0 }}></span>
+                          <span style={{ flex: 1, fontSize: 13, color: "#374151" }}>{d.title}</span>
+                          <span style={{ fontSize: 11, color: "#6b7280" }}>{d.due_date ? new Date(d.due_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "No due date"}</span>
+                          <div style={{ position: "relative" }}>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setOpenDeliverableDropdown(isDropdownOpen ? null : index); }}
+                              style={{
+                                fontSize: 11, cursor: "pointer", padding: "3px 8px", borderRadius: 4, border: "1px solid #e5e7eb",
+                                background: assignedUser ? "#eef2ff" : "#f9fafb", color: assignedUser ? "#6366f1" : "#6b7280",
+                                fontWeight: 500, whiteSpace: "nowrap",
+                              }}
+                            >
+                              {assignedUser ? assignedUser.name : "Assign"}
+                            </button>
+                            {isDropdownOpen && (
+                              <div onClick={(e) => e.stopPropagation()} style={{
+                                position: "absolute", bottom: "100%", right: 0, zIndex: 100,
+                                background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
+                                boxShadow: "0 4px 12px rgba(0,0,0,0.1)", minWidth: 150, padding: "4px 0", marginBottom: 4,
+                              }}>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); handleDeliverableAssignee(index, null); }}
+                                  style={{
+                                    display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
+                                    fontSize: 12, cursor: "pointer", background: !assignedUser ? "#f3f4f6" : "transparent",
+                                    border: "none", color: "#374151",
+                                  }}
+                                >
+                                  All assignees
+                                </button>
+                                {displayUsers.filter(u => form.assigned_to.includes(u.id)).map((u) => (
+                                  <button
+                                    key={u.id}
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleDeliverableAssignee(index, u.id); }}
+                                    style={{
+                                      display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
+                                      fontSize: 12, cursor: "pointer",
+                                      background: String(d.assigned_to) === String(u.id) ? "#f3f4f6" : "transparent",
+                                      border: "none", color: "#374151",
+                                    }}
+                                  >
+                                    {u.name}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "deliverable", index }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
-              </div>
-
-              {/* DUE DATE & TIME */}
-              <div className="task-card">
-                <div className="task-card-top"><span>Due Date & Time</span></div>
-                <div className="task-deadline-grid">
-                  <div>
-                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
-                    <input type="datetime-local" value={form.start_date} onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))} min={getNowDatetimeLocal()} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
-                    <input type="datetime-local" value={form.end_date} onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))} min={form.start_date || getNowDatetimeLocal()} />
-                  </div>
-                </div>
               </div>
 
               {/* REQUIREMENTS */}
@@ -766,13 +828,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
       <ConfirmModal isOpen={removeConfirmOpen} onClose={() => { setRemoveConfirmOpen(false); setPendingRemoveItem({ type: "", index: -1 }); }}
         onConfirm={confirmRemoveItem} title="Remove Item" message="Are you sure you want to remove this item? This action cannot be undone."
         confirmText="Remove" cancelText="Cancel" danger />
-    </>,
-    document.body
-  );
-
-  return (
-    <>
-      {modalContent}
 
       {/* Edit Link Modal */}
       {editingLink && createPortal(
@@ -897,7 +952,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         </div>,
         document.body
       )}
-    </>
+    </>,
+    document.body
   );
 };
 

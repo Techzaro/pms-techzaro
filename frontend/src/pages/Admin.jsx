@@ -23,6 +23,7 @@ import API_URL from "../config/api";
 import { timeAgo, formatDateTime } from "../utils/formatDateTime";
 import { useApiQuery } from "../hooks/useApi";
 import { useRelativeTime } from "../hooks/useRelativeTime";
+import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { IoPerson, IoPeople, IoEyeOutline } from "react-icons/io5";
 import "./Admin.css";
 
@@ -121,9 +122,11 @@ const AVATAR_COLORS = [
   { bg: "#FCE7F3", text: "#DB2777" },
 ];
 
-const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, rolePath, cardWidth, getProgressColor, PROJECTS_PER_VIEW, GAP, currentRole }) {
+const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, rolePath, cardWidth, getProgressColor, PROJECTS_PER_VIEW, GAP, currentRole, dashboardMode }) {
   const isManager = currentRole === "admin" || currentRole === "manager";
   const assignees = item.assignees || [];
+  const isMyDashboard = dashboardMode === "my";
+  const currentUser = getUser();
 
   const handleCardClick = (e) => {
     if (isManager) {
@@ -135,7 +138,7 @@ const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, r
     }
   };
 
-  const handleAvatarClick = (e, assignee) => {
+  const handleAvatarClick = (e, user) => {
     e.stopPropagation();
     if (item.module === "project") {
       navigate(rolePath(`projects/project-details/${item.entity_id}`), { state: { from: "taskby" } });
@@ -143,6 +146,17 @@ const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, r
       navigate(rolePath(`tasks/task-details/${item.entity_id}`), { state: { from: "taskby" } });
     }
   };
+
+  // My Dashboard: show only the assigner/creator's avatar + time from MY pivot due_date
+  // User Dashboard: show all assignees' avatars, no time
+  const displayUsers = isMyDashboard
+    ? (item.assigner ? [item.assigner] : (item.creator ? [item.creator] : []))
+    : assignees;
+
+  // Get the due time from the CURRENT USER's pivot (the deadline given to me)
+  const myPivotDueDate = isMyDashboard
+    ? (assignees.find(a => a.id === currentUser?.id)?.pivot?.due_date || null)
+    : null;
 
   return (
     <div className="dash-task-card" style={{
@@ -170,28 +184,30 @@ const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, r
         </div>
       </div>
 
-      {assignees.length > 0 && (
+      {displayUsers.length > 0 && (
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
-          {assignees.map((a) => {
-            const colorIdx = (a.id || 0) % AVATAR_COLORS.length;
+          {displayUsers.map((u) => {
+            const colorIdx = (u.id || 0) % AVATAR_COLORS.length;
             const colors = AVATAR_COLORS[colorIdx];
-            const dueTime = a.pivot?.due_date
-              ? new Date(a.pivot.due_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            // My Dashboard: show time from the current user's pivot due_date
+            // User Dashboard: no time shown
+            const dueTime = isMyDashboard && myPivotDueDate
+              ? new Date(myPivotDueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               : null;
             return (
-              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <div key={u.id} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                 <div
-                  onClick={(e) => handleAvatarClick(e, a)}
-                  title={a.name}
+                  onClick={isMyDashboard ? undefined : (e) => handleAvatarClick(e, u)}
+                  title={u.name}
                   style={{
                     width: 36, height: 36, borderRadius: "50%",
                     background: colors.bg, color: colors.text,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "10px", fontWeight: 700, cursor: "pointer",
+                    fontSize: "10px", fontWeight: 700, cursor: isMyDashboard ? "default" : "pointer",
                     border: "2px solid #fff", flexShrink: 0,
                   }}
                 >
-                  {getInitials(a.name)}
+                  {getInitials(u.name)}
                 </div>
                 {dueTime && (
                   <span style={{ fontSize: "11px", color: "#6b7280", whiteSpace: "nowrap" }}>
@@ -281,11 +297,13 @@ const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, ge
           )}
         </div>
         <button
-          className="action-icon-btn action-view"
           title="View Project"
           onClick={(e) => { e.stopPropagation(); navigate(rolePath(`projects/project-details/${project.id}`)); }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "#4F46E5"; e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = "#4F46E5"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "#EEF2FF"; e.currentTarget.style.color = "#4F46E5"; e.currentTarget.style.borderColor = "#C7D2FE"; }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "44px", height: "44px", minWidth: "44px", minHeight: "44px", borderRadius: "10px", border: "1px solid #C7D2FE", background: "#EEF2FF", color: "#4F46E5", cursor: "pointer", flexShrink: 0 }}
         >
-          <IoEyeOutline />
+          <IoEyeOutline size={22} />
         </button>
       </div>
 
@@ -326,19 +344,19 @@ function Admin() {
     });
   };
 
-  // For admin/manager: My Dashboard = incoming (mode=my), User Dashboard = outgoing (mode=user)
-  // For teamlead/member: My Dashboard = outgoing (mode=user), User Dashboard = incoming (mode=my)
-  const apiMode = isAdminManager
-    ? dashboardMode
-    : (dashboardMode === "my" ? "user" : "my");
+  // For all roles: My Dashboard = incoming (mode=my), User Dashboard = outgoing (mode=user)
+  const apiMode = dashboardMode;
 
   // Fetch dashboard summary data (active projects, tasks due today, etc.)
-  const { data: dashboard, isLoading } = useApiQuery(
+  const { data: dashboard, isLoading, refetch: refetchDashboard } = useApiQuery(
     ["dashboard", apiMode],
     "/dashboard",
     { mode: apiMode },
     { staleTime: 120000, refetchOnMount: false, refetchOnWindowFocus: false, refetchInterval: false }
   );
+
+  // Auto-refresh dashboard when tasks, projects, or deliverables change
+  useRefreshOnEvent(["task:created", "task:updated", "task:deleted", "project:created", "project:updated", "project:deleted", "deliverable:updated", "data:changed"], () => refetchDashboard());
 
   // Listen for modal open/close events from child components
   useEffect(() => {
@@ -366,13 +384,12 @@ function Admin() {
   ], [summaryData.active_projects, summaryData.tasks_due_today, summaryData.approved_tasks, summaryData.pending_tasks]);
 
   // Navigate to filtered list when a summary card is clicked
-  // For admin/manager: "my" = incoming (tasks), "user" = outgoing (taskby)
-  // For teamlead/member: "my" = outgoing (taskby), "user" = incoming (tasks)
+  // For all roles: "my" = incoming (tasks), "user" = outgoing (taskby)
   const handleSummaryCardClick = useCallback((card) => {
     if (card.filter === "active-projects") {
       navigate(`${rolePath("projects")}?filter=active`);
     } else {
-      const isOutgoing = isAdminManager ? dashboardMode === "user" : dashboardMode === "my";
+      const isOutgoing = dashboardMode === "user";
       const basePath = rolePath(isOutgoing ? "taskby" : "tasks");
       if (card.filter === "tasks-due-today") navigate(`${basePath}?status=due_today`);
       else if (card.filter === "approved-tasks") navigate(`${basePath}?status=approved`);
@@ -399,6 +416,8 @@ function Admin() {
         end_date: w.end_date || null,
         priority: w.priority || 'Medium',
         assigned_by: w.assigned_by || null,
+        assigner: w.assigner || null,
+        creator: w.creator || null,
       };
     });
     // Deduplicate by title — if multiple tasks share the same title, show one card
@@ -609,7 +628,7 @@ function Admin() {
           <div className="welcome-box" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
               <h1>{greeting}</h1>
-              <p>{(isAdminManager ? dashboardMode === "my" : dashboardMode === "user")
+              <p>{dashboardMode === "my"
                 ? "Viewing tasks assigned to you."
                 : "Viewing tasks you assigned to others."}</p>
             </div>
@@ -647,7 +666,7 @@ function Admin() {
             <div className="workload-card-header">
               <h3 style={{fontSize: "22px", fontWeight: "700"}}>Today's Tasks</h3>
               <button className="workload-view-btn" onClick={() => {
-                const isOutgoing = isAdminManager ? dashboardMode === "user" : dashboardMode === "my";
+                const isOutgoing = dashboardMode === "user";
                 navigate(rolePath(isOutgoing ? "taskby" : "tasks"));
               }}>View All Tasks</button>
             </div>
@@ -672,6 +691,7 @@ function Admin() {
                         PROJECTS_PER_VIEW={PROJECTS_PER_VIEW}
                         GAP={GAP}
                         currentRole={currentRole}
+                        dashboardMode={dashboardMode}
                       />
                     ))}
                   </div>
@@ -722,6 +742,7 @@ function Admin() {
             )}
           </div>
           {/* Only show extra sections in the default mode for each role */}
+          {/* admin/manager: show on "user" mode; teamlead/member: show on "my" mode */}
           {(isAdminManager ? dashboardMode === "user" : dashboardMode === "my") && (<>
           <div className="active-projects-section" style={{
             background: "#fff", borderRadius: "20px", padding: "24px",
@@ -731,7 +752,7 @@ function Admin() {
               <h3 style={{ margin: 0, fontSize: "22px", fontWeight: "700" }}>Active Projects</h3>
               <button
                 onClick={() => navigate(`${rolePath("projects")}?filter=active`)}
-                style={{ background: "transparent", border: "none", color: "#6366F1", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}
+                style={{ background: "#2563EB", border: "none", color: "#fff", fontWeight: "600", cursor: "pointer", fontSize: "14px", padding: "12px 24px", borderRadius: "10px", flexShrink: 0 }}
               >
                 View All Projects
               </button>
