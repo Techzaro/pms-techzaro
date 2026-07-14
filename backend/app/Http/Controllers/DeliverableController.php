@@ -11,6 +11,7 @@ use App\Models\SubmissionAttachment;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\ActivityService;
+use App\Services\AuditService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -31,7 +32,8 @@ class DeliverableController extends Controller
 {
     public function __construct(
         private NotificationService $notificationService,
-        private ActivityService $activityService
+        private ActivityService $activityService,
+        private AuditService $auditService
     ) {}
 
     /**
@@ -268,6 +270,20 @@ class DeliverableController extends Controller
             'Assigned To' => $deliverable->assignee?->name ?? 'N/A',
         ]);
 
+        try {
+            $this->auditService->log(
+                module: 'deliverable_management',
+                action: 'create',
+                description: "Created deliverable {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Deliverable created successfully',
@@ -353,6 +369,21 @@ class DeliverableController extends Controller
             ]);
         }
 
+        try {
+            $this->auditService->log(
+                module: 'deliverable_management',
+                action: 'update',
+                description: "Updated deliverable {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                oldValues: $oldValues,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => count($changes) > 0 ? 'Deliverable updated — '.count($changes).' change(s) made' : 'Deliverable updated successfully',
@@ -375,6 +406,20 @@ class DeliverableController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         $deliverable->delete();
+
+        try {
+            $this->auditService->log(
+                module: 'deliverable_management',
+                action: 'delete',
+                description: "Deleted deliverable {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json(['success' => true, 'message' => 'Deliverable deleted successfully']);
     }
@@ -490,6 +535,20 @@ class DeliverableController extends Controller
         $this->activityService->log($user->id, 'deliverable_'.$isResubmitLabel, 'You '.$isResubmitLabel.' deliverable "'.$deliverable->title.'" for review', 'deliverable', $deliverable->id);
         $this->clearDashboardCache($user->id);
 
+        try {
+            $this->auditService->log(
+                module: 'deliverable_management',
+                action: 'submit',
+                description: ($isResubmit ? 'Resubmitted' : 'Submitted')." deliverable {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Deliverable submitted successfully',
@@ -546,6 +605,20 @@ class DeliverableController extends Controller
         // Log activity
         $this->activityService->log($user->id, 'deliverable_approved', 'You approved deliverable "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
         $this->clearDashboardCache($user->id);
+
+        try {
+            $this->auditService->log(
+                module: 'deliverable_management',
+                action: 'approve',
+                description: "Approved deliverable {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -609,6 +682,20 @@ class DeliverableController extends Controller
         // Log activity
         $this->activityService->log($user->id, 'deliverable_rejected', 'You rejected deliverable "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
         $this->clearDashboardCache($user->id);
+
+        try {
+            $this->auditService->log(
+                module: 'deliverable_management',
+                action: 'reject',
+                description: "Rejected deliverable {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -702,6 +789,20 @@ class DeliverableController extends Controller
         $this->activityService->log($user->id, 'deliverable_reopened', 'You reopened deliverable "'.$deliverable->title.'" for revision', 'deliverable', $deliverable->id);
         $this->clearDashboardCache($user->id);
 
+        try {
+            $this->auditService->log(
+                module: 'deliverable_management',
+                action: 'reopen',
+                description: "Reopened deliverable {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Deliverable reopened successfully',
@@ -728,6 +829,20 @@ class DeliverableController extends Controller
 
         $deliverable->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id]);
         DeliverableWorkflowEvent::create(['deliverable_id' => $deliverable->id, 'event_type' => 'approval', 'user_id' => $user->id]);
+
+        try {
+            $this->auditService->log(
+                module: 'deliverable_management',
+                action: 'self_approve',
+                description: "Self-approved deliverable {$deliverable->title}",
+                user: $user,
+                entityType: 'Deliverable',
+                entityId: $deliverable->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,

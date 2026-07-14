@@ -14,6 +14,22 @@ export default defineConfig({
       'firebase/messaging': path.resolve(__dirname, 'node_modules/firebase/messaging/dist/esm/index.esm.js'),
     },
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/sanctum': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/storage': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+    },
+  },
   optimizeDeps: {
     include: ['jspdf', 'jspdf-autotable'],
   },

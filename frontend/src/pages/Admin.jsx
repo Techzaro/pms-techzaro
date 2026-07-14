@@ -17,8 +17,9 @@ import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import "../components/layout/DashboardLayout.css";
-import { getUser, getCurrentRole, rolePath, normalizeRole } from "../utils/auth";
+import { getUser, getCurrentRole, rolePath, normalizeRole, authToken } from "../utils/auth";
 import { getActivityDestination, getActivityFrom } from "../utils/navigation";
+import API_URL from "../config/api";
 import { timeAgo, formatDateTime } from "../utils/formatDateTime";
 import { useApiQuery } from "../hooks/useApi";
 import { useRelativeTime } from "../hooks/useRelativeTime";
@@ -943,6 +944,46 @@ function Admin() {
             </div>
           )}
           </>)}
+
+          {/* RECENT SYSTEM ACTIVITIES (admin/manager only) */}
+          {isAdminManager && (() => {
+            const [recentLogs, setRecentLogs] = useState([]);
+            const [logsLoaded, setLogsLoaded] = useState(false);
+            useEffect(() => {
+              fetch(`${API_URL}/audit-logs/recent`, {
+                headers: { Accept: "application/json", Authorization: `Bearer ${authToken()}` },
+                skipLoader: true,
+              }).then(r => r.ok ? r.json() : null).then(d => { if (d?.data) setRecentLogs(d.data); setLogsLoaded(true); }).catch(() => setLogsLoaded(true));
+            }, []);
+            if (!logsLoaded || recentLogs.length === 0) return null;
+            return (
+              <div style={{ background: "#fff", borderRadius: "20px", padding: "24px", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", marginBottom: "30px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                  <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "700" }}>Recent System Activities</h3>
+                  <button onClick={() => navigate(rolePath("audit-logs"))} style={{ background: "transparent", border: "none", color: "#6366F1", fontWeight: "600", cursor: "pointer", fontSize: "13px" }}>
+                    View All →
+                  </button>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {recentLogs.slice(0, 5).map((log) => (
+                    <div key={log.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "8px 0", borderBottom: "1px solid #f3f4f6" }}>
+                      <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: log.status === "failed" ? "#fee2e2" : "#d1fae5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={log.status === "failed" ? "#dc2626" : "#059669"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          {log.status === "failed" ? <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></> : <polyline points="20 6 9 17 4 12" />}
+                        </svg>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: "13px", color: "#374151", fontWeight: "500" }}>{log.description}</p>
+                        <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#9ca3af" }}>
+                          {log.user?.name || "System"} · {log.module} · {timeAgo(log.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
     </DashboardLayout>
   );
 }

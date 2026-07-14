@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -38,6 +39,10 @@ class Task extends Model
         'reopen_file_path',
         'reopen_file_name',
         'sort_order',
+        'task_type',
+        'recurrence_settings',
+        'recurrence_status',
+        'deliverables_generated',
     ];
 
     protected $casts = [
@@ -49,6 +54,8 @@ class Task extends Model
         'rejected_at' => 'datetime:Y-m-d\TH:i:s',
         'reopened_at' => 'datetime:Y-m-d\TH:i:s',
         'reopen_new_deadline' => 'datetime:Y-m-d\TH:i:s',
+        'recurrence_settings' => 'array',
+        'deliverables_generated' => 'integer',
     ];
 
     /** Apply filters for querying tasks. */
@@ -103,9 +110,15 @@ class Task extends Model
     }
 
     /** Deliverables belonging to this task, ordered by sort order. */
-    public function deliverables()
+    public function deliverables(): HasMany
     {
-        return $this->hasMany(\App\Models\Deliverable::class)->orderBy('sort_order')->latest('updated_at');
+        return $this->hasMany(Deliverable::class)->orderBy('sort_order')->latest('updated_at');
+    }
+
+    /** Deliverable templates for recurring task generation. */
+    public function deliverableTemplates(): HasMany
+    {
+        return $this->hasMany(DeliverableTemplate::class)->orderBy('sort_order');
     }
 
     /** File attachments for this task. */

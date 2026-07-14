@@ -8,6 +8,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Models\UserChange;
 use App\Services\ActivityService;
+use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -25,7 +26,8 @@ use Illuminate\Validation\ValidationException;
 class AuthController extends Controller
 {
     public function __construct(
-        private ActivityService $activityService
+        private ActivityService $activityService,
+        private AuditService $auditService
     ) {}
 
     /**
@@ -108,7 +110,20 @@ class AuthController extends Controller
      */
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
+        $user = $request->user();
+        $user->currentAccessToken()->delete();
+
+        try {
+            $this->auditService->log(
+                module: 'auth',
+                action: 'logout',
+                description: "User {$user->name} logged out",
+                user: $user,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
@@ -153,6 +168,18 @@ class AuthController extends Controller
             $user->must_change_password = false;
             $user->active = true;
             $user->save();
+
+            try {
+                $this->auditService->log(
+                    module: 'auth',
+                    action: 'password_changed',
+                    description: "User {$user->name} changed password (first time)",
+                    user: $user,
+                    status: 'success'
+                );
+            } catch (\Throwable $e) {
+                \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+            }
 
             return response()->json([
                 'success' => true,
@@ -486,6 +513,23 @@ class AuthController extends Controller
             $user->save();
         }
 
+        try {
+            $changedFields = array_keys($oldValues);
+            $this->auditService->log(
+                module: 'auth',
+                action: 'profile_updated',
+                description: "User {$user->name} updated their profile",
+                user: $user,
+                entityType: 'User',
+                entityId: $user->id,
+                oldValues: !empty($oldValues) ? $oldValues : null,
+                newValues: collect($changedFields)->mapWithKeys(fn($f) => [$f => $user->$f])->toArray(),
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
         Cache::forget("user_profile_{$user->id}");
         Cache::forget('all_users_list');
 
@@ -557,6 +601,18 @@ class AuthController extends Controller
                 } catch (\Throwable $e) {
                     \Log::error('Failed to send password changed email', ['user_id' => $user->id, 'error' => $e->getMessage()]);
                 }
+            }
+
+            try {
+                $this->auditService->log(
+                    module: 'auth',
+                    action: 'password_changed',
+                    description: "User {$user->name} changed their password",
+                    user: $user,
+                    status: 'success'
+                );
+            } catch (\Throwable $e) {
+                \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
             }
 
             // Log activity
