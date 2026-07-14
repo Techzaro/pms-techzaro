@@ -17,6 +17,9 @@ use App\Console\Commands\SendEventReminders;
 // Send event reminders every minute
 Schedule::command('events:send-reminders')->everyMinute();
 
+// Generate daily deliverables for recurring tasks at midnight
+Schedule::command('deliverables:generate-daily')->dailyAt('00:01');
+
 /*
 | Artisan Commands
 | Custom Artisan commands for the application.

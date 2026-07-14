@@ -9,6 +9,7 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\ActivityService;
+use App\Services\AuditService;
 use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -26,7 +27,8 @@ class EventController extends Controller
 {
     public function __construct(
         private NotificationService $notificationService,
-        private ActivityService $activityService
+        private ActivityService $activityService,
+        private AuditService $auditService
     ) {}
 
     /**
@@ -356,6 +358,20 @@ class EventController extends Controller
             : 'You created event "'.$event->title.'"';
         $this->activityService->log($user->id, 'event_created', $activityDesc, 'event', $event->id);
 
+        try {
+            $this->auditService->log(
+                module: 'event_management',
+                action: 'create',
+                description: "Created event {$event->title}",
+                user: $user,
+                entityType: 'Event',
+                entityId: $event->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
         return response()->json(['success' => true, 'message' => 'Event created successfully', 'event' => $this->formatEventResponse($event->fresh())], 201);
     }
 
@@ -409,6 +425,20 @@ class EventController extends Controller
         // Log activity
         $this->activityService->log($user->id, 'event_updated', 'You updated event "'.$event->title.'"', 'event', $event->id);
 
+        try {
+            $this->auditService->log(
+                module: 'event_management',
+                action: 'update',
+                description: "Updated event {$event->title}",
+                user: $user,
+                entityType: 'Event',
+                entityId: $event->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
         return response()->json(['success' => true, 'message' => 'Event updated successfully', 'event' => $this->formatEventResponse($event->fresh())]);
     }
 
@@ -436,6 +466,20 @@ class EventController extends Controller
 
         // Log activity
         $this->activityService->log($user->id, 'event_cancelled', 'You cancelled event "'.$event->title.'"', 'event', $event->id);
+
+        try {
+            $this->auditService->log(
+                module: 'event_management',
+                action: 'delete',
+                description: "Deleted event {$event->title}",
+                user: $user,
+                entityType: 'Event',
+                entityId: $event->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
 
         $event->delete();
 

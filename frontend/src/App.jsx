@@ -36,6 +36,7 @@ const DeliverableDetails = lazy(() => import("./pages/DeliverableDetails"));
 const SelfDeliveries = lazy(() => import("./pages/SelfDeliveries"));
 const Calender = lazy(() => import("./pages/Calender"));
 const Notifications = lazy(() => import("./pages/Notifications"));
+const AuditLogs = lazy(() => import("./pages/AuditLogs"));
 const UserPerformance = lazy(() => import("./pages/UserPerformance"));
 const TeamMembersReport = lazy(() => import("./pages/TeamMembersReport"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
@@ -120,6 +121,7 @@ function App() {
             <Route path="/:role/my-profile" element={<ProtectedRoute><MyProfile /></ProtectedRoute>} />
             <Route path="/:role/calender" element={<ProtectedRoute><Calender /></ProtectedRoute>} />
             <Route path="/:role/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+            <Route path="/:role/audit-logs" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><AuditLogs /></RoleProtectedRoute>} />
             <Route path="/:role/reports/user-performance/:userId" element={<ProtectedRoute><UserPerformance /></ProtectedRoute>} />
             <Route path="/:role/reports/team-members/:teamId" element={<ProtectedRoute><TeamMembersReport /></ProtectedRoute>} />
 

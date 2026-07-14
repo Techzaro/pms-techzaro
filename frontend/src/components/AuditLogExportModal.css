@@ -1,0 +1,244 @@
+/* ── Audit Log Export Modal ── */
+
+.ael-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+  backdrop-filter: blur(2px);
+}
+
+.ael-modal {
+  background: #fff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.ael-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px 24px 0;
+  gap: 16px;
+}
+
+.ael-header-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.ael-header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.ael-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.ael-subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.ael-close-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 8px;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.ael-close-btn:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.ael-body {
+  padding: 20px 24px;
+}
+
+.ael-format-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.ael-radio-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ael-radio-label:hover {
+  border-color: #d1d5db;
+  background: #fafbfc;
+}
+
+.ael-radio-label input[type="radio"] {
+  display: none;
+}
+
+.ael-radio-mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #d1d5db;
+  flex-shrink: 0;
+  margin-top: 1px;
+  position: relative;
+  transition: all 0.15s;
+}
+
+.ael-radio-label input[type="radio"]:checked + .ael-radio-mark {
+  border-color: #6366f1;
+  background: #6366f1;
+}
+
+.ael-radio-label input[type="radio"]:checked + .ael-radio-mark::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.ael-radio-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ael-radio-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.ael-radio-desc {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.ael-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.ael-preview strong {
+  color: #111827;
+}
+
+.ael-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.ael-cancel-btn {
+  padding: 9px 20px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ael-cancel-btn:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.ael-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 20px;
+  border: none;
+  border-radius: 10px;
+  background: #6366f1;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ael-export-btn:hover {
+  background: #4f46e5;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 520px) {
+  .ael-overlay {
+    padding: 12px;
+    align-items: stretch;
+  }
+
+  .ael-header {
+    padding: 16px 16px 0;
+  }
+
+  .ael-body {
+    padding: 16px;
+  }
+
+  .ael-footer {
+    padding: 12px 16px;
+    flex-direction: column;
+  }
+
+  .ael-cancel-btn,
+  .ael-export-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

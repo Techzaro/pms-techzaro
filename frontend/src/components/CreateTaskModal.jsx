@@ -1,11 +1,4 @@
-/**
- * CreateTaskModal.jsx
- * Modal form for creating a new task within a project or standalone.
- * Supports multi-user assignment, requirements, deliverables, attachments,
- * and date ranges. Fetches project-specific team members when a project is preselected.
- */
-
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
@@ -21,16 +14,128 @@ import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import "./layout/CreateTaskModal.css";
 
-/**
- * Modal form for creating a new task.
- * @param {Function} onClose - Callback to close modal; receives boolean (true if created)
- * @param {number|null} projectId - Pre-selected project ID (hides project dropdown)
- * @param {string} [projectName=""] - Display name of the pre-selected project
- */
+const REPEAT_OPTIONS = [
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+  { value: "custom", label: "Custom" },
+];
+
+const VARIABLES = [
+  { token: "{{number}}", desc: "Global counter (1, 2, 3...)" },
+  { token: "{{day}}", desc: "Day number (1, 2, 3...)" },
+  { token: "{{date}}", desc: "Date (15 Jul 2026)" },
+  { token: "{{week}}", desc: "Week number (28, 29...)" },
+  { token: "{{month}}", desc: "Month name (July)" },
+  { token: "{{year}}", desc: "Year (2026)" },
+];
+
+function parseVariables(text, dayNumber, dateStr, globalNumber) {
+  const d = new Date(dateStr);
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const fullMonths = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const weekNum = Math.ceil((d.getDate() + new Date(d.getFullYear(), d.getMonth(), 1).getDay()) / 7);
+  return text
+    .replace(/\{\{number\}\}/g, globalNumber ?? dayNumber)
+    .replace(/\{\{day\}\}/g, dayNumber)
+    .replace(/\{\{date\}\}/g, `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`)
+    .replace(/\{\{week\}\}/g, weekNum)
+    .replace(/\{\{month\}\}/g, fullMonths[d.getMonth()])
+    .replace(/\{\{year\}\}/g, d.getFullYear());
+}
+
+function getNextWorkingDay(date, skipWeekends) {
+  if (!skipWeekends) return new Date(date);
+  const d = new Date(date);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+function getPeriodDate(start, repeat, periodNumber, skipWeekends) {
+  const d = new Date(start);
+  if (repeat === "daily" || repeat === "custom") {
+    d.setDate(start.getDate() + periodNumber - 1);
+    return getNextWorkingDay(d, skipWeekends);
+  } else if (repeat === "weekly") {
+    d.setDate(start.getDate() + (periodNumber - 1) * 7);
+    return d;
+  } else if (repeat === "monthly") {
+    d.setMonth(start.getMonth() + periodNumber - 1);
+    return d;
+  }
+  d.setDate(start.getDate() + periodNumber - 1);
+  return d;
+}
+
+function calculateTotalPeriods(startDate, endDate, repeat) {
+  if (!startDate || !endDate) return repeat === "daily" ? 30 : repeat === "weekly" ? 4 : 3;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const diffMs = end - start;
+  const diffDays = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1);
+  if (repeat === "weekly") return Math.max(1, Math.ceil(diffDays / 7));
+  if (repeat === "monthly") return Math.max(1, Math.ceil(diffDays / 30));
+  return diffDays;
+}
+
+function generatePreview(templates, settings, startDate, endDate) {
+  const repeat = settings.repeat || "daily";
+  const skipWeekends = settings.skip_weekends || false;
+  const start = startDate ? new Date(startDate) : new Date();
+
+  const totalPeriods = calculateTotalPeriods(startDate, endDate, repeat);
+  const showPeriods = Math.min(totalPeriods, 5);
+  let globalCounter = 0;
+  const previewPeriods = [];
+
+  for (let p = 1; p <= showPeriods; p++) {
+    const date = getPeriodDate(start, repeat, p, skipWeekends);
+    const dateStr = date.toISOString().split("T")[0];
+    const items = [];
+
+    templates.forEach((t) => {
+      const qty = parseInt(t.quantity) || 1;
+      if (t.combined) {
+        globalCounter++;
+        const title = parseVariables(t.title, p, dateStr, globalCounter);
+        items.push({
+          number: globalCounter,
+          title: `${qty} \u00d7 ${title} (combined)`,
+          description: t.description ? parseVariables(t.description, p, dateStr, globalCounter) : null,
+          count: qty,
+        });
+      } else {
+        for (let i = 0; i < qty; i++) {
+          globalCounter++;
+          items.push({
+            number: globalCounter,
+            title: parseVariables(t.title, p, dateStr, globalCounter),
+            description: t.description ? parseVariables(t.description, p, dateStr, globalCounter) : null,
+          });
+        }
+      }
+    });
+
+    previewPeriods.push({
+      period: p, date: dateStr,
+      label: `Day ${p}`, items, count: items.length,
+    });
+  }
+
+  const remainingTemplatesTotal = (totalPeriods - showPeriods) * templates.reduce((s, t) => s + (parseInt(t.quantity) || 1), 0);
+
+  return {
+    previewPeriods,
+    totalPeriods,
+    totalDeliverables: globalCounter + remainingTemplatesTotal,
+    hasMore: totalPeriods > showPeriods,
+    remainingPeriods: totalPeriods - showPeriods,
+  };
+}
+
 const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   useEscapeKey(true, onClose);
 
-  const [loading, setLoading] = useState(false);
   const { submitting, run } = useSubmit();
   const [formErrors, setFormErrors] = useState({});
   const [projects, setProjects] = useState([]);
@@ -43,16 +148,26 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     title: "",
     description: "",
     priority: "Medium",
+    task_type: "standard",
     start_date: "",
     end_date: "",
   });
-  const [dueDates, setDueDates] = useState({});
 
-  const [requirementsList, setRequirementsList] = useState([]);
-  const [reqInput, setReqInput] = useState("");
+  const [recurrenceSettings, setRecurrenceSettings] = useState({
+    repeat: "daily",
+    skip_weekends: false,
+  });
+
+  const [recurringTemplates, setRecurringTemplates] = useState([
+    { title: "", description: "", quantity: 1, combined: false },
+  ]);
+
   const [deliverables, setDeliverables] = useState([]);
   const [deliverableInput, setDeliverableInput] = useState({ title: "", due_datetime: "" });
 
+  const [dueDates, setDueDates] = useState({});
+  const [requirementsList, setRequirementsList] = useState([]);
+  const [reqInput, setReqInput] = useState("");
   const [pendingFiles, setPendingFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const [linkInput, setLinkInput] = useState("");
@@ -68,6 +183,14 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   const [editFileNewFile, setEditFileNewFile] = useState(null);
   const [editFileDeleted, setEditFileDeleted] = useState(false);
   const [editFileDeleteConfirm, setEditFileDeleteConfirm] = useState(false);
+  const [showVariablesHint, setShowVariablesHint] = useState(false);
+
+  const preview = useMemo(() => {
+    if (form.task_type !== "recurring") return null;
+    const validTemplates = recurringTemplates.filter((t) => t.title.trim());
+    if (validTemplates.length === 0) return null;
+    return generatePreview(validTemplates, recurrenceSettings, form.start_date, form.end_date);
+  }, [form.task_type, recurringTemplates, recurrenceSettings, form.start_date, form.end_date]);
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: true } }));
@@ -77,162 +200,74 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   useEffect(() => {
     const token = authToken();
     const currentUser = getUser();
-
     const ensureCurrentUser = (users) => {
       if (!currentUser) return users;
-      const exists = users.some((u) => u.id === currentUser.id);
-      if (!exists) {
-        return [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role }, ...users];
-      }
-      return users;
+      return users.some((u) => u.id === currentUser.id) ? users : [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role }, ...users];
     };
-
     if (projectId) {
       fetch(`${API_URL}/projects/${projectId}`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         skipLoader: true,
-      })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          const project = data?.project;
-          if (project?.team?.members && project.team.members.length > 0) {
-            setDisplayUsers(ensureCurrentUser(project.team.members));
-          } else if (project?.members && project.members.length > 0) {
-            setDisplayUsers(ensureCurrentUser(project.members));
-          } else {
-            fetch(`${API_URL}/team-users`, {
-              headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-              skipLoader: true,
-            })
-              .then((res) => (res.ok ? res.json() : { users: [] }))
-              .then((data) => {
-                const users = ensureCurrentUser(Array.isArray(data) ? data : (data.users || []));
-                setAllUsers(users);
-                setDisplayUsers(users);
-              })
-              .catch(() => { });
-          }
-        })
-        .catch(() => { });
+      }).then((res) => (res.ok ? res.json() : null)).then((data) => {
+        const project = data?.project;
+        if (project?.team?.members?.length) setDisplayUsers(ensureCurrentUser(project.team.members));
+        else if (project?.members?.length) setDisplayUsers(ensureCurrentUser(project.members));
+        else fetch(`${API_URL}/team-users`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : { users: [] })).then((d) => { const u = ensureCurrentUser(Array.isArray(d) ? d : (d.users || [])); setAllUsers(u); setDisplayUsers(u); }).catch(() => {});
+      }).catch(() => {});
     } else {
       Promise.all([
-        fetch(`${API_URL}/projects`, {
-          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-          skipLoader: true,
-        })
-          .then((res) => (res.ok ? res.json() : []))
-          .then((data) => {
-            const list = data?.data || data;
-            setProjects(Array.isArray(list) ? list : []);
-          })
-          .catch(() => { }),
-
-        fetch(`${API_URL}/team-users`, {
-          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-          skipLoader: true,
-        })
-          .then((res) => (res.ok ? res.json() : { users: [] }))
-          .then((data) => {
-            const users = Array.isArray(data) ? data : (data.users || []);
-            setAllUsers(users);
-            setDisplayUsers(users);
-          })
-          .catch(() => { }),
+        fetch(`${API_URL}/projects`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : [])).then((d) => { const l = d?.data || d; setProjects(Array.isArray(l) ? l : []); }).catch(() => {}),
+        fetch(`${API_URL}/team-users`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : { users: [] })).then((d) => { const u = Array.isArray(d) ? d : (d.users || []); setAllUsers(u); setDisplayUsers(u); }).catch(() => {}),
       ]);
     }
   }, [projectId]);
 
-  /**
-   * Handles input changes. Special-cases project_id to refresh the
-   * display user list based on the selected project's team members.
-   */
   const handleChange = (e) => {
     const { name, value } = e.target;
-
     if (name === "project_id") {
-      // Reset assigned users when project changes
       setForm((prev) => ({ ...prev, project_id: value, assigned_to: [] }));
-
-      // Fetch project-specific team members for the user dropdown
       if (value) {
         const token = authToken();
-        fetch(`${API_URL}/projects/${value}`, {
-          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-          skipLoader: true,
-        })
-          .then((res) => (res.ok ? res.json() : null))
-          .then((data) => {
-            const project = data?.project;
-            if (project?.team?.members && project.team.members.length > 0) {
-              setDisplayUsers(project.team.members);
-            } else {
-              setDisplayUsers(allUsers);
-            }
-          })
-          .catch(() => {
-            setDisplayUsers(allUsers);
-          });
-      } else {
-        setDisplayUsers(allUsers);
-      }
-    } else {
-      setForm((prev) => ({ ...prev, [name]: value }));
-    }
-
-    if (formErrors[name]) {
-      setFormErrors((prev) => {
-        const next = { ...prev };
-        delete next[name];
-        return next;
-      });
-    }
+        fetch(`${API_URL}/projects/${value}`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : null)).then((d) => { setDisplayUsers(d?.project?.team?.members?.length ? d.project.team.members : allUsers); }).catch(() => setDisplayUsers(allUsers));
+      } else setDisplayUsers(allUsers);
+    } else setForm((prev) => ({ ...prev, [name]: value }));
+    if (formErrors[name]) setFormErrors((prev) => { const n = { ...prev }; delete n[name]; return n; });
   };
 
   const handleAssignedToChange = (ids) => {
     setForm((prev) => ({ ...prev, assigned_to: ids }));
-    setDueDates((prev) => {
-      const next = { ...prev };
-      Object.keys(next).forEach((k) => {
-        if (!ids.includes(Number(k))) delete next[k];
-      });
+    setDueDates((prev) => { const n = { ...prev }; Object.keys(n).forEach((k) => { if (!ids.includes(Number(k))) delete n[k]; }); return n; });
+    if (formErrors.assigned_to) setFormErrors((prev) => { const n = { ...prev }; delete n.assigned_to; return n; });
+  };
+
+  const handleDueDateChange = (userId, value) => setDueDates((prev) => ({ ...prev, [userId]: value }));
+
+  const handleAddRequirement = () => { if (!reqInput.trim()) return; setRequirementsList((prev) => [...prev, reqInput.trim()]); setReqInput(""); };
+  const handleRemoveRequirement = (index) => setRequirementsList((prev) => prev.filter((_, i) => i !== index));
+  const handleReqKeyDown = (e) => { if (e.key === "Enter") { e.preventDefault(); handleAddRequirement(); } };
+
+  const handleRecurringSettingChange = (field, value) => setRecurrenceSettings((prev) => ({ ...prev, [field]: value }));
+
+  const handleAddTemplate = () => setRecurringTemplates((prev) => [...prev, { title: "", description: "", quantity: 1, combined: false }]);
+  const handleRemoveTemplate = (index) => setRecurringTemplates((prev) => prev.filter((_, i) => i !== index));
+  const handleTemplateChange = (index, field, value) => setRecurringTemplates((prev) => {
+    const next = [...prev];
+    next[index] = { ...next[index], [field]: value };
+    return next;
+  });
+  const moveTemplate = useCallback((from, to) => {
+    if (to < 0 || to >= recurringTemplates.length) return;
+    setRecurringTemplates((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
       return next;
     });
-    if (formErrors.assigned_to) {
-      setFormErrors((prev) => {
-        const next = { ...prev };
-        delete next.assigned_to;
-        return next;
-      });
-    }
-  };
-
-  const handleDueDateChange = (userId, value) => {
-    setDueDates((prev) => ({ ...prev, [userId]: value }));
-  };
-
-  const handleAddRequirement = () => {
-    if (!reqInput.trim()) return;
-    setRequirementsList((prev) => [...prev, reqInput.trim()]);
-    setReqInput("");
-  };
-
-  const handleRemoveRequirement = (index) => {
-    setRequirementsList((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const confirmRemoveItem = () => {
-    const { type, index } = pendingRemoveItem;
-    if (type === "file") handleRemoveFile(index);
-    else if (type === "link") handleRemoveLink(index);
-    else if (type === "requirement") handleRemoveRequirement(index);
-    else if (type === "deliverable") handleRemoveDeliverable(index);
-    setRemoveConfirmOpen(false);
-    setPendingRemoveItem({ type: "", index: -1 });
-  };
-
-  const handleReqKeyDown = (e) => {
-    if (e.key === "Enter") { e.preventDefault(); handleAddRequirement(); }
-  };
+  }, [recurringTemplates.length]);
 
   const handleAddDeliverable = () => {
     if (!deliverableInput.title.trim()) return;
@@ -241,124 +276,77 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     setDeliverables((prev) => [...prev, { title: deliverableInput.title.trim(), due_date: dueDate }]);
     setDeliverableInput({ title: "", due_datetime: "" });
   };
+  const handleRemoveDeliverable = (index) => setDeliverables((prev) => prev.filter((_, i) => i !== index));
+  const handleDeliverableKeyDown = (e) => { if (e.key === "Enter") { e.preventDefault(); handleAddDeliverable(); } };
 
-  const handleRemoveDeliverable = (index) => {
-    setDeliverables((prev) => prev.filter((_, i) => i !== index));
+  const confirmRemoveItem = () => {
+    const { type, index } = pendingRemoveItem;
+    if (type === "file") handleRemoveFile(index);
+    else if (type === "link") handleRemoveLink(index);
+    else if (type === "requirement") handleRemoveRequirement(index);
+    else if (type === "template") handleRemoveTemplate(index);
+    else if (type === "deliverable") handleRemoveDeliverable(index);
+    setRemoveConfirmOpen(false);
+    setPendingRemoveItem({ type: "", index: -1 });
   };
-
-  const handleDeliverableKeyDown = (e) => {
-    if (e.key === "Enter") { e.preventDefault(); handleAddDeliverable(); }
-  };
-
 
   const handleFiles = (fileList) => {
     const newFiles = Array.from(fileList);
     setPendingFiles((prev) => [...prev, ...newFiles.map((f) => ({ file: f, name: f.name, size: f.size, renaming: false }))]);
   };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dropRef.current?.classList.remove("task-drop-active");
-    if (e.dataTransfer.files.length > 0) {
-      handleFiles(e.dataTransfer.files);
-    }
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dropRef.current?.classList.add("task-drop-active");
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dropRef.current?.classList.remove("task-drop-active");
-  };
-
-  const handleRemoveFile = (index) => {
-    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
-  };
-
+  const handleDrop = (e) => { e.preventDefault(); e.stopPropagation(); dropRef.current?.classList.remove("task-drop-active"); if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files); };
+  const handleDragOver = (e) => { e.preventDefault(); e.stopPropagation(); dropRef.current?.classList.add("task-drop-active"); };
+  const handleDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); dropRef.current?.classList.remove("task-drop-active"); };
+  const handleRemoveFile = (index) => setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   const handleAddLink = () => {
     if (!linkInput.trim()) return;
     let url = linkInput.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     const name = linkTitleInput.trim() || url;
     setLinks((prev) => [...prev, { url, name, renaming: false }]);
-    setLinkInput("");
-    setLinkTitleInput("");
+    setLinkInput(""); setLinkTitleInput("");
   };
+  const handleRemoveLink = (index) => setLinks((prev) => prev.filter((_, i) => i !== index));
+  const handleLinkKeyDown = (e) => { if (e.key === "Enter") { e.preventDefault(); handleAddLink(); } };
 
-  const handleRemoveLink = (index) => {
-    setLinks((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleLinkKeyDown = (e) => {
-    if (e.key === "Enter") { e.preventDefault(); handleAddLink(); }
-  };
-
-  /**
-   * Uploads pending file attachments and links to the newly created task.
-   * @param {number} taskId - ID of the created task
-   * @param {string} token - Auth token
-   */
   const uploadAttachments = async (taskId, token) => {
     await Promise.all([
       ...pendingFiles.map((file) => {
         const fd = new FormData();
         fd.append("file", file.file);
         fd.append("name", file.customName || file.name);
-        return fetch(`${API_URL}/tasks/${taskId}/files`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-          body: fd,
-          _notifHandled: true,
-        }).catch(() => {});
+        return fetch(`${API_URL}/tasks/${taskId}/files`, { method: "POST", headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, body: fd, _notifHandled: true }).catch(() => {});
       }),
-      ...links.map((link) => {
-        return fetch(`${API_URL}/tasks/${taskId}/links`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ url: link.url, name: link.customName || link.name }),
-          _notifHandled: true,
-        }).catch(() => {});
-      }),
+      ...links.map((link) => fetch(`${API_URL}/tasks/${taskId}/links`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ url: link.url, name: link.customName || link.name }), _notifHandled: true }).catch(() => {})),
     ]);
   };
 
-  /**
-   * Validates required form fields (title, assigned_to, priority).
-   * @returns {boolean} True if form is valid
-   */
   const validateForm = () => {
     const errors = {};
     if (!form.title.trim()) errors.title = "Task Name is required.";
     if (!form.assigned_to || form.assigned_to.length === 0) errors.assigned_to = "Select at least one user.";
     if (!form.priority) errors.priority = "Priority is required.";
+    if (form.task_type === "recurring") {
+      const validTemplates = recurringTemplates.filter((t) => t.title.trim());
+      if (validTemplates.length === 0) errors.recurring_templates = "Add at least one deliverable template.";
+      if (!form.start_date) errors.start_date = "Start date is required for recurring tasks.";
+      if (!form.end_date) errors.end_date = "End date (due date) is required for recurring tasks.";
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  /**
-   * Handles form submission: validates, creates task via API,
-   * uploads attachments in parallel, and publishes events on success.
-   */
   const handleSubmit = async (e) => {
     if (e?.preventDefault) e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
+    if (!validateForm()) return;
     await run(async () => {
       try {
         const token = authToken();
+        const validTemplates = recurringTemplates.filter((t) => t.title.trim());
+        const settings = form.task_type === "recurring" ? {
+          repeat: recurrenceSettings.repeat,
+          skip_weekends: recurrenceSettings.skip_weekends || false,
+        } : undefined;
 
         const body = {
           title: form.title.trim(),
@@ -369,7 +357,10 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
           assigned_to: form.assigned_to,
           due_dates: Object.keys(dueDates).length > 0 ? dueDates : undefined,
           priority: form.priority,
-          deliverables: deliverables.length > 0 ? deliverables.map(d => ({ title: d.title, due_date: d.due_date || null })) : undefined,
+          task_type: form.task_type,
+          recurrence_settings: settings,
+          deliverable_templates: validTemplates.length > 0 ? validTemplates.map((t) => ({ title: t.title.trim(), description: t.description || null, quantity: t.quantity || 1, combined: t.combined || false })) : undefined,
+          deliverables: deliverables.length > 0 ? deliverables.map((d) => ({ title: d.title, due_date: d.due_date || null })) : undefined,
         };
 
         const pid = projectId || form.project_id;
@@ -377,31 +368,26 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
 
         const response = await fetch(url, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify(body),
           _notifHandled: true,
         });
 
         const data = await response.json();
-
         if (!response.ok) {
           const msg = data.message || "Failed to create task";
           const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
           throw new Error(errors || msg);
         }
 
-        const taskIds = data.tasks?.map(t => t.id) || (data.task?.id ? [data.task.id] : []);
+        const taskIds = data.tasks?.map((t) => t.id) || (data.task?.id ? [data.task.id] : []);
         if (taskIds.length > 0 && (pendingFiles.length > 0 || links.length > 0)) {
-          await Promise.all(taskIds.map(id => uploadAttachments(id, token)));
+          await Promise.all(taskIds.map((id) => uploadAttachments(id, token)));
         }
 
         showSuccessMessage("Task", "created");
-        publish('task:created', data.task || data);
-        publish('data:changed', { type: 'task', action: 'created' });
+        publish("task:created", data.task || data);
+        publish("data:changed", { type: "task", action: "created" });
         onClose(true);
       } catch (err) {
         notify.error(err.message);
@@ -409,137 +395,60 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     });
   };
 
-  const modalContent = createPortal(
+  const templateErrors = formErrors.recurring_templates && recurringTemplates.filter((t) => t.title.trim()).length === 0;
+
+  return createPortal(
     <>
-    <div className="task-overlay">
-      <div className="task-modal" onClick={(e) => e.stopPropagation()}>
-        {/* HEADER */}
-        <div className="task-header">
-          <div className="task-header-left">
-            <div className="task-icon">
-              ⊕
+      <div className="task-overlay">
+        <div className="task-modal" onClick={(e) => e.stopPropagation()}>
+          {/* HEADER */}
+          <div className="task-header">
+            <div className="task-header-left">
+              <div className="task-icon">⊕</div>
+              <div>
+                <h2>Create New Task</h2>
+                <p>Add task details and assign it to team members.</p>
+              </div>
             </div>
-            <div>
-              <h2>Create New Task</h2>
-              <p>Add task details and assign it to team members.</p>
+            <div className="task-header-actions">
+              <LoadingButton className="task-create-btn" onClick={handleSubmit} loading={submitting}>+ Create Task</LoadingButton>
+              <button className="task-close-btn" onClick={() => onClose(false)}>✕</button>
             </div>
           </div>
-          <div className="task-header-actions">
-            <LoadingButton
-              className="task-create-btn"
-              onClick={handleSubmit}
-              loading={submitting}
-            >
-              + Create Task
-            </LoadingButton>
-            <button className="task-close-btn" onClick={() => onClose(false)}>
-              ✕
-            </button>
-          </div>
-        </div>
 
-        {/* BODY */}
-        <form onSubmit={handleSubmit} className="task-body">
-
-          {/* LEFT SIDE */}
-          <div className="task-left">
-
-            <div className="task-grid-2">
-
-              {!projectId ? (
+          {/* BODY */}
+          <form onSubmit={handleSubmit} className="task-body">
+            <div className="task-left">
+              <div className="task-grid-2">
+                {!projectId ? (
+                  <div className="task-field">
+                    <label>Projects</label>
+                    <CustomSelect name="project_id" value={form.project_id} onChange={(val) => handleChange({ target: { name: "project_id", value: val } })}
+                      placeholder="Select project" options={[{ value: "", label: "Select project" }, ...projects.map((p) => ({ value: p.id, label: p.title }))]} />
+                  </div>
+                ) : (
+                  <div className="task-field">
+                    <label>Project</label>
+                    <div className="task-project-name">{projectName || "Current Project"}</div>
+                  </div>
+                )}
                 <div className="task-field">
-                  <label>Projects</label>
-                  <CustomSelect
-                    name="project_id"
-                    value={form.project_id}
-                    onChange={(val) => handleChange({ target: { name: "project_id", value: val } })}
-                    placeholder="Select project"
-                    options={[
-                      { value: "", label: "Select project" },
-                      ...projects.map((project) => ({ value: project.id, label: project.title })),
-                    ]}
-                  />
+                  <label>Assign To <span>*</span></label>
+                  <UserSelectDropdown users={displayUsers} selectedIds={form.assigned_to} onChange={handleAssignedToChange}
+                    showDueDate={true} dueDates={dueDates} onDueDateChange={handleDueDateChange} placeholder="Click to select members" error={!!formErrors.assigned_to} />
+                  {formErrors.assigned_to && <span className="field-error-text">{formErrors.assigned_to}</span>}
                 </div>
-              ) : (
-                <div className="task-field">
-                  <label>Project</label>
-                  <div className="task-project-name">{projectName || "Current Project"}</div>
-                </div>
-              )}
-
-              <div className="task-field">
-                <label>
-                  Assign To <span>*</span>
-                </label>
-                <UserSelectDropdown
-                  users={displayUsers}
-                  selectedIds={form.assigned_to}
-                  onChange={handleAssignedToChange}
-                  showDueDate={true}
-                  dueDates={dueDates}
-                  onDueDateChange={handleDueDateChange}
-                  placeholder="Click to select members"
-                  error={!!formErrors.assigned_to}
-                />
-                {formErrors.assigned_to && <span className="field-error-text">{formErrors.assigned_to}</span>}
               </div>
 
-            </div>
+              <div className="task-field">
+                <label>Task Name <span>*</span></label>
+                <input type="text" name="title" placeholder="Enter task name.." value={form.title} onChange={handleChange} className={formErrors.title ? "field-error" : ""} />
+                {formErrors.title && <span className="field-error-text">{formErrors.title}</span>}
+              </div>
 
-            <div className="task-field">
-              <label>
-                Task Name <span>*</span>
-              </label>
-              <input
-                type="text"
-                name="title"
-                placeholder="Enter task name.."
-                value={form.title}
-                onChange={handleChange}
-                className={formErrors.title ? "field-error" : ""}
-              />
-              {formErrors.title && <span className="field-error-text">{formErrors.title}</span>}
-            </div>
-
-            <div className="task-field">
-              <label>Description</label>
-              <textarea
-                name="description"
-                placeholder="Enter task description.."
-                value={form.description}
-                onChange={handleChange}
-              ></textarea>
-            </div>
-
-
-            {/* ATTACHMENTS */}
-            <div className="task-field">
-              <label>Links & Attachment</label>
-
-              <div
-                className="task-drop-zone"
-                ref={dropRef}
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <div className="task-drop-content">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="17 8 12 3 7 8" />
-                    <line x1="12" y1="3" x2="12" y2="15" />
-                  </svg>
-                  <p className="task-drop-text">Drag & drop files here</p>
-                </div>
-                <span className="task-drop-browse">or browse</span>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  style={{ display: "none" }}
-                  onChange={(e) => { if (e.target.files.length > 0) handleFiles(e.target.files); e.target.value = ""; }}
-                />
+              <div className="task-field">
+                <label>Description</label>
+                <textarea name="description" placeholder="Enter task description.." value={form.description} onChange={handleChange}></textarea>
               </div>
 
               {pendingFiles.length > 0 && (
@@ -570,40 +479,71 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                       </div>
                     </div>
                   ))}
+              {/* ATTACHMENTS */}
+              <div className="task-field">
+                <label>Links & Attachment</label>
+                <div className="task-drop-zone" ref={dropRef} onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onClick={() => fileInputRef.current?.click()}>
+                  <div className="task-drop-content">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    <p className="task-drop-text">Drag & drop files here</p>
+                  </div>
+                  <span className="task-drop-browse">or browse</span>
+                  <input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { if (e.target.files.length > 0) handleFiles(e.target.files); e.target.value = ""; }} />
                 </div>
-              )}
+                {pendingFiles.length > 0 && (
+                  <div className="task-attachments-list">
+                    {pendingFiles.map((file, index) => (
+                      <div key={index} className="task-attachment-item">
+                        <span className="task-attachment-icon">📄</span>
+                        <span className="task-attachment-name">{file.customName || file.name}</span>
+                        <span className="task-attachment-size">{(file.size / 1024).toFixed(1)} KB</span>
+                        <button type="button" className="task-attachment-remove" onClick={() => { setPendingRemoveItem({ type: "file", index }); setRemoveConfirmOpen(true); }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="task-or-divider"><span className="task-or-line"></span><span className="task-or-text">OR</span><span className="task-or-line"></span></div>
+                <div className="task-link-input-row" style={{ flexDirection: "column", gap: "8px" }}>
+                  <input type="text" placeholder="Link title (e.g. Figma Design, Drive Folder)" value={linkTitleInput} onChange={(e) => setLinkTitleInput(e.target.value)} />
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <input type="text" placeholder="Paste link (Drive, Figma, Website, etc.)" value={linkInput} onChange={(e) => setLinkInput(e.target.value)} onKeyDown={handleLinkKeyDown} style={{ flex: 1 }} />
+                    <button type="button" className="task-link-add-btn" onClick={handleAddLink} disabled={!linkInput.trim()}>Add Link</button>
+                  </div>
+                </div>
+                {links.length > 0 && (
+                  <div className="task-attachments-list">
+                    {links.map((link, index) => (
+                      <div key={index} className="task-attachment-item">
+                        <span className="task-attachment-icon">🔗</span>
+                        <span className="task-attachment-name" style={{ fontWeight: 600, fontSize: "13px" }}>{link.customName || link.name}</span>
+                        <a href={link.url} target="_blank" rel="noopener noreferrer" className="task-attachment-link" style={{ fontSize: "12px", color: "#6366f1", flex: 1 }}>{link.url.length > 45 ? link.url.substring(0, 45) + "..." : link.url}</a>
+                        <button type="button" className="task-attachment-remove" onClick={() => { setPendingRemoveItem({ type: "link", index }); setRemoveConfirmOpen(true); }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
 
-              <div className="task-or-divider">
-                <span className="task-or-line"></span>
-                <span className="task-or-text">OR</span>
-                <span className="task-or-line"></span>
+            {/* RIGHT SIDE */}
+            <div className="task-right">
+              {/* PRIORITY */}
+              <div className="task-card">
+                <label>Priority <span style={{ color: "#ef4444" }}>*</span></label>
+                <CustomSelect name="priority" value={form.priority}
+                  onChange={(val) => handleChange({ target: { name: "priority", value: val } })}
+                  options={[{ value: "Medium", label: "Medium" }, { value: "Low", label: "Low" }, { value: "High", label: "High" }]} />
+                {formErrors.priority && <span className="field-error-text">{formErrors.priority}</span>}
               </div>
 
-              <div className="task-link-input-row" style={{ flexDirection: "column", gap: "8px" }}>
-                <input
-                  type="text"
-                  placeholder="Link title (e.g. Figma Design, Drive Folder)"
-                  value={linkTitleInput}
-                  onChange={(e) => setLinkTitleInput(e.target.value)}
-                />
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <input
-                    type="text"
-                    placeholder="Paste link (Drive, Figma, Website, etc.)"
-                    value={linkInput}
-                    onChange={(e) => setLinkInput(e.target.value)}
-                    onKeyDown={handleLinkKeyDown}
-                    style={{ flex: 1 }}
-                  />
-                  <button
-                    type="button"
-                    className="task-link-add-btn"
-                    onClick={handleAddLink}
-                    disabled={!linkInput.trim()}
-                  >
-                    Add Link
-                  </button>
-                </div>
+              {/* TASK TYPE */}
+              <div className="task-card">
+                <label>Task Type</label>
+                <CustomSelect name="task_type" value={form.task_type}
+                  onChange={(val) => handleChange({ target: { name: "task_type", value: val } })}
+                  options={[{ value: "standard", label: "Standard" }, { value: "recurring", label: "Recurring" }]} />
               </div>
 
               {links.length > 0 && (
@@ -631,176 +571,201 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                         </button>
                       </div>
+              {/* RECURRING SETTINGS */}
+              {form.task_type === "recurring" && (
+                <>
+                  <div className="task-card">
+                    <div className="task-card-top"><span>Recurrence Settings</span></div>
+                    <div className="task-field" style={{ marginBottom: 10 }}>
+                      <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Repeat</label>
+                      <CustomSelect name="repeat" value={recurrenceSettings.repeat}
+                        onChange={(val) => handleRecurringSettingChange("repeat", val)}
+                        options={REPEAT_OPTIONS} />
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
 
-          </div>
-
-          {/* RIGHT SIDE */}
-          <div className="task-right">
-
-            {/* PRIORITY */}
-            <div className="task-card">
-              <label>Priority <span style={{ color: "#ef4444" }}>*</span></label>
-              <CustomSelect
-                name="priority"
-                value={form.priority}
-                onChange={(val) => handleChange({ target: { name: "priority", value: val } })}
-                options={[
-                  { value: "Medium", label: "Medium" },
-                  { value: "Low", label: "Low" },
-                  { value: "High", label: "High" },
-                ]}
-              />
-              {formErrors.priority && <span className="field-error-text">{formErrors.priority}</span>}
-            </div>
-
-            <div className="task-card">
-              <div className="task-card-top"><span>Due Date & Time</span></div>
-              <div className="task-deadline-grid">
-                <div>
-                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
-                  <input
-                    type="datetime-local"
-                    value={form.start_date}
-                    onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))}
-                    min={getNowDatetimeLocal()}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
-                  <input
-                    type="datetime-local"
-                    value={form.end_date}
-                    onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))}
-                    min={form.start_date || getNowDatetimeLocal()}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="task-field">
-              <label>Requirements</label>
-              <div className="cp-goals-input-row">
-                <input
-                  type="text"
-                  placeholder="Enter a requirement"
-                  value={reqInput}
-                  onChange={(e) => setReqInput(e.target.value)}
-                  onKeyDown={handleReqKeyDown}
-                />
-                <button
-                  type="button"
-                  className="cp-goals-add-btn"
-                  onClick={handleAddRequirement}
-                  disabled={!reqInput.trim()}
-                >
-                  Add
-                </button>
-              </div>
-
-              {requirementsList.length > 0 && (
-                <div className="cp-goals-list">
-                  {requirementsList.map((req, index) => (
-                    <div key={index} className="cp-goals-item">
-                      <span className="cp-goals-item-text">{req}</span>
-                      <button
-                        type="button"
-                        className="cp-goals-item-remove"
-                        onClick={() => { setPendingRemoveItem({ type: "requirement", index }); setRemoveConfirmOpen(true); }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* DELIVERABLES */}
-            <div className="task-card">
-              <div className="task-card-top">
-                <span>Deliverables</span>
-              </div>
-
-              <div className="task-deadline-grid">
-                <div className="task-field">
-                  <label style={{ fontSize: "13px" }}>Deliverable Name</label>
-                  <input
-                    type="text"
-                    placeholder="Enter deliverable name"
-                    value={deliverableInput.title}
-                    onChange={(e) => setDeliverableInput((prev) => ({ ...prev, title: e.target.value }))}
-                    onKeyDown={handleDeliverableKeyDown}
-                  />
-                </div>
-                <div className="task-field">
-                  <label style={{ fontSize: "13px" }}>Due Date & Time</label>
-                  <input
-                    type="datetime-local"
-                    value={deliverableInput.due_datetime}
-                    onChange={(e) => setDeliverableInput((prev) => ({ ...prev, due_datetime: e.target.value }))}
-                    min={getNowDatetimeLocal()}
-                  />
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="task-add-phase-btn"
-                onClick={handleAddDeliverable}
-                disabled={!deliverableInput.title.trim()}
-              >
-                + Add Deliverable
-              </button>
-
-              {deliverables.length > 0 && (
-                <div className="task-phase-list">
-                  {deliverables.map((d, index) => (
-                    <div key={index} className="task-phase-item">
-                      <div className="task-phase-item-dot" style={{ background: "#8b5cf6" }} />
-                      <div className="task-phase-item-info">
-                        <div className="task-phase-item-title">{d.title}</div>
-                        <div className="task-phase-item-date">{d.due_date ? formatDateTime(d.due_date).replace("\n", " ") : "No due date"}</div>
+                    {/* Skip Weekends Toggle */}
+                    {(recurrenceSettings.repeat === "daily" || recurrenceSettings.repeat === "custom") && (
+                      <div className="task-field" style={{ marginBottom: 10 }}>
+                        <label style={{ fontSize: 13, color: "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                          <input type="checkbox" checked={recurrenceSettings.skip_weekends}
+                            onChange={(e) => handleRecurringSettingChange("skip_weekends", e.target.checked)}
+                            style={{ width: 16, height: 16, accentColor: "#6366f1" }} />
+                          Skip weekends (Sat/Sun)
+                        </label>
                       </div>
-                      <button
-                        type="button"
-                        className="task-phase-item-remove"
-                        onClick={() => { setPendingRemoveItem({ type: "deliverable", index }); setRemoveConfirmOpen(true); }}
-                      >
-                        ✕
-                      </button>
+                    )}
+
+                    <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>
+                      Deliverables auto-distribute between <strong>Start Date</strong> and <strong>Due Date</strong>.
+                    </p>
+                  </div>
+
+                  {/* DELIVERABLE TEMPLATES */}
+                  <div className="task-card">
+                    <div className="task-card-top">
+                      <span>Deliverable Templates</span>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <button type="button" className="task-icon-btn" title="Available variables" onClick={() => setShowVariablesHint(!showVariablesHint)}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        </button>
+                        <button type="button" className="task-add-phase-btn" onClick={handleAddTemplate} style={{ padding: "3px 10px", fontSize: 12 }}>+ Add</button>
+                      </div>
                     </div>
-                  ))}
-                </div>
+                    {templateErrors && <span className="field-error-text" style={{ marginBottom: 6, display: "block" }}>{formErrors.recurring_templates}</span>}
+
+                    {showVariablesHint && (
+                      <div style={{ background: "#f0f4ff", border: "1px solid #c7d2fe", borderRadius: 6, padding: "8px 10px", marginBottom: 10, fontSize: 12, color: "#4338ca" }}>
+                        <strong>Variables:</strong> Use these in titles/descriptions
+                        <div style={{ marginTop: 4, display: "flex", flexWrap: "wrap", gap: "4px 12px" }}>
+                          {VARIABLES.map((v) => (
+                            <span key={v.token} style={{ cursor: "pointer" }} onClick={() => { setShowVariablesHint(false); }}
+                              title={v.desc}><code style={{ background: "#e0e7ff", padding: "1px 5px", borderRadius: 3 }}>{v.token}</code> — {v.desc}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {recurringTemplates.map((tmpl, index) => (
+                      <div key={index} className="task-template-item" style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 10, marginBottom: 8, background: "#fafafa" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", minWidth: 40 }}>#{index + 1}</span>
+                          <input type="text" placeholder="Template title (use {{day}}, {{date}}...)" value={tmpl.title}
+                            onChange={(e) => handleTemplateChange(index, "title", e.target.value)}
+                            style={{ flex: 1, fontSize: 13, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 4 }} />
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, border: "1px solid #d1d5db", borderRadius: 4, padding: "2px 6px", background: "#fff" }}>
+                            <span style={{ fontSize: 11, color: "#6b7280" }}>Qty:</span>
+                            <input type="number" min="1" max="100" value={tmpl.quantity}
+                              onChange={(e) => handleTemplateChange(index, "quantity", Math.max(1, parseInt(e.target.value) || 1))}
+                              style={{ width: 40, fontSize: 12, border: "none", outline: "none", textAlign: "center" }} />
+                          </div>
+                          <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "template", index }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                          <input type="text" placeholder="Description (optional)" value={tmpl.description}
+                            onChange={(e) => handleTemplateChange(index, "description", e.target.value)}
+                            style={{ flex: 1, fontSize: 12, padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 4, color: "#6b7280" }} />
+                          <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 11, color: "#6b7280", whiteSpace: "nowrap" }}>
+                            <input type="checkbox" checked={tmpl.combined}
+                              onChange={(e) => handleTemplateChange(index, "combined", e.target.checked)}
+                              style={{ width: 14, height: 14, accentColor: "#6366f1" }} />
+                            Combined
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+
+                    {recurringTemplates.length === 0 && (
+                      <p style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", padding: 16 }}>
+                        No templates yet. Click + Add to create your first deliverable template.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* PREVIEW */}
+                  {preview && (
+                    <div className="task-card" style={{ border: "1px solid #c7d2fe", background: "#f8faff" }}>
+                      <div className="task-card-top">
+                        <span>Recurring Preview</span>
+                        <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 600 }}>{preview.totalDeliverables} Total</span>
+                      </div>
+                      <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                        {preview.previewPeriods.map((pd) => (
+                          <div key={pd.period} style={{ marginBottom: 8, padding: "6px 0", borderBottom: "1px solid #eef2ff" }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: "#4338ca", marginBottom: 4 }}>{pd.label} — {pd.date}</div>
+                            {pd.items.map((item, i) => (
+                              <div key={i} style={{ fontSize: 12, color: "#374151", paddingLeft: 16, display: "flex", alignItems: "center", gap: 6 }}>
+                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#6366f1", display: "inline-block", flexShrink: 0 }}></span>
+                                #{item.number} {item.title}
+                                {item.count > 1 && <span style={{ color: "#6366f1", fontWeight: 600, fontSize: 11 }}>(qty {item.count})</span>}
+                                {item.description && <span style={{ color: "#9ca3af" }}>— {item.description}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                      {preview.hasMore && (
+                        <p style={{ fontSize: 11, color: "#9ca3af", textAlign: "center", marginTop: 4 }}>
+                          ... and {preview.remainingPeriods} more days · {preview.totalPeriods} days total
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
+
+              {/* MANUAL DELIVERABLES */}
+              <div className="task-card">
+                <div className="task-card-top"><span>Deliverables</span></div>
+                <div className="task-deadline-grid">
+                  <div>
+                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Deliverable Name</label>
+                    <input type="text" placeholder="Enter deliverable name" value={deliverableInput.title}
+                      onChange={(e) => setDeliverableInput((prev) => ({ ...prev, title: e.target.value }))}
+                      onKeyDown={handleDeliverableKeyDown} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Due Date & Time</label>
+                    <input type="datetime-local" value={deliverableInput.due_datetime}
+                      onChange={(e) => setDeliverableInput((prev) => ({ ...prev, due_datetime: e.target.value }))} />
+                  </div>
+                </div>
+                <button type="button" className="task-add-phase-btn" onClick={handleAddDeliverable}
+                  disabled={!deliverableInput.title.trim()} style={{ marginTop: 8 }}>+ Add Deliverable</button>
+
+                {deliverables.length > 0 && (
+                  <div className="task-phase-list" style={{ marginTop: 10 }}>
+                    {deliverables.map((d, index) => (
+                      <div key={index} className="task-phase-item" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #f3f4f6" }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7c3aed", display: "inline-block", flexShrink: 0 }}></span>
+                        <span style={{ flex: 1, fontSize: 13, color: "#374151" }}>{d.title}</span>
+                        <span style={{ fontSize: 11, color: "#6b7280" }}>{d.due_date ? new Date(d.due_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "No due date"}</span>
+                        <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "deliverable", index }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* DUE DATE & TIME */}
+              <div className="task-card">
+                <div className="task-card-top"><span>Due Date & Time</span></div>
+                <div className="task-deadline-grid">
+                  <div>
+                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
+                    <input type="datetime-local" value={form.start_date} onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))} min={getNowDatetimeLocal()} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
+                    <input type="datetime-local" value={form.end_date} onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))} min={form.start_date || getNowDatetimeLocal()} />
+                  </div>
+                </div>
+              </div>
+
+              {/* REQUIREMENTS */}
+              <div className="task-field">
+                <label>Requirements</label>
+                <div className="cp-goals-input-row">
+                  <input type="text" placeholder="Enter a requirement" value={reqInput} onChange={(e) => setReqInput(e.target.value)} onKeyDown={handleReqKeyDown} />
+                  <button type="button" className="cp-goals-add-btn" onClick={handleAddRequirement} disabled={!reqInput.trim()}>Add</button>
+                </div>
+                {requirementsList.length > 0 && (
+                  <div className="cp-goals-list">
+                    {requirementsList.map((req, index) => (
+                      <div key={index} className="cp-goals-item">
+                        <span className="cp-goals-item-text">{req}</span>
+                        <button type="button" className="cp-goals-item-remove" onClick={() => { setPendingRemoveItem({ type: "requirement", index }); setRemoveConfirmOpen(true); }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-        
-          </div>
-
-
-
-
-
-
-
-        </form>
-
+          </form>
+        </div>
       </div>
-    </div>
-    <ConfirmModal
-      isOpen={removeConfirmOpen}
-      onClose={() => { setRemoveConfirmOpen(false); setPendingRemoveItem({ type: "", index: -1 }); }}
-      onConfirm={confirmRemoveItem}
-      title="Remove Item"
-      message="Are you sure you want to remove this item? This action cannot be undone."
-      confirmText="Remove"
-      cancelText="Cancel"
-      danger
-    />
+      <ConfirmModal isOpen={removeConfirmOpen} onClose={() => { setRemoveConfirmOpen(false); setPendingRemoveItem({ type: "", index: -1 }); }}
+        onConfirm={confirmRemoveItem} title="Remove Item" message="Are you sure you want to remove this item? This action cannot be undone."
+        confirmText="Remove" cancelText="Cancel" danger />
     </>,
     document.body
   );
