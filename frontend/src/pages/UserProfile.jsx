@@ -838,15 +838,43 @@ function UserProfile() {
     { label: user?.name || "User Profile" },
   ];
 
+  const currentUserIndex = allUsers.findIndex((u) => String(u.id) === String(userId));
+  const hasPrev = currentUserIndex > 0;
+  const hasNext = currentUserIndex >= 0 && currentUserIndex < allUsers.length - 1;
+
   return (
     <DashboardLayout hideRightSidebar={true}>
       <div className="user-profile-page">
         <div className="profile">
           <div className="profile-layout">
         <Breadcrumb items={breadcrumbs} />
-            <div className="profile-header-profile">
-              <h1>User Profile</h1>
-              <p>View and manage your personal information and account settings.</p>
+            <div className="profile-header-profile" style={{ display: "flex", alignItems: "center",gap: 300, }}>
+              <div>
+                <h1>User Profile</h1>
+                <p>View and manage your personal information and account settings.</p>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                <button
+                  disabled={!hasPrev}
+                  onClick={() => { if (hasPrev) navigate(rolePath(`manage-users/user-profile/${allUsers[currentUserIndex - 1].id}`)); }}
+                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid #d1d5db", background: hasPrev ? "#fff" : "#f9fafb", color: hasPrev ? "#374151" : "#9ca3af", fontWeight: 600, fontSize: 13, cursor: hasPrev ? "pointer" : "not-allowed", transition: "all 0.15s", whiteSpace: "nowrap" }}
+                  onMouseEnter={(e) => { if (hasPrev) e.target.style.background = "#f3f4f6"; }}
+                  onMouseLeave={(e) => { if (hasPrev) e.target.style.background = "#fff"; }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                  Previous
+                </button>
+                <button
+                  disabled={!hasNext}
+                  onClick={() => { if (hasNext) navigate(rolePath(`manage-users/user-profile/${allUsers[currentUserIndex + 1].id}`)); }}
+                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid #d1d5db", background: hasNext ? "#fff" : "#f9fafb", color: hasNext ? "#374151" : "#9ca3af", fontWeight: 600, fontSize: 13, cursor: hasNext ? "pointer" : "not-allowed", transition: "all 0.15s", whiteSpace: "nowrap" }}
+                  onMouseEnter={(e) => { if (hasNext) e.target.style.background = "#f3f4f6"; }}
+                  onMouseLeave={(e) => { if (hasNext) e.target.style.background = "#fff"; }}
+                >
+                  Next
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+              </div>
             </div>
             {/* LEFT SIDE */}
             <div className="profile-left">
@@ -1116,20 +1144,20 @@ function UserProfile() {
                   })()}
                   {companyDocs?.other_documents?.files?.map((file, i) => {
                     const fileName = file.filename.replace(/^other_document_\d+_/, "").replace(/\.[^.]+$/, "");
-                    const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(file.filename);
                     return (
-                      <div className="info-row" key={`company-${i}`}>
+                      <div className="info-row" key={`company-${i}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span className="info-label">{fileName}</span>
-                        <span className="info-value">
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1 }}>
                           <a
                             href={`${API_URL.replace("/api", "")}/storage/${file.path}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            style={{ color: "#2563eb", textDecoration: "underline" }}
+                            style={{ background: "#2563eb", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+                            title="View"
                           >
-                            {isImage ? "View Image" : "View File"}
+                            <Eye size={16} />
                           </a>
-                        </span>
+                        </div>
                       </div>
                     );
                   })}

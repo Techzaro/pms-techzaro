@@ -538,51 +538,53 @@ function MyProfile() {
                     });
                   })()}
                   {companyDocs?.company_logo?.exists && (
-                    <div className="info-row">
+                    <div className="info-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <span className="info-label">Company Logo</span>
-                      <span className="info-value">
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1 }}>
                         <a
                           href={`${API_URL.replace("/api", "")}/storage/${companyDocs.company_logo.path}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ color: "#2563eb", textDecoration: "underline" }}
+                          style={{ background: "#2563eb", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+                          title="View"
                         >
-                          View Image
+                          <Eye size={16} />
                         </a>
-                      </span>
+                      </div>
                     </div>
                   )}
                   {companyDocs?.qr_code?.exists && (
-                    <div className="info-row">
+                    <div className="info-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <span className="info-label">QR Code</span>
-                      <span className="info-value">
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1 }}>
                         <a
                           href={`${API_URL.replace("/api", "")}/storage/${companyDocs.qr_code.path}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ color: "#2563eb", textDecoration: "underline" }}
+                          style={{ background: "#2563eb", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+                          title="View"
                         >
-                          View Image
+                          <Eye size={16} />
                         </a>
-                      </span>
+                      </div>
                     </div>
                   )}
                   {companyDocs?.other_documents?.files?.map((file, i) => {
                     const fileName = file.filename.replace(/^other_document_\d+_/, "").replace(/\.[^.]+$/, "");
-                    const isImage = /\.(png|jpe?g|gif|bmp|webp|svg|tiff)$/i.test(file.filename);
                     return (
-                      <div className="info-row" key={`company-${i}`}>
+                      <div className="info-row" key={`company-${i}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span className="info-label">{fileName}</span>
-                        <span className="info-value">
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flex: 1 }}>
                           <a
                             href={`${API_URL.replace("/api", "")}/storage/${file.path}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            style={{ color: "#2563eb", textDecoration: "underline" }}
+                            style={{ background: "#2563eb", border: "none", color: "#fff", cursor: "pointer", padding: "6px 9px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+                            title="View"
                           >
-                            {isImage ? "View Image" : "View File"}
+                            <Eye size={16} />
                           </a>
-                        </span>
+                        </div>
                       </div>
                     );
                   })}
