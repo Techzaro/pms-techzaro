@@ -316,7 +316,7 @@
   top: calc(100% + 14px);
   right: 0;
 
-  width: 300px;
+  width: 400px;
 
   background: #ffffff;
 
@@ -426,7 +426,7 @@
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #fff;
+  color: #111827;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -435,7 +435,7 @@
 .hmc-email {
   font-size: 17px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.8);
+  color: #111827;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -443,7 +443,7 @@
 
 .hmc-role-text {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.8);
+  color: #111827;
   font-weight: 500;
 }
 

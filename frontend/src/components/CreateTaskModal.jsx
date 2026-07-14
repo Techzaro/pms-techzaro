@@ -549,6 +549,70 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 </div>
               )}
 
+            </div>
+
+            {/* RIGHT SIDE */}
+            <div className="task-right">
+
+              <div className="task-card">
+                <label>Priority <span style={{ color: "#ef4444" }}>*</span></label>
+                <CustomSelect name="priority" value={form.priority}
+                  onChange={(val) => setForm((prev) => ({ ...prev, priority: val }))}
+                  options={[
+                    { value: "Medium", label: "Medium" },
+                    { value: "Low", label: "Low" },
+                    { value: "High", label: "High" },
+                  ]} />
+              </div>
+
+              <div className="task-card">
+                <div className="task-card-top"><span>Dates</span></div>
+                <div className="task-deadline-grid">
+                  <div>
+                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
+                    <input type="datetime-local" value={form.start_date}
+                      onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))}
+                      min={getNowDatetimeLocal()} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
+                    <input type="datetime-local" value={form.end_date}
+                      onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))}
+                      min={getNowDatetimeLocal()} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="task-field">
+                <label>Requirements</label>
+                <div className="cp-goals-input-row">
+                  <input type="text" placeholder="Enter a requirement" value={reqInput} onChange={(e) => setReqInput(e.target.value)} onKeyDown={handleReqKeyDown} />
+                  <button type="button" className="cp-goals-add-btn" onClick={handleAddRequirement} disabled={!reqInput.trim()}>Add</button>
+                </div>
+                {requirementsList.length > 0 && (
+                  <div className="cp-goals-list">
+                    {requirementsList.map((req, index) => (
+                      <div key={index} className="cp-goals-item">
+                        <span className="cp-goals-item-text">{req}</span>
+                        <button type="button" className="cp-goals-item-remove" onClick={() => { setPendingRemoveItem({ type: "requirement", index }); setRemoveConfirmOpen(true); }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="task-card">
+                <label>Task Type</label>
+                <CustomSelect name="task_type" value={form.task_type}
+                  onChange={(val) => {
+                    setForm((prev) => ({ ...prev, task_type: val }));
+                    if (val === "recurring" && recurringTemplates.length === 0) {
+                      setRecurringTemplates([{ title: "", description: "", quantity: 1, combined: false }]);
+                    }
+                  }}
+                  options={[{ value: "standard", label: "Standard" }, { value: "recurring", label: "Recurring" }]} />
+              </div>
+
               {/* RECURRING SETTINGS */}
               {form.task_type === "recurring" && (
                 <>
@@ -561,7 +625,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                         options={REPEAT_OPTIONS} />
                     </div>
 
-                    {/* Skip Weekends Toggle */}
                     {(recurrenceSettings.repeat === "daily" || recurrenceSettings.repeat === "custom") && (
                       <div className="task-field" style={{ marginBottom: 10 }}>
                         <label style={{ fontSize: 13, color: "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
@@ -578,7 +641,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                     </p>
                   </div>
 
-                  {/* DELIVERABLE TEMPLATES */}
                   <div className="task-card">
                     <div className="task-card-top">
                       <span>Deliverable Templates</span>
@@ -639,7 +701,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                     )}
                   </div>
 
-                  {/* PREVIEW */}
                   {preview && (
                     <div className="task-card" style={{ border: "1px solid #c7d2fe", background: "#f8faff" }}>
                       <div className="task-card-top">
@@ -671,7 +732,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 </>
               )}
 
-              {/* MANUAL DELIVERABLES */}
               <div className="task-card">
                 <div className="task-card-top"><span>Deliverables</span></div>
                 <div className="task-deadline-grid">
@@ -767,24 +827,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 )}
               </div>
 
-              {/* REQUIREMENTS */}
-              <div className="task-field">
-                <label>Requirements</label>
-                <div className="cp-goals-input-row">
-                  <input type="text" placeholder="Enter a requirement" value={reqInput} onChange={(e) => setReqInput(e.target.value)} onKeyDown={handleReqKeyDown} />
-                  <button type="button" className="cp-goals-add-btn" onClick={handleAddRequirement} disabled={!reqInput.trim()}>Add</button>
-                </div>
-                {requirementsList.length > 0 && (
-                  <div className="cp-goals-list">
-                    {requirementsList.map((req, index) => (
-                      <div key={index} className="cp-goals-item">
-                        <span className="cp-goals-item-text">{req}</span>
-                        <button type="button" className="cp-goals-item-remove" onClick={() => { setPendingRemoveItem({ type: "requirement", index }); setRemoveConfirmOpen(true); }}>✕</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
           </form>
         </div>

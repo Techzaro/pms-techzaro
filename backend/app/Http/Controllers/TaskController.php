@@ -100,7 +100,7 @@ class TaskController extends Controller
 
         $projects = Project::whereJsonContains('assigned_users', $user->id)
             ->where('created_by', '!=', $user->id)
-            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
+            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
             ->where(function ($q) {
                 $q->whereNotNull('assigned_users')->whereRaw('JSON_LENGTH(assigned_users) > 0');
             })
