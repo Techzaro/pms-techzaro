@@ -847,6 +847,43 @@
   color: #b91c1c;
 }
 
+/* Attachments list */
+
+.cp-attachments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.cp-attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.cp-attachment-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.cp-attachment-name {
+  font-size: 13px;
+  color: #374151;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cp-attachment-size {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
 /* Drag handle, actions, action buttons */
 
 .cp-attachment-drag {

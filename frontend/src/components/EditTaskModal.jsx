@@ -177,8 +177,9 @@ export default function EditTaskModal({ task, onClose }) {
   });
   const [requirementsList, setRequirementsList] = useState(task.requirements || []);
   const [reqInput, setReqInput] = useState("");
-  const [deliverables, setDeliverables] = useState([]);
+  const [deliverables, setDeliverables] = useState(task.deliverables || []);
   const [deliverableInput, setDeliverableInput] = useState({ title: "", due_datetime: "" });
+  const [openDeliverableDropdown, setOpenDeliverableDropdown] = useState(null);
   const [pendingFiles, setPendingFiles] = useState([]);
   const [existingFiles, setExistingFiles] = useState(task.files || []);
   const [links, setLinks] = useState([]);
@@ -214,6 +215,13 @@ export default function EditTaskModal({ task, onClose }) {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (openDeliverableDropdown === null) return;
+    const handleClick = () => setOpenDeliverableDropdown(null);
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [openDeliverableDropdown]);
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -262,12 +270,17 @@ export default function EditTaskModal({ task, onClose }) {
     if (!deliverableInput.title.trim()) return;
     const dt = deliverableInput.due_datetime;
     const dueDate = toUTCIso(dt);
-    setDeliverables((prev) => [...prev, { title: deliverableInput.title.trim(), due_date: dueDate }]);
+    setDeliverables((prev) => [...prev, { title: deliverableInput.title.trim(), due_date: dueDate, assigned_to: null }]);
     setDeliverableInput({ title: "", due_datetime: "" });
   };
 
   const handleRemoveDeliverable = (index) => {
     setDeliverables((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDeliverableAssignee = (index, userId) => {
+    setDeliverables((prev) => prev.map((d, i) => i === index ? { ...d, assigned_to: userId || null } : d));
+    setOpenDeliverableDropdown(null);
   };
 
   const confirmRemoveItem = () => {
@@ -415,7 +428,7 @@ export default function EditTaskModal({ task, onClose }) {
             }, []),
           };
           if (deliverables.length > 0) {
-            body.deliverables = deliverables.map((d) => ({ title: d.title, due_date: d.due_date || null }));
+            body.deliverables = deliverables.map((d) => ({ id: d.id || null, title: d.title, due_date: d.due_date || null, assigned_to: d.assigned_to || null }));
           }
           url = `${API_URL}/tasks/${task.id}`;
         }
@@ -737,6 +750,30 @@ export default function EditTaskModal({ task, onClose }) {
               />
             </div>
 
+            <div className="task-card">
+              <div className="task-card-top"><span>Dates</span></div>
+              <div className="task-deadline-grid">
+                <div>
+                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
+                  <input
+                    type="datetime-local"
+                    value={form.start_date}
+                    onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))}
+                    min={getNowDatetimeLocal()}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
+                  <input
+                    type="datetime-local"
+                    value={form.end_date}
+                    onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))}
+                    min={getNowDatetimeLocal()}
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="task-field">
               <label>Requirements</label>
               <div className="cp-goals-input-row">
@@ -896,30 +933,6 @@ export default function EditTaskModal({ task, onClose }) {
               </>
             )}
 
-            <div className="task-card">
-              <div className="task-card-top"><span>Dates</span></div>
-              <div className="task-deadline-grid">
-                <div>
-                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
-                  <input
-                    type="datetime-local"
-                    value={form.start_date}
-                    onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))}
-                    min={getNowDatetimeLocal()}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
-                  <input
-                    type="datetime-local"
-                    value={form.end_date}
-                    onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))}
-                    min={getNowDatetimeLocal()}
-                  />
-                </div>
-              </div>
-            </div>
-
             {/* DELIVERABLES */}
             <div className="task-card">
               <div className="task-card-top">
@@ -941,9 +954,20 @@ export default function EditTaskModal({ task, onClose }) {
                   <input
                     type="datetime-local"
                     value={deliverableInput.due_datetime}
-                    onChange={(e) => setDeliverableInput((prev) => ({ ...prev, due_datetime: e.target.value }))}
                     min={getNowDatetimeLocal()}
+                    max={form.end_date || undefined}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (form.end_date && val && val > form.end_date) {
+                        setDeliverableInput((prev) => ({ ...prev, due_datetime: form.end_date }));
+                      } else {
+                        setDeliverableInput((prev) => ({ ...prev, due_datetime: val }));
+                      }
+                    }}
                   />
+                  {form.end_date && (
+                    <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(form.end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                  )}
                 </div>
               </div>
               <button
@@ -956,16 +980,65 @@ export default function EditTaskModal({ task, onClose }) {
               </button>
               {deliverables.length > 0 && (
                 <div className="task-phase-list">
-                  {deliverables.map((d, index) => (
-                    <div key={index} className="task-phase-item">
-                      <div className="task-phase-item-dot" style={{ background: "#8b5cf6" }} />
-                      <div className="task-phase-item-info">
-                        <div className="task-phase-item-title">{d.title}</div>
-                        <div className="task-phase-item-date">{d.due_date ? formatDateTime(d.due_date).replace("\n", " ") : "No due date"}</div>
+                  {deliverables.map((d, index) => {
+                    const assignedUser = d.assigned_to ? displayUsers.find(u => String(u.id) === String(d.assigned_to)) : null;
+                    const isDropdownOpen = openDeliverableDropdown === index;
+                    return (
+                    <div key={index} className="task-phase-item" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #f3f4f6", position: "relative" }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#8b5cf6", display: "inline-block", flexShrink: 0 }}></span>
+                      <span style={{ flex: 1, fontSize: 13, color: "#374151" }}>{d.title}</span>
+                      <span style={{ fontSize: 11, color: "#6b7280" }}>{d.due_date ? formatDateTime(d.due_date).replace("\n", " ") : "No due date"}</span>
+                      <div style={{ position: "relative" }}>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setOpenDeliverableDropdown(isDropdownOpen ? null : index); }}
+                          style={{
+                            fontSize: 11, cursor: "pointer", padding: "3px 8px", borderRadius: 4, border: "1px solid #e5e7eb",
+                            background: assignedUser ? "#eef2ff" : "#f9fafb", color: assignedUser ? "#6366f1" : "#6b7280",
+                            fontWeight: 500, whiteSpace: "nowrap",
+                          }}
+                        >
+                          {assignedUser ? assignedUser.name : "Assign"}
+                        </button>
+                        {isDropdownOpen && (
+                          <div onClick={(e) => e.stopPropagation()} style={{
+                            position: "absolute", bottom: "100%", right: 0, zIndex: 100,
+                            background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.1)", minWidth: 150, padding: "4px 0", marginBottom: 4,
+                          }}>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleDeliverableAssignee(index, null); }}
+                              style={{
+                                display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
+                                fontSize: 12, cursor: "pointer", background: !assignedUser ? "#f3f4f6" : "transparent",
+                                border: "none", color: "#374151",
+                              }}
+                            >
+                              All assignees
+                            </button>
+                            {displayUsers.filter(u => selectedAssigneeIds.includes(u.id)).map((u) => (
+                              <button
+                                key={u.id}
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); handleDeliverableAssignee(index, u.id); }}
+                                style={{
+                                  display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
+                                  fontSize: 12, cursor: "pointer",
+                                  background: String(d.assigned_to) === String(u.id) ? "#f3f4f6" : "transparent",
+                                  border: "none", color: "#374151",
+                                }}
+                              >
+                                {u.name}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                       <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "deliverable", index, id: "" }); setRemoveConfirmOpen(true); }}>✕</button>
+                      <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "deliverable", index, id: "" }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
