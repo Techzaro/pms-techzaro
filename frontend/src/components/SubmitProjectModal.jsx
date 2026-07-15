@@ -122,8 +122,8 @@ function SubmitProjectModal({ isOpen, onClose, project, onSubmitSuccess }) {
             <h2 className="sd-title">{project.title}</h2>
             <div className="sd-meta">
               <span className={`sd-status-badge sd-status-${project.status || "pending"}`}>{statusLabel}</span>
-              {project.end_date && (
-                <span className="sd-due-date">Due Date & Time {formatDateTimeShort(project.end_date)}</span>
+              {project.active_deadline && (
+                <span className="sd-due-date">Due Date & Time {formatDateTimeShort(project.active_deadline)}</span>
               )}
             </div>
           </div>

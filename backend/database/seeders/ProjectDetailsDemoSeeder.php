@@ -9,7 +9,7 @@
  *
  * Features seeded:
  * - 4 team members with different roles (admin, manager, team_lead, member)
- * - 1 project with full metadata (description, goals, budget, dates, etc.)
+ * - 1 project with full metadata (description, budget, dates, etc.)
  * - 4 milestones (Design, Development, Testing, Launch)
  * - 2 project files (Requirements.pdf, Figma UI Kit)
  * - 5 tasks with varied statuses and priorities
@@ -75,21 +75,11 @@ class ProjectDetailsDemoSeeder extends Seeder
         // HTML description for the project details page
         $description = '<p>Complete redesign of the ecommerce storefront with a focus on performance, accessibility, and conversion. This phase covers UX research, UI design, and implementation of the new checkout flow.</p>';
 
-        // Goals checklist with completion status for progress tracking
-        $goalsChecklist = [
-            ['text' => 'Improve user experience and navigation', 'done' => true],
-            ['text' => 'Increase conversion rate with streamlined checkout', 'done' => true],
-            ['text' => 'Launch mobile-first responsive layouts', 'done' => false],
-            ['text' => 'Integrate analytics and A/B testing hooks', 'done' => false],
-        ];
-
         // Create or update the main project record with all metadata
         $project = Project::updateOrCreate(
             ['title' => 'Ecommerce Platform Redesign'],
             [
                 'description' => $description,
-                'goals' => '<p>Deliver a modern shopping experience aligned with brand guidelines.</p>',
-                'goals_checklist' => $goalsChecklist,
                 'sheets_documents' => '<p>Links to Figma and requirements doc can go here.</p>',
                 'website_name' => 'Ecommerce Demo',
                 'website_link' => 'https://example.com',

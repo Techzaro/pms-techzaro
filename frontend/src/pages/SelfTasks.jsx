@@ -24,7 +24,7 @@ import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal"; /
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
-import { authToken, rolePath } from "../utils/auth";
+import { authToken, rolePath, getUser } from "../utils/auth";
 import { formatDateTime } from "../utils/formatDateTime";
 import "../pages/Task.css";
 
@@ -309,9 +309,9 @@ const SelfTasks = () => {
                     <div><div className="task-title">{item.title}</div></div>
                     <div><span className="badge" style={{ background: "#eef2ff", color: "#4f46e5" }}>Project</span></div>
                     <div>
-                      <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
-                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                        {["submitted","approved","rejected","reopened"].includes(item.status) ? formatStatus(item.status) : "Pending"}
+                      <span className="badge" style={{ background: STATUS_COLORS[item.my_submission_status || item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.my_submission_status || item.status] || "#374151" }}>
+                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.my_submission_status || item.status] || "#374151" }}></span>
+                        {["submitted","approved","rejected","reopened"].includes(item.my_submission_status || item.status) ? formatStatus(item.my_submission_status || item.status) : "Pending"}
                       </span>
                     </div>
                     <div>
@@ -326,7 +326,13 @@ const SelfTasks = () => {
                       </span>
                     </div>
                     <div className="date-box">
-                      <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
+                      <div style={{ whiteSpace: "pre-line" }}>
+                        {(() => {
+                          const currentUser = getUser();
+                          const myDueDate = currentUser ? item.user_due_dates?.[currentUser.id] : null;
+                          return formatDate(myDueDate || item.end_date);
+                        })()}
+                      </div>
                     </div>
                     <div className="action-btns">
                       <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'self-tasks' } })}><IoEyeOutline /></button>
@@ -339,9 +345,9 @@ const SelfTasks = () => {
                           <LuSend />
                         </button>
                       )}
-                      {item.status === "submitted" && <span className="action-status-badge" style={{ color: "#1E40AF", fontWeight: 600, fontSize: "12px" }}>Submitted</span>}
-                      {item.status === "approved" && <span className="action-status-badge" style={{ color: "#166534", fontWeight: 600, fontSize: "12px" }}>Approved</span>}
-                      {item.status === "rejected" && <span className="action-status-badge" style={{ color: "#991B1B", fontWeight: 600, fontSize: "12px" }}>Rejected</span>}
+                      {item.my_submission_status === "submitted" && <span className="action-status-badge" style={{ color: "#1E40AF", fontWeight: 600, fontSize: "12px" }}>Submitted</span>}
+                      {item.my_submission_status === "approved" && <span className="action-status-badge" style={{ color: "#166534", fontWeight: 600, fontSize: "12px" }}>Approved</span>}
+                      {item.my_submission_status === "rejected" && <span className="action-status-badge" style={{ color: "#991B1B", fontWeight: 600, fontSize: "12px" }}>Rejected — Resubmit</span>}
                       {item.status === "reopened" && <span className="action-status-badge" style={{ color: "#92400E", fontWeight: 600, fontSize: "12px" }}>Reopened</span>}
                       {item.status === "completed" && <span className="action-status-badge" style={{ color: "#166534", fontWeight: 600, fontSize: "12px" }}>Completed</span>}
                     </div>
@@ -361,9 +367,7 @@ const SelfTasks = () => {
                     </span>
                   </div>
                   <div>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{item.deliverables_progress || 0}%</div>
                     <div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div></div>
-                    <div className="deliverables-approved-text">{item.approved_deliverables || 0}/{item.total_deliverables || 0} Deliverables Approved</div>
                   </div>
                   <div>
                     <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>

@@ -33,6 +33,8 @@ function ProfileModal({
   const [confirmPassword, setConfirmPassword] =
     useState("");
 
+  const [saving, setSaving] = useState(false);
+
   /**
    * CHANGE PASSWORD
    */
@@ -57,6 +59,7 @@ function ProfileModal({
       return;
     }
 
+    setSaving(true);
     try {
 
       const token = authToken();
@@ -104,6 +107,8 @@ function ProfileModal({
       console.error(error);
 
       notify.error(error.message || "Failed to change password.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -226,8 +231,9 @@ function ProfileModal({
           <button
             className="change-btn"
             onClick={handlePasswordChange}
+            disabled={saving}
           >
-            Change Password
+            {saving ? "Changing..." : "Change Password"}
           </button>
 
           <button

@@ -188,7 +188,7 @@ function Projects() {
   /** Derive the display status (Completed / Failed / In Progress) from progress and dates. */
   const calculateStatus = (project) => {
     const progress = calculateProgress(project);
-    const endDate = project.end_date ? new Date(project.end_date) : null;
+    const endDate = project.active_deadline ? new Date(project.active_deadline) : null;
     const now = new Date();
 
     if (progress === 100) {
@@ -269,9 +269,9 @@ function Projects() {
       return false;
     }
     if (statusFilter === "due_today") {
-      if (!project.end_date) return false;
+      if (!project.active_deadline) return false;
       const today = new Date();
-      const end = new Date(project.end_date);
+      const end = new Date(project.active_deadline);
       return end.getFullYear() === today.getFullYear() &&
         end.getMonth() === today.getMonth() &&
         end.getDate() === today.getDate();
@@ -446,13 +446,15 @@ function Projects() {
                     <div className="card-footer">
                       <div className="date-info">
                         <span className="date-icon">📅</span>
-                        {project.end_date ? (
-                          <span>
-                            {formatDateTime(project.end_date).replace("\n", " ")}
-                          </span>
-                        ) : (
-                          <span>No deadline set</span>
-                        )}
+                        {(() => {
+                          const myDueDate = project.user_due_dates?.[currentUser?.id];
+                          const displayDate = myDueDate || project.active_deadline;
+                          return displayDate ? (
+                            <span>{formatDateTime(displayDate).replace("\n", " ")}</span>
+                          ) : (
+                            <span>No deadline set</span>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -586,7 +588,14 @@ function Projects() {
 
                     <div className="col-due-date">
                       <div className="date-box">
-                        <div style={{ whiteSpace: "pre-line" }}>{project.end_date ? formatDateTime(project.end_date) : "No deadline"}</div>
+                        <div style={{ whiteSpace: "pre-line" }}>
+                          {(() => {
+                            const myDueDate = project.user_due_dates?.[currentUser?.id];
+                            if (myDueDate) return formatDateTime(myDueDate);
+                            if (project.active_deadline) return formatDateTime(project.active_deadline);
+                            return "No deadline";
+                          })()}
+                        </div>
                       </div>
                     </div>
 

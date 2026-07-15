@@ -292,8 +292,8 @@ const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, ge
       <div className="dash-card-footer">
         <div className="dash-date-info">
           <span className="dash-date-icon">📅</span>
-          {project.end_date ? (
-            <span>{new Date(project.end_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+          {project.active_deadline ? (
+            <span>{new Date(project.active_deadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
           ) : (
             <span>No deadline set</span>
           )}
@@ -439,8 +439,8 @@ function Admin() {
     (dashboard?.activeProjects || []).map((p) => ({
       id: p.id, name: p.name, title: p.title || p.name, client: p.client || '\u2014',
       description: p.description || '',
-      progress: Number(p.progress || p.progress_percent) || 0, deadline: p.deadline || p.due_date || '\u2014',
-      end_date: p.end_date || p.deadline || p.due_date || null,
+      progress: Number(p.progress || p.progress_percent) || 0,       deadline: p.deadline || p.due_date || '\u2014',
+      end_date: p.active_deadline || p.end_date || p.deadline || p.due_date || null,
       status: p.status || 'In_progress',
       team: p.team || '\u2014', assigned_users: p.assigned_users || [],
     })),
