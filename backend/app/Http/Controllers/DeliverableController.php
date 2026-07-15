@@ -978,18 +978,23 @@ class DeliverableController extends Controller
             return response()->json(['success' => false, 'message' => 'File not found'], 404);
         }
 
-        $fullPath = storage_path('app/public/'.$attachment->file_path);
-        if (! file_exists($fullPath)) {
+        if (! Storage::disk('public')->exists($attachment->file_path)) {
+            \Log::error('Attachment file not found on disk', [
+                'file_path' => $attachment->file_path,
+                'disk_root' => public_path('storage'),
+                'full_path' => public_path('storage') . '/' . $attachment->file_path,
+                'attachment_id' => $attachment->id,
+            ]);
             return response()->json(['success' => false, 'message' => 'File not found on disk'], 404);
         }
 
         $filename = $attachment->original_name ?? basename($attachment->file_path);
 
         if ($request->query('action') === 'download') {
-            return response()->download($fullPath, $filename);
+            return Storage::disk('public')->download($attachment->file_path, $filename);
         }
 
-        return response()->file($fullPath, ['Cache-Control' => 'public, max-age=3600']);
+        return Storage::disk('public')->response($attachment->file_path, ['Cache-Control' => 'public, max-age=3600']);
     }
 
     /**

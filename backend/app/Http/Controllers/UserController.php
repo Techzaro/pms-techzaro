@@ -911,19 +911,24 @@ class UserController extends Controller
             }
         }
 
-        $fullPath = storage_path('app/public/' . $path);
-
-        if (!file_exists($fullPath)) {
+        if (!Storage::disk('public')->exists($path)) {
+            \Log::error('File not found on disk', [
+                'path' => $path,
+                'disk_root' => public_path('storage'),
+                'full_path' => public_path('storage') . '/' . $path,
+                'user_id' => $user->id,
+                'document' => $document,
+            ]);
             return response()->json(['success' => false, 'message' => 'File not found on disk.'], 404);
         }
 
         $filename = basename($path);
 
         if ($request->query('action') === 'download') {
-            return response()->download($fullPath, $filename);
+            return Storage::disk('public')->download($path, $filename);
         }
 
-        return response()->file($fullPath);
+        return Storage::disk('public')->response($path);
     }
 
     /**
@@ -1204,19 +1209,24 @@ class UserController extends Controller
             }
         }
 
-        $fullPath = storage_path('app/public/' . $path);
-
-        if (!file_exists($fullPath)) {
+        if (!Storage::disk('public')->exists($path)) {
+            \Log::error('File not found on disk (my-documents)', [
+                'path' => $path,
+                'disk_root' => public_path('storage'),
+                'full_path' => public_path('storage') . '/' . $path,
+                'user_id' => $user->id ?? null,
+                'document' => $document,
+            ]);
             return response()->json(['success' => false, 'message' => 'File not found on disk.'], 404);
         }
 
         $filename = basename($path);
 
         if ($request->query('action') === 'download') {
-            return response()->download($fullPath, $filename);
+            return Storage::disk('public')->download($path, $filename);
         }
 
-        return response()->file($fullPath);
+        return Storage::disk('public')->response($path);
     }
 
     /**
