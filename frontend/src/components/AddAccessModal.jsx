@@ -18,6 +18,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [aamSearch, setAamSearch] = useState("");
   const dropdownRef = useRef(null);
   const [pendingRemoveUser, setPendingRemoveUser] = useState(null);
 
@@ -201,22 +202,44 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
             </label>
             <p className="aam-hint">Select users who can see this credential</p>
             <div className="aam-multiselect" ref={dropdownRef}>
-              <button
-                type="button"
-                className={`aam-multiselect-trigger ${dropdownOpen ? "aam-multiselect-trigger--open" : ""}`}
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-              >
-                <span className="aam-multiselect-value">
-                  {assignedUserIds.length === 0
-                    ? "Select users"
-                    : assignedUserIds.length === 1
-                    ? users.find((u) => u.id === assignedUserIds[0])?.name || "1 user selected"
-                    : `${assignedUserIds.length} users selected`}
-                </span>
-                <ChevronDown size={16} className={`aam-multiselect-arrow ${dropdownOpen ? "aam-multiselect-arrow--open" : ""}`} />
-              </button>
+              <div className={`aam-multiselect-trigger aam-combo-trigger ${dropdownOpen ? "aam-multiselect-trigger--open" : ""}`} onClick={() => { if (!dropdownOpen) { setDropdownOpen(true); } }}>
+                {assignedUserIds.length > 0 && (
+                  <span className="aam-combo-count">{assignedUserIds.length} selected</span>
+                )}
+                {assignedUserIds.length === 0 && !dropdownOpen && (
+                  <span className="aam-combo-placeholder">Select users</span>
+                )}
+                {dropdownOpen && (
+                  <input
+                    type="text"
+                    className="aam-combo-input"
+                    placeholder="Search users..."
+                    value={aamSearch}
+                    onChange={(e) => { setAamSearch(e.target.value); }}
+                    onFocus={() => setDropdownOpen(true)}
+                    onKeyDown={(e) => { if (e.key === "Escape") { setAamSearch(""); setDropdownOpen(false); } }}
+                    autoFocus
+                  />
+                )}
+                <ChevronDown
+                  size={16}
+                  className={`aam-multiselect-arrow ${dropdownOpen ? "aam-multiselect-arrow--open" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); setDropdownOpen(!dropdownOpen); }}
+                />
+              </div>
               {dropdownOpen && (
                 <div className="aam-multiselect-dropdown">
+                  <div className="aam-multiselect-search">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    <input
+                      type="text"
+                      placeholder="Search by name, role, department..."
+                      value={aamSearch}
+                      onChange={(e) => setAamSearch(e.target.value)}
+                      autoFocus
+                    />
+                    {aamSearch && <button type="button" className="aam-multiselect-search-clear" onClick={() => setAamSearch("")}>✕</button>}
+                  </div>
                   <label className="aam-multiselect-option" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
@@ -233,7 +256,13 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
                     <span className="aam-multiselect-label">Select All</span>
                   </label>
                   <div className="aam-multiselect-divider" />
-                  {users.map((u) => (
+                  {users
+                    .filter((u) => {
+                      if (!aamSearch.trim()) return true;
+                      const q = aamSearch.toLowerCase();
+                      return u.name?.toLowerCase().includes(q) || u.role?.toLowerCase().includes(q) || u.department?.toLowerCase().includes(q);
+                    })
+                    .map((u) => (
                     <label key={u.id} className="aam-multiselect-option" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"

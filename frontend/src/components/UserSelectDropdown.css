@@ -1,60 +1,98 @@
-/* ===== UserSelectDropdown — matches Create Team design ===== */
+/* ===== UserSelectDropdown — combobox pattern ===== */
 
 .usd-wrap {
   position: relative;
   width: 100%;
 }
 
-/* Trigger */
+/* Trigger — looks like an input field */
 .usd-trigger {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   width: 100%;
-  height: 52px;
+  height: 44px;
   border: 1px solid #d1d5db;
-  border-radius: 12px;
-  padding: 0 14px;
+  border-radius: 10px;
+  padding: 0 12px;
   font-size: 14px;
-  background: #f9fafb;
+  background: #fff;
   cursor: pointer;
   box-sizing: border-box;
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  gap: 8px;
 }
 
 .usd-trigger:hover {
   border-color: #a5b4fc;
-  background: #fff;
 }
 
 .usd-trigger--open {
   border-color: #6366f1;
-  background: #fff;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
 .usd-trigger--error {
-  border-color: #111827 !important;
-  background: #f9fafb !important;
+  border-color: #ef4444 !important;
 }
 
 .usd-trigger--disabled {
   opacity: 0.55;
   cursor: not-allowed;
+  background: #f9fafb;
 }
 
-.usd-placeholder {
-  color: #9ca3af;
+/* The actual input field inside trigger */
+.usd-combo-input {
+  flex: 1;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  font-size: 14px;
+  color: #1e293b;
+  background: transparent !important;
+  min-width: 0;
+  cursor: text;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
 }
 
-.usd-value {
-  color: #111827;
-  font-weight: 500;
+.usd-combo-input::placeholder {
+  color: #94a3b8;
 }
 
+/* Count badge when input is not focused */
+.usd-combo-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4f46e5;
+  background: #eef2ff;
+  padding: 3px 10px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Placeholder text when nothing selected and input not focused */
+.usd-combo-placeholder {
+  color: #94a3b8;
+  font-size: 14px;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Arrow icon */
 .usd-arrow {
   color: #6b7280;
   transition: transform 0.2s;
   flex-shrink: 0;
+  cursor: pointer;
+  padding: 2px;
 }
 
 .usd-arrow--open {
@@ -112,7 +150,7 @@
 }
 
 .usd-dropdown-items {
-  max-height: 260px;
+  max-height: 240px;
   overflow-y: auto;
 }
 

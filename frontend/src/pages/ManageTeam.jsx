@@ -106,6 +106,8 @@ function ManageTeam() {
 
   const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [mtMemberSearch, setMtMemberSearch] = useState("");
+  const [mtUserSearch, setMtUserSearch] = useState("");
 
   const [deleteTeamConfirmOpen, setDeleteTeamConfirmOpen] = useState(false);
   const [deleteTeamId, setDeleteTeamId] = useState(null);
@@ -696,13 +698,26 @@ function ManageTeam() {
                         cursor: "pointer",
                         boxSizing: "border-box",
                       }}
-                      onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
+                      onClick={() => { setIsUserDropdownOpen(!isUserDropdownOpen); }}
                     >
-                      <span style={{ color: selectedUserIds.length === 0 ? "#9ca3af" : "#111827" }}>
-                        {selectedUserIds.length === 0
-                          ? "Click to select users"
-                          : `${selectedUserIds.length} user(s) selected`}
-                      </span>
+                      {selectedUserIds.length > 0 && (
+                        <span className="mt-combo-count">{selectedUserIds.length} selected</span>
+                      )}
+                      {selectedUserIds.length === 0 && !isUserDropdownOpen && (
+                        <span className="mt-combo-placeholder">Click to select users</span>
+                      )}
+                      {isUserDropdownOpen && (
+                        <input
+                          type="text"
+                          className="mt-combo-input"
+                          placeholder="Search users..."
+                          value={mtUserSearch}
+                          onChange={(e) => { setMtUserSearch(e.target.value); }}
+                          onFocus={() => setIsUserDropdownOpen(true)}
+                          onKeyDown={(e) => { if (e.key === "Escape") { setMtUserSearch(""); setIsUserDropdownOpen(false); } }}
+                          autoFocus
+                        />
+                      )}
                       <MdExpandMore
                         size={20}
                         style={{
@@ -734,7 +749,13 @@ function ManageTeam() {
                           {availableUsersForTeam.length === 0 ? (
                             <p className="mt-dropdown-empty">All users are already members of this team.</p>
                           ) : (
-                            availableUsersForTeam.map((user) => (
+                            availableUsersForTeam
+                              .filter((user) => {
+                                if (!mtUserSearch.trim()) return true;
+                                const q = mtUserSearch.toLowerCase();
+                                return user.name?.toLowerCase().includes(q) || user.role?.toLowerCase().includes(q) || user.department?.toLowerCase().includes(q);
+                              })
+                              .map((user) => (
                               <label key={user.id} className="mt-dropdown-item">
                                 <input
                                   type="checkbox"
@@ -815,32 +836,49 @@ function ManageTeam() {
                     <div
                       style={{
                         display: "flex",
-                        justifyContent: "space-between",
                         alignItems: "center",
                         width: "100%",
-                        height: "52px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "12px",
-                        padding: "0 14px",
+                        height: "44px",
+                        border: isMemberDropdownOpen ? "1px solid #6366f1" : "1px solid #d1d5db",
+                        borderRadius: "10px",
+                        padding: "0 12px",
                         fontSize: "14px",
-                        background: "#f9fafb",
+                        background: "#fff",
                         cursor: "pointer",
                         boxSizing: "border-box",
+                        gap: "8px",
+                        boxShadow: isMemberDropdownOpen ? "0 0 0 3px rgba(99, 102, 241, 0.1)" : "none",
+                        transition: "border-color 0.2s, box-shadow 0.2s",
                       }}
-                      onClick={() => setIsMemberDropdownOpen(!isMemberDropdownOpen)}
+                      onClick={() => { if (!isMemberDropdownOpen) { setIsMemberDropdownOpen(true); setMtMemberSearch(""); } }}
                     >
-                      <span style={{ color: selectedMemberIds.length === 0 ? "#9ca3af" : "#111827" }}>
-                        {selectedMemberIds.length === 0
-                          ? "Click to select members"
-                          : `${selectedMemberIds.length} member(s) selected`}
-                      </span>
+                      {selectedMemberIds.length > 0 && (
+                        <span className="mt-combo-count">{selectedMemberIds.length} selected</span>
+                      )}
+                      {selectedMemberIds.length === 0 && !isMemberDropdownOpen && (
+                        <span className="mt-combo-placeholder">Click to select members</span>
+                      )}
+                      {isMemberDropdownOpen && (
+                        <input
+                          type="text"
+                          className="mt-combo-input"
+                          placeholder="Search members..."
+                          value={mtMemberSearch}
+                          onChange={(e) => { setMtMemberSearch(e.target.value); }}
+                          onFocus={() => setIsMemberDropdownOpen(true)}
+                          onKeyDown={(e) => { if (e.key === "Escape") { setMtMemberSearch(""); setIsMemberDropdownOpen(false); } }}
+                          autoFocus
+                        />
+                      )}
                       <MdExpandMore
                         size={20}
                         style={{
                           transform: isMemberDropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
                           transition: "0.2s",
                           color: "#6b7280",
+                          cursor: "pointer",
                         }}
+                        onClick={(e) => { e.stopPropagation(); if (isMemberDropdownOpen) { setIsMemberDropdownOpen(false); setMtMemberSearch(""); } else { setIsMemberDropdownOpen(true); setMtMemberSearch(""); } }}
                       />
                     </div>
                     {isMemberDropdownOpen && (
@@ -862,7 +900,13 @@ function ManageTeam() {
                           {users.length === 0 ? (
                             <p className="mt-dropdown-empty">No users available.</p>
                           ) : (
-                            users.map((user) => (
+                            users
+                              .filter((user) => {
+                                if (!mtMemberSearch.trim()) return true;
+                                const q = mtMemberSearch.toLowerCase();
+                                return user.name?.toLowerCase().includes(q) || user.role?.toLowerCase().includes(q) || user.department?.toLowerCase().includes(q);
+                              })
+                              .map((user) => (
                               <label key={user.id} className="mt-dropdown-item">
                                 <input
                                   type="checkbox"

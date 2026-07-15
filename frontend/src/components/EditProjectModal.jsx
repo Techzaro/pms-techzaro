@@ -76,6 +76,7 @@ const EditProjectModal = ({ project, onClose }) => {
     return [];
   });
   const [categoryInput, setCategoryInput] = useState("");
+  const [catSearch, setCatSearch] = useState("");
   const [existingCategories, setExistingCategories] = useState([]);
   const [categoryCustomMode, setCategoryCustomMode] = useState(false);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
@@ -963,17 +964,33 @@ const EditProjectModal = ({ project, onClose }) => {
                 </div>
               ) : (
                 <div className="cp-category-dropdown" ref={categoryDropdownRef}>
-                  <div className="cp-category-trigger" onClick={() => setCategoryDropdownOpen((prev) => !prev)}>
-                    <span className={categoriesList.length === 0 ? "cp-dropdown-placeholder" : ""}>
-                      {categoriesList.length === 0
-                        ? "Select category"
-                        : `${categoriesList.length} selected`}
-                    </span>
-                    <svg className={`cp-dropdown-arrow ${categoryDropdownOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
+                  <div className="cp-category-trigger cp-combo-trigger" onClick={() => { setCategoryDropdownOpen(true); }}>
+                    {categoriesList.length > 0 && (
+                      <span className="cp-combo-count">{categoriesList.length} selected</span>
+                    )}
+                    {categoriesList.length === 0 && !categoryDropdownOpen && (
+                      <span className="cp-combo-placeholder">Select category</span>
+                    )}
+                    {categoryDropdownOpen && (
+                      <input
+                        type="text"
+                        className="cp-combo-input"
+                        placeholder="Search categories..."
+                        value={catSearch}
+                        onChange={(e) => { setCatSearch(e.target.value); }}
+                        onFocus={() => setCategoryDropdownOpen(true)}
+                        onKeyDown={(e) => { if (e.key === "Escape") { setCatSearch(""); setCategoryDropdownOpen(false); } }}
+                        autoFocus
+                      />
+                    )}
+                    <svg className={`cp-dropdown-arrow ${categoryDropdownOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" onClick={(e) => { e.stopPropagation(); setCategoryDropdownOpen((prev) => !prev); }}><polyline points="6 9 12 15 18 9" /></svg>
                   </div>
                   {categoryDropdownOpen && (
                     <div className="cp-dropdown-menu">
-                      {existingCategories.filter((c) => !categoriesList.includes(c)).map((cat) => (
+                      {existingCategories
+                        .filter((c) => !categoriesList.includes(c))
+                        .filter((c) => !catSearch.trim() || c.toLowerCase().includes(catSearch.toLowerCase()))
+                        .map((cat) => (
                         <div key={cat} className="cp-dropdown-item cp-dropdown-item-row">
                           <label className="cp-dropdown-item-check">
                             <input
