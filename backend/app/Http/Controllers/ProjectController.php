@@ -325,9 +325,9 @@ class ProjectController extends Controller
         }
 
         $baseRelations = [
-            'creator:id,name,email,role',
-            'team.leader:id,name,email,role',
-            'team.members:id,name,email,role',
+            'creator:id,name,email,role,department',
+            'team.leader:id,name,email,role,department',
+            'team.members:id,name,email,role,department',
             'milestones',
             'files',
             'approvedBy:id,name',
@@ -368,7 +368,7 @@ class ProjectController extends Controller
 
         $memberIds = $project->assigned_users ?? [];
         $members = ! empty($memberIds)
-            ? User::whereIn('id', $memberIds)->where('active', true)->orderByRaw('FIELD(id,' . implode(',', $memberIds) . ')')->get(['id', 'name', 'email', 'role'])
+            ? User::whereIn('id', $memberIds)->where('active', true)->orderByRaw('FIELD(id,' . implode(',', $memberIds) . ')')->get(['id', 'name', 'email', 'role', 'department'])
             : collect();
 
         $isCreator = (int) $project->created_by === (int) $user->id;
@@ -584,25 +584,38 @@ class ProjectController extends Controller
             );
         }
 
-        $this->sendProjectUpdateNotification($project, $user, $changes);
+        // Log activity and send notifications — wrapped individually so
+        // any single failure (e.g. SMTP timeout) never blocks the response.
+        $changeCount = count($changes);
 
-        // Send confirmation email to performer
-        if (count($changes) > 0) {
-            $fieldNames = array_column($changes, 'label');
-            $this->notificationService->confirmAction($user, 'Updated', 'project', $project->title, [
-                'Changes Made' => implode(', ', array_slice($fieldNames, 0, 5)).(count($fieldNames) > 5 ? ' and more' : ''),
-            ]);
+        try {
+            $this->sendProjectUpdateNotification($project, $user, $changes);
+        } catch (\Throwable $e) {
+            \Log::error('Failed to send project update notification', ['error' => $e->getMessage()]);
         }
 
-        // Log activity
-        $changeCount = count($changes);
+        try {
+            if ($changeCount > 0) {
+                $fieldNames = array_column($changes, 'label');
+                $this->notificationService->confirmAction($user, 'Updated', 'project', $project->title, [
+                    'Changes Made' => implode(', ', array_slice($fieldNames, 0, 5)).(count($fieldNames) > 5 ? ' and more' : ''),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Failed to send confirmation email', ['error' => $e->getMessage()]);
+        }
+
         if ($changeCount > 0) {
             $fieldNames = array_column($changes, 'label');
             $activityDesc = 'You updated project "'.$project->title.'" — changed: '.implode(', ', array_slice($fieldNames, 0, 3));
             if ($changeCount > 3) {
                 $activityDesc .= ' and '.($changeCount - 3).' more';
             }
-            $this->activityService->log($user->id, 'project_updated', $activityDesc, 'project', $project->id);
+            try {
+                $this->activityService->log($user->id, 'project_updated', $activityDesc, 'project', $project->id);
+            } catch (\Throwable $e) {
+                \Log::error('Failed to log activity', ['error' => $e->getMessage()]);
+            }
             $this->clearDashboardCache($user->id);
 
             try {
@@ -934,18 +947,21 @@ class ProjectController extends Controller
 
         $users = User::where('active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'role']);
+            ->get(['id', 'name', 'role', 'department']);
 
         $visibility = $project->visibility()->get()->keyBy('user_id');
+        $memberIds = array_map('intval', $project->assigned_users ?? []);
 
-        $result = $users->map(function ($u) use ($visibility) {
+        $result = $users->map(function ($u) use ($visibility, $memberIds, $project) {
             $row = $visibility->get($u->id);
+            $isMember = in_array($u->id, $memberIds) || (int) $u->id === (int) $project->created_by;
 
             return [
                 'id' => $u->id,
                 'name' => $u->name,
                 'role' => $u->role,
-                'is_visible' => $row ? (bool) $row->is_visible : false,
+                'department' => $u->department,
+                'is_visible' => $row ? (bool) $row->is_visible : $isMember,
             ];
         });
 
@@ -988,7 +1004,6 @@ class ProjectController extends Controller
             }
             $grantedUsers[] = $uid;
         }
-
         // Bulk insert new records + bulk update removed
         if (! empty($newRecords)) {
             ProjectVisibility::insert($newRecords);

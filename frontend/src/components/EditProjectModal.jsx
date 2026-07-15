@@ -18,6 +18,7 @@ import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import "./layout/CreateProjectModal.css";
 
 const PRESET_PHASES = [
@@ -33,7 +34,8 @@ const PRESET_PHASES = [
  * @param {Function} onClose - Callback to close modal; receives boolean (true if saved)
  */
 const EditProjectModal = ({ project, onClose }) => {
-  useEscapeKey(true, onClose);
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(true, handleClose);
 
   const [loading, setLoading] = useState(false);
   const { submitting, run } = useSubmit();
@@ -221,6 +223,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    setIsDirty(true);
     setForm((prev) => {
       const next = { ...prev, [name]: value };
       if (name === "team_id") {
@@ -238,6 +241,7 @@ const EditProjectModal = ({ project, onClose }) => {
   };
 
   const handleAssignedUsersChange = (ids) => {
+    setIsDirty(true);
     setForm((prev) => ({ ...prev, assigned_users: ids }));
     setDueDates((prev) => {
       const next = { ...prev };
@@ -249,18 +253,21 @@ const EditProjectModal = ({ project, onClose }) => {
   };
 
   const handleDueDateChange = (userId, value) => {
+    setIsDirty(true);
     setDueDates((prev) => ({ ...prev, [userId]: value }));
   };
 
   const handleAddPhase = () => {
     if (!phaseName.trim() || !phaseDate) return;
     const formattedDt = toUTCIso(phaseDate);
+    setIsDirty(true);
     setMilestones((prev) => [...prev, { title: phaseName.trim(), due_date: formattedDt, status: "planned" }]);
     setPhaseName("");
     setPhaseDate("");
   };
 
   const handleRemovePhase = (index) => {
+    setIsDirty(true);
     setMilestones((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -289,6 +296,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
   const handleAddGoal = () => {
     if (!goalInput.trim()) return;
+    setIsDirty(true);
     setGoalsList((prev) => [...prev, { text: goalInput.trim(), done: false, due_datetime: goalDateTime || null }]);
     setGoalInput("");
     setGoalDateTime("");
@@ -300,6 +308,7 @@ const EditProjectModal = ({ project, onClose }) => {
   };
 
   const confirmDeleteGoal = () => {
+    setIsDirty(true);
     setGoalsList((prev) => prev.filter((_, i) => i !== pendingGoalIndex));
     setGoalDeleteOpen(false);
     setPendingGoalIndex(null);
@@ -313,6 +322,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
   const handleSaveGoalEdit = () => {
     if (!editGoalForm.text.trim()) return;
+    setIsDirty(true);
     setGoalsList((prev) => prev.map((g, i) => i === editingGoal ? { ...g, text: editGoalForm.text.trim(), due_datetime: editGoalForm.due_datetime || null } : g));
     setEditingGoal(null);
     setEditGoalForm({ text: "", due_datetime: "" });
@@ -325,6 +335,7 @@ const EditProjectModal = ({ project, onClose }) => {
   const handleAddCategory = () => {
     if (!categoryInput.trim()) return;
     const newCat = categoryInput.trim();
+    setIsDirty(true);
     if (!categoriesList.includes(newCat)) {
       setCategoriesList((prev) => [...prev, newCat]);
     }
@@ -338,6 +349,7 @@ const EditProjectModal = ({ project, onClose }) => {
   };
 
   const handleRemoveCategory = (index) => {
+    setIsDirty(true);
     setCategoriesList((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -374,6 +386,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
   const handleFiles = (fileList) => {
     const newFiles = Array.from(fileList);
+    setIsDirty(true);
     setPendingFiles((prev) => [...prev, ...newFiles.map((f) => ({ file: f, name: f.name, size: f.size, renaming: false }))]);
   };
 
@@ -399,6 +412,7 @@ const EditProjectModal = ({ project, onClose }) => {
   };
 
   const handleRemoveFile = (index) => {
+    setIsDirty(true);
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -419,12 +433,14 @@ const EditProjectModal = ({ project, onClose }) => {
     let url = linkInput.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     const name = linkTitleInput.trim() || url;
+    setIsDirty(true);
     setLinks((prev) => [...prev, { url, name, renaming: false }]);
     setLinkInput("");
     setLinkTitleInput("");
   };
 
   const handleRemoveLink = (index) => {
+    setIsDirty(true);
     setLinks((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -436,11 +452,13 @@ const EditProjectModal = ({ project, onClose }) => {
     if (!deliverableProjInput.title.trim()) return;
     const dt = deliverableProjInput.due_datetime;
     const dueDate = toUTCIso(dt);
+    setIsDirty(true);
     setDeliverablesProj((prev) => [...prev, { title: deliverableProjInput.title.trim(), due_date: dueDate }]);
     setDeliverableProjInput({ title: "", due_datetime: "" });
   };
 
   const handleRemoveDeliverableProj = (index) => {
+    setIsDirty(true);
     setDeliverablesProj((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -580,7 +598,7 @@ const EditProjectModal = ({ project, onClose }) => {
             <LoadingButton className="cp-create-btn" onClick={handleSubmit} loading={submitting}>
               Save Changes
             </LoadingButton>
-            <button className="cp-close-btn" onClick={() => onClose(false)}>✕</button>
+            <button className="cp-close-btn" onClick={handleClose}>✕</button>
           </div>
         </div>
 
@@ -620,14 +638,14 @@ const EditProjectModal = ({ project, onClose }) => {
                     type="text"
                     placeholder="Enter a goal"
                     value={goalInput}
-                    onChange={(e) => setGoalInput(e.target.value)}
+                    onChange={(e) => { setIsDirty(true); setGoalInput(e.target.value); }}
                     onKeyDown={handleGoalKeyDown}
                   />
                   <input
                     type="datetime-local"
                     ref={goalDateTimeRef}
                     value={goalDateTime}
-                    onChange={(e) => setGoalDateTime(e.target.value)}
+                    onChange={(e) => { setIsDirty(true); setGoalDateTime(e.target.value); }}
                     className="cp-goals-datetime-input"
                   />
                   <button
@@ -802,14 +820,14 @@ const EditProjectModal = ({ project, onClose }) => {
                   type="text"
                   placeholder="Link title (e.g. Figma Design, Drive Folder)"
                   value={linkTitleInput}
-                  onChange={(e) => setLinkTitleInput(e.target.value)}
+                  onChange={(e) => { setIsDirty(true); setLinkTitleInput(e.target.value); }}
                 />
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
                     type="text"
                     placeholder="Paste link (Drive, Figma, Website, etc.)"
                     value={linkInput}
-                    onChange={(e) => setLinkInput(e.target.value)}
+                    onChange={(e) => { setIsDirty(true); setLinkInput(e.target.value); }}
                     onKeyDown={handleLinkKeyDown}
                     style={{ flex: 1 }}
                   />
@@ -934,7 +952,7 @@ const EditProjectModal = ({ project, onClose }) => {
                     type="text"
                     placeholder="Enter custom category"
                     value={categoryInput}
-                    onChange={(e) => setCategoryInput(e.target.value)}
+                    onChange={(e) => { setIsDirty(true); setCategoryInput(e.target.value); }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") { e.preventDefault(); handleAddCategory(); }
                       if (e.key === "Escape") { setCategoryCustomMode(false); setCategoryInput(""); }
@@ -963,6 +981,7 @@ const EditProjectModal = ({ project, onClose }) => {
                               checked={categoriesList.includes(cat)}
                               onChange={() => {
                                 if (!categoriesList.includes(cat)) {
+                                  setIsDirty(true);
                                   setCategoriesList((prev) => [...prev, cat]);
                                 }
                               }}
@@ -1020,7 +1039,7 @@ const EditProjectModal = ({ project, onClose }) => {
                     type="text"
                     placeholder="Enter phase name"
                     value={phaseName}
-                    onChange={(e) => setPhaseName(e.target.value)}
+                    onChange={(e) => { setIsDirty(true); setPhaseName(e.target.value); }}
                     onKeyDown={handlePhaseKeyDown}
                     list="edit-phase-presets"
                   />
@@ -1035,7 +1054,7 @@ const EditProjectModal = ({ project, onClose }) => {
                   <input
                     type="datetime-local"
                     value={phaseDate}
-                    onChange={(e) => setPhaseDate(e.target.value)}
+                    onChange={(e) => { setIsDirty(true); setPhaseDate(e.target.value); }}
                     min={getNowDatetimeLocal()}
                   />
                 </div>
@@ -1092,7 +1111,7 @@ const EditProjectModal = ({ project, onClose }) => {
                     type="text"
                     placeholder="Enter deliverable name"
                     value={deliverableProjInput.title}
-                    onChange={(e) => setDeliverableProjInput((prev) => ({ ...prev, title: e.target.value }))}
+                    onChange={(e) => { setIsDirty(true); setDeliverableProjInput((prev) => ({ ...prev, title: e.target.value })); }}
                     onKeyDown={handleDeliverableProjKeyDown}
                   />
                 </div>
@@ -1101,7 +1120,7 @@ const EditProjectModal = ({ project, onClose }) => {
                   <input
                     type="datetime-local"
                     value={deliverableProjInput.due_datetime}
-                    onChange={(e) => setDeliverableProjInput((prev) => ({ ...prev, due_datetime: e.target.value }))}
+                    onChange={(e) => { setIsDirty(true); setDeliverableProjInput((prev) => ({ ...prev, due_datetime: e.target.value })); }}
                     min={getNowDatetimeLocal()}
                   />
                 </div>
@@ -1394,6 +1413,8 @@ const EditProjectModal = ({ project, onClose }) => {
         cancelText="Cancel"
         danger
       />
+
+      {ConfirmDialog}
     </>
   );
 };

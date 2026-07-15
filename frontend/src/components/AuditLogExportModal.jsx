@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
 import { jsPDF } from "jspdf";
@@ -8,7 +9,8 @@ import autoTable from "jspdf-autotable";
 import "./AuditLogExportModal.css";
 
 function AuditLogExportModal({ onClose }) {
-  useEscapeKey(true, onClose);
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(true, handleClose);
   const [format, setFormat] = useState("pdf");
   const [exporting, setExporting] = useState(false);
 
@@ -144,71 +146,74 @@ function AuditLogExportModal({ onClose }) {
   };
 
   return createPortal(
-    <div className="ael-overlay" onClick={onClose}>
-      <div className="ael-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <div className="ael-header">
-          <div className="ael-header-left">
-            <div className="ael-header-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
+    <>
+      <div className="ael-overlay" onClick={handleClose}>
+        <div className="ael-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+          <div className="ael-header">
+            <div className="ael-header-left">
+              <div className="ael-header-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="ael-title">Export Audit Logs</h2>
+                <p className="ael-subtitle">Choose a format to export the audit log data</p>
+              </div>
+            </div>
+            <button className="ael-close-btn" onClick={handleClose}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
-            </div>
-            <div>
-              <h2 className="ael-title">Export Audit Logs</h2>
-              <p className="ael-subtitle">Choose a format to export the audit log data</p>
+            </button>
+          </div>
+
+          <div className="ael-body">
+            <div className="ael-format-group">
+              <label className="ael-radio-label">
+                <input
+                  type="radio"
+                  name="export-format"
+                  value="pdf"
+                  checked={format === "pdf"}
+                  onChange={() => { setFormat("pdf"); setIsDirty(true); }}
+                />
+                <span className="ael-radio-mark" />
+                <div className="ael-radio-content">
+                  <span className="ael-radio-title">PDF</span>
+                  <span className="ael-radio-desc">Portable Document Format - best for viewing and printing</span>
+                </div>
+              </label>
+              <label className="ael-radio-label">
+                <input
+                  type="radio"
+                  name="export-format"
+                  value="xlsx"
+                  checked={format === "xlsx"}
+                  onChange={() => { setFormat("xlsx"); setIsDirty(true); }}
+                />
+                <span className="ael-radio-mark" />
+                <div className="ael-radio-content">
+                  <span className="ael-radio-title">Excel</span>
+                  <span className="ael-radio-desc">Spreadsheet format - best for data analysis and filtering</span>
+                </div>
+              </label>
             </div>
           </div>
-          <button className="ael-close-btn" onClick={onClose}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
 
-        <div className="ael-body">
-          <div className="ael-format-group">
-            <label className="ael-radio-label">
-              <input
-                type="radio"
-                name="export-format"
-                value="pdf"
-                checked={format === "pdf"}
-                onChange={() => setFormat("pdf")}
-              />
-              <span className="ael-radio-mark" />
-              <div className="ael-radio-content">
-                <span className="ael-radio-title">PDF</span>
-                <span className="ael-radio-desc">Portable Document Format - best for viewing and printing</span>
-              </div>
-            </label>
-            <label className="ael-radio-label">
-              <input
-                type="radio"
-                name="export-format"
-                value="xlsx"
-                checked={format === "xlsx"}
-                onChange={() => setFormat("xlsx")}
-              />
-              <span className="ael-radio-mark" />
-              <div className="ael-radio-content">
-                <span className="ael-radio-title">Excel</span>
-                <span className="ael-radio-desc">Spreadsheet format - best for data analysis and filtering</span>
-              </div>
-            </label>
+          <div className="ael-footer">
+            <button className="ael-cancel-btn" onClick={handleClose} disabled={exporting}>Cancel</button>
+            <button className="ael-export-btn" onClick={handleExport} disabled={exporting}>
+              {exporting ? "Exporting..." : "Export"}
+            </button>
           </div>
-        </div>
-
-        <div className="ael-footer">
-          <button className="ael-cancel-btn" onClick={onClose} disabled={exporting}>Cancel</button>
-          <button className="ael-export-btn" onClick={handleExport} disabled={exporting}>
-            {exporting ? "Exporting..." : "Export"}
-          </button>
         </div>
       </div>
-    </div>,
+      {ConfirmDialog}
+    </>,
     document.body
   );
 }

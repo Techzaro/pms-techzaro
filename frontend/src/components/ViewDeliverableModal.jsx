@@ -11,6 +11,7 @@ import { FileText, Download, ExternalLink } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { formatDateTime } from "../utils/formatDateTime";
 import { notify, showSuccessMessage } from "../utils/notify";
 import "./ViewDeliverableModal.css";
@@ -46,7 +47,8 @@ function formatFileSize(bytes) {
  * @param {Function} onSubmitSuccess - Callback after successful resubmission.
  */
 function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess }) {
-  useEscapeKey(isOpen, onClose);
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(isOpen, handleClose);
 
   const [submission, setSubmission] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -291,7 +293,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
                       className="vd-textarea"
                       placeholder="Describe your revised submission..."
                       value={comment}
-                      onChange={(e) => setComment(e.target.value)}
+                      onChange={(e) => { setIsDirty(true); setComment(e.target.value); }}
                       rows={3}
                     />
                   </div>
@@ -301,7 +303,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
                       className="vd-dropzone"
                       onClick={() => document.getElementById(`vd-file-${deliverable.id}`)?.click()}
                       onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) setFiles(Array.from(e.dataTransfer.files)); }}
+                      onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) { setIsDirty(true); setFiles(Array.from(e.dataTransfer.files)); } }}
                     >
                       <p className="vd-dropzone-text">Drag & drop files or <span className="vd-browse">browse</span></p>
                     </div>
@@ -310,7 +312,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
                       multiple
                       id={`vd-file-${deliverable.id}`}
                       style={{ display: "none" }}
-                      onChange={(e) => setFiles(Array.from(e.target.files || []))}
+                      onChange={(e) => { setIsDirty(true); setFiles(Array.from(e.target.files || [])); }}
                     />
                     <div className="vd-field">
                       <label className="vd-label">Links</label>
@@ -321,10 +323,10 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
                             style={{ flex: 1, padding: "8px 10px", border: "1px solid #E5E7EB", borderRadius: "8px", fontSize: "13px" }}
                             placeholder="https://example.com"
                             value={link}
-                            onChange={(e) => setLinks(links.map((l, j) => (j === i ? e.target.value : l)))}
+                            onChange={(e) => { setIsDirty(true); setLinks(links.map((l, j) => (j === i ? e.target.value : l))); }}
                           />
                           {i === links.length - 1 && (
-                            <button type="button" style={{ padding: "4px 10px", background: "#DCFCE7", border: "1px solid #16A34A", borderRadius: "6px", color: "#16A34A", cursor: "pointer" }} onClick={() => setLinks([...links, ""])}>+</button>
+                            <button type="button" style={{ padding: "4px 10px", background: "#DCFCE7", border: "1px solid #16A34A", borderRadius: "6px", color: "#16A34A", cursor: "pointer" }} onClick={() => { setIsDirty(true); setLinks([...links, ""]); }}>+</button>
                           )}
                         </div>
                       ))}
@@ -350,13 +352,14 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
         )}
 
         <div className="vd-footer">
-          <button className="vd-close-btn" onClick={onClose}>Close</button>
+          <button className="vd-close-btn" onClick={handleClose}>Close</button>
           {isReopened && (
             <button className="vd-resubmit-btn" onClick={handleResubmit} disabled={submitting}>
               {submitting ? "Submitting..." : "Resubmit"}
             </button>
           )}
         </div>
+        {ConfirmDialog}
       </div>
     </div>,
     document.body

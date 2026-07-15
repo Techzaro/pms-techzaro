@@ -3,8 +3,12 @@ import { X, Upload, Link, FileUp } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import ConfirmModal from "./ConfirmModal";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 export default function AddProjectFileModal({ isOpen, onClose, projectId, onSuccess }) {
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(isOpen, handleClose);
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const [linkInput, setLinkInput] = useState("");
@@ -19,11 +23,13 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
   const handleFileSelect = (e) => {
     const selected = Array.from(e.target.files);
     setFiles((prev) => [...prev, ...selected.map((f) => ({ file: f, customName: f.name.replace(/\.[^.]+$/, ""), renaming: false }))]);
+    setIsDirty(true);
     e.target.value = "";
   };
 
   const handleRemoveFile = (index) => {
     setFiles((prev) => prev.filter((_, i) => i !== index));
+    setIsDirty(true);
   };
 
   const handleAddLink = () => {
@@ -34,10 +40,12 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
     setLinks((prev) => [...prev, { url, name, renaming: false }]);
     setLinkInput("");
     setLinkTitleInput("");
+    setIsDirty(true);
   };
 
   const handleRemoveLink = (index) => {
     setLinks((prev) => prev.filter((_, i) => i !== index));
+    setIsDirty(true);
   };
 
   const handleLinkKeyDown = (e) => {
@@ -93,11 +101,11 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
 
   return (
     <>
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={handleClose}>
       <div className="modal-box" style={{ maxWidth: "520px", width: "95%" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
           <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "#111827" }}>Add Files & Links</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", color: "#6b7280" }}>
+          <button onClick={handleClose} style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", color: "#6b7280" }}>
             <X size={20} />
           </button>
         </div>
@@ -297,7 +305,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
         {/* Action Buttons */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", paddingTop: "16px", borderTop: "1px solid #e5e7eb" }}>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             style={{
               padding: "10px 20px", borderRadius: "8px", border: "1px solid #d1d5db", background: "#fff",
               fontWeight: 600, fontSize: "13px", cursor: "pointer", color: "#374151",
@@ -335,6 +343,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
       cancelText="Cancel"
       danger
     />
+    {ConfirmDialog}
     </>
   );
 }

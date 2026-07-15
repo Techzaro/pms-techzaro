@@ -33,6 +33,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import API_URL from "../config/api";
@@ -310,9 +311,11 @@ function ManageTeam() {
     setIsUserDropdownOpen(false);
   };
 
-  useEscapeKey(isModalOpen, closeModal);
+  const { isDirty: teamIsDirty, setIsDirty: setTeamIsDirty, handleClose: handleTeamClose, ConfirmDialog: TeamConfirmDialog } = useConfirmOnClose(closeModal);
+  useEscapeKey(isModalOpen, handleTeamClose);
 
   const toggleMemberSelection = (userId) => {
+    setTeamIsDirty(true);
     setSelectedMemberIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
     );
@@ -325,6 +328,7 @@ function ManageTeam() {
   };
 
   const toggleSelectAllMembers = () => {
+    setTeamIsDirty(true);
     if (selectedMemberIds.length === users.length) {
       setSelectedMemberIds([]);
     } else {
@@ -655,7 +659,7 @@ function ManageTeam() {
 
         {/* MODAL */}
         {isModalOpen && createPortal(
-          <div className="mt-modal-overlay" onClick={closeModal}>
+          <div className="mt-modal-overlay" onClick={handleTeamClose}>
             <div className="mt-modal" onClick={(e) => e.stopPropagation()}>
               <div className="mt-modal-header">
                 <div>
@@ -668,7 +672,7 @@ function ManageTeam() {
                       : "Create a new team and add members"}
                   </p>
                 </div>
-                <button className="mt-modal-close" onClick={closeModal}>
+                <button className="mt-modal-close" onClick={handleTeamClose}>
                   &#10005;
                 </button>
               </div>
@@ -737,8 +741,13 @@ function ManageTeam() {
                                   checked={selectedUserIds.includes(user.id)}
                                   onChange={() => toggleUserSelection(user.id)}
                                 />
-                                <span className="mt-dropdown-name">{user.name}</span>
-                                {user.role && <span className="mt-dropdown-role">{user.role}</span>}
+                                <div className="mt-dropdown-info">
+                                  <span className="mt-dropdown-name">{user.name}</span>
+                                  <div className="mt-dropdown-badges">
+                                    {user.role && <span className="mt-dropdown-role">{user.role}</span>}
+                                    {user.department && <span className="mt-dropdown-dept">{user.department}</span>}
+                                  </div>
+                                </div>
                               </label>
                             ))
                           )}
@@ -747,7 +756,7 @@ function ManageTeam() {
                     )}
                   </div>
                   <div className="mt-modal-actions">
-                    <button type="button" className="mt-btn-cancel" onClick={closeModal}>
+                    <button type="button" className="mt-btn-cancel" onClick={handleTeamClose}>
                       Cancel
                     </button>
                     <LoadingButton type="submit" className="mt-btn-primary" loading={submitting} disabled={selectedUserIds.length === 0}>
@@ -773,7 +782,7 @@ function ManageTeam() {
                       }}
                       type="text"
                       value={teamName}
-                      onChange={(e) => setTeamName(e.target.value)}
+                      onChange={(e) => { setTeamIsDirty(true); setTeamName(e.target.value); }}
                       placeholder="Enter Team Name"
                       required
                     />
@@ -796,7 +805,7 @@ function ManageTeam() {
                         fontFamily: "inherit",
                       }}
                       value={teamDescription}
-                      onChange={(e) => setTeamDescription(e.target.value)}
+                      onChange={(e) => { setTeamIsDirty(true); setTeamDescription(e.target.value); }}
                       placeholder="Enter team description (optional)"
                     />
                   </div>
@@ -860,8 +869,13 @@ function ManageTeam() {
                                   checked={selectedMemberIds.includes(user.id)}
                                   onChange={() => toggleMemberSelection(user.id)}
                                 />
-                                <span className="mt-dropdown-name">{user.name}</span>
-                                {user.role && <span className="mt-dropdown-role">{user.role}</span>}
+                                <div className="mt-dropdown-info">
+                                  <span className="mt-dropdown-name">{user.name}</span>
+                                  <div className="mt-dropdown-badges">
+                                    {user.role && <span className="mt-dropdown-role">{user.role}</span>}
+                                    {user.department && <span className="mt-dropdown-dept">{user.department}</span>}
+                                  </div>
+                                </div>
                               </label>
                             ))
                           )}
@@ -887,20 +901,20 @@ function ManageTeam() {
                           cursor: "pointer",
                         }}
                         value={selectedLeaderId || ""}
-                        onChange={(e) => setSelectedLeaderId(e.target.value ? Number(e.target.value) : null)}
+                        onChange={(e) => { setTeamIsDirty(true); setSelectedLeaderId(e.target.value ? Number(e.target.value) : null); }}
                       >
                         <option value="">No leader selected</option>
                         {users
                           .filter((u) => selectedMemberIds.includes(u.id))
                           .map((u) => (
-                            <option key={u.id} value={u.id}>{u.name} ({u.role === "teamlead" ? "Team Lead" : u.role})</option>
+                            <option key={u.id} value={u.id}>{u.name} ({u.role === "teamlead" ? "Team Lead" : u.role}){u.department ? ` - ${u.department}` : ""}</option>
                           ))}
                       </select>
                     </div>
                   )}
 
                   <div className="mt-modal-actions">
-                    <button type="button" className="mt-btn-cancel" onClick={closeModal}>
+                    <button type="button" className="mt-btn-cancel" onClick={handleTeamClose}>
                       Cancel
                     </button>
                     <LoadingButton type="submit" className="mt-btn-primary" loading={submitting}>
@@ -913,6 +927,7 @@ function ManageTeam() {
           </div>,
           document.body
         )}
+        {TeamConfirmDialog}
       </div>
     </DashboardLayout>
 

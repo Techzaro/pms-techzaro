@@ -33,7 +33,7 @@ class TeamController extends Controller
 
     public function index()
     {
-        $teams = Team::with(['leader:id,name', 'members:id,name,role'])->orderBy('created_at', 'desc')->get();
+        $teams = Team::with(['leader:id,name,department', 'members:id,name,role,department'])->orderBy('created_at', 'desc')->get();
         return response()->json($teams);
     }
 
@@ -60,7 +60,7 @@ class TeamController extends Controller
 
     public function show(Team $team)
     {
-        $team->load(['leader:id,name', 'members:id,name,role']);
+        $team->load(['leader:id,name,department', 'members:id,name,role,department']);
         return response()->json($team);
     }
 

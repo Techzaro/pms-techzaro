@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
 import LoadingButton from "./LoadingButton";
@@ -134,7 +135,8 @@ function generatePreview(templates, settings, startDate, endDate) {
 }
 
 const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
-  useEscapeKey(true, onClose);
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(true, handleClose);
 
   const { submitting, run } = useSubmit();
   const [formErrors, setFormErrors] = useState({});
@@ -210,7 +212,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     const currentUser = getUser();
     const ensureCurrentUser = (users) => {
       if (!currentUser) return users;
-      return users.some((u) => u.id === currentUser.id) ? users : [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role }, ...users];
+      return users.some((u) => u.id === currentUser.id) ? users : [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department }, ...users];
     };
     if (projectId) {
       fetch(`${API_URL}/projects/${projectId}`, {
@@ -235,6 +237,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    setIsDirty(true);
     if (name === "project_id") {
       setForm((prev) => ({ ...prev, project_id: value, assigned_to: [] }));
       if (value) {
@@ -247,26 +250,27 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   };
 
   const handleAssignedToChange = (ids) => {
+    setIsDirty(true);
     setForm((prev) => ({ ...prev, assigned_to: ids }));
     setDueDates((prev) => { const n = { ...prev }; Object.keys(n).forEach((k) => { if (!ids.includes(Number(k))) delete n[k]; }); return n; });
     if (formErrors.assigned_to) setFormErrors((prev) => { const n = { ...prev }; delete n.assigned_to; return n; });
   };
 
-  const handleDueDateChange = (userId, value) => setDueDates((prev) => ({ ...prev, [userId]: value }));
+  const handleDueDateChange = (userId, value) => { setIsDirty(true); setDueDates((prev) => ({ ...prev, [userId]: value })); };
 
-  const handleAddRequirement = () => { if (!reqInput.trim()) return; setRequirementsList((prev) => [...prev, reqInput.trim()]); setReqInput(""); };
-  const handleRemoveRequirement = (index) => setRequirementsList((prev) => prev.filter((_, i) => i !== index));
+  const handleAddRequirement = () => { if (!reqInput.trim()) return; setIsDirty(true); setRequirementsList((prev) => [...prev, reqInput.trim()]); setReqInput(""); };
+  const handleRemoveRequirement = (index) => { setIsDirty(true); setRequirementsList((prev) => prev.filter((_, i) => i !== index)); };
   const handleReqKeyDown = (e) => { if (e.key === "Enter") { e.preventDefault(); handleAddRequirement(); } };
 
-  const handleRecurringSettingChange = (field, value) => setRecurrenceSettings((prev) => ({ ...prev, [field]: value }));
+  const handleRecurringSettingChange = (field, value) => { setIsDirty(true); setRecurrenceSettings((prev) => ({ ...prev, [field]: value })); };
 
-  const handleAddTemplate = () => setRecurringTemplates((prev) => [...prev, { title: "", description: "", quantity: 1, combined: false }]);
-  const handleRemoveTemplate = (index) => setRecurringTemplates((prev) => prev.filter((_, i) => i !== index));
-  const handleTemplateChange = (index, field, value) => setRecurringTemplates((prev) => {
+  const handleAddTemplate = () => { setIsDirty(true); setRecurringTemplates((prev) => [...prev, { title: "", description: "", quantity: 1, combined: false }]); };
+  const handleRemoveTemplate = (index) => { setIsDirty(true); setRecurringTemplates((prev) => prev.filter((_, i) => i !== index)); };
+  const handleTemplateChange = (index, field, value) => { setIsDirty(true); setRecurringTemplates((prev) => {
     const next = [...prev];
     next[index] = { ...next[index], [field]: value };
     return next;
-  });
+  }); };
   const moveTemplate = useCallback((from, to) => {
     if (to < 0 || to >= recurringTemplates.length) return;
     setRecurringTemplates((prev) => {
@@ -281,10 +285,11 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     if (!deliverableInput.title.trim()) return;
     const dt = deliverableInput.due_datetime;
     const dueDate = toUTCIso(dt);
+    setIsDirty(true);
     setDeliverables((prev) => [...prev, { title: deliverableInput.title.trim(), due_date: dueDate, assigned_to: null }]);
     setDeliverableInput({ title: "", due_datetime: "" });
   };
-  const handleRemoveDeliverable = (index) => setDeliverables((prev) => prev.filter((_, i) => i !== index));
+  const handleRemoveDeliverable = (index) => { setIsDirty(true); setDeliverables((prev) => prev.filter((_, i) => i !== index)); };
   const handleDeliverableKeyDown = (e) => { if (e.key === "Enter") { e.preventDefault(); handleAddDeliverable(); } };
   const handleDeliverableAssignee = (index, userId) => {
     setDeliverables((prev) => prev.map((d, i) => i === index ? { ...d, assigned_to: userId || null } : d));
@@ -304,21 +309,23 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
 
   const handleFiles = (fileList) => {
     const newFiles = Array.from(fileList);
+    setIsDirty(true);
     setPendingFiles((prev) => [...prev, ...newFiles.map((f) => ({ file: f, name: f.name, size: f.size, renaming: false }))]);
   };
   const handleDrop = (e) => { e.preventDefault(); e.stopPropagation(); dropRef.current?.classList.remove("task-drop-active"); if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files); };
   const handleDragOver = (e) => { e.preventDefault(); e.stopPropagation(); dropRef.current?.classList.add("task-drop-active"); };
   const handleDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); dropRef.current?.classList.remove("task-drop-active"); };
-  const handleRemoveFile = (index) => setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  const handleRemoveFile = (index) => { setIsDirty(true); setPendingFiles((prev) => prev.filter((_, i) => i !== index)); };
   const handleAddLink = () => {
     if (!linkInput.trim()) return;
     let url = linkInput.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     const name = linkTitleInput.trim() || url;
+    setIsDirty(true);
     setLinks((prev) => [...prev, { url, name, renaming: false }]);
     setLinkInput(""); setLinkTitleInput("");
   };
-  const handleRemoveLink = (index) => setLinks((prev) => prev.filter((_, i) => i !== index));
+  const handleRemoveLink = (index) => { setIsDirty(true); setLinks((prev) => prev.filter((_, i) => i !== index)); };
   const handleLinkKeyDown = (e) => { if (e.key === "Enter") { e.preventDefault(); handleAddLink(); } };
 
   const uploadAttachments = async (taskId, token) => {
@@ -424,7 +431,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
             </div>
             <div className="task-header-actions">
               <LoadingButton className="task-create-btn" onClick={handleSubmit} loading={submitting}>+ Create Task</LoadingButton>
-              <button className="task-close-btn" onClick={() => onClose(false)}>✕</button>
+              <button className="task-close-btn" onClick={handleClose}>✕</button>
             </div>
           </div>
 
@@ -511,9 +518,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 <div className="task-or-divider"><span className="task-or-line"></span><span className="task-or-text">OR</span><span className="task-or-line"></span></div>
 
                 <div className="task-link-input-row" style={{ flexDirection: "column", gap: "8px" }}>
-                  <input type="text" placeholder="Link title (e.g. Figma Design, Drive Folder)" value={linkTitleInput} onChange={(e) => setLinkTitleInput(e.target.value)} />
+                  <input type="text" placeholder="Link title (e.g. Figma Design, Drive Folder)" value={linkTitleInput} onChange={(e) => { setIsDirty(true); setLinkTitleInput(e.target.value); }} />
                   <div style={{ display: "flex", gap: "8px" }}>
-                    <input type="text" placeholder="Paste link (Drive, Figma, Website, etc.)" value={linkInput} onChange={(e) => setLinkInput(e.target.value)} onKeyDown={handleLinkKeyDown} style={{ flex: 1 }} />
+                    <input type="text" placeholder="Paste link (Drive, Figma, Website, etc.)" value={linkInput} onChange={(e) => { setIsDirty(true); setLinkInput(e.target.value); }} onKeyDown={handleLinkKeyDown} style={{ flex: 1 }} />
                     <button type="button" className="task-link-add-btn" onClick={handleAddLink} disabled={!linkInput.trim()}>Add Link</button>
                   </div>
                 </div>
@@ -557,7 +564,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
               <div className="task-card">
                 <label>Priority <span style={{ color: "#ef4444" }}>*</span></label>
                 <CustomSelect name="priority" value={form.priority}
-                  onChange={(val) => setForm((prev) => ({ ...prev, priority: val }))}
+                  onChange={(val) => { setIsDirty(true); setForm((prev) => ({ ...prev, priority: val })); }}
                   options={[
                     { value: "Medium", label: "Medium" },
                     { value: "Low", label: "Low" },
@@ -571,13 +578,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                   <div>
                     <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
                     <input type="datetime-local" value={form.start_date}
-                      onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))}
+                      onChange={(e) => { setIsDirty(true); setForm((prev) => ({ ...prev, start_date: e.target.value })); }}
                       min={getNowDatetimeLocal()} />
                   </div>
                   <div>
                     <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
                     <input type="datetime-local" value={form.end_date}
-                      onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))}
+                      onChange={(e) => { setIsDirty(true); setForm((prev) => ({ ...prev, end_date: e.target.value })); }}
                       min={getNowDatetimeLocal()} />
                   </div>
                 </div>
@@ -586,7 +593,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
               <div className="task-field">
                 <label>Requirements</label>
                 <div className="cp-goals-input-row">
-                  <input type="text" placeholder="Enter a requirement" value={reqInput} onChange={(e) => setReqInput(e.target.value)} onKeyDown={handleReqKeyDown} />
+                  <input type="text" placeholder="Enter a requirement" value={reqInput} onChange={(e) => { setIsDirty(true); setReqInput(e.target.value); }} onKeyDown={handleReqKeyDown} />
                   <button type="button" className="cp-goals-add-btn" onClick={handleAddRequirement} disabled={!reqInput.trim()}>Add</button>
                 </div>
                 {requirementsList.length > 0 && (
@@ -605,6 +612,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 <label>Task Type</label>
                 <CustomSelect name="task_type" value={form.task_type}
                   onChange={(val) => {
+                    setIsDirty(true);
                     setForm((prev) => ({ ...prev, task_type: val }));
                     if (val === "recurring" && recurringTemplates.length === 0) {
                       setRecurringTemplates([{ title: "", description: "", quantity: 1, combined: false }]);
@@ -738,7 +746,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                   <div>
                     <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Deliverable Name</label>
                     <input type="text" placeholder="Enter deliverable name" value={deliverableInput.title}
-                      onChange={(e) => setDeliverableInput((prev) => ({ ...prev, title: e.target.value }))}
+                      onChange={(e) => { setIsDirty(true); setDeliverableInput((prev) => ({ ...prev, title: e.target.value })); }}
                       onKeyDown={handleDeliverableKeyDown} />
                   </div>
                   <div>
@@ -747,6 +755,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                       min={getNowDatetimeLocal()}
                       max={form.end_date || undefined}
                       onChange={(e) => {
+                        setIsDirty(true);
                         const val = e.target.value;
                         if (form.end_date && val && val > form.end_date) {
                           setDeliverableInput((prev) => ({ ...prev, due_datetime: form.end_date }));
@@ -813,7 +822,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                                       border: "none", color: "#374151",
                                     }}
                                   >
-                                    {u.name}
+                                    <span>{u.name}</span>
+                                    {u.role && <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 6 }}>({u.role.replace("_", " ")})</span>}
+                                    {u.department && <span style={{ fontSize: 10, fontWeight: 500, color: "#4f46e5", background: "#eef2ff", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>{u.department}</span>}
                                   </button>
                                 ))}
                               </div>
@@ -958,6 +969,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         </div>,
         document.body
       )}
+      {ConfirmDialog}
     </>,
     document.body
   );

@@ -52,6 +52,7 @@ import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { useActivityHighlight } from "../hooks/useActivityHighlight";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import "../components/layout/ActivityHighlight.css";
 import "./ProjectDetails.css";
 import "./TaskDetails.css";
@@ -674,6 +675,16 @@ function ProjectDetails() {
     markViewed: markProjectViewed,
   } = useActivityHighlight("project", project?.id, project?.activity_max_id || 0, project?.all_changes || []);
 
+  const closeVisibility = () => {
+    setVisibilityOpen(false);
+    setVisibilityUsers([]);
+    setVisibilitySelected({});
+  };
+
+  const { isDirty: visIsDirty, setIsDirty: setVisIsDirty, handleClose: handleVisClose, ConfirmDialog: VisConfirmDialog } = useConfirmOnClose(closeVisibility);
+
+  const { isDirty: mgrIsDirty, setIsDirty: setMgrIsDirty, handleClose: handleMgrClose, ConfirmDialog:MgrConfirmDialog } = useConfirmOnClose(() => setShowManagerModal(false));
+
   if (loading) {
     return (
       <DashboardLayout hideRightSidebar={true}>
@@ -743,12 +754,6 @@ function ProjectDetails() {
       setVisibilityUsers([]);
       setVisibilitySelected({});
     }
-  };
-
-  const closeVisibility = () => {
-    setVisibilityOpen(false);
-    setVisibilityUsers([]);
-    setVisibilitySelected({});
   };
 
   const toggleVisibilityUser = (userId) => {
@@ -1022,6 +1027,9 @@ function ProjectDetails() {
                   )}
                 </div>
                 <span className="pd-meta-rows__value">{project.creator?.name || "—"}</span>
+                {project.creator?.department && (
+                  <span className="pd-meta-rows__dept">{project.creator.department}</span>
+                )}
               </div>
             </li>
             <li>
@@ -1501,7 +1509,10 @@ function ProjectDetails() {
                                 <div className="pd-member-name">{project.creator.name}</div>
                                 <div className="pd-member-role">Owner · {project.creator.role || "—"}</div>
                               </div>
-                              <span className="pd-badge-owner">Owner</span>
+                              <div className="pd-member-right">
+                                {project.creator.department && <span className="pd-member-dept">{project.creator.department}</span>}
+                                <span className="pd-badge-owner">Owner</span>
+                              </div>
                             </div>
                           )}
                           <SortableTableWrapper
@@ -1518,7 +1529,10 @@ function ProjectDetails() {
                                   <div className="pd-member-name">{m.name}</div>
                                   <div className="pd-member-role">{m.role || "Member"}</div>
                                 </div>
-                                <span className="pd-badge-member">Member</span>
+                                <div className="pd-member-right">
+                                  {m.department && <span className="pd-member-dept">{m.department}</span>}
+                                  <span className="pd-badge-member">Member</span>
+                                </div>
                               </div>
                             )}
                           </SortableTableWrapper>
@@ -1671,11 +1685,11 @@ function ProjectDetails() {
       />
 
       {visibilityOpen && (
-        <div className="modal-overlay" onClick={closeVisibility}>
+        <div className="modal-overlay" onClick={handleVisClose}>
           <div className="sv-modal" onClick={(e) => e.stopPropagation()}>
             <div className="sv-modal-header">
               <h3>Show To — {project.title}</h3>
-              <button className="sv-close-btn" onClick={closeVisibility}>✕</button>
+              <button className="sv-close-btn" onClick={handleVisClose}>✕</button>
             </div>
             <div className="sv-modal-body">
               {visibilityUsers.length === 0 ? (
@@ -1686,16 +1700,21 @@ function ProjectDetails() {
                     <input
                       type="checkbox"
                       checked={!!visibilitySelected[u.id]}
-                      onChange={() => toggleVisibilityUser(u.id)}
+                      onChange={() => { setVisIsDirty(true); toggleVisibilityUser(u.id); }}
                     />
-                    <span className="sv-user-name">{u.name}</span>
-                    <span className="sv-user-role">({u.role.replace("_", " ")})</span>
+                    <div className="sv-user-info">
+                      <span className="sv-user-name">{u.name}</span>
+                      <div className="sv-user-badges">
+                        {u.role && <span className="sv-user-role">{u.role.replace("_", " ")}</span>}
+                        {u.department && <span className="sv-user-dept">{u.department}</span>}
+                      </div>
+                    </div>
                   </label>
                 ))
               )}
             </div>
             <div className="sv-modal-footer">
-              <button className="sv-cancel-btn" onClick={closeVisibility}>Cancel</button>
+              <button className="sv-cancel-btn" onClick={handleVisClose}>Cancel</button>
               <button className="sv-save-btn" onClick={saveVisibility} disabled={visibilitySaving}>
                 {visibilitySaving ? "Saving..." : "Save"}
               </button>
@@ -1703,6 +1722,8 @@ function ProjectDetails() {
           </div>
         </div>
       )}
+
+      {VisConfirmDialog}
 
       {/* Edit File/Link Popup */}
       {editFileItem && (
@@ -1785,11 +1806,11 @@ function ProjectDetails() {
       />
 
       {showManagerModal && (
-        <div className="modal-overlay" onClick={() => setShowManagerModal(false)}>
+        <div className="modal-overlay" onClick={handleMgrClose}>
           <div className="aam-modal" onClick={(e) => e.stopPropagation()}>
             <div className="aam-header">
               <h3>Change Project Manager</h3>
-              <button className="aam-close" onClick={() => setShowManagerModal(false)}>
+              <button className="aam-close" onClick={handleMgrClose}>
                 <X size={18} />
               </button>
             </div>
@@ -1822,11 +1843,17 @@ function ProjectDetails() {
                             checked={selectedManagerId === u.id}
                             onChange={() => {
                               setSelectedManagerId(u.id);
+                              setMgrIsDirty(true);
                               setManagerDropdownOpen(false);
                             }}
                           />
-                          <span className="aam-multiselect-label">{u.name}</span>
-                          <span className="aam-multiselect-role">({u.role?.replace("_", " ")})</span>
+                          <div className="aam-multiselect-info">
+                            <span className="aam-multiselect-label">{u.name}</span>
+                            <div className="aam-multiselect-badges">
+                              {u.role && <span className="aam-multiselect-role">{u.role.replace("_", " ")}</span>}
+                              {u.department && <span className="aam-multiselect-dept">{u.department}</span>}
+                            </div>
+                          </div>
                         </label>
                       ))}
                     </div>
@@ -1834,7 +1861,7 @@ function ProjectDetails() {
                 </div>
               </div>
               <div className="aam-footer">
-                <button type="button" className="aam-btn aam-btn-cancel" onClick={() => setShowManagerModal(false)}>
+                <button type="button" className="aam-btn aam-btn-cancel" onClick={handleMgrClose}>
                   Cancel
                 </button>
                 <button
@@ -1850,6 +1877,8 @@ function ProjectDetails() {
           </div>
         </div>
       )}
+
+      {MgrConfirmDialog}
     </>
   );
 }

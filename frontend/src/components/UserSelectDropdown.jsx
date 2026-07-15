@@ -140,7 +140,10 @@ const UserSelectDropdown = ({
                       />
                       <div className="usd-item-info">
                         <span className="usd-name">{user.name}</span>
-                        {user.role && <span className="usd-role">{formatRole(user.role)}</span>}
+                        <div className="usd-meta">
+                          {user.role && <span className="usd-role">{formatRole(user.role)}</span>}
+                          {user.department && <span className="usd-dept">{user.department}</span>}
+                        </div>
                       </div>
                     </label>
                     {showDueDate && isSelected && (

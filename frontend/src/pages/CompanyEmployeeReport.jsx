@@ -11,6 +11,8 @@
  */
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useApiQuery } from "../hooks/useApi";
@@ -57,6 +59,8 @@ const PERIOD_MAP = { "All Time": "all", "Today": "today", "This Week": "week", "
  * both a visual preview and PDF export.
  */
 function CompanyEmployeeReport({ isOpen, onClose }) {
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(true, handleClose);
   const [dateRange, setDateRange] = useState("all");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -425,7 +429,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                 <h2>Export Report</h2>
                 <p>Generate company-wide employee performance report.</p>
               </div>
-              <button className="er-close-btn" onClick={onClose}>
+              <button className="er-close-btn" onClick={handleClose}>
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M15 5L5 15M5 5l10 10" />
                 </svg>
@@ -441,22 +445,22 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                   { value: "month", label: "This Month" },
                   { value: "custom", label: "Custom Range" },
                 ].map((opt) => (
-                  <button key={opt.value} className={`er-date-btn ${dateRange === opt.value ? "active" : ""}`} onClick={() => setDateRange(opt.value)}>
+                  <button key={opt.value} className={`er-date-btn ${dateRange === opt.value ? "active" : ""}`} onClick={() => { setDateRange(opt.value); setIsDirty(true); }}>
                     {opt.label}
                   </button>
                 ))}
               </div>
               {dateRange === "custom" && (
                 <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-                  <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
+                  <input type="date" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setIsDirty(true); }}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 13, color: "#374151", outline: "none" }} />
-                  <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)}
+                  <input type="date" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setIsDirty(true); }}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 13, color: "#374151", outline: "none" }} />
                 </div>
               )}
             </div>
             <div className="er-footer">
-              <button className="er-cancel-btn" onClick={onClose}>Cancel</button>
+              <button className="er-cancel-btn" onClick={handleClose}>Cancel</button>
               <button className="er-export-btn" onClick={() => setShowReview(true)}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
@@ -739,6 +743,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
           </div>
         </div>
       )}
+      {ConfirmDialog}
     </>,
     document.body
   );

@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
+import useConfirmOnClose from "../../hooks/useConfirmOnClose";
 import CustomSelect from "../CustomSelect";
 import CustomDateTimePicker from "../CustomDateTimePicker";
 import "../layout/CreateDeliverableModel.css";
@@ -16,7 +17,8 @@ import "../layout/CreateDeliverableModel.css";
  * @param {{ onClose: () => void }} props - Callback to close the modal
  */
 const CreateDeliverableTask = ({ onClose }) => {
-  useEscapeKey(true, onClose);
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(true, handleClose);
 
   const [form, setForm] = useState({
     task: "",
@@ -61,7 +63,7 @@ const CreateDeliverableTask = ({ onClose }) => {
             <button className="deliverable-create-btn">
               ⊕ Create Task
             </button>
-            <button className="deliverable-close-btn" onClick={onClose}>
+            <button className="deliverable-close-btn" onClick={handleClose}>
               ✕
             </button>
           </div>
@@ -84,7 +86,7 @@ const CreateDeliverableTask = ({ onClose }) => {
 
                 <CustomSelect
                   value={form.task}
-                  onChange={(val) => setForm((p) => ({ ...p, task: val }))}
+                  onChange={(val) => { setIsDirty(true); setForm((p) => ({ ...p, task: val })); }}
                   placeholder="Select Task"
                   options={[
                     { value: "", label: "Select Task" },
@@ -101,7 +103,7 @@ const CreateDeliverableTask = ({ onClose }) => {
 
                 <CustomSelect
                   value={form.assign_to}
-                  onChange={(val) => setForm((p) => ({ ...p, assign_to: val }))}
+                  onChange={(val) => { setIsDirty(true); setForm((p) => ({ ...p, assign_to: val })); }}
                   placeholder="Select user(s)"
                   options={[
                     { value: "", label: "Select user(s)" },
@@ -139,7 +141,7 @@ const CreateDeliverableTask = ({ onClose }) => {
 
               <CustomSelect
                 value={form.status}
-                onChange={(val) => setForm((p) => ({ ...p, status: val }))}
+                onChange={(val) => { setIsDirty(true); setForm((p) => ({ ...p, status: val })); }}
                 options={[
                   { value: "Pending", label: "Pending" },
                   { value: "In Progress", label: "In Progress" },
@@ -161,7 +163,7 @@ const CreateDeliverableTask = ({ onClose }) => {
 
               <CustomSelect
                 value={form.priority}
-                onChange={(val) => setForm((p) => ({ ...p, priority: val }))}
+                onChange={(val) => { setIsDirty(true); setForm((p) => ({ ...p, priority: val })); }}
                 options={[
                   { value: "Medium", label: "Medium" },
                   { value: "Low", label: "Low" },
@@ -186,7 +188,7 @@ const CreateDeliverableTask = ({ onClose }) => {
 
                   <CustomDateTimePicker
                     value={form.start_date}
-                    onChange={(val) => setForm((p) => ({ ...p, start_date: val }))}
+                    onChange={(val) => { setIsDirty(true); setForm((p) => ({ ...p, start_date: val })); }}
                     dateOnly
                     min={new Date().toISOString()}
                   />
@@ -197,7 +199,7 @@ const CreateDeliverableTask = ({ onClose }) => {
 
                   <CustomDateTimePicker
                     value={form.due_date}
-                    onChange={(val) => setForm((p) => ({ ...p, due_date: val }))}
+                    onChange={(val) => { setIsDirty(true); setForm((p) => ({ ...p, due_date: val })); }}
                     dateOnly
                     min={new Date().toISOString()}
                   />
@@ -212,6 +214,8 @@ const CreateDeliverableTask = ({ onClose }) => {
         </div>
 
       </div>
+
+      <ConfirmDialog />
 
     </div>,
     document.body

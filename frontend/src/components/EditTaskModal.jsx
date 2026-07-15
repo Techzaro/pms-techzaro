@@ -18,6 +18,7 @@ import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import "./layout/CreateTaskModal.css";
 
 const REPEAT_OPTIONS = [
@@ -126,7 +127,8 @@ function generatePreview(templates, settings, startDate, endDate) {
  * @param {Function} onClose - Callback to close modal; receives boolean (true if saved)
  */
 export default function EditTaskModal({ task, onClose }) {
-  useEscapeKey(true, onClose);
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(true, handleClose);
   const [container, setContainer] = useState(null);
 
   useEffect(() => {
@@ -224,20 +226,22 @@ export default function EditTaskModal({ task, onClose }) {
   }, [openDeliverableDropdown]);
 
   const handleChange = (e) => {
+    setIsDirty(true);
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleRecurringSettingChange = (field, value) => setRecurrenceSettings((prev) => ({ ...prev, [field]: value }));
+  const handleRecurringSettingChange = (field, value) => { setIsDirty(true); setRecurrenceSettings((prev) => ({ ...prev, [field]: value })); };
 
-  const handleAddTemplate = () => setRecurringTemplates((prev) => [...prev, { title: "", description: "", quantity: 1, combined: false }]);
-  const handleRemoveTemplate = (index) => setRecurringTemplates((prev) => prev.filter((_, i) => i !== index));
-  const handleTemplateChange = (index, field, value) => setRecurringTemplates((prev) => {
+  const handleAddTemplate = () => { setIsDirty(true); setRecurringTemplates((prev) => [...prev, { title: "", description: "", quantity: 1, combined: false }]); };
+  const handleRemoveTemplate = (index) => { setIsDirty(true); setRecurringTemplates((prev) => prev.filter((_, i) => i !== index)); };
+  const handleTemplateChange = (index, field, value) => { setIsDirty(true); setRecurringTemplates((prev) => {
     const next = [...prev];
     next[index] = { ...next[index], [field]: value };
     return next;
-  });
+  }); };
 
   const handleAssignedToChange = (ids) => {
+    setIsDirty(true);
     setSelectedAssigneeIds(ids);
     setDueDates((prev) => {
       const next = { ...prev };
@@ -249,16 +253,19 @@ export default function EditTaskModal({ task, onClose }) {
   };
 
   const handleDueDateChange = (userId, value) => {
+    setIsDirty(true);
     setDueDates((prev) => ({ ...prev, [userId]: value }));
   };
 
   const handleAddRequirement = () => {
     if (!reqInput.trim()) return;
+    setIsDirty(true);
     setRequirementsList((prev) => [...prev, reqInput.trim()]);
     setReqInput("");
   };
 
   const handleRemoveRequirement = (index) => {
+    setIsDirty(true);
     setRequirementsList((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -270,11 +277,13 @@ export default function EditTaskModal({ task, onClose }) {
     if (!deliverableInput.title.trim()) return;
     const dt = deliverableInput.due_datetime;
     const dueDate = toUTCIso(dt);
+    setIsDirty(true);
     setDeliverables((prev) => [...prev, { title: deliverableInput.title.trim(), due_date: dueDate, assigned_to: null }]);
     setDeliverableInput({ title: "", due_datetime: "" });
   };
 
   const handleRemoveDeliverable = (index) => {
+    setIsDirty(true);
     setDeliverables((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -307,6 +316,7 @@ export default function EditTaskModal({ task, onClose }) {
   };
 
   const handleFiles = (fileList) => {
+    setIsDirty(true);
     setPendingFiles((prev) => [...prev, ...Array.from(fileList).map((f) => ({ file: f, name: f.name, size: f.size, renaming: false }))]);
   };
 
@@ -330,6 +340,7 @@ export default function EditTaskModal({ task, onClose }) {
   };
 
   const handleRemoveFile = (index) => {
+    setIsDirty(true);
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -350,12 +361,14 @@ export default function EditTaskModal({ task, onClose }) {
     let url = linkInput.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     const name = linkTitleInput.trim() || url;
+    setIsDirty(true);
     setLinks((prev) => [...prev, { url, name, renaming: false }]);
     setLinkInput("");
     setLinkTitleInput("");
   };
 
   const handleRemoveLink = (index) => {
+    setIsDirty(true);
     setLinks((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -475,7 +488,7 @@ export default function EditTaskModal({ task, onClose }) {
             <LoadingButton className="task-create-btn" onClick={handleSubmit} loading={submitting}>
               Save Changes
             </LoadingButton>
-            <button className="task-close-btn" onClick={() => onClose(false)}>✕</button>
+            <button className="task-close-btn" onClick={handleClose}>✕</button>
           </div>
         </div>
 
@@ -643,14 +656,14 @@ export default function EditTaskModal({ task, onClose }) {
                   type="text"
                   placeholder="Link title (e.g. Figma Design, Drive Folder)"
                   value={linkTitleInput}
-                  onChange={(e) => setLinkTitleInput(e.target.value)}
+                  onChange={(e) => { setIsDirty(true); setLinkTitleInput(e.target.value); }}
                 />
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
                     type="text"
                     placeholder="Paste link (Drive, Figma, Website, etc.)"
                     value={linkInput}
-                    onChange={(e) => setLinkInput(e.target.value)}
+                    onChange={(e) => { setIsDirty(true); setLinkInput(e.target.value); }}
                     onKeyDown={handleLinkKeyDown}
                     style={{ flex: 1 }}
                   />
@@ -741,7 +754,7 @@ export default function EditTaskModal({ task, onClose }) {
               <CustomSelect
                 name="priority"
                 value={form.priority}
-                onChange={(val) => setForm((prev) => ({ ...prev, priority: val }))}
+                onChange={(val) => { setIsDirty(true); setForm((prev) => ({ ...prev, priority: val })); }}
                 options={[
                   { value: "Medium", label: "Medium" },
                   { value: "Low", label: "Low" },
@@ -758,7 +771,7 @@ export default function EditTaskModal({ task, onClose }) {
                   <input
                     type="datetime-local"
                     value={form.start_date}
-                    onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))}
+                    onChange={(e) => { setIsDirty(true); setForm((prev) => ({ ...prev, start_date: e.target.value })); }}
                     min={getNowDatetimeLocal()}
                   />
                 </div>
@@ -767,7 +780,7 @@ export default function EditTaskModal({ task, onClose }) {
                   <input
                     type="datetime-local"
                     value={form.end_date}
-                    onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))}
+                    onChange={(e) => { setIsDirty(true); setForm((prev) => ({ ...prev, end_date: e.target.value })); }}
                     min={getNowDatetimeLocal()}
                   />
                 </div>
@@ -781,7 +794,7 @@ export default function EditTaskModal({ task, onClose }) {
                   type="text"
                   placeholder="Enter a requirement"
                   value={reqInput}
-                  onChange={(e) => setReqInput(e.target.value)}
+                  onChange={(e) => { setIsDirty(true); setReqInput(e.target.value); }}
                   onKeyDown={handleReqKeyDown}
                 />
                 <button
@@ -816,6 +829,7 @@ export default function EditTaskModal({ task, onClose }) {
               <label>Task Type</label>
               <CustomSelect name="task_type" value={form.task_type}
                 onChange={(val) => {
+                  setIsDirty(true);
                   setForm((prev) => ({ ...prev, task_type: val }));
                   if (val === "recurring" && recurringTemplates.length === 0) {
                     setRecurringTemplates([{ title: "", description: "", quantity: 1, combined: false }]);
@@ -945,7 +959,7 @@ export default function EditTaskModal({ task, onClose }) {
                     type="text"
                     placeholder="Enter deliverable name"
                     value={deliverableInput.title}
-                    onChange={(e) => setDeliverableInput((prev) => ({ ...prev, title: e.target.value }))}
+                    onChange={(e) => { setIsDirty(true); setDeliverableInput((prev) => ({ ...prev, title: e.target.value })); }}
                     onKeyDown={handleDeliverableKeyDown}
                   />
                 </div>
@@ -957,6 +971,7 @@ export default function EditTaskModal({ task, onClose }) {
                     min={getNowDatetimeLocal()}
                     max={form.end_date || undefined}
                     onChange={(e) => {
+                      setIsDirty(true);
                       const val = e.target.value;
                       if (form.end_date && val && val > form.end_date) {
                         setDeliverableInput((prev) => ({ ...prev, due_datetime: form.end_date }));
@@ -1029,7 +1044,9 @@ export default function EditTaskModal({ task, onClose }) {
                                   border: "none", color: "#374151",
                                 }}
                               >
-                                {u.name}
+                                <span>{u.name}</span>
+                                {u.role && <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 6 }}>({u.role.replace("_", " ")})</span>}
+                                {u.department && <span style={{ fontSize: 10, fontWeight: 500, color: "#4f46e5", background: "#eef2ff", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>{u.department}</span>}
                               </button>
                             ))}
                           </div>
@@ -1239,6 +1256,7 @@ export default function EditTaskModal({ task, onClose }) {
         cancelText="Cancel"
         danger
       />
+      {ConfirmDialog}
     </>
   );
 }
