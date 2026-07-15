@@ -13,6 +13,9 @@ class ProjectUserSubmission extends Model
         'user_id',
         'status',
         'comment',
+        'file_path',
+        'file_name',
+        'links',
         'submitted_at',
         'reviewed_at',
         'reviewed_by',
@@ -22,6 +25,7 @@ class ProjectUserSubmission extends Model
     protected $casts = [
         'submitted_at' => 'datetime',
         'reviewed_at' => 'datetime',
+        'links' => 'array',
     ];
 
     public function project(): BelongsTo

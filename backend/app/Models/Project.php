@@ -8,6 +8,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Casts\AsStringKeyedJson;
 
 /**
  * Core project model that ties together all project-related entities.
@@ -53,7 +54,7 @@ class Project extends Model
 
     protected $casts = [
         'assigned_users' => 'array',
-        'user_due_dates' => 'array',
+        'user_due_dates' => AsStringKeyedJson::class,
         'start_date' => 'datetime:Y-m-d\TH:i:s',
         'end_date' => 'datetime:Y-m-d\TH:i:s',
         'budget' => 'decimal:2',

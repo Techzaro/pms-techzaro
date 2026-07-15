@@ -6,6 +6,7 @@ use App\Models\Deliverable;
 use App\Models\DeliverableSubmission;
 use App\Models\DeliverableTemplate;
 use App\Models\Project;
+use App\Models\ProjectUserSubmission;
 use App\Models\Task;
 use App\Models\TaskChange;
 use App\Models\TaskFile;
@@ -123,6 +124,13 @@ class TaskController extends Controller
             $project->is_assigned = $isAssigned;
             $project->can_submit = in_array($project->status, $submittableStatuses) && $isAssigned;
 
+            $mySubmission = ProjectUserSubmission::where('project_id', $project->id)
+                ->where('user_id', $user->id)
+                ->latest()
+                ->first();
+            $project->my_submission_status = $mySubmission?->status ?? null;
+            $project->can_submit = $project->can_submit && ($mySubmission?->status !== 'submitted');
+
             return $project;
         });
 
@@ -214,7 +222,13 @@ class TaskController extends Controller
                 $isAssigned = in_array($user->id, $project->assigned_users ?? []);
             $submittableStatuses = ['pending', 'reopened', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress'];
                 $project->is_assigned = $isAssigned;
-                $project->can_submit = in_array($project->status, $submittableStatuses) && $isAssigned;
+
+                $mySubmission = ProjectUserSubmission::where('project_id', $project->id)
+                    ->where('user_id', $user->id)
+                    ->latest()
+                    ->first();
+                $project->my_submission_status = $mySubmission?->status ?? null;
+                $project->can_submit = in_array($project->status, $submittableStatuses) && $isAssigned && ($mySubmission?->status !== 'submitted');
 
                 return $project;
             });
@@ -489,6 +503,7 @@ class TaskController extends Controller
                 $clone->assigned_user = null;
                 $clone->is_assigned = false;
                 $clone->can_submit = false;
+                $clone->my_submission_status = null;
                 $expandedProjects->push($clone);
             } else {
                 foreach ($assignedUsers as $id) {
@@ -499,7 +514,13 @@ class TaskController extends Controller
                     $clone->assigned_user = $allResolvedUsers->get($id);
                     $isAssignedToUser = (int) $id === (int) $user->id;
                     $clone->is_assigned = $isAssignedToUser;
-                    $clone->can_submit = in_array($clone->status, $submittableStatuses) && $isAssignedToUser;
+
+                    $assignedUserSubmission = ProjectUserSubmission::where('project_id', $project->id)
+                        ->where('user_id', $id)
+                        ->latest()
+                        ->first();
+                    $clone->my_submission_status = $assignedUserSubmission?->status ?? null;
+                    $clone->can_submit = in_array($clone->status, $submittableStatuses) && $isAssignedToUser && ($assignedUserSubmission?->status !== 'submitted');
                     $expandedProjects->push($clone);
                 }
             }

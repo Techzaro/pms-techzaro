@@ -23,7 +23,7 @@ import EditProjectModal from "../components/EditProjectModal";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
-import { authToken, rolePath } from "../utils/auth";
+import { authToken, rolePath, getUser } from "../utils/auth";
 import { formatDateOnly, formatDateTime } from "../utils/formatDateTime";
 import "../pages/Task.css";
 
@@ -366,9 +366,9 @@ const Taskby = () => {
                       </div>
 
                       <div className="col-status">
-                        <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
-                          <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                          {["submitted", "approved", "rejected", "reopened"].includes(item.status) ? formatStatus(item.status) : "Pending"}
+                        <span className="badge" style={{ background: STATUS_COLORS[item.my_submission_status || item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.my_submission_status || item.status] || "#374151" }}>
+                          <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.my_submission_status || item.status] || "#374151" }}></span>
+                          {["submitted", "approved", "rejected", "reopened"].includes(item.my_submission_status || item.status) ? formatStatus(item.my_submission_status || item.status) : "Pending"}
                         </span>
                       </div>
 
@@ -404,7 +404,13 @@ const Taskby = () => {
 
                       <div className="col-due-date">
                         <div className="date-box">
-                          <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
+                          <div style={{ whiteSpace: "pre-line" }}>
+                            {(() => {
+                              const assignedUserId = item.assigned_user?.id;
+                              const userDueDate = assignedUserId ? item.user_due_dates?.[assignedUserId] : null;
+                              return formatDate(userDueDate || item.end_date);
+                            })()}
+                          </div>
                         </div>
                       </div>
 

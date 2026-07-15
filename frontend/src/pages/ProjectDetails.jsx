@@ -1143,7 +1143,7 @@ function ProjectDetails() {
                 </div>
                 <div style={{ padding: "0 0 4px" }}>
                   {(project.user_submissions || []).map((sub) => (
-                    <div key={sub.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 0", borderBottom: "1px solid #f3f4f6" }}>
+                    <div key={sub.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px", borderBottom: "1px solid #f3f4f6" }}>
                       <div className="pd-avatar" aria-hidden style={{ background: sub.status === "approved" ? "#22c55e" : sub.status === "rejected" ? "#ef4444" : "#f59e0b", flexShrink: 0 }}>
                         {sub.user?.name?.charAt(0)?.toUpperCase() || "?"}
                       </div>
@@ -1156,7 +1156,39 @@ function ProjectDetails() {
                           </span>
                         </div>
                         {sub.comment && <p style={{ margin: "4px 0 0", fontSize: 13, color: "#374151" }}>{sub.comment}</p>}
-                        {sub.review_comment && <p style={{ margin: "4px 0 0", fontSize: 13, color: sub.status === "rejected" ? "#991b1b" : "#166534", fontStyle: "italic" }}>Review: {sub.review_comment}</p>}
+
+                        {(sub.file_name || sub.file_path) && (
+                          <div style={{ margin: "6px 0 0", display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                            <span style={{ color: "#6b7280" }}>File:</span>
+                            <a
+                              href={sub.file_path ? `${API_BASE}/storage/${sub.file_path}` : "#"}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: "#6366f1", fontWeight: 500, textDecoration: "underline" }}
+                            >
+                              {sub.file_name || "Download"}
+                            </a>
+                          </div>
+                        )}
+
+                        {sub.links && sub.links.length > 0 && (
+                          <div style={{ margin: "6px 0 0", fontSize: 13 }}>
+                            <span style={{ color: "#6b7280" }}>Links:</span>
+                            {sub.links.map((link, i) => (
+                              <a
+                                key={i}
+                                href={link.startsWith("http") ? link : `https://${link}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ display: "block", color: "#6366f1", fontWeight: 500, textDecoration: "underline", marginTop: 2 }}
+                              >
+                                {link}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+
+                        {sub.review_comment && <p style={{ margin: "6px 0 0", fontSize: 13, color: sub.status === "rejected" ? "#991b1b" : "#166534", fontStyle: "italic" }}>Review: {sub.review_comment}</p>}
                         <div style={{ display: "flex", gap: 16, marginTop: 4, fontSize: 12, color: "#9ca3af" }}>
                           {sub.submitted_at && <span>Submitted: {new Date(sub.submitted_at).toLocaleString()}</span>}
                           {sub.reviewed_at && <span>Reviewed: {new Date(sub.reviewed_at).toLocaleString()} by {sub.reviewer?.name || "—"}</span>}
@@ -1171,10 +1203,19 @@ function ProjectDetails() {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
                                   });
-                                  if (!res.ok) throw new Error("Failed to approve");
+                                  const data = await res.json();
+                                  if (!res.ok) {
+                                    notifyRef.current?.error?.(data.message || "Failed to approve");
+                                    await loadProject();
+                                    return;
+                                  }
                                   showSuccessMessage("Submission", "approved");
-                                  loadProject();
-                                } catch (err) { console.error(err); }
+                                  await loadProject();
+                                } catch (err) {
+                                  console.error(err);
+                                  notifyRef.current?.error?.("Something went wrong");
+                                  await loadProject();
+                                }
                               }}
                               style={{ padding: "6px 16px", borderRadius: 8, border: "none", background: "#22c55e", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
                             >
@@ -1183,6 +1224,7 @@ function ProjectDetails() {
                             <button
                               onClick={async () => {
                                 const comment = prompt("Rejection reason (optional):");
+                                if (comment === null) return;
                                 try {
                                   const token = authToken();
                                   const res = await fetch(`${API_URL}/projects/${project.id}/user-submissions/${sub.id}/reject`, {
@@ -1190,14 +1232,23 @@ function ProjectDetails() {
                                     headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
                                     body: JSON.stringify({ comment: comment || "" }),
                                   });
-                                  if (!res.ok) throw new Error("Failed to reject");
-                                  showSuccessMessage("Submission", "rejected");
-                                  loadProject();
-                                } catch (err) { console.error(err); }
+                                  const data = await res.json();
+                                  if (!res.ok) {
+                                    notifyRef.current?.error?.(data.message || "Failed to reject");
+                                    await loadProject();
+                                    return;
+                                  }
+                                  showSuccessMessage("Submission", "rejected & reopened");
+                                  await loadProject();
+                                } catch (err) {
+                                  console.error(err);
+                                  notifyRef.current?.error?.("Something went wrong");
+                                  await loadProject();
+                                }
                               }}
                               style={{ padding: "6px 16px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
                             >
-                              Reject
+                              Reject & Reopen
                             </button>
                           </div>
                         )}

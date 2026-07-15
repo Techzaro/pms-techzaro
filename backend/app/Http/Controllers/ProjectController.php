@@ -1248,29 +1248,15 @@ class ProjectController extends Controller
             [
                 'status' => 'submitted',
                 'comment' => $validated['comment'] ?? null,
+                'file_path' => $filePath,
+                'file_name' => $fileName,
+                'links' => $validated['links'] ?? null,
                 'submitted_at' => now(),
                 'reviewed_at' => null,
                 'reviewed_by' => null,
                 'review_comment' => null,
             ]
         );
-
-        if (in_array($project->status, ['pending', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress', 'reopened'])) {
-            $updateData = ['status' => 'submitted', 'submitted_at' => now()];
-            if ($project->status === 'reopened') {
-                $updateData['rejected_at'] = null;
-                $updateData['rejected_by'] = null;
-                $updateData['rejection_comment'] = null;
-                $updateData['reopened_at'] = null;
-                $updateData['reopened_by'] = null;
-                $updateData['reopen_comment'] = null;
-                $updateData['reopen_instructions'] = null;
-                $updateData['reopen_new_deadline'] = null;
-                $updateData['reopen_file_path'] = null;
-                $updateData['reopen_file_name'] = null;
-            }
-            $project->update($updateData);
-        }
 
         $creatorId = $project->created_by;
         if ($creatorId && $creatorId !== $user->id) {
@@ -1646,7 +1632,7 @@ class ProjectController extends Controller
         $this->activityService->log($user->id, 'project_submission_approved', 'Approved submission by '.User::find($submission->user_id)?->name.' for "'.$project->title.'"', 'project', $project->id);
 
         $allReviewed = ProjectUserSubmission::where('project_id', $project->id)->where('status', 'submitted')->count() === 0;
-        if ($allReviewed && $project->status === 'submitted') {
+        if ($allReviewed) {
             $allApproved = ProjectUserSubmission::where('project_id', $project->id)->where('status', 'approved')->count() > 0
                 && ProjectUserSubmission::where('project_id', $project->id)->where('status', 'rejected')->count() === 0;
             if ($allApproved) {
@@ -1715,7 +1701,7 @@ class ProjectController extends Controller
         $this->activityService->log($user->id, 'project_submission_rejected', 'Rejected submission by '.User::find($submission->user_id)?->name.' for "'.$project->title.'"', 'project', $project->id);
 
         $allReviewed = ProjectUserSubmission::where('project_id', $project->id)->where('status', 'submitted')->count() === 0;
-        if ($allReviewed && $project->status === 'submitted') {
+        if ($allReviewed) {
             $project->update(['status' => 'rejected', 'rejected_at' => now(), 'rejected_by' => $user->id]);
         }
 
