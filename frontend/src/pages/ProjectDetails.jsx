@@ -326,6 +326,7 @@ function ProjectDetails() {
   const [visibilityUsers, setVisibilityUsers] = useState([]);
   const [visibilitySelected, setVisibilitySelected] = useState({});
   const [visibilitySaving, setVisibilitySaving] = useState(false);
+  const [visSearch, setVisSearch] = useState("");
   const [showAddAccessModal, setShowAddAccessModal] = useState(false);
   const [editingCredential, setEditingCredential] = useState(null);
   const [accessCredentials, setAccessCredentials] = useState([]);
@@ -336,6 +337,7 @@ function ProjectDetails() {
   const [managerDropdownOpen, setManagerDropdownOpen] = useState(false);
   const managerDropdownRef = useRef(null);
   const [showManagerModal, setShowManagerModal] = useState(false);
+  const [mgrSearch, setMgrSearch] = useState("");
   const [savingManager, setSavingManager] = useState(false);
 
   const memberCount = useMemo(() => {
@@ -1808,10 +1810,31 @@ function ProjectDetails() {
               <button className="sv-close-btn" onClick={handleVisClose}>✕</button>
             </div>
             <div className="sv-modal-body">
+              {visibilityUsers.length > 0 && (
+                <div className="sv-search-wrap">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                  <input
+                    type="text"
+                    className="sv-search-input"
+                    placeholder="Search by name, role, department..."
+                    value={visSearch}
+                    onChange={(e) => setVisSearch(e.target.value)}
+                  />
+                  {visSearch && (
+                    <button type="button" className="sv-search-clear" onClick={() => setVisSearch("")}>✕</button>
+                  )}
+                </div>
+              )}
               {visibilityUsers.length === 0 ? (
                 <p className="sv-muted">Loading users...</p>
               ) : (
-                visibilityUsers.map((u) => (
+                visibilityUsers
+                  .filter((u) => {
+                    if (!visSearch.trim()) return true;
+                    const q = visSearch.toLowerCase();
+                    return u.name?.toLowerCase().includes(q) || u.role?.toLowerCase().includes(q) || u.department?.toLowerCase().includes(q);
+                  })
+                  .map((u) => (
                   <label key={u.id} className="sv-user-row">
                     <input
                       type="checkbox"
@@ -1949,7 +1972,24 @@ function ProjectDetails() {
                   </button>
                   {managerDropdownOpen && (
                     <div className="aam-multiselect-dropdown aam-multiselect-dropdown--down">
-                      {managerUsers.map((u) => (
+                      <div className="aam-multiselect-search">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                        <input
+                          type="text"
+                          placeholder="Search by name, role, department..."
+                          value={mgrSearch}
+                          onChange={(e) => setMgrSearch(e.target.value)}
+                          autoFocus
+                        />
+                        {mgrSearch && <button type="button" className="aam-multiselect-search-clear" onClick={() => setMgrSearch("")}>✕</button>}
+                      </div>
+                      {managerUsers
+                        .filter((u) => {
+                          if (!mgrSearch.trim()) return true;
+                          const q = mgrSearch.toLowerCase();
+                          return u.name?.toLowerCase().includes(q) || u.role?.toLowerCase().includes(q) || u.department?.toLowerCase().includes(q);
+                        })
+                        .map((u) => (
                         <label key={u.id} className="aam-multiselect-option" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="radio"

@@ -4,39 +4,76 @@
 }
 
 .cs-trigger {
-  width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 14px;
+  width: 100%;
+  height: 44px;
   border: 1px solid #d1d5db;
-  border-radius: 12px;
-  background: #fff;
+  border-radius: 10px;
+  padding: 0 12px;
   font-size: 14px;
-  font-weight: 500;
-  color: #111827;
+  background: #fff;
   cursor: pointer;
-  text-align: left;
   box-sizing: border-box;
-  min-height: 42px;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.cs-trigger:focus {
-  outline: none;
+.cs-trigger:hover {
+  border-color: #a5b4fc;
+}
+
+.cs-open .cs-trigger {
   border-color: #6366f1;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
-.cs-placeholder {
-  color: #9ca3af;
-  font-weight: 400;
+.cs-combo-input {
+  flex: 1;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  font-size: 14px;
+  color: #1e293b;
+  background: transparent !important;
+  min-width: 0;
+  cursor: text;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+}
+
+.cs-combo-input::placeholder {
+  color: #94a3b8;
+}
+
+.cs-selected-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cs-placeholder-text {
+  color: #94a3b8;
+  font-size: 14px;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cs-arrow {
   flex-shrink: 0;
   transition: transform 0.2s;
   color: #6b7280;
+  cursor: pointer;
+  padding: 2px;
 }
 
 .cs-arrow-open {
@@ -50,7 +87,7 @@
   right: 0;
   background: #fff;
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   z-index: 100;
   max-height: 200px;
@@ -67,6 +104,13 @@
   border-radius: 4px;
 }
 
+.cs-empty {
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #94a3b8;
+  text-align: center;
+}
+
 .cs-option {
   padding: 10px 14px;
   font-size: 14px;
@@ -77,11 +121,11 @@
 }
 
 .cs-option:first-child {
-  border-radius: 12px 12px 0 0;
+  border-radius: 10px 10px 0 0;
 }
 
 .cs-option:last-child {
-  border-radius: 0 0 12px 12px;
+  border-radius: 0 0 10px 10px;
 }
 
 .cs-option:hover {

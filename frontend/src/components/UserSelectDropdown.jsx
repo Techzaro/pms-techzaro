@@ -1,29 +1,14 @@
 /**
  * UserSelectDropdown.jsx
- * Multi-select dropdown component for selecting team members with per-user due dates.
- * Supports select-all functionality, view-only mode, displays user roles below names,
- * and provides a datetime picker for each selected user to set individual due dates.
- * Closes automatically when clicking outside the dropdown.
+ * Multi-select combobox dropdown for selecting team members.
+ * Click input → search mode. Click arrow → toggle dropdown.
  */
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { MdExpandMore } from "react-icons/md";
 import { IoCalendarOutline } from "react-icons/io5";
 import "./UserSelectDropdown.css";
 
-/**
- * Multi-select dropdown for team member selection with optional per-user due dates.
- * @param {Array} users - Array of user objects (id, name, role).
- * @param {Array} selectedIds - Array of currently selected user IDs.
- * @param {Function} onChange - Callback with updated array of selected IDs.
- * @param {Object} [dueDates] - Map of {userId: 'YYYY-MM-DDTHH:MM'} for per-user due dates.
- * @param {Function} [onDueDateChange] - Callback (userId, dateValue) when a due date changes.
- * @param {boolean} [showDueDate] - Show datetime picker for per-user due dates.
- * @param {string} [placeholder='Click to select members'] - Placeholder text.
- * @param {boolean} [disabled] - Disables the dropdown when true.
- * @param {boolean} [viewOnly] - Shows members as read-only without selection.
- * @param {boolean} [error] - Applies error styling to the trigger.
- */
 const UserSelectDropdown = ({
   users = [],
   selectedIds = [],
@@ -37,31 +22,33 @@ const UserSelectDropdown = ({
   error = false,
 }) => {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const [activeDatePicker, setActiveDatePicker] = useState(null);
   const dateInputRefs = useRef({});
   const ref = useRef(null);
+  const inputRef = useRef(null);
 
-  // Close dropdown when clicking outside the component
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (ref.current && !ref.current.contains(e.target)) {
         setOpen(false);
+        setSearch("");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  /** Toggles selection of all users or deselects all */
   const toggleAll = () => {
-    if (selectedIds.length === users.length) {
-      onChange([]);
+    const filteredIds = filteredUsers.map((u) => u.id);
+    const allSelected = filteredIds.every((id) => selectedIds.includes(id));
+    if (allSelected) {
+      onChange(selectedIds.filter((id) => !filteredIds.includes(id)));
     } else {
-      onChange(users.map((u) => u.id));
+      onChange([...new Set([...selectedIds, ...filteredIds])]);
     }
   };
 
-  /** Toggles a single user in/out of the selected list */
   const toggleUser = (userId) => {
     if (selectedIds.includes(userId)) {
       onChange(selectedIds.filter((id) => id !== userId));
@@ -70,14 +57,12 @@ const UserSelectDropdown = ({
     }
   };
 
-  /** Format role for display */
   const formatRole = (role) => {
     if (!role) return "";
     const map = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member" };
     return map[role] || role.charAt(0).toUpperCase() + role.slice(1);
   };
 
-  /** Format date for display */
   const formatDisplayDate = (dateStr) => {
     if (!dateStr) return "";
     try {
@@ -88,32 +73,92 @@ const UserSelectDropdown = ({
     }
   };
 
+  const q = search.toLowerCase().trim();
+  const filteredUsers = q
+    ? users.filter((u) =>
+        u.name?.toLowerCase().includes(q) ||
+        u.role?.toLowerCase().includes(q) ||
+        u.department?.toLowerCase().includes(q) ||
+        u.email?.toLowerCase().includes(q)
+      )
+    : users;
+
+  const handleInputChange = (e) => {
+    setSearch(e.target.value);
+    if (!open) setOpen(true);
+  };
+
+  const handleInputFocus = () => {
+    setOpen(true);
+  };
+
+  const handleTriggerClick = () => {
+    if (!open) {
+      setOpen(true);
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  };
+
+  const handleArrowClick = (e) => {
+    e.stopPropagation();
+    if (open) {
+      setOpen(false);
+      setSearch("");
+    } else {
+      setOpen(true);
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Escape") {
+      setSearch("");
+      setOpen(false);
+      inputRef.current?.blur();
+    }
+  };
+
+  const triggerText = viewOnly
+    ? (users.length === 0 ? "No team members" : `${users.length} team member(s)`)
+    : (selectedIds.length === 0 ? placeholder : `${selectedIds.length} member(s) selected`);
+
   return (
     <div className="usd-wrap" ref={ref}>
-      <div
-        className={`usd-trigger ${open ? "usd-trigger--open" : ""} ${error ? "usd-trigger--error" : ""} ${disabled ? "usd-trigger--disabled" : ""}`}
-        onClick={() => !disabled && setOpen(!open)}
-      >
-        <span className={(!viewOnly && selectedIds.length === 0) || (viewOnly && users.length === 0) ? "usd-placeholder" : "usd-value"}>
-          {viewOnly
-            ? (users.length === 0 ? "No team members" : `${users.length} team member(s)`)
-            : (selectedIds.length === 0 ? placeholder : `${selectedIds.length} member(s) selected`)
-          }
-        </span>
+      <div className={`usd-trigger ${open ? "usd-trigger--open" : ""} ${error ? "usd-trigger--error" : ""} ${disabled ? "usd-trigger--disabled" : ""}`} onClick={handleTriggerClick}>
+        {selectedIds.length > 0 && (
+          <span className="usd-combo-count">{selectedIds.length} selected</span>
+        )}
+        {selectedIds.length === 0 && !open && (
+          <span className="usd-combo-placeholder">{triggerText}</span>
+        )}
+        {open && (
+          <input
+            ref={inputRef}
+            type="text"
+            className="usd-combo-input"
+            placeholder="Search members..."
+            value={search}
+            onChange={handleInputChange}
+            onFocus={handleInputFocus}
+            onKeyDown={handleKeyDown}
+            disabled={disabled || viewOnly}
+          />
+        )}
         <MdExpandMore
           size={20}
           className={`usd-arrow ${open ? "usd-arrow--open" : ""}`}
+          onClick={handleArrowClick}
         />
       </div>
 
       {open && (
-        <div className="usd-dropdown">
+        <div className="usd-dropdown" onClick={(e) => e.stopPropagation()}>
           {!viewOnly && (
             <div className="usd-dropdown-header">
               <label className="usd-selectall">
                 <input
                   type="checkbox"
-                  checked={users.length > 0 && selectedIds.length === users.length}
+                  checked={filteredUsers.length > 0 && filteredUsers.every((u) => selectedIds.includes(u.id))}
                   onChange={toggleAll}
                 />
                 Select All
@@ -124,10 +169,10 @@ const UserSelectDropdown = ({
             </div>
           )}
           <div className="usd-dropdown-items">
-            {users.length === 0 ? (
-              <p className="usd-empty">No users available.</p>
+            {filteredUsers.length === 0 ? (
+              <p className="usd-empty">{search ? "No users match your search." : "No users available."}</p>
             ) : (
-              users.map((user) => {
+              filteredUsers.map((user) => {
                 const isSelected = selectedIds.includes(user.id);
                 return (
                   <div key={user.id} className={`usd-item ${isSelected ? "usd-item--selected" : ""}`}>

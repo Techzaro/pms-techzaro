@@ -60,6 +60,7 @@ const CreateProjectModal = ({ onClose }) => {
 
   const [categoriesList, setCategoriesList] = useState([]);
   const [categoryInput, setCategoryInput] = useState("");
+  const [catSearch, setCatSearch] = useState("");
   const [catDeleteOpen, setCatDeleteOpen] = useState(false);
   const [pendingCatDelete, setPendingCatDelete] = useState("");
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
@@ -73,6 +74,7 @@ const CreateProjectModal = ({ onClose }) => {
   const categoryDropdownRef = useRef(null);
 
   const [teamRolesOpen, setTeamRolesOpen] = useState(false);
+  const [teamRolesSearch, setTeamRolesSearch] = useState("");
   const teamRolesRef = useRef(null);
 
   const [milestones, setMilestones] = useState([]);
@@ -104,6 +106,7 @@ const CreateProjectModal = ({ onClose }) => {
     const handleClickOutside = (e) => {
       if (teamRolesRef.current && !teamRolesRef.current.contains(e.target)) {
         setTeamRolesOpen(false);
+        setTeamRolesSearch("");
       }
       if (phaseDropdownRef.current && !phaseDropdownRef.current.contains(e.target)) {
         setPhaseDropdownOpen(false);
@@ -664,22 +667,28 @@ const CreateProjectModal = ({ onClose }) => {
             <div className="cp-grid-2">
               <div className="cp-field">
                 <label>Team (Optional)</label>
-                <div className="cp-dropdown-wrap" ref={teamRolesRef}>
-                  <button
-                    type="button"
-                    className="cp-dropdown-trigger"
-                    onClick={() => setTeamRolesOpen((prev) => !prev)}
-                  >
-                    <span className={form.team_roles.length === 0 ? "cp-dropdown-placeholder" : ""}>
-                      {form.team_roles.length === 0
-                        ? "Select Team"
-                        : form.team_roles.join(", ")}
-                    </span>
-                    <svg className={`cp-dropdown-arrow ${teamRolesOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
-                  </button>
+                <div className="cp-dropdown-wrap cp-combo-trigger" ref={teamRolesRef} onClick={() => { if (!teamRolesOpen) { setTeamRolesOpen(true); setTeamRolesSearch(""); } }}>
+                  {form.team_roles.length > 0 && (
+                    <span className="cp-combo-count">{form.team_roles.length} selected</span>
+                  )}
+                  {form.team_roles.length === 0 && !teamRolesOpen && (
+                    <span className="cp-combo-placeholder">Select Team</span>
+                  )}
                   {teamRolesOpen && (
-                    <div className="cp-dropdown-menu">
-                      {TEAM_ROLES.map((role) => (
+                    <input
+                      type="text"
+                      className="cp-combo-input"
+                      placeholder="Search roles..."
+                      value={teamRolesSearch}
+                      onChange={(e) => setTeamRolesSearch(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Escape") { setTeamRolesSearch(""); setTeamRolesOpen(false); } }}
+                      autoFocus
+                    />
+                  )}
+                  <svg className={`cp-dropdown-arrow ${teamRolesOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" onClick={(e) => { e.stopPropagation(); if (teamRolesOpen) { setTeamRolesOpen(false); setTeamRolesSearch(""); } else { setTeamRolesOpen(true); setTeamRolesSearch(""); } }}><polyline points="6 9 12 15 18 9" /></svg>
+                  {teamRolesOpen && (
+                    <div className="cp-dropdown-menu" onClick={(e) => e.stopPropagation()}>
+                      {TEAM_ROLES.filter((r) => !teamRolesSearch.trim() || r.toLowerCase().includes(teamRolesSearch.toLowerCase())).map((role) => (
                         <label key={role} className="cp-dropdown-item">
                           <input
                             type="checkbox"
@@ -897,17 +906,33 @@ const CreateProjectModal = ({ onClose }) => {
                 </div>
               ) : (
                 <div className="cp-category-dropdown" ref={categoryDropdownRef}>
-                  <div className="cp-category-trigger" onClick={() => setCategoryDropdownOpen((prev) => !prev)}>
-                    <span className={categoriesList.length === 0 ? "cp-dropdown-placeholder" : ""}>
-                      {categoriesList.length === 0
-                        ? "Select category"
-                        : `${categoriesList.length} selected`}
-                    </span>
-                    <svg className={`cp-dropdown-arrow ${categoryDropdownOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
+                  <div className="cp-category-trigger cp-combo-trigger" onClick={() => { setCategoryDropdownOpen(true); }}>
+                    {categoriesList.length > 0 && (
+                      <span className="cp-combo-count">{categoriesList.length} selected</span>
+                    )}
+                    {categoriesList.length === 0 && !categoryDropdownOpen && (
+                      <span className="cp-combo-placeholder">Select category</span>
+                    )}
+                    {categoryDropdownOpen && (
+                      <input
+                        type="text"
+                        className="cp-combo-input"
+                        placeholder="Search categories..."
+                        value={catSearch}
+                        onChange={(e) => { setCatSearch(e.target.value); }}
+                        onFocus={() => setCategoryDropdownOpen(true)}
+                        onKeyDown={(e) => { if (e.key === "Escape") { setCatSearch(""); setCategoryDropdownOpen(false); } }}
+                        autoFocus
+                      />
+                    )}
+                    <svg className={`cp-dropdown-arrow ${categoryDropdownOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" onClick={(e) => { e.stopPropagation(); setCategoryDropdownOpen((prev) => !prev); }}><polyline points="6 9 12 15 18 9" /></svg>
                   </div>
                   {categoryDropdownOpen && (
                     <div className="cp-dropdown-menu">
-                      {existingCategories.filter((c) => !categoriesList.includes(c)).map((cat) => (
+                      {existingCategories
+                        .filter((c) => !categoriesList.includes(c))
+                        .filter((c) => !catSearch.trim() || c.toLowerCase().includes(catSearch.toLowerCase()))
+                        .map((cat) => (
                         <div key={cat} className="cp-dropdown-item cp-dropdown-item-row">
                           <label className="cp-dropdown-item-check">
                             <input
