@@ -187,9 +187,11 @@ function CredentialRow({ credential, onDelete }) {
             <a href={credential.website_url} target="_blank" rel="noopener noreferrer" className="td-cred-link">Visit</a>
           )}
         </div>
-        <button className="td-cred-delete" onClick={onDelete} title="Delete credential">
-          <Trash2 size={14} />
-        </button>
+        {onDelete && (
+          <button className="td-cred-delete" onClick={onDelete} title="Delete credential">
+            <Trash2 size={14} />
+          </button>
+        )}
       </div>
 
       <div className="td-cred-fields">
@@ -805,9 +807,11 @@ function TaskDetails() {
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                           <input type="text" placeholder="Search access..." value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
                         </div>
-                        <button className="td-access-add-btn" onClick={() => setShowAddAccessModal(true)}>
-                          <Plus size={16} /> Add Access
-                        </button>
+                        {isCreator && (
+                          <button className="td-access-add-btn" onClick={() => setShowAddAccessModal(true)}>
+                            <Plus size={16} /> Add Access
+                          </button>
+                        )}
                       </div>
                       {loadingCredentials ? (
                         <p className="td-muted">Loading credentials...</p>
@@ -823,10 +827,10 @@ function TaskDetails() {
                             <CredentialRow
                               key={cred.id}
                               credential={cred}
-                              onDelete={() => {
+                              onDelete={isCreator ? () => {
                                 setPendingDeleteCredential(cred.id);
                                 setDeleteCredentialConfirmOpen(true);
-                              }}
+                              } : undefined}
                             />
                           ))}
                           {accessSearch && accessCredentials.filter((cred) => {

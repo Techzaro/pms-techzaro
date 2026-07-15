@@ -124,7 +124,7 @@ export default function ChangePasswordModal({ onClose }) {
         {/* Buttons */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
           <button onClick={onClose} style={{ padding: "10px 22px", borderRadius: 10, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#f9fafb"} onMouseLeave={(e) => e.target.style.background = "#fff"}>Cancel</button>
-          <button onClick={handleSubmit} disabled={loading} style={{ padding: "10px 22px", borderRadius: 10, border: "none", background: "#2563eb", color: "#fff", fontWeight: 600, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, transition: "all 0.15s" }} onMouseEnter={(e) => { if (!loading) e.target.style.background = "#1d4ed8"; }} onMouseLeave={(e) => e.target.style.background = "#2563eb"}>Change Password</button>
+          <button onClick={handleSubmit} disabled={loading} style={{ padding: "10px 22px", borderRadius: 10, border: "none", background: "#2563eb", color: "#fff", fontWeight: 600, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, transition: "all 0.15s" }} onMouseEnter={(e) => { if (!loading) e.target.style.background = "#1d4ed8"; }} onMouseLeave={(e) => e.target.style.background = "#2563eb"}>{loading ? "Changing..." : "Change Password"}</button>
         </div>
       </div>
     </div>,

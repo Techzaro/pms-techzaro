@@ -525,7 +525,7 @@ class TaskController extends Controller
     {
         $user = request()->user();
         $task->load([
-            'project:id,title,team_id,created_by,client_name,category,budget,priority,goals_checklist,sidebar_notes,sheets_documents,website_link,website_name,status,start_date,end_date',
+            'project:id,title,team_id,created_by,client_name,category,budget,priority,sidebar_notes,sheets_documents,website_link,website_name,status,start_date,end_date',
             'project.creator:id,name,email,role',
             'project.team:id,name,leader_id',
             'project.team.leader:id,name',

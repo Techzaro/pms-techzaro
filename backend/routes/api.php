@@ -244,6 +244,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/projects/{project}/approve', [ProjectController::class, 'approve']); // Approve submitted project
     Route::post('/projects/{project}/reject', [ProjectController::class, 'reject']); // Reject submitted project
     Route::post('/projects/{project}/reopen', [ProjectController::class, 'reopen']); // Reopen rejected project
+    Route::post('/projects/{project}/user-submissions/{submission}/approve', [ProjectController::class, 'approveUserSubmission']);
+    Route::post('/projects/{project}/user-submissions/{submission}/reject', [ProjectController::class, 'rejectUserSubmission']);
     Route::post('/projects/reorder', [ProjectController::class, 'reorderProjects']); // Reorder projects
 
     // Reorder tasks within a project

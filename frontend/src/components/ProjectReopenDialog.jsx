@@ -39,7 +39,7 @@ function ProjectReopenDialog({ isOpen, onClose, project, onReopenSuccess }) {
       document.body.style.overflow = "hidden";
       setComment("");
       setInstructions("");
-      setNewDeadline(project?.end_date ? toDatetimeLocal(project.end_date) : "");
+      setNewDeadline(project?.active_deadline ? toDatetimeLocal(project.active_deadline) : "");
       setFile(null);
     } else {
       document.body.style.overflow = "";

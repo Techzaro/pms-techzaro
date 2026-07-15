@@ -307,6 +307,7 @@ function ProjectDetails() {
   const [taskSearch, setTaskSearch] = useState("");
   const [deliverableSearch, setDeliverableSearch] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
+  const [viewAccessSearch, setViewAccessSearch] = useState("");
   const [accessSearch, setAccessSearch] = useState("");
   const [editFileItem, setEditFileItem] = useState(null);
   const [editFileName, setEditFileName] = useState("");
@@ -320,7 +321,6 @@ function ProjectDetails() {
   const [acting, setActing] = useState(false);
   const [orderedTasks, setOrderedTasks] = useState([]);
   const [orderedDeliverables, setOrderedDeliverables] = useState([]);
-  const [goalsChecklist, setGoalsChecklist] = useState([]);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [visibilityUsers, setVisibilityUsers] = useState([]);
   const [visibilitySelected, setVisibilitySelected] = useState({});
@@ -335,6 +335,7 @@ function ProjectDetails() {
   const [managerDropdownOpen, setManagerDropdownOpen] = useState(false);
   const managerDropdownRef = useRef(null);
   const [showManagerModal, setShowManagerModal] = useState(false);
+  const [savingManager, setSavingManager] = useState(false);
 
   const memberCount = useMemo(() => {
     if (!project) return 0;
@@ -356,10 +357,6 @@ function ProjectDetails() {
   useEffect(() => {
     setOrderedDeliverables(project?.deliverables || []);
   }, [project?.deliverables]);
-
-  useEffect(() => {
-    setGoalsChecklist(Array.isArray(project?.goals_checklist) ? project.goals_checklist : []);
-  }, [project?.goals_checklist]);
 
   useEffect(() => {
     if (tab === "access" && project) {
@@ -398,19 +395,6 @@ function ProjectDetails() {
       _notifHandled: true,
     }).catch(() => { });
   }, []);
-
-  const handleGoalReorder = useCallback((reordered) => {
-    const list = reordered.map((item) => ({ text: item.text, done: item.done, due_datetime: item.due_datetime, completed_at: item.completed_at }));
-    setGoalsChecklist(list);
-    fetch(`${API}/projects/${projectId}`, {
-      method: 'PATCH',
-      headers: authHeadersLocal(),
-      body: JSON.stringify({ goals_checklist: list }),
-      _notifHandled: true,
-    }).then(() => {
-      setProject((prev) => ({ ...prev, goals_checklist: list }));
-    }).catch((err) => console.error('Goal reorder failed:', err));
-  }, [projectId]);
 
   const handleMemberReorder = useCallback((reordered) => {
     const ids = reordered.map((m) => m.id);
@@ -617,30 +601,6 @@ function ProjectDetails() {
     }
   };
 
-  const handleToggleGoal = async (index) => {
-    const list = [...goalsChecklist];
-    if (!list[index] || list[index].done) return;
-    list[index] = { ...list[index], done: true, completed_at: new Date().toISOString() };
-    setGoalsChecklist(list);
-    setProject((prev) => ({ ...prev, goals_checklist: list }));
-    try {
-      const token = authToken();
-      await fetch(`${API}/projects/${projectId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ goals_checklist: list }),
-        _notifHandled: true,
-      });
-    } catch (err) {
-      console.error(err);
-      notify.error("Could not update goals.");
-    }
-  };
-
   const handleDeleteProject = async () => {
     setDeleteProjectConfirmOpen(true);
   };
@@ -694,7 +654,6 @@ function ProjectDetails() {
   const filteredMembers = memberSearch ? members.filter((m) => (m.name || "").toLowerCase().includes(memberSearch.toLowerCase())) : members;
   const milestones = project.milestones || [];
   const files = project.files || [];
-  const checklist = goalsChecklist;
   const tasks = orderedTasks.length ? orderedTasks : (project.tasks || []);
   const filteredTasks = taskSearch ? tasks.filter((t) => (t.title || "").toLowerCase().includes(taskSearch.toLowerCase())) : tasks;
   const progress = typeof project.progress_percent === "number" ? project.progress_percent : calculateProjectProgress(project.tasks || []);
@@ -723,7 +682,7 @@ function ProjectDetails() {
   const isAdminOrManager = project.is_admin_or_manager;
 
   const canEdit = project.can_edit;
-  const canSubmitProject = tasks.length > 0 && tasks.every((t) => t.status === "approved");
+  const canSubmitProject = tasks.length === 0 || tasks.every((t) => t.status === "approved");
 
   const openVisibility = async () => {
     setVisibilityOpen(true);
@@ -810,21 +769,16 @@ function ProjectDetails() {
     }
   };
 
-  const openManagerEdit = async () => {
+  const openManagerEdit = () => {
     setSelectedManagerId(project.creator?.id || null);
     setManagerDropdownOpen(false);
     setShowManagerModal(true);
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/team-users`, {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Failed to load users");
-      const data = await res.json();
-      setManagerUsers(data.users || data || []);
-    } catch (err) {
-      console.error("Fetch users error:", err);
-      setManagerUsers([]);
+    const members = project.members || [];
+    const creator = project.creator;
+    if (creator && !members.find((m) => m.id === creator.id)) {
+      setManagerUsers([creator, ...members]);
+    } else {
+      setManagerUsers(members);
     }
   };
 
@@ -837,8 +791,13 @@ function ProjectDetails() {
       setShowManagerModal(false);
       return;
     }
-    await updateProjectManager(selectedManagerId);
-    setShowManagerModal(false);
+    setSavingManager(true);
+    try {
+      await updateProjectManager(selectedManagerId);
+      setShowManagerModal(false);
+    } finally {
+      setSavingManager(false);
+    }
   };
 
   const updateProjectManager = async (userId) => {
@@ -874,25 +833,6 @@ function ProjectDetails() {
 
   const renderRail = () => (
     <div className="pd-rail">
-      <section className="pd-rail-card">
-        <h1 className="pd-rail-card__title">Deadlines</h1>
-        <ul className="pd-milestones">
-          {milestones.length === 0 ? (
-            <li className="pd-muted">No milestones.</li>
-          ) : (
-            milestones.map((m) => (
-              <li key={m.id} className="pd-milestones__item">
-                <span className={`pd-dot pd-dot--${statusSlug(m.status)}`} />
-                <div>
-                  <div className="pd-milestones__title">{m.title}</div>
-                  <div className="pd-milestones__date">{formatDateTimeShort(m.due_date)}</div>
-                </div>
-              </li>
-            ))
-          )}
-        </ul>
-      </section>
-
       <section className="pd-rail-card">
         <h1 className="pd-rail-card__title">Tasks</h1>
         {tasks.length === 0 ? (
@@ -947,40 +887,21 @@ function ProjectDetails() {
     <>
       <div className="pd-shell-split">
         <div className="pd-shell-left">
-          <h2 className="pd-block-title">Project Goals</h2>
-          {checklist.length > 0 ? (
-            <div>
-              {checklist.map((item, idx) => (
-                <div key={`goal-${idx}`} className="pd-goal-row">
-                  <button
-                    type="button"
-                    className={`pd-goal-check ${item.done ? "pd-goal-check--on" : "pd-goal-check--off"}`}
-                    onClick={() => { if (!item.done) handleToggleGoal(idx); }}
-                    aria-pressed={!!item.done}
-                    disabled={item.done}
-                  >
-                    {item.done ? "✓" : ""}
-                  </button>
-                  <span style={{ flex: 1 }} className={item.done ? "pd-goal-done" : ""}>{item.text}</span>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2, marginLeft: "auto" }}>
-                    {item.due_datetime && (
-                      <span className="pd-goal-datetime">
-                        📅 {new Date(item.due_datetime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} {new Date(item.due_datetime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                    )}
-                    {item.done && (
-                      <span className="pd-goal-datetime" style={{ color: item.completed_at ? "#16a34a" : "#9ca3af" }}>
-                        ✅ {item.completed_at ? new Date(item.completed_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + " " + new Date(item.completed_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "Just now"}
-                      </span>
-                    )}
+          <h2 className="pd-block-title">Project Milestones</h2>
+          {milestones.length > 0 ? (
+            <ul className="pd-milestones" style={{ marginBottom: 20 }}>
+              {milestones.map((m) => (
+                <li key={m.id} className="pd-milestones__item">
+                  <span className={`pd-dot pd-dot--${statusSlug(m.status)}`} />
+                  <div>
+                    <div className="pd-milestones__title">{m.title}</div>
+                    <div className="pd-milestones__date">{formatDateTimeShort(m.due_date)}</div>
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
-          ) : project.goals ? (
-            <div className="pd-rich" dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.goals) }} />
+            </ul>
           ) : (
-            <p className="pd-muted">No goals recorded.</p>
+            <p className="pd-muted">No milestones.</p>
           )}
 
           {(() => {
@@ -1065,6 +986,25 @@ function ProjectDetails() {
                   <span className="pd-meta-rows__value">
                     {project.budget != null && project.budget !== "" ? `PKR ${Number(project.budget).toLocaleString()}` : "—"}
                   </span>
+                </div>
+              </li>
+            )}
+            {(isCreator || isAdminOrManager) && project.user_due_dates && Object.keys(project.user_due_dates).length > 0 && (
+              <li>
+                <span className="pd-meta-rows__ic">
+                  <CalendarDays size={18} />
+                </span>
+                <div style={{ width: "100%" }}>
+                  <span className="pd-meta-rows__label">Member Deadlines</span>
+                  {Object.entries(project.user_due_dates).map(([uid, dt]) => {
+                    const member = (project.members || []).find((m) => m.id === Number(uid));
+                    return (
+                      <div key={uid} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, padding: "3px 0", borderBottom: "1px solid #f3f4f6" }}>
+                        <span style={{ color: "#374151" }}>{member?.name || `User #${uid}`}</span>
+                        <span style={{ color: "#6366f1", fontWeight: 500, fontSize: 12 }}>{formatDateTimeShort(dt)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </li>
             )}
@@ -1159,12 +1099,26 @@ function ProjectDetails() {
                 <div className="td-trio-item">
                   <div className="td-stat-ic td-stat-ic--green"><CalendarDays size={18} /></div>
                   <div>
-                    <span className="td-stat-big td-stat-big--sm">{formatDateTimeShort(project.end_date)}</span>
+                    <span className="td-stat-big td-stat-big--sm">{formatDateTimeShort(project.active_deadline)}</span>
                     <span className="td-stat-label">Deadline</span>
                   </div>
                 </div>
               </div>
             </div>
+
+            {isAssigned && project.user_due_dates && project.user_due_dates[currentUser?.id] && (
+              <div className="pd-card-flat" style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px" }}>
+                  <CalendarDays size={16} style={{ color: "#6366f1", flexShrink: 0 }} />
+                  <div>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>Your Due Date</span>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#6366f1" }}>
+                      {formatDateTime(project.user_due_dates[currentUser.id])}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {(project.status === "submitted" || project.status === "reopened" || (["approved", "rejected"].includes(project.status) && project.latestSubmission)) && (
               <ProjectSubmissionPanel
@@ -1180,6 +1134,78 @@ function ProjectDetails() {
                 acting={acting}
                 setActing={setActing}
               />
+            )}
+
+            {(isCreator || isAdminOrManager) && (project.user_submissions || []).length > 0 && (
+              <div className="pd-card-flat" style={{ marginBottom: 16 }}>
+                <div className="pd-card-flat__head">
+                  <h2 className="pd-block-title pd-block-title--inline">Submission Timeline</h2>
+                </div>
+                <div style={{ padding: "0 0 4px" }}>
+                  {(project.user_submissions || []).map((sub) => (
+                    <div key={sub.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 0", borderBottom: "1px solid #f3f4f6" }}>
+                      <div className="pd-avatar" aria-hidden style={{ background: sub.status === "approved" ? "#22c55e" : sub.status === "rejected" ? "#ef4444" : "#f59e0b", flexShrink: 0 }}>
+                        {sub.user?.name?.charAt(0)?.toUpperCase() || "?"}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <span style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>{sub.user?.name || "Unknown"}</span>
+                          <span style={{ fontSize: 12, color: "#6b7280" }}>({sub.user?.role?.replace("_", " ") || "—"})</span>
+                          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, fontWeight: 500, background: sub.status === "approved" ? "#dcfce7" : sub.status === "rejected" ? "#fee2e2" : sub.status === "submitted" ? "#dbeafe" : "#f3f4f6", color: sub.status === "approved" ? "#166534" : sub.status === "rejected" ? "#991b1b" : sub.status === "submitted" ? "#1e40af" : "#6b7280" }}>
+                            {sub.status === "submitted" ? "Pending Review" : sub.status.charAt(0).toUpperCase() + sub.status.slice(1)}
+                          </span>
+                        </div>
+                        {sub.comment && <p style={{ margin: "4px 0 0", fontSize: 13, color: "#374151" }}>{sub.comment}</p>}
+                        {sub.review_comment && <p style={{ margin: "4px 0 0", fontSize: 13, color: sub.status === "rejected" ? "#991b1b" : "#166534", fontStyle: "italic" }}>Review: {sub.review_comment}</p>}
+                        <div style={{ display: "flex", gap: 16, marginTop: 4, fontSize: 12, color: "#9ca3af" }}>
+                          {sub.submitted_at && <span>Submitted: {new Date(sub.submitted_at).toLocaleString()}</span>}
+                          {sub.reviewed_at && <span>Reviewed: {new Date(sub.reviewed_at).toLocaleString()} by {sub.reviewer?.name || "—"}</span>}
+                        </div>
+                        {sub.status === "submitted" && (isCreator || isAdminOrManager) && (
+                          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const token = authToken();
+                                  const res = await fetch(`${API_URL}/projects/${project.id}/user-submissions/${sub.id}/approve`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+                                  });
+                                  if (!res.ok) throw new Error("Failed to approve");
+                                  showSuccessMessage("Submission", "approved");
+                                  loadProject();
+                                } catch (err) { console.error(err); }
+                              }}
+                              style={{ padding: "6px 16px", borderRadius: 8, border: "none", background: "#22c55e", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={async () => {
+                                const comment = prompt("Rejection reason (optional):");
+                                try {
+                                  const token = authToken();
+                                  const res = await fetch(`${API_URL}/projects/${project.id}/user-submissions/${sub.id}/reject`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+                                    body: JSON.stringify({ comment: comment || "" }),
+                                  });
+                                  if (!res.ok) throw new Error("Failed to reject");
+                                  showSuccessMessage("Submission", "rejected");
+                                  loadProject();
+                                } catch (err) { console.error(err); }
+                              }}
+                              style={{ padding: "6px 16px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
 
             <div className="pd-focus">
@@ -1499,9 +1525,9 @@ function ProjectDetails() {
                               </div>
                               <div>
                                 <div className="pd-member-name">{project.creator.name}</div>
-                                <div className="pd-member-role">Owner · {project.creator.role || "—"}</div>
+                                <div className="pd-member-role">Project Manager · {project.creator.role || "—"}</div>
                               </div>
-                              <span className="pd-badge-owner">Owner</span>
+                              <span className="pd-badge-owner">Project Manager</span>
                             </div>
                           )}
                           <SortableTableWrapper
@@ -1514,15 +1540,57 @@ function ProjectDetails() {
                                 <div className="pd-avatar" aria-hidden>
                                   {initials(m.name)}
                                 </div>
-                                <div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
                                   <div className="pd-member-name">{m.name}</div>
                                   <div className="pd-member-role">{m.role || "Member"}</div>
+                                  {project.user_due_dates && project.user_due_dates[m.id] && (
+                                    <div style={{ fontSize: 12, color: "#6366f1", marginTop: 2, display: "flex", alignItems: "center", gap: 4 }}>
+                                      <CalendarDays size={12} />
+                                      Due: {formatDateTime(project.user_due_dates[m.id])}
+                                    </div>
+                                  )}
                                 </div>
                                 <span className="pd-badge-member">Member</span>
                               </div>
                             )}
                           </SortableTableWrapper>
                         </section>
+
+                        {(project.view_only_users || []).length > 0 && (
+                          <section className="pd-card-flat" style={{ marginTop: 16 }}>
+                            <div className="pd-card-flat__head">
+                              <h2 className="pd-block-title pd-block-title--inline">View Access</h2>
+                              <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                <input type="text" placeholder="Search view access users..." value={viewAccessSearch} onChange={(e) => setViewAccessSearch(e.target.value)} />
+                              </div>
+                            </div>
+                            <p className="pd-muted" style={{ margin: "0 0 12px", fontSize: 13 }}>
+                              These users have been granted view-only access via "Show To" and can see the project but are not team members.
+                            </p>
+                            {(() => {
+                              const viewUsers = project.view_only_users || [];
+                              const filtered = viewAccessSearch
+                                ? viewUsers.filter((u) => (u.name || "").toLowerCase().includes(viewAccessSearch.toLowerCase()))
+                                : viewUsers;
+                              return filtered.length === 0 ? (
+                                <p className="pd-muted" style={{ fontSize: 13 }}>{viewAccessSearch ? "No matching users found." : "No view-only users."}</p>
+                              ) : (
+                                filtered.map((u) => (
+                                  <div key={u.id} className="pd-member">
+                                    <div className="pd-avatar" aria-hidden style={{ background: "#fbbf24" }}>
+                                      {initials(u.name)}
+                                    </div>
+                                    <div>
+                                      <div className="pd-member-name">{u.name}</div>
+                                      <div className="pd-member-role">{u.role || "—"}</div>
+                                    </div>
+                                  </div>
+                                ))
+                              );
+                            })()}
+                          </section>
+                        )}
                       </div>
                     )}
 
@@ -1690,6 +1758,9 @@ function ProjectDetails() {
                     />
                     <span className="sv-user-name">{u.name}</span>
                     <span className="sv-user-role">({u.role.replace("_", " ")})</span>
+                    {!u.is_member && (
+                      <span style={{ marginLeft: "auto", fontSize: 11, color: "#92400e", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 6, padding: "1px 8px", fontWeight: 500 }}>View Only</span>
+                    )}
                   </label>
                 ))
               )}
@@ -1841,9 +1912,9 @@ function ProjectDetails() {
                   type="button"
                   className="aam-btn aam-btn-save"
                   onClick={saveManagerChange}
-                  disabled={!selectedManagerId || selectedManagerId === project.creator?.id}
+                  disabled={!selectedManagerId || selectedManagerId === project.creator?.id || savingManager}
                 >
-                  Save Change
+                  {savingManager ? "Saving..." : "Save Change"}
                 </button>
               </div>
             </div>

@@ -545,16 +545,8 @@ function UserPerformance() {
                       </div>
 
                       <div className="col-progress">
-                        <div style={{ display: "flex", justifyContent: "flex-start", alignItems: "center", marginBottom: "4px" }}>
-                          <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
-                            {item.deliverables_progress || 0}%
-                          </span>
-                        </div>
                         <div className="progress-bar-track">
                           <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
-                        </div>
-                        <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
-                          {item.approved_deliverables || 0}/{item.total_deliverables || 0} Deliverables Approved
                         </div>
                       </div>
 
