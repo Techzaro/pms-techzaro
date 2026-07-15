@@ -753,7 +753,20 @@
   font-size: 14px;
   font-weight: 500;
   color: #1e293b;
+}
+
+.mt-dropdown-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   flex: 1;
+  min-width: 0;
+}
+
+.mt-dropdown-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .mt-dropdown-role {
@@ -764,6 +777,15 @@
   padding: 2px 8px;
   border-radius: 6px;
   text-transform: capitalize;
+}
+
+.mt-dropdown-dept {
+  font-size: 11px;
+  font-weight: 500;
+  color: #4f46e5;
+  background: #eef2ff;
+  padding: 2px 8px;
+  border-radius: 6px;
 }
 
 .mt-dropdown-empty {

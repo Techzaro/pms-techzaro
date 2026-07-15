@@ -11,6 +11,7 @@ import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { notify, showSuccessMessage } from "../utils/notify";
 import "../components/ProfileModal.css";
 
@@ -23,7 +24,8 @@ function ProfileModal({
   user,
   onClose,
 }) {
-  useEscapeKey(true, onClose);
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(true, handleClose);
 
   const [newPassword, setNewPassword] =
     useState("");
@@ -195,11 +197,10 @@ function ProfileModal({
             <input
               type="password"
               value={newPassword}
-              onChange={(e) =>
-                setNewPassword(
-                  e.target.value
-                )
-              }
+              onChange={(e) => {
+                setNewPassword(e.target.value);
+                setIsDirty(true);
+              }}
               placeholder="Enter new password"
             />
 
@@ -214,11 +215,10 @@ function ProfileModal({
             <input
               type="password"
               value={confirmPassword}
-              onChange={(e) =>
-                setConfirmPassword(
-                  e.target.value
-                )
-              }
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                setIsDirty(true);
+              }}
               placeholder="Confirm password"
             />
 
@@ -238,7 +238,7 @@ function ProfileModal({
 
           <button
             className="close-btn"
-            onClick={onClose}
+            onClick={handleClose}
           >
             Close
           </button>
@@ -246,6 +246,8 @@ function ProfileModal({
         </div>
 
       </div>
+
+      {ConfirmDialog}
 
     </div>,
     document.body

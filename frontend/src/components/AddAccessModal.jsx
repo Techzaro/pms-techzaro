@@ -3,8 +3,13 @@ import { X, Globe, User, Lock, Users, ChevronDown, Check } from "lucide-react";
 import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
 import { showSuccessMessage } from "../utils/notify";
+import { useEscapeKey } from "../hooks/useEscapeKey";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 
 export default function AddAccessModal({ isOpen, onClose, projectId, taskId, projectName, onSuccess, files = [], credential }) {
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(isOpen, handleClose);
+
   const [websiteName, setWebsiteName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -67,6 +72,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
   };
 
   const toggleUser = (userId) => {
+    setIsDirty(true);
     setAssignedUserIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
     );
@@ -127,12 +133,12 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={handleClose}>
       <div className="aam-modal" onClick={(e) => e.stopPropagation()}>
         <div className="aam-header">
           <h3>{isEdit ? "Edit Access Credential" : "Add Access Credential"}</h3>
           <span className="aam-project-name">{projectName}</span>
-          <button className="aam-close" onClick={onClose}>
+          <button className="aam-close" onClick={handleClose}>
             <X size={18} />
           </button>
         </div>
@@ -147,7 +153,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
             <select
               className="aam-select"
               value={websiteName}
-              onChange={(e) => setWebsiteName(e.target.value)}
+              onChange={(e) => { setIsDirty(true); setWebsiteName(e.target.value); }}
               required
             >
               <option value="">Select website</option>
@@ -169,7 +175,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
               type="text"
               placeholder="Enter username or email"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => { setIsDirty(true); setUsername(e.target.value); }}
               required
             />
           </div>
@@ -183,7 +189,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
                 type="password"
                 placeholder="Enter password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { setIsDirty(true); setPassword(e.target.value); }}
                 required
               />
             </div>
@@ -216,6 +222,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
                       type="checkbox"
                       checked={assignedUserIds.length === users.length && users.length > 0}
                       onChange={() => {
+                        setIsDirty(true);
                         if (assignedUserIds.length === users.length) {
                           setAssignedUserIds([]);
                         } else {
@@ -231,13 +238,18 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
                       <input
                         type="checkbox"
                         checked={assignedUserIds.includes(u.id)}
-                        onChange={() => toggleUser(u.id)}
+                        onChange={() => { setIsDirty(true); toggleUser(u.id); }}
                       />
                       <span className="aam-multiselect-check">
                         {assignedUserIds.includes(u.id) && <Check size={12} />}
                       </span>
-                      <span className="aam-multiselect-label">{u.name}</span>
-                      <span className="aam-multiselect-role">({u.role?.replace("_", " ")})</span>
+                      <div className="aam-multiselect-info">
+                        <span className="aam-multiselect-label">{u.name}</span>
+                        <div className="aam-multiselect-badges">
+                          {u.role && <span className="aam-multiselect-role">{u.role.replace("_", " ")}</span>}
+                          {u.department && <span className="aam-multiselect-dept">{u.department}</span>}
+                        </div>
+                      </div>
                     </label>
                   ))}
                 </div>
@@ -271,7 +283,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
           </div>
 
           <div className="aam-footer">
-            <button type="button" className="aam-btn aam-btn-cancel" onClick={onClose}>
+            <button type="button" className="aam-btn aam-btn-cancel" onClick={handleClose}>
               Cancel
             </button>
             <button type="submit" className="aam-btn aam-btn-save" disabled={loading}>
@@ -280,6 +292,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
           </div>
         </form>
       </div>
+      {ConfirmDialog}
     </div>
   );
 }

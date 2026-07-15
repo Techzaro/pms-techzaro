@@ -19,6 +19,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import { publish } from "../utils/eventBus";
 import API_URL from "../config/api";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { authToken, getCurrentRole, rolePath, getUser, normalizeRole } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
@@ -173,7 +174,8 @@ function UserProfile() {
     markViewed: markUserViewed,
   } = useActivityHighlight("user", userId, profileData?.activity_max_id || 0, changes);
 
-  useEscapeKey(isEditModalOpen, () => { setIsEditModalOpen(false); setExistingOtherDocs([]); });
+  const { isDirty: editIsDirty, setIsDirty: setEditIsDirty, handleClose: handleEditClose, ConfirmDialog: EditConfirmDialog } = useConfirmOnClose(() => { setIsEditModalOpen(false); setExistingOtherDocs([]); });
+  useEscapeKey(isEditModalOpen, handleEditClose);
 
   useEffect(() => {
     if (isEditModalOpen) {
@@ -383,6 +385,7 @@ function UserProfile() {
     if (name === "id_card_number") formattedValue = formatCNIC(value);
     if (name === "phone_number" || name === "emergency_contact_phone") formattedValue = formatPhone(value);
     setEditUser((prev) => ({ ...prev, [name]: formattedValue }));
+    setEditIsDirty(true);
     if (editErrors[name]) {
       setEditErrors((prev) => {
         const next = { ...prev };
@@ -395,6 +398,7 @@ function UserProfile() {
   const handleCustomRevert = (field) => {
     const customField = field === "department" ? "departmentCustom" : "designationCustom";
     setEditUser((prev) => ({ ...prev, [field]: "", [customField]: "" }));
+    setEditIsDirty(true);
   };
 
   const deleteDesignation = (val) => {
@@ -848,7 +852,7 @@ function UserProfile() {
         <div className="profile">
           <div className="profile-layout">
         <Breadcrumb items={breadcrumbs} />
-            <div className="profile-header-profile" style={{ display: "flex", alignItems: "center",gap: 300, }}>
+            <div className="profile-header-profile" style={{ display: "flex", alignItems: "center",gap: 310, }}>
               <div>
                 <h1>User Profile</h1>
                 <p>View and manage your personal information and account settings.</p>
@@ -1247,7 +1251,7 @@ function UserProfile() {
                 >
                   Update User
                 </LoadingButton>
-                <button className="user-modal-close" onClick={() => { setIsEditModalOpen(false); setExistingOtherDocs([]); }}>
+                <button className="user-modal-close" onClick={handleEditClose}>
                   &#10005;
                 </button>
               </div>
@@ -1381,16 +1385,16 @@ function UserProfile() {
                       </button>
                       {desgDropdownOpen && (
                         <div className="category-dropdown-options">
-                          <div className="category-dropdown-option" onClick={() => { setEditUser((prev) => ({ ...prev, designation: "" })); setDesgDropdownOpen(false); }} style={{ fontWeight: !editUser.designation ? "600" : "400", background: !editUser.designation ? "#f0f9ff" : "transparent" }}>
+                          <div className="category-dropdown-option" onClick={() => { setEditUser((prev) => ({ ...prev, designation: "" })); setEditIsDirty(true); setDesgDropdownOpen(false); }} style={{ fontWeight: !editUser.designation ? "600" : "400", background: !editUser.designation ? "#f0f9ff" : "transparent" }}>
                             Select Designation
                           </div>
                           {designations.map((d) => (
-                            <div key={d} className="category-dropdown-option" onClick={() => { setEditUser((prev) => ({ ...prev, designation: d })); setDesgDropdownOpen(false); }} style={{ fontWeight: editUser.designation === d ? "600" : "400", background: editUser.designation === d ? "#f0f9ff" : "transparent" }}>
+                            <div key={d} className="category-dropdown-option" onClick={() => { setEditUser((prev) => ({ ...prev, designation: d })); setEditIsDirty(true); setDesgDropdownOpen(false); }} style={{ fontWeight: editUser.designation === d ? "600" : "400", background: editUser.designation === d ? "#f0f9ff" : "transparent" }}>
                               {d}
                               <span className="category-option-delete" onClick={(e) => { e.stopPropagation(); deleteDesignation(d); }} title="Delete">&times;</span>
                             </div>
                           ))}
-                          <div className="category-dropdown-option category-dropdown-custom" onClick={() => { setEditUser((prev) => ({ ...prev, designation: "__custom__" })); setDesgDropdownOpen(false); }}>Custom / Type Here</div>
+                          <div className="category-dropdown-option category-dropdown-custom" onClick={() => { setEditUser((prev) => ({ ...prev, designation: "__custom__" })); setEditIsDirty(true); setDesgDropdownOpen(false); }}>Custom / Type Here</div>
                         </div>
                       )}
                     </div>
@@ -1412,16 +1416,16 @@ function UserProfile() {
                       </button>
                       {deptDropdownOpen && (
                         <div className="category-dropdown-options">
-                          <div className="category-dropdown-option" onClick={() => { setEditUser((prev) => ({ ...prev, department: "" })); setDeptDropdownOpen(false); }} style={{ fontWeight: !editUser.department ? "600" : "400", background: !editUser.department ? "#f0f9ff" : "transparent" }}>
+                          <div className="category-dropdown-option" onClick={() => { setEditUser((prev) => ({ ...prev, department: "" })); setEditIsDirty(true); setDeptDropdownOpen(false); }} style={{ fontWeight: !editUser.department ? "600" : "400", background: !editUser.department ? "#f0f9ff" : "transparent" }}>
                             Select Department
                           </div>
                           {departments.map((d) => (
-                            <div key={d} className="category-dropdown-option" onClick={() => { setEditUser((prev) => ({ ...prev, department: d })); setDeptDropdownOpen(false); }} style={{ fontWeight: editUser.department === d ? "600" : "400", background: editUser.department === d ? "#f0f9ff" : "transparent" }}>
+                            <div key={d} className="category-dropdown-option" onClick={() => { setEditUser((prev) => ({ ...prev, department: d })); setEditIsDirty(true); setDeptDropdownOpen(false); }} style={{ fontWeight: editUser.department === d ? "600" : "400", background: editUser.department === d ? "#f0f9ff" : "transparent" }}>
                               {d}
                               <span className="category-option-delete" onClick={(e) => { e.stopPropagation(); deleteDepartment(d); }} title="Delete">&times;</span>
                             </div>
                           ))}
-                          <div className="category-dropdown-option category-dropdown-custom" onClick={() => { setEditUser((prev) => ({ ...prev, department: "__custom__" })); setDeptDropdownOpen(false); }}>Custom / Type Here</div>
+                          <div className="category-dropdown-option category-dropdown-custom" onClick={() => { setEditUser((prev) => ({ ...prev, department: "__custom__" })); setEditIsDirty(true); setDeptDropdownOpen(false); }}>Custom / Type Here</div>
                         </div>
                       )}
                     </div>
@@ -1693,6 +1697,7 @@ function UserProfile() {
               </div>
             </form>
           </div>
+          {EditConfirmDialog}
         </div>,
         document.body
       )}

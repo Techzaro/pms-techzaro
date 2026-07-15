@@ -13,6 +13,8 @@ import { createPortal } from "react-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import "../pages/ExportReport.css";
+import { useEscapeKey } from "../hooks/useEscapeKey";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 
 /** Color palette for user avatar backgrounds */
 const AVATAR_COLORS = ["#f59e0b", "#3b82f6", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
@@ -53,6 +55,8 @@ function formatStatus(status) {
  * report preview, and PDF generation.
  */
 function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(true, handleClose);
   const [showReview, setShowReview] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [timeRange, setTimeRange] = useState("all");
@@ -198,7 +202,7 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
                 <h2>Export Report</h2>
                 <p>Review and export your performance report.</p>
               </div>
-              <button className="er-close-btn" onClick={onClose}>
+               <button className="er-close-btn" onClick={handleClose}>
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M15 5L5 15M5 5l10 10" />
                 </svg>
@@ -214,22 +218,22 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
                   { value: "month", label: "This Month" },
                   { value: "custom", label: "Custom Range" },
                 ].map((opt) => (
-                  <button key={opt.value} className={`er-date-btn ${timeRange === opt.value ? "active" : ""}`} onClick={() => setTimeRange(opt.value)}>
+                  <button key={opt.value} className={`er-date-btn ${timeRange === opt.value ? "active" : ""}`} onClick={() => { setTimeRange(opt.value); setIsDirty(true); }}>
                     {opt.label}
                   </button>
                 ))}
               </div>
               {timeRange === "custom" && (
                 <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-                  <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
+                  <input type="date" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setIsDirty(true); }}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 13, color: "#374151", outline: "none" }} />
-                  <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)}
+                  <input type="date" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setIsDirty(true); }}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 13, color: "#374151", outline: "none" }} />
                 </div>
               )}
             </div>
             <div className="er-footer">
-              <button className="er-cancel-btn" onClick={onClose}>Cancel</button>
+               <button className="er-cancel-btn" onClick={handleClose}>Cancel</button>
               <button className="er-export-btn" onClick={() => setShowReview(true)}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
@@ -344,6 +348,7 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
           </div>
         </div>
       )}
+    {ConfirmDialog}
     </>,
     document.body
   );

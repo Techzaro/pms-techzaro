@@ -322,9 +322,9 @@ class ProjectController extends Controller
         }
 
         $baseRelations = [
-            'creator:id,name,email,role',
-            'team.leader:id,name,email,role',
-            'team.members:id,name,email,role',
+            'creator:id,name,email,role,department',
+            'team.leader:id,name,email,role,department',
+            'team.members:id,name,email,role,department',
             'milestones',
             'files',
             'approvedBy:id,name',
@@ -366,7 +366,7 @@ class ProjectController extends Controller
 
         $memberIds = $project->assigned_users ?? [];
         $members = ! empty($memberIds)
-            ? User::whereIn('id', $memberIds)->where('active', true)->orderByRaw('FIELD(id,' . implode(',', $memberIds) . ')')->get(['id', 'name', 'email', 'role'])
+            ? User::whereIn('id', $memberIds)->where('active', true)->orderByRaw('FIELD(id,' . implode(',', $memberIds) . ')')->get(['id', 'name', 'email', 'role', 'department'])
             : collect();
 
         $isCreator = (int) $project->created_by === (int) $user->id;
@@ -949,7 +949,7 @@ class ProjectController extends Controller
 
         $users = User::where('active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'role']);
+            ->get(['id', 'name', 'role', 'department']);
 
         $visibility = $project->visibility()->get()->keyBy('user_id');
         $memberIds = array_map('intval', $project->assigned_users ?? []);
@@ -962,6 +962,7 @@ class ProjectController extends Controller
                 'id' => $u->id,
                 'name' => $u->name,
                 'role' => $u->role,
+                'department' => $u->department,
                 'is_member' => $isMember,
                 'is_visible' => $row ? (bool) $row->is_visible : $isMember,
             ];
@@ -1006,7 +1007,6 @@ class ProjectController extends Controller
             }
             $grantedUsers[] = $uid;
         }
-
         // Bulk insert new records + bulk update removed
         if (! empty($newRecords)) {
             ProjectVisibility::insert($newRecords);

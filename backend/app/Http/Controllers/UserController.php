@@ -753,7 +753,7 @@ class UserController extends Controller
      */
     public function getTeamUsers(Request $request)
     {
-        $users = User::select('id', 'name', 'email', 'role')
+        $users = User::select('id', 'name', 'email', 'role', 'department')
             ->where('active', true)
             ->orderBy('name')
             ->get();

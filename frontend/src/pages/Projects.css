@@ -628,15 +628,36 @@
   cursor: pointer;
 }
 
+.sv-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .sv-user-name {
   font-weight: 600;
   color: #111827;
 }
 
+.sv-user-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .sv-user-role {
   color: #6b7280;
-  font-size: 13px;
+  font-size: 12px;
   text-transform: capitalize;
+}
+
+.sv-user-dept {
+  font-size: 11px;
+  font-weight: 500;
+  color: #4f46e5;
+  background: #eef2ff;
+  padding: 2px 8px;
+  border-radius: 6px;
 }
 
 .sv-muted {

@@ -29,6 +29,7 @@ import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
 import API_URL from "../config/api";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { authToken, getCurrentRole, getUser, setUser, rolePath, normalizeRole } from "../utils/auth";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import { publish } from "../utils/eventBus";
@@ -475,7 +476,8 @@ function ManageUsers() {
     });
   };
 
-  useEscapeKey(isAddModalOpen, closeModal);
+  const { isDirty: addIsDirty, setIsDirty: setAddIsDirty, handleClose: handleAddClose, ConfirmDialog: AddConfirmDialog } = useConfirmOnClose(closeModal);
+  useEscapeKey(isAddModalOpen, handleAddClose);
 
   // Validates the add/edit user form and returns errors object
   const validateAddForm = () => {
@@ -543,6 +545,7 @@ function ManageUsers() {
     if (name === "idCardNumber") formattedValue = formatCNIC(value);
     if (name === "phoneNumber" || name === "emergencyContactPhone") formattedValue = formatPhone(value);
     setNewUser((prev) => ({ ...prev, [name]: formattedValue }));
+    setAddIsDirty(true);
     if (addErrors[name]) {
       setAddErrors((prev) => {
         const next = { ...prev };
@@ -1264,7 +1267,7 @@ function ManageUsers() {
                   <LoadingButton type="button" className="primary-button" loading={submitting} onClick={handleSubmit}>
                     {submitting ? (editingUser ? "Updating User..." : "Creating User...") : (editingUser ? "Update User" : "Create User")}
                   </LoadingButton>
-                  <button className="user-modal-close" onClick={closeModal}>
+                  <button className="user-modal-close" onClick={handleAddClose}>
                     &#10005;
                   </button>
                 </div>
@@ -1318,7 +1321,7 @@ function ManageUsers() {
                           </>
                         )}
                       </div>
-                      <input id="avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) setNewUser((prev) => ({ ...prev, avatar: file })); }} />
+                      <input id="avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) { setNewUser((prev) => ({ ...prev, avatar: file })); setAddIsDirty(true); } }} />
                       {(newUser.avatar || newUser._existingAvatar) && (
                         <button type="button" className="avatar-remove-btn" onClick={() => setAvatarRemoveConfirmOpen(true)}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -1577,6 +1580,7 @@ function ManageUsers() {
                               return;
                             }
                             setNewUser((p) => ({ ...p, [key]: f || null }));
+                            setAddIsDirty(true);
                           }}
                         />
                       </div>
@@ -1609,6 +1613,7 @@ function ManageUsers() {
                               ...valid.map((f) => ({ file: f, customName: f.name.replace(/\.[^.]+$/, ""), renaming: false })),
                             ],
                           }));
+                          setAddIsDirty(true);
                         }
                         e.target.value = "";
                       }}
@@ -1668,6 +1673,8 @@ function ManageUsers() {
           </div>,
           document.body
         )}
+
+        {AddConfirmDialog}
 
       </div>
     </DashboardLayout>

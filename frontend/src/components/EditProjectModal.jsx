@@ -18,6 +18,7 @@ import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import "./layout/CreateProjectModal.css";
 
 const PRESET_PHASES = [
@@ -33,7 +34,8 @@ const PRESET_PHASES = [
  * @param {Function} onClose - Callback to close modal; receives boolean (true if saved)
  */
 const EditProjectModal = ({ project, onClose }) => {
-  useEscapeKey(true, onClose);
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(true, handleClose);
 
   const [loading, setLoading] = useState(false);
   const { submitting, run } = useSubmit();
@@ -199,6 +201,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    setIsDirty(true);
     setForm((prev) => {
       const next = { ...prev, [name]: value };
       if (name === "team_id") {
@@ -216,6 +219,7 @@ const EditProjectModal = ({ project, onClose }) => {
   };
 
   const handleAssignedUsersChange = (ids) => {
+    setIsDirty(true);
     setForm((prev) => ({ ...prev, assigned_users: ids }));
     setDueDates((prev) => {
       const next = { ...prev };
@@ -227,18 +231,21 @@ const EditProjectModal = ({ project, onClose }) => {
   };
 
   const handleDueDateChange = (userId, value) => {
+    setIsDirty(true);
     setDueDates((prev) => ({ ...prev, [userId]: value }));
   };
 
   const handleAddPhase = () => {
     if (!phaseName.trim() || !phaseDate) return;
     const formattedDt = toUTCIso(phaseDate);
+    setIsDirty(true);
     setMilestones((prev) => [...prev, { title: phaseName.trim(), due_date: formattedDt, status: "planned" }]);
     setPhaseName("");
     setPhaseDate("");
   };
 
   const handleRemovePhase = (index) => {
+    setIsDirty(true);
     setMilestones((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -268,6 +275,7 @@ const EditProjectModal = ({ project, onClose }) => {
   const handleAddCategory = () => {
     if (!categoryInput.trim()) return;
     const newCat = categoryInput.trim();
+    setIsDirty(true);
     if (!categoriesList.includes(newCat)) {
       setCategoriesList((prev) => [...prev, newCat]);
     }
@@ -281,6 +289,7 @@ const EditProjectModal = ({ project, onClose }) => {
   };
 
   const handleRemoveCategory = (index) => {
+    setIsDirty(true);
     setCategoriesList((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -317,6 +326,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
   const handleFiles = (fileList) => {
     const newFiles = Array.from(fileList);
+    setIsDirty(true);
     setPendingFiles((prev) => [...prev, ...newFiles.map((f) => ({ file: f, name: f.name, size: f.size, renaming: false }))]);
   };
 
@@ -342,6 +352,7 @@ const EditProjectModal = ({ project, onClose }) => {
   };
 
   const handleRemoveFile = (index) => {
+    setIsDirty(true);
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -362,12 +373,14 @@ const EditProjectModal = ({ project, onClose }) => {
     let url = linkInput.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     const name = linkTitleInput.trim() || url;
+    setIsDirty(true);
     setLinks((prev) => [...prev, { url, name, renaming: false }]);
     setLinkInput("");
     setLinkTitleInput("");
   };
 
   const handleRemoveLink = (index) => {
+    setIsDirty(true);
     setLinks((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -379,11 +392,13 @@ const EditProjectModal = ({ project, onClose }) => {
     if (!deliverableProjInput.title.trim()) return;
     const dt = deliverableProjInput.due_datetime;
     const dueDate = toUTCIso(dt);
+    setIsDirty(true);
     setDeliverablesProj((prev) => [...prev, { title: deliverableProjInput.title.trim(), due_date: dueDate }]);
     setDeliverableProjInput({ title: "", due_datetime: "" });
   };
 
   const handleRemoveDeliverableProj = (index) => {
+    setIsDirty(true);
     setDeliverablesProj((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -517,7 +532,7 @@ const EditProjectModal = ({ project, onClose }) => {
             <LoadingButton className="cp-create-btn" onClick={handleSubmit} loading={submitting}>
               Save Changes
             </LoadingButton>
-            <button className="cp-close-btn" onClick={() => onClose(false)}>✕</button>
+            <button className="cp-close-btn" onClick={handleClose}>✕</button>
           </div>
         </div>
 
@@ -764,14 +779,14 @@ const EditProjectModal = ({ project, onClose }) => {
                   type="text"
                   placeholder="Link title (e.g. Figma Design, Drive Folder)"
                   value={linkTitleInput}
-                  onChange={(e) => setLinkTitleInput(e.target.value)}
+                  onChange={(e) => { setIsDirty(true); setLinkTitleInput(e.target.value); }}
                 />
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
                     type="text"
                     placeholder="Paste link (Drive, Figma, Website, etc.)"
                     value={linkInput}
-                    onChange={(e) => setLinkInput(e.target.value)}
+                    onChange={(e) => { setIsDirty(true); setLinkInput(e.target.value); }}
                     onKeyDown={handleLinkKeyDown}
                     style={{ flex: 1 }}
                   />
@@ -896,7 +911,7 @@ const EditProjectModal = ({ project, onClose }) => {
                     type="text"
                     placeholder="Enter custom category"
                     value={categoryInput}
-                    onChange={(e) => setCategoryInput(e.target.value)}
+                    onChange={(e) => { setIsDirty(true); setCategoryInput(e.target.value); }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") { e.preventDefault(); handleAddCategory(); }
                       if (e.key === "Escape") { setCategoryCustomMode(false); setCategoryInput(""); }
@@ -925,6 +940,7 @@ const EditProjectModal = ({ project, onClose }) => {
                               checked={categoriesList.includes(cat)}
                               onChange={() => {
                                 if (!categoriesList.includes(cat)) {
+                                  setIsDirty(true);
                                   setCategoriesList((prev) => [...prev, cat]);
                                 }
                               }}
@@ -969,6 +985,78 @@ const EditProjectModal = ({ project, onClose }) => {
               )}
             </div>
 
+            {/* DEADLINES - PHASE SYSTEM */}
+            <div className="cp-card">
+              <div className="cp-card-top">
+                <span>Deadlines</span>
+              </div>
+
+              <div className="cp-deadline-grid">
+                <div className="cp-field">
+                  <label style={{ fontSize: "13px" }}>Phase</label>
+                  <input
+                    type="text"
+                    placeholder="Enter phase name"
+                    value={phaseName}
+                    onChange={(e) => { setIsDirty(true); setPhaseName(e.target.value); }}
+                    onKeyDown={handlePhaseKeyDown}
+                    list="edit-phase-presets"
+                  />
+                  <datalist id="edit-phase-presets">
+                    {PRESET_PHASES.map((p) => (
+                      <option key={p} value={p} />
+                    ))}
+                  </datalist>
+                </div>
+                <div className="cp-field">
+                  <label style={{ fontSize: "13px" }}>Due Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    value={phaseDate}
+                    onChange={(e) => { setIsDirty(true); setPhaseDate(e.target.value); }}
+                    min={getNowDatetimeLocal()}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="cp-add-phase-btn"
+                onClick={handleAddPhase}
+                disabled={!phaseName.trim() || !phaseDate}
+              >
+                + Add Phase
+              </button>
+
+              {milestones.length > 0 && (
+                <div className="cp-phase-list">
+                  {milestones.map((m, index) => (
+                    <div key={index} className="cp-phase-item">
+                      <div className="cp-phase-item-dot" />
+                      <div className="cp-phase-item-info">
+                        <div className="cp-phase-item-title">{m.title}</div>
+                        <div className="cp-phase-item-date">{formatDateDisplay(m.due_date)}</div>
+                      </div>
+                      <button
+                        type="button"
+                        className="cp-phase-item-remove"
+                        onClick={() => { setPendingRemoveItem({ type: "phase", index, id: "" }); setRemoveConfirmOpen(true); }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {milestones.length > 0 && (
+                <div className="cp-deadline-summary">
+                  <span>Final Deadline:</span>
+                  <strong>{formatDateDisplay(milestones[milestones.length - 1].due_date)}</strong>
+                </div>
+              )}
+            </div>
+
             {/* DELIVERABLES */}
             <div className="cp-card">
               <div className="cp-card-top">
@@ -982,7 +1070,7 @@ const EditProjectModal = ({ project, onClose }) => {
                     type="text"
                     placeholder="Enter deliverable name"
                     value={deliverableProjInput.title}
-                    onChange={(e) => setDeliverableProjInput((prev) => ({ ...prev, title: e.target.value }))}
+                    onChange={(e) => { setIsDirty(true); setDeliverableProjInput((prev) => ({ ...prev, title: e.target.value })); }}
                     onKeyDown={handleDeliverableProjKeyDown}
                   />
                 </div>
@@ -991,7 +1079,7 @@ const EditProjectModal = ({ project, onClose }) => {
                   <input
                     type="datetime-local"
                     value={deliverableProjInput.due_datetime}
-                    onChange={(e) => setDeliverableProjInput((prev) => ({ ...prev, due_datetime: e.target.value }))}
+                    onChange={(e) => { setIsDirty(true); setDeliverableProjInput((prev) => ({ ...prev, due_datetime: e.target.value })); }}
                     min={getNowDatetimeLocal()}
                   />
                 </div>
@@ -1241,6 +1329,8 @@ const EditProjectModal = ({ project, onClose }) => {
         cancelText="Cancel"
         danger
       />
+
+      {ConfirmDialog}
     </>
   );
 };

@@ -176,7 +176,7 @@ function Header() {
         matchedUsers = userList
           .filter((u) => u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q))
           .slice(0, 5)
-          .map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, path: rolePath(`manage-users/user-profile/${u.id}`) }));
+          .map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, department: u.department, path: rolePath(`manage-users/user-profile/${u.id}`) }));
       }
     } catch {
       // API not available, show only page results
@@ -447,7 +447,10 @@ function Header() {
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                           <div>
                             <span>{item.name}</span>
-                            <small style={{ color: "#9ca3af", marginLeft: 6, fontSize: 11 }}>{item.email}</small>
+                            {item.role && <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 6 }}>({item.role.replace("_", " ")})</span>}
+                            {item.department && <span style={{ fontSize: 10, fontWeight: 500, color: "#4f46e5", background: "#eef2ff", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>{item.department}</span>}
+                            <br />
+                            <small style={{ color: "#9ca3af", fontSize: 11 }}>{item.email}</small>
                           </div>
                         </div>
                       ))}
@@ -555,6 +558,7 @@ function Header() {
               <h6>{user.name}</h6>
 
               <span>{normalizeRole(user.role)}</span>
+              {user.department && <span style={{ fontSize: 11, fontWeight: 500, color: "#4f46e5", background: "#eef2ff", padding: "1px 6px", borderRadius: 4, marginLeft: 6 }}>{user.department}</span>}
 
             </div>
 
@@ -585,6 +589,7 @@ function Header() {
                     <h4 className="hmc-name">{user.name}</h4>
                     <span className="hmc-email">{user.professional_email || ""}</span>
                     <span className="hmc-role-text">{normalizeRole(user.role)}</span>
+                    {user.department && <span style={{ fontSize: 11, fontWeight: 500, color: "#4f46e5", background: "#eef2ff", padding: "1px 6px", borderRadius: 4, marginLeft: 6 }}>{user.department}</span>}
                   </div>
                 </div>
 

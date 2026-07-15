@@ -11,6 +11,7 @@ import { FileText, Upload, X, Image } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { formatDateTimeShort } from "../utils/formatDateTime";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
@@ -28,7 +29,8 @@ import "./layout/CreateTaskModal.css";
  * @param {Function} onSubmitSuccess - Callback after successful submission, receives updated deliverable.
  */
 function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess }) {
-  useEscapeKey(isOpen, onClose);
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(isOpen, handleClose);
 
   const [comment, setComment] = useState("");
   const [files, setFiles] = useState([]);
@@ -53,15 +55,17 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
   /** Appends newly selected files to the existing file list */
   const handleFileSelect = (e) => {
     const selected = Array.from(e.target.files || []);
+    setIsDirty(true);
     setFiles((prev) => [...prev, ...selected]);
     e.target.value = "";
   };
 
-  const removeFile = (index) => setFiles((prev) => prev.filter((_, i) => i !== index));
+  const removeFile = (index) => { setIsDirty(true); setFiles((prev) => prev.filter((_, i) => i !== index)); };
 
   /** Handles file drops onto the dropzone area */
   const handleDrop = (e) => {
     e.preventDefault();
+    setIsDirty(true);
     setFiles((prev) => [...prev, ...Array.from(e.dataTransfer.files || [])]);
   };
 
@@ -134,7 +138,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
               className="sd-textarea"
               placeholder="Describe your submission..."
               value={comment}
-              onChange={(e) => setComment(e.target.value)}
+              onChange={(e) => { setIsDirty(true); setComment(e.target.value); }}
               rows={3}
             />
           </div>
@@ -181,12 +185,12 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
           </div>
 
           <SubmissionLinkSection
-            onLinksChange={setLinks}
+            onLinksChange={(val) => { setIsDirty(true); setLinks(val); }}
           />
         </div>
 
         <div className="sd-footer">
-          <button className="sd-cancel-btn" onClick={onClose} disabled={submitting}>Cancel</button>
+          <button className="sd-cancel-btn" onClick={handleClose} disabled={submitting}>Cancel</button>
           <LoadingButton className="sd-submit-btn" onClick={handleSubmit} loading={submitting}>
             {deliverable.status === "rework_required" ? "Resubmit Deliverable" : "Submit Deliverable"}
           </LoadingButton>
@@ -203,6 +207,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
       cancelText="Cancel"
       danger
     />
+    {ConfirmDialog}
     </>,
     document.body
   );

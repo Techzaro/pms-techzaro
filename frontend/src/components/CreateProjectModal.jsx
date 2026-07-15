@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
 import LoadingButton from "./LoadingButton";
@@ -35,7 +36,8 @@ const TEAM_ROLES = ["Solution", "Tech", "Developer"];
  * @param {Function} onClose - Callback to close the modal; receives boolean (true if created)
  */
 const CreateProjectModal = ({ onClose }) => {
-  useEscapeKey(true, onClose);
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(true, handleClose);
 
   const [loading, setLoading] = useState(false);
   const { submitting, run } = useSubmit();
@@ -180,6 +182,7 @@ const CreateProjectModal = ({ onClose }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    setIsDirty(true);
     setForm((prev) => {
       const next = { ...prev, [name]: value };
       if (name === "team_id") {
@@ -197,6 +200,7 @@ const CreateProjectModal = ({ onClose }) => {
   };
 
   const handleAssignedUsersChange = (ids) => {
+    setIsDirty(true);
     setForm((prev) => ({ ...prev, assigned_users: ids }));
     setDueDates((prev) => {
       const next = { ...prev };
@@ -208,18 +212,21 @@ const CreateProjectModal = ({ onClose }) => {
   };
 
   const handleDueDateChange = (userId, value) => {
+    setIsDirty(true);
     setDueDates((prev) => ({ ...prev, [userId]: value }));
   };
 
   const handleAddPhase = () => {
     if (!phaseName.trim() || !phaseDate) return;
     const formattedDt = toUTCIso(phaseDate);
+    setIsDirty(true);
     setMilestones((prev) => [...prev, { title: phaseName.trim(), due_date: formattedDt, status: "planned" }]);
     setPhaseName("");
     setPhaseDate("");
   };
 
   const handleRemovePhase = (index) => {
+    setIsDirty(true);
     setMilestones((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -227,9 +234,30 @@ const CreateProjectModal = ({ onClose }) => {
     if (e.key === "Enter") { e.preventDefault(); handleAddPhase(); }
   };
 
+  const handleAddGoal = () => {
+    if (!goalInput.trim()) return;
+    setIsDirty(true);
+    setGoalsList((prev) => [...prev, { text: goalInput.trim(), done: false, due_datetime: goalDateTime || null }]);
+    setGoalInput("");
+    setGoalDateTime("");
+  };
+
+  const handleRemoveGoal = (index) => {
+    setPendingGoalIndex(index);
+    setGoalDeleteOpen(true);
+  };
+
+  const confirmDeleteGoal = () => {
+    setIsDirty(true);
+    setGoalsList((prev) => prev.filter((_, i) => i !== pendingGoalIndex));
+    setGoalDeleteOpen(false);
+    setPendingGoalIndex(null);
+  };
+
   const handleAddCategory = () => {
     if (!categoryInput.trim()) return;
     const newCat = categoryInput.trim();
+    setIsDirty(true);
     if (!categoriesList.includes(newCat)) {
       setCategoriesList((prev) => [...prev, newCat]);
     }
@@ -243,6 +271,7 @@ const CreateProjectModal = ({ onClose }) => {
   };
 
   const handleRemoveCategory = (index) => {
+    setIsDirty(true);
     setCategoriesList((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -283,6 +312,24 @@ const CreateProjectModal = ({ onClose }) => {
     if (e.key === "Enter") { e.preventDefault(); handleAddCategory(); }
   };
 
+  const handleGoalKeyDown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); handleAddGoal(); }
+  };
+
+  const handleEditGoal = (index) => {
+    const goal = goalsList[index];
+    setEditGoalForm({ text: goal.text, due_datetime: goal.due_datetime || "" });
+    setEditingGoal(index);
+  };
+
+  const handleSaveGoalEdit = () => {
+    if (!editGoalForm.text.trim()) return;
+    setIsDirty(true);
+    setGoalsList((prev) => prev.map((g, i) => i === editingGoal ? { ...g, text: editGoalForm.text.trim(), due_datetime: editGoalForm.due_datetime || null } : g));
+    setEditingGoal(null);
+    setEditGoalForm({ text: "", due_datetime: "" });
+  };
+
   const formatDateDisplay = (dateStr) => {
     if (!dateStr) return "";
     return formatDateTime(dateStr).replace("\n", " ");
@@ -290,6 +337,7 @@ const CreateProjectModal = ({ onClose }) => {
 
   const handleFiles = (fileList) => {
     const newFiles = Array.from(fileList);
+    setIsDirty(true);
     setPendingFiles((prev) => [...prev, ...newFiles.map((f) => ({ file: f, name: f.name, size: f.size, renaming: false }))]);
   };
 
@@ -315,6 +363,7 @@ const CreateProjectModal = ({ onClose }) => {
   };
 
   const handleRemoveFile = (index) => {
+    setIsDirty(true);
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -323,12 +372,14 @@ const CreateProjectModal = ({ onClose }) => {
     let url = linkInput.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     const name = linkTitleInput.trim() || url;
+    setIsDirty(true);
     setLinks((prev) => [...prev, { url, name, renaming: false }]);
     setLinkInput("");
     setLinkTitleInput("");
   };
 
   const handleRemoveLink = (index) => {
+    setIsDirty(true);
     setLinks((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -340,11 +391,13 @@ const CreateProjectModal = ({ onClose }) => {
     if (!deliverableProjInput.title.trim()) return;
     const dt = deliverableProjInput.due_datetime;
     const dueDate = toUTCIso(dt);
+    setIsDirty(true);
     setDeliverablesProj((prev) => [...prev, { title: deliverableProjInput.title.trim(), due_date: dueDate }]);
     setDeliverableProjInput({ title: "", due_datetime: "" });
   };
 
   const handleRemoveDeliverableProj = (index) => {
+    setIsDirty(true);
     setDeliverablesProj((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -480,7 +533,7 @@ const CreateProjectModal = ({ onClose }) => {
             <LoadingButton className="cp-create-btn" onClick={handleSubmit} loading={submitting}>
               + Create Project
             </LoadingButton>
-            <button className="cp-close-btn" onClick={() => onClose(false)}>✕</button>
+            <button className="cp-close-btn" onClick={handleClose}>✕</button>
           </div>
         </div>
 
@@ -524,6 +577,10 @@ const CreateProjectModal = ({ onClose }) => {
                   <label style={{ fontSize: "13px" }}>Phase</label>
                   <input
                     type="text"
+                    placeholder="Enter a goal"
+                    value={goalInput}
+                    onChange={(e) => { setIsDirty(true); setGoalInput(e.target.value); }}
+                    onKeyDown={handleGoalKeyDown}
                     placeholder="Enter phase name"
                     value={phaseName}
                     onChange={(e) => {
@@ -555,6 +612,10 @@ const CreateProjectModal = ({ onClose }) => {
                   <label style={{ fontSize: "13px" }}>Due Date & Time</label>
                   <input
                     type="datetime-local"
+                    ref={goalDateTimeRef}
+                    value={goalDateTime}
+                    onChange={(e) => { setIsDirty(true); setGoalDateTime(e.target.value); }}
+                    className="cp-goals-datetime-input"
                     value={phaseDate}
                     onChange={(e) => setPhaseDate(e.target.value)}
                     min={getNowDatetimeLocal()}
@@ -624,6 +685,7 @@ const CreateProjectModal = ({ onClose }) => {
                             type="checkbox"
                             checked={form.team_roles.includes(role)}
                             onChange={() => {
+                              setIsDirty(true);
                               setForm((prev) => ({
                                 ...prev,
                                 team_roles: prev.team_roles.includes(role)
@@ -726,14 +788,14 @@ const CreateProjectModal = ({ onClose }) => {
                   type="text"
                   placeholder="Link title (e.g. Figma Design, Drive Folder)"
                   value={linkTitleInput}
-                  onChange={(e) => setLinkTitleInput(e.target.value)}
+                  onChange={(e) => { setIsDirty(true); setLinkTitleInput(e.target.value); }}
                 />
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
                     type="text"
                     placeholder="Paste link (Drive, Figma, Website, etc.)"
                     value={linkInput}
-                    onChange={(e) => setLinkInput(e.target.value)}
+                    onChange={(e) => { setIsDirty(true); setLinkInput(e.target.value); }}
                     onKeyDown={handleLinkKeyDown}
                     style={{ flex: 1 }}
                   />
@@ -824,7 +886,7 @@ const CreateProjectModal = ({ onClose }) => {
                     type="text"
                     placeholder="Enter custom category"
                     value={categoryInput}
-                    onChange={(e) => setCategoryInput(e.target.value)}
+                    onChange={(e) => { setIsDirty(true); setCategoryInput(e.target.value); }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") { e.preventDefault(); handleAddCategory(); }
                       if (e.key === "Escape") { setCategoryCustomMode(false); setCategoryInput(""); }
@@ -853,6 +915,7 @@ const CreateProjectModal = ({ onClose }) => {
                               checked={categoriesList.includes(cat)}
                               onChange={() => {
                                 if (!categoriesList.includes(cat)) {
+                                  setIsDirty(true);
                                   setCategoriesList((prev) => [...prev, cat]);
                                 }
                               }}
@@ -897,6 +960,94 @@ const CreateProjectModal = ({ onClose }) => {
               )}
             </div>
 
+            {/* DEADLINES - PHASE SYSTEM */}
+            <div className="cp-card">
+              <div className="cp-card-top">
+                <span>Deadlines</span>
+              </div>
+
+              <div className="cp-deadline-grid">
+                <div className="cp-field">
+                  <label style={{ fontSize: "13px" }}>Phase</label>
+                  <input
+                    type="text"
+                    placeholder="Enter phase name"
+                    value={phaseName}
+                    onChange={(e) => {
+                      setIsDirty(true);
+                      setPhaseName(e.target.value);
+                      setPhaseDropdownOpen(false);
+                    }}
+                    onFocus={() => { if (!phaseName) setPhaseDropdownOpen(true); }}
+                    onKeyDown={handlePhaseKeyDown}
+                  />
+                  {phaseDropdownOpen && (
+                    <div className="cp-dropdown-menu" style={{ position: "relative", top: "4px", boxShadow: "0 8px 24px rgba(0,0,0,0.1)" }}>
+                      {PRESET_PHASES.map((p) => (
+                        <div
+                          key={p}
+                          className="cp-dropdown-item"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setPhaseName(p);
+                            setPhaseDropdownOpen(false);
+                          }}
+                        >
+                          {p}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="cp-field">
+                  <label style={{ fontSize: "13px" }}>Due Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    value={phaseDate}
+                    onChange={(e) => { setIsDirty(true); setPhaseDate(e.target.value); }}
+                    min={getNowDatetimeLocal()}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="cp-add-phase-btn"
+                onClick={handleAddPhase}
+                disabled={!phaseName.trim() || !phaseDate}
+              >
+                + Add Phase
+              </button>
+
+              {milestones.length > 0 && (
+                <div className="cp-phase-list">
+                  {milestones.map((m, index) => (
+                    <div key={index} className="cp-phase-item">
+                      <div className="cp-phase-item-dot" />
+                      <div className="cp-phase-item-info">
+                        <div className="cp-phase-item-title">{m.title}</div>
+                        <div className="cp-phase-item-date">{formatDateDisplay(m.due_date)}</div>
+                      </div>
+                      <button
+                        type="button"
+                        className="cp-phase-item-remove"
+                        onClick={() => { setPendingRemoveItem({ type: "phase", index }); setRemoveConfirmOpen(true); }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {milestones.length > 0 && (
+                <div className="cp-deadline-summary">
+                  <span>Final Deadline:</span>
+                  <strong>{formatDateDisplay(milestones[milestones.length - 1].due_date)}</strong>
+                </div>
+              )}
+            </div>
+
             {/* DELIVERABLES */}
             <div className="cp-card">
               <div className="cp-card-top">
@@ -910,7 +1061,7 @@ const CreateProjectModal = ({ onClose }) => {
                     type="text"
                     placeholder="Enter deliverable name"
                     value={deliverableProjInput.title}
-                    onChange={(e) => setDeliverableProjInput((prev) => ({ ...prev, title: e.target.value }))}
+                    onChange={(e) => { setIsDirty(true); setDeliverableProjInput((prev) => ({ ...prev, title: e.target.value })); }}
                     onKeyDown={handleDeliverableProjKeyDown}
                   />
                 </div>
@@ -919,7 +1070,7 @@ const CreateProjectModal = ({ onClose }) => {
                   <input
                     type="datetime-local"
                     value={deliverableProjInput.due_datetime}
-                    onChange={(e) => setDeliverableProjInput((prev) => ({ ...prev, due_datetime: e.target.value }))}
+                    onChange={(e) => { setIsDirty(true); setDeliverableProjInput((prev) => ({ ...prev, due_datetime: e.target.value })); }}
                     min={getNowDatetimeLocal()}
                   />
                 </div>
@@ -1098,6 +1249,7 @@ const CreateProjectModal = ({ onClose }) => {
         </div>,
         document.body
       )}
+      {ConfirmDialog}
     </>
   );
 };

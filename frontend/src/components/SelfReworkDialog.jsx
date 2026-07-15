@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { notify } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "./LoadingButton";
@@ -24,7 +25,8 @@ import { toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
  * @param {Function} onReworkSuccess - Callback after successful rework, receives updated deliverable.
  */
 function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
-  useEscapeKey(isOpen, onClose);
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(isOpen, handleClose);
 
   const [comment, setComment] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -94,7 +96,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
               className="rd-textarea"
               placeholder="Explain what needs to be improved..."
               value={comment}
-              onChange={(e) => setComment(e.target.value)}
+              onChange={(e) => { setComment(e.target.value); setIsDirty(true); }}
               rows={3}
             />
           </div>
@@ -105,7 +107,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
               className="rd-textarea"
               placeholder="Provide specific instructions for resubmission..."
               value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
+              onChange={(e) => { setInstructions(e.target.value); setIsDirty(true); }}
               rows={3}
             />
           </div>
@@ -117,7 +119,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
               className="rd-input"
               value={newDeadline}
               min={new Date().toISOString().slice(0, 16)}
-              onChange={(e) => setNewDeadline(e.target.value)}
+              onChange={(e) => { setNewDeadline(e.target.value); setIsDirty(true); }}
             />
           </div>
 
@@ -142,17 +144,18 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
               type="file"
               ref={fileInputRef}
               style={{ display: "none" }}
-              onChange={(e) => { if (e.target.files.length) setFile(e.target.files[0]); }}
+              onChange={(e) => { if (e.target.files.length) { setFile(e.target.files[0]); setIsDirty(true); } }}
             />
           </div>
         </div>
 
         <div className="rd-footer">
-          <button className="rd-cancel-btn" onClick={onClose} disabled={submitting}>Cancel</button>
+          <button className="rd-cancel-btn" onClick={handleClose} disabled={submitting}>Cancel</button>
           <LoadingButton className="rd-submit-btn" onClick={handleSubmit} loading={submitting}>
             Confirm Rework
           </LoadingButton>
         </div>
+        {ConfirmDialog}
       </div>
     </div>,
     document.body

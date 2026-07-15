@@ -15,6 +15,7 @@ import UserSelectDropdown from "./UserSelectDropdown";
 import LoadingButton from "./LoadingButton";
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import "./Event.css";
 
 const TYPE_MAP = {
@@ -64,7 +65,8 @@ const COLOR_MAP = {
  * @param {Object|null} [editEvent=null] - Event object to edit (null for creation mode)
  */
 function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
-  useEscapeKey(isOpen, onClose);
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(isOpen, handleClose);
 
   const [step, setStep] = useState(1);
   const { submitting, run } = useSubmit();
@@ -167,6 +169,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
   ];
 
   const handleChange = (field, value) => {
+    setIsDirty(true);
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -174,7 +177,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
   const handleBack = () => setStep(1);
   const handleCancel = () => {
     setStep(1);
-    onClose();
+    handleClose();
   };
 
   /**
@@ -259,7 +262,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
 
         <div className="event-header">
           <h2>{isEditing ? "Edit Event" : "Add New Event"}</h2>
-          <button className="event-close" onClick={handleCancel}>×</button>
+          <button className="event-close" onClick={handleClose}>×</button>
         </div>
 
         {step === 1 && (
@@ -288,7 +291,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
             </div>
 
             <div className="event-footer">
-              <button className="btn-cancel" onClick={handleCancel}>Cancel</button>
+              <button className="btn-cancel" onClick={handleClose}>Cancel</button>
               <button className="btn-primary" onClick={handleNext}>Next</button>
             </div>
           </div>
@@ -411,6 +414,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
                 type="checkbox"
                 checked={isGlobal}
                 onChange={(e) => {
+                  setIsDirty(true);
                   setIsGlobal(e.target.checked);
                   if (e.target.checked) setAssignedUserIds([]);
                 }}
@@ -427,7 +431,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
                 <UserSelectDropdown
                   users={users}
                   selectedIds={assignedUserIds}
-                  onChange={setAssignedUserIds}
+                  onChange={(ids) => { setIsDirty(true); setAssignedUserIds(ids); }}
                   placeholder="Select users to assign"
                 />
               </div>
@@ -452,6 +456,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
         )}
 
       </div>
+      {ConfirmDialog}
     </div>
   , document.body);
 }
