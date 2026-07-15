@@ -265,16 +265,24 @@ class ReportController extends Controller
             )
             ->groupBy('projects.id', 'projects.title', 'projects.status', 'projects.start_date', 'projects.end_date')
             ->get()
-            ->map(fn ($p) => [
-                'id' => $p->project_id,
-                'name' => $p->project_title,
-                'status' => $p->project_status,
-                'start_date' => $p->start_date,
-                'end_date' => $p->end_date,
-                'total_tasks' => (int) $p->total_tasks,
-                'completed_tasks' => (int) $p->completed_tasks,
-                'progress' => $p->total_tasks > 0 ? (int) round(($p->completed_tasks / $p->total_tasks) * 100) : 0,
-            ]);
+            ->map(function ($p) {
+                $milestones = \App\Models\ProjectMilestone::where('project_id', $p->project_id)->orderBy('sort_order')->get();
+                $now = now();
+                $upcoming = $milestones->first(fn ($m) => $m->due_date >= $now && $m->status !== 'completed');
+                $last = $milestones->last();
+                $activeDeadline = $upcoming?->due_date ?? $last?->due_date ?? $p->end_date;
+
+                return [
+                    'id' => $p->project_id,
+                    'name' => $p->project_title,
+                    'status' => $p->project_status,
+                    'start_date' => $p->start_date,
+                    'end_date' => $activeDeadline,
+                    'total_tasks' => (int) $p->total_tasks,
+                    'completed_tasks' => (int) $p->completed_tasks,
+                    'progress' => $p->total_tasks > 0 ? (int) round(($p->completed_tasks / $p->total_tasks) * 100) : 0,
+                ];
+            });
 
         // Also include projects assigned directly as tasks (not via tasks table)
         $directProjectStatsQuery = Project::whereJsonContains('assigned_users', $user->id)
@@ -289,16 +297,24 @@ class ReportController extends Controller
             ->select('id', 'title', 'status', 'start_date', 'end_date')
             ->get()
             ->filter(fn ($p) => ! $projectStats->contains('id', $p->id))
-            ->map(fn ($p) => [
-                'id' => $p->id,
-                'name' => $p->title,
-                'status' => $p->status,
-                'start_date' => $p->start_date,
-                'end_date' => $p->end_date,
-                'total_tasks' => 0,
-                'completed_tasks' => 0,
-                'progress' => 0,
-            ]);
+            ->map(function ($p) {
+                $milestones = \App\Models\ProjectMilestone::where('project_id', $p->id)->orderBy('sort_order')->get();
+                $now = now();
+                $upcoming = $milestones->first(fn ($m) => $m->due_date >= $now && $m->status !== 'completed');
+                $last = $milestones->last();
+                $activeDeadline = $upcoming?->due_date ?? $last?->due_date ?? $p->end_date;
+
+                return [
+                    'id' => $p->id,
+                    'name' => $p->title,
+                    'status' => $p->status,
+                    'start_date' => $p->start_date,
+                    'end_date' => $activeDeadline,
+                    'total_tasks' => 0,
+                    'completed_tasks' => 0,
+                    'progress' => 0,
+                ];
+            });
 
         $allProjects = collect($projectStats)->merge(collect($directProjectStats))->values();
 

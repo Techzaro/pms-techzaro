@@ -8,6 +8,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Casts\AsStringKeyedJson;
 
 /**
  * Core project model that ties together all project-related entities.
@@ -20,8 +21,6 @@ class Project extends Model
     protected $fillable = [
         'title',
         'description',
-        'goals',
-        'goals_checklist',
         'sheets_documents',
         'website_name',
         'website_link',
@@ -32,6 +31,7 @@ class Project extends Model
         'sidebar_notes',
         'team_id',
         'assigned_users',
+        'user_due_dates',
         'status',
         'start_date',
         'end_date',
@@ -54,7 +54,7 @@ class Project extends Model
 
     protected $casts = [
         'assigned_users' => 'array',
-        'goals_checklist' => 'array',
+        'user_due_dates' => AsStringKeyedJson::class,
         'start_date' => 'datetime:Y-m-d\TH:i:s',
         'end_date' => 'datetime:Y-m-d\TH:i:s',
         'budget' => 'decimal:2',
@@ -174,6 +174,12 @@ class Project extends Model
         return $this->hasMany(ProjectChange::class)->where('is_viewed', false);
     }
 
+    /** Per-user submissions for this project. */
+    public function userSubmissions()
+    {
+        return $this->hasMany(ProjectUserSubmission::class)->latest();
+    }
+
     /**
      * Resolve assigned_users JSON array to User models.
      */
@@ -184,5 +190,38 @@ class Project extends Model
             return [];
         }
         return User::whereIn('id', $ids)->select('id', 'name', 'role')->get();
+    }
+
+    /**
+     * Get the active deadline for this project.
+     * Returns the nearest upcoming milestone due_date.
+     * Falls back to end_date if no milestones exist.
+     */
+    public function getActiveDeadlineAttribute()
+    {
+        $now = now();
+
+        // Find the nearest upcoming milestone (not completed, due_date >= now)
+        $upcoming = $this->milestones()
+            ->where('due_date', '>=', $now)
+            ->where('status', '!=', 'completed')
+            ->orderBy('due_date', 'asc')
+            ->first();
+
+        if ($upcoming) {
+            return $upcoming->due_date;
+        }
+
+        // All milestones completed/passed - use the last milestone's due_date
+        $lastMilestone = $this->milestones()
+            ->orderBy('sort_order', 'desc')
+            ->first();
+
+        if ($lastMilestone && $lastMilestone->due_date) {
+            return $lastMilestone->due_date;
+        }
+
+        // Fallback to end_date if no milestones at all
+        return $this->end_date;
     }
 }

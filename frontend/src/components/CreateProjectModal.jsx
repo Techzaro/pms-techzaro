@@ -2,7 +2,7 @@
  * CreateProjectModal.jsx
  * Full-featured modal form for creating a new project.
  * Includes fields for title, description, category, team assignment, milestones,
- * goals, deliverables, attachments (files & links), client info, and priority.
+ * deliverables, attachments (files & links), client info, and priority.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -62,8 +62,6 @@ const CreateProjectModal = ({ onClose }) => {
   const [categoryInput, setCategoryInput] = useState("");
   const [catDeleteOpen, setCatDeleteOpen] = useState(false);
   const [pendingCatDelete, setPendingCatDelete] = useState("");
-  const [goalDeleteOpen, setGoalDeleteOpen] = useState(false);
-  const [pendingGoalIndex, setPendingGoalIndex] = useState(null);
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [pendingRemoveItem, setPendingRemoveItem] = useState({ type: "", index: -1 });
   const [deletedCategories, setDeletedCategories] = useState(() => {
@@ -82,13 +80,6 @@ const CreateProjectModal = ({ onClose }) => {
   const [phaseDate, setPhaseDate] = useState("");
   const [phaseDropdownOpen, setPhaseDropdownOpen] = useState(false);
   const phaseDropdownRef = useRef(null);
-
-  const [goalsList, setGoalsList] = useState([]);
-  const [goalInput, setGoalInput] = useState("");
-  const [goalDateTime, setGoalDateTime] = useState("");
-  const goalDateTimeRef = useRef(null);
-  const [editingGoal, setEditingGoal] = useState(null);
-  const [editGoalForm, setEditGoalForm] = useState({ text: "", due_datetime: "" });
 
   const [pendingFiles, setPendingFiles] = useState([]);
   const [links, setLinks] = useState([]);
@@ -474,22 +465,16 @@ const CreateProjectModal = ({ onClose }) => {
       try {
         const token = authToken();
 
-        // Use the last milestone's due date as the project end date
-        const lastMilestone = milestones.length > 0 ? milestones[milestones.length - 1] : null;
-        const computedEndDate = lastMilestone ? lastMilestone.due_date : null;
-
         // Build the request payload from form state
         const body = {
           title: form.title.trim(),
           description: form.description || null,
           category: categoriesList.length > 0 ? JSON.stringify(categoriesList) : null,
-          goals_checklist: goalsList.length > 0 ? goalsList : [],
           team_id: form.team_id ? parseInt(form.team_id) : null,
           assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
           user_due_dates: Object.keys(dueDates).length > 0 ? dueDates : undefined,
           priority: form.priority,
           status: form.status,
-          end_date: computedEndDate,
           client_name: form.client_name || null,
           budget: form.budget ? parseFloat(form.budget) : null,
           milestones: milestones.length > 0 ? milestones : [],
@@ -581,52 +566,100 @@ const CreateProjectModal = ({ onClose }) => {
               ></textarea>
             </div>
 
-            <div className="cp-field">
-              <label>Project Goals</label>
-                <div className="cp-goals-input-row">
+            {/* PROJECT MILESTONES */}
+            <div className="cp-card">
+              <div className="cp-card-top">
+                <span>Project Milestones</span>
+              </div>
+
+              <div className="cp-deadline-grid">
+                <div className="cp-field">
+                  <label style={{ fontSize: "13px" }}>Phase</label>
                   <input
                     type="text"
                     placeholder="Enter a goal"
                     value={goalInput}
                     onChange={(e) => { setIsDirty(true); setGoalInput(e.target.value); }}
                     onKeyDown={handleGoalKeyDown}
+                    placeholder="Enter phase name"
+                    value={phaseName}
+                    onChange={(e) => {
+                      setPhaseName(e.target.value);
+                      setPhaseDropdownOpen(false);
+                    }}
+                    onFocus={() => { if (!phaseName) setPhaseDropdownOpen(true); }}
+                    onKeyDown={handlePhaseKeyDown}
                   />
+                  {phaseDropdownOpen && (
+                    <div className="cp-dropdown-menu" style={{ position: "relative", top: "4px", boxShadow: "0 8px 24px rgba(0,0,0,0.1)" }}>
+                      {PRESET_PHASES.map((p) => (
+                        <div
+                          key={p}
+                          className="cp-dropdown-item"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setPhaseName(p);
+                            setPhaseDropdownOpen(false);
+                          }}
+                        >
+                          {p}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="cp-field">
+                  <label style={{ fontSize: "13px" }}>Due Date & Time</label>
                   <input
                     type="datetime-local"
                     ref={goalDateTimeRef}
                     value={goalDateTime}
                     onChange={(e) => { setIsDirty(true); setGoalDateTime(e.target.value); }}
                     className="cp-goals-datetime-input"
+                    value={phaseDate}
+                    onChange={(e) => setPhaseDate(e.target.value)}
+                    min={getNowDatetimeLocal()}
                   />
-                  <button
-                    type="button"
-                    className="cp-goals-add-btn"
-                    onClick={handleAddGoal}
-                    disabled={!goalInput.trim()}
-                  >
-                    Add
-                  </button>
                 </div>
-
-                {goalsList.length > 0 && (
-                  <div className="cp-goals-list">
-                    {goalsList.map((g, index) => (
-                      <div key={index} className="cp-goals-item">
-                        <span className="cp-goals-item-text">{g.text}</span>
-                        {g.due_datetime && (
-                          <span className="cp-goals-item-datetime">
-                            📅 {new Date(g.due_datetime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} {new Date(g.due_datetime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                        )}
-                        <div className="cp-attachment-actions">
-                          <button type="button" className="cp-action-btn cp-action-btn-edit" title="Edit Goal" onClick={() => handleEditGoal(index)}>✎</button>
-                          <button type="button" className="cp-action-btn cp-action-btn-delete" title="Delete Goal" onClick={() => handleRemoveGoal(index)}>✕</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
+
+              <button
+                type="button"
+                className="cp-add-phase-btn"
+                onClick={handleAddPhase}
+                disabled={!phaseName.trim() || !phaseDate}
+              >
+                + Add Phase
+              </button>
+
+              {milestones.length > 0 && (
+                <div className="cp-phase-list">
+                  {milestones.map((m, index) => (
+                    <div key={index} className="cp-phase-item">
+                      <div className="cp-phase-item-dot" />
+                      <div className="cp-phase-item-info">
+                        <div className="cp-phase-item-title">{m.title}</div>
+                        <div className="cp-phase-item-date">{formatDateDisplay(m.due_date)}</div>
+                      </div>
+                      <button
+                        type="button"
+                        className="cp-phase-item-remove"
+                        onClick={() => { setPendingRemoveItem({ type: "phase", index }); setRemoveConfirmOpen(true); }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {milestones.length > 0 && (
+                <div className="cp-deadline-summary">
+                  <span>Final Deadline:</span>
+                  <strong>{formatDateDisplay(milestones[milestones.length - 1].due_date)}</strong>
+                </div>
+              )}
+            </div>
 
             <div className="cp-grid-2">
               <div className="cp-field">
@@ -1112,16 +1145,6 @@ const CreateProjectModal = ({ onClose }) => {
         danger
       />
       <ConfirmModal
-        isOpen={goalDeleteOpen}
-        onClose={() => { setGoalDeleteOpen(false); setPendingGoalIndex(null); }}
-        onConfirm={confirmDeleteGoal}
-        title="Delete Goal"
-        message="Are you sure you want to delete this goal? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
-        danger
-      />
-      <ConfirmModal
         isOpen={removeConfirmOpen}
         onClose={() => { setRemoveConfirmOpen(false); setPendingRemoveItem({ type: "", index: -1 }); }}
         onConfirm={confirmRemoveItem}
@@ -1131,39 +1154,6 @@ const CreateProjectModal = ({ onClose }) => {
         cancelText="Cancel"
         danger
       />
-
-      {/* Edit Goal Modal */}
-      {editingGoal !== null && createPortal(
-        <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditingGoal(null); setEditGoalForm({ text: "", due_datetime: "" }); }}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 400, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>Edit Goal</h3>
-            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Update the goal text and due date below.</p>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Goal</label>
-              <input
-                type="text"
-                value={editGoalForm.text}
-                onChange={(e) => setEditGoalForm((p) => ({ ...p, text: e.target.value }))}
-                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
-              />
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Due Date & Time (optional)</label>
-              <input
-                type="datetime-local"
-                value={editGoalForm.due_datetime}
-                onChange={(e) => setEditGoalForm((p) => ({ ...p, due_datetime: e.target.value }))}
-                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
-              />
-            </div>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button type="button" onClick={() => { setEditingGoal(null); setEditGoalForm({ text: "", due_datetime: "" }); }} style={{ padding: "10px 20px", border: "1px solid #d1d5db", borderRadius: 8, background: "#fff", color: "#374151", fontSize: 14, fontWeight: 600, cursor: "pointer" }} onMouseEnter={(e) => e.currentTarget.style.background = "#f3f4f6"} onMouseLeave={(e) => e.currentTarget.style.background = "#fff"}>Cancel</button>
-              <button type="button" onClick={handleSaveGoalEdit} disabled={!editGoalForm.text.trim()} style={{ padding: "10px 20px", border: "none", borderRadius: 8, background: "#2563eb", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: editGoalForm.text.trim() ? 1 : 0.5 }} onMouseEnter={(e) => { if (editGoalForm.text.trim()) e.currentTarget.style.background = "#1d4ed8"; }} onMouseLeave={(e) => { if (editGoalForm.text.trim()) e.currentTarget.style.background = "#2563eb"; }}>Save</button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
 
       {/* Edit Link Modal */}
       {editingLink && createPortal(
