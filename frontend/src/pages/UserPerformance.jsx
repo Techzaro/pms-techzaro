@@ -3,7 +3,7 @@
  *
  * Shows detailed performance metrics for a single user (or the current user
  * when the route uses "me").  Displays summary cards, task status breakdown
- * with bar chart, a weekly workload chart and a sortable task/project table
+ * with bar chart, a weekly workload chart and a sortable task table
  * with search and status filtering.  Admins/managers can export a PDF report
  * and assign new tasks from this page.
  */
@@ -192,7 +192,7 @@ function UserPerformance() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  /** Fetch tasks/projects for the target user from the API. */
+  /** Fetch tasks for the target user from the API. */
   const fetchTasks = useCallback(() => {
     if (!userId) return;
     setTasksLoading(true);
@@ -237,14 +237,6 @@ function UserPerformance() {
       return true;
     }
     if (statusFilter) {
-      if (item.item_type === "project") {
-        if (statusFilter === "pending") {
-          return pendingStatuses.includes(item.status);
-        }
-        const workflowStatuses = ["submitted", "approved", "rejected", "reopened"];
-        const displayStatus = workflowStatuses.includes(item.status) ? item.status : "pending";
-        return displayStatus === statusFilter;
-      }
       if (statusFilter === "pending") {
         return pendingStatuses.includes(item.status);
       }
@@ -253,24 +245,7 @@ function UserPerformance() {
     return true;
   });
 
-  const taskIdList = filteredItems.filter((i) => i.item_type !== "project").map((i) => i.id);
-
-  const getInitials = (name) => {
-    if (!name) return "??";
-    return name.split(" ").map((w) => w[0]).join("").substring(0, 2).toUpperCase();
-  };
-
-  const getRandomColors = (id) => {
-    const colors = [
-      { bg: "#E0E7FF", text: "#4338CA" },
-      { bg: "#FEE2E2", text: "#B91C1C" },
-      { bg: "#DCFCE7", text: "#22C55E" },
-      { bg: "#FEF3C7", text: "#D97706" },
-      { bg: "#EDE9FE", text: "#7C3AED" },
-      { bg: "#FCE7F3", text: "#DB2777" },
-    ];
-    return colors[id % colors.length];
-  };
+  const taskIdList = filteredItems.map((i) => i.id);
 
   const formatDate = (dateStr) => formatDateTime(dateStr);
 
@@ -283,13 +258,6 @@ function UserPerformance() {
       rejected: "Rejected",
     };
     return map[status] || status;
-  };
-
-  const calculateProgress = (item) => {
-    const total = Number(item.total_tasks ?? 0) || 0;
-    const completed = Number(item.completed_tasks ?? 0) || 0;
-    if (!total) return 0;
-    return Math.round((completed / total) * 100) || 0;
   };
 
   return (
@@ -385,17 +353,14 @@ function UserPerformance() {
           <div style={{ marginTop: "32px" }}>
             <div className="task-text">
               <h3>Tasks</h3>
-              <p>All tasks and projects assigned to {isOwnPage ? "me" : (userInfo.name || "this user")}</p>
+              <p>All tasks assigned to {isOwnPage ? "me" : (userInfo.name || "this user")}</p>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "6px", flexWrap: "wrap", gap: "8px" }}>
                 <div className="task-count-badge" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                   <span style={{ background: "#dedfe0", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
                     Total: {totalCount} items
                   </span>
                   <span style={{ background: "#d6d6d6", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-                    Tasks: {filteredItems.filter(i => i.item_type !== "project").length}
-                  </span>
-                  <span style={{ background: "#d4d4d4", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-                    Projects: {filteredItems.filter(i => i.item_type === "project").length}
+                    Tasks: {filteredItems.length}
                   </span>
                 </div>
                 <div className="all-time">
@@ -436,7 +401,7 @@ function UserPerformance() {
             <IoSearchOutline fontSize={"20px"} />
             <input
               type="text"
-              placeholder="Search by task or project name"
+              placeholder="Search by task name"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -445,7 +410,6 @@ function UserPerformance() {
           <div className="container">
             <div className="table-header-compact">
               <div className="task-name-column">Task Name</div>
-              <div>Type</div>
               <div className="status-column">Status</div>
               <div>Progress</div>
               <div className="priority-column">Priority</div>
@@ -460,81 +424,12 @@ function UserPerformance() {
             ) : (
               <div className="sortable-table-container">
                 {filteredItems.map((item, idx) => {
-                  const isProject = item.item_type === "project";
-                  const colors = getRandomColors(item.id);
-                  const uniqueKey = `${item.item_type}-${item.id}-${idx}`;
+                  const uniqueKey = `task-${item.id}-${idx}`;
 
-                  if (isProject) {
-                    return (
-                      <div className="taskby-row-compact" key={uniqueKey}>
-                        <div className="col-task-name">
-                          <div className="task-title">{item.title}</div>
-                        </div>
-
-                        <div className="col-type">
-                          <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5" }}>Project</span>
-                        </div>
-
-                        <div className="col-status">
-                          <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
-                            <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                            {["submitted", "approved", "rejected", "reopened"].includes(item.status) ? formatStatus(item.status) : "Pending"}
-                          </span>
-                        </div>
-
-                        <div className="col-progress">
-                          <div style={{ display: "flex", justifyContent: "flex-start", alignItems: "center", marginBottom: "4px" }}>
-                            <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
-                              {calculateProgress(item)}%
-                            </span>
-                          </div>
-                          <div className="progress-bar-track">
-                            <div className="progress-bar-fill" style={{ width: `${calculateProgress(item)}%` }}></div>
-                          </div>
-                          <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
-                            {item.completed_tasks || 0}/{item.total_tasks || 0} tasks
-                          </div>
-                        </div>
-
-                        <div className="col-priority">
-                          <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
-                            <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
-                            {item.priority}
-                          </span>
-                        </div>
-
-                        <div className="col-due-date">
-                          <div className="date-box">
-                            <div>{formatDate(item.start_date)}</div>
-                            <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
-                          </div>
-                        </div>
-
-                        <div className="col-action">
-                          <div className="action-btns">
-                            <button
-                              className="action-icon-btn action-view"
-                              title="View"
-                              onClick={() => navigate(rolePath(`projects/project-details/${item.id}`))}
-                            >
-                              <IoEyeOutline />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  const assignees = item.assignees || [];
-                  const primaryAssignee = assignees[0];
                   return (
                     <div className="taskby-row-compact" key={uniqueKey}>
                       <div className="col-task-name">
                         <div className="task-title">{item.title}</div>
-                      </div>
-
-                      <div className="col-type">
-                        <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a" }}>Task</span>
                       </div>
 
                       <div className="col-status">
@@ -589,8 +484,7 @@ function UserPerformance() {
               <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
             ) : (
               filteredItems.map((item, idx) => {
-                const isProject = item.item_type === "project";
-                const uniqueKey = `card-${item.item_type}-${item.id}-${idx}`;
+                const uniqueKey = `card-task-${item.id}-${idx}`;
 
                 return (
                   <div className="up-task-card" key={uniqueKey}>
@@ -598,10 +492,10 @@ function UserPerformance() {
                       <div className="up-task-card-title">{item.title}</div>
                       <div className="up-task-card-type">
                         <span className="badge" style={{
-                          background: isProject ? "#eef2ff" : "#f0fdf4",
-                          color: isProject ? "#4f46e5" : "#16a34a"
+                          background: "#f0fdf4",
+                          color: "#16a34a"
                         }}>
-                          {isProject ? "Project" : "Task"}
+                          Task
                         </span>
                       </div>
                     </div>
@@ -613,9 +507,7 @@ function UserPerformance() {
                           background: STATUS_COLORS[item.status] || "#F3F4F6",
                           color: STATUS_TEXT_COLORS[item.status] || "#374151"
                         }}>
-                          {["submitted", "approved", "rejected", "reopened"].includes(item.status)
-                            ? formatStatus(item.status)
-                            : isProject ? "Pending" : formatStatus(item.status)}
+                          {formatStatus(item.status)}
                         </span>
                       </div>
                       <div className="up-task-card-detail">
@@ -632,17 +524,15 @@ function UserPerformance() {
                     <div className="up-task-card-progress">
                       <div className="up-task-card-progress-info">
                         <span className="up-task-card-progress-text">
-                          {isProject ? calculateProgress(item) : (item.deliverables_progress || 0)}%
+                          {item.deliverables_progress || 0}%
                         </span>
                         <span className="up-task-card-progress-detail">
-                          {isProject
-                            ? `${item.completed_tasks || 0}/${item.total_tasks || 0} tasks`
-                            : `${item.approved_deliverables || 0}/${item.total_deliverables || 0} deliverables`}
+                          {item.approved_deliverables || 0}/{item.total_deliverables || 0} deliverables
                         </span>
                       </div>
                       <div className="progress-bar-track">
                         <div className="progress-bar-fill" style={{
-                          width: `${isProject ? calculateProgress(item) : (item.deliverables_progress || 0)}%`
+                          width: `${item.deliverables_progress || 0}%`
                         }}></div>
                       </div>
                     </div>
@@ -651,10 +541,8 @@ function UserPerformance() {
                       <button
                         className="action-icon-btn action-view"
                         title="View"
-                        onClick={() => navigate(rolePath(isProject
-                          ? `projects/project-details/${item.id}`
-                          : `tasks/task-details/${item.id}`), {
-                          state: isProject ? undefined : { taskIds: taskIdList, from: 'user-performance' }
+                        onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), {
+                          state: { taskIds: taskIdList, from: 'user-performance' }
                         })}
                       >
                         <IoEyeOutline /> View

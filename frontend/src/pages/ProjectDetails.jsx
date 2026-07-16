@@ -25,7 +25,6 @@ import {
   Monitor,
   Pencil,
   Plus,
-  Send,
   Shield,
   Tag,
   Trash2,
@@ -44,8 +43,6 @@ import AssignerViewModal from "../components/AssignerViewModal";
 import AddProjectFileModal from "../components/AddProjectFileModal";
 import AddAccessModal from "../components/AddAccessModal";
 import ConfirmModal from "../components/ConfirmModal";
-import SubmitProjectModal from "../components/SubmitProjectModal";
-import ProjectSubmissionPanel from "../components/ProjectSubmissionPanel";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import { formatDateTimeShort, formatDateTime, formatDateTimeInline } from "../utils/formatDateTime";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
@@ -301,9 +298,7 @@ function ProjectDetails() {
   const [submitModal, setSubmitModal] = useState({ open: false, deliverable: null });
   const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
   const [assignerModal, setAssignerModal] = useState({ open: false, deliverable: null });
-  const [submitProjectModal, setSubmitProjectModal] = useState({ open: false, project: null });
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
-  const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null });
   const [fileSearch, setFileSearch] = useState("");
   const [taskSearch, setTaskSearch] = useState("");
   const [deliverableSearch, setDeliverableSearch] = useState("");
@@ -318,8 +313,6 @@ function ProjectDetails() {
   const [deleteCredentialConfirmOpen, setDeleteCredentialConfirmOpen] = useState(false);
   const [pendingDeleteCredential, setPendingDeleteCredential] = useState(null);
   const [showAddFileModal, setShowAddFileModal] = useState(false);
-  const [reopenDialog, setReopenDialog] = useState(false);
-  const [acting, setActing] = useState(false);
   const [orderedTasks, setOrderedTasks] = useState([]);
   const [orderedDeliverables, setOrderedDeliverables] = useState([]);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
@@ -482,12 +475,6 @@ function ProjectDetails() {
     });
     publish('deliverable:updated', updatedDeliverable);
     publish('data:changed', { type: 'deliverable', action: 'updated' });
-  };
-
-  const handleProjectActionSuccess = (updatedProject) => {
-    setProject((prev) => ({ ...prev, ...updatedProject }));
-    publish('project:updated', updatedProject);
-    publish('data:changed', { type: 'project', action: 'updated' });
   };
 
   const [loadError, setLoadError] = useState(null);
@@ -695,7 +682,6 @@ function ProjectDetails() {
   const isAdminOrManager = project.is_admin_or_manager;
 
   const canEdit = project.can_edit;
-  const canSubmitProject = tasks.length === 0 || tasks.every((t) => t.status === "approved");
 
   const openVisibility = async () => {
     setVisibilityOpen(true);
@@ -999,25 +985,6 @@ function ProjectDetails() {
                 </div>
               </li>
             )}
-            {(isCreator || isAdminOrManager) && project.user_due_dates && Object.keys(project.user_due_dates).length > 0 && (
-              <li>
-                <span className="pd-meta-rows__ic">
-                  <CalendarDays size={18} />
-                </span>
-                <div style={{ width: "100%" }}>
-                  <span className="pd-meta-rows__label">Member Deadlines</span>
-                  {Object.entries(project.user_due_dates).map(([uid, dt]) => {
-                    const member = (project.members || []).find((m) => m.id === Number(uid));
-                    return (
-                      <div key={uid} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, padding: "3px 0", borderBottom: "1px solid #f3f4f6" }}>
-                        <span style={{ color: "#374151" }}>{member?.name || `User #${uid}`}</span>
-                        <span style={{ color: "#6366f1", fontWeight: 500, fontSize: 12 }}>{formatDateTimeShort(dt)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </li>
-            )}
           </ul>
         </aside>
       </div>
@@ -1050,19 +1017,6 @@ function ProjectDetails() {
                       <button type="button" className="pd-btn-tx pd-btn-tx--outline" onClick={openVisibility}>
                         <IoEyeOutline size={16} />
                         Show To
-                      </button>
-                    )}
-                    {isAssigned && ["pending", "reopened", "Planned", "Planning", "in_progress", "In Progress", "In-progress"].includes(project?.status) && (
-                      <button
-                        type="button"
-                        className="pd-btn-tx pd-btn-tx--primary"
-                        disabled={!canSubmitProject}
-                        title={!canSubmitProject ? "All tasks and deliverables must be approved first" : ""}
-                        onClick={() => setSubmitProjectModal({ open: true, project })}
-                        style={!canSubmitProject ? { opacity: 0.5, cursor: "not-allowed" } : {}}
-                      >
-                        <Send size={16} />
-                        {project.status === "reopened" ? "Resubmit Project" : "Submit Project"}
                       </button>
                     )}
                     {canEdit && (
@@ -1115,159 +1069,6 @@ function ProjectDetails() {
                 </div>
               </div>
             </div>
-
-            {isAssigned && project.user_due_dates && project.user_due_dates[currentUser?.id] && (
-              <div className="pd-card-flat" style={{ marginBottom: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px" }}>
-                  <CalendarDays size={16} style={{ color: "#6366f1", flexShrink: 0 }} />
-                  <div>
-                    <span style={{ fontSize: 12, color: "#6b7280" }}>Your Due Date</span>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "#6366f1" }}>
-                      {formatDateTime(project.user_due_dates[currentUser.id])}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {(project.status === "submitted" || project.status === "reopened" || (["approved", "rejected"].includes(project.status) && project.latestSubmission)) && (
-              <ProjectSubmissionPanel
-                project={project}
-                isCreator={isCreator}
-                isAssignee={isAssigned}
-                onProjectUpdate={handleProjectActionSuccess}
-                onSubmitClick={() => setSubmitProjectModal({ open: true, project })}
-                confirmDialog={confirmDialog}
-                setConfirmDialog={setConfirmDialog}
-                reopenDialog={reopenDialog}
-                setReopenDialog={setReopenDialog}
-                acting={acting}
-                setActing={setActing}
-              />
-            )}
-
-            {(isCreator || isAdminOrManager) && (project.user_submissions || []).length > 0 && (
-              <div className="pd-card-flat" style={{ marginBottom: 16 }}>
-                <div className="pd-card-flat__head">
-                  <h2 className="pd-block-title pd-block-title--inline">Submission Timeline</h2>
-                </div>
-                <div style={{ padding: "0 0 4px" }}>
-                  {(project.user_submissions || []).map((sub) => (
-                    <div key={sub.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px", borderBottom: "1px solid #f3f4f6" }}>
-                      <div className="pd-avatar" aria-hidden style={{ background: sub.status === "approved" ? "#22c55e" : sub.status === "rejected" ? "#ef4444" : "#f59e0b", flexShrink: 0 }}>
-                        {sub.user?.name?.charAt(0)?.toUpperCase() || "?"}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                          <span style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>{sub.user?.name || "Unknown"}</span>
-                          <span style={{ fontSize: 12, color: "#6b7280" }}>({sub.user?.role?.replace("_", " ") || "—"})</span>
-                          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, fontWeight: 500, background: sub.status === "approved" ? "#dcfce7" : sub.status === "rejected" ? "#fee2e2" : sub.status === "submitted" ? "#dbeafe" : "#f3f4f6", color: sub.status === "approved" ? "#166534" : sub.status === "rejected" ? "#991b1b" : sub.status === "submitted" ? "#1e40af" : "#6b7280" }}>
-                            {sub.status === "submitted" ? "Pending Review" : sub.status.charAt(0).toUpperCase() + sub.status.slice(1)}
-                          </span>
-                        </div>
-                        {sub.comment && <p style={{ margin: "4px 0 0", fontSize: 13, color: "#374151" }}>{sub.comment}</p>}
-
-                        {(sub.file_name || sub.file_path) && (
-                          <div style={{ margin: "6px 0 0", display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                            <span style={{ color: "#6b7280" }}>File:</span>
-                            <a
-                              href={sub.file_path ? `${API_BASE}/storage/${sub.file_path}` : "#"}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{ color: "#6366f1", fontWeight: 500, textDecoration: "underline" }}
-                            >
-                              {sub.file_name || "Download"}
-                            </a>
-                          </div>
-                        )}
-
-                        {sub.links && sub.links.length > 0 && (
-                          <div style={{ margin: "6px 0 0", fontSize: 13 }}>
-                            <span style={{ color: "#6b7280" }}>Links:</span>
-                            {sub.links.map((link, i) => (
-                              <a
-                                key={i}
-                                href={link.startsWith("http") ? link : `https://${link}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{ display: "block", color: "#6366f1", fontWeight: 500, textDecoration: "underline", marginTop: 2 }}
-                              >
-                                {link}
-                              </a>
-                            ))}
-                          </div>
-                        )}
-
-                        {sub.review_comment && <p style={{ margin: "6px 0 0", fontSize: 13, color: sub.status === "rejected" ? "#991b1b" : "#166534", fontStyle: "italic" }}>Review: {sub.review_comment}</p>}
-                        <div style={{ display: "flex", gap: 16, marginTop: 4, fontSize: 12, color: "#9ca3af" }}>
-                          {sub.submitted_at && <span>Submitted: {new Date(sub.submitted_at).toLocaleString()}</span>}
-                          {sub.reviewed_at && <span>Reviewed: {new Date(sub.reviewed_at).toLocaleString()} by {sub.reviewer?.name || "—"}</span>}
-                        </div>
-                        {sub.status === "submitted" && (isCreator || isAdminOrManager) && (
-                          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                            <button
-                              onClick={async () => {
-                                try {
-                                  const token = authToken();
-                                  const res = await fetch(`${API_URL}/projects/${project.id}/user-submissions/${sub.id}/approve`, {
-                                    method: "POST",
-                                    headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-                                  });
-                                  const data = await res.json();
-                                  if (!res.ok) {
-                                    notifyRef.current?.error?.(data.message || "Failed to approve");
-                                    await loadProject();
-                                    return;
-                                  }
-                                  showSuccessMessage("Submission", "approved");
-                                  await loadProject();
-                                } catch (err) {
-                                  console.error(err);
-                                  notifyRef.current?.error?.("Something went wrong");
-                                  await loadProject();
-                                }
-                              }}
-                              style={{ padding: "6px 16px", borderRadius: 8, border: "none", background: "#22c55e", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={async () => {
-                                const comment = prompt("Rejection reason (optional):");
-                                if (comment === null) return;
-                                try {
-                                  const token = authToken();
-                                  const res = await fetch(`${API_URL}/projects/${project.id}/user-submissions/${sub.id}/reject`, {
-                                    method: "POST",
-                                    headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-                                    body: JSON.stringify({ comment: comment || "" }),
-                                  });
-                                  const data = await res.json();
-                                  if (!res.ok) {
-                                    notifyRef.current?.error?.(data.message || "Failed to reject");
-                                    await loadProject();
-                                    return;
-                                  }
-                                  showSuccessMessage("Submission", "rejected & reopened");
-                                  await loadProject();
-                                } catch (err) {
-                                  console.error(err);
-                                  notifyRef.current?.error?.("Something went wrong");
-                                  await loadProject();
-                                }
-                              }}
-                              style={{ padding: "6px 16px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
-                            >
-                              Reject & Reopen
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div className="pd-focus">
               <div className="pd-focus__main">
@@ -1604,12 +1405,6 @@ function ProjectDetails() {
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div className="pd-member-name">{m.name}</div>
                                   <div className="pd-member-role">{m.role || "Member"}</div>
-                                  {project.user_due_dates && project.user_due_dates[m.id] && (
-                                    <div style={{ fontSize: 12, color: "#6366f1", marginTop: 2, display: "flex", alignItems: "center", gap: 4 }}>
-                                      <CalendarDays size={12} />
-                                      Due: {formatDateTime(project.user_due_dates[m.id])}
-                                    </div>
-                                  )}
                                 </div>
                                 <div className="pd-member-right">
                                   {m.department && <span className="pd-member-dept">{m.department}</span>}
@@ -1725,14 +1520,6 @@ function ProjectDetails() {
         onClose={() => setSubmitModal({ open: false, deliverable: null })}
         deliverable={submitModal.deliverable}
         onSubmitSuccess={handleDeliverableActionSuccess}
-      />
-
-      <SubmitProjectModal
-        key={`pd-project-submit-${submitProjectModal.project?.id || "none"}`}
-        isOpen={submitProjectModal.open}
-        onClose={() => setSubmitProjectModal({ open: false, project: null })}
-        project={submitProjectModal.project}
-        onSubmitSuccess={handleProjectActionSuccess}
       />
 
       <ViewDeliverableModal

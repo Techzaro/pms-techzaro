@@ -50,9 +50,6 @@ return new class extends Migration
         $this->addIndexIfMissing('task_submissions', ['task_id']);
         $this->addIndexIfMissing('task_submissions', ['submitted_by']);
 
-        $this->addIndexIfMissing('project_submissions', ['project_id']);
-        $this->addIndexIfMissing('project_submissions', ['submitted_by']);
-
         $this->addIndexIfMissing('task_workflow_events', ['task_id', 'action', 'created_at'], 'idx_twe_task_action_created');
         $this->addIndexIfMissing('project_workflow_events', ['project_id', 'action', 'created_at'], 'idx_pwe_project_action_created');
         $this->addIndexIfMissing('deliverable_workflow_events', ['deliverable_id', 'event_type', 'created_at'], 'idx_dwe_dlv_event_type_created');

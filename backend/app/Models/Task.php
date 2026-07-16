@@ -25,6 +25,7 @@ class Task extends Model
         'end_date',
         'assigned_to',
         'assigned_by',
+        'updated_by',
         'submitted_at',
         'approved_at',
         'rejected_at',
@@ -101,6 +102,12 @@ class Task extends Model
     public function assigner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_by');
+    }
+
+    /** The user who last updated this task. */
+    public function updatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 
     /** All users assigned to this task (many-to-many). */

@@ -56,8 +56,6 @@ const CreateProjectModal = ({ onClose }) => {
     budget: "",
     team_roles: [],
   });
-  const [dueDates, setDueDates] = useState({});
-
   const [categoriesList, setCategoriesList] = useState([]);
   const [categoryInput, setCategoryInput] = useState("");
   const [catSearch, setCatSearch] = useState("");
@@ -205,18 +203,6 @@ const CreateProjectModal = ({ onClose }) => {
   const handleAssignedUsersChange = (ids) => {
     setIsDirty(true);
     setForm((prev) => ({ ...prev, assigned_users: ids }));
-    setDueDates((prev) => {
-      const next = { ...prev };
-      Object.keys(next).forEach((k) => {
-        if (!ids.includes(Number(k))) delete next[k];
-      });
-      return next;
-    });
-  };
-
-  const handleDueDateChange = (userId, value) => {
-    setIsDirty(true);
-    setDueDates((prev) => ({ ...prev, [userId]: value }));
   };
 
   const handleAddPhase = () => {
@@ -235,26 +221,6 @@ const CreateProjectModal = ({ onClose }) => {
 
   const handlePhaseKeyDown = (e) => {
     if (e.key === "Enter") { e.preventDefault(); handleAddPhase(); }
-  };
-
-  const handleAddGoal = () => {
-    if (!goalInput.trim()) return;
-    setIsDirty(true);
-    setGoalsList((prev) => [...prev, { text: goalInput.trim(), done: false, due_datetime: goalDateTime || null }]);
-    setGoalInput("");
-    setGoalDateTime("");
-  };
-
-  const handleRemoveGoal = (index) => {
-    setPendingGoalIndex(index);
-    setGoalDeleteOpen(true);
-  };
-
-  const confirmDeleteGoal = () => {
-    setIsDirty(true);
-    setGoalsList((prev) => prev.filter((_, i) => i !== pendingGoalIndex));
-    setGoalDeleteOpen(false);
-    setPendingGoalIndex(null);
   };
 
   const handleAddCategory = () => {
@@ -313,24 +279,6 @@ const CreateProjectModal = ({ onClose }) => {
 
   const handleCategoryKeyDown = (e) => {
     if (e.key === "Enter") { e.preventDefault(); handleAddCategory(); }
-  };
-
-  const handleGoalKeyDown = (e) => {
-    if (e.key === "Enter") { e.preventDefault(); handleAddGoal(); }
-  };
-
-  const handleEditGoal = (index) => {
-    const goal = goalsList[index];
-    setEditGoalForm({ text: goal.text, due_datetime: goal.due_datetime || "" });
-    setEditingGoal(index);
-  };
-
-  const handleSaveGoalEdit = () => {
-    if (!editGoalForm.text.trim()) return;
-    setIsDirty(true);
-    setGoalsList((prev) => prev.map((g, i) => i === editingGoal ? { ...g, text: editGoalForm.text.trim(), due_datetime: editGoalForm.due_datetime || null } : g));
-    setEditingGoal(null);
-    setEditGoalForm({ text: "", due_datetime: "" });
   };
 
   const formatDateDisplay = (dateStr) => {
@@ -475,7 +423,6 @@ const CreateProjectModal = ({ onClose }) => {
           category: categoriesList.length > 0 ? JSON.stringify(categoriesList) : null,
           team_id: form.team_id ? parseInt(form.team_id) : null,
           assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
-          user_due_dates: Object.keys(dueDates).length > 0 ? dueDates : undefined,
           priority: form.priority,
           status: form.status,
           client_name: form.client_name || null,
@@ -580,10 +527,6 @@ const CreateProjectModal = ({ onClose }) => {
                   <label style={{ fontSize: "13px" }}>Phase</label>
                   <input
                     type="text"
-                    placeholder="Enter a goal"
-                    value={goalInput}
-                    onChange={(e) => { setIsDirty(true); setGoalInput(e.target.value); }}
-                    onKeyDown={handleGoalKeyDown}
                     placeholder="Enter phase name"
                     value={phaseName}
                     onChange={(e) => {
@@ -615,10 +558,6 @@ const CreateProjectModal = ({ onClose }) => {
                   <label style={{ fontSize: "13px" }}>Due Date & Time</label>
                   <input
                     type="datetime-local"
-                    ref={goalDateTimeRef}
-                    value={goalDateTime}
-                    onChange={(e) => { setIsDirty(true); setGoalDateTime(e.target.value); }}
-                    className="cp-goals-datetime-input"
                     value={phaseDate}
                     onChange={(e) => setPhaseDate(e.target.value)}
                     min={getNowDatetimeLocal()}
@@ -717,9 +656,6 @@ const CreateProjectModal = ({ onClose }) => {
                   users={displayUsers}
                   selectedIds={form.assigned_users}
                   onChange={handleAssignedUsersChange}
-                  showDueDate={true}
-                  dueDates={dueDates}
-                  onDueDateChange={handleDueDateChange}
                   placeholder="Click to select members"
                   viewOnly={!!form.team_id}
                 />

@@ -8,8 +8,6 @@ use App\Models\Project;
 use App\Models\ProjectChange;
 use App\Models\ProjectFile;
 use App\Models\ProjectAccessCredential;
-use App\Models\ProjectSubmission;
-use App\Models\ProjectUserSubmission;
 use App\Models\ProjectVisibility;
 use App\Models\ProjectWorkflowEvent;
 use App\Models\Team;
@@ -27,7 +25,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 /**
  * Controller for managing projects.
  * Handles CRUD operations, file/link management, visibility controls,
- * milestone management, and the full submission/approval/rejection/reopen workflow.
+ * milestone management, and workflow state changes.
  * Sends notifications for assignment, updates, and workflow state changes.
  */
 class ProjectController extends Controller
@@ -54,10 +52,8 @@ class ProjectController extends Controller
         $user = request()->user();
         $filter = request()->query('filter');
 
-        $submittableStatuses = ['pending', 'reopened', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress'];
-
         if (in_array($user->role, ['admin', 'manager'])) {
-            $projectsQuery = Project::with(['creator:id,name', 'team:id,name'])
+            $projectsQuery = Project::with(['creator:id,name,role', 'team:id,name', 'updatedBy:id,name,role'])
                 ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
                     $q->whereIn('status', $this->completedTaskStatuses());
                 }])
@@ -81,7 +77,7 @@ class ProjectController extends Controller
                     })
                     ->orWhereJsonContains('assigned_users', $user->id);
             })
-                ->with(['creator:id,name', 'team:id,name'])
+                ->with(['creator:id,name,role', 'team:id,name', 'updatedBy:id,name,role'])
                 ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
                     $q->whereIn('status', $this->completedTaskStatuses());
                 }])
@@ -101,14 +97,9 @@ class ProjectController extends Controller
 
         $projects = $projectsQuery->limit(200)->get();
 
-        return $projects->map(function ($project) use ($user, $submittableStatuses) {
+        return $projects->map(function ($project) use ($user) {
             $isAssigned = in_array($user->id, $project->assigned_users ?? []);
-            $totalTasks = $project->total_tasks ?? 0;
-            $approvedTasks = $project->approved_tasks ?? 0;
-            $allTasksApproved = $totalTasks === 0 || $approvedTasks === $totalTasks;
-            $allDeliverablesApproved = ($project->pending_deliverables_count ?? 0) === 0;
             $project->is_assigned = $isAssigned;
-            $project->can_submit = in_array($project->status, $submittableStatuses) && $isAssigned && $allTasksApproved && $allDeliverablesApproved;
 
             return $project;
         });
@@ -150,8 +141,6 @@ class ProjectController extends Controller
             'deliverables.*.title' => 'required_with:deliverables|string|max:255',
             'deliverables.*.description' => 'nullable|string|max:2000',
             'deliverables.*.due_date' => 'nullable|date',
-            'user_due_dates' => 'nullable|array',
-            'user_due_dates.*' => 'nullable|date_format:Y-m-d\TH:i',
         ]);
 
         $milestones = $validated['milestones'] ?? null;
@@ -160,10 +149,9 @@ class ProjectController extends Controller
         unset($validated['deliverables']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
-        $userDueDates = $validated['user_due_dates'] ?? null;
-        unset($validated['user_due_dates']);
 
         $validated['created_by'] = $request->user()->id;
+        $validated['updated_by'] = $request->user()->id;
         $validated['priority'] = $validated['priority'] ?? 'Medium';
         $validated['status'] = $validated['status'] ?? 'in_progress';
         $validated['start_date'] = $validated['start_date'] ?? now()->toDateTimeString();
@@ -179,7 +167,6 @@ class ProjectController extends Controller
             $validated['assigned_users'] = $validated['assigned_users'] ?? [];
         }
 
-        $validated['user_due_dates'] = $userDueDates;
         $project = Project::create($validated);
         $this->replaceProjectMilestones($project, $milestones);
 
@@ -216,8 +203,6 @@ class ProjectController extends Controller
                 DB::table('project_workflow_events')->insert($assignedEvents);
             }
         }
-
-        $this->sendProjectAssignmentNotification($project, $request->user());
 
         // Log activity for the creator
         $activityDesc = $assigneeNames
@@ -284,10 +269,10 @@ class ProjectController extends Controller
     }
 
     /**
-     * Retrieve a single project with all related data (tasks, deliverables, milestones, submissions, workflow events).
+     * Retrieve a single project with all related data (tasks, deliverables, milestones, workflow events).
      *
      * Enforces authorization based on visibility, team membership, task assignment, or admin/manager role.
-     * Returns submission eligibility flags and unviewed changes.
+     * Returns unviewed changes.
      *
      * @param  Project  $project  The project to retrieve.
      * @return JsonResponse JSON response with full project details or 403.
@@ -327,9 +312,6 @@ class ProjectController extends Controller
             'team.members:id,name,email,role,department',
             'milestones',
             'files',
-            'approvedBy:id,name',
-            'rejectedBy:id,name',
-            'reopenedBy:id,name',
             'deliverables' => fn ($q) => $q->with(['assignee:id,name,role', 'creator:id,name,role'])->orderBy('sort_order'),
             'tasks' => fn ($q) => $q->with(['assignees:id,name', 'assigner:id,name,role'])->withCount([
                 'deliverables as total_deliverables',
@@ -339,12 +321,9 @@ class ProjectController extends Controller
         ];
 
         $optionalRelations = [
-            'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
-            'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
             'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
             'changes' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
-            'userSubmissions' => fn ($q) => $q->with(['user:id,name,email,role', 'reviewer:id,name,email'])->latest(),
         ];
 
         try {
@@ -372,7 +351,6 @@ class ProjectController extends Controller
         $isCreator = (int) $project->created_by === (int) $user->id;
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
         $isAssigned = in_array($user->id, $project->assigned_users ?? []);
-        $submittableStatuses = ['pending', 'reopened', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress'];
 
         $approvalCacheKey = "project_approval_{$project->id}";
         $approvalStatus = Cache::remember($approvalCacheKey, 30, function () use ($project) {
@@ -392,20 +370,6 @@ class ProjectController extends Controller
         $payload['is_admin_or_manager'] = $isAdminOrManager;
         $payload['can_edit'] = $isAdminOrManager;
 
-        $hasPendingSubmission = ProjectUserSubmission::where('project_id', $project->id)
-            ->where('user_id', $user->id)
-            ->where('status', 'submitted')
-            ->exists();
-        $payload['can_submit'] = in_array($project->status, $submittableStatuses)
-            && $isAssigned
-            && $approvalStatus['all_deliverables_approved']
-            && $approvalStatus['all_tasks_approved']
-            && ! $hasPendingSubmission;
-
-        $payload['my_submission'] = ProjectUserSubmission::where('project_id', $project->id)
-            ->where('user_id', $user->id)
-            ->latest()
-            ->first();
         $payload['can_review'] = $isCreator || $isAdminOrManager;
         $payload['unviewed_changes'] = $project->unviewedChanges ?? collect();
         $payload['unviewed_changes_count'] = $payload['unviewed_changes']->count();
@@ -477,8 +441,6 @@ class ProjectController extends Controller
             'existing_file_names' => 'nullable|array',
             'existing_file_names.*.id' => 'required_with:existing_file_names|exists:project_files,id',
             'existing_file_names.*.name' => 'required_with:existing_file_names|string|max:255',
-            'user_due_dates' => 'nullable|array',
-            'user_due_dates.*' => 'nullable|date_format:Y-m-d\TH:i',
         ]);
 
         $milestones = $validated['milestones'] ?? null;
@@ -487,8 +449,6 @@ class ProjectController extends Controller
         unset($validated['deliverables']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
-        $userDueDates = $validated['user_due_dates'] ?? null;
-        unset($validated['user_due_dates']);
 
         $oldValues = [];
         $fieldLabels = ['title' => 'Title', 'description' => 'Description', 'start_date' => 'Start Date', 'end_date' => 'End Date', 'priority' => 'Priority', 'status' => 'Status', 'budget' => 'Budget', 'category' => 'Category', 'client_name' => 'Client Name', 'website_name' => 'Website Name', 'website_link' => 'Website Link', 'team_id' => 'Team', 'sheets_documents' => 'Documents'];
@@ -500,7 +460,7 @@ class ProjectController extends Controller
 
         $oldAssignedUsers = $project->assigned_users ?? [];
         $oldTeamId = $project->team_id;
-        $validated['user_due_dates'] = $userDueDates;
+        $validated['updated_by'] = $user->id;
         $project->update($validated);
 
         // Rename existing files/links if provided
@@ -658,10 +618,7 @@ class ProjectController extends Controller
             'tasks' => fn ($q) => $q->with('assignee:id,name,role'),
             'files',
             'deliverables',
-            'submissions',
-            'latestSubmission',
             'workflowEvents' => fn ($q) => $q->with('user:id,name'),
-            'userSubmissions' => fn ($q) => $q->with(['user:id,name,email,role', 'reviewer:id,name,email'])->latest(),
         ]);
 
         return response()->json([
@@ -1153,622 +1110,6 @@ class ProjectController extends Controller
     }
 
     /**
-     * Submit a project for review by its creator.
-     *
-     * Only assigned users can submit. All tasks and deliverables must be approved first.
-     * Handles file uploads, link attachments, and determines first submission vs resubmission.
-     *
-     * @param  Request  $request  Input: comment, file, files[], links[].
-     * @param  Project  $project  The project to submit.
-     * @return JsonResponse JSON response with the updated project.
-     */
-    public function submit(Request $request, Project $project)
-    {
-        $user = $request->user();
-        $isAssigned = in_array($user->id, $project->assigned_users ?? []);
-
-        if (! $isAssigned) {
-            return response()->json(['success' => false, 'message' => 'Only assigned users can submit this project'], 403);
-        }
-
-        $activeStatuses = ['pending', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress', 'reopened', 'submitted'];
-        if (! in_array($project->status, $activeStatuses)) {
-            return response()->json(['success' => false, 'message' => 'This project cannot be submitted in its current status'], 422);
-        }
-
-        $existingSubmission = ProjectUserSubmission::where('project_id', $project->id)
-            ->where('user_id', $user->id)
-            ->where('status', 'submitted')
-            ->first();
-
-        if ($existingSubmission) {
-            return response()->json(['success' => false, 'message' => 'You have already submitted this project. Wait for review.'], 422);
-        }
-
-        $validated = $request->validate([
-            'comment' => 'nullable|string|max:2000',
-            'file' => 'nullable|file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,webp,ppt,pptx,txt|max:51200',
-            'files' => 'nullable|array',
-            'files.*' => 'file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif,webp,ppt,pptx,txt|max:51200',
-            'links' => 'nullable|array',
-            'links.*' => 'string|max:2048',
-        ]);
-
-        $filePath = null;
-        $fileName = null;
-
-        if ($request->hasFile('file')) {
-            $file = $request->file('file');
-            $fileName = $file->getClientOriginalName();
-            $filePath = $file->store('project-submissions/'.$project->id, 'public');
-        }
-
-        $submission = ProjectSubmission::create([
-            'project_id' => $project->id,
-            'submitted_by' => $user->id,
-            'comment' => $validated['comment'] ?? null,
-            'file_path' => $filePath,
-            'file_name' => $fileName,
-        ]);
-
-        if ($request->hasFile('files')) {
-            $submission->attachments()->createMany(
-                collect($request->file('files'))->map(fn ($file) => [
-                    'submission_type' => 'project',
-                    'file_name' => basename($path = $file->store('project-submissions/'.$project->id, 'public')),
-                    'original_name' => $file->getClientOriginalName(),
-                    'file_path' => $path,
-                    'file_type' => $file->getMimeType(),
-                    'file_size' => $file->getSize(),
-                    'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
-                    'url' => '/storage/'.$path,
-                ])->toArray()
-            );
-        }
-
-        if (! empty($validated['links'])) {
-            $submission->attachments()->createMany(
-                collect($validated['links'])->map(fn ($url) => [
-                    'submission_type' => 'project', 'file_name' => $url,
-                    'original_name' => $url, 'attachment_type' => 'link', 'url' => $url,
-                ])->toArray()
-            );
-        }
-
-        $isResubmit = $project->status === 'reopened';
-
-        ProjectWorkflowEvent::create([
-            'project_id' => $project->id, 'user_id' => $user->id,
-            'action' => $isResubmit ? 'resubmitted' : 'submitted',
-            'comment' => $validated['comment'] ?? null, 'file_path' => $filePath, 'file_name' => $fileName,
-        ]);
-
-        ProjectUserSubmission::updateOrCreate(
-            ['project_id' => $project->id, 'user_id' => $user->id],
-            [
-                'status' => 'submitted',
-                'comment' => $validated['comment'] ?? null,
-                'file_path' => $filePath,
-                'file_name' => $fileName,
-                'links' => $validated['links'] ?? null,
-                'submitted_at' => now(),
-                'reviewed_at' => null,
-                'reviewed_by' => null,
-                'review_comment' => null,
-            ]
-        );
-
-        $creatorId = $project->created_by;
-        if ($creatorId && $creatorId !== $user->id) {
-            $this->notificationService->notify(
-                $creatorId,
-                $user->id,
-                'project_submitted',
-                'project',
-                $project->id,
-                'Project Submitted',
-                $user->name.' submitted the project "'.$project->title.'" for your review.',
-                '/projects/project-details/'.$project->id
-            );
-        }
-
-        $this->notificationService->confirmAction($user, $isResubmit ? 'Resubmitted' : 'Submitted', 'project', $project->title, [
-            'Assigned To' => User::whereIn('id', $project->assigned_users ?? [])->pluck('name')->implode(', ') ?: 'N/A',
-            'Submitted To' => User::find($project->created_by)?->name ?? 'N/A',
-        ]);
-
-        $isResubmitLabel = $isResubmit ? 'resubmitted' : 'submitted';
-        $this->activityService->log($user->id, 'project_'.$isResubmitLabel, 'You '.$isResubmitLabel.' project "'.$project->title.'" for review', 'project', $project->id);
-        $this->clearDashboardCache($user->id);
-
-        try {
-            $this->auditService->log(
-                module: 'project_management',
-                action: 'submit',
-                description: ($isResubmit ? 'Resubmitted' : 'Submitted')." project {$project->title}",
-                user: $user,
-                entityType: 'Project',
-                entityId: $project->id,
-                status: 'success'
-            );
-        } catch (\Throwable $e) {
-            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Project submitted successfully',
-            'project' => $project->fresh()->load([
-                'creator:id,name,email,role', 'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
-                'latestSubmission' => fn ($q) => $q->with('submittedBy:id,name,email'),
-                'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
-                'approvedBy:id,name', 'rejectedBy:id,name', 'reopenedBy:id,name',
-                'userSubmissions' => fn ($q) => $q->with('user:id,name,email,role')->latest(),
-            ]),
-        ]);
-    }
-
-    /**
-     * Approve a submitted project. Only the creator or admin/manager can approve.
-     *
-     * @param  Request  $request  The incoming HTTP request.
-     * @param  Project  $project  The project to approve (must be in 'submitted' status).
-     * @return JsonResponse JSON response with the approved project.
-     */
-    public function approve(Request $request, Project $project)
-    {
-        $user = $request->user();
-        $isCreator = (int) $project->created_by === (int) $user->id;
-
-        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
-
-        if ($project->status !== 'submitted') {
-            return response()->json(['success' => false, 'message' => 'Can only approve submitted projects'], 422);
-        }
-
-        $project->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id]);
-
-        ProjectWorkflowEvent::create(['project_id' => $project->id, 'user_id' => $user->id, 'action' => 'approved']);
-
-        $assignedUserIds = $project->assigned_users ?? [];
-        $this->notificationService->notifyMultiple(
-            array_filter($assignedUserIds, fn ($id) => (int) $id !== (int) $user->id),
-            $user->id,
-            'project_approved',
-            'project',
-            $project->id,
-            'Project Approved',
-            'Your project "'.$project->title.'" has been approved.',
-            '/projects/project-details/'.$project->id
-        );
-
-        // Send confirmation email to performer
-        $this->notificationService->confirmAction($user, 'Approved', 'project', $project->title, [
-            'Assigned To' => User::whereIn('id', $assignedUserIds)->pluck('name')->implode(', ') ?: 'N/A',
-        ]);
-
-        // Log activity
-        $this->activityService->log($user->id, 'project_approved', 'You approved project "'.$project->title.'"', 'project', $project->id);
-        $this->clearDashboardCache($user->id);
-
-        try {
-            $this->auditService->log(
-                module: 'project_management',
-                action: 'approve',
-                description: "Approved project {$project->title}",
-                user: $user,
-                entityType: 'Project',
-                entityId: $project->id,
-                status: 'success'
-            );
-        } catch (\Throwable $e) {
-            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Project approved successfully',
-            'project' => $project->fresh()->load([
-                'creator:id,name,email,role', 'approvedBy:id,name',
-                'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
-                'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
-                'rejectedBy:id,name', 'reopenedBy:id,name',
-            ]),
-        ]);
-    }
-
-    /**
-     * Reject a submitted project with an optional comment.
-     *
-     * @param  Request  $request  Input: comment (optional).
-     * @param  Project  $project  The project to reject (must be in 'submitted' status).
-     * @return JsonResponse JSON response with the rejected project.
-     */
-    public function reject(Request $request, Project $project)
-    {
-        $user = $request->user();
-        $isCreator = (int) $project->created_by === (int) $user->id;
-
-        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
-
-        if ($project->status !== 'submitted') {
-            return response()->json(['success' => false, 'message' => 'Can only reject submitted projects'], 422);
-        }
-
-        $validated = $request->validate(['comment' => 'nullable|string|max:2000']);
-
-        $project->update([
-            'status' => 'rejected', 'rejected_at' => now(),
-            'rejected_by' => $user->id, 'rejection_comment' => $validated['comment'] ?? null,
-        ]);
-
-        ProjectWorkflowEvent::create([
-            'project_id' => $project->id, 'user_id' => $user->id,
-            'action' => 'rejected', 'comment' => $validated['comment'] ?? null,
-        ]);
-
-        $assignedUserIds = $project->assigned_users ?? [];
-        $assignedUserIds = array_values(array_filter($assignedUserIds, fn ($id) => (int) $id !== (int) $user->id));
-        $rejectMsg = 'Your project "'.$project->title.'" has been rejected.';
-        if (! empty($validated['comment'])) {
-            $rejectMsg .= ' Reason: '.$validated['comment'];
-        }
-
-        $this->notificationService->notifyMultiple(
-            $assignedUserIds,
-            $user->id,
-            'project_rejected',
-            'project',
-            $project->id,
-            'Project Rejected',
-            $rejectMsg,
-            '/projects/project-details/'.$project->id
-        );
-
-        // Send confirmation email to performer
-        $this->notificationService->confirmAction($user, 'Rejected', 'project', $project->title, [
-            'Assigned To' => User::whereIn('id', $project->assigned_users ?? [])->pluck('name')->implode(', ') ?: 'N/A',
-            'Reason' => $validated['comment'] ?? 'N/A',
-        ]);
-
-        // Log activity
-        $this->activityService->log($user->id, 'project_rejected', 'You rejected project "'.$project->title.'"', 'project', $project->id);
-        $this->clearDashboardCache($user->id);
-
-        try {
-            $this->auditService->log(
-                module: 'project_management',
-                action: 'reject',
-                description: "Rejected project {$project->title}",
-                user: $user,
-                entityType: 'Project',
-                entityId: $project->id,
-                status: 'success'
-            );
-        } catch (\Throwable $e) {
-            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Project rejected',
-            'project' => $project->fresh()->load([
-                'creator:id,name,email,role', 'rejectedBy:id,name',
-                'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
-                'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
-                'approvedBy:id,name', 'reopenedBy:id,name',
-            ]),
-        ]);
-    }
-
-    /**
-     * Reopen a submitted project for revision with instructions and optional new deadline.
-     *
-     * @param  Request  $request  Input: comment, instructions, new_deadline, file.
-     * @param  Project  $project  The project to reopen.
-     * @return JsonResponse JSON response with the reopened project.
-     */
-    public function reopen(Request $request, Project $project)
-    {
-        $user = $request->user();
-        $isCreator = (int) $project->created_by === (int) $user->id;
-
-        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
-
-        if ($project->status !== 'submitted') {
-            return response()->json(['success' => false, 'message' => 'Can only reopen submitted projects'], 422);
-        }
-
-        $validated = $request->validate([
-            'comment' => 'nullable|string|max:2000',
-            'instructions' => 'nullable|string|max:2000',
-            'new_deadline' => 'nullable|date',
-            'file' => 'nullable|file|mimes:zip,rar,pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif|max:51200',
-        ]);
-
-        $filePath = $fileName = null;
-        if ($request->hasFile('file')) {
-            $file = $request->file('file');
-            $fileName = $file->getClientOriginalName();
-            $filePath = $file->store('project-reopen/'.$project->id, 'public');
-        }
-
-        $updateData = [
-            'status' => 'reopened', 'reopened_at' => now(), 'reopened_by' => $user->id,
-            'reopen_comment' => $validated['comment'] ?? null,
-            'reopen_instructions' => $validated['instructions'] ?? null,
-        ];
-
-        if (! empty($validated['new_deadline'])) {
-            $updateData['reopen_new_deadline'] = $validated['new_deadline'];
-            // Create a milestone for the new deadline instead of overwriting end_date
-            $project->milestones()->create([
-                'title' => 'Reopened: ' . ($validated['comment'] ?? 'New deadline'),
-                'due_date' => $validated['new_deadline'],
-                'status' => 'pending',
-                'sort_order' => $project->milestones()->count() + 1,
-            ]);
-        }
-        if (! empty($filePath)) {
-            $updateData['reopen_file_path'] = $filePath;
-            $updateData['reopen_file_name'] = $fileName;
-        }
-
-        $project->update($updateData);
-
-        ProjectWorkflowEvent::create([
-            'project_id' => $project->id, 'user_id' => $user->id,
-            'action' => 'reopened', 'comment' => $validated['comment'] ?? null,
-            'instructions' => $validated['instructions'] ?? null,
-            'new_deadline' => $validated['new_deadline'] ?? null,
-            'file_path' => $filePath, 'file_name' => $fileName,
-        ]);
-
-        $assignedUserIds = $project->assigned_users ?? [];
-        $assignedUserIds = array_values(array_filter($assignedUserIds, fn ($id) => (int) $id !== (int) $user->id));
-        $reopenMsg = 'Your project "'.$project->title.'" has been reopened for revision.';
-        if (! empty($validated['comment'])) {
-            $reopenMsg .= ' Comment: '.$validated['comment'];
-        }
-        if (! empty($validated['instructions'])) {
-            $reopenMsg .= ' Instructions: '.$validated['instructions'];
-        }
-
-        $this->notificationService->notifyMultiple(
-            $assignedUserIds,
-            $user->id,
-            'project_reopened',
-            'project',
-            $project->id,
-            'Project Reopened',
-            $reopenMsg,
-            '/projects/project-details/'.$project->id
-        );
-
-        // Send confirmation email to performer
-        $this->notificationService->confirmAction($user, 'Reopened', 'project', $project->title, [
-            'Assigned To' => User::whereIn('id', $project->assigned_users ?? [])->pluck('name')->implode(', ') ?: 'N/A',
-            'Instructions' => $validated['instructions'] ?? 'N/A',
-        ]);
-
-        // Log activity
-        $this->activityService->log($user->id, 'project_reopened', 'You reopened project "'.$project->title.'" for revision', 'project', $project->id);
-        $this->clearDashboardCache($user->id);
-
-        try {
-            $this->auditService->log(
-                module: 'project_management',
-                action: 'reopen',
-                description: "Reopened project {$project->title}",
-                user: $user,
-                entityType: 'Project',
-                entityId: $project->id,
-                status: 'success'
-            );
-        } catch (\Throwable $e) {
-            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Project reopened successfully',
-            'project' => $project->fresh()->load([
-                'creator:id,name,email,role', 'reopenedBy:id,name',
-                'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
-                'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
-                'approvedBy:id,name', 'rejectedBy:id,name',
-            ]),
-        ]);
-    }
-
-    public function approveUserSubmission(Request $request, Project $project, ProjectUserSubmission $submission)
-    {
-        $user = $request->user();
-        $isCreator = (int) $project->created_by === (int) $user->id;
-        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
-
-        if (! $isCreator && ! $isAdminOrManager) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
-
-        if ($submission->project_id !== $project->id) {
-            return response()->json(['success' => false, 'message' => 'Submission does not belong to this project'], 422);
-        }
-
-        if ($submission->status !== 'submitted') {
-            return response()->json(['success' => false, 'message' => 'This submission has already been reviewed'], 422);
-        }
-
-        $validated = $request->validate([
-            'comment' => 'nullable|string|max:2000',
-        ]);
-
-        $submission->update([
-            'status' => 'approved',
-            'reviewed_at' => now(),
-            'reviewed_by' => $user->id,
-            'review_comment' => $validated['comment'] ?? null,
-        ]);
-
-        if ((int) $submission->user_id !== (int) $user->id) {
-            $this->notificationService->notify(
-                $submission->user_id,
-                $user->id,
-                'project_submission_approved',
-                'project',
-                $project->id,
-                'Submission Approved',
-                'Your submission for "'.$project->title.'" has been approved by '.$user->name.'.',
-                '/projects/project-details/'.$project->id
-            );
-        }
-
-        $this->activityService->log($user->id, 'project_submission_approved', 'Approved submission by '.User::find($submission->user_id)?->name.' for "'.$project->title.'"', 'project', $project->id);
-
-        $allReviewed = ProjectUserSubmission::where('project_id', $project->id)->where('status', 'submitted')->count() === 0;
-        if ($allReviewed) {
-            $allApproved = ProjectUserSubmission::where('project_id', $project->id)->where('status', 'approved')->count() > 0
-                && ProjectUserSubmission::where('project_id', $project->id)->where('status', 'rejected')->count() === 0;
-            if ($allApproved) {
-                $project->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id]);
-            } elseif (ProjectUserSubmission::where('project_id', $project->id)->where('status', 'rejected')->count() > 0) {
-                $project->update(['status' => 'rejected', 'rejected_at' => now(), 'rejected_by' => $user->id]);
-            }
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Submission approved',
-            'submission' => $submission->fresh()->load(['user:id,name,email,role', 'reviewer:id,name,email']),
-            'project' => $project->fresh()->load([
-                'creator:id,name,email,role', 'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
-                'latestSubmission' => fn ($q) => $q->with('submittedBy:id,name,email'),
-                'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
-                'approvedBy:id,name', 'rejectedBy:id,name', 'reopenedBy:id,name',
-                'userSubmissions' => fn ($q) => $q->with(['user:id,name,email,role', 'reviewer:id,name,email'])->latest(),
-            ]),
-        ]);
-    }
-
-    public function rejectUserSubmission(Request $request, Project $project, ProjectUserSubmission $submission)
-    {
-        $user = $request->user();
-        $isCreator = (int) $project->created_by === (int) $user->id;
-        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
-
-        if (! $isCreator && ! $isAdminOrManager) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
-
-        if ($submission->project_id !== $project->id) {
-            return response()->json(['success' => false, 'message' => 'Submission does not belong to this project'], 422);
-        }
-
-        if ($submission->status !== 'submitted') {
-            return response()->json(['success' => false, 'message' => 'This submission has already been reviewed'], 422);
-        }
-
-        $validated = $request->validate([
-            'comment' => 'nullable|string|max:2000',
-        ]);
-
-        $submission->update([
-            'status' => 'rejected',
-            'reviewed_at' => now(),
-            'reviewed_by' => $user->id,
-            'review_comment' => $validated['comment'] ?? null,
-        ]);
-
-        if ((int) $submission->user_id !== (int) $user->id) {
-            $this->notificationService->notify(
-                $submission->user_id,
-                $user->id,
-                'project_submission_rejected',
-                'project',
-                $project->id,
-                'Submission Rejected',
-                'Your submission for "'.$project->title.'" has been rejected by '.$user->name.'. ' . ($validated['comment'] ?? ''),
-                '/projects/project-details/'.$project->id
-            );
-        }
-
-        $this->activityService->log($user->id, 'project_submission_rejected', 'Rejected submission by '.User::find($submission->user_id)?->name.' for "'.$project->title.'"', 'project', $project->id);
-
-        $allReviewed = ProjectUserSubmission::where('project_id', $project->id)->where('status', 'submitted')->count() === 0;
-        if ($allReviewed) {
-            $project->update(['status' => 'rejected', 'rejected_at' => now(), 'rejected_by' => $user->id]);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Submission rejected',
-            'submission' => $submission->fresh()->load(['user:id,name,email,role', 'reviewer:id,name,email']),
-            'project' => $project->fresh()->load([
-                'creator:id,name,email,role', 'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
-                'latestSubmission' => fn ($q) => $q->with('submittedBy:id,name,email'),
-                'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
-                'approvedBy:id,name', 'rejectedBy:id,name', 'reopenedBy:id,name',
-                'userSubmissions' => fn ($q) => $q->with(['user:id,name,email,role', 'reviewer:id,name,email'])->latest(),
-            ]),
-        ]);
-    }
-
-    /**
-     * Get the most recent submission for a project.
-     *
-     * @param  Request  $request  The incoming HTTP request.
-     * @param  Project  $project  The project to get the latest submission for.
-     * @return JsonResponse JSON response with the latest submission.
-     */
-    public function latestSubmission(Request $request, Project $project)
-    {
-        $user = $request->user();
-        $isCreator = (int) $project->created_by === (int) $user->id;
-        $isAssigned = in_array($user->id, $project->assigned_users ?? []);
-
-        if (! $isCreator && ! $isAssigned && ! in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
-
-        $submission = ProjectSubmission::where('project_id', $project->id)
-            ->with('submittedBy:id,name,email')
-            ->latest()
-            ->first();
-
-        return response()->json(['success' => true, 'submission' => $submission]);
-    }
-
-    /**
-     * Download the file attached to a project submission.
-     *
-     * @param  ProjectSubmission  $submission  The submission containing the file.
-     * @return BinaryFileResponse|JsonResponse File download or error.
-     */
-    public function downloadSubmissionFile(ProjectSubmission $submission)
-    {
-        $user = request()->user();
-        $project = $submission->project;
-        $isCreator = (int) $project->created_by === (int) $user->id;
-        $isAssigned = in_array($user->id, $project->assigned_users ?? []);
-
-        if (! $isCreator && ! $isAssigned && ! in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
-
-        if (! $submission->file_path || ! Storage::disk('public')->exists($submission->file_path)) {
-            return response()->json(['success' => false, 'message' => 'File not found'], 404);
-        }
-
-        return Storage::disk('public')->download($submission->file_path, $submission->file_name);
-    }
-
-    /**
      * Replace all milestones for a project with a new set.
      *
      * @param  Project  $project  The project to update milestones for.
@@ -1878,31 +1219,6 @@ class ProjectController extends Controller
         $project->changes()->where('is_viewed', false)->update(['is_viewed' => true]);
 
         return response()->json(['success' => true, 'message' => 'Changes marked as read']);
-    }
-
-    /**
-     * Send assignment notifications to all assigned users (excluding the sender).
-     *
-     * @param  Project  $project  The assigned project.
-     * @param  User  $sender  The user who assigned the project.
-     */
-    private function sendProjectAssignmentNotification(Project $project, User $sender): void
-    {
-        $assignedUserIds = $project->assigned_users ?? [];
-        if (is_string($assignedUserIds)) {
-            $assignedUserIds = json_decode($assignedUserIds, true) ?? [];
-        }
-
-        $this->notificationService->notifyMultiple(
-            array_filter($assignedUserIds, fn ($id) => (int) $id !== (int) $sender->id),
-            $sender->id,
-            'project_assigned',
-            'project',
-            $project->id,
-            'Project Assigned',
-            'A new project "'.$project->title.'" has been assigned to you by '.$sender->name.'.',
-            '/projects/project-details/'.$project->id
-        );
     }
 
     /**

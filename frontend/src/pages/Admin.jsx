@@ -402,7 +402,7 @@ function Admin() {
         .sort((a, b) => (a === "Team Lead" ? -1 : b === "Team Lead" ? 1 : 0))
         .join(", ");
       return {
-        id: w.id, entity_id: w.entity_id || w.id, module: w.module || w.item_type || "task",
+        id: w.id, entity_id: w.entity_id || w.id, module: w.module || "task",
         time: w.end_date ? new Date(w.end_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '\u2014',
         title: w.title || w.name || 'Untitled', roleLabel, assignees,
         status: w.priority ? w.priority + ' Priority' : (w.status || '\u2014'),

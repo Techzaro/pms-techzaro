@@ -4,9 +4,9 @@
  * Lists all projects accessible to the current user in a card-based layout.
  * Supports searching by name, filtering by status (pending, submitted,
  * approved, rejected, due-today, active), time-range filtering, visibility
- * management (admin/manager only) and inline project submission.  Each card
- * shows progress, deadline and quick actions.  Projects are paginated and
- * can be reordered via drag-and-drop.
+ * management (admin/manager only).  Each card shows progress, deadline and
+ * quick actions.  Projects are paginated and can be reordered via
+ * drag-and-drop.
  */
 
 import { useEffect, useState, useRef, useCallback } from "react";
@@ -16,10 +16,10 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CreateProjectModal from "../components/CreateProjectModal";
 import EditProjectModal from "../components/EditProjectModal";
-import SubmitProjectModal from "../components/SubmitProjectModal";
+
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import { LuSend } from "react-icons/lu";
+
 import { GoDotFill } from "react-icons/go";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath, getUser } from "../utils/auth";
@@ -74,7 +74,6 @@ function Projects() {
   const [searchQuery, setSearchQuery] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get("filter") === "active" ? "active" : "");
-  const [submitProjectModal, setSubmitProjectModal] = useState({ open: false, project: null });
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [expandedDesc, setExpandedDesc] = useState({});
@@ -256,13 +255,6 @@ function Projects() {
     return (project.pending_deliverables_count || 0) > 0;
   };
 
-  const handleProjectSubmitSuccess = (updatedProject) => {
-    setProjects((prev) =>
-      prev.map((p) =>
-        p.id === updatedProject.id ? { ...p, ...updatedProject } : p
-      )
-    );
-  };
 
   const filteredProjects = orderedProjects.filter((project) => {
     if (searchQuery && !project.title?.toLowerCase().includes(searchQuery.toLowerCase())) {
@@ -304,6 +296,23 @@ function Projects() {
           <div>
             <h1>Projects</h1>
             <p>Manage and track your projects</p>
+            <div className="task-count-badge" style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
+              <span style={{ background: "#dedfe0", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
+                Total: {filteredProjects.length} projects
+              </span>
+              <span style={{ background: "#d6d6d6", color: "#92400E", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
+                Active: {filteredProjects.filter(p => p.status === "In-progress" || p.status === "in_progress" || p.status === "Planning" || p.status === "planned").length}
+              </span>
+              <span style={{ background: "#d4d4d4", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
+                Completed: {filteredProjects.filter(p => p.status === "Completed" || p.status === "approved").length}
+              </span>
+              <span style={{ background: "#d8d8d8", color: "#1E40AF", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
+                Pending: {filteredProjects.filter(p => p.status === "pending" || p.status === "submitted").length}
+              </span>
+              <span style={{ background: "#dcdcdc", color: "#991B1B", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
+                Rejected: {filteredProjects.filter(p => p.status === "rejected" || p.status === "Pause").length}
+              </span>
+            </div>
           </div>
 
           <div className="header-actions">
@@ -402,6 +411,48 @@ function Projects() {
                       {/* HEADER */}
                       <div className="project-card-header">
                         <h3>{project.title}</h3>
+
+                        {/* OWNERSHIP INFO */}
+                        <div className="ownership-info" style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "6px", marginBottom: "4px" }}>
+                          {project.creator && (
+                            <span className="ownership-badge" style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#EEF2FF", color: "#4F46E5", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 500 }}>
+                              <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "#4F46E5", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
+                                {project.creator.name?.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
+                              </span>
+                              Created: {project.creator.name}
+                              <span style={{ background: project.creator.role === "admin" ? "#4F46E5" : "#059669", color: "#fff", padding: "0 4px", borderRadius: "4px", fontSize: "9px", marginLeft: "2px" }}>
+                                {project.creator.role === "admin" ? "Admin" : "Manager"}
+                              </span>
+                            </span>
+                          )}
+                          {project.updatedBy && project.updated_by !== project.created_by && (
+                            <span className="ownership-badge" style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#FEF3C7", color: "#92400E", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 500 }}>
+                              <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "#D97706", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
+                                {project.updatedBy.name?.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
+                              </span>
+                              Updated: {project.updatedBy.name}
+                              <span style={{ background: project.updatedBy.role === "admin" ? "#4F46E5" : "#059669", color: "#fff", padding: "0 4px", borderRadius: "4px", fontSize: "9px", marginLeft: "2px" }}>
+                                {project.updatedBy.role === "admin" ? "Admin" : "Manager"}
+                              </span>
+                            </span>
+                          )}
+                          {project.approvedBy && (
+                            <span className="ownership-badge" style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#DCFCE7", color: "#166534", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 500 }}>
+                              <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "#16A34A", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
+                                {project.approvedBy.name?.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
+                              </span>
+                              Approved: {project.approvedBy.name}
+                            </span>
+                          )}
+                          {project.rejectedBy && (
+                            <span className="ownership-badge" style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#FEE2E2", color: "#991B1B", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 500 }}>
+                              <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "#DC2626", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
+                                {project.rejectedBy.name?.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
+                              </span>
+                              Rejected: {project.rejectedBy.name}
+                            </span>
+                          )}
+                        </div>
                       <div
                         className={`card-subtitle${!expandedDesc[project.id] ? " clamped" : ""}`}
                         ref={!expandedDesc[project.id] ? measureRef(project.id) : null}
@@ -446,15 +497,11 @@ function Projects() {
                     <div className="card-footer">
                       <div className="date-info">
                         <span className="date-icon">📅</span>
-                        {(() => {
-                          const myDueDate = project.user_due_dates?.[currentUser?.id];
-                          const displayDate = myDueDate || project.active_deadline;
-                          return displayDate ? (
-                            <span>{formatDateTime(displayDate).replace("\n", " ")}</span>
-                          ) : (
-                            <span>No deadline set</span>
-                          );
-                        })()}
+                        {project.active_deadline ? (
+                          <span>{formatDateTime(project.active_deadline).replace("\n", " ")}</span>
+                        ) : (
+                          <span>No deadline set</span>
+                        )}
                       </div>
                     </div>
 
@@ -471,17 +518,6 @@ function Projects() {
                       </span>
 
                       <div className="project-card-actions-right">
-                        {project.can_submit && (
-                          <div style={{ position: "relative", display: "inline-flex" }}>
-                            <button
-                              className="action-icon-btn action-submit"
-                              title="Submit Project"
-                              onClick={() => setSubmitProjectModal({ open: true, project })}
-                            >
-                              <LuSend />
-                            </button>
-                          </div>
-                        )}
                         <button
                           className="action-icon-btn action-view"
                           title="View Project"
@@ -589,12 +625,7 @@ function Projects() {
                     <div className="col-due-date">
                       <div className="date-box">
                         <div style={{ whiteSpace: "pre-line" }}>
-                          {(() => {
-                            const myDueDate = project.user_due_dates?.[currentUser?.id];
-                            if (myDueDate) return formatDateTime(myDueDate);
-                            if (project.active_deadline) return formatDateTime(project.active_deadline);
-                            return "No deadline";
-                          })()}
+                          {project.active_deadline ? formatDateTime(project.active_deadline) : "No deadline"}
                         </div>
                       </div>
                     </div>
@@ -625,13 +656,6 @@ function Projects() {
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                           </button>
                         )}
-                        {project.can_submit && (
-                          <div style={{ position: "relative", display: "inline-flex" }}>
-                            <button className="action-icon-btn action-submit" title="Submit Project" onClick={() => setSubmitProjectModal({ open: true, project })}>
-                              <LuSend />
-                            </button>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -657,14 +681,6 @@ function Projects() {
           />
         </div>
       )}
-
-      <SubmitProjectModal
-        key={`project-submit-${submitProjectModal.project?.id || "none"}`}
-        isOpen={submitProjectModal.open}
-        onClose={() => setSubmitProjectModal({ open: false, project: null })}
-        project={submitProjectModal.project}
-        onSubmitSuccess={handleProjectSubmitSuccess}
-      />
 
       {showEditModal && editingProject && (
         <EditProjectModal

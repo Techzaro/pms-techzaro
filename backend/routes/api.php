@@ -237,15 +237,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/reject', [TaskController::class, 'reject']); // Reject submitted task
     Route::post('/tasks/{task}/reopen', [TaskController::class, 'reopen']); // Reopen rejected task
 
-    // Project submission workflow (similar to task submission)
-    Route::post('/projects/{project}/submit', [ProjectController::class, 'submit']); // Submit project for review
-    Route::get('/projects/{project}/latest-submission', [ProjectController::class, 'latestSubmission']); // Get latest submission
-    Route::get('/projects/submission-file/{submission}', [ProjectController::class, 'downloadSubmissionFile']); // Download submission file
-    Route::post('/projects/{project}/approve', [ProjectController::class, 'approve']); // Approve submitted project
-    Route::post('/projects/{project}/reject', [ProjectController::class, 'reject']); // Reject submitted project
-    Route::post('/projects/{project}/reopen', [ProjectController::class, 'reopen']); // Reopen rejected project
-    Route::post('/projects/{project}/user-submissions/{submission}/approve', [ProjectController::class, 'approveUserSubmission']);
-    Route::post('/projects/{project}/user-submissions/{submission}/reject', [ProjectController::class, 'rejectUserSubmission']);
+    // Project submission workflow removed - projects no longer submitted as tasks
     Route::post('/projects/reorder', [ProjectController::class, 'reorderProjects']); // Reorder projects
 
     // Reorder tasks within a project

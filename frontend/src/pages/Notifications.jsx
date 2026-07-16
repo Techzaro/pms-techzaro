@@ -21,11 +21,7 @@ import "./Notifications.css";
 
 /** Map of notification type keys to their display icon, background and colour. */
 const TYPE_ICONS = {
-  project_assigned: { icon: "folder", bg: "#ede9fe", color: "#7c3aed" },
   project_updated: { icon: "edit", bg: "#dbeafe", color: "#2563eb" },
-  project_submitted: { icon: "upload", bg: "#dbeafe", color: "#2563eb" },
-  project_approved: { icon: "check", bg: "#d1fae5", color: "#059669" },
-  project_rejected: { icon: "x", bg: "#fee2e2", color: "#dc2626" },
   project_reopened: { icon: "refresh", bg: "#fef3c7", color: "#d97706" },
   project_access_granted: { icon: "check", bg: "#d1fae5", color: "#059669" },
   project_access_removed: { icon: "x", bg: "#fee2e2", color: "#dc2626" },
@@ -158,11 +154,7 @@ function Notifications() {
   const NOTIFICATION_TYPES = [
     { value: "", label: "All Types" },
     { value: "user_updated", label: "Profile Updated" },
-    { value: "project_assigned", label: "Project Assigned" },
     { value: "project_updated", label: "Project Updated" },
-    { value: "project_submitted", label: "Project Submitted" },
-    { value: "project_approved", label: "Project Approved" },
-    { value: "project_rejected", label: "Project Rejected" },
     { value: "project_reopened", label: "Project Reopened" },
     { value: "project_access_granted", label: "Project Access Granted" },
     { value: "project_access_removed", label: "Project Access Removed" },

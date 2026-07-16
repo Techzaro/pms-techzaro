@@ -58,6 +58,7 @@ class DeliverableController extends Controller
         $query = Deliverable::with([
             'project:id,title', 'assignee:id,name,email,role',
             'creator:id,name,role', 'task:id,title', 'latestSubmission',
+            'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role',
         ]);
 
         if ($view === 'assignee') {
@@ -110,7 +111,8 @@ class DeliverableController extends Controller
             'project:id,title', 'assignee:id,name,email,role',
             'creator:id,name,role', 'task:id,title',
             'latestSubmission', 'latestSubmission.submittedBy:id,name,email',
-            'latestSubmission.attachments', 'reopenedBy:id,name',
+            'latestSubmission.attachments', 'reopenedBy:id,name,role',
+            'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'updatedBy:id,name,role',
         ]);
 
         if ($isAdminOrManager) {
@@ -219,6 +221,7 @@ class DeliverableController extends Controller
             'status' => $validated['status'] ?? 'pending', 'priority' => $validated['priority'] ?? 'Medium',
             'due_date' => $validated['due_date'] ?? null, 'assigned_to' => $validated['assigned_to'] ?? null,
             'task_id' => $validated['task_id'] ?? null, 'created_by' => $user->id,
+            'updated_by' => $user->id,
         ]);
 
         // Create workflow event for deliverable creation
@@ -324,6 +327,7 @@ class DeliverableController extends Controller
             }
         }
         $oldAssignedTo = $deliverable->assigned_to;
+        $validated['updated_by'] = $user->id;
         $deliverable->update($validated);
 
         $changes = [];
@@ -578,7 +582,7 @@ class DeliverableController extends Controller
             return response()->json(['success' => false, 'message' => 'Can only approve submitted deliverables'], 422);
         }
 
-        $deliverable->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id]);
+        $deliverable->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id, 'updated_by' => $user->id]);
 
         DeliverableWorkflowEvent::create(['deliverable_id' => $deliverable->id, 'event_type' => 'approval', 'user_id' => $user->id]);
 
@@ -650,6 +654,7 @@ class DeliverableController extends Controller
         $deliverable->update([
             'status' => 'rejected', 'rejected_at' => now(), 'rejected_by' => $user->id,
             'rejection_comment' => $validated['comment'] ?? null,
+            'updated_by' => $user->id,
         ]);
 
         DeliverableWorkflowEvent::create(['deliverable_id' => $deliverable->id, 'event_type' => 'rejected', 'user_id' => $user->id, 'comment' => $validated['comment'] ?? null]);
@@ -740,6 +745,7 @@ class DeliverableController extends Controller
         $updateData = [
             'status' => 'reopened', 'reopened_at' => now(), 'reopened_by' => $user->id,
             'reopen_comment' => $validated['comment'] ?? null, 'reopen_instructions' => $validated['instructions'] ?? null,
+            'updated_by' => $user->id,
         ];
         if (! empty($validated['new_deadline'])) {
             $updateData['reopen_new_deadline'] = $validated['new_deadline'];

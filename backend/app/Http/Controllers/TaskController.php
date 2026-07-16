@@ -6,7 +6,6 @@ use App\Models\Deliverable;
 use App\Models\DeliverableSubmission;
 use App\Models\DeliverableTemplate;
 use App\Models\Project;
-use App\Models\ProjectUserSubmission;
 use App\Models\Task;
 use App\Models\TaskChange;
 use App\Models\TaskFile;
@@ -51,11 +50,7 @@ class TaskController extends Controller
     {
         $user = $request->user();
         $isDueTodayFilter = $request->input('status') === 'due_today';
-        $isApprovedFilter = $request->input('status') === 'approved';
         $isPendingFilter = $request->input('status') === 'pending';
-        $isSubmittedFilter = $request->input('status') === 'submitted';
-        $isReopenedFilter = $request->input('status') === 'reopened';
-        $isRejectedFilter = $request->input('status') === 'rejected';
         $statusFilter = $request->input('status');
         $filters = $request->query();
         if ($isDueTodayFilter || $isPendingFilter) {
@@ -69,7 +64,7 @@ class TaskController extends Controller
             ->where('assigned_by', '!=', $user->id)
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
-            ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role'])
+            ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role'])
             ->orderBy('sort_order')->latest('updated_at')
             ->filter($filters);
 
@@ -99,44 +94,7 @@ class TaskController extends Controller
             return $task;
         });
 
-        $projects = Project::whereJsonContains('assigned_users', $user->id)
-            ->where('created_by', '!=', $user->id)
-            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
-            ->where(function ($q) {
-                $q->whereNotNull('assigned_users')->whereRaw('JSON_LENGTH(assigned_users) > 0');
-            })
-            ->when($isApprovedFilter, fn ($q) => $q->where('status', 'approved'))
-            ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
-            ->when($isSubmittedFilter, fn ($q) => $q->where('status', 'submitted'))
-            ->when($isReopenedFilter, fn ($q) => $q->where('status', 'reopened'))
-            ->when($isRejectedFilter, fn ($q) => $q->where('status', 'rejected'))
-            ->when($statusFilter && ! $isDueTodayFilter && ! in_array($statusFilter, ['approved', 'pending', 'submitted', 'reopened', 'rejected']), fn ($q) => $q->where('status', $statusFilter))
-            ->with(['creator:id,name,role', 'team:id,name'])
-            ->latest()
-            ->limit(100)
-            ->get();
-
-        $projects = $projects->map(function ($project) use ($user) {
-            $project->item_type = 'project';
-            $project->sort_order = null;
-            $isAssigned = in_array($user->id, $project->assigned_users ?? []);
-            $submittableStatuses = ['pending', 'reopened', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress'];
-            $project->is_assigned = $isAssigned;
-            $project->can_submit = in_array($project->status, $submittableStatuses) && $isAssigned;
-
-            $mySubmission = ProjectUserSubmission::where('project_id', $project->id)
-                ->where('user_id', $user->id)
-                ->latest()
-                ->first();
-            $project->my_submission_status = $mySubmission?->status ?? null;
-            $project->can_submit = $project->can_submit && ($mySubmission?->status !== 'submitted');
-
-            return $project;
-        });
-
-        $allItems = $tasks->merge($projects)->sortBy(function ($item) {
-            return $item->sort_order ?? PHP_INT_MAX;
-        })->values();
+        $allItems = $tasks->sortBy('sort_order')->values();
 
         return response()->json([
             'data' => $allItems,
@@ -155,11 +113,7 @@ class TaskController extends Controller
     {
         $user = $request->user();
         $isDueTodayFilter = $request->input('status') === 'due_today';
-        $isApprovedFilter = $request->input('status') === 'approved';
         $isPendingFilter = $request->input('status') === 'pending';
-        $isSubmittedFilter = $request->input('status') === 'submitted';
-        $isReopenedFilter = $request->input('status') === 'reopened';
-        $isRejectedFilter = $request->input('status') === 'rejected';
         $filters = $request->query();
         if ($isPendingFilter || $isDueTodayFilter) {
             unset($filters['status']);
@@ -172,7 +126,7 @@ class TaskController extends Controller
             })
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
-            ->with(['project:id,title,team_id', 'assigners:id,name,email,role', 'assigner:id,name,email,role'])
+            ->with(['project:id,title,team_id', 'assigners:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role'])
             ->orderBy('sort_order')->latest('updated_at')
             ->filter($filters)
             ->limit(200)
@@ -202,40 +156,7 @@ class TaskController extends Controller
             return $task;
         });
 
-        $projects = Project::where('created_by', $user->id)
-            ->whereJsonContains('assigned_users', $user->id)
-            ->where(function ($q) {
-                $q->whereNotNull('assigned_users')->whereRaw('JSON_LENGTH(assigned_users) > 0');
-            })
-            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
-            ->when($isApprovedFilter, fn ($q) => $q->where('status', 'approved'))
-            ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
-            ->when($isSubmittedFilter, fn ($q) => $q->where('status', 'submitted'))
-            ->when($isReopenedFilter, fn ($q) => $q->where('status', 'reopened'))
-            ->when($isRejectedFilter, fn ($q) => $q->where('status', 'rejected'))
-            ->with(['creator:id,name,role', 'team:id,name'])
-            ->latest()
-            ->get()
-            ->map(function ($project) use ($user) {
-                $project->item_type = 'project';
-                $project->sort_order = null;
-                $isAssigned = in_array($user->id, $project->assigned_users ?? []);
-            $submittableStatuses = ['pending', 'reopened', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress'];
-                $project->is_assigned = $isAssigned;
-
-                $mySubmission = ProjectUserSubmission::where('project_id', $project->id)
-                    ->where('user_id', $user->id)
-                    ->latest()
-                    ->first();
-                $project->my_submission_status = $mySubmission?->status ?? null;
-                $project->can_submit = in_array($project->status, $submittableStatuses) && $isAssigned && ($mySubmission?->status !== 'submitted');
-
-                return $project;
-            });
-
-        $allItems = $tasks->merge($projects)->sortBy(function ($item) {
-            return $item->sort_order ?? PHP_INT_MAX;
-        })->values();
+        $allItems = $tasks->sortBy('sort_order')->values();
 
         return response()->json([
             'data' => $allItems,
@@ -278,11 +199,7 @@ class TaskController extends Controller
             && $requestingUser->id != $userId;
 
         $isDueTodayFilter = $request->input('status') === 'due_today';
-        $isApprovedFilter = $request->input('status') === 'approved';
         $isPendingFilter = $request->input('status') === 'pending';
-        $isSubmittedFilter = $request->input('status') === 'submitted';
-        $isReopenedFilter = $request->input('status') === 'reopened';
-        $isRejectedFilter = $request->input('status') === 'rejected';
         $statusFilter = $request->input('status');
         $search = $request->input('search');
 
@@ -326,40 +243,7 @@ class TaskController extends Controller
             $expandedTasks->push($clone);
         }
 
-        $projectsQuery = Project::whereJsonContains('assigned_users', (int) $userId)
-            ->where(function ($q) {
-                $q->whereNotNull('assigned_users')->whereRaw('JSON_LENGTH(assigned_users) > 0');
-            })
-            // If team lead is viewing member, only show projects created BY the team lead
-            ->when($isTeamLeadViewingMember, fn ($q) => $q->where('projects.created_by', $requestingUser->id))
-            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
-            ->when($isApprovedFilter, fn ($q) => $q->where('status', 'approved'))
-            ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
-            ->when($isSubmittedFilter, fn ($q) => $q->where('status', 'submitted'))
-            ->when($isReopenedFilter, fn ($q) => $q->where('status', 'reopened'))
-            ->when($isRejectedFilter, fn ($q) => $q->where('status', 'rejected'))
-            ->when($search, fn ($q) => $q->where('title', 'like', '%'.$search.'%'))
-            ->when($statusFilter && ! $isDueTodayFilter && ! in_array($statusFilter, ['approved', 'pending', 'submitted', 'reopened', 'rejected']), fn ($q) => $q->where('status', $statusFilter))
-            ->with(['creator:id,name,role', 'team:id,name'])
-            ->latest();
-
-        $projects = $projectsQuery->get();
-
-        $expandedProjects = collect();
-        $submittableStatuses = ['pending', 'reopened', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress'];
-        foreach ($projects as $project) {
-            $clone = clone $project;
-            $clone->item_type = 'project';
-            $clone->sort_order = null;
-            $clone->assigned_user = $targetUser;
-            $clone->is_assigned = true;
-            $clone->can_submit = in_array($clone->status, $submittableStatuses);
-            $expandedProjects->push($clone);
-        }
-
-        $allItems = $expandedTasks->merge($expandedProjects)->sortBy(function ($item) {
-            return $item->sort_order ?? PHP_INT_MAX;
-        })->values();
+        $allItems = $expandedTasks->sortBy('sort_order')->values();
 
         return response()->json(['success' => true, 'data' => $allItems, 'total' => $allItems->count()]);
     }
@@ -377,12 +261,7 @@ class TaskController extends Controller
         $user = $request->user();
         $userId = $user->id;
         $isDueTodayFilter = $request->input('status') === 'due_today';
-        $isApprovedFilter = $request->input('status') === 'approved';
         $isPendingFilter = $request->input('status') === 'pending';
-        $isSubmittedFilter = $request->input('status') === 'submitted';
-        $isReopenedFilter = $request->input('status') === 'reopened';
-        $isRejectedFilter = $request->input('status') === 'rejected';
-        $statusFilter = $request->input('status');
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
 
         if ($isAdminOrManager) {
@@ -390,7 +269,7 @@ class TaskController extends Controller
             );
         }
 
-        $tasksQuery = Task::with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role']);
+        $tasksQuery = Task::with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role']);
 
         if ($isAdminOrManager) {
             $tasksQuery->whereIn('assigned_by', $adminManagerIds)
@@ -457,78 +336,7 @@ class TaskController extends Controller
             }
         }
 
-        $projectsQuery = Project::where(function ($q) {
-            $q->whereNotNull('assigned_users')->whereRaw('JSON_LENGTH(assigned_users) > 0');
-        });
-
-        if ($isAdminOrManager) {
-            $projectsQuery->whereIn('created_by', $adminManagerIds);
-        } else {
-            $projectsQuery->where('created_by', $user->id);
-        }
-
-        $projects = $projectsQuery
-            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q))
-            ->when($isApprovedFilter, fn ($q) => $q->where('status', 'approved'))
-            ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
-            ->when($isSubmittedFilter, fn ($q) => $q->where('status', 'submitted'))
-            ->when($isReopenedFilter, fn ($q) => $q->where('status', 'reopened'))
-            ->when($isRejectedFilter, fn ($q) => $q->where('status', 'rejected'))
-            ->when($statusFilter && ! $isDueTodayFilter && ! in_array($statusFilter, ['approved', 'pending', 'submitted', 'reopened', 'rejected']), fn ($q) => $q->where('status', $statusFilter))
-            ->with(['creator:id,name,role', 'team:id,name'])
-            ->latest()
-            ->limit(100)->get();
-
-        $expandedProjects = collect();
-        $submittableStatuses = ['pending', 'reopened', 'Planned', 'Planning', 'in_progress', 'In Progress', 'In-progress'];
-
-        // Bulk-load all assigned user IDs across projects
-        $allUserIds = $projects->flatMap(fn ($p) => is_string($p->assigned_users) ? json_decode($p->assigned_users, true) ?? [] : ($p->assigned_users ?? []))
-            ->unique()->values()->toArray();
-        $allResolvedUsers = ! empty($allUserIds)
-            ? User::whereIn('id', $allUserIds)->select('id', 'name', 'role')->get()->keyBy('id')
-            : collect();
-
-        foreach ($projects as $project) {
-            $project->item_type = 'project';
-            $project->sort_order = null;
-            $assignedIds = $project->assigned_users;
-            if (is_string($assignedIds)) {
-                $assignedIds = json_decode($assignedIds, true) ?? [];
-            }
-            $assignedUsers = collect($assignedIds);
-
-            if ($assignedUsers->isEmpty()) {
-                $clone = clone $project;
-                $clone->assigned_user = null;
-                $clone->is_assigned = false;
-                $clone->can_submit = false;
-                $clone->my_submission_status = null;
-                $expandedProjects->push($clone);
-            } else {
-                foreach ($assignedUsers as $id) {
-                    if ((int) $id === (int) $project->created_by) {
-                        continue;
-                    }
-                    $clone = clone $project;
-                    $clone->assigned_user = $allResolvedUsers->get($id);
-                    $isAssignedToUser = (int) $id === (int) $user->id;
-                    $clone->is_assigned = $isAssignedToUser;
-
-                    $assignedUserSubmission = ProjectUserSubmission::where('project_id', $project->id)
-                        ->where('user_id', $id)
-                        ->latest()
-                        ->first();
-                    $clone->my_submission_status = $assignedUserSubmission?->status ?? null;
-                    $clone->can_submit = in_array($clone->status, $submittableStatuses) && $isAssignedToUser && ($assignedUserSubmission?->status !== 'submitted');
-                    $expandedProjects->push($clone);
-                }
-            }
-        }
-
-        $allItems = $expandedTasks->merge($expandedProjects)->sortBy(function ($item) {
-            return $item->sort_order ?? PHP_INT_MAX;
-        })->values();
+        $allItems = $expandedTasks->sortBy('sort_order')->values();
 
         return response()->json(['success' => true, 'data' => $allItems, 'total' => $allItems->count()]);
     }
@@ -713,6 +521,7 @@ class TaskController extends Controller
                 'end_date' => $validated['end_date'] ?? null,
                 'assigned_to' => $userId,
                 'assigned_by' => $user->id,
+                'updated_by' => $user->id,
                 'priority' => $validated['priority'],
                 'status' => 'pending',
                 'task_type' => $validated['task_type'] ?? 'standard',
@@ -1242,6 +1051,7 @@ class TaskController extends Controller
         }
 
         $oldAssigneeIds = $task->assignees()->pluck('users.id')->toArray();
+        $validated['updated_by'] = $user->id;
         $task->update($validated);
 
         // Rename existing files/links if provided
@@ -1817,7 +1627,7 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Can only approve submitted tasks'], 422);
         }
 
-        $task->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id]);
+        $task->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id, 'updated_by' => $user->id]);
 
         TaskWorkflowEvent::create(['task_id' => $task->id, 'user_id' => $user->id, 'action' => 'approved']);
 
@@ -1888,7 +1698,7 @@ class TaskController extends Controller
 
         $validated = $request->validate(['comment' => 'nullable|string|max:2000']);
 
-        $task->update(['status' => 'rejected', 'rejected_at' => now(), 'rejected_by' => $user->id, 'rejection_comment' => $validated['comment'] ?? null]);
+        $task->update(['status' => 'rejected', 'rejected_at' => now(), 'rejected_by' => $user->id, 'rejection_comment' => $validated['comment'] ?? null, 'updated_by' => $user->id]);
 
         TaskWorkflowEvent::create(['task_id' => $task->id, 'user_id' => $user->id, 'action' => 'rejected', 'comment' => $validated['comment'] ?? null]);
 
@@ -1980,6 +1790,7 @@ class TaskController extends Controller
             'status' => 'reopened', 'reopened_at' => now(), 'reopened_by' => $user->id,
             'reopen_comment' => $validated['comment'] ?? null,
             'reopen_instructions' => $validated['instructions'] ?? null,
+            'updated_by' => $user->id,
         ];
         if (! empty($validated['new_deadline'])) {
             $updateData['reopen_new_deadline'] = $validated['new_deadline'];

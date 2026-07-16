@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Tracks workflow events for a project (e.g., submitted, approved, rejected, reopened).
+ * Tracks workflow events for a project (e.g., created, assigned, field_changed, status_updated, completed).
  * Stores event details including comments, instructions, and optional file attachments.
  */
 class ProjectWorkflowEvent extends Model

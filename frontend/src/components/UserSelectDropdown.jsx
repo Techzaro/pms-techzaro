@@ -4,18 +4,14 @@
  * Click input → search mode. Click arrow → toggle dropdown.
  */
 
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect } from "react";
 import { MdExpandMore } from "react-icons/md";
-import { IoCalendarOutline } from "react-icons/io5";
 import "./UserSelectDropdown.css";
 
 const UserSelectDropdown = ({
   users = [],
   selectedIds = [],
   onChange,
-  dueDates = {},
-  onDueDateChange,
-  showDueDate = false,
   placeholder = "Click to select members",
   disabled = false,
   viewOnly = false,
@@ -23,8 +19,6 @@ const UserSelectDropdown = ({
 }) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [activeDatePicker, setActiveDatePicker] = useState(null);
-  const dateInputRefs = useRef({});
   const ref = useRef(null);
   const inputRef = useRef(null);
 
@@ -61,16 +55,6 @@ const UserSelectDropdown = ({
     if (!role) return "";
     const map = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member" };
     return map[role] || role.charAt(0).toUpperCase() + role.slice(1);
-  };
-
-  const formatDisplayDate = (dateStr) => {
-    if (!dateStr) return "";
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-    } catch {
-      return dateStr;
-    }
   };
 
   const q = search.toLowerCase().trim();
@@ -191,32 +175,6 @@ const UserSelectDropdown = ({
                         </div>
                       </div>
                     </label>
-                    {showDueDate && isSelected && (
-                      <div className="usd-date-wrap" onClick={(e) => e.stopPropagation()}>
-                        {dueDates[user.id] && (
-                          <span className="usd-date-text">{formatDisplayDate(dueDates[user.id])}</span>
-                        )}
-                        <IoCalendarOutline
-                          className="usd-cal-icon"
-                          size={16}
-                          onClick={() => {
-                            const input = dateInputRefs.current[user.id];
-                            if (input) {
-                              if (input.showPicker) input.showPicker();
-                              else input.click();
-                            }
-                            setActiveDatePicker(user.id);
-                          }}
-                        />
-                        <input
-                          ref={(el) => (dateInputRefs.current[user.id] = el)}
-                          type="datetime-local"
-                          className="usd-date-input-hidden"
-                          value={dueDates[user.id] || ""}
-                          onChange={(e) => onDueDateChange?.(user.id, e.target.value)}
-                        />
-                      </div>
-                    )}
                   </div>
                 );
               })

@@ -8,7 +8,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use App\Casts\AsStringKeyedJson;
 
 /**
  * Core project model that ties together all project-related entities.
@@ -31,38 +30,19 @@ class Project extends Model
         'sidebar_notes',
         'team_id',
         'assigned_users',
-        'user_due_dates',
         'status',
         'start_date',
         'end_date',
         'created_by',
-        'submitted_at',
-        'approved_at',
-        'rejected_at',
-        'rejection_comment',
-        'approved_by',
-        'rejected_by',
-        'reopened_at',
-        'reopened_by',
-        'reopen_comment',
-        'reopen_instructions',
-        'reopen_new_deadline',
-        'reopen_file_path',
-        'reopen_file_name',
+        'updated_by',
         'sort_order',
     ];
 
     protected $casts = [
         'assigned_users' => 'array',
-        'user_due_dates' => AsStringKeyedJson::class,
         'start_date' => 'datetime:Y-m-d\TH:i:s',
         'end_date' => 'datetime:Y-m-d\TH:i:s',
         'budget' => 'decimal:2',
-        'submitted_at' => 'datetime:Y-m-d\TH:i:s',
-        'approved_at' => 'datetime:Y-m-d\TH:i:s',
-        'rejected_at' => 'datetime:Y-m-d\TH:i:s',
-        'reopened_at' => 'datetime:Y-m-d\TH:i:s',
-        'reopen_new_deadline' => 'datetime:Y-m-d\TH:i:s',
     ];
 
     /** All tasks belonging to this project. */
@@ -75,6 +55,12 @@ class Project extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** The user who last updated this project. */
+    public function updatedBy()
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 
     /** The team assigned to this project. */
@@ -119,40 +105,10 @@ class Project extends Model
         return $this->hasMany(ProjectVisibility::class)->where('is_visible', true);
     }
 
-    /** All submission instances for this project. */
-    public function submissions()
-    {
-        return $this->hasMany(ProjectSubmission::class);
-    }
-
-    /** The most recent submission for this project. */
-    public function latestSubmission()
-    {
-        return $this->hasOne(ProjectSubmission::class)->latestOfMany();
-    }
-
-    /** Workflow events tracking state changes (submit, approve, reject, reopen). */
+    /** Workflow events tracking state changes (created, field_changed, status_updated). */
     public function workflowEvents()
     {
         return $this->hasMany(ProjectWorkflowEvent::class)->latest();
-    }
-
-    /** The user who approved this project. */
-    public function approvedBy()
-    {
-        return $this->belongsTo(User::class, 'approved_by');
-    }
-
-    /** The user who rejected this project. */
-    public function rejectedBy()
-    {
-        return $this->belongsTo(User::class, 'rejected_by');
-    }
-
-    /** The user who reopened this project for rework. */
-    public function reopenedBy()
-    {
-        return $this->belongsTo(User::class, 'reopened_by');
     }
 
     /** Activities related to this project (via related_module/related_id). */
@@ -172,12 +128,6 @@ class Project extends Model
     public function unviewedChanges()
     {
         return $this->hasMany(ProjectChange::class)->where('is_viewed', false);
-    }
-
-    /** Per-user submissions for this project. */
-    public function userSubmissions()
-    {
-        return $this->hasMany(ProjectUserSubmission::class)->latest();
     }
 
     /**

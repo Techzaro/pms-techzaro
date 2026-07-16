@@ -1,30 +1,26 @@
 /**
  * SelfTasks page component.
  *
- * Displays tasks and projects that the current user assigned to themselves.
+ * Displays tasks that the current user assigned to themselves.
  * Includes search with debounce, status filtering, time-range filtering,
  * drag-and-drop reordering and pagination.  Modals are available for
- * creating new tasks, submitting deliverables and submitting projects.
+ * creating new tasks and submitting deliverables.
  */
 
 import { useState, useEffect, useCallback } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
-import { CiCalendar } from "react-icons/ci";
-import { IoIosArrowDown } from "react-icons/io";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import { LuSend } from "react-icons/lu"; // Added missing import
 import CreateTaskModal from "../components/CreateTaskModal";
-import SubmitProjectModal from "../components/SubmitProjectModal";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal"; // Added missing import
 import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal"; // Added missing import
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
-import { authToken, rolePath, getUser } from "../utils/auth";
+import { authToken, rolePath } from "../utils/auth";
 import { formatDateTime } from "../utils/formatDateTime";
 import "../pages/Task.css";
 
@@ -56,13 +52,12 @@ const PRIORITY_TEXT_COLORS = {
   Low: "#166534",
 };
 
-/** Main Self Tasks page — renders tasks and projects assigned by the current user to themselves. */
+/** Main Self Tasks page — renders tasks assigned by the current user to themselves. */
 const SelfTasks = () => {
   const navigate = useNavigate();
   
   // State declarations
   const [showTaskModal, setShowTaskModal] = useState({ open: false, projectId: null, id: null }); // Fixed to object
-  const [showProjectSubmitModal, setShowProjectSubmitModal] = useState({ open: false, project: null });
   const [showDeliverableSubmitModal, setShowDeliverableSubmitModal] = useState({ open: false, deliverable: null }); // Added missing state
   const [viewModal, setViewModal] = useState({ open: false, deliverable: null }); // Added missing state
   const [items, setItems] = useState([]);
@@ -122,9 +117,8 @@ const SelfTasks = () => {
 
   const handleTaskReorder = useCallback((reordered) => {
     setOrderedItems(reordered);
-    const taskItems = reordered.filter((i) => i.item_type !== 'project');
-    if (taskItems.length) {
-      const payload = taskItems.map((item, idx) => ({ id: item.id, sort_order: idx }));
+    if (reordered.length) {
+      const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
       const token = authToken();
       fetch(`${API_URL}/tasks/reorder`, {
         method: 'POST',
@@ -167,25 +161,10 @@ const SelfTasks = () => {
     return map[status] || status;
   };
 
-  const calculateProgress = (item) => {
-    const total = Number(item.total_tasks ?? 0) || 0;
-    const completed = Number(item.completed_tasks ?? 0) || 0;
-    if (!total) return 0;
-    return Math.round((completed / total) * 100) || 0;
-  };
-
   const baseItems = orderedItems.length ? orderedItems : items;
   const pendingStatuses = ["pending", "in_progress", "In Progress", "In-progress", "planned", "Planning", "Planned", "submitted", "reopened", "rejected"];
   const filteredItems = statusFilter && statusFilter !== "due_today"
     ? baseItems.filter((item) => {
-        if (item.item_type === "project") {
-          if (statusFilter === "pending") {
-            return pendingStatuses.includes(item.status);
-          }
-          const workflowStatuses = ["submitted","approved","rejected","reopened"];
-          const displayStatus = workflowStatuses.includes(item.status) ? item.status : "pending";
-          return displayStatus === statusFilter;
-        }
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
@@ -193,7 +172,7 @@ const SelfTasks = () => {
       })
     : baseItems;
 
-  const taskIdList = filteredItems.filter((i) => i.item_type !== "project").map((i) => i.id);
+  const taskIdList = filteredItems.map((i) => i.id);
 
   const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
   const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
@@ -209,17 +188,15 @@ const SelfTasks = () => {
       <div className="Task">
         <div className="task-text">
           <h3>Self Tasks</h3>
-          <p>Tasks and projects you assigned to yourself</p>
+          <p>Tasks you assigned to yourself</p>
           <div className="task-count-badge" style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
             <span style={{ background: "#dedfe0", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
               Total: {totalCount} items
             </span>
             <span style={{ background: "#d6d6d6", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-              Tasks: {filteredItems.filter(i => i.item_type !== "project").length}
+              Tasks: {filteredItems.length}
             </span>
-            <span style={{ background: "#d4d4d4", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-              Projects: {filteredItems.filter(i => i.item_type === "project").length}
-            </span>
+
           </div>
         </div>
 
@@ -269,7 +246,7 @@ const SelfTasks = () => {
         <IoSearchOutline fontSize={"20px"} />
         <input
           type="text"
-          placeholder="Search by task or project name"
+          placeholder="Search by task name"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -279,7 +256,6 @@ const SelfTasks = () => {
         <div className="table-header-compact">
           <div></div>
           <div>Task Name</div>
-          <div>Type</div>
           <div>Status</div>
           <div>Progress</div>
           <div>Priority</div>
@@ -294,76 +270,33 @@ const SelfTasks = () => {
         ) : (
           <SortableTableWrapper 
             as="div" 
-            items={paginatedItems.map((i) => ({ ...i, sortableId: `${i.item_type}-${i.id}` }))} 
+            items={paginatedItems.map((i) => ({ ...i, sortableId: `task-${i.id}` }))} 
             onReorder={(reordered) => handleTaskReorder(reordered)} 
             idKey="sortableId"
             handleOnly
           >
             {(item, idx, dndProps) => {
-              const isProject = item.item_type === "project";
-
-              if (isProject) {
-                return (
-                  <div className="taskby-row-compact" key={item.sortableId}>
-                    <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
-                    <div><div className="task-title">{item.title}</div></div>
-                    <div><span className="badge" style={{ background: "#eef2ff", color: "#4f46e5" }}>Project</span></div>
-                    <div>
-                      <span className="badge" style={{ background: STATUS_COLORS[item.my_submission_status || item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.my_submission_status || item.status] || "#374151" }}>
-                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.my_submission_status || item.status] || "#374151" }}></span>
-                        {["submitted","approved","rejected","reopened"].includes(item.my_submission_status || item.status) ? formatStatus(item.my_submission_status || item.status) : "Pending"}
-                      </span>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>{calculateProgress(item)}%</div>
-                      <div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: `${calculateProgress(item)}%` }}></div></div>
-                      <div className="deliverables-approved-text">{item.completed_tasks || 0}/{item.total_tasks || 0} tasks</div>
-                    </div>
-                    <div>
-                      <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
-                        <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
-                        {item.priority}
-                      </span>
-                    </div>
-                    <div className="date-box">
-                      <div style={{ whiteSpace: "pre-line" }}>
-                        {(() => {
-                          const currentUser = getUser();
-                          const myDueDate = currentUser ? item.user_due_dates?.[currentUser.id] : null;
-                          return formatDate(myDueDate || item.end_date);
-                        })()}
-                      </div>
-                    </div>
-                    <div className="action-btns">
-                      <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'self-tasks' } })}><IoEyeOutline /></button>
-                      {item.can_submit && (
-                        <button 
-                          className="action-icon-btn action-submit" 
-                          title="Submit Project" 
-                          onClick={() => setShowProjectSubmitModal({ open: true, project: item })}
-                        >
-                          <LuSend />
-                        </button>
-                      )}
-                      {item.my_submission_status === "submitted" && <span className="action-status-badge" style={{ color: "#1E40AF", fontWeight: 600, fontSize: "12px" }}>Submitted</span>}
-                      {item.my_submission_status === "approved" && <span className="action-status-badge" style={{ color: "#166534", fontWeight: 600, fontSize: "12px" }}>Approved</span>}
-                      {item.my_submission_status === "rejected" && <span className="action-status-badge" style={{ color: "#991B1B", fontWeight: 600, fontSize: "12px" }}>Rejected — Resubmit</span>}
-                      {item.status === "reopened" && <span className="action-status-badge" style={{ color: "#92400E", fontWeight: 600, fontSize: "12px" }}>Reopened</span>}
-                      {item.status === "completed" && <span className="action-status-badge" style={{ color: "#166534", fontWeight: 600, fontSize: "12px" }}>Completed</span>}
-                    </div>
-                  </div>
-                );
-              }
-
               return (
                 <div className="taskby-row-compact" key={item.sortableId}>
                   <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
-                  <div><div className="task-title">{item.title}</div></div>
-                  <div><span className="badge" style={{ background: "#f0fdf4", color: "#16a34a" }}>Task</span></div>
+                  <div>
+                    <div className="task-title">{item.title}</div>
+                  </div>
                   <div>
                     <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
                       <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                       {formatStatus(item.status)}
+                    </span>
+                    {item.status === "approved" && item.approvedBy && (
+                      <div style={{ fontSize: "10px", color: "#166534", marginTop: "2px" }}>by {item.approvedBy.name}</div>
+                    )}
+                    {item.status === "rejected" && item.rejectedBy && (
+                      <div style={{ fontSize: "10px", color: "#991B1B", marginTop: "2px" }}>by {item.rejectedBy.name}</div>
+                    )}
+                    {item.status === "reopened" && item.reopenedBy && (
+                      <div style={{ fontSize: "10px", color: "#92400E", marginTop: "2px" }}>by {item.reopenedBy.name}</div>
+                    )}
+                  </div>
                     </span>
                   </div>
                   <div>
@@ -393,16 +326,6 @@ const SelfTasks = () => {
       )}
 
       {/* Modals */}
-      {showProjectSubmitModal.open && (
-        <SubmitProjectModal
-          key={`project-submit-${showProjectSubmitModal.project?.id || "none"}`}
-          isOpen={showProjectSubmitModal.open}
-          onClose={() => setShowProjectSubmitModal({ open: false, project: null })}
-          project={showProjectSubmitModal.project}
-          onSubmitSuccess={fetchTasks}
-        />
-      )}
-
       {showTaskModal.open && (
         <CreateTaskModal
           key={`task-create-${showTaskModal.id}`}

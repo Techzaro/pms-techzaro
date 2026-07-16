@@ -168,7 +168,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   const [deliverableInput, setDeliverableInput] = useState({ title: "", due_datetime: "" });
   const [openDeliverableDropdown, setOpenDeliverableDropdown] = useState(null);
 
-  const [dueDates, setDueDates] = useState({});
   const [requirementsList, setRequirementsList] = useState([]);
   const [reqInput, setReqInput] = useState("");
   const [pendingFiles, setPendingFiles] = useState([]);
@@ -252,11 +251,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   const handleAssignedToChange = (ids) => {
     setIsDirty(true);
     setForm((prev) => ({ ...prev, assigned_to: ids }));
-    setDueDates((prev) => { const n = { ...prev }; Object.keys(n).forEach((k) => { if (!ids.includes(Number(k))) delete n[k]; }); return n; });
     if (formErrors.assigned_to) setFormErrors((prev) => { const n = { ...prev }; delete n.assigned_to; return n; });
   };
-
-  const handleDueDateChange = (userId, value) => { setIsDirty(true); setDueDates((prev) => ({ ...prev, [userId]: value })); };
 
   const handleAddRequirement = () => { if (!reqInput.trim()) return; setIsDirty(true); setRequirementsList((prev) => [...prev, reqInput.trim()]); setReqInput(""); };
   const handleRemoveRequirement = (index) => { setIsDirty(true); setRequirementsList((prev) => prev.filter((_, i) => i !== index)); };
@@ -374,7 +370,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
           start_date: toUTCIso(form.start_date),
           end_date: toUTCIso(form.end_date),
           assigned_to: form.assigned_to,
-          due_dates: Object.keys(dueDates).length > 0 ? dueDates : undefined,
           priority: form.priority,
           task_type: form.task_type,
           recurrence_settings: settings,
@@ -454,7 +449,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 <div className="task-field">
                   <label>Assign To <span>*</span></label>
                   <UserSelectDropdown users={displayUsers} selectedIds={form.assigned_to} onChange={handleAssignedToChange}
-                    showDueDate={true} dueDates={dueDates} onDueDateChange={handleDueDateChange} placeholder="Click to select members" error={!!formErrors.assigned_to} />
+                    placeholder="Click to select members" error={!!formErrors.assigned_to} />
                   {formErrors.assigned_to && <span className="field-error-text">{formErrors.assigned_to}</span>}
                 </div>
               </div>

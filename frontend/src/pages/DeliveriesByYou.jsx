@@ -271,6 +271,19 @@ function DeliveriesByYou() {
                         </div>
                         <div>
                           <div className="user-name">{item.title}</div>
+                          {/* OWNERSHIP INFO */}
+                          <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginTop: "2px" }}>
+                            {item.approvedBy && (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#DCFCE7", color: "#166534", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 500 }}>
+                                Approved: {item.approvedBy.name}
+                              </span>
+                            )}
+                            {item.rejectedBy && (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#FEE2E2", color: "#991B1B", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 500 }}>
+                                Rejected: {item.rejectedBy.name}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

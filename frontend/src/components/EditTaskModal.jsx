@@ -168,15 +168,6 @@ export default function EditTaskModal({ task, onClose }) {
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState(
     task.assignees?.map((a) => a.id) || []
   );
-  const [dueDates, setDueDates] = useState(() => {
-    const initial = {};
-    if (task.assignees) {
-      task.assignees.forEach((a) => {
-        if (a.pivot?.due_date) initial[a.id] = a.pivot.due_date.slice(0, 16);
-      });
-    }
-    return initial;
-  });
   const [requirementsList, setRequirementsList] = useState(task.requirements || []);
   const [reqInput, setReqInput] = useState("");
   const [deliverables, setDeliverables] = useState(task.deliverables || []);
@@ -243,18 +234,6 @@ export default function EditTaskModal({ task, onClose }) {
   const handleAssignedToChange = (ids) => {
     setIsDirty(true);
     setSelectedAssigneeIds(ids);
-    setDueDates((prev) => {
-      const next = { ...prev };
-      Object.keys(next).forEach((k) => {
-        if (!ids.includes(Number(k))) delete next[k];
-      });
-      return next;
-    });
-  };
-
-  const handleDueDateChange = (userId, value) => {
-    setIsDirty(true);
-    setDueDates((prev) => ({ ...prev, [userId]: value }));
   };
 
   const handleAddRequirement = () => {
@@ -432,7 +411,6 @@ export default function EditTaskModal({ task, onClose }) {
             start_date: toUTCIso(form.start_date),
             end_date: toUTCIso(form.end_date),
             assigned_to: selectedAssigneeIds,
-            due_dates: Object.keys(dueDates).length > 0 ? dueDates : undefined,
             existing_file_names: existingFiles.reduce((acc, f) => {
               if (f.customName && f.customName !== f.name) {
                 acc.push({ id: f.id, name: f.customName });
@@ -514,9 +492,6 @@ export default function EditTaskModal({ task, onClose }) {
                     users={displayUsers}
                     selectedIds={selectedAssigneeIds}
                     onChange={handleAssignedToChange}
-                    showDueDate={true}
-                    dueDates={dueDates}
-                    onDueDateChange={handleDueDateChange}
                     placeholder="Click to select members"
                   />
                 )}

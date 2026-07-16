@@ -44,16 +44,8 @@ function formatStatus(status) {
   return map[status] || status || "-";
 }
 
-/**
- * Calculate the progress percentage for a task/project item.
- * For projects it uses completed_tasks/total_tasks; for tasks it
- * falls back to the deliverables_progress field.
- */
+/** Calculate the progress percentage for a task item. */
 function calculateProgress(item) {
-  if (item.item_type === "project") {
-    const t = Number(item.total_tasks ?? 0) || 0, c = Number(item.completed_tasks ?? 0) || 0;
-    return t === 0 ? 0 : Math.round((c / t) * 100) || 0;
-  }
   return Number(item.deliverables_progress) || 0;
 }
 
@@ -111,7 +103,6 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
   const statusDistribution = userData?.status_distribution || {};
   const priorityDistribution = userData?.priority_distribution || {};
   const tasks = userData?.tasks || [];
-  const projects = userData?.projects || [];
   const deliverables = userData?.deliverables || [];
   const delivSummary = userData?.deliverable_summary || {};
 
@@ -119,13 +110,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
   const reportLabel = isOwnPage ? "MY" : "USER";
   const reportLabelTitle = isOwnPage ? "My" : "User";
 
-  const allItems = [
-    ...tasks.map(t => ({ ...t, item_type: "task" })),
-    ...projects.map(p => ({
-      ...p, item_type: "project", title: p.name || p.title,
-      status: ["submitted", "approved", "rejected", "reopened"].includes(p.status) ? p.status : "pending",
-    })),
-  ];
+  const allItems = tasks;
 
   const dateRangeLabels = {
     all: "All Time", today: "Today", week: "This Week", month: "This Month",
@@ -147,8 +132,6 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
   };
 
   const filteredItems = filterByDateRange(allItems);
-  const filteredTasks = filteredItems.filter(i => i.item_type !== "project");
-  const filteredProjects = filteredItems.filter(i => i.item_type === "project");
   const totalItems = filteredItems.length;
   const totalAssigned = summary.total_assigned ?? totalItems;
   const approvedCount = summary.approved ?? statusBreakdown.completed ?? 0;
@@ -249,7 +232,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
         doc.text(String(c.value), cx + 18, y + 16);
         doc.setFontSize(5); doc.setFont("helvetica", "normal");
         doc.setTextColor(156, 163, 175);
-        const subs = { total_assigned: "All tasks and projects", approved: "Tasks completed", pending: "Tasks in progress", overdue: "Require attention" };
+        const subs = { total_assigned: "All tasks", approved: "Tasks completed", pending: "Tasks in progress", overdue: "Require attention" };
         doc.text(subs[c.key], cx + cW / 2, y + 20, { align: "center" });
       });
       y += 30;
@@ -331,21 +314,19 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
       });
       y += 50;
 
-      // ── TASKS & PROJECTS TABLE ──
+      // ── TASKS TABLE ──
       if (y > 220) { doc.addPage(); y = 16; }
       doc.setFontSize(9); doc.setFont("helvetica", "bold");
-      doc.setTextColor(17, 24, 39); doc.text("TASKS & PROJECTS DETAILS", M, y + 2);
+      doc.setTextColor(17, 24, 39);       doc.text("TASKS DETAILS", M, y + 2);
       y += 6;
 
       const taskTableData = filteredItems.map((item, idx) => {
         const progress = calculateProgress(item);
-        const isProject = item.item_type === "project";
-        const st = isProject ? (["submitted", "approved", "rejected", "reopened"].includes(item.status) ? formatStatus(item.status) : "Pending") : formatStatus(item.status);
+        const st = formatStatus(item.status);
         const due = item.end_date ? formatDateShort(item.end_date) : "-";
         return [
           String(idx + 1),
           (item.title || item.name || "-").substring(0, 36),
-          isProject ? "Project" : "Task",
           st,
           `${progress}%`,
           item.priority || "Medium",
@@ -356,7 +337,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
       autoTable(doc, {
         startY: y,
         margin: { left: M, right: M },
-        head: [["#", "Task / Project Name", "Type", "Status", "Progress", "Priority", "Due Date"]],
+        head: [["#", "Task Name", "Status", "Progress", "Priority", "Due Date"]],
         body: taskTableData,
         theme: "plain",
         styles: { fontSize: 6, cellPadding: 3, textColor: [55, 65, 81], lineColor: [229, 231, 235], lineWidth: 0.1 },
@@ -365,16 +346,15 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
         columnStyles: {
           0: { cellWidth: 8, halign: "center" },
           1: { cellWidth: "auto" },
-          2: { cellWidth: 18, halign: "center" },
+          2: { cellWidth: 20, halign: "center" },
           3: { cellWidth: 20, halign: "center" },
-          4: { cellWidth: 20, halign: "center" },
-          5: { cellWidth: 18, halign: "center" },
-          6: { cellWidth: 22, halign: "center" },
+          4: { cellWidth: 18, halign: "center" },
+          5: { cellWidth: 22, halign: "center" },
         },
         didParseCell(data) {
           if (data.section === "body") {
             if (data.column.index === 1) data.cell.styles.fontStyle = "bold";
-            if (data.column.index === 3 || data.column.index === 5) data.cell.styles.fontStyle = "bold";
+            if (data.column.index === 2 || data.column.index === 4) data.cell.styles.fontStyle = "bold";
           }
         },
         didDrawCell(data) {
@@ -619,7 +599,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                     </div>
                     <div style={{ fontSize: 26, fontWeight: 700, color: c.color, marginTop: 4 }}>{c.value}</div>
                     <div style={{ fontSize: 8, color: "#9ca3af", marginTop: 2 }}>
-                      {c.key === "total_assigned" ? "All tasks and projects" : c.key === "approved" ? "Tasks completed" : c.key === "pending" ? "Tasks in progress" : "Require attention"}
+                      {c.key === "total_assigned" ? "All tasks" : c.key === "approved" ? "Tasks completed" : c.key === "pending" ? "Tasks in progress" : "Require attention"}
                     </div>
                   </div>
                 ))}
@@ -675,14 +655,13 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
 
               {/* ═══ TASKS TABLE ═══ */}
               <div className="erm-table-section">
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>TASKS & PROJECTS DETAILS</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>TASKS DETAILS</div>
                 <div className="erm-table-wrapper">
                   <table className="erm-table">
                     <thead>
                       <tr>
                         <th style={{ width: "5%", textAlign: "center" }}>#</th>
-                        <th style={{ width: "30%", textAlign: "left" }}>Task / Project Name</th>
-                        <th style={{ width: "10%", textAlign: "center" }}>Type</th>
+                        <th style={{ width: "30%", textAlign: "left" }}>Task Name</th>
                         <th style={{ width: "14%", textAlign: "center" }}>Status</th>
                         <th style={{ width: "16%", textAlign: "center" }}>Progress</th>
                         <th style={{ width: "10%", textAlign: "center" }}>Priority</th>
@@ -691,11 +670,10 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                     </thead>
                     <tbody>
                       {filteredItems.length === 0 ? (
-                        <tr><td colSpan={7} style={{ textAlign: "center", padding: 20, color: "#9ca3af" }}>No items found</td></tr>
+                        <tr><td colSpan={6} style={{ textAlign: "center", padding: 20, color: "#9ca3af" }}>No items found</td></tr>
                       ) : filteredItems.map((item, idx) => {
                         const progress = calculateProgress(item);
-                        const isProject = item.item_type === "project";
-                        const st = isProject ? (["submitted", "approved", "rejected", "reopened"].includes(item.status) ? formatStatus(item.status) : "Pending") : formatStatus(item.status);
+                        const st = formatStatus(item.status);
                         const ss = getStatusStyle(st);
                         const ps = getPriStyle(item.priority || "Medium");
                         const due = item.end_date ? formatDateShort(item.end_date) : "-";
@@ -703,9 +681,6 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                           <tr key={idx} style={{ borderBottom: "1px solid #f3f4f6", background: idx % 2 ? "#f9fafb" : "#fff" }}>
                             <td data-label="#" style={{ textAlign: "center", color: "#6b7280" }}>{idx + 1}</td>
                             <td data-label="Name" style={{ fontWeight: 600, color: "#111827", wordBreak: "break-word" }}>{item.title || item.name || "-"}</td>
-                            <td data-label="Type" style={{ textAlign: "center" }}>
-                              <span style={{ fontWeight: 600, color: isProject ? "#6366f1" : "#16a34a" }}>{isProject ? "Project" : "Task"}</span>
-                            </td>
                             <td data-label="Status" style={{ textAlign: "center" }}>
                               <span style={{ fontWeight: 600, color: ss.text }}>&#9679; {st}</span>
                             </td>

@@ -23,6 +23,7 @@ class Deliverable extends Model
         'due_date',
         'assigned_to',
         'created_by',
+        'updated_by',
         'submitted_at',
         'approved_at',
         'rejected_at',
@@ -96,6 +97,12 @@ class Deliverable extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** The user who last updated this deliverable. */
+    public function updatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 
     /** The parent task this deliverable belongs to (optional). */

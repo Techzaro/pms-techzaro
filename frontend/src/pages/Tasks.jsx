@@ -1,10 +1,9 @@
 /**
  * Tasks page component — "Tasks Assigned To You".
  *
- * Displays tasks and projects that have been assigned to the current user
+ * Displays tasks that have been assigned to the current user
  * by others.  Provides search with debounce, status filtering, time-range
- * filtering, drag-and-drop reordering and pagination.  Submit actions open
- * modals for task or project submission.
+ * filtering, drag-and-drop reordering and pagination.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -17,7 +16,6 @@ import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import CreateTaskModal from "../components/CreateTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
-import SubmitProjectModal from "../components/SubmitProjectModal";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
@@ -53,7 +51,7 @@ const PRIORITY_TEXT_COLORS = {
   Low: "#166534",
 };
 
-/** Main Tasks page — renders tasks/projects assigned to the current user by others. */
+/** Main Tasks page — renders tasks assigned to the current user by others. */
 function Tasks() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -72,7 +70,7 @@ function Tasks() {
   });
   const [timeFilter, setTimeFilter] = useState("");
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
-  const [submitProjectModal, setSubmitProjectModal] = useState({ open: false, project: null });
+
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const ITEMS_PER_PAGE = 10;
@@ -107,7 +105,7 @@ function Tasks() {
     fetchTasks();
   }, [debouncedSearch, statusFilter]);
 
-  useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted', 'project:updated'], fetchTasks);
+  useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted'], fetchTasks);
 
   useEffect(() => {
     setOrderedItems(items);
@@ -115,9 +113,8 @@ function Tasks() {
 
   const handleTaskListReorder = useCallback((reordered) => {
     setOrderedItems(reordered);
-    const taskItems = reordered.filter((i) => i.item_type !== 'project');
-    if (taskItems.length) {
-      const payload = taskItems.map((item, idx) => ({ id: item.id, sort_order: idx }));
+    if (reordered.length) {
+      const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
       const token = authToken();
       fetch(`${API_URL}/tasks/reorder`, {
         method: 'POST',
@@ -189,29 +186,11 @@ function Tasks() {
   const handleTaskSubmitSuccess = (updatedTask) => {
     setItems((prev) =>
       prev.map((item) =>
-        item.item_type !== "project" && item.id === updatedTask.id
-          ? { ...item, ...updatedTask, item_type: item.item_type }
+        item.id === updatedTask.id
+          ? { ...item, ...updatedTask }
           : item
       )
     );
-  };
-
-  const handleProjectSubmitSuccess = (updatedProject) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.item_type === "project" && item.id === updatedProject.id
-          ? { ...item, ...updatedProject, item_type: "project" }
-          : item
-      )
-    );
-    fetchTasks();
-  };
-
-  const calculateProgress = (item) => {
-    const total = Number(item.total_tasks ?? 0) || 0;
-    const completed = Number(item.completed_tasks ?? 0) || 0;
-    if (!total) return 0;
-    return Math.round((completed / total) * 100) || 0;
   };
 
 
@@ -220,14 +199,6 @@ function Tasks() {
   const pendingStatuses = ["pending", "in_progress", "In Progress", "In-progress", "planned", "Planning", "Planned", "submitted", "reopened", "rejected"];
   const filteredItems = statusFilter && statusFilter !== "due_today"
     ? items.filter((item) => {
-        if (item.item_type === "project") {
-          if (statusFilter === "pending") {
-            return pendingStatuses.includes(item.status);
-          }
-          const workflowStatuses = ["submitted","approved","rejected","reopened"];
-          const displayStatus = workflowStatuses.includes(item.status) ? item.status : "pending";
-          return displayStatus === statusFilter;
-        }
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
@@ -235,7 +206,7 @@ function Tasks() {
       })
     : baseItems;
 
-  const taskIdList = filteredItems.filter((i) => i.item_type !== "project").map((i) => i.id);
+  const taskIdList = filteredItems.map((i) => i.id);
 
   const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
   const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
@@ -257,10 +228,7 @@ function Tasks() {
               Total: {totalCount} items
             </span>
             <span style={{ background: "#d6d6d6", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-              Tasks: {filteredItems.filter(i => i.item_type !== "project").length}
-            </span>
-            <span style={{ background: "#d4d4d4", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-              Projects: {filteredItems.filter(i => i.item_type === "project").length}
+              Tasks: {filteredItems.length}
             </span>
           </div>
         </div>
@@ -317,7 +285,7 @@ function Tasks() {
         <IoSearchOutline fontSize={"20px"} />
         <input
           type="text"
-          placeholder="Search by task or project name"
+          placeholder="Search by task name"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -329,7 +297,6 @@ function Tasks() {
           <div></div>
           <div>Assigned by</div>
           <div className="task-name-column">Task Name</div>
-          <div>Type</div>
           <div className="status-column">Status</div>
           <div>Progress</div>
           <div className="priority-column">Priority</div>
@@ -343,107 +310,14 @@ function Tasks() {
           <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
         ) : (
           <SortableTableWrapper 
-            items={paginatedItems.map((i) => ({ ...i, sortableId: `${i.item_type}-${i.id}` }))} 
+            items={paginatedItems.map((i) => ({ ...i, sortableId: `task-${i.id}` }))} 
             onReorder={(reordered) => handleTaskListReorder(reordered)} 
             idKey="sortableId"
             as="div"
             handleOnly
           >
             {(item, idx, dndProps) => {
-              const isProject = item.item_type === "project";
               const colors = getRandomColors(item.id);
-
-              if (isProject) {
-                return (
-                  <div className="taskby-row" key={item.sortableId}>
-                    <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
-                    <div className="col-assigned-to">
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                          {getInitials(item.creator?.name)}
-                        </div>
-                        <div style={{ minWidth: 0 }}>
-                          <div className="user-name">{item.creator?.name || "System"}</div>
-                          <div className="user-role">{item.creator?.role || ""}</div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="col-task-name">
-                      <div className="task-title">{item.title}</div>
-                    </div>
-                    
-                    <div className="col-type">
-                      <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5", backgroundColor: "#e0eaf0" }}>Project</span>
-                    </div>
-                    
-                    <div className="col-status">
-                      <span className="badge" style={{ background: STATUS_COLORS[item.my_submission_status || item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.my_submission_status || item.status] || "#374151" }}>
-                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.my_submission_status || item.status] || "#374151" }}></span>
-                        {["submitted","approved","rejected","reopened"].includes(item.my_submission_status || item.status) ? formatStatus(item.my_submission_status || item.status) : "Pending"}
-                      </span>
-                    </div>
-                    
-                    <div className="col-progress">
-                      <div style={{ 
-                        display: "flex", 
-                        justifyContent: "flex-start", 
-                        alignItems: "center",
-                        marginBottom: "4px"
-                      }}>
-                        <span style={{ 
-                          fontSize: "13px", 
-                          fontWeight: 600, 
-                          color: "#374151" 
-                        }}>
-                          {calculateProgress(item)}%
-                        </span>
-                      </div>
-                      <div className="progress-bar-track">
-                        <div className="progress-bar-fill" style={{ width: `${calculateProgress(item)}%` }}></div>
-                      </div>
-                      <div className="deliverables-approved-text">
-                        {item.completed_tasks || 0}/{item.total_tasks || 0} tasks
-                      </div>
-                    </div>
-                    
-                    <div className="col-priority">
-                      <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
-                        <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
-                        {item.priority}
-                      </span>
-                    </div>
-                    
-                    <div className="col-due-date">
-                      <div className="date-box">
-                        <div style={{ whiteSpace: "pre-line" }}>
-                          {(() => {
-                            const myDueDate = currentUser ? item.user_due_dates?.[currentUser.id] : null;
-                            return formatDate(myDueDate || item.end_date);
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="col-action">
-                      <div className="action-btns">
-                        <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'tasks' } })}><IoEyeOutline /></button>
-                        {item.can_submit && (
-                          <div style={{ position: "relative", display: "inline-flex" }}>
-                            <button 
-                              className="action-icon-btn action-submit" 
-                              title="Submit Project" 
-                              onClick={() => setSubmitProjectModal({ open: true, project: item })} 
-                            >
-                              <LuSend />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
 
               const assigner = item.assigner;
               return (
@@ -463,15 +337,20 @@ function Tasks() {
                     <div className="task-title">{item.title}</div>
                   </div>
                   
-                  <div className="col-type">
-                    <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a" }}>Task</span>
-                  </div>
-                  
                   <div className="col-status">
                     <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
                       <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                       {formatStatus(item.status)}
                     </span>
+                    {item.status === "approved" && item.approvedBy && (
+                      <div style={{ fontSize: "10px", color: "#166534", marginTop: "2px" }}>by {item.approvedBy.name}</div>
+                    )}
+                    {item.status === "rejected" && item.rejectedBy && (
+                      <div style={{ fontSize: "10px", color: "#991B1B", marginTop: "2px" }}>by {item.rejectedBy.name}</div>
+                    )}
+                    {item.status === "reopened" && item.reopenedBy && (
+                      <div style={{ fontSize: "10px", color: "#92400E", marginTop: "2px" }}>by {item.reopenedBy.name}</div>
+                    )}
                   </div>
                   
                   <div className="col-progress">
@@ -539,13 +418,6 @@ function Tasks() {
         onSubmitSuccess={handleTaskSubmitSuccess}
       />
 
-      <SubmitProjectModal
-        key={`tasks-project-submit-${submitProjectModal.project?.id || "none"}`}
-        isOpen={submitProjectModal.open}
-        onClose={() => setSubmitProjectModal({ open: false, project: null })}
-        project={submitProjectModal.project}
-        onSubmitSuccess={handleProjectSubmitSuccess}
-      />
     </DashboardLayout>
   );
 }

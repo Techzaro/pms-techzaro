@@ -182,48 +182,17 @@ class ReportController extends Controller
                 ->whereIn('id', $taskIds)->groupBy('status')->get()
             : collect();
 
-        // --- PROJECTS ASSIGNED AS TASKS ---
-        $projectQuery = Project::whereJsonContains('assigned_users', $user->id)
-            ->whereNotNull('assigned_users');
-
-        // If team lead is viewing member, only show projects created BY the team lead
-        if ($isTeamLeadViewingMember) {
-            $projectQuery->where('projects.created_by', $requestingUser->id);
-        }
-
-        if ($timeFilter !== 'all') {
-            $this->applyTimeFilter($projectQuery, $timeFilter, 'projects');
-        }
-        $projectAsTaskStats = (clone $projectQuery)->selectRaw("
-            COUNT(*) as assigned,
-            SUM(CASE WHEN status IN ('approved','completed','done') THEN 1 ELSE 0 END) as completed,
-            SUM(CASE WHEN status IN ('submitted','reopened') THEN 1 ELSE 0 END) as in_review,
-            SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue
-        ")->first();
-
-        // Project-as-task status breakdown (mapped to task statuses)
-        $projectAsTaskBreakdown = (clone $projectQuery)->selectRaw("
-            CASE
-                WHEN status IN ('approved','completed','done') THEN 'completed'
-                WHEN status IN ('submitted','reopened') THEN 'submitted'
-                WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 'overdue'
-                ELSE 'pending'
-            END as mapped_status,
-            COUNT(*) as count
-        ")->groupBy('mapped_status')->get();
-
-        // --- MERGE TASK + PROJECT-AS-TASK COUNTS ---
-        $assigned = (int) $taskAgg->assigned + (int) $projectAsTaskStats->assigned;
-        $completed = (int) $taskAgg->completed + (int) $projectAsTaskStats->completed;
-        $inReview = (int) $taskAgg->in_review + (int) $projectAsTaskStats->in_review;
-        $overdue = (int) $taskAgg->overdue + (int) $projectAsTaskStats->overdue;
+        // --- COMPUTE STATS FROM TASKS ONLY ---
+        $assigned = (int) $taskAgg->assigned;
+        $completed = (int) $taskAgg->completed;
+        $inReview = (int) $taskAgg->in_review;
+        $overdue = (int) $taskAgg->overdue;
         $pending = max($assigned - $completed - $inReview - $overdue, 0);
 
-        // Merge status breakdowns
         $mergedBreakdown = ['completed' => $completed, 'pending' => $pending, 'in_review' => $inReview, 'overdue' => $overdue, 'total' => $assigned];
 
-        // --- RECENT TASKS (tasks + project-as-task items) ---
-        $recentTasks = (clone $taskBase)
+        // --- RECENT TASKS ---
+        $allRecentTasks = (clone $taskBase)
             ->with('project:id,title')
             ->latest()
             ->limit(10)
@@ -237,22 +206,6 @@ class ReportController extends Controller
                 'end_date' => $t->end_date,
                 'item_type' => 'task',
             ]);
-
-        $recentProjectTasks = (clone $projectQuery)->latest()->limit(10)->get()
-            ->map(fn ($p) => [
-                'id' => 'proj_'.$p->id,
-                'title' => $p->title,
-                'project' => $p->title,
-                'status' => $p->status,
-                'priority' => $p->priority ?? 'Medium',
-                'end_date' => $p->end_date,
-                'item_type' => 'project',
-            ]);
-
-        $allRecentTasks = collect($recentTasks)->merge(collect($recentProjectTasks))
-            ->sortByDesc('end_date')
-            ->take(10)
-            ->values();
 
         // --- PROJECTS WITH TASK COUNTS (projects tab) ---
         $projectStats = (clone $taskBase)
@@ -284,39 +237,7 @@ class ReportController extends Controller
                 ];
             });
 
-        // Also include projects assigned directly as tasks (not via tasks table)
-        $directProjectStatsQuery = Project::whereJsonContains('assigned_users', $user->id)
-            ->whereNotNull('assigned_users');
-
-        // If team lead is viewing member, only show projects created BY the team lead
-        if ($isTeamLeadViewingMember) {
-            $directProjectStatsQuery->where('projects.created_by', $requestingUser->id);
-        }
-
-        $directProjectStats = $directProjectStatsQuery
-            ->select('id', 'title', 'status', 'start_date', 'end_date')
-            ->get()
-            ->filter(fn ($p) => ! $projectStats->contains('id', $p->id))
-            ->map(function ($p) {
-                $milestones = \App\Models\ProjectMilestone::where('project_id', $p->id)->orderBy('sort_order')->get();
-                $now = now();
-                $upcoming = $milestones->first(fn ($m) => $m->due_date >= $now && $m->status !== 'completed');
-                $last = $milestones->last();
-                $activeDeadline = $upcoming?->due_date ?? $last?->due_date ?? $p->end_date;
-
-                return [
-                    'id' => $p->id,
-                    'name' => $p->title,
-                    'status' => $p->status,
-                    'start_date' => $p->start_date,
-                    'end_date' => $activeDeadline,
-                    'total_tasks' => 0,
-                    'completed_tasks' => 0,
-                    'progress' => 0,
-                ];
-            });
-
-        $allProjects = collect($projectStats)->merge(collect($directProjectStats))->values();
+        $allProjects = $projectStats->values();
 
         // Build status distribution from task breakdown + project breakdown
         $statusDistribution = [
@@ -340,7 +261,7 @@ class ReportController extends Controller
             }
         }
 
-        // --- PRIORITY DISTRIBUTION (user's tasks + project-as-tasks) ---
+        // --- PRIORITY DISTRIBUTION (user's tasks) ---
         $priorityStats = $taskIds->isNotEmpty()
             ? Task::selectRaw("
                 SUM(CASE WHEN `priority` = 'high' THEN 1 ELSE 0 END) as p_high,
@@ -349,17 +270,10 @@ class ReportController extends Controller
             ")->whereIn('id', $taskIds)->first()
             : (object) ['p_high' => 0, 'p_medium' => 0, 'p_low' => 0];
 
-        $projectPriorityStatsResult = (clone $projectQuery)->selectRaw("
-            SUM(CASE WHEN `priority` = 'high' THEN 1 ELSE 0 END) as p_high,
-            SUM(CASE WHEN `priority` = 'medium' THEN 1 ELSE 0 END) as p_medium,
-            SUM(CASE WHEN `priority` = 'low' THEN 1 ELSE 0 END) as p_low
-        ")->first();
-        $projectPriorityStats = $projectPriorityStatsResult ?: (object) ['p_high' => 0, 'p_medium' => 0, 'p_low' => 0];
-
         $priorityDistribution = [
-            'high' => (int) $priorityStats->p_high + (int) $projectPriorityStats->p_high,
-            'medium' => (int) $priorityStats->p_medium + (int) $projectPriorityStats->p_medium,
-            'low' => (int) $priorityStats->p_low + (int) $projectPriorityStats->p_low,
+            'high' => (int) $priorityStats->p_high,
+            'medium' => (int) $priorityStats->p_medium,
+            'low' => (int) $priorityStats->p_low,
         ];
 
         $team = $user->teams()->first();
@@ -809,50 +723,14 @@ class ReportController extends Controller
             SUM(CASE WHEN `priority` = 'low' THEN 1 ELSE 0 END) as p_low
         ")->first();
 
-        // --- PROJECTS ASSIGNED AS TASKS ---
-        $projectQuery = Project::whereNotNull('assigned_users');
-        switch ($role) {
-            case 'admin':
-            case 'manager':
-                $projectQuery->whereRaw('JSON_LENGTH(assigned_users) > 0');
-                break;
-            case 'team_lead':
-                if ($isTeamView) {
-                    // Get projects created BY team lead where team members are assigned
-                    $projectQuery->where('created_by', $user->id)
-                        ->where(function ($q) use ($memberIds) {
-                            foreach ($memberIds as $memberId) {
-                                $q->orWhereJsonContains('assigned_users', $memberId);
-                            }
-                        });
-                } else {
-                    $projectQuery->whereJsonContains('assigned_users', $user->id);
-                }
-                break;
-            case 'member':
-                $projectQuery->whereJsonContains('assigned_users', $user->id);
-                break;
-        }
-        if ($timeFilter !== 'all') {
-            $this->applyTimeFilter($projectQuery, $timeFilter, 'projects');
-        }
-        $projectStats = $projectQuery->selectRaw("
-            COUNT(*) as total_assigned,
-            SUM(CASE WHEN status IN ('approved','completed','done') THEN 1 ELSE 0 END) as approved,
-            SUM(CASE WHEN end_date < NOW() AND status NOT IN ('completed','done','abandoned','approved') THEN 1 ELSE 0 END) as overdue,
-            SUM(CASE WHEN `priority` = 'high' THEN 1 ELSE 0 END) as p_high,
-            SUM(CASE WHEN `priority` = 'medium' THEN 1 ELSE 0 END) as p_medium,
-            SUM(CASE WHEN `priority` = 'low' THEN 1 ELSE 0 END) as p_low
-        ")->first();
-
-        // Merge task + project-as-task counts
-        $totalAssigned = (int) $taskStats->total_assigned + (int) $projectStats->total_assigned;
-        $approved = (int) $taskStats->approved + (int) $projectStats->approved;
+        // Use task-only stats
+        $totalAssigned = (int) $taskStats->total_assigned;
+        $approved = (int) $taskStats->approved;
         $pending = max($totalAssigned - $approved, 0);
-        $overdue = (int) $taskStats->overdue + (int) $projectStats->overdue;
-        $highPriority = (int) $taskStats->p_high + (int) $projectStats->p_high;
-        $mediumPriority = (int) $taskStats->p_medium + (int) $projectStats->p_medium;
-        $lowPriority = (int) $taskStats->p_low + (int) $projectStats->p_low;
+        $overdue = (int) $taskStats->overdue;
+        $highPriority = (int) $taskStats->p_high;
+        $mediumPriority = (int) $taskStats->p_medium;
+        $lowPriority = (int) $taskStats->p_low;
 
         return response()->json([
             'total_assigned' => $totalAssigned,
@@ -922,7 +800,7 @@ class ReportController extends Controller
             ->get()
             ->keyBy('id');
 
-        // --- PROJECT-AS-TASK STATS PER USER — single query instead of N+1 ---
+        // --- USER STATS FROM TASKS ONLY ---
         $allUsers = User::where('active', true)->select('id', 'name', 'role');
 
         // Filter by team members for team_lead
@@ -931,16 +809,13 @@ class ReportController extends Controller
         }
 
         $allUsers = $allUsers->orderBy('name')->get();
-        $projectStats = $this->getProjectAsTaskStatsForTeamLead($allUsers->pluck('id'), $timeFilter, $isTeamLead ? $user->id : null);
 
-        // --- MERGE TASK + PROJECT-AS-TASK COUNTS ---
-        $stats = $allUsers->map(function ($user) use ($taskStats, $projectStats) {
+        $stats = $allUsers->map(function ($user) use ($taskStats) {
             $ts = $taskStats->get($user->id);
-            $ps = $projectStats->get($user->id);
 
-            $assigned = (int) ($ts->assigned ?? 0) + (int) ($ps->assigned ?? 0);
-            $completed = (int) ($ts->completed ?? 0) + (int) ($ps->completed ?? 0);
-            $overdue = (int) ($ts->overdue ?? 0) + (int) ($ps->overdue ?? 0);
+            $assigned = (int) ($ts->assigned ?? 0);
+            $completed = (int) ($ts->completed ?? 0);
+            $overdue = (int) ($ts->overdue ?? 0);
             $pending = max($assigned - $completed, 0);
 
             return [
@@ -993,17 +868,13 @@ class ReportController extends Controller
             ->get()
             ->keyBy('id');
 
-        // --- PROJECT-AS-TASK STATS PER USER — single query instead of N+1 ---
-        $projectStats = $this->getProjectAsTaskStats($allUsers->pluck('id'), $timeFilter);
-
-        // --- MERGE TASK + PROJECT-AS-TASK COUNTS PER USER ---
-        $employeeStats = $allUsers->map(function ($user) use ($taskStats, $projectStats) {
+        // --- EMPLOYEE STATS FROM TASKS ONLY ---
+        $employeeStats = $allUsers->map(function ($user) use ($taskStats) {
             $ts = $taskStats->get($user->id);
-            $ps = $projectStats->get($user->id);
 
-            $assigned = (int) ($ts->assigned ?? 0) + (int) ($ps->assigned ?? 0);
-            $completed = (int) ($ts->completed ?? 0) + (int) ($ps->completed ?? 0);
-            $overdue = (int) ($ts->overdue ?? 0) + (int) ($ps->overdue ?? 0);
+            $assigned = (int) ($ts->assigned ?? 0);
+            $completed = (int) ($ts->completed ?? 0);
+            $overdue = (int) ($ts->overdue ?? 0);
             $pending = max($assigned - $completed, 0);
             $completionRate = $assigned > 0 ? (int) round(($completed / $assigned) * 100) : 0;
 
@@ -1112,88 +983,6 @@ class ReportController extends Controller
             'month' => $query->where($col, '>=', now()->startOfMonth()),
             default => $query,
         };
-    }
-
-    /**
-     * Bulk compute project-as-task stats for all user IDs in a single pass.
-     * Replaces N+1 pattern where one query ran per user.
-     */
-    private function getProjectAsTaskStats($userIds, string $timeFilter): Collection
-    {
-        $allProjects = Project::whereNotNull('assigned_users')
-            ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter, 'projects'))
-            ->select('id', 'assigned_users', 'status', 'end_date', 'created_at')
-            ->get();
-
-        $userProjectMap = [];
-        foreach ($allProjects as $p) {
-            $ids = is_string($p->assigned_users) ? json_decode($p->assigned_users, true) ?? [] : ($p->assigned_users ?? []);
-            foreach (array_map('intval', $ids) as $uid) {
-                $userProjectMap[$uid][] = $p;
-            }
-        }
-
-        $results = collect();
-        foreach ($userIds as $uid) {
-            $assigned = 0;
-            $completed = 0;
-            $overdue = 0;
-            foreach ($userProjectMap[$uid] ?? [] as $p) {
-                $assigned++;
-                if (in_array(strtolower((string) $p->status), ['approved', 'completed', 'done'])) {
-                    $completed++;
-                }
-                if ($p->end_date && now()->greaterThan($p->end_date) && ! in_array(strtolower((string) $p->status), ['completed', 'done', 'abandoned', 'approved'])) {
-                    $overdue++;
-                }
-            }
-            $results->put($uid, (object) ['assigned' => $assigned, 'completed' => $completed, 'overdue' => $overdue]);
-        }
-
-        return $results;
-    }
-
-    /**
-     * Bulk compute project-as-task stats for team lead - only projects created by the team lead.
-     */
-    private function getProjectAsTaskStatsForTeamLead($userIds, string $timeFilter, ?int $teamLeadId = null): Collection
-    {
-        if (! $teamLeadId) {
-            return $this->getProjectAsTaskStats($userIds, $timeFilter);
-        }
-
-        $allProjects = Project::whereNotNull('assigned_users')
-            ->where('created_by', $teamLeadId)
-            ->when($timeFilter !== 'all', fn ($q) => $this->applyTimeFilter($q, $timeFilter, 'projects'))
-            ->select('id', 'assigned_users', 'status', 'end_date', 'created_at')
-            ->get();
-
-        $userProjectMap = [];
-        foreach ($allProjects as $p) {
-            $ids = is_string($p->assigned_users) ? json_decode($p->assigned_users, true) ?? [] : ($p->assigned_users ?? []);
-            foreach (array_map('intval', $ids) as $uid) {
-                $userProjectMap[$uid][] = $p;
-            }
-        }
-
-        $results = collect();
-        foreach ($userIds as $uid) {
-            $assigned = 0;
-            $completed = 0;
-            $overdue = 0;
-            foreach ($userProjectMap[$uid] ?? [] as $p) {
-                $assigned++;
-                if (in_array(strtolower((string) $p->status), ['approved', 'completed', 'done'])) {
-                    $completed++;
-                }
-                if ($p->end_date && now()->greaterThan($p->end_date) && ! in_array(strtolower((string) $p->status), ['completed', 'done', 'abandoned', 'approved'])) {
-                    $overdue++;
-                }
-            }
-            $results->put($uid, (object) ['assigned' => $assigned, 'completed' => $completed, 'overdue' => $overdue]);
-        }
-
-        return $results;
     }
 
     /**

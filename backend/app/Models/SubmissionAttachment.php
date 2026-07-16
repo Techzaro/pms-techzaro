@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Represents a file or link attachment for a submission.
- * Supports both uploaded files and external URLs, scoped by submission_type (project, task, deliverable).
+ * Supports both uploaded files and external URLs, scoped by submission_type (task, deliverable).
  */
 class SubmissionAttachment extends Model
 {

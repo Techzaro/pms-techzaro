@@ -1,10 +1,10 @@
 /**
  * Taskby page component — "Tasks Assigned By You".
  *
- * Lists tasks and projects that the current user (typically admin, manager
- * or team lead) has assigned to other team members.  Provides search with
- * debounce, status filtering, time-range filtering, drag-and-drop reordering,
- * pagination and a modal for creating new tasks.
+ * Lists tasks that the current user (typically admin, manager or team lead)
+ * has assigned to other team members. Provides search with debounce, status
+ * filtering, time-range filtering, drag-and-drop reordering, pagination
+ * and a modal for creating new tasks.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -19,7 +19,6 @@ import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io
 import { Pencil } from "lucide-react";
 import CreateTaskModal from "../components/CreateTaskModal";
 import EditTaskModal from "../components/EditTaskModal";
-import EditProjectModal from "../components/EditProjectModal";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
@@ -55,7 +54,7 @@ const PRIORITY_TEXT_COLORS = {
   Low: "#166534",
 };
 
-/** Main Taskby page — renders tasks/projects assigned by the current user. */
+/** Main Taskby page — renders tasks assigned by the current user. */
 const Taskby = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -75,7 +74,7 @@ const Taskby = () => {
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
-  const [editingProject, setEditingProject] = useState(null);
+
   const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
@@ -83,7 +82,7 @@ const Taskby = () => {
     return () => clearTimeout(timer);
   }, [search]);
 
-  /** Fetch tasks/projects assigned by the current user from the API. */
+  /** Fetch tasks assigned by the current user from the API. */
   const fetchTasks = () => {
     setLoading(true);
     const token = authToken();
@@ -122,9 +121,8 @@ const Taskby = () => {
 
   const handleTaskReorder = useCallback((reordered) => {
     setOrderedItems(reordered);
-    const taskItems = reordered.filter((i) => i.item_type !== 'project');
-    if (taskItems.length) {
-      const payload = taskItems.map((item, idx) => ({ id: item.id, sort_order: idx }));
+    if (reordered.length) {
+      const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
       const token = authToken();
       fetch(`${API_URL}/tasks/reorder`, {
         method: 'POST',
@@ -183,13 +181,6 @@ const Taskby = () => {
     return map[status] || status;
   };
 
-  const calculateProgress = (item) => {
-    const total = Number(item.total_tasks ?? 0) || 0;
-    const completed = Number(item.completed_tasks ?? 0) || 0;
-    if (!total) return 0;
-    return Math.round((completed / total) * 100) || 0;
-  };
-
   const baseItems = orderedItems.length ? orderedItems : items;
   const pendingStatuses = ["pending", "in_progress", "In Progress", "In-progress", "planned", "Planning", "Planned", "submitted", "reopened", "rejected"];
 
@@ -198,14 +189,6 @@ const Taskby = () => {
       return true;
     }
     if (statusFilter) {
-      if (item.item_type === "project") {
-        if (statusFilter === "pending") {
-          return pendingStatuses.includes(item.status);
-        }
-        const workflowStatuses = ["submitted", "approved", "rejected", "reopened"];
-        const displayStatus = workflowStatuses.includes(item.status) ? item.status : "pending";
-        return displayStatus === statusFilter;
-      }
       if (statusFilter === "pending") {
         return pendingStatuses.includes(item.status);
       }
@@ -214,7 +197,7 @@ const Taskby = () => {
     return true;
   });
 
-  const taskIdList = filteredItems.filter((i) => i.item_type !== "project").map((i) => i.id);
+  const taskIdList = filteredItems.map((i) => i.id);
 
   const showAllItems = showAll;
   const totalPages = showAllItems ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
@@ -231,16 +214,13 @@ const Taskby = () => {
       <div className="Task">
         <div className="task-text">
           <h3>Tasks Assigned By You</h3>
-          <p>Manage and track tasks and projects you assigned</p>
+          <p>Manage and track tasks you assigned</p>
           <div className="task-count-badge" style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
             <span style={{ background: "#dedfe0", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-              Total: {totalCount} items
+              Total: {totalCount}
             </span>
             <span style={{ background: "#d6d6d6", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-              Tasks: {filteredItems.filter(i => i.item_type !== "project").length}
-            </span>
-            <span style={{ background: "#d4d4d4", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-              Projects: {filteredItems.filter(i => i.item_type === "project").length}
+              Tasks: {filteredItems.length}
             </span>
           </div>
         </div>
@@ -295,7 +275,7 @@ const Taskby = () => {
         <IoSearchOutline fontSize={"20px"} />
         <input
           type="text"
-          placeholder="Search by task or project name"
+          placeholder="Search by task name"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -309,7 +289,6 @@ const Taskby = () => {
           <div></div>
           <div>Assigned To</div>
           <div className="task-name-column">Task Name</div>
-          <div>Type</div>
           <div className="status-column">Status</div>
           <div>Progress</div>
           <div className="priority-column">Priority</div>
@@ -328,7 +307,7 @@ const Taskby = () => {
             <SortableTableWrapper
               items={paginatedItems.map((i, index) => ({
                 ...i,
-                sortableId: `${i.item_type}-${i.id}-${index}`
+                sortableId: `${i.id}-${index}`
               }))}
               onReorder={(reordered) => handleTaskReorder(reordered)}
               idKey="sortableId"
@@ -336,122 +315,8 @@ const Taskby = () => {
               handleOnly
             >
               {(item, idx, dndProps) => {
-                const isProject = item.item_type === "project";
                 const colors = getRandomColors(item.id);
-                const uniqueKey = `${item.item_type}-${item.id}-${idx}`;
-
-                if (isProject) {
-                  const primaryUser = item.assigned_user;
-                  return (
-                    <div className="taskby-row" key={uniqueKey}>
-                      <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
-                      <div className="col-assigned-to">
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                            {getInitials(primaryUser?.name)}
-                          </div>
-                          <div style={{ minWidth: 0 }}>
-                            <div className="user-name">{primaryUser?.name || "Unassigned"}</div>
-                            <div className="user-role">{primaryUser?.role || ""}</div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="col-task-name">
-                        <div className="task-title">{item.title}</div>
-                      </div>
-
-                      <div className="col-type">
-                        <span className="badge" style={{ background: "#eef2ff", color: "#4f46e5" }}>Project</span>
-                      </div>
-
-                      <div className="col-status">
-                        <span className="badge" style={{ background: STATUS_COLORS[item.my_submission_status || item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.my_submission_status || item.status] || "#374151" }}>
-                          <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.my_submission_status || item.status] || "#374151" }}></span>
-                          {["submitted", "approved", "rejected", "reopened"].includes(item.my_submission_status || item.status) ? formatStatus(item.my_submission_status || item.status) : "Pending"}
-                        </span>
-                      </div>
-
-                      <div className="col-progress">
-                        <div style={{
-                          display: "flex",
-                          justifyContent: "flex-start",
-                          alignItems: "center",
-                          marginBottom: "4px"
-                        }}>
-                          <span style={{
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            color: "#374151"
-                          }}>
-                            {calculateProgress(item)}%
-                          </span>
-                        </div>
-                        <div className="progress-bar-track">
-                          <div className="progress-bar-fill" style={{ width: `${calculateProgress(item)}%` }}></div>
-                        </div>
-                        <div className="deliverables-approved-text">
-                          {item.completed_tasks || 0}/{item.total_tasks || 0} tasks
-                        </div>
-                      </div>
-
-                      <div className="col-priority">
-                        <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
-                          <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
-                          {item.priority}
-                        </span>
-                      </div>
-
-                      <div className="col-due-date">
-                        <div className="date-box">
-                          <div style={{ whiteSpace: "pre-line" }}>
-                            {(() => {
-                              const assignedUserId = item.assigned_user?.id;
-                              const userDueDate = assignedUserId ? item.user_due_dates?.[assignedUserId] : null;
-                              return formatDate(userDueDate || item.end_date);
-                            })()}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="col-action">
-                        <div className="action-btns">
-                          <button
-                            className="action-icon-btn action-view"
-                            title="View"
-                            onClick={() => navigate(rolePath(`projects/project-details/${item.id}`), { state: { from: 'taskby' } })}
-                          >
-                            <IoEyeOutline />
-                          </button>
-                          {item.status?.toLowerCase() !== "approved" && (
-                            <button
-                              className="action-icon-btn action-edit"
-                              title="Edit Project"
-                              onClick={async () => {
-                                try {
-                                  const token = authToken();
-                                  const res = await fetch(`${API_URL}/projects/${item.id}`, {
-                                    headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
-                                  });
-                                  if (res.ok) {
-                                    const data = await res.json();
-                                    setEditingProject(data.project || item);
-                                  } else {
-                                    setEditingProject(item);
-                                  }
-                                } catch {
-                                  setEditingProject(item);
-                                }
-                              }}
-                            >
-                              <Pencil size={20} />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
+                const uniqueKey = `task-${item.id}-${idx}`;
 
                 const assignees = item.assignees || [];
                 const primaryAssignee = assignees[0];
@@ -472,10 +337,27 @@ const Taskby = () => {
 
                     <div className="col-task-name">
                       <div className="task-title">{item.title}</div>
-                    </div>
-
-                    <div className="col-type">
-                      <span className="badge" style={{ background: "#f0fdf4", color: "#16a34a" }}>Task</span>
+                      {/* OWNERSHIP INFO */}
+                      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginTop: "4px" }}>
+                        {item.assigner && (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#EEF2FF", color: "#4F46E5", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 500 }}>
+                            By: {item.assigner.name}
+                            <span style={{ background: item.assigner.role === "admin" ? "#4F46E5" : "#059669", color: "#fff", padding: "0 3px", borderRadius: "3px", fontSize: "8px" }}>
+                              {item.assigner.role === "admin" ? "Admin" : "Manager"}
+                            </span>
+                          </span>
+                        )}
+                        {item.approvedBy && (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#DCFCE7", color: "#166534", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 500 }}>
+                            Approved: {item.approvedBy.name}
+                          </span>
+                        )}
+                        {item.rejectedBy && (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#FEE2E2", color: "#991B1B", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 500 }}>
+                            Rejected: {item.rejectedBy.name}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="col-status">
@@ -484,7 +366,7 @@ const Taskby = () => {
                           <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                           {formatStatus(item.status)}
                         </span>
-                        {!isProject && item.assignees?.[0]?.pivot?.status === "submitted" && (
+                        {item.assignees?.[0]?.pivot?.status === "submitted" && (
                           <span className="badge" style={{ background: "#DBEAFE", color: "#1E40AF", fontSize: "10px" }}>
                             Submitted
                           </span>
@@ -508,7 +390,7 @@ const Taskby = () => {
                     <div className="col-due-date">
                       <div className="date-box">
                         <div style={{ whiteSpace: "pre-line" }}>
-                          {!isProject && item.assignees?.[0]?.pivot?.due_date
+                          {item.assignees?.[0]?.pivot?.due_date
                             ? formatDate(item.assignees[0].pivot.due_date)
                             : formatDate(item.end_date)}
                         </div>
@@ -569,12 +451,6 @@ const Taskby = () => {
         />
       )}
 
-      {editingProject && (
-        <EditProjectModal
-          project={editingProject}
-          onClose={(refresh) => { setEditingProject(null); if (refresh) fetchTasks(); }}
-        />
-      )}
     </DashboardLayout>
   );
 };

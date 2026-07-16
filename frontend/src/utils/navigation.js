@@ -23,11 +23,7 @@ import { rolePath, getCurrentRole, getUser } from "./auth";
  */
 const NOTIFICATION_TYPE_MAP = {
   // Projects
-  project_assigned:       { page: "projects", buildPath: (id) => `projects/project-details/${id}` },
   project_updated:        { page: "projects", buildPath: (id) => `projects/project-details/${id}` },
-  project_submitted:      { page: "projects", buildPath: (id) => `projects/project-details/${id}` },
-  project_approved:       { page: "projects", buildPath: (id) => `projects/project-details/${id}` },
-  project_rejected:       { page: "projects", buildPath: (id) => `projects/project-details/${id}` },
   project_reopened:       { page: "projects", buildPath: (id) => `projects/project-details/${id}` },
   project_access_granted: { page: "projects", buildPath: (id) => `projects/project-details/${id}` },
   project_access_removed: { page: "projects", buildPath: (id) => `projects/project-details/${id}` },

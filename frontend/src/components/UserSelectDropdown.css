@@ -265,44 +265,6 @@
   border-color: #6366f1;
 }
 
-.usd-date-wrap {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-  max-width: 140px;
-  overflow: hidden;
-}
-
-.usd-date-text {
-  font-size: 11px;
-  color: #374151;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.usd-cal-icon {
-  color: #6b7280;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: color 0.15s;
-}
-
-.usd-cal-icon:hover {
-  color: #4f46e5;
-}
-
-.usd-date-input-hidden {
-  position: absolute;
-  width: 0;
-  height: 0;
-  padding: 0;
-  border: none;
-  opacity: 0;
-  pointer-events: none;
-}
-
 .usd-empty {
   padding: 20px 14px;
   text-align: center;
