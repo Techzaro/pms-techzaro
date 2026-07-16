@@ -822,7 +822,7 @@ function ProjectDetails() {
   const tabs = [
     { id: "overview", label: "Overview", icon: ListChecks },
     { id: "tasks", label: "Tasks", icon: ClipboardList },
-    { id: "deliverables", label: "Deliverables", icon: Calendar },
+    { id: "deliverables", label: "Subtasks", icon: Calendar },
     { id: "files", label: "Platform files & links", icon: FolderOpen },
     { id: "access", label: "Accessess", icon: Shield },
     { id: "members", label: "Members", icon: Users },
@@ -933,7 +933,7 @@ function ProjectDetails() {
               <div className="pd-meta-rows__content">
                 <div className="pd-meta-rows__header">
                   <span className="pd-meta-rows__label">Project manager</span>
-                  {currentUser?.role === "admin" && (
+                  {(currentUser?.role === "admin" || currentUser?.role === "manager") && (
                     <button className="pd-manager-edit" onClick={openManagerEdit} title="Change project manager">
                       Edit
                     </button>
@@ -1210,23 +1210,23 @@ function ProjectDetails() {
                       <div className="pd-tab-panel">
                         <section className="pd-card-flat pd-card-flat--table">
                           <div className="pd-card-flat__head">
-                            <h2 className="pd-block-title pd-block-title--inline">Deliverables</h2>
+                            <h2 className="pd-block-title pd-block-title--inline">Subtasks</h2>
                             <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                              <input type="text" placeholder="Search deliverables..." value={deliverableSearch} onChange={(e) => setDeliverableSearch(e.target.value)} />
+                              <input type="text" placeholder="Search subtasks..." value={deliverableSearch} onChange={(e) => setDeliverableSearch(e.target.value)} />
                             </div>
                           </div>
                           <div className="pd-table-wrap">
                             <div className="deliveries-table-header pd-deliverables-grid">
                               <div></div>
-                              <div>Deliverable</div>
+                              <div>Subtask</div>
                               <div>{isAdminOrManager || isCreator ? "Assigned To" : "Assigned By"}</div>
                               <div>Due Date</div>
                               <div>Status</div>
                               <div>Action</div>
                             </div>
                             {(filteredDeliverables.length === 0) ? (
-                              <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>{deliverableSearch ? "No deliverables match your search." : "No deliverables."}</div>
+                              <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>{deliverableSearch ? "No subtasks match your search." : "No subtasks."}</div>
                             ) : (
                               <SortableTableWrapper
                                 items={filteredDeliverables.map((d, idx) => ({ ...d, sortableId: `del-${d.id || idx}` }))}
@@ -1422,6 +1422,38 @@ function ProjectDetails() {
                             )}
                           </SortableTableWrapper>
                         </section>
+
+                        {(project.teams || []).length > 0 && (project.teams || []).map((team) => (
+                          <section key={team.id} className="pd-card-flat" style={{ marginTop: 16 }}>
+                            <div className="pd-card-flat__head">
+                              <h2 className="pd-block-title pd-block-title--inline">{team.name}</h2>
+                              <span className="pd-badge-member" style={{ marginLeft: 8 }}>Team</span>
+                            </div>
+                            {team.leader && (
+                              <div className="pd-member">
+                                <div className="pd-avatar" aria-hidden style={{ background: "#7c3aed" }}>
+                                  {initials(team.leader.name)}
+                                </div>
+                                <div>
+                                  <div className="pd-member-name">{team.leader.name}</div>
+                                  <div className="pd-member-role">Team Lead · {team.leader.role || "—"}</div>
+                                </div>
+                                <span className="pd-badge-owner">Lead</span>
+                              </div>
+                            )}
+                            {(team.members || []).filter((m) => m.id !== team.leader?.id && m.id !== project.creator?.id).map((m) => (
+                              <div key={m.id} className="pd-member">
+                                <div className="pd-avatar" aria-hidden>
+                                  {initials(m.name)}
+                                </div>
+                                <div>
+                                  <div className="pd-member-name">{m.name}</div>
+                                  <div className="pd-member-role">{m.role || "Member"}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </section>
+                        ))}
 
                         {(project.view_only_users || []).length > 0 && (
                           <section className="pd-card-flat" style={{ marginTop: 16 }}>

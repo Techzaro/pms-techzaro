@@ -14,13 +14,15 @@ import Breadcrumb from "../components/Breadcrumb";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
+import { LuSend } from "react-icons/lu";
 import CreateTaskModal from "../components/CreateTaskModal";
+import SubmitTaskModal from "../components/SubmitTaskModal";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal"; // Added missing import
 import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal"; // Added missing import
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
-import { authToken, rolePath } from "../utils/auth";
+import { authToken, getUser, rolePath } from "../utils/auth";
 import { formatDateTime } from "../utils/formatDateTime";
 import "../pages/Task.css";
 
@@ -55,10 +57,12 @@ const PRIORITY_TEXT_COLORS = {
 /** Main Self Tasks page — renders tasks assigned by the current user to themselves. */
 const SelfTasks = () => {
   const navigate = useNavigate();
+  const currentUser = getUser();
   
   // State declarations
   const [showTaskModal, setShowTaskModal] = useState({ open: false, projectId: null, id: null }); // Fixed to object
   const [showDeliverableSubmitModal, setShowDeliverableSubmitModal] = useState({ open: false, deliverable: null }); // Added missing state
+  const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [viewModal, setViewModal] = useState({ open: false, deliverable: null }); // Added missing state
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -139,6 +143,10 @@ const SelfTasks = () => {
   };
 
   const handleDeliverableSubmitSuccess = () => {
+    fetchTasks();
+  };
+
+  const handleTaskSubmitSuccess = () => {
     fetchTasks();
   };
 
@@ -311,6 +319,23 @@ const SelfTasks = () => {
                   </div>
                   <div className="action-btns">
                     <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}><IoEyeOutline /></button>
+                    {(() => {
+                      const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
+                      const canSubmit = (item.status === "pending" || item.status === "reopened") && myPivotStatus !== "submitted";
+                      return canSubmit && (
+                      <div style={{ position: "relative", display: "inline-flex" }}>
+                        <button 
+                          className="action-icon-btn action-submit" 
+                          title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"} 
+                          disabled={item.pending_deliverables_count > 0} 
+                          onClick={() => !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item })} 
+                          style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                        >
+                          <LuSend />
+                        </button>
+                      </div>
+                      );
+                    })()}
                   </div>
                 </div>
               );
@@ -331,6 +356,16 @@ const SelfTasks = () => {
           onClose={handleModalClose}
           onTaskCreated={handleTaskCreated}
           projectId={showTaskModal.projectId}
+        />
+      )}
+
+      {submitTaskModal.open && (
+        <SubmitTaskModal
+          key={`task-submit-${submitTaskModal.task?.id || "none"}`}
+          isOpen={submitTaskModal.open}
+          onClose={() => setSubmitTaskModal({ open: false, task: null })}
+          task={submitTaskModal.task}
+          onSubmitSuccess={handleTaskSubmitSuccess}
         />
       )}
 

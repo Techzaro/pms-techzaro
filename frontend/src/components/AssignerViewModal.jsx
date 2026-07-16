@@ -103,7 +103,7 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
       const data = await res.json();
       if (res.ok) {
         const actionLabel = action === "approve" ? "approved" : action === "reject" ? "rejected" : "reopened";
-        showSuccessMessage("Deliverable", actionLabel);
+        showSuccessMessage("Subtask", actionLabel);
         onActionSuccess(data.deliverable);
         onClose();
       }
@@ -116,9 +116,9 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
 
   // Confirmation dialog messages for each action type
   const confirmMessages = {
-    approve: "Are you sure you want to approve this deliverable?",
-    reject: "Are you sure you want to reject this deliverable? The assignee will not be able to resubmit.",
-    reopen: "Are you sure you want to reject and reopen this deliverable?",
+    approve: "Are you sure you want to approve this subtask?",
+    reject: "Are you sure you want to reject this subtask? The assignee will not be able to resubmit.",
+    reopen: "Are you sure you want to reject and reopen this subtask?",
   };
 
   // Color codes for confirmation dialog confirm button
@@ -364,7 +364,7 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
           setConfirmDialog({ open: false, type: null });
           handleAction(type);
         }}
-        title={confirmDialog.type === "approve" ? "Approve Deliverable" : confirmDialog.type === "reject" ? "Reject Deliverable" : "Reject & Reopen"}
+        title={confirmDialog.type === "approve" ? "Approve Subtask" : confirmDialog.type === "reject" ? "Reject Subtask" : "Reject & Reopen"}
         message={confirmMessages[confirmDialog.type] || ""}
         confirmText={confirmDialog.type === "approve" ? "Approve" : confirmDialog.type === "reject" ? "Reject" : "Reject & Reopen"}
         confirmColor={confirmColors[confirmDialog.type] || "#4F46E5"}

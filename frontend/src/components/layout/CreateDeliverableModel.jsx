@@ -50,7 +50,7 @@ const CreateDeliverableTask = ({ onClose }) => {
             </div>
 
             <div>
-              <h2>Create New Deliverable Task</h2>
+              <h2>Create New Subtask</h2>
 
               <p>
                 Add deliverable task details.
@@ -121,7 +121,7 @@ const CreateDeliverableTask = ({ onClose }) => {
               </label>
 
               <textarea
-                placeholder="Enter deliverable task description..."
+                placeholder="Enter subtask description..."
               ></textarea>
 
             </div>

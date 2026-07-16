@@ -49,6 +49,7 @@ const CreateProjectModal = ({ onClose }) => {
     title: "",
     description: "",
     team_id: "",
+    team_ids: [],
     assigned_users: [],
     priority: "Medium",
     status: "Planning",
@@ -422,6 +423,7 @@ const CreateProjectModal = ({ onClose }) => {
           description: form.description || null,
           category: categoriesList.length > 0 ? JSON.stringify(categoriesList) : null,
           team_id: form.team_id ? parseInt(form.team_id) : null,
+          team_ids: form.team_ids,
           assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
           priority: form.priority,
           status: form.status,
@@ -605,19 +607,19 @@ const CreateProjectModal = ({ onClose }) => {
 
             <div className="cp-grid-2">
               <div className="cp-field">
-                <label>Team (Optional)</label>
+                <label>Teams (Optional)</label>
                 <div className="cp-dropdown-wrap cp-combo-trigger" ref={teamRolesRef} onClick={() => { if (!teamRolesOpen) { setTeamRolesOpen(true); setTeamRolesSearch(""); } }}>
-                  {form.team_roles.length > 0 && (
-                    <span className="cp-combo-count">{form.team_roles.length} selected</span>
+                  {form.team_ids.length > 0 && (
+                    <span className="cp-combo-count">{form.team_ids.length} selected</span>
                   )}
-                  {form.team_roles.length === 0 && !teamRolesOpen && (
-                    <span className="cp-combo-placeholder">Select Team</span>
+                  {form.team_ids.length === 0 && !teamRolesOpen && (
+                    <span className="cp-combo-placeholder">Select Teams</span>
                   )}
                   {teamRolesOpen && (
                     <input
                       type="text"
                       className="cp-combo-input"
-                      placeholder="Search roles..."
+                      placeholder="Search teams..."
                       value={teamRolesSearch}
                       onChange={(e) => setTeamRolesSearch(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Escape") { setTeamRolesSearch(""); setTeamRolesOpen(false); } }}
@@ -627,22 +629,22 @@ const CreateProjectModal = ({ onClose }) => {
                   <svg className={`cp-dropdown-arrow ${teamRolesOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" onClick={(e) => { e.stopPropagation(); if (teamRolesOpen) { setTeamRolesOpen(false); setTeamRolesSearch(""); } else { setTeamRolesOpen(true); setTeamRolesSearch(""); } }}><polyline points="6 9 12 15 18 9" /></svg>
                   {teamRolesOpen && (
                     <div className="cp-dropdown-menu" onClick={(e) => e.stopPropagation()}>
-                      {TEAM_ROLES.filter((r) => !teamRolesSearch.trim() || r.toLowerCase().includes(teamRolesSearch.toLowerCase())).map((role) => (
-                        <label key={role} className="cp-dropdown-item">
+                      {teams.filter((t) => !teamRolesSearch.trim() || t.name.toLowerCase().includes(teamRolesSearch.toLowerCase())).map((team) => (
+                        <label key={team.id} className="cp-dropdown-item">
                           <input
                             type="checkbox"
-                            checked={form.team_roles.includes(role)}
+                            checked={form.team_ids.includes(team.id)}
                             onChange={() => {
                               setIsDirty(true);
                               setForm((prev) => ({
                                 ...prev,
-                                team_roles: prev.team_roles.includes(role)
-                                  ? prev.team_roles.filter((r) => r !== role)
-                                  : [...prev.team_roles, role],
+                                team_ids: prev.team_ids.includes(team.id)
+                                  ? prev.team_ids.filter((id) => id !== team.id)
+                                  : [...prev.team_ids, team.id],
                               }));
                             }}
                           />
-                          <span>{role}</span>
+                          <span>{team.name}</span>
                         </label>
                       ))}
                     </div>
@@ -924,15 +926,15 @@ const CreateProjectModal = ({ onClose }) => {
             {/* DELIVERABLES */}
             <div className="cp-card">
               <div className="cp-card-top">
-                <span>Deliverables (Optional)</span>
+                <span>Subtasks (Optional)</span>
               </div>
 
               <div className="cp-deadline-grid">
                 <div className="cp-field">
-                  <label style={{ fontSize: "13px" }}>Deliverable Name</label>
+                  <label style={{ fontSize: "13px" }}>Subtask Name</label>
                   <input
                     type="text"
-                    placeholder="Enter deliverable name"
+                    placeholder="Enter subtask name"
                     value={deliverableProjInput.title}
                     onChange={(e) => { setIsDirty(true); setDeliverableProjInput((prev) => ({ ...prev, title: e.target.value })); }}
                     onKeyDown={handleDeliverableProjKeyDown}
@@ -955,7 +957,7 @@ const CreateProjectModal = ({ onClose }) => {
                 onClick={handleAddDeliverableProj}
                 disabled={!deliverableProjInput.title.trim()}
               >
-                + Add Deliverable
+                + Add Subtask
               </button>
 
               {deliverablesProj.length > 0 && (

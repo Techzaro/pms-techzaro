@@ -381,9 +381,9 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
       doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
       doc.roundedRect(M, y, qHalf, 42, 2, 2, "S");
       doc.setFontSize(8); doc.setFont("helvetica", "bold");
-      doc.setTextColor(17, 24, 39); doc.text("DELIVERABLES SUMMARY", M + 5, y + 7);
+      doc.setTextColor(17, 24, 39); doc.text("SUBTASKS SUMMARY", M + 5, y + 7);
       const delivItems = [
-        { label: "Total Deliverables", count: delivSummary.total ?? 0, color: [99, 102, 241] },
+        { label: "Total Subtasks", count: delivSummary.total ?? 0, color: [99, 102, 241] },
         { label: "Submitted", count: delivSummary.submitted ?? 0, color: [245, 158, 11] },
         { label: "Approved", count: delivSummary.approved ?? 0, color: [34, 197, 94] },
         { label: "Pending Review", count: delivSummary.pending_review ?? 0, color: [245, 158, 11] },
@@ -404,10 +404,10 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
       doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
       doc.roundedRect(ddX, y, qHalf, 42, 2, 2, "S");
       doc.setFontSize(8); doc.setFont("helvetica", "bold");
-      doc.setTextColor(17, 24, 39); doc.text("DELIVERABLES DETAILS", ddX + 5, y + 7);
+      doc.setTextColor(17, 24, 39); doc.text("SUBTASKS DETAILS", ddX + 5, y + 7);
       if (deliverables.length === 0) {
         doc.setFontSize(5.5); doc.setFont("helvetica", "normal"); doc.setTextColor(152, 163, 175);
-        doc.text("No deliverables found.", ddX + qHalf / 2, y + 24, { align: "center" });
+        doc.text("No subtasks found.", ddX + qHalf / 2, y + 24, { align: "center" });
       } else {
         const delivTableData = deliverables.slice(0, 6).map((d, i) => [
           String(i + 1),
@@ -708,9 +708,9 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               <div className="erm-deliverables-grid">
                 {/* Left */}
                 <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>DELIVERABLES SUMMARY</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>SUBTASKS SUMMARY</div>
                   {[
-                    { label: "Total Deliverables", count: delivSummary.total ?? 0, color: "#6366f1" },
+                    { label: "Total Subtasks", count: delivSummary.total ?? 0, color: "#6366f1" },
                     { label: "Submitted", count: delivSummary.submitted ?? 0, color: "#f59e0b" },
                     { label: "Approved", count: delivSummary.approved ?? 0, color: "#22c55e" },
                     { label: "Pending Review", count: delivSummary.pending_review ?? 0, color: "#f59e0b" },
@@ -729,9 +729,9 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
 
                 {/* Right */}
                 <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>DELIVERABLES DETAILS</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>SUBTASKS DETAILS</div>
                   {deliverables.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: 20, color: "#9ca3af", fontSize: 10 }}>No deliverables found.</div>
+                    <div style={{ textAlign: "center", padding: 20, color: "#9ca3af", fontSize: 10 }}>No subtasks found.</div>
                   ) : (
                     <div className="erm-table-wrapper">
                       <table className="erm-table" style={{ tableLayout: "auto", minWidth: 0 }}>

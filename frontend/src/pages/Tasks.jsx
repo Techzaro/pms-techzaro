@@ -387,7 +387,7 @@ function Tasks() {
                         <div style={{ position: "relative", display: "inline-flex" }}>
                           <button 
                             className="action-icon-btn action-submit" 
-                            title={item.pending_deliverables_count > 0 ? "Submit all deliverables first" : "Submit Task"} 
+                            title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"} 
                             disabled={item.pending_deliverables_count > 0} 
                             onClick={() => !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item })} 
                             style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}

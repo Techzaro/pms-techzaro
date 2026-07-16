@@ -247,7 +247,7 @@ function MyActivity() {
                 <option value="user">User</option>
                 <option value="project">Project</option>
                 <option value="task">Task</option>
-                <option value="deliverable">Deliverable</option>
+                <option value="deliverable">Subtask</option>
                 <option value="team">Team</option>
                 <option value="event">Event</option>
               </select>

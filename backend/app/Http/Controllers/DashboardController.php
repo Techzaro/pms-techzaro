@@ -373,6 +373,22 @@ class DashboardController extends Controller
             ->whereNotIn('status', $this->inactiveTaskStatuses())
             ->latest()->limit($limit)->get();
 
+        // Add self-tasks due today
+        $selfTasks = Task::with(['project:id,title', 'assignees:id,name,role', 'assigner:id,name,role'])
+            ->where('assigned_by', $user->id)
+            ->where(function ($q) use ($user) {
+                $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
+                    ->orWhere('assigned_to', $user->id);
+            })
+            ->where(function ($q) {
+                $q->whereDate('end_date', today())
+                    ->orWhereHas('assignees', fn ($q) => $q->whereDate('task_user.due_date', today()));
+            })
+            ->whereNotIn('status', $this->inactiveTaskStatuses())
+            ->latest()->limit($limit)->get();
+
+        $tasks = $tasks->merge($selfTasks)->take($limit);
+
         return $tasks->map(function ($task) {
             $perUserDueDate = $task->assignees->pluck('pivot.due_date')->filter()->sortBy('asc')->first();
             return array_merge($task->toArray(), [
@@ -530,7 +546,7 @@ class DashboardController extends Controller
         $myTaskIds = DB::table('task_user')->where('user_id', $user->id)->pluck('task_id')->toArray();
 
         // ── TASKS (past) ──
-        $taskEvents = TaskWorkflowEvent::with(['task:id,title,assigned_by,assigned_to', 'user:id,name,role'])
+        $taskEvents = TaskWorkflowEvent::with(['task:id,title,assigned_by,assigned_to', 'task.assignees:id', 'user:id,name,role'])
             ->whereDate('created_at', '<=', $yesterday)
             ->whereIn('action', ['created', 'assigned', 'submitted', 'resubmitted', 'approved', 'rejected', 'reopened', 'completed', 'field_changed', 'status_updated'])
             ->latest()
@@ -568,6 +584,7 @@ class DashboardController extends Controller
             }
             $item = $this->formatActivity('task', $event->id, $task->id, $task->title, $event->action, $event->user, true, $taskSubmitters[$task->id] ?? null, $event->comment ?? null, $event->created_at);
             $item['assigned_by'] = $task->assigned_by;
+            $item['assignees'] = $task->assignees->map(fn ($u) => ['id' => $u->id])->toArray();
             $activities[] = $item;
         }
 
@@ -762,7 +779,7 @@ class DashboardController extends Controller
         $myTaskIds = DB::table('task_user')->where('user_id', $user->id)->pluck('task_id')->toArray();
 
         // ── TASKS ──
-        $taskEvents = TaskWorkflowEvent::with(['task:id,title,assigned_by,assigned_to', 'user:id,name,role'])
+        $taskEvents = TaskWorkflowEvent::with(['task:id,title,assigned_by,assigned_to', 'task.assignees:id', 'user:id,name,role'])
             ->whereDate('created_at', $today)
             ->whereIn('action', ['created', 'assigned', 'submitted', 'resubmitted', 'approved', 'rejected', 'reopened', 'completed', 'field_changed', 'status_updated'])
             ->limit(50)->get();
@@ -797,6 +814,7 @@ class DashboardController extends Controller
             }
             $item = $this->formatActivity('task', $event->id, $task->id, $task->title, $event->action, $event->user, $isActor, $taskSubmitters[$task->id] ?? null, $event->comment ?? null, $event->created_at);
             $item['assigned_by'] = $task->assigned_by;
+            $item['assignees'] = $task->assignees->map(fn ($u) => ['id' => $u->id])->toArray();
             if ($isActor) {
                 $activities[] = $item;
             } else {

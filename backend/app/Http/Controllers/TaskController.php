@@ -141,7 +141,7 @@ class TaskController extends Controller
             })
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
-            ->with(['project:id,title,team_id', 'assigners:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role'])
+            ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role'])
             ->orderBy('sort_order')->latest('updated_at')
             ->filter($filters)
             ->limit(200)

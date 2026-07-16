@@ -129,13 +129,9 @@ const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, r
   const currentUser = getUser();
 
   const handleCardClick = (e) => {
-    if (isManager) {
-      navigate(`${rolePath("taskby")}?status=due_today`, { state: { from: "taskby" } });
-    } else {
-      const from = getActivityFrom(item);
-      const dest = getActivityDestination(item);
-      navigate(`${dest}${dest.includes("?") ? "&" : "?"}from=${from}`, { state: { from } });
-    }
+    const from = getActivityFrom(item);
+    const dest = getActivityDestination(item);
+    navigate(`${dest}${dest.includes("?") ? "&" : "?"}from=${from}`, { state: { from } });
   };
 
   const handleAvatarClick = (e, user) => {
@@ -143,7 +139,8 @@ const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, r
     if (item.module === "project") {
       navigate(rolePath(`projects/project-details/${item.entity_id}`), { state: { from: "taskby" } });
     } else {
-      navigate(rolePath(`tasks/task-details/${item.entity_id}`), { state: { from: "taskby" } });
+      const from = getActivityFrom(item);
+      navigate(rolePath(`tasks/task-details/${item.entity_id}`), { state: { from } });
     }
   };
 
@@ -466,6 +463,7 @@ function Admin() {
         time_ago: item.time_ago || '—',
         created_at: item.created_at,
         assigned_by: item.assigned_by || null,
+        assignees: item.assignees || [],
       })),
     [dashboard?.completedToday]
   );
@@ -495,7 +493,7 @@ function Admin() {
   const getModuleLabel = (module) => {
     if (module === "task") return "Task";
     if (module === "project") return "Project";
-    if (module === "deliverable") return "Deliverable";
+    if (module === "deliverable") return "Subtask";
     if (module === "user") return "User";
     if (module === "team") return "Team";
     return module;

@@ -593,7 +593,7 @@ function TaskDetails() {
                     <button
                       className="td-btn-primary"
                       disabled={!canSubmitTask}
-                      title={!canSubmitTask ? "Submit all deliverables first" : ""}
+                      title={!canSubmitTask ? "Submit all subtasks first" : ""}
                       onClick={() => setTaskSubmitModalOpen(true)}
                       style={!canSubmitTask ? { opacity: 0.5, cursor: "not-allowed" } : {}}
                     >
@@ -666,7 +666,7 @@ function TaskDetails() {
                 {/* TABS */}
                 <div className="td-tabs">
                   {[
-                    { id: "deliverables", label: "Deliverables", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg> },
+                    { id: "deliverables", label: "Subtasks", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg> },
                     { id: "overview", label: "Overview", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
                     { id: "files", label: "Platform files & links", icon: <FolderOpen size={16} /> },
                     { id: "access", label: "Access", icon: <Shield size={16} /> },
@@ -717,10 +717,10 @@ function TaskDetails() {
                   {tab === "deliverables" && (
                     <div>
                       <div className="td-section-header">
-                        <h2 className="td-section-title">Deliverables</h2>
+                        <h2 className="td-section-title">Subtasks</h2>
                         <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                          <input type="text" placeholder="Search deliverables..." value={deliverableSearch} onChange={(e) => setDeliverableSearch(e.target.value)} />
+                          <input type="text" placeholder="Search subtasks..." value={deliverableSearch} onChange={(e) => setDeliverableSearch(e.target.value)} />
                         </div>
                         <span className="td-section-count">{task.completed_deliverables || 0}/{task.total_deliverables || 0} Completed</span>
                       </div>
@@ -731,12 +731,12 @@ function TaskDetails() {
                           return (d.title || "").toLowerCase().includes(q) || (d.description || "").toLowerCase().includes(q);
                         }) : allDeliverables;
                         return filteredDeliverables.length === 0 ? (
-                          <p className="td-empty">{deliverableSearch ? "No deliverables match your search." : "No deliverables linked to this task."}</p>
+                          <p className="td-empty">{deliverableSearch ? "No subtasks match your search." : "No subtasks linked to this task."}</p>
                         ) : (
                           <div className="pd-table-wrap">
                             <div className="deliveries-table-header" style={{ gridTemplateColumns: "32px minmax(150px, 1.6fr) minmax(160px, 1.8fr) minmax(110px, 1.1fr) minmax(90px, 0.9fr) minmax(70px, 0.5fr)" }}>
                               <div></div>
-                              <div>Deliverable</div>
+                              <div>Subtask</div>
                               <div>{isCreator ? "Assigned To" : "Assigned By"}</div>
                               <div>Due Date</div>
                               <div>Status</div>

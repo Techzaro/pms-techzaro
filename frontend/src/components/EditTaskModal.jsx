@@ -840,7 +840,7 @@ export default function EditTaskModal({ task, onClose }) {
 
                 <div className="task-card">
                   <div className="task-card-top">
-                    <span>Deliverable Templates</span>
+                    <span>Subtask Templates</span>
                     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                       <button type="button" className="task-icon-btn" title="Available variables" onClick={() => setShowVariablesHint(!showVariablesHint)}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
@@ -925,14 +925,14 @@ export default function EditTaskModal({ task, onClose }) {
             {/* DELIVERABLES */}
             <div className="task-card">
               <div className="task-card-top">
-                <span>Deliverables</span>
+                <span>Subtasks</span>
               </div>
               <div className="task-deadline-grid">
                 <div className="task-field">
-                  <label style={{ fontSize: "13px" }}>Deliverable Name</label>
+                  <label style={{ fontSize: "13px" }}>Subtask Name</label>
                   <input
                     type="text"
-                    placeholder="Enter deliverable name"
+                    placeholder="Enter subtask name"
                     value={deliverableInput.title}
                     onChange={(e) => { setIsDirty(true); setDeliverableInput((prev) => ({ ...prev, title: e.target.value })); }}
                     onKeyDown={handleDeliverableKeyDown}
@@ -966,7 +966,7 @@ export default function EditTaskModal({ task, onClose }) {
                 onClick={handleAddDeliverable}
                 disabled={!deliverableInput.title.trim()}
               >
-                + Add Deliverable
+                + Add Subtask
               </button>
               {deliverables.length > 0 && (
                 <div className="task-phase-list">

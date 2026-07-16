@@ -59,9 +59,9 @@ function DeliverableDetails() {
 
   // Map of source page keys to breadcrumb labels and paths (for back navigation)
   const deliverableSourcePages = {
-    deliveries: { label: "Deliverables Assigned To You", path: rolePath("deliveries") },
-    "deliveries-by-you": { label: "Deliverables Assigned By You", path: rolePath("deliveries-by-you") },
-    "self-deliveries": { label: "Self Deliverables", path: rolePath("self-deliveries") },
+    deliveries: { label: "Subtasks Assigned To You", path: rolePath("deliveries") },
+    "deliveries-by-you": { label: "Subtasks Assigned By You", path: rolePath("deliveries-by-you") },
+    "self-deliveries": { label: "Self Subtasks", path: rolePath("self-deliveries") },
   };
   const deliverableSource = deliverableSourcePages[location.state?.from] || null;
 
@@ -165,7 +165,7 @@ function DeliverableDetails() {
       if (res.ok) {
         publish('deliverable:updated', data.deliverable || data);
         publish('data:changed', { type: 'deliverable', action: 'updated' });
-        showSuccessMessage("Deliverable", "submitted");
+        showSuccessMessage("Subtask", "submitted");
         setShowSubmitForm(false);
         setSubmitComment("");
         setSubmitFile(null);
@@ -196,7 +196,7 @@ function DeliverableDetails() {
       if (res.ok) {
         publish('deliverable:updated', data.deliverable || data);
         publish('data:changed', { type: 'deliverable', action: 'updated' });
-        showSuccessMessage("Deliverable", "approved");
+        showSuccessMessage("Subtask", "approved");
         fetchDeliverable();
       } else {
         notify.error(data.message || "Failed to approve");
@@ -220,7 +220,7 @@ function DeliverableDetails() {
       if (res.ok) {
         publish('deliverable:updated', data.deliverable || data);
         publish('data:changed', { type: 'deliverable', action: 'updated' });
-        showSuccessMessage("Deliverable", "rejected");
+        showSuccessMessage("Subtask", "rejected");
         setShowRejectForm(false);
         setRejectComment("");
         fetchDeliverable();
@@ -243,7 +243,7 @@ function DeliverableDetails() {
   if (!deliverable) {
     return (
       <DashboardLayout hideRightSidebar>
-        <div className="td-loading td-error">Deliverable not found.</div>
+        <div className="td-loading td-error">Subtask not found.</div>
       </DashboardLayout>
     );
   }
@@ -265,7 +265,7 @@ function DeliverableDetails() {
         <div className="td-layout">
           <div className="td-main">
             <Breadcrumb items={[
-              { label: "Deliverables", path: rolePath("deliveries") },
+              { label: "Subtasks", path: rolePath("deliveries") },
               ...(deliverableSource ? [{ label: deliverableSource.label, path: deliverableSource.path }] : []),
               { label: deliverable.title },
             ]} />
@@ -320,12 +320,12 @@ function DeliverableDetails() {
               <div style={{ marginTop: "24px" }}>
                 {!showSubmitForm && (
                   <button className="td-btn-primary" onClick={() => setShowSubmitForm(true)}>
-                    {isRejected ? "Resubmit Deliverable" : "Submit Deliverable"}
+                    {isRejected ? "Resubmit Subtask" : "Submit Subtask"}
                   </button>
                 )}
                 {showSubmitForm && (
                   <div className="td-card" style={{ padding: "20px" }}>
-                    <h3 className="td-card-title">{isRejected ? "Resubmit Deliverable" : "Submit Deliverable"}</h3>
+                    <h3 className="td-card-title">{isRejected ? "Resubmit Subtask" : "Submit Subtask"}</h3>
                     <div style={{ marginTop: "12px" }}>
                       <label style={{ display: "block", marginBottom: "6px", fontSize: "13px", fontWeight: 500, color: "#374151" }}>Comment</label>
                       <textarea
@@ -518,7 +518,7 @@ function DeliverableDetails() {
           {/* Right Sidebar */}
           <aside className="td-sidebar">
             <div className="td-card">
-              <h3 className="td-card-title">Deliverable Info</h3>
+              <h3 className="td-card-title">Subtask Info</h3>
               <ul className="td-info">
                 <li>
                   <span className="td-dot" style={{ background: "#3b82f6" }} />
