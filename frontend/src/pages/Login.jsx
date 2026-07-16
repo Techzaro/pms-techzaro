@@ -138,6 +138,8 @@ function Login() {
       window.location.href = "/manager/dashboard";
     } else if (role === "teamlead" || role === "team_lead") {
       window.location.href = "/teamlead/dashboard";
+    } else if (role === "guest") {
+      window.location.href = "/guest/dashboard";
     } else {
       window.location.href = "/member/dashboard";
     }

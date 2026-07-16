@@ -12,7 +12,9 @@ use App\Services\ActivityService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use App\Models\Project;
+use App\Models\Team;
 use App\Jobs\SendUserCreatedEmails;
+use App\Mail\GuestInvitation;
 use App\Mail\UserCreated;
 use App\Mail\UserResigned;
 use App\Mail\UserProfileUpdated;
@@ -59,7 +61,7 @@ class UserController extends Controller
     public function index()
     {
         $users = Cache::remember('all_users_list', 10, fn () =>
-            User::select('id', 'name', 'avatar', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password', 'personal_email', 'professional_email')
+            User::select('id', 'name', 'avatar', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password', 'personal_email', 'professional_email', 'company_name', 'phone_number', 'last_login_at', 'created_at')
                 ->orderBy('sort_order')->latest('updated_at')
                 ->get()
                 ->toArray()
@@ -105,7 +107,7 @@ class UserController extends Controller
                 'personal_email' => 'nullable|email|max:255',
                 'professional_email' => 'nullable|string|max:255',
                 'professional_email_password' => 'nullable|string|max:255',
-                'role' => ['required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member'])],
+                'role' => ['required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member', 'guest'])],
                 'father_name' => 'nullable|string|max:255',
                 'id_card_number' => 'nullable|string|max:32',
                 'phone_number' => 'nullable|string|max:32',
@@ -305,6 +307,7 @@ class UserController extends Controller
             'email' => ['sometimes', 'required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'role' => ['sometimes', 'required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member'])],
             'active' => ['sometimes', 'boolean'],
+            'company_name' => 'nullable|string|max:255',
             'father_name' => 'nullable|string|max:255',
             'id_card_number' => 'nullable|string|max:32',
             'phone_number' => 'nullable|string|max:32',
@@ -378,7 +381,7 @@ class UserController extends Controller
             'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
             'personal_email', 'professional_email',
             'recovery_email',
-            'department', 'designation', 'hired_for', 'employee_code',
+            'department', 'designation', 'company_name', 'hired_for', 'employee_code',
             'job_started_date', 'job_ended_date',
             'gross_salary', 'applied_via',
             'bank_name', 'bank_account_number', 'bank_account_title',
@@ -753,10 +756,38 @@ class UserController extends Controller
      */
     public function getTeamUsers(Request $request)
     {
-        $users = User::select('id', 'name', 'email', 'role', 'department')
-            ->where('active', true)
-            ->orderBy('name')
-            ->get();
+        $user = $request->user();
+
+        if ($user->role === 'guest') {
+            // Guest can only see admin/manager + team members of their projects
+            $projectIds = Project::where('client_name', $user->name)->pluck('id');
+
+            $teamIds = \App\Models\Team::whereIn('id', function ($q) use ($projectIds) {
+                $q->select('team_id')->from('projects')->whereIn('id', $projectIds)->whereNotNull('team_id');
+            })->pluck('id');
+
+            $memberIds = \App\Models\Team::whereIn('id', $teamIds)
+                ->with('members:id')
+                ->get()
+                ->pluck('members')
+                ->flatten()
+                ->pluck('id');
+
+            $adminManagerIds = User::whereIn('role', ['admin', 'manager'])->pluck('id');
+
+            $allIds = $adminManagerIds->merge($memberIds)->unique();
+
+            $users = User::select('id', 'name', 'email', 'role', 'department')
+                ->where('active', true)
+                ->whereIn('id', $allIds)
+                ->orderBy('name')
+                ->get();
+        } else {
+            $users = User::select('id', 'name', 'email', 'role', 'department')
+                ->where('active', true)
+                ->orderBy('name')
+                ->get();
+        }
 
         return response()->json(['success' => true, 'users' => $users]);
     }
@@ -1759,5 +1790,346 @@ class UserController extends Controller
         }
 
         return response()->json(['success' => false, 'message' => 'Invalid document type.'], 422);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Guest (Client Portal) Management
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Create a new guest (client portal) user with auto-generated password.
+     */
+    public function storeGuest(Request $request)
+    {
+        $this->normalizeEmptyStrings($request);
+
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'personal_email' => 'required|string|email|max:255|unique:users,professional_email|unique:users,email',
+            'phone_number' => 'nullable|string|max:32',
+            'company_name' => 'nullable|string|max:255',
+            'avatar' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
+        ]);
+
+        $authUser = $request->user();
+        $plainPassword = Str::random(10) . '@' . Str::random(2);
+
+        $user = User::create([
+            'name' => $request->input('name'),
+            'email' => $request->input('personal_email'),
+            'professional_email' => $request->input('personal_email'),
+            'personal_email' => $request->input('personal_email'),
+            'password' => Hash::make($plainPassword),
+            'role' => 'guest',
+            'active' => false,
+            'must_change_password' => true,
+            'phone_number' => $request->input('phone_number'),
+            'contact_no' => $request->input('phone_number'),
+            'company_name' => $request->input('company_name'),
+        ]);
+
+        if ($request->hasFile('avatar')) {
+            $user->avatar = $this->handleAvatarUpload($request, $user);
+            $user->save();
+        }
+
+        Cache::forget('all_users_list');
+
+        $this->activityService->log(
+            $authUser->id,
+            'guest_created',
+            "You created guest {$user->name}",
+            'user',
+            $user->id,
+            'created',
+            $user->name,
+            $user->id,
+        );
+
+        try {
+            $this->auditService->log(
+                module: 'user_management',
+                action: 'create',
+                description: "Created guest {$user->name}",
+                user: $authUser,
+                entityType: 'User',
+                entityId: $user->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
+        $loginUrl = config('app.frontend_url');
+        $emailSent = false;
+
+        try {
+            Mail::to($user->personal_email)->send(new GuestInvitation($user, $plainPassword, $loginUrl, false));
+            $emailSent = true;
+        } catch (\Throwable $e) {
+            Log::error("Failed to send guest invitation email to {$user->personal_email}: " . $e->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Guest created successfully.' . ($emailSent ? ' Invitation email sent.' : ''),
+            'user' => $user,
+            'email_sent' => $emailSent,
+        ], 201);
+    }
+
+    /**
+     * Update a guest's profile details.
+     */
+    public function updateGuest(Request $request, User $user)
+    {
+        $this->normalizeEmptyStrings($request);
+
+        if ($user->role !== 'guest') {
+            return response()->json(['success' => false, 'message' => 'This user is not a guest.'], 422);
+        }
+
+        $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'personal_email' => ['sometimes', 'required', 'string', 'email', 'max:255', Rule::unique('users', 'professional_email')->ignore($user->id), Rule::unique('users', 'email')->ignore($user->id)],
+            'phone_number' => 'nullable|string|max:32',
+            'company_name' => 'nullable|string|max:255',
+            'avatar' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:5120',
+            'avatar_remove' => 'nullable|in:1',
+        ]);
+
+        $authUser = $request->user();
+
+        $fields = ['name', 'phone_number', 'company_name'];
+        foreach ($fields as $field) {
+            if ($request->exists($field)) {
+                $user->$field = $request->input($field);
+            }
+        }
+
+        if ($request->exists('personal_email')) {
+            $user->email = $request->input('personal_email');
+            $user->professional_email = $request->input('personal_email');
+            $user->personal_email = $request->input('personal_email');
+        }
+
+        if ($request->exists('phone_number')) {
+            $user->contact_no = $request->input('phone_number');
+        }
+
+        // Handle avatar removal
+        if ($request->input('avatar_remove') === '1') {
+            if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
+                Storage::disk('public')->delete($user->avatar);
+            }
+            $user->avatar = null;
+        }
+
+        // Handle avatar upload
+        if ($request->hasFile('avatar')) {
+            $user->avatar = $this->handleAvatarUpload($request, $user);
+        }
+
+        $user->save();
+
+        Cache::forget('all_users_list');
+        Cache::forget("user_profile_{$user->id}");
+
+        $this->activityService->log(
+            $authUser->id,
+            'guest_updated',
+            "You updated guest {$user->name}",
+            'user',
+            $user->id,
+            'updated',
+            $user->name,
+            $user->id,
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Guest updated successfully.',
+            'user' => $user,
+        ]);
+    }
+
+    /**
+     * Resend invitation email to a guest with a new password.
+     */
+    public function resendInvitation(Request $request, User $user)
+    {
+        if ($user->role !== 'guest') {
+            return response()->json(['success' => false, 'message' => 'This user is not a guest.'], 422);
+        }
+
+        $authUser = $request->user();
+        $plainPassword = Str::random(10) . '@' . Str::random(2);
+        $user->password = Hash::make($plainPassword);
+        $user->must_change_password = true;
+        $user->active = true;
+        $user->save();
+
+        Cache::forget('all_users_list');
+
+        $loginUrl = config('app.frontend_url');
+        $emailSent = false;
+
+        try {
+            Mail::to($user->personal_email)->send(new GuestInvitation($user, $plainPassword, $loginUrl, false));
+            $emailSent = true;
+        } catch (\Throwable $e) {
+            Log::error("Failed to resend guest invitation to {$user->personal_email}: " . $e->getMessage());
+        }
+
+        $this->activityService->log(
+            $authUser->id,
+            'guest_invitation_resent',
+            "You resent invitation to guest {$user->name}",
+            'user',
+            $user->id,
+            'updated',
+            $user->name,
+            $user->id,
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Invitation resent successfully.' . ($emailSent ? ' Email sent.' : ' Email sending failed.'),
+            'user' => $user,
+            'email_sent' => $emailSent,
+        ]);
+    }
+
+    /**
+     * Reset a guest's password and send new credentials.
+     */
+    public function resetGuestPassword(Request $request, User $user)
+    {
+        if ($user->role !== 'guest') {
+            return response()->json(['success' => false, 'message' => 'This user is not a guest.'], 422);
+        }
+
+        $authUser = $request->user();
+        $plainPassword = Str::random(10) . '@' . Str::random(2);
+        $user->password = Hash::make($plainPassword);
+        $user->must_change_password = true;
+        $user->save();
+
+        Cache::forget('all_users_list');
+
+        $loginUrl = config('app.frontend_url');
+        $emailSent = false;
+
+        try {
+            Mail::to($user->personal_email)->send(new GuestInvitation($user, $plainPassword, $loginUrl, true));
+            $emailSent = true;
+        } catch (\Throwable $e) {
+            Log::error("Failed to send password reset to guest {$user->personal_email}: " . $e->getMessage());
+        }
+
+        $this->activityService->log(
+            $authUser->id,
+            'guest_password_reset',
+            "You reset password for guest {$user->name}",
+            'user',
+            $user->id,
+            'updated',
+            $user->name,
+            $user->id,
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password reset successfully.' . ($emailSent ? ' New credentials sent by email.' : ' Email sending failed.'),
+            'user' => $user,
+            'email_sent' => $emailSent,
+        ]);
+    }
+
+    /**
+     * Toggle a guest's active/inactive status.
+     */
+    public function resignGuest(Request $request, User $user)
+    {
+        if ($user->role !== 'guest') {
+            return response()->json(['success' => false, 'message' => 'This user is not a guest.'], 422);
+        }
+
+        if ($user->active === false && $user->must_change_password === false) {
+            return response()->json(['success' => false, 'message' => 'This guest is already resigned.'], 422);
+        }
+
+        $authUser = $request->user();
+
+        $user->active = false;
+        $user->must_change_password = false;
+        $user->save();
+
+        Cache::forget('all_users_list');
+
+        $this->activityService->log(
+            $authUser->id,
+            'guest_resigned',
+            "You resigned guest {$user->name}",
+            'user',
+            $user->id,
+            'resigned',
+            $user->name,
+            $user->id,
+        );
+
+        try {
+            $this->auditService->log(
+                module: 'user_management',
+                action: 'resign',
+                description: "Resigned guest {$user->name}",
+                user: $authUser,
+                entityType: 'User',
+                entityId: $user->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Guest resigned successfully.',
+            'user' => $user,
+        ]);
+    }
+
+    public function toggleGuestStatus(Request $request, User $user)
+    {
+        if ($user->role !== 'guest') {
+            return response()->json(['success' => false, 'message' => 'This user is not a guest.'], 422);
+        }
+
+        $authUser = $request->user();
+        $user->active = !$user->active;
+        $user->save();
+
+        Cache::forget('all_users_list');
+
+        $status = $user->active ? 'activated' : 'deactivated';
+
+        $this->activityService->log(
+            $authUser->id,
+            'guest_status_changed',
+            "You {$status} guest {$user->name}",
+            'user',
+            $user->id,
+            'updated',
+            $user->name,
+            $user->id,
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => "Guest {$status} successfully.",
+            'user' => $user,
+        ]);
     }
 }

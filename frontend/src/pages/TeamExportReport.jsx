@@ -6,7 +6,7 @@ import DonutChart from "../components/DonutChart";
 import "../components/Charts.css";
 import "../pages/ExportReport.css";
 
-const ROLE_LABEL = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member" };
+const ROLE_LABEL = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member", guest: "Guest" };
 
 const STATUS_COLORS_PDF = {
   completed: [22, 101, 52], done: [22, 101, 52], approved: [22, 101, 52],

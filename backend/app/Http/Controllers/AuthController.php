@@ -48,8 +48,11 @@ class AuthController extends Controller
                 'password' => 'required',
             ]);
 
-            // Look up user by professional_email (not personal email)
-            $user = User::where('professional_email', $request->email)->first();
+            // Look up user by email — guests use personal_email, employees use professional_email
+            $user = User::where('professional_email', $request->email)
+                ->orWhere('email', $request->email)
+                ->orWhere('personal_email', $request->email)
+                ->first();
 
             if (! $user || ! Hash::check($request->password, $user->password)) {
                 return response()->json([
@@ -212,18 +215,30 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        $taskStats = Task::where(function ($q) use ($user) {
-            $q->where('assigned_to', $user->id)
-                ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
-        })
-            ->selectRaw('COUNT(*) as total_assigned')
-            ->selectRaw("COUNT(CASE WHEN status IN ('completed','done','approved') THEN 1 END) as completed")
-            ->selectRaw("COUNT(CASE WHEN status IN ('pending', 'in_progress') THEN 1 END) as pending")
-            ->first();
+        if ($user->role === 'guest') {
+            $taskStats = Task::whereHas('project', fn ($q) => $q->where('client_name', $user->name))
+                ->selectRaw('COUNT(*) as total_assigned')
+                ->selectRaw("COUNT(CASE WHEN status IN ('completed','done','approved') THEN 1 END) as completed")
+                ->selectRaw("COUNT(CASE WHEN status IN ('pending', 'in_progress') THEN 1 END) as pending")
+                ->first();
+        } else {
+            $taskStats = Task::where(function ($q) use ($user) {
+                $q->where('assigned_to', $user->id)
+                    ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
+            })
+                ->selectRaw('COUNT(*) as total_assigned')
+                ->selectRaw("COUNT(CASE WHEN status IN ('completed','done','approved') THEN 1 END) as completed")
+                ->selectRaw("COUNT(CASE WHEN status IN ('pending', 'in_progress') THEN 1 END) as pending")
+                ->first();
+        }
 
         $taskStats = $taskStats ?? (object) ['total_assigned' => 0, 'completed' => 0, 'pending' => 0];
 
-        $totalProjects = Project::where('created_by', $user->id)->count();
+        if ($user->role === 'guest') {
+            $totalProjects = Project::where('client_name', $user->name)->count();
+        } else {
+            $totalProjects = Project::where('created_by', $user->id)->count();
+        }
 
         $loginHistory = [];
         if ($user->last_login_at) {
@@ -243,6 +258,8 @@ class AuthController extends Controller
                 'role' => $user->role,
                 'active' => $user->active,
                 'contact_no' => $user->contact_no,
+                'phone_number' => $user->phone_number,
+                'company_name' => $user->company_name,
                 'address' => $user->address,
                 'department' => $user->department,
                 'designation' => $user->designation,
@@ -325,7 +342,7 @@ class AuthController extends Controller
         $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'email' => 'sometimes|required|email|max:255',
-            'role' => ['sometimes', 'required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member'])],
+            'role' => ['sometimes', 'required', Rule::in(['admin', 'manager', 'team_lead', 'teamlead', 'member', 'guest'])],
             'father_name' => 'nullable|string|max:255',
             'id_card_number' => 'nullable|string|max:32',
             'phone_number' => 'nullable|string|max:32',

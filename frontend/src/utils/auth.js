@@ -10,7 +10,7 @@
  * A second login with the SAME role kicks out the old tab for that role.
  */
 
-const ROLES = ["admin", "manager", "team_lead", "member"];
+const ROLES = ["admin", "manager", "team_lead", "member", "guest"];
 
 /* ───── current role (tab-scoped) ───── */
 
@@ -192,6 +192,7 @@ const ROLE_URL_MAP = {
   team_lead: "teamlead",
   teamlead: "teamlead",
   member: "member",
+  guest: "guest",
 };
 
 /**
@@ -223,5 +224,6 @@ export function getUrlRole() {
 export function normalizeRole(role) {
   if (!role) return "";
   if (role === "team_lead" || role === "teamlead") return "Team Lead";
+  if (role === "guest") return "Guest";
   return role.charAt(0).toUpperCase() + role.slice(1);
 }

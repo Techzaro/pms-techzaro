@@ -144,6 +144,12 @@ function UserProfile() {
   const [deleteDocConfirmOpen, setDeleteDocConfirmOpen] = useState(false);
   const [pendingDeleteDoc, setPendingDeleteDoc] = useState(null);
 
+  // Guest management state
+  const [guestActionModal, setGuestActionModal] = useState({ open: false, type: "" });
+  const [guestEditModal, setGuestEditModal] = useState(false);
+  const [guestEditData, setGuestEditData] = useState({ name: "", personal_email: "", phone_number: "", company_name: "", avatar: null, _existingAvatar: null });
+  const [guestEditSubmitting, setGuestEditSubmitting] = useState(false);
+
   // Dynamic departments and designations from users data + localStorage persistence
   const [deletedDesignations, setDeletedDesignations] = useState(() => {
     try { return JSON.parse(localStorage.getItem("deleted_designations") || "[]"); } catch { return []; }
@@ -233,6 +239,98 @@ function UserProfile() {
       showSuccessMessage("User", "resigned");
       publish('data:changed', { type: 'user', action: 'resigned' });
     });
+  };
+
+  /** Handle guest-specific actions (resign, resend invitation, reset password) */
+  const handleGuestAction = async (type) => {
+    setGuestActionModal({ open: false, type: "" });
+    const token = authToken();
+    if (!token) return;
+
+    try {
+      let url, method;
+      if (type === "resend-invitation") {
+        url = `${API_URL}/guests/${userId}/resend-invitation`;
+        method = "POST";
+      } else if (type === "reset-password") {
+        url = `${API_URL}/guests/${userId}/reset-password`;
+        method = "POST";
+      } else if (type === "resign") {
+        url = `${API_URL}/guests/${userId}/resign`;
+        method = "PUT";
+      } else {
+        return;
+      }
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Action failed");
+
+      if (type === "resign") {
+        setProfileData((prev) => ({ ...prev, user: { ...prev.user, active: false, must_change_password: false } }));
+        showSuccessMessage("Guest", "resigned");
+      } else {
+        showSuccessMessage("Guest", type === "resend-invitation" ? "invitation resent" : "password reset");
+        if (data.email_sent === false) notify.error("Email sending failed.");
+      }
+      publish("data:changed", { type: "guest", action: type });
+    } catch (err) {
+      notify.error(err.message);
+    }
+  };
+
+  const openGuestEditModal = () => {
+    setGuestEditData({
+      name: user.name || "",
+      personal_email: user.personal_email || user.email || "",
+      phone_number: user.phone_number || user.contact_no || "",
+      company_name: user.company_name || "",
+      avatar: null,
+      _existingAvatar: user.avatar || null,
+    });
+    setGuestEditModal(true);
+  };
+
+  const handleGuestEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!guestEditData.name.trim() || !guestEditData.personal_email.trim()) {
+      notify.error("Name and email are required.");
+      return;
+    }
+    setGuestEditSubmitting(true);
+    try {
+      const token = authToken();
+      const formData = new FormData();
+      formData.append("name", guestEditData.name.trim());
+      formData.append("personal_email", guestEditData.personal_email.trim());
+      if (guestEditData.phone_number.trim()) formData.append("phone_number", guestEditData.phone_number.trim());
+      if (guestEditData.company_name.trim()) formData.append("company_name", guestEditData.company_name.trim());
+      if (guestEditData.avatar) formData.append("avatar", guestEditData.avatar);
+      if (!guestEditData.avatar && !guestEditData._existingAvatar && user.avatar) formData.append("avatar_remove", "1");
+      formData.append("_method", "PUT");
+
+      const res = await fetch(`${API_URL}/guests/${userId}`, {
+        method: "POST",
+        headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to update guest");
+
+      setProfileData((prev) => ({ ...prev, user: { ...prev.user, ...data.user } }));
+      showSuccessMessage("Guest", "updated");
+      publish("data:changed", { type: "guest", action: "updated" });
+      setGuestEditModal(false);
+    } catch (err) {
+      notify.error(err.message);
+    } finally {
+      setGuestEditSubmitting(false);
+    }
   };
 
   /** Fetch the target user's profile data from the API. */
@@ -904,8 +1002,8 @@ function UserProfile() {
         <Breadcrumb items={breadcrumbs} />
             <div className="profile-header-profile" style={{ display: "flex", alignItems: "center",gap: 310, }}>
               <div>
-                <h1>User Profile</h1>
-                <p>View and manage your personal information and account settings.</p>
+                <h1>{user?.role === "guest" ? "Guest Profile" : "User Profile"}</h1>
+                <p>{user?.role === "guest" ? "View and manage guest information and account settings." : "View and manage your personal information and account settings."}</p>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                 <button
@@ -965,39 +1063,75 @@ function UserProfile() {
                 <div className="info-card-header">
                   <h3>Personal Information</h3>
                   <div style={{ display: "flex", gap: "8px" }}>
-                    {(!["admin", "manager"].includes(user.role) || currentUserRole === "admin") && (
+                    {user.role !== "guest" && (!["admin", "manager"].includes(user.role) || currentUserRole === "admin") && (
                       <button className="btn-edit" onClick={openEditModal} disabled={isResignedProfile || isOwnProfile} style={isResignedProfile || isOwnProfile ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
                         <MdEdit size={16} /> Edit
                       </button>
                     )}
-                    {(!["admin", "manager"].includes(user.role) || currentUserRole === "admin") && user.active !== false && String(getUser()?.id) !== String(userId) && (
+                    {user.role !== "guest" && (!["admin", "manager"].includes(user.role) || currentUserRole === "admin") && user.active !== false && String(getUser()?.id) !== String(userId) && (
                       <button className="btn-edit" onClick={handleResignUser} style={{ background: "#dc2626" }}>
                         <ResignIcon /> Resign
                       </button>
                     )}
+                    {user.role === "guest" && currentUserRole !== "guest" && (
+                      <>
+                        <button className="btn-edit" onClick={openGuestEditModal}>
+                          <MdEdit size={16} /> Edit
+                        </button>
+                        {!(user.active === false && user.must_change_password === false) && (
+                          <button className="btn-edit" onClick={() => setGuestActionModal({ open: true, type: "resign" })} style={{ background: "#dc2626" }}>
+                            <ResignIcon /> Resign
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="info-card-body">
-                  <div className="info-row">
-                    <span className="info-label">Full Name</span>
-                    <span className="info-value">{user.name || "---"}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Father Name</span>
-                    <span className="info-value">{user.father_name || "---"}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">ID Card Number</span>
-                    <span className="info-value">{displayCNIC(user.id_card_number)}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Phone Number</span>
-                    <span className="info-value">{displayPhone(user.phone_number || user.contact_no)}</span>
-                  </div>
+                  {user.role === "guest" ? (
+                    <>
+                      <div className="info-row">
+                        <span className="info-label">Client Name</span>
+                        <span className="info-value">{user.name || "---"}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="info-label">Email</span>
+                        <span className="info-value">{user.personal_email || user.email || "---"}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="info-label">Phone</span>
+                        <span className="info-value">{displayPhone(user.phone_number || user.contact_no)}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="info-label">Company Name</span>
+                        <span className="info-value">{user.company_name || "---"}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="info-row">
+                        <span className="info-label">Full Name</span>
+                        <span className="info-value">{user.name || "---"}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="info-label">Father Name</span>
+                        <span className="info-value">{user.father_name || "---"}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="info-label">ID Card Number</span>
+                        <span className="info-value">{displayCNIC(user.id_card_number)}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="info-label">Phone Number</span>
+                        <span className="info-value">{displayPhone(user.phone_number || user.contact_no)}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* Address */}
+              {/* Address - hidden for guests */}
+              {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
                   <h3>Address</h3>
@@ -1013,8 +1147,10 @@ function UserProfile() {
                   </div>
                 </div>
               </div>
+              )}
 
-              {/* Emergency Contact */}
+              {/* Emergency Contact - hidden for guests */}
+              {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
                   <h3>Emergency Contact</h3>
@@ -1034,8 +1170,10 @@ function UserProfile() {
                   </div>
                 </div>
               </div>
+              )}
 
-              {/* Email Accounts */}
+              {/* Email Accounts - hidden for guests */}
+              {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
                   <h3>Email Accounts</h3>
@@ -1062,8 +1200,10 @@ function UserProfile() {
                   </div>
                 </div>
               </div>
+              )}
 
-              {/* Employment Details */}
+              {/* Employment Details - hidden for guests */}
+              {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
                   <h3>Employment Details</h3>
@@ -1105,8 +1245,10 @@ function UserProfile() {
                   </div>
                 </div>
               </div>
+              )}
 
-              {/* Salary & Bank Details */}
+              {/* Salary & Bank Details - hidden for guests */}
+              {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
                   <h3>Salary & Bank Details</h3>
@@ -1130,8 +1272,10 @@ function UserProfile() {
                   </div>
                 </div>
               </div>
+              )}
 
-              {/* Documents */}
+              {/* Documents - hidden for guests */}
+              {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
                   <h3>Documents</h3>
@@ -1217,6 +1361,7 @@ function UserProfile() {
                   })}
                 </div>
               </div>
+              )}
             </div>
 
           </div>
@@ -1266,7 +1411,7 @@ function UserProfile() {
                     </span>
                     <div className="status-info">
                       <span className="status-label">Account Type</span>
-                      <span className="status-value">Employee</span>
+                      <span className="status-value">{user?.role === "guest" ? "Guest" : "Employee"}</span>
                     </div>
                   </div>
                 </div>
@@ -1499,6 +1644,7 @@ function UserProfile() {
                     {getCurrentRole() === "admin" && <option value="manager">Manager</option>}
                     <option value="team_lead">Team Lead</option>
                     <option value="member">Member</option>
+                    <option value="guest">Guest</option>
                   </select>
                 </div>
                 <div className="form-row">
@@ -1817,6 +1963,109 @@ function UserProfile() {
         confirmText="Delete"
         danger
       />
+
+      {/* Guest Action Confirmation */}
+      <ConfirmModal
+        isOpen={guestActionModal.open}
+        onClose={() => setGuestActionModal({ open: false, type: "" })}
+        onConfirm={() => handleGuestAction(guestActionModal.type)}
+        title={
+          guestActionModal.type === "resend-invitation" ? "Resend Invitation" :
+          guestActionModal.type === "reset-password" ? "Reset Password" :
+          guestActionModal.type === "resign" ? "Resign Guest" :
+          "Guest Action"
+        }
+        message={
+          guestActionModal.type === "resend-invitation"
+            ? `A new password will be generated and sent to ${user.personal_email || user.email}. Continue?`
+            : guestActionModal.type === "reset-password"
+            ? `A new password will be generated and sent to ${user.personal_email || user.email}. The old password will stop working. Continue?`
+            : guestActionModal.type === "resign"
+            ? `Are you sure you want to resign ${user.name}? They will no longer be able to access the portal.`
+            : ""
+        }
+        confirmText={
+          guestActionModal.type === "resend-invitation" ? "Resend" :
+          guestActionModal.type === "reset-password" ? "Reset" :
+          guestActionModal.type === "resign" ? "Resign" :
+          "Confirm"
+        }
+        cancelText="Cancel"
+        danger={guestActionModal.type === "resign" || guestActionModal.type === "reset-password"}
+      />
+
+      {/* Guest Edit Modal */}
+      {guestEditModal && createPortal(
+        <div className="user-modal-overlay" onClick={() => setGuestEditModal(false)}>
+          <div className="user-modal-content" style={{ maxWidth: "560px", width: "100%" }} onClick={(e) => e.stopPropagation()}>
+            <div className="user-modal-header">
+              <div className="user-header-left">
+                <div className="user-icon-box">👥</div>
+                <div>
+                  <h2>Edit Guest</h2>
+                </div>
+              </div>
+              <div className="user-header-actions">
+                <button className="primary-button" disabled={guestEditSubmitting} onClick={handleGuestEditSubmit}>
+                  {guestEditSubmitting ? "Updating..." : "Update Guest"}
+                </button>
+                <button className="user-modal-close" onClick={() => setGuestEditModal(false)}>&#10005;</button>
+              </div>
+            </div>
+            <form className="user-form" onSubmit={handleGuestEditSubmit} style={{ pointerEvents: guestEditSubmitting ? "none" : "auto", opacity: guestEditSubmitting ? 0.7 : 1 }}>
+              {/* Profile Photo */}
+              <div className="avatar-upload-section">
+                <label className="avatar-upload-label">Profile Photo</label>
+                <div className="avatar-upload-row">
+                  <div className="avatar-preview" onClick={() => document.getElementById('guest-profile-avatar-input').click()}>
+                    {guestEditData.avatar ? (
+                      <img src={URL.createObjectURL(guestEditData.avatar)} alt="Avatar preview" />
+                    ) : guestEditData._existingAvatar ? (
+                      <img src={`${API_URL.replace('/api', '')}/storage/${guestEditData._existingAvatar}`} alt="Avatar preview" />
+                    ) : (
+                      <>
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
+                        <span className="avatar-upload-hint">Click to upload</span>
+                      </>
+                    )}
+                  </div>
+                  <input id="guest-profile-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) setGuestEditData((prev) => ({ ...prev, avatar: file })); }} />
+                  {(guestEditData.avatar || guestEditData._existingAvatar) && (
+                    <button type="button" className="avatar-remove-btn" onClick={() => setGuestEditData((prev) => ({ ...prev, avatar: null, _existingAvatar: null }))}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <h3 className="form-section-title">Client Information</h3>
+              <div className="user-form-grid">
+                <div className="form-row">
+                  <label>Client Name *</label>
+                  <input type="text" value={guestEditData.name} onChange={(e) => setGuestEditData((p) => ({ ...p, name: e.target.value }))} placeholder="Enter client / company name" />
+                </div>
+                <div className="form-row">
+                  <label>Personal Email *</label>
+                  <input type="email" value={guestEditData.personal_email} onChange={(e) => setGuestEditData((p) => ({ ...p, personal_email: e.target.value }))} placeholder="client@example.com" />
+                </div>
+                <div className="form-row">
+                  <label>Phone Number</label>
+                  <input type="text" value={guestEditData.phone_number} onChange={(e) => setGuestEditData((p) => ({ ...p, phone_number: e.target.value }))} placeholder="03XX-XXXXXXX" />
+                </div>
+                <div className="form-row">
+                  <label>Company Name</label>
+                  <input type="text" value={guestEditData.company_name} onChange={(e) => setGuestEditData((p) => ({ ...p, company_name: e.target.value }))} placeholder="Enter company name (optional)" />
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
     </DashboardLayout>
   );
 }

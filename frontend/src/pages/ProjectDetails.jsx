@@ -163,7 +163,7 @@ function sanitizeHtml(html) {
   return String(html || "").replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
 }
 
-function CredentialRow({ credential, onDelete, onEdit }) {
+function CredentialRow({ credential, onDelete, onEdit, isGuest }) {
   const [copied, setCopied] = useState(false);
   const [copiedUser, setCopiedUser] = useState(false);
 
@@ -223,12 +223,16 @@ function CredentialRow({ credential, onDelete, onEdit }) {
           )}
         </div>
         <div className="pd-cred-actions">
-          <button className="pd-cred-edit" onClick={() => onEdit?.(credential)} title="Edit credential">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
-          </button>
-          <button className="pd-cred-delete" onClick={onDelete} title="Delete credential">
-            <Trash2 size={14} />
-          </button>
+          {!isGuest && (
+            <>
+              <button className="pd-cred-edit" onClick={() => onEdit?.(credential)} title="Edit credential">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+              </button>
+              <button className="pd-cred-delete" onClick={onDelete} title="Delete credential">
+                <Trash2 size={14} />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -1101,9 +1105,11 @@ function ProjectDetails() {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                               <input type="text" placeholder="Search tasks..." value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} />
                             </div>
-                            <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowTaskModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                              <Plus size={16} /> Add Task
-                            </button>
+                            {currentUser?.role !== "guest" && (
+                              <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowTaskModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <Plus size={16} /> Add Task
+                              </button>
+                            )}
                           </div>
                           <div className="pd-table-wrap">
                             <div className="project-task-table">
@@ -1376,9 +1382,11 @@ function ProjectDetails() {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                               <input type="text" placeholder="Search members..." value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} />
                             </div>
-                            <Link to={rolePath("manage-team")} className="pd-link-manage">
-                              Manage
-                            </Link>
+                            {currentUser?.role !== "guest" && (
+                              <Link to={rolePath("manage-team")} className="pd-link-manage">
+                                Manage
+                              </Link>
+                            )}
                           </div>
                           {project.creator && (
                             <div className="pd-member">
@@ -1526,6 +1534,7 @@ function ProjectDetails() {
                                     setDeleteCredentialConfirmOpen(true);
                                   }}
                                   onEdit={(c) => setEditingCredential(c)}
+                                  isGuest={currentUser?.role === "guest"}
                                 />
                               ))}
                             </div>

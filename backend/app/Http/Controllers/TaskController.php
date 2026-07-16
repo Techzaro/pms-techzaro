@@ -49,6 +49,15 @@ class TaskController extends Controller
     public function myTasks(Request $request)
     {
         $user = $request->user();
+
+        // Guests only see tasks inside project details, not in standalone lists
+        if ($user->role === 'guest') {
+            return response()->json([
+                'data' => collect(),
+                'total' => 0,
+            ]);
+        }
+
         $isDueTodayFilter = $request->input('status') === 'due_today';
         $isPendingFilter = $request->input('status') === 'pending';
         $statusFilter = $request->input('status');
@@ -112,6 +121,12 @@ class TaskController extends Controller
     public function mySelfTasks(Request $request)
     {
         $user = $request->user();
+
+        // Guests only see tasks inside project details
+        if ($user->role === 'guest') {
+            return response()->json(['data' => collect(), 'total' => 0]);
+        }
+
         $isDueTodayFilter = $request->input('status') === 'due_today';
         $isPendingFilter = $request->input('status') === 'pending';
         $filters = $request->query();
@@ -131,6 +146,17 @@ class TaskController extends Controller
             ->filter($filters)
             ->limit(200)
             ->get();
+
+        if ($user->role === 'guest') {
+            $tasks = Task::whereHas('project', fn ($q) => $q->where('client_name', $user->name))
+                ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
+                ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
+                ->with(['project:id,title,team_id', 'assigners:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role'])
+                ->orderBy('sort_order')->latest('updated_at')
+                ->filter($filters)
+                ->limit(200)
+                ->get();
+        }
 
         // Bulk load deliverable counts
         $taskIds = $tasks->pluck('id');
@@ -259,6 +285,12 @@ class TaskController extends Controller
     public function assignedByMe(Request $request)
     {
         $user = $request->user();
+
+        // Guests only see tasks inside project details
+        if ($user->role === 'guest') {
+            return response()->json(['data' => collect(), 'total' => 0]);
+        }
+
         $userId = $user->id;
         $isDueTodayFilter = $request->input('status') === 'due_today';
         $isPendingFilter = $request->input('status') === 'pending';
@@ -271,7 +303,9 @@ class TaskController extends Controller
 
         $tasksQuery = Task::with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role']);
 
-        if ($isAdminOrManager) {
+        if ($user->role === 'guest') {
+            $tasksQuery->whereHas('project', fn ($q) => $q->where('client_name', $user->name));
+        } elseif ($isAdminOrManager) {
             $tasksQuery->whereIn('assigned_by', $adminManagerIds)
                 ->where(function ($q) {
                     $q->whereColumn('assigned_by', '!=', 'assigned_to')->orWhereNull('assigned_to');

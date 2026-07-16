@@ -30,6 +30,7 @@ class User extends Authenticatable
         // Contact
         'contact_no',
         'address',
+        'company_name',
 
         // Employment
         'department',

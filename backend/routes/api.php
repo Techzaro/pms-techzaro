@@ -20,6 +20,7 @@ use App\Http\Controllers\DeliverableController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\ChatController;
 
 /*
 | Public Routes
@@ -112,6 +113,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/test-email', [UserController::class, 'testEmail']);
         // Reorder users list
         Route::post('/users/reorder', [UserController::class, 'reorder']);
+
+        // Guest (Client Portal) management
+        Route::post('/guests', [UserController::class, 'storeGuest']);
+        Route::put('/guests/{user}', [UserController::class, 'updateGuest']);
+        Route::post('/guests/{user}/resend-invitation', [UserController::class, 'resendInvitation']);
+        Route::post('/guests/{user}/reset-password', [UserController::class, 'resetGuestPassword']);
+        Route::put('/guests/{user}/toggle-status', [UserController::class, 'toggleGuestStatus']);
+        Route::put('/guests/{user}/resign', [UserController::class, 'resignGuest']);
 
         // Company documents management (logo, QR code, contracts, etc.) - admin/manager only for write operations
         Route::post('/company-documents', [\App\Http\Controllers\CompanyDocumentController::class, 'store']);
@@ -212,46 +221,46 @@ Route::middleware('auth:sanctum')->group(function () {
     | CRUD operations, submission workflows, file attachments, and personal notes for tasks.
     */
 
-    // Create standalone task (no project required)
-    Route::post('/tasks', [TaskController::class, 'storeStandalone']);
+    // Create standalone task (no project required) - not for guests
+    Route::post('/tasks', [TaskController::class, 'storeStandalone'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
 
     // Preview recurring deliverables calculation
-    Route::post('/tasks/recurring-preview', [TaskController::class, 'recurringPreview']);
+    Route::post('/tasks/recurring-preview', [TaskController::class, 'recurringPreview'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
 
-    // Create task under a project (any authenticated user)
-    Route::post('/projects/{project}/tasks', [TaskController::class, 'store']);
+    // Create task under a project (any authenticated user except guests)
+    Route::post('/projects/{project}/tasks', [TaskController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
 
     // Task CRUD operations
     Route::get('/tasks/{task}', [TaskController::class, 'show']); // View task details
-    Route::put('/tasks/{task}', [TaskController::class, 'update']); // Update task
-    Route::patch('/tasks/{task}/status', [TaskController::class, 'updateStatus']); // Update task status
-    Route::post('/tasks/{task}/complete', [TaskController::class, 'completeTask']); // Mark task as complete
-    Route::delete('/tasks/{task}', [TaskController::class, 'destroy']); // Delete task
-    Route::post('/tasks/{task}/update-recurring', [TaskController::class, 'updateRecurring']); // Update recurring task with confirmation
+    Route::put('/tasks/{task}', [TaskController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update task
+    Route::patch('/tasks/{task}/status', [TaskController::class, 'updateStatus'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update task status
+    Route::post('/tasks/{task}/complete', [TaskController::class, 'completeTask'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Mark task as complete
+    Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete task
+    Route::post('/tasks/{task}/update-recurring', [TaskController::class, 'updateRecurring'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update recurring task with confirmation
 
     // Task submission workflow (submit for review, approve, reject, reopen)
-    Route::post('/tasks/{task}/submit', [TaskController::class, 'submit']); // Submit task for review
+    Route::post('/tasks/{task}/submit', [TaskController::class, 'submit'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Submit task for review
     Route::get('/tasks/{task}/latest-submission', [TaskController::class, 'latestSubmission']); // Get latest submission
     Route::get('/tasks/submission-file/{submission}', [TaskController::class, 'downloadSubmissionFile']); // Download submission file
-    Route::post('/tasks/{task}/approve', [TaskController::class, 'approve']); // Approve submitted task
-    Route::post('/tasks/{task}/reject', [TaskController::class, 'reject']); // Reject submitted task
-    Route::post('/tasks/{task}/reopen', [TaskController::class, 'reopen']); // Reopen rejected task
+    Route::post('/tasks/{task}/approve', [TaskController::class, 'approve'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Approve submitted task
+    Route::post('/tasks/{task}/reject', [TaskController::class, 'reject'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reject submitted task
+    Route::post('/tasks/{task}/reopen', [TaskController::class, 'reopen'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reopen rejected task
 
     // Project submission workflow removed - projects no longer submitted as tasks
-    Route::post('/projects/reorder', [ProjectController::class, 'reorderProjects']); // Reorder projects
+    Route::post('/projects/reorder', [ProjectController::class, 'reorderProjects'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reorder projects
 
     // Reorder tasks within a project
-    Route::post('/tasks/reorder', [TaskController::class, 'reorderTasks']);
+    Route::post('/tasks/reorder', [TaskController::class, 'reorderTasks'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
 
     // Mark task changes as read (for notification tracking)
     Route::post('/tasks/{task}/changes/mark-read', [TaskController::class, 'markChangesRead']);
 
     // Task file attachments and links
-    Route::post('/tasks/{task}/files', [TaskController::class, 'uploadFile']); // Upload file to task
-    Route::post('/tasks/{task}/links', [TaskController::class, 'addLink']); // Add link to task
-    Route::put('/tasks/{task}/files/{file}', [TaskController::class, 'renameFile']); // Rename task file/link
-    Route::delete('/tasks/{task}/files/{file}', [TaskController::class, 'deleteFile']); // Delete task file
-    Route::post('/tasks/{task}/files/reorder', [TaskController::class, 'reorderFiles']); // Reorder task files
+    Route::post('/tasks/{task}/files', [TaskController::class, 'uploadFile'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Upload file to task
+    Route::post('/tasks/{task}/links', [TaskController::class, 'addLink'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Add link to task
+    Route::put('/tasks/{task}/files/{file}', [TaskController::class, 'renameFile'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Rename task file/link
+    Route::delete('/tasks/{task}/files/{file}', [TaskController::class, 'deleteFile'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete task file
+    Route::post('/tasks/{task}/files/reorder', [TaskController::class, 'reorderFiles'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reorder task files
 
     // Task access credentials
     Route::get('/tasks/{task}/access-credentials', [TaskController::class, 'getAccessCredentials']);
@@ -294,12 +303,12 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // Deliverable submission workflow
-    Route::post('/deliverables/{deliverable}/submit', [DeliverableController::class, 'submit']); // Submit deliverable for review
+    Route::post('/deliverables/{deliverable}/submit', [DeliverableController::class, 'submit'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Submit deliverable for review
     Route::get('/deliverables/{deliverable}/latest-submission', [DeliverableController::class, 'latestSubmission']); // Get latest submission
 
     // Self-deliverable review actions (assignee reviews their own work)
-    Route::post('/deliverables/{deliverable}/self-approve', [DeliverableController::class, 'selfApprove']); // Self-approve deliverable
-    Route::post('/deliverables/{deliverable}/self-rework', [DeliverableController::class, 'selfRework']); // Mark for rework
+    Route::post('/deliverables/{deliverable}/self-approve', [DeliverableController::class, 'selfApprove'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Self-approve deliverable
+    Route::post('/deliverables/{deliverable}/self-rework', [DeliverableController::class, 'selfRework'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Mark for rework
 
     /*
     | Notification Routes
@@ -313,6 +322,18 @@ Route::middleware('auth:sanctum')->group(function () {
     // Device tokens for push notifications (all authenticated users)
     Route::post('/device-tokens', [\App\Http\Controllers\DeviceTokenController::class, 'store']); // Register device token
     Route::delete('/device-tokens', [\App\Http\Controllers\DeviceTokenController::class, 'destroy']); // Remove device token
+
+    /*
+    | Chat Routes
+    | Project-based messaging between guests and internal users.
+    */
+    Route::get('/conversations', [ChatController::class, 'index']); // List user's conversations
+    Route::get('/conversations/unread-count', [ChatController::class, 'unreadCount']); // Get unread conversation count
+    Route::get('/chat-items', [ChatController::class, 'chatItems']); // Get projects, tasks, deliverables for chat
+    Route::get('/conversations/{conversation}', [ChatController::class, 'show']); // View conversation messages
+    Route::post('/conversations', [ChatController::class, 'store']); // Create new conversation
+    Route::post('/conversations/{conversation}/messages', [ChatController::class, 'sendMessage']); // Send message
+    Route::get('/messages/{message}/file', [ChatController::class, 'downloadFile']); // Download message attachment
 
     /*
     | Activity Routes
@@ -348,9 +369,9 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::get('/events', [EventController::class, 'index']); // List all events
     Route::get('/events/{event}', [EventController::class, 'show']); // View event details
-    Route::post('/events', [EventController::class, 'store']); // Create new event
-    Route::put('/events/{event}', [EventController::class, 'update']); // Update event
-    Route::delete('/events/{event}', [EventController::class, 'destroy']); // Delete event
+    Route::post('/events', [EventController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Create new event
+    Route::put('/events/{event}', [EventController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update event
+    Route::delete('/events/{event}', [EventController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete event
 
     /*
     | Unified Calendar Routes
@@ -380,7 +401,7 @@ Route::middleware('auth:sanctum')->group(function () {
     | Role-Based Dashboard Routes
     | Personalized dashboard information based on user role.
     */
-    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead,member')->group(function () {
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead,member,guest')->group(function () {
         // Get role-specific welcome message and dashboard data
         Route::get('/role-dashboard', function (Request $request) {
             return response()->json([

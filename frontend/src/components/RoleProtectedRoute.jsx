@@ -14,6 +14,7 @@ const URL_ROLE_TO_SESSION = {
   manager: "manager",
   teamlead: "team_lead",
   member: "member",
+  guest: "guest",
 };
 
 const SESSION_ROLE_TO_URL = {
@@ -21,6 +22,7 @@ const SESSION_ROLE_TO_URL = {
   manager: "manager",
   team_lead: "teamlead",
   member: "member",
+  guest: "guest",
 };
 
 /**

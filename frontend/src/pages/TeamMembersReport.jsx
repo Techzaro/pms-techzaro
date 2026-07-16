@@ -11,7 +11,7 @@ import { useApiQuery } from "../hooks/useApi";
 import "../pages/UserPerformance.css";
 import "../components/Charts.css";
 
-const ROLE_LABEL = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member" };
+const ROLE_LABEL = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member", guest: "Guest" };
 
 function TeamMembersReport() {
   const { teamId } = useParams();

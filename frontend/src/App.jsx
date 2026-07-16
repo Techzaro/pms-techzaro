@@ -42,6 +42,7 @@ const TeamMembersReport = lazy(() => import("./pages/TeamMembersReport"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const LoggedOut = lazy(() => import("./pages/LoggedOut"));
+const Chat = lazy(() => import("./pages/Chat"));
 
 // Route protection components
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -124,6 +125,8 @@ function App() {
             <Route path="/:role/audit-logs" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><AuditLogs /></RoleProtectedRoute>} />
             <Route path="/:role/reports/user-performance/:userId" element={<ProtectedRoute><UserPerformance /></ProtectedRoute>} />
             <Route path="/:role/reports/team-members/:teamId" element={<ProtectedRoute><TeamMembersReport /></ProtectedRoute>} />
+            <Route path="/:role/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+            <Route path="/:role/chat/:conversationId" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
 
             {/* Catch-all redirect */}
             <Route path="*" element={<Navigate to="/" replace />} />

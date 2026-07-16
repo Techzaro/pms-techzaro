@@ -75,7 +75,7 @@ const SummaryCard = memo(function SummaryCard({ card }) {
   );
 });
 
-const ROLE_LABEL = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member" };
+const ROLE_LABEL = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member", guest: "Guest" };
 
 const STATUS_COLORS = {
   pending: "#FEF3C7",

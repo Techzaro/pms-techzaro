@@ -466,8 +466,9 @@ function Header() {
         {/* ── Right: Create buttons, notifications, user menu ── */}
         <div className="header-right">
 
-          {/* Quick-create task button */}
+          {/* Quick-create task button – not for guests */}
 
+          {getCurrentRole() !== "guest" && (
           <button
             className="task-btn1"
             onClick={() =>
@@ -476,6 +477,7 @@ function Header() {
           >
             + Task
           </button>
+          )}
 
           {/* Quick-create project button – visible to admin/manager only */}
 

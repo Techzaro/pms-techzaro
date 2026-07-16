@@ -44,6 +44,7 @@ const TYPE_ICONS = {
   event_updated: { icon: "calendar", bg: "#dbeafe", color: "#2563eb" },
   event_cancelled: { icon: "calendar", bg: "#fee2e2", color: "#dc2626" },
   event_reminder: { icon: "alarm", bg: "#fef3c7", color: "#d97706" },
+  chat_message: { icon: "chat", bg: "#d1fae5", color: "#059669" },
 };
 
 /** Renders the appropriate SVG icon for a given notification type. */
@@ -131,6 +132,11 @@ function TypeIcon({ type }) {
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
         </svg>
       )}
+      {cfg.icon === "chat" && (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+      )}
     </div>
   );
 }
@@ -176,6 +182,7 @@ function Notifications() {
     { value: "event_updated", label: "Event Updated" },
     { value: "event_cancelled", label: "Event Cancelled" },
     { value: "event_reminder", label: "Event Reminder" },
+    { value: "chat_message", label: "Chat Message" },
   ];
 
   /**

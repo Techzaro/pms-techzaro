@@ -65,6 +65,20 @@ class ProjectController extends Controller
                 }])
                 ->orderBy('sort_order')
                 ->latest('id');
+        } elseif ($user->role === 'guest') {
+            $projectsQuery = Project::where('client_name', $user->name)
+                ->with(['creator:id,name,role', 'team:id,name', 'updatedBy:id,name,role'])
+                ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
+                    $q->whereIn('status', $this->completedTaskStatuses());
+                }])
+                ->withCount(['tasks as approved_tasks' => function ($q) {
+                    $q->where('status', 'approved');
+                }])
+                ->withCount(['deliverables as pending_deliverables_count' => function ($q) {
+                    $q->whereNull('task_id')->where('status', 'pending');
+                }])
+                ->orderBy('sort_order')
+                ->latest('id');
         } else {
             $projectsQuery = Project::where(function ($q) use ($user) {
                 $q->whereHas('manuallyVisibleTo', fn ($q) => $q->where('user_id', $user->id))
@@ -302,8 +316,9 @@ class ProjectController extends Controller
                 ->where('is_visible', true)
                 ->exists();
             $isTeamLead = $user->role === 'team_lead';
+            $isGuestClient = $user->role === 'guest' && $project->client_name === $user->name;
 
-            if (! $isCreator && ! $isAssigned && ! $isTeamMember && ! $hasTasksUnderProject && ! $isManuallyVisible && ! $isTeamLead) {
+            if (! $isCreator && ! $isAssigned && ! $isTeamMember && ! $hasTasksUnderProject && ! $isManuallyVisible && ! $isTeamLead && ! $isGuestClient) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             }
         }
