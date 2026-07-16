@@ -207,7 +207,7 @@ function Deliveries() {
   const paginatedItems = showAll ? displayItems : displayItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   const breadcrumbs = [
-    { label: "Deliverables", path: rolePath("deliveries") },
+    { label: "Subtasks", path: rolePath("deliveries") },
     { label: "Assigned To You" },
   ];
 
@@ -217,8 +217,8 @@ function Deliveries() {
       <div className="projects-page">
         <div className="projects-header">
           <div>
-            <h1>Deliverables Assigned To You</h1>
-            <p>Manage and track your deliverables</p>
+            <h1>Subtasks Assigned To You</h1>
+            <p>Manage and track your subtasks</p>
           </div>
           <div className="header-actions">
             <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="reports-filter">
@@ -254,13 +254,13 @@ function Deliveries() {
 
         <div className="delivery-serach-bar">
           <IoSearchOutline fontSize={"20px"} />
-          <input type="text" placeholder="Search by deliverable name" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input type="text" placeholder="Search by subtask name" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
 
         <div className="container">
           <div className="deliveries-table-header">
             <div></div>
-            <div>Deliverable</div>
+            <div>Subtask</div>
             <div>Task</div>
             <div>Assigned By</div>
             <div>Status</div>
@@ -271,7 +271,7 @@ function Deliveries() {
           {loading ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
           ) : displayItems.length === 0 ? (
-            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
+            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No subtasks found</div>
           ) : (
             <SortableTableWrapper items={paginatedItems} onReorder={handleDeliverableReorder} as="div" handleOnly>
               {(item, idx, dndProps) => {
@@ -319,7 +319,7 @@ function Deliveries() {
                     </div>
                     <div className="action-btns">
                       {(item.status === "pending" || item.status === "rejected" || item.status === "reopened") ? (
-                        <button className="action-icon-btn action-submit" title="Submit Deliverable" onClick={() => setSubmitModal({ open: true, deliverable: item })}>
+                        <button className="action-icon-btn action-submit" title="Submit Subtask" onClick={() => setSubmitModal({ open: true, deliverable: item })}>
                           <LuSend />
                         </button>
                       ) : (

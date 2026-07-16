@@ -29,6 +29,7 @@ class Project extends Model
         'priority',
         'sidebar_notes',
         'team_id',
+        'team_ids',
         'assigned_users',
         'status',
         'start_date',
@@ -40,6 +41,7 @@ class Project extends Model
 
     protected $casts = [
         'assigned_users' => 'array',
+        'team_ids' => 'array',
         'start_date' => 'datetime:Y-m-d\TH:i:s',
         'end_date' => 'datetime:Y-m-d\TH:i:s',
         'budget' => 'decimal:2',
@@ -67,6 +69,12 @@ class Project extends Model
     public function team()
     {
         return $this->belongsTo(Team::class);
+    }
+
+    /** Multiple teams assigned to this project via team_ids JSON column. */
+    public function teams()
+    {
+        return Team::whereIn('id', $this->team_ids ?? [])->get();
     }
 
     /** Milestones for this project, ordered by sort order. */

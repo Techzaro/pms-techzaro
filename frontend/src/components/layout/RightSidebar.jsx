@@ -11,7 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { useCalendarData } from "../../hooks/useCalendarData";
 import { useUnifiedSummary } from "../../hooks/useUnifiedSummary";
-import { TYPE_COLORS, TYPE_LABELS, DEFAULT_EVENT_COLOR } from "../../pages/Calender";
+import { TYPE_COLORS, TYPE_LABELS, DEFAULT_EVENT_COLOR } from "../../utils/calendarConstants";
 import EventsWidget from "../EventsWidget";
 import EventInfoPopup from "../EventInfoPopup";
 import ItemDetailPopup from "../ItemDetailPopup";

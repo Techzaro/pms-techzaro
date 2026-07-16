@@ -163,8 +163,8 @@ function SelfDeliveries() {
   const paginatedItems = showAll ? displayItems : displayItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   const breadcrumbs = [
-    { label: "Deliverables", path: rolePath("deliveries") },
-    { label: "Self Deliverables" },
+    { label: "Subtasks", path: rolePath("deliveries") },
+    { label: "Self Subtasks" },
   ];
 
   return (
@@ -173,8 +173,8 @@ function SelfDeliveries() {
       <div className="projects-page">
         <div className="projects-header">
           <div>
-            <h1>Self Deliverables</h1>
-            <p>Deliverables assigned to yourself</p>
+            <h1>Self Subtasks</h1>
+            <p>Subtasks assigned to yourself</p>
           </div>
           <div className="header-actions">
             <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="reports-filter">
@@ -207,13 +207,13 @@ function SelfDeliveries() {
 
         <div className="delivery-serach-bar">
           <IoSearchOutline fontSize={"20px"} />
-          <input type="text" placeholder="Search by deliverable name" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input type="text" placeholder="Search by subtask name" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
 
         <div className="container">
           <div className="deliveries-table-header self-deliveries-grid">
             <div></div>
-            <div>Deliverable</div>
+            <div>Subtask</div>
             <div>Related Task/Project</div>
             <div>Status</div>
             <div>Due Date</div>
@@ -223,13 +223,13 @@ function SelfDeliveries() {
           {loading ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
           ) : deliverables.length === 0 ? (
-            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
+            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No subtasks found</div>
           ) : (
             <SortableTableWrapper items={paginatedItems} onReorder={handleDeliverableReorder} idKey="id" as="div" handleOnly>
               {(item, idx, dndProps) => {
                 const colors = getRandomColors(item.id);
-                const canSubmit = item.status === "pending";
-                const canView = item.status === "submitted" || item.status === "approved" || item.status === "rework_required";
+                const canSubmit = item.status === "pending" || item.status === "rework_required";
+                const canView = item.status === "submitted" || item.status === "approved";
                 return (
                   <div className="deliveries-table-row self-deliveries-grid">
                     <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
@@ -266,7 +266,7 @@ function SelfDeliveries() {
                       {canSubmit ? (
                         <button
                           className="action-icon-btn action-submit"
-                          title="Submit Deliverable"
+                          title={item.status === "rework_required" ? "Resubmit Subtask" : "Submit Subtask"}
                           onClick={() => setSubmitModal({ open: true, deliverable: item })}
                         >
                           <LuSend />
@@ -274,7 +274,7 @@ function SelfDeliveries() {
                       ) : canView ? (
                         <button
                           className="action-icon-btn action-view"
-                          title="View Deliverable"
+                          title="View Subtask"
                           onClick={() => setViewModal({ open: true, deliverable: item })}
                         >
                           <IoEyeOutline />

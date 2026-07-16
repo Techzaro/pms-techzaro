@@ -532,6 +532,17 @@
   gap: 8px;
 }
 
+.project-card-actions-right .action-icon-btn.action-view {
+  background: #dbeafe;
+  color: #2563eb;
+  border: 1px solid #93c5fd;
+}
+
+.project-card-actions-right .action-icon-btn.action-view:hover {
+  background: #2563eb;
+  color: #ffffff;
+}
+
 .show-to-btn {
   display: inline-flex;
   align-items: center;

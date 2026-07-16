@@ -109,7 +109,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
 
       const data = await res.json();
       if (res.ok) {
-        showSuccessMessage("Deliverable", "resubmitted");
+        showSuccessMessage("Subtask", "resubmitted");
         if (onSubmitSuccess) onSubmitSuccess(data.deliverable);
         onClose();
       } else {
@@ -286,7 +286,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
               {/* Resubmit Form for Reopened Status */}
               {isReopened && (
                 <div className="vd-section vd-resubmit-section">
-                  <h3 className="vd-section-title">Resubmit Deliverable</h3>
+                  <h3 className="vd-section-title">Resubmit Subtask</h3>
                   <div className="vd-field">
                     <label className="vd-label">Comment</label>
                     <textarea

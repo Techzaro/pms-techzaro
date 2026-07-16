@@ -244,14 +244,15 @@ export function getActivityFrom(item) {
   const mod = item.module;
 
   if (mod === "task") {
-    // Use assigned_by to determine sidebar placement — this is reliable regardless of action type
     const currentUser = getUser();
     const currentUserId = currentUser?.id;
-    // If the current user created/assigned this task, it belongs to "Assigned by You"
-    if (currentUserId && item.assigned_by && Number(item.assigned_by) === Number(currentUserId)) {
-      return "taskby";
-    }
-    // Otherwise it's assigned to the current user → "Assigned to You"
+    const isAssigner = currentUserId && item.assigned_by && Number(item.assigned_by) === Number(currentUserId);
+    const isAssignee = (item.assignees || []).some(a => Number(a.id) === Number(currentUserId));
+    // Self-task: user assigned to themselves
+    if (isAssigner && isAssignee) return "self-tasks";
+    // Assigned by you: you created it, assigned to someone else
+    if (isAssigner) return "taskby";
+    // Assigned to you: someone else assigned it to you
     return "tasks";
   }
 

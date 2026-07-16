@@ -35,6 +35,7 @@ class ProjectResource extends JsonResource
             'active_deadline' => $this->active_deadline?->format('Y-m-d\TH:i:s'),
             'created_by' => $this->created_by,
             'team_id' => $this->team_id,
+            'team_ids' => $this->team_ids ?? [],
             'assigned_users' => $this->assigned_users,
             'sidebar_notes' => $this->sidebar_notes,
             'created_at' => $this->created_at?->format('Y-m-d\TH:i:s'),

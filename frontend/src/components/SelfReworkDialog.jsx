@@ -71,7 +71,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
           onReworkSuccess(data.deliverable);
           onClose();
         } else {
-          notify.error(data.message || "Failed to mark deliverable for rework.");
+          notify.error(data.message || "Failed to mark subtask for rework.");
         }
       } catch {
         notify.error("An error occurred. Please try again.");

@@ -129,6 +129,8 @@ class ProjectController extends Controller
             'priority' => 'nullable|string|max:32',
             'sidebar_notes' => 'nullable|string',
             'team_id' => 'nullable|exists:teams,id',
+            'team_ids' => 'nullable|array',
+            'team_ids.*' => 'exists:teams,id',
             'assigned_users' => 'nullable|array',
             'status' => 'nullable|string|max:64',
             'start_date' => 'nullable|date',
@@ -365,6 +367,8 @@ class ProjectController extends Controller
 
         $payload = (new ProjectResource($project))->resolve();
         $payload['members'] = $members;
+        $payload['teams'] = Team::with('leader:id,name,role', 'members:id,name,role')
+            ->whereIn('id', $project->team_ids ?? [])->get();
         $payload['is_creator'] = $isCreator;
         $payload['is_assigned'] = $isAssigned;
         $payload['is_admin_or_manager'] = $isAdminOrManager;
@@ -425,6 +429,8 @@ class ProjectController extends Controller
             'priority' => 'nullable|string|max:32',
             'sidebar_notes' => 'nullable|string',
             'team_id' => 'nullable|exists:teams,id',
+            'team_ids' => 'nullable|array',
+            'team_ids.*' => 'exists:teams,id',
             'assigned_users' => 'nullable|array',
             'created_by' => 'nullable|exists:users,id',
             'status' => 'sometimes|nullable|string|max:64',

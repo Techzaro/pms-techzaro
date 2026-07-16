@@ -7,7 +7,7 @@
 import { createPortal } from "react-dom";
 import { Edit3, Trash2 } from "lucide-react";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import { TYPE_COLORS, TYPE_LABELS, DEFAULT_EVENT_COLOR } from "../pages/Calender";
+import { TYPE_COLORS, TYPE_LABELS, DEFAULT_EVENT_COLOR } from "../utils/calendarConstants";
 import { formatEventTime } from "../utils/formatDateTime";
 
 /** Formats a date as "Month Day, Year" (e.g., "March 15, 2025"). */

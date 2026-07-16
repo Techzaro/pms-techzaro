@@ -96,7 +96,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
 
         const data = await res.json();
         if (res.ok) {
-          showSuccessMessage("Deliverable", "submitted");
+          showSuccessMessage("Subtask", "submitted");
           onSubmitSuccess(data.deliverable);
           onClose();
         } else {
@@ -130,7 +130,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
         </div>
 
         <div className="sd-body">
-          <h3 className="sd-section-title">Submit Deliverable</h3>
+          <h3 className="sd-section-title">Submit Subtask</h3>
 
           <div className="sd-field">
             <label className="sd-label">Submission Notes</label>
@@ -192,7 +192,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
         <div className="sd-footer">
           <button className="sd-cancel-btn" onClick={handleClose} disabled={submitting}>Cancel</button>
           <LoadingButton className="sd-submit-btn" onClick={handleSubmit} loading={submitting}>
-            {deliverable.status === "rework_required" ? "Resubmit Deliverable" : "Submit Deliverable"}
+            {deliverable.status === "rework_required" ? "Resubmit Subtask" : "Submit Subtask"}
           </LoadingButton>
         </div>
       </div>

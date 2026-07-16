@@ -312,7 +312,7 @@ function Sidebar() {
               style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
             >
               <MdAssignment />
-              <span style={{ flex: 1 }}>Deliverables</span>
+              <span style={{ flex: 1 }}>Subtasks</span>
               <MdKeyboardArrowDown
                 size={18}
                 style={{
@@ -342,7 +342,7 @@ function Sidebar() {
                   className={`sidebar-sub-link ${isActive("self-deliveries") || (isDeliverableDetailPage && getDeliverableFrom() === "self-deliveries") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Self Deliverables
+                  Self Subtasks
                 </Link>
               </div>
             )}

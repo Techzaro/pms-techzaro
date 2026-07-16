@@ -190,7 +190,7 @@ function DeliveriesByYou() {
   const paginatedItems = showAll ? displayItems : displayItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   const breadcrumbs = [
-    { label: "Deliverables", path: rolePath("deliveries") },
+    { label: "Subtasks", path: rolePath("deliveries") },
     { label: "Assigned By You" },
   ];
 
@@ -200,8 +200,8 @@ function DeliveriesByYou() {
       <div className="projects-page">
         <div className="projects-header">
           <div>
-            <h1>Deliverables Assigned By You</h1>
-            <p>Deliverables assigned to others from tasks and projects you created</p>
+            <h1>Subtasks Assigned By You</h1>
+            <p>Subtasks assigned to others from tasks and projects you created</p>
           </div>
           <div className="header-actions">
             <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="reports-filter">
@@ -237,14 +237,14 @@ function DeliveriesByYou() {
 
         <div className="delivery-serach-bar">
           <IoSearchOutline fontSize={"20px"} />
-          <input type="text" placeholder="Search by deliverable name" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input type="text" placeholder="Search by subtask name" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
 
         <div className="container">
           {/* Header - Div based */}
           <div className="deliveries-table-header">
             <div></div>
-            <div>Deliverable</div>
+            <div>Subtask</div>
             <div>Task</div>
             <div>Assigned To</div>
             <div>Status</div>
@@ -255,7 +255,7 @@ function DeliveriesByYou() {
           {loading ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
           ) : displayItems.length === 0 ? (
-            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No deliverables found</div>
+            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No subtasks found</div>
           ) : (
             <div className="sortable-table-container">
               <SortableTableWrapper items={paginatedItems} onReorder={handleDeliverableReorder} as="div" handleOnly>

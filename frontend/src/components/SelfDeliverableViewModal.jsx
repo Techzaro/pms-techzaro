@@ -127,7 +127,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
       });
       const data = await res.json();
       if (res.ok) {
-        showSuccessMessage("Deliverable", "approved");
+        showSuccessMessage("Subtask", "approved");
         onActionSuccess(data.deliverable);
         onClose();
       }
@@ -186,7 +186,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
           ) : (
             <>
               <div className="sdvm-section">
-                <h3 className="sdvm-section-title">Deliverable Details</h3>
+                <h3 className="sdvm-section-title">Subtask Details</h3>
                 <div className="sdvm-details-grid">
                   <div className="sdvm-detail-item">
                     <span className="sdvm-detail-label">Task / Project</span>
@@ -393,7 +393,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
           handleSelfApprove();
         }}
         title="Mark as Approved"
-        message="Are you sure you want to mark this deliverable as completed and approved?"
+        message="Are you sure you want to mark this subtask as completed and approved?"
         confirmText="Mark as Approved"
         confirmColor="#16A34A"
       />

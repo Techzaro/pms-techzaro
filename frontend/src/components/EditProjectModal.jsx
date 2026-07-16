@@ -47,6 +47,7 @@ const EditProjectModal = ({ project, onClose }) => {
     title: project?.title || "",
     description: project?.description || "",
     team_id: project?.team_id || "",
+    team_ids: project?.team_ids || [],
     assigned_users: project?.assigned_users || [],
     priority: project?.priority || "Medium",
     status: project?.status || "Planning",
@@ -72,6 +73,9 @@ const EditProjectModal = ({ project, onClose }) => {
   const [categoryCustomMode, setCategoryCustomMode] = useState(false);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const categoryDropdownRef = useRef(null);
+  const [teamRolesOpen, setTeamRolesOpen] = useState(false);
+  const [teamRolesSearch, setTeamRolesSearch] = useState("");
+  const teamRolesRef = useRef(null);
   const [catDeleteOpen, setCatDeleteOpen] = useState(false);
   const [pendingCatDelete, setPendingCatDelete] = useState("");
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
@@ -120,6 +124,10 @@ const EditProjectModal = ({ project, onClose }) => {
     const handleClickOutside = (e) => {
       if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target)) {
         setCategoryDropdownOpen(false);
+      }
+      if (teamRolesRef.current && !teamRolesRef.current.contains(e.target)) {
+        setTeamRolesOpen(false);
+        setTeamRolesSearch("");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -446,6 +454,7 @@ const EditProjectModal = ({ project, onClose }) => {
           description: form.description || null,
           category: categoriesList.length > 0 ? JSON.stringify(categoriesList) : null,
           team_id: form.team_id ? parseInt(form.team_id) : null,
+          team_ids: form.team_ids,
           assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
           priority: form.priority,
           status: form.status,
@@ -618,17 +627,49 @@ const EditProjectModal = ({ project, onClose }) => {
 
             <div className="cp-grid-2">
               <div className="cp-field">
-                <label>Team (Optional)</label>
-                <CustomSelect
-                  name="team_id"
-                  value={form.team_id}
-                  onChange={(val) => handleChange({ target: { name: "team_id", value: val } })}
-                  placeholder="Select team"
-                  options={[
-                    { value: "", label: "Select team" },
-                    ...teams.map((team) => ({ value: team.id, label: team.name })),
-                  ]}
-                />
+                <label>Teams (Optional)</label>
+                <div className="cp-dropdown-wrap cp-combo-trigger" ref={teamRolesRef} onClick={() => { if (!teamRolesOpen) { setTeamRolesOpen(true); setTeamRolesSearch(""); } }}>
+                  {form.team_ids.length > 0 && (
+                    <span className="cp-combo-count">{form.team_ids.length} selected</span>
+                  )}
+                  {form.team_ids.length === 0 && !teamRolesOpen && (
+                    <span className="cp-combo-placeholder">Select Teams</span>
+                  )}
+                  {teamRolesOpen && (
+                    <input
+                      type="text"
+                      className="cp-combo-input"
+                      placeholder="Search teams..."
+                      value={teamRolesSearch}
+                      onChange={(e) => setTeamRolesSearch(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Escape") { setTeamRolesSearch(""); setTeamRolesOpen(false); } }}
+                      autoFocus
+                    />
+                  )}
+                  <svg className={`cp-dropdown-arrow ${teamRolesOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" onClick={(e) => { e.stopPropagation(); if (teamRolesOpen) { setTeamRolesOpen(false); setTeamRolesSearch(""); } else { setTeamRolesOpen(true); setTeamRolesSearch(""); } }}><polyline points="6 9 12 15 18 9" /></svg>
+                  {teamRolesOpen && (
+                    <div className="cp-dropdown-menu" onClick={(e) => e.stopPropagation()}>
+                      {teams.filter((t) => !teamRolesSearch.trim() || t.name.toLowerCase().includes(teamRolesSearch.toLowerCase())).map((team) => (
+                        <label key={team.id} className="cp-dropdown-item">
+                          <input
+                            type="checkbox"
+                            checked={form.team_ids.includes(team.id)}
+                            onChange={() => {
+                              setIsDirty(true);
+                              setForm((prev) => ({
+                                ...prev,
+                                team_ids: prev.team_ids.includes(team.id)
+                                  ? prev.team_ids.filter((id) => id !== team.id)
+                                  : [...prev.team_ids, team.id],
+                              }));
+                            }}
+                          />
+                          <span>{team.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="cp-field">
@@ -638,7 +679,6 @@ const EditProjectModal = ({ project, onClose }) => {
                   selectedIds={form.assigned_users}
                   onChange={handleAssignedUsersChange}
                   placeholder="Click to select members"
-                  viewOnly={!!form.team_id}
                 />
               </div>
             </div>
@@ -980,15 +1020,15 @@ const EditProjectModal = ({ project, onClose }) => {
             {/* DELIVERABLES */}
             <div className="cp-card">
               <div className="cp-card-top">
-                <span>Deliverables (Optional)</span>
+                <span>Subtasks (Optional)</span>
               </div>
 
               <div className="cp-deadline-grid">
                 <div className="cp-field">
-                  <label style={{ fontSize: "13px" }}>Deliverable Name</label>
+                  <label style={{ fontSize: "13px" }}>Subtask Name</label>
                   <input
                     type="text"
-                    placeholder="Enter deliverable name"
+                    placeholder="Enter subtask name"
                     value={deliverableProjInput.title}
                     onChange={(e) => { setIsDirty(true); setDeliverableProjInput((prev) => ({ ...prev, title: e.target.value })); }}
                     onKeyDown={handleDeliverableProjKeyDown}
@@ -1011,7 +1051,7 @@ const EditProjectModal = ({ project, onClose }) => {
                 onClick={handleAddDeliverableProj}
                 disabled={!deliverableProjInput.title.trim()}
               >
-                + Add Deliverable
+                + Add Subtask
               </button>
 
               {deliverablesProj.length > 0 && (

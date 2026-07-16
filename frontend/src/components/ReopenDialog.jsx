@@ -86,7 +86,7 @@ function ReopenDialog({ isOpen, onClose, deliverable, onReopenSuccess }) {
     <div className="rd-overlay">
       <div className="rd-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="rd-header">
-          <h2 className="rd-title">Reject & Reopen Deliverable</h2>
+          <h2 className="rd-title">Reject & Reopen Subtask</h2>
           <p className="rd-subtitle">{deliverable.title}</p>
         </div>
 
@@ -95,7 +95,7 @@ function ReopenDialog({ isOpen, onClose, deliverable, onReopenSuccess }) {
             <label className="rd-label">Reopen Comment</label>
             <textarea
               className="rd-textarea"
-              placeholder="Explain why this deliverable needs revision..."
+              placeholder="Explain why this subtask needs revision..."
               value={comment}
               onChange={(e) => { setComment(e.target.value); setIsDirty(true); }}
               rows={3}

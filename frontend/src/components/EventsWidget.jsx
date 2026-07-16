@@ -6,35 +6,8 @@
 
 import { useMemo } from "react";
 import { formatEventDateTime } from "../utils/formatDateTime";
+import { TYPE_COLORS, TYPE_LABELS, DEFAULT_EVENT_COLOR } from "../utils/calendarConstants";
 import "./EventsWidget.css";
-
-const TYPE_COLORS = {
-  Meeting: { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" },
-  Training: { bg: "#eff6ff", text: "#3b82f6", dot: "#3b82f6" },
-  Workshop: { bg: "#f5f3ff", text: "#8b5cf6", dot: "#8b5cf6" },
-  "Client Meeting": { bg: "#fffbeb", text: "#f59e0b", dot: "#f59e0b" },
-  "Company Event": { bg: "#ecfdf5", text: "#22c55e", dot: "#22c55e" },
-  Holiday: { bg: "#fef2f2", text: "#ef4444", dot: "#ef4444" },
-  Interview: { bg: "#fdf2f8", text: "#ec4899", dot: "#ec4899" },
-  "Project Milestone": { bg: "#f0fdfa", text: "#14b8a6", dot: "#14b8a6" },
-  "Internship Activity": { bg: "#ecfeff", text: "#06b6d4", dot: "#06b6d4" },
-  Other: { bg: "#f3f4f6", text: "#6b7280", dot: "#6b7280" },
-};
-
-const DEFAULT_EVENT_COLOR = { bg: "#eef2ff", text: "#6366f1", dot: "#6366f1" };
-
-const TYPE_LABELS = {
-  Meeting: "Meeting",
-  Training: "Training",
-  Workshop: "Workshop",
-  "Client Meeting": "Client Meeting",
-  "Company Event": "Company Event",
-  Holiday: "Holiday",
-  Interview: "Interview",
-  "Project Milestone": "Project Milestone",
-  "Internship Activity": "Internship Activity",
-  Other: "Other",
-};
 
 /** Formats a date as "Month Day, Year" (e.g., "March 15, 2025"). */
 function formatDisplayDate(d) {

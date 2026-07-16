@@ -1,0 +1,200 @@
+.rd-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.rd-modal {
+  background: #fff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.rd-header {
+  padding: 24px 24px 0;
+}
+
+.rd-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 4px;
+}
+
+.rd-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.rd-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rd-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.rd-textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #1e293b;
+  background: #fff;
+  resize: vertical;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.rd-textarea:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.rd-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #1e293b;
+  background: #fff;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.rd-input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.rd-dropzone {
+  border: 2px dashed #d1d5db;
+  border-radius: 10px;
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.rd-dropzone:hover {
+  border-color: #6366f1;
+  background: #f5f3ff;
+}
+
+.rd-dropzone-text {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.rd-browse {
+  color: #6366f1;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rd-file-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rd-file-name {
+  font-size: 13px;
+  color: #374151;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rd-file-remove {
+  font-size: 12px;
+  color: #ef4444;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.rd-file-remove:hover {
+  color: #dc2626;
+}
+
+.rd-footer {
+  padding: 0 24px 24px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.rd-cancel-btn {
+  padding: 10px 20px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.rd-cancel-btn:hover {
+  background: #f9fafb;
+}
+
+.rd-cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rd-submit-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 10px;
+  background: #6366f1;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.rd-submit-btn:hover {
+  background: #4f46e5;
+}
+
+.rd-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
