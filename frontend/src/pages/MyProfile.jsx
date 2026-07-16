@@ -322,26 +322,52 @@ function MyProfile() {
                   </button>
                 </div>
                 <div className="info-card-body">
-                  <div className="info-row">
-                    <span className="info-label">Full Name</span>
-                    <span className="info-value">{user.name || "---"}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Father Name</span>
-                    <span className="info-value">{user.father_name || "---"}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">ID Card Number</span>
-                    <span className="info-value">{displayCNIC(user.id_card_number)}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Phone Number</span>
-                    <span className="info-value">{displayPhone(user.phone_number || user.contact_no)}</span>
-                  </div>
+                  {user.role === "guest" ? (
+                    <>
+                      <div className="info-row">
+                        <span className="info-label">Client Name</span>
+                        <span className="info-value">{user.name || "---"}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="info-label">Email</span>
+                        <span className="info-value">{user.personal_email || user.email || "---"}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="info-label">Phone</span>
+                        <span className="info-value">{displayPhone(user.phone_number || user.contact_no)}</span>
+                      </div>
+                      {user.company_name && (
+                        <div className="info-row">
+                          <span className="info-label">Company Name</span>
+                          <span className="info-value">{user.company_name}</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="info-row">
+                        <span className="info-label">Full Name</span>
+                        <span className="info-value">{user.name || "---"}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="info-label">Father Name</span>
+                        <span className="info-value">{user.father_name || "---"}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="info-label">ID Card Number</span>
+                        <span className="info-value">{displayCNIC(user.id_card_number)}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="info-label">Phone Number</span>
+                        <span className="info-value">{displayPhone(user.phone_number || user.contact_no)}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* Address */}
+              {/* Address - hidden for guests */}
+              {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
                   <h3>Address</h3>
@@ -357,8 +383,10 @@ function MyProfile() {
                   </div>
                 </div>
               </div>
+              )}
 
-              {/* Emergency Contact */}
+              {/* Emergency Contact - hidden for guests */}
+              {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
                   <h3>Emergency Contact</h3>
@@ -378,8 +406,10 @@ function MyProfile() {
                   </div>
                 </div>
               </div>
+              )}
 
-              {/* Email Accounts */}
+              {/* Email Accounts - hidden for guests */}
+              {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
                   <h3>Email Accounts</h3>
@@ -406,13 +436,21 @@ function MyProfile() {
                   </div>
                 </div>
               </div>
+              )}
 
-              {/* Employment Details */}
+              {/* Employment Details - hidden for guests */}
+              {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
                   <h3>Employment Details</h3>
                 </div>
                 <div className="info-card-body">
+                  {user.company_name && (
+                    <div className="info-row">
+                      <span className="info-label">Company Name</span>
+                      <span className="info-value">{user.company_name}</span>
+                    </div>
+                  )}
                   <div className="info-row">
                     <span className="info-label">Designation</span>
                     <span className="info-value">{user.designation || "---"}</span>
@@ -447,8 +485,10 @@ function MyProfile() {
                   </div>
                 </div>
               </div>
+              )}
 
-              {/* Salary & Bank Details */}
+              {/* Salary & Bank Details - hidden for guests */}
+              {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
                   <h3>Salary & Bank Details</h3>
@@ -472,8 +512,10 @@ function MyProfile() {
                   </div>
                 </div>
               </div>
+              )}
 
-              {/* Documents */}
+              {/* Documents - hidden for guests */}
+              {user.role !== "guest" && (
               <div className="profile-info-card">
                 <div className="info-card-header">
                   <h3>Documents</h3>
@@ -590,6 +632,7 @@ function MyProfile() {
                   })}
                 </div>
               </div>
+              )}
             </div>
           </div>
      

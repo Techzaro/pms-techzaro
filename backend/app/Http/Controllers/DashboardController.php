@@ -1033,6 +1033,10 @@ class DashboardController extends Controller
         if ((int) ($task->assigned_by ?? 0) === (int) $user->id) {
             return true;
         }
+        // Guest: task belongs to their client project
+        if ($user->role === 'guest' && $task->project && $task->project->client_name === $user->name) {
+            return true;
+        }
         // Admin/Manager see all
         if ($isAdminOrManager) {
             return true;
@@ -1064,6 +1068,10 @@ class DashboardController extends Controller
         if ($project->manuallyVisibleTo()->where('user_id', $user->id)->exists()) {
             return true;
         }
+        // Guest client: name matches project's client_name
+        if ($user->role === 'guest' && $project->client_name === $user->name) {
+            return true;
+        }
         // Admin/Manager see all
         if ($isAdminOrManager) {
             return true;
@@ -1087,6 +1095,10 @@ class DashboardController extends Controller
         }
         // Creator
         if ((int) ($dlv->created_by ?? 0) === (int) $user->id) {
+            return true;
+        }
+        // Guest: deliverable belongs to their client project
+        if ($user->role === 'guest' && $dlv->project && $dlv->project->client_name === $user->name) {
             return true;
         }
 
@@ -1150,6 +1162,10 @@ class DashboardController extends Controller
         return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($user) {
             if (in_array($user->role, ['admin', 'manager'])) {
                 return Project::pluck('id')->toArray();
+            }
+
+            if ($user->role === 'guest') {
+                return Project::where('client_name', $user->name)->pluck('id')->toArray();
             }
 
             return Project::where(function ($q) use ($user) {

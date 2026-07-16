@@ -17,6 +17,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'auth' => \App\Http\Middleware\Authenticate::class,
+            'guest.role' => \App\Http\Middleware\GuestMiddleware::class,
+            'not.guest' => \App\Http\Middleware\EnsureNotGuest::class,
         ]);
         if (env('APP_ENV') === 'local') {
             $middleware->api(prepend: [

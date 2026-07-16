@@ -49,9 +49,9 @@ window.fetch = async function (...args) {
         try {
           const clone = res.clone();
           const data = await clone.json();
-          if (data?.success === true && data?.message) {
+          if (data?.success === true && data?.message && typeof data.message === "string") {
             notify.success(data.message);
-          } else if (data?.success === false && data?.message) {
+          } else if (data?.success === false && data?.message && typeof data.message === "string") {
             notify.error(data.message);
           }
         } catch {}

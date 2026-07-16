@@ -38,6 +38,43 @@ class NotificationController extends Controller
             ->with('sender:id,name')
             ->latest();
 
+        // Guest users only see notifications related to their projects
+        if ($user->role === 'guest') {
+            $query->where(function ($q) use ($user) {
+                $q->whereNull('related_module')
+                    ->orWhere(function ($q) use ($user) {
+                        $q->where('related_module', 'project')
+                            ->whereIn('related_id', function ($sq) use ($user) {
+                                $sq->select('id')->from('projects')->where('client_name', $user->name);
+                            });
+                    })
+                    ->orWhere(function ($q) use ($user) {
+                        $q->where('related_module', 'task')
+                            ->whereIn('related_id', function ($sq) use ($user) {
+                                $sq->select('id')->from('tasks')->whereIn('project_id', function ($sq2) use ($user) {
+                                    $sq2->select('id')->from('projects')->where('client_name', $user->name);
+                                });
+                            });
+                    })
+                    ->orWhere(function ($q) use ($user) {
+                        $q->where('related_module', 'deliverable')
+                            ->whereIn('related_id', function ($sq) use ($user) {
+                                $sq->select('id')->from('deliverables')->whereIn('project_id', function ($sq2) use ($user) {
+                                    $sq2->select('id')->from('projects')->where('client_name', $user->name);
+                                });
+                            });
+                    })
+                    ->orWhere(function ($q) use ($user) {
+                        $q->where('related_module', 'chat')
+                            ->whereIn('related_id', function ($sq) use ($user) {
+                                $sq->select('id')->from('conversations')->whereIn('project_id', function ($sq2) use ($user) {
+                                    $sq2->select('id')->from('projects')->where('client_name', $user->name);
+                                });
+                            });
+                    });
+            });
+        }
+
         if ($request->filled('search')) {
             $search = $request->input('search');
             $query->where(function ($q) use ($search) {
@@ -71,13 +108,51 @@ class NotificationController extends Controller
     public function unreadCount(Request $request)
     {
         $user = $request->user();
-        $count = $user->notifications()
+        $query = $user->notifications()
             ->where('is_read', false)
             ->where(function ($q) use ($user) {
                 $q->whereNull('sender_user_id')
                     ->orWhere('sender_user_id', '!=', $user->id);
-            })
-            ->count();
+            });
+
+        // Guest users only see notifications related to their projects
+        if ($user->role === 'guest') {
+            $query->where(function ($q) use ($user) {
+                $q->whereNull('related_module')
+                    ->orWhere(function ($q) use ($user) {
+                        $q->where('related_module', 'project')
+                            ->whereIn('related_id', function ($sq) use ($user) {
+                                $sq->select('id')->from('projects')->where('client_name', $user->name);
+                            });
+                    })
+                    ->orWhere(function ($q) use ($user) {
+                        $q->where('related_module', 'task')
+                            ->whereIn('related_id', function ($sq) use ($user) {
+                                $sq->select('id')->from('tasks')->whereIn('project_id', function ($sq2) use ($user) {
+                                    $sq2->select('id')->from('projects')->where('client_name', $user->name);
+                                });
+                            });
+                    })
+                    ->orWhere(function ($q) use ($user) {
+                        $q->where('related_module', 'deliverable')
+                            ->whereIn('related_id', function ($sq) use ($user) {
+                                $sq->select('id')->from('deliverables')->whereIn('project_id', function ($sq2) use ($user) {
+                                    $sq2->select('id')->from('projects')->where('client_name', $user->name);
+                                });
+                            });
+                    })
+                    ->orWhere(function ($q) use ($user) {
+                        $q->where('related_module', 'chat')
+                            ->whereIn('related_id', function ($sq) use ($user) {
+                                $sq->select('id')->from('conversations')->whereIn('project_id', function ($sq2) use ($user) {
+                                    $sq2->select('id')->from('projects')->where('client_name', $user->name);
+                                });
+                            });
+                    });
+            });
+        }
+
+        $count = $query->count();
 
         return response()->json(['unread_count' => $count]);
     }

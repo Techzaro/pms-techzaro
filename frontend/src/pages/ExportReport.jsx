@@ -34,7 +34,7 @@ function getAvatarColor(name) {
 }
 
 /** Display labels for user roles */
-const ROLE_LABEL = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member" };
+const ROLE_LABEL = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member", guest: "Guest" };
 /** RGB color values for task statuses in PDF */
 const STATUS_COLORS_PDF = {
   completed: [22, 101, 52], done: [22, 101, 52], approved: [22, 101, 52],

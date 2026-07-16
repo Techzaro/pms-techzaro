@@ -297,8 +297,6 @@ const SelfTasks = () => {
                       <div style={{ fontSize: "10px", color: "#92400E", marginTop: "2px" }}>by {item.reopenedBy.name}</div>
                     )}
                   </div>
-                    </span>
-                  </div>
                   <div>
                     <div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div></div>
                   </div>

@@ -20,7 +20,7 @@ import { createPortal } from "react-dom";
 import { MdVisibility, MdEdit } from "react-icons/md";
 import { IoSearchOutline } from "react-icons/io5";
 import { CiCirclePlus } from "react-icons/ci";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { DndContext, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -132,6 +132,19 @@ function ManageUsers() {
   const [companyDocsOpen, setCompanyDocsOpen] = useState(false);
   const [page, setPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
+
+  // Tab management: employees vs guests
+  const [activeTab, setActiveTab] = useState("employees");
+
+  // Guest management state
+  const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
+  const [editingGuest, setEditingGuest] = useState(null);
+  const [guestSubmitting, setGuestSubmitting] = useState(false);
+  const [guestSearch, setGuestSearch] = useState("");
+  const [guestPage, setGuestPage] = useState(1);
+  const [guestConfirmModal, setGuestConfirmModal] = useState({ open: false, type: "", guest: null });
+  const [newGuest, setNewGuest] = useState({ name: "", personal_email: "", phone_number: "", company_name: "", avatar: null, _existingAvatar: null });
+  const [guestErrors, setGuestErrors] = useState({});
 
   const [localUsers, setLocalUsers] = useState([]);
   const [activeDragId, setActiveDragId] = useState(null);
@@ -259,6 +272,7 @@ function ManageUsers() {
   };
 
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     const role = getCurrentRole();
@@ -281,6 +295,21 @@ function ManageUsers() {
   useEffect(() => {
     setLocalUsers(users);
   }, [users]);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    const editGuestId = searchParams.get("editGuest");
+    if (tab === "guests") {
+      setActiveTab("guests");
+    }
+    if (editGuestId && localUsers.length > 0) {
+      const guest = localUsers.find((u) => String(u.id) === String(editGuestId) && u.role === "guest");
+      if (guest) {
+        openGuestModal(guest);
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [searchParams, localUsers]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -477,6 +506,175 @@ function ManageUsers() {
   };
 
   const { isDirty: addIsDirty, setIsDirty: setAddIsDirty, handleClose: handleAddClose, ConfirmDialog: AddConfirmDialog } = useConfirmOnClose(closeModal);
+
+  // ── Guest Management Functions ──
+  const openGuestModal = (guest = null) => {
+    setGuestErrors({});
+    if (guest) {
+      setEditingGuest(guest);
+      setNewGuest({
+        name: guest.name || "",
+        personal_email: guest.personal_email || guest.email || "",
+        phone_number: guest.phone_number || guest.contact_no || "",
+        company_name: guest.company_name || "",
+        avatar: null,
+        _existingAvatar: guest.avatar || null,
+      });
+    } else {
+      setEditingGuest(null);
+      setNewGuest({ name: "", personal_email: "", phone_number: "", company_name: "", avatar: null, _existingAvatar: null });
+    }
+    setIsGuestModalOpen(true);
+  };
+
+  const closeGuestModal = () => {
+    setIsGuestModalOpen(false);
+    setEditingGuest(null);
+    setNewGuest({ name: "", personal_email: "", phone_number: "", company_name: "", avatar: null, _existingAvatar: null });
+    setGuestErrors({});
+  };
+
+  const validateGuestForm = () => {
+    const errors = {};
+    if (!newGuest.name.trim()) errors.name = "Client Name is required.";
+    if (!newGuest.personal_email.trim()) {
+      errors.personal_email = "Email is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newGuest.personal_email.trim())) {
+      errors.personal_email = "Please enter a valid email address.";
+    }
+    return errors;
+  };
+
+  const handleGuestSubmit = async (e) => {
+    e.preventDefault();
+    const errors = validateGuestForm();
+    setGuestErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setGuestSubmitting(true);
+    try {
+      const token = authToken();
+      const isEdit = !!editingGuest;
+      const url = isEdit ? `${API_URL}/guests/${editingGuest.id}` : `${API_URL}/guests`;
+
+      const formData = new FormData();
+      formData.append("name", newGuest.name.trim());
+      formData.append("personal_email", newGuest.personal_email.trim());
+      if (newGuest.phone_number.trim()) formData.append("phone_number", newGuest.phone_number.trim());
+      if (newGuest.company_name.trim()) formData.append("company_name", newGuest.company_name.trim());
+
+      if (newGuest.avatar) {
+        formData.append("avatar", newGuest.avatar);
+      }
+
+      if (isEdit && !newGuest.avatar && !newGuest._existingAvatar && editingGuest.avatar) {
+        formData.append("avatar_remove", "1");
+      }
+
+      if (isEdit) {
+        formData.append("_method", "PUT");
+      }
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        body: formData,
+        _notifHandled: true,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.errors) {
+          const mapped = {};
+          Object.entries(data.errors).forEach(([key, msgs]) => {
+            mapped[key] = Array.isArray(msgs) ? msgs[0] : msgs;
+          });
+          setGuestErrors(mapped);
+        }
+        notify.error(data.message || (isEdit ? "Failed to update guest" : "Failed to create guest"));
+        return;
+      }
+
+      if (isEdit) {
+        setUsers((prev) => prev.map((u) => u.id === editingGuest.id ? { ...u, ...data.user } : u));
+        showSuccessMessage("Guest", "updated");
+      } else {
+        setUsers((prev) => [data.user, ...prev]);
+        if (data.emailSent !== false) {
+          notify.success("Guest created. Invitation email sent.");
+        } else {
+          notify.success("Guest created successfully.");
+        }
+      }
+      publish("data:changed", { type: "guest", action: isEdit ? "updated" : "created" });
+      closeGuestModal();
+    } catch (err) {
+      notify.error(err.message || "An error occurred");
+    } finally {
+      setGuestSubmitting(false);
+    }
+  };
+
+  const handleGuestAction = async (type, guest) => {
+    const token = authToken();
+    if (!token) return;
+
+    setGuestConfirmModal({ open: false, type: "", guest: null });
+
+    try {
+      let url, method, body;
+      if (type === "resend-invitation") {
+        url = `${API_URL}/guests/${guest.id}/resend-invitation`;
+        method = "POST";
+        body = {};
+      } else if (type === "reset-password") {
+        url = `${API_URL}/guests/${guest.id}/reset-password`;
+        method = "POST";
+        body = {};
+      } else if (type === "toggle-status") {
+        url = `${API_URL}/guests/${guest.id}/toggle-status`;
+        method = "PUT";
+        body = {};
+      } else if (type === "resign") {
+        url = `${API_URL}/guests/${guest.id}/resign`;
+        method = "PUT";
+        body = {};
+      } else if (type === "delete") {
+        url = `${API_URL}/users/${guest.id}`;
+        method = "DELETE";
+        body = {};
+      } else {
+        return;
+      }
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+        _notifHandled: true,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Action failed");
+
+      if (type === "delete") {
+        setUsers((prev) => prev.filter((u) => u.id !== guest.id));
+        showSuccessMessage("Guest", "deleted");
+      } else if (type === "toggle-status") {
+        setUsers((prev) => prev.map((u) => u.id === guest.id ? { ...u, active: data.user.active } : u));
+        showSuccessMessage("Guest", data.user.active ? "activated" : "deactivated");
+      } else if (type === "resign") {
+        setUsers((prev) => prev.map((u) => u.id === guest.id ? { ...u, active: false, must_change_password: false } : u));
+        showSuccessMessage("Guest", "resigned");
+      } else {
+        showSuccessMessage("Guest", type === "resend-invitation" ? "invitation resent" : "password reset");
+        if (data.email_sent === false) notify.error("Email sending failed. Guest not found or invalid email.");
+      }
+      publish("data:changed", { type: "guest", action: type });
+    } catch (err) {
+      notify.error(err.message);
+    }
+  };
   useEscapeKey(isAddModalOpen, handleAddClose);
 
   // Validates the add/edit user form and returns errors object
@@ -725,8 +923,9 @@ function ManageUsers() {
     );
   };
 
-  // Apply search, role, and status filters to users list
+  // Apply search, role, and status filters to users list (employees only)
   const filteredUsers = localUsers.filter(Boolean).filter((user) => {
+    if (user.role === "guest") return false;
     const matchesSearch =
       (user.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (user.professional_email || "").toLowerCase().includes(searchQuery.toLowerCase());
@@ -1141,6 +1340,35 @@ function ManageUsers() {
     { label: "Users" },
   ];
 
+  // Guest list derived from users
+  const guests = localUsers.filter(Boolean).filter((u) => u.role === "guest");
+  const filteredGuests = guests.filter((g) => {
+    const q = guestSearch.toLowerCase();
+    return (
+      (g.name || "").toLowerCase().includes(q) ||
+      (g.email || g.professional_email || g.personal_email || "").toLowerCase().includes(q) ||
+      (g.company_name || "").toLowerCase().includes(q)
+    );
+  });
+  const sortedGuests = [...filteredGuests].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  const guestTotalPages = Math.ceil(sortedGuests.length / ITEMS_PER_PAGE);
+  const paginatedGuests = sortedGuests.slice((guestPage - 1) * ITEMS_PER_PAGE, guestPage * ITEMS_PER_PAGE);
+
+  const getGuestInitials = (name) => {
+    return (name || "").split(" ").filter(Boolean).map((w) => w[0].toUpperCase()).join("");
+  };
+
+  const getGuestStatus = (g) => {
+    if (g.active === false && g.must_change_password === false) return { label: "Resigned", className: "status-resigned" };
+    if (g.active === false) return { label: "Inactive", className: "status-inactive" };
+    return { label: "Active", className: "status-active" };
+  };
+
+  const formatDateShort = (d) => {
+    if (!d) return "—";
+    try { return new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }); } catch { return "—"; }
+  };
+
   return (
     <>
     <DashboardLayout>
@@ -1149,18 +1377,41 @@ function ManageUsers() {
         <div className="manage-users-header">
           <div>
             <h1>User Management</h1>
-            <p>Manage users, roles and access permissions.</p>
+            <p>Manage employees, clients (guests), roles and access permissions.</p>
           </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <button className="primary-button add-user-button" onClick={() => setCompanyDocsOpen(true)} style={{ background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }}>
-              Company Documents
-            </button>
-            <button className="primary-button add-user-button" onClick={openModal}>
-              <CiCirclePlus fontSize={"21px"} /> Add User
-            </button>
+            {activeTab === "employees" && (
+              <button className="primary-button add-user-button" onClick={() => setCompanyDocsOpen(true)} style={{ background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }}>
+                Company Documents
+              </button>
+            )}
+            {activeTab === "employees" ? (
+              <button className="primary-button add-user-button" onClick={openModal}>
+                <CiCirclePlus fontSize={"21px"} /> Add User
+              </button>
+            ) : (
+              <button className="primary-button add-user-button" onClick={() => openGuestModal()}>
+                <CiCirclePlus fontSize={"21px"} /> Add Guest
+              </button>
+            )}
           </div>
         </div>
 
+        {/* Tab Toggle */}
+        <div className="manage-users-tabs">
+          <button className={`tab-button ${activeTab === "employees" ? "tab-active" : ""}`} onClick={() => { setActiveTab("employees"); setPage(1); }}>
+            <span className="tab-icon">👤</span> Employees
+            <span className="tab-count">{localUsers.filter((u) => u.role !== "guest").length || ""}</span>
+          </button>
+          <button className={`tab-button ${activeTab === "guests" ? "tab-active" : ""}`} onClick={() => { setActiveTab("guests"); setGuestPage(1); }}>
+            <span className="tab-icon">👥</span> Guests (Clients)
+            <span className="tab-count">{guests.length || ""}</span>
+          </button>
+        </div>
+
+        {/* ═══════════ EMPLOYEES TAB ═══════════ */}
+        {activeTab === "employees" && (
+        <>
         <div className="bar">
           <div className="search-bar">
             <IoSearchOutline fontSize={"25px"} />
@@ -1243,6 +1494,78 @@ function ManageUsers() {
 
         {totalUserPages > 1 && (
           <Pagination currentPage={page} totalPages={totalUserPages} onPageChange={setPage} />
+        )}
+        </>
+        )}
+
+        {/* ═══════════ GUESTS TAB ═══════════ */}
+        {activeTab === "guests" && (
+        <>
+        <div className="bar">
+          <div className="search-bar">
+            <IoSearchOutline fontSize={"25px"} />
+            <input type="text" placeholder="Search guests by name, email or company....." value={guestSearch} onChange={(e) => { setGuestSearch(e.target.value); setGuestPage(1); }} />
+          </div>
+        </div>
+
+        <div className="manage-users-table-card">
+          <div className="table-card-header">
+            <h2>Guests (Client Portal Users)</h2>
+          </div>
+          <table className="manage-user-table">
+            <thead>
+              <tr>
+                <th style={{ width: "35%" }}>Client</th>
+                <th style={{ width: "20%" }}>Company</th>
+                <th style={{ width: "15%" }}>Status</th>
+                <th style={{ width: "15%" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan="4" className="loading-row">Loading guests...</td></tr>
+              ) : paginatedGuests.length > 0 ? (
+                paginatedGuests.map((g) => {
+                  const st = getGuestStatus(g);
+                  return (
+                    <tr key={g.id} className={g.active === false ? "resigned-row" : ""}>
+                      <td style={{ textAlign: "left" }}>
+                        <div className="user-info">
+                          <span className="user-avatar">{g.avatar ? <img src={`${API_URL.replace('/api', '')}/storage/${g.avatar}`} alt={g.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : getGuestInitials(g.name)}</span>
+                          <div className="user-details">
+                            <span className="user-name">{g.name}</span>
+                            <span className="user-email">{g.personal_email || g.email || "—"}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td><span style={{ fontSize: 14, color: "#374151" }}>{g.company_name || "—"}</span></td>
+                      <td><span className={`status-badge ${st.className}`}>{st.label}</span></td>
+                      <td>
+                        <div className="action-buttons">
+                          <button className="btn-view" title="View Profile" onClick={() => navigate(rolePath(`manage-users/user-profile/${g.id}`))} aria-label="View guest profile">
+                            <MdVisibility size={24} />
+                          </button>
+                          <button className="btn-view" title="Edit" onClick={() => openGuestModal(g)} aria-label="Edit guest">
+                            <MdEdit size={20} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr><td colSpan="4" className="empty-row">
+                  {guestSearch ? "No guests match your search." : "No guests yet. Click \"Add Guest\" to invite a client."}
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {guestTotalPages > 1 && (
+          <Pagination currentPage={guestPage} totalPages={guestTotalPages} onPageChange={setGuestPage} />
+        )}
+        </>
         )}
 
         {/* ===================== ADD USER MODAL ===================== */}
@@ -1833,6 +2156,115 @@ function ManageUsers() {
     <CompanyDocuments
       isOpen={companyDocsOpen}
       onClose={() => setCompanyDocsOpen(false)}
+    />
+
+    {/* ===================== GUEST MODAL ===================== */}
+    {isGuestModalOpen && createPortal(
+      <div className="user-modal-overlay" onClick={closeGuestModal}>
+        <div className="user-modal-content" style={{ maxWidth: "560px", width: "100%" }} onClick={(e) => e.stopPropagation()}>
+          <div className="user-modal-header">
+            <div className="user-header-left">
+              <div className="user-icon-box">👥</div>
+              <div>
+                <h2>{editingGuest ? "Edit Guest" : "Add New Guest"}</h2>
+              </div>
+            </div>
+            <div className="user-header-actions">
+              <LoadingButton type="button" className="primary-button" loading={guestSubmitting} onClick={handleGuestSubmit}>
+                {guestSubmitting ? (editingGuest ? "Updating..." : "Creating...") : (editingGuest ? "Update Guest" : "Create Guest")}
+              </LoadingButton>
+              <button className="user-modal-close" onClick={closeGuestModal}>&#10005;</button>
+            </div>
+          </div>
+          <form className="user-form" onSubmit={handleGuestSubmit} style={{ pointerEvents: guestSubmitting ? "none" : "auto", opacity: guestSubmitting ? 0.7 : 1 }}>
+            {/* ===== Profile Photo ===== */}
+            <div className="avatar-upload-section">
+              <label className="avatar-upload-label">Profile Photo</label>
+              <div className="avatar-upload-row">
+                <div className="avatar-preview" onClick={() => document.getElementById('guest-avatar-input').click()}>
+                  {newGuest.avatar ? (
+                    <img src={URL.createObjectURL(newGuest.avatar)} alt="Avatar preview" />
+                  ) : newGuest._existingAvatar ? (
+                    <img src={`${API_URL.replace('/api', '')}/storage/${newGuest._existingAvatar}`} alt="Avatar preview" />
+                  ) : (
+                    <>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                      </svg>
+                      <span className="avatar-upload-hint">Click to upload</span>
+                    </>
+                  )}
+                </div>
+                <input id="guest-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) setNewGuest((prev) => ({ ...prev, avatar: file })); }} />
+                {(newGuest.avatar || newGuest._existingAvatar) && (
+                  <button type="button" className="avatar-remove-btn" onClick={() => setNewGuest((prev) => ({ ...prev, avatar: null, _existingAvatar: null }))}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <h3 className="form-section-title">Client Information</h3>
+            <div className="user-form-grid">
+              <div className="form-row">
+                <label htmlFor="guest-name">Client Name *</label>
+                <input type="text" id="guest-name" value={newGuest.name} onChange={(e) => { setNewGuest((p) => ({ ...p, name: e.target.value })); if (guestErrors.name) setGuestErrors((p) => { const n = { ...p }; delete n.name; return n; }); }} placeholder="Enter client / company name" className={guestErrors.name ? "field-error" : ""} />
+                {guestErrors.name && <span className="field-error-text">{guestErrors.name}</span>}
+              </div>
+              <div className="form-row">
+                <label htmlFor="guest-email">Personal Email *</label>
+                <input type="email" id="guest-email" value={newGuest.personal_email} onChange={(e) => { setNewGuest((p) => ({ ...p, personal_email: e.target.value })); if (guestErrors.personal_email) setGuestErrors((p) => { const n = { ...p }; delete n.personal_email; return n; }); }} placeholder="client@example.com" className={guestErrors.personal_email ? "field-error" : ""} />
+                {guestErrors.personal_email && <span className="field-error-text">{guestErrors.personal_email}</span>}
+              </div>
+              <div className="form-row">
+                <label htmlFor="guest-phone">Phone Number</label>
+                <input type="text" id="guest-phone" value={newGuest.phone_number} onChange={(e) => setNewGuest((p) => ({ ...p, phone_number: e.target.value }))} placeholder="03XX-XXXXXXX" />
+              </div>
+              <div className="form-row">
+                <label htmlFor="guest-company">Company Name</label>
+                <input type="text" id="guest-company" value={newGuest.company_name} onChange={(e) => setNewGuest((p) => ({ ...p, company_name: e.target.value }))} placeholder="Enter company name (optional)" />
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>,
+      document.body
+    )}
+
+    {/* Guest Action Confirmation Modal */}
+    <ConfirmModal
+      isOpen={guestConfirmModal.open}
+      onClose={() => setGuestConfirmModal({ open: false, type: "", guest: null })}
+      onConfirm={() => handleGuestAction(guestConfirmModal.type, guestConfirmModal.guest)}
+      title={
+        guestConfirmModal.type === "resend-invitation" ? "Resend Invitation" :
+        guestConfirmModal.type === "reset-password" ? "Reset Password" :
+        guestConfirmModal.type === "toggle-status" ? (guestConfirmModal.guest?.active !== false ? "Deactivate Guest" : "Activate Guest") :
+        guestConfirmModal.type === "resign" ? "Resign Guest" :
+        "Delete Guest"
+      }
+      message={
+        guestConfirmModal.type === "resend-invitation"
+          ? `A new password will be generated and sent to ${guestConfirmModal.guest?.personal_email || "the guest"}. Continue?`
+          : guestConfirmModal.type === "reset-password"
+          ? `A new password will be generated and sent to ${guestConfirmModal.guest?.personal_email || "the guest"}. The old password will stop working. Continue?`
+          : guestConfirmModal.type === "toggle-status"
+          ? `Are you sure you want to ${guestConfirmModal.guest?.active !== false ? "deactivate" : "activate"} ${guestConfirmModal.guest?.name}?`
+          : guestConfirmModal.type === "resign"
+          ? `Are you sure you want to resign ${guestConfirmModal.guest?.name}? They will no longer be able to access the portal.`
+          : `Are you sure you want to delete "${guestConfirmModal.guest?.name}"? This action cannot be undone.`
+      }
+      confirmText={
+        guestConfirmModal.type === "resend-invitation" ? "Resend" :
+        guestConfirmModal.type === "reset-password" ? "Reset" :
+        guestConfirmModal.type === "toggle-status" ? (guestConfirmModal.guest?.active !== false ? "Deactivate" : "Activate") :
+        guestConfirmModal.type === "resign" ? "Resign" :
+        "Delete"
+      }
+      cancelText="Cancel"
+      danger={guestConfirmModal.type === "delete" || guestConfirmModal.type === "toggle-status" || guestConfirmModal.type === "resign"}
     />
     </>
   );

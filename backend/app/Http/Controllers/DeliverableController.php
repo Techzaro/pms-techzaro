@@ -48,6 +48,12 @@ class DeliverableController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
+
+        // Guests only see deliverables inside project details, not in standalone lists
+        if ($user->role === 'guest') {
+            return response()->json(['success' => true, 'data' => collect()]);
+        }
+
         $view = $request->query('view', 'assignee');
         $isDueTodayFilter = $request->input('status') === 'due_today';
         $filters = $request->query();
@@ -100,6 +106,12 @@ class DeliverableController extends Controller
     public function assignedByMe(Request $request)
     {
         $user = $request->user();
+
+        // Guests only see deliverables inside project details
+        if ($user->role === 'guest') {
+            return response()->json(['success' => true, 'data' => collect()]);
+        }
+
         $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
         $isDueTodayFilter = $request->input('status') === 'due_today';
         $filters = $request->query();
@@ -138,6 +150,12 @@ class DeliverableController extends Controller
     public function mySelfDeliverables(Request $request)
     {
         $user = $request->user();
+
+        // Guests only see deliverables inside project details
+        if ($user->role === 'guest') {
+            return response()->json(['success' => true, 'data' => collect()]);
+        }
+
         $isDueTodayFilter = $request->input('status') === 'due_today';
         $filters = $request->query();
         if ($isDueTodayFilter) {

@@ -64,6 +64,9 @@ const NOTIFICATION_TYPE_MAP = {
   user_updated: { page: "my-profile" },
   user_created: { page: "manage-users" },
   user_resigned: { page: "manage-users" },
+
+  // Chat
+  chat_message: { page: "chat", buildPath: (id) => `chat/${id}` },
 };
 
 // ── Dashboard Activity → Destination mapping ──
@@ -78,6 +81,7 @@ const ACTIVITY_MODULE_MAP = {
   deliverable: { buildPath: (id) => `deliveries/deliverable-details/${id}`, from: "deliveries" },
   user:        { buildPath: (id) => `manage-users/user-profile/${id}` },
   team:        { buildPath: (id) => `manage-team?selectedTeam=${id}` },
+  chat:        { buildPath: (id) => `chat/${id}` },
 };
 
 // ── Public API ──

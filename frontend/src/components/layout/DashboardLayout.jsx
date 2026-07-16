@@ -9,6 +9,7 @@ import { useState, useEffect } from "react";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import RightSidebar from "./RightSidebar";
+import ChatWidget from "./ChatWidget";
 
 import "./DashboardLayout.css";
 
@@ -81,6 +82,8 @@ function DashboardLayout({ children, hideRightSidebar = false }) {
           </svg>
         </button>
       )}
+
+      <ChatWidget />
 
     </div>
   );

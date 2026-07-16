@@ -262,7 +262,8 @@ function Sidebar() {
             <span>Projects</span>
           </Link>
 
-          {/* Tasks dropdown – sub-links for assigned/by-you/self */}
+          {/* Tasks dropdown – sub-links for assigned/by-you/self; hidden for guest */}
+          {user.role !== "guest" && (
           <div className={`sidebar-link ${isActive("tasks") || isActive("taskby") || isActive("self-tasks") || location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
             <div
               onClick={toggleTasks}
@@ -287,6 +288,8 @@ function Sidebar() {
                 >
                   Assigned to You
                 </Link>
+                {user.role !== "guest" && (
+                <>
                 <Link
                   to={rolePath("taskby")}
                   className={`sidebar-sub-link ${isActive("taskby") || (isTaskDetailPage && getTaskFrom() === "taskby") ? "active" : ""}`}
@@ -301,11 +304,15 @@ function Sidebar() {
                 >
                   Self Tasks
                 </Link>
+                </>
+                )}
               </div>
             )}
           </div>
+          )}
 
-          {/* Deliverables dropdown – sub-links for assigned/by-you/self */}
+          {/* Deliverables dropdown – sub-links for assigned/by-you/self; hidden for guest */}
+          {user.role !== "guest" && (
           <div className={`sidebar-link ${isActive("deliveries") || isActive("deliveries-by-you") || isActive("self-deliveries") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
             <div
               onClick={toggleDeliverables}
@@ -330,6 +337,8 @@ function Sidebar() {
                 >
                   Assigned To You
                 </Link>
+                {user.role !== "guest" && (
+                <>
                 <Link
                   to={rolePath("deliveries-by-you")}
                   className={`sidebar-sub-link ${isActive("deliveries-by-you") || (isDeliverableDetailPage && getDeliverableFrom() === "deliveries-by-you") ? "active" : ""}`}
@@ -344,9 +353,12 @@ function Sidebar() {
                 >
                   Self Deliverables
                 </Link>
+                </>
+                )}
               </div>
             )}
           </div>
+          )}
 
           {/* Calendar link */}
           <Link
@@ -395,8 +407,8 @@ function Sidebar() {
             </Link>
           )}
 
-          {/* Reports – dropdown for team_lead, simple link for others */}
-          {(user.role === "team_lead" || user.role === "teamlead") ? (
+          {/* Reports – dropdown for team_lead, simple link for others; hidden for guest */}
+          {user.role !== "guest" && (user.role === "team_lead" || user.role === "teamlead") && (
             <div className={`sidebar-link ${isActive("reports") || isActive("team-members-report") || location.pathname.startsWith(`${rolePrefix}/reports/team-members/`) || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
               <div
                 onClick={toggleReports}
@@ -431,7 +443,9 @@ function Sidebar() {
                 </div>
               )}
             </div>
-          ) : (
+          )}
+
+          {user.role !== "guest" && user.role !== "team_lead" && user.role !== "teamlead" && (
             <Link
               to={user.role === "member" ? rolePath("reports/user-performance/me") : rolePath("reports")}
               className={`sidebar-link ${isActive("reports") || location.pathname.startsWith(`${rolePrefix}/reports/team-members/`) || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`) ? "active" : ""}`}
