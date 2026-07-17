@@ -45,8 +45,10 @@ function actionLabel(action) {
     submitted: "Submitted",
     resubmitted: "Resubmitted",
     acknowledged: "Acknowledged",
+    paused: "Paused",
+    continued: "Continued",
     approved: "Approved",
-    rejected: "Rejected",
+    rejected: "Declined",
     reopened: "Reopened",
   };
   return map[action] || action;
@@ -111,7 +113,7 @@ function TaskSubmissionPanel({
 
   const confirmMessages = {
     approve: "Are you sure you want to approve this task?",
-    reject: "Are you sure you want to reject this task? The assignee will not be able to resubmit.",
+    reject: "Are you sure you want to decline this task? The assignee will not be able to resubmit.",
   };
 
   // Build chronological history of workflow events (newest first), excluding field changes
@@ -279,14 +281,14 @@ function TaskSubmissionPanel({
                 disabled={acting}
                 onClick={() => setConfirmDialog({ open: true, type: "reject" })}
               >
-                Reject
+                Decline
               </button>
               <button
                 className="td-review-btn td-review-btn--reopen"
                 disabled={acting}
                 onClick={() => setReopenDialog(true)}
               >
-                Reject & Reopen
+                Decline & Reopen
               </button>
             </div>
           )}
@@ -296,7 +298,7 @@ function TaskSubmissionPanel({
       {/* Submission history */}
       {historyItems.length > 0 && (
         <div className="td-card td-submission-card">
-          <h3 className="td-card-title">Submission History</h3>
+          <h3 className="td-card-title">Timeline History</h3>
           <ul className="td-history-list">
             {historyItems.map((item) => (
               <li key={item.id} className="td-history-item">
@@ -331,9 +333,9 @@ function TaskSubmissionPanel({
           setConfirmDialog({ open: false, type: null });
           handleAction(type);
         }}
-        title={confirmDialog.type === "approve" ? "Approve Task" : "Reject Task"}
+        title={confirmDialog.type === "approve" ? "Approve Task" : "Decline Task"}
         message={confirmMessages[confirmDialog.type] || ""}
-        confirmText={confirmDialog.type === "approve" ? "Approve" : "Reject"}
+        confirmText={confirmDialog.type === "approve" ? "Approve" : "Decline"}
         confirmColor={confirmDialog.type === "approve" ? "#16A34A" : "#DC2626"}
       />
 

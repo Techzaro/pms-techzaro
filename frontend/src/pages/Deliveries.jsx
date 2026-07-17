@@ -13,7 +13,7 @@
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect, useCallback } from "react";
-import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
@@ -92,7 +92,7 @@ function Deliveries() {
     fetchSubtasks();
   }, [search, statusFilter, timeFilter]);
 
-  useRefreshOnEvent(['deliverable:updated', 'deliverable:created', 'deliverable:deleted'], fetchSubtasks);
+  useAutoRefresh(fetchSubtasks, { events: ['deliverable:updated', 'deliverable:created', 'deliverable:deleted', 'data:changed'], pollInterval: 30000 });
 
   // Deep linking: auto-open submit/view modal when ?selectedDeliverable= is in URL
   useEffect(() => {
@@ -184,7 +184,7 @@ function Deliveries() {
       pending: "Pending",
       submitted: "Submitted",
       approved: "Approved",
-      rejected: "Rejected",
+      rejected: "Declined",
       reopened: "Reopened",
     };
     return map[status] || status;
@@ -248,7 +248,7 @@ function Deliveries() {
             <GoDotFill /> Approved
           </p>
           <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Rejected
+            <GoDotFill /> Declined
           </p>
         </div>
 

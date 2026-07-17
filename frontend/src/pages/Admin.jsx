@@ -23,7 +23,7 @@ import API_URL from "../config/api";
 import { timeAgo, formatDateTime } from "../utils/formatDateTime";
 import { useApiQuery } from "../hooks/useApi";
 import { useRelativeTime } from "../hooks/useRelativeTime";
-import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { IoPerson, IoPeople } from "react-icons/io5";
 import "./Admin.css";
 
@@ -225,6 +225,7 @@ const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, r
 const STATUS_COLORS = {
   pending: "#FEF3C7",
   in_progress: "#DBEAFE",
+  paused: "#FEF3C7",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -239,6 +240,7 @@ const STATUS_COLORS = {
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
   in_progress: "#1E40AF",
+  paused: "#92400E",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -359,7 +361,10 @@ function Admin() {
   );
 
   // Auto-refresh dashboard when tasks, projects, or subtasks change
-  useRefreshOnEvent(["task:created", "task:updated", "task:deleted", "project:created", "project:updated", "project:deleted", "deliverable:updated", "data:changed"], () => refetchDashboard());
+  useAutoRefresh(() => refetchDashboard(), {
+    events: ["task:created", "task:updated", "task:deleted", "project:created", "project:updated", "project:deleted", "deliverable:updated", "data:changed"],
+    pollInterval: 45000,
+  });
 
   // Listen for modal open/close events from child components
   useEffect(() => {
@@ -534,7 +539,7 @@ function Admin() {
       submitted: "submitted",
       resubmitted: "resubmitted",
       approved: "approved",
-      rejected: "rejected",
+      rejected: "declined",
       reopened: "reopened",
       rework: "reopened",
       completed: "completed",

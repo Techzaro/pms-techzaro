@@ -19,7 +19,7 @@ import CompanyEmployeeReport from "./CompanyEmployeeReport";
 import { getUser, rolePath } from "../utils/auth";
 import { useApiQuery } from "../hooks/useApi";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { MdGroup } from "react-icons/md";
 import "../components/Charts.css";
 import "./Reports.css";
@@ -212,7 +212,7 @@ function Reports() {
     queryClient.invalidateQueries({ queryKey: ["report-user-table"] });
   }, [queryClient]);
 
-  useRefreshOnEvent(["task:created", "task:updated", "task:deleted", "task:approved", "task:rejected", "task:reopened", "data:changed"], refetchSummary);
+  useAutoRefresh(refetchSummary, { events: ["task:created", "task:updated", "task:deleted", "task:approved", "task:rejected", "task:reopened", "data:changed"], pollInterval: 30000 });
 
   const navigate = useNavigate();
 

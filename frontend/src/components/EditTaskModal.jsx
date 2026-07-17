@@ -420,6 +420,15 @@ export default function EditTaskModal({ task, onClose }) {
    */
   const handleSubmit = async (e) => {
     if (e?.preventDefault) e.preventDefault();
+    // Validate deadline against project deadline
+    if (form.end_date && task.project?.end_date) {
+      const taskEnd = new Date(form.end_date);
+      const projEnd = new Date(task.project.end_date);
+      if (taskEnd > projEnd) {
+        notify.error("Task deadline cannot exceed the project deadline.");
+        return;
+      }
+    }
     await run(async () => {
       try {
         let body;
@@ -794,7 +803,9 @@ export default function EditTaskModal({ task, onClose }) {
                     value={form.end_date}
                     onChange={(e) => { setIsDirty(true); setForm((prev) => ({ ...prev, end_date: e.target.value })); }}
                     min={getNowDatetimeLocal()}
+                    max={task.project?.end_date ? toDatetimeLocal(task.project.end_date) : undefined}
                   />
+                  {task.project?.end_date && <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(task.project.end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
                 </div>
               </div>
             </div>

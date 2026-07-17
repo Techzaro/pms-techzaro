@@ -45,7 +45,8 @@ import AddAccessModal from "../components/AddAccessModal";
 import ConfirmModal from "../components/ConfirmModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import { formatDateTimeShort, formatDateTime, formatDateTimeInline } from "../utils/formatDateTime";
-import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
+import { useSubmit } from "../hooks/useSubmit";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { useActivityHighlight } from "../hooks/useActivityHighlight";
@@ -70,6 +71,7 @@ function fileUrl(url) {
 const STATUS_COLORS = {
   pending: "#FEF3C7",
   in_progress: "#DBEAFE",
+  paused: "#FEF3C7",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -79,6 +81,7 @@ const STATUS_COLORS = {
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
   in_progress: "#1E40AF",
+  paused: "#92400E",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -100,10 +103,12 @@ const PRIORITY_TEXT_COLORS = {
 function formatStatus(status) {
   const map = {
     pending: "Pending",
+    in_progress: "In Progress",
+    paused: "Paused",
     submitted: "Submitted",
     reopened: "Reopened",
     approved: "Approved",
-    rejected: "Rejected",
+    rejected: "Declined",
   };
   return map[status] || status;
 }
@@ -137,7 +142,7 @@ function taskStatusLabel(status) {
   if (s === "submitted") return "Submitted";
   if (s === "reopened") return "Reopened";
   if (s === "approved") return "Approved";
-  if (s === "rejected") return "Rejected";
+  if (s === "rejected") return "Declined";
   if (s === "completed" || s === "done") return "Completed";
   if (s === "in_progress") return "In Progress";
   return status || "Pending";
@@ -551,7 +556,10 @@ function ProjectDetails() {
     }
   }, [loadProject]);
 
-  useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted', 'project:updated', 'project:deleted', 'deliverable:updated'], handleRefresh);
+  useAutoRefresh(handleRefresh, {
+    events: ['task:created', 'task:updated', 'task:deleted', 'project:updated', 'project:deleted', 'deliverable:updated', 'data:changed'],
+    pollInterval: 30000,
+  });
 
   useEffect(() => {
     const handler = () => loadProject();
@@ -688,6 +696,34 @@ function ProjectDetails() {
   const isAdminOrManager = project.is_admin_or_manager;
 
   const canEdit = project.can_edit;
+
+  const { submitting: milestoneToggling, run: runMilestoneToggle } = useSubmit();
+
+  const handleMilestoneToggle = async (milestone) => {
+    await runMilestoneToggle(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/projects/${project.id}/milestones/${milestone.id}/achieve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setProject((prev) => ({
+            ...prev,
+            milestones: (prev.milestones || []).map((m) => m.id === milestone.id ? data.milestone : m),
+          }));
+          showSuccessMessage("Milestone", data.message);
+          publish('data:changed', { type: 'project', action: 'updated' });
+        } else {
+          notify.error(data.message || "Failed to update milestone");
+        }
+      } catch {
+        notify.error("Failed to update milestone");
+      }
+    });
+  };
 
   const openVisibility = async () => {
     setVisibilityOpen(true);
@@ -890,11 +926,53 @@ function ProjectDetails() {
           {milestones.length > 0 ? (
             <ul className="pd-milestones" style={{ marginBottom: 20 }}>
               {milestones.map((m) => (
-                <li key={m.id} className="pd-milestones__item">
-                  <span className={`pd-dot pd-dot--${statusSlug(m.status)}`} />
-                  <div>
-                    <div className="pd-milestones__title">{m.title}</div>
-                    <div className="pd-milestones__date">{formatDateTimeShort(m.due_date)}</div>
+                <li key={m.id} className="pd-milestones__item" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #f3f4f6" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1 }}>
+                    {isAdminOrManager ? (
+                      <button
+                        onClick={() => handleMilestoneToggle(m)}
+                        disabled={milestoneToggling}
+                        style={{
+                          width: "22px", height: "22px", borderRadius: "50%", border: m.status === "completed" ? "2px solid #16a34a" : "2px solid #d1d5db",
+                          background: m.status === "completed" ? "#16a34a" : "transparent", cursor: "pointer", display: "flex",
+                          alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s",
+                        }}
+                        title={m.status === "completed" ? "Click to unachieve" : "Click to achieve"}
+                      >
+                        {m.status === "completed" && (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </button>
+                    ) : (
+                      <span
+                        style={{
+                          width: "22px", height: "22px", borderRadius: "50%", border: m.status === "completed" ? "2px solid #16a34a" : "2px solid #d1d5db",
+                          background: m.status === "completed" ? "#16a34a" : "transparent", display: "flex",
+                          alignItems: "center", justifyContent: "center", flexShrink: 0,
+                        }}
+                      >
+                        {m.status === "completed" && (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </span>
+                    )}
+                    <div>
+                      <div className="pd-milestones__title" style={{ textDecoration: m.status === "completed" ? "line-through" : "none", color: m.status === "completed" ? "#6b7280" : "#111827" }}>{m.title}</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0, marginLeft: "12px" }}>
+                    <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                      Due: {formatDateTimeShort(m.due_date)}
+                    </div>
+                    {m.status === "completed" && m.completed_at && (
+                      <div style={{ fontSize: "12px", color: "#16a34a", marginTop: "2px" }}>
+                        Achieved: {formatDateTimeShort(m.completed_at)}
+                      </div>
+                    )}
                   </div>
                 </li>
               ))}

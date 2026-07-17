@@ -1,10 +1,10 @@
 /**
- * SelfTasks page component.
+ * GuestTasks page component — Tasks Assigned To Guest.
  *
- * Displays tasks that the current user assigned to themselves.
- * Includes search with debounce, status filtering, time-range filtering,
- * drag-and-drop reordering and pagination.  Modals are available for
- * creating new tasks and submitting subtasks.
+ * Displays tasks that have been assigned to the current guest user
+ * by admin/manager. Provides search with debounce, status filtering,
+ * time-range filtering, drag-and-drop reordering and pagination.
+ * Same action pattern as Tasks Assigned To You (acknowledge/pause/continue/submit).
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -12,13 +12,14 @@ import { useAutoRefresh } from "../utils/useAutoRefresh";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { GoDotFill } from "react-icons/go";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import CreateTaskModal from "../components/CreateTaskModal";
+import { CheckCircle2, Play } from "lucide-react";
+import { useNotification } from "../context/NotificationContext";
+import { showSuccessMessage } from "../utils/notify";
+import { publish } from "../utils/eventBus";
 import SubmitTaskModal from "../components/SubmitTaskModal";
-import SubmitDeliverableModal from "../components/SubmitDeliverableModal"; // Added missing import
-import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal"; // Added missing import
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
@@ -58,49 +59,44 @@ const PRIORITY_TEXT_COLORS = {
   Low: "#166534",
 };
 
-/** Main Self Tasks page — renders tasks assigned by the current user to themselves. */
-const SelfTasks = () => {
+/** Guest Tasks page — renders tasks assigned to the current guest user. */
+function GuestTasks() {
   const navigate = useNavigate();
-  const currentUser = getUser();
-  
-  // State declarations
-  const [showTaskModal, setShowTaskModal] = useState({ open: false, projectId: null, id: null }); // Fixed to object
-  const [showSubtaskSubmitModal, setShowSubtaskSubmitModal] = useState({ open: false, subtask: null }); // Added missing state
-  const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
-  const [viewModal, setViewModal] = useState({ open: false, subtask: null }); // Added missing state
+  const { notify } = useNotification();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [totalCount, setTotalCount] = useState(0);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [timeFilter, setTimeFilter] = useState("");
   const [orderedItems, setOrderedItems] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const currentUser = getUser();
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const status = searchParams.get("status");
+    if (status) return status;
+    return "";
+  });
+  const [timeFilter, setTimeFilter] = useState("");
+  const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
+
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const ITEMS_PER_PAGE = 10;
-
-  const selectStatusFilter = (filter) => {
-    setStatusFilter(filter);
-    setShowAll(!filter);
-    setPage(1);
-  };
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
   }, [search]);
 
-  /** Fetch self-assigned tasks/projects from the API with current filters. */
+  /** Fetch tasks assigned to the current guest user from the API. */
   const fetchTasks = () => {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
     if (debouncedSearch) params.append("search", debouncedSearch);
     if (statusFilter) params.append("status", statusFilter);
-    if (timeFilter) params.append("time_filter", timeFilter);
 
-    fetch(`${API_URL}/self-tasks?${params.toString()}`, {
+    fetch(`${API_URL}/my-tasks?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       skipLoader: true,
     })
@@ -115,7 +111,7 @@ const SelfTasks = () => {
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch, statusFilter, timeFilter]);
+  }, [debouncedSearch, statusFilter]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -126,7 +122,7 @@ const SelfTasks = () => {
     setOrderedItems(items);
   }, [items]);
 
-  const handleTaskReorder = useCallback((reordered) => {
+  const handleTaskListReorder = useCallback((reordered) => {
     setOrderedItems(reordered);
     if (reordered.length) {
       const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
@@ -140,25 +136,42 @@ const SelfTasks = () => {
     }
   }, []);
 
-  const handleModalClose = (refresh) => {
-    setShowTaskModal({ open: false, projectId: null, id: null });
-    if (refresh) fetchTasks();
+  useEffect(() => {
+    const nextFilter = searchParams.get("status") || "";
+    setStatusFilter((current) => {
+      if (nextFilter === "due_today" || current === "due_today" || nextFilter !== current) {
+        return nextFilter;
+      }
+      return current;
+    });
+  }, [searchParams]);
+
+  const selectStatusFilter = (filter) => {
+    setStatusFilter(filter);
+    setShowAll(!filter);
+    setPage(1);
+    if (filter) {
+      setSearchParams({ status: filter });
+    } else {
+      setSearchParams({});
+    }
   };
 
-  const handleTaskCreated = () => {
-    fetchTasks();
+  const getInitials = (name) => {
+    if (!name) return "??";
+    return name.split(" ").map((w) => w[0]).join("").substring(0, 2).toUpperCase();
   };
 
-  const handleSubtaskSubmitSuccess = () => {
-    fetchTasks();
-  };
-
-  const handleTaskSubmitSuccess = () => {
-    fetchTasks();
-  };
-
-  const handleSubtaskUpdate = () => {
-    fetchTasks();
+  const getRandomColors = (id) => {
+    const colors = [
+      { bg: "#E0E7FF", text: "#4338CA" },
+      { bg: "#FEE2E2", text: "#B91C1C" },
+      { bg: "#DCFCE7", text: "#22C55E" },
+      { bg: "#FEF3C7", text: "#D97706" },
+      { bg: "#EDE9FE", text: "#7C3AED" },
+      { bg: "#FCE7F3", text: "#DB2777" },
+    ];
+    return colors[id % colors.length];
   };
 
   const formatDate = (dateStr) => {
@@ -178,10 +191,72 @@ const SelfTasks = () => {
     return map[status] || status;
   };
 
+  const handleTaskSubmitSuccess = (updatedTask) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === updatedTask.id
+          ? { ...item, ...updatedTask }
+          : item
+      )
+    );
+  };
+
+  const handleAcknowledge = async (taskId) => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/acknowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "in_progress", ...data.task } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage("Task", "acknowledged");
+      } else {
+        notify.error(data.message || "Failed to acknowledge task.");
+      }
+    } catch {
+      notify.error("Failed to acknowledge task.");
+    }
+  };
+
+  const handleContinue = async (taskId) => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/continue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "in_progress", ...data.task } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage("Task", "resumed");
+      } else {
+        notify.error(data.message || "Failed to continue task.");
+      }
+    } catch {
+      notify.error("Failed to continue task.");
+    }
+  };
+
   const baseItems = orderedItems.length ? orderedItems : items;
   const pendingStatuses = ["pending", "in_progress", "paused", "In Progress", "In-progress", "planned", "Planning", "Planned", "submitted", "reopened", "rejected"];
   const filteredItems = statusFilter && statusFilter !== "due_today"
-    ? baseItems.filter((item) => {
+    ? items.filter((item) => {
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
@@ -195,8 +270,8 @@ const SelfTasks = () => {
   const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   const breadcrumbs = [
-    { label: "Tasks", path: rolePath("tasks") },
-    { label: "Self Tasks" },
+    { label: "Tasks", path: rolePath("guest-tasks") },
+    { label: "Assigned To You" },
   ];
 
   return (
@@ -204,8 +279,8 @@ const SelfTasks = () => {
       <Breadcrumb items={breadcrumbs} />
       <div className="Task">
         <div className="task-text">
-          <h3>Self Tasks</h3>
-          <p>Tasks you assigned to yourself</p>
+          <h3>Tasks Assigned To You</h3>
+          <p>View and manage tasks assigned to you</p>
           <div className="task-count-badge" style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
             <span style={{ background: "#dedfe0", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
               Total: {totalCount} items
@@ -213,7 +288,6 @@ const SelfTasks = () => {
             <span style={{ background: "#d6d6d6", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
               Tasks: {filteredItems.length}
             </span>
-
           </div>
         </div>
 
@@ -226,17 +300,10 @@ const SelfTasks = () => {
               <option value="180">Last 6 Months</option>
             </select>
           </div>
-
-          <button
-            className="export task-btn--mobile"
-            onClick={() => setShowTaskModal({ open: true, projectId: null, id: Date.now() })}
-            style={{ whiteSpace: "nowrap" }}
-          >
-            + Task
-          </button>
         </div>
       </div>
 
+      {/* STATUS FILTERS */}
       <div className="task-progress">
         <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
         <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
@@ -259,6 +326,7 @@ const SelfTasks = () => {
         </p>
       </div>
 
+      {/* SEARCH BAR */}
       <div className="tasks-search-bar">
         <IoSearchOutline fontSize={"20px"} />
         <input
@@ -269,37 +337,53 @@ const SelfTasks = () => {
         />
       </div>
 
+      {/* TABLE */}
       <div className="container">
-        <div className="table-header-compact">
+        <div className="table-header1">
           <div></div>
-          <div>Task Name</div>
-          <div>Status</div>
+          <div>Assigned by</div>
+          <div className="task-name-column">Task Name</div>
+          <div className="status-column">Status</div>
           <div>Progress</div>
-          <div>Priority</div>
-          <div>Date</div>
+          <div className="priority-column">Priority</div>
+          <div className="date-column">Date</div>
           <div>Action</div>
         </div>
 
         {loading ? (
           <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
         ) : filteredItems.length === 0 ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
+          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No tasks assigned to you</div>
         ) : (
-          <SortableTableWrapper 
-            as="div" 
-            items={paginatedItems.map((i) => ({ ...i, sortableId: `task-${i.id}` }))} 
-            onReorder={(reordered) => handleTaskReorder(reordered)} 
+          <SortableTableWrapper
+            items={paginatedItems.map((i) => ({ ...i, sortableId: `task-${i.id}` }))}
+            onReorder={(reordered) => handleTaskListReorder(reordered)}
             idKey="sortableId"
+            as="div"
             handleOnly
           >
             {(item, idx, dndProps) => {
+              const colors = getRandomColors(item.id);
+
+              const assigner = item.assigner;
               return (
-                <div className="taskby-row-compact" key={item.sortableId}>
+                <div className="taskby-row" key={item.sortableId}>
                   <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
-                  <div>
+                  <div className="col-assigned-to">
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <div className="avatar" style={{ background: colors.bg, color: colors.text }}>{getInitials(assigner?.name)}</div>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="user-name">{assigner?.name || "System"}</div>
+                        <div className="user-role">{assigner?.role || ""}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="col-task-name">
                     <div className="task-title">{item.title}</div>
                   </div>
-                  <div>
+
+                  <div className="col-status">
                     <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
                       <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                       {formatStatus(item.status)}
@@ -314,43 +398,79 @@ const SelfTasks = () => {
                       <div style={{ fontSize: "10px", color: "#92400E", marginTop: "2px" }}>by {item.reopenedBy.name}</div>
                     )}
                   </div>
+
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
                     <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
                       {item.deliverables_progress || 0}%
                     </div>
-                    <div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div></div>
+                    <div className="progress-bar-track">
+                      <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
+                    </div>
                     <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
                     </div>
                   </div>
-                  <div>
+
+                  <div className="col-priority">
                     <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
                       <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
                       {item.priority}
                     </span>
                   </div>
-                  <div className="date-box">
-                    <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.start_date)}{"\n"}{formatDate(item.end_date)}</div>
-                  </div>
-                  <div className="action-btns">
-                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}><IoEyeOutline /></button>
-                    {(() => {
-                      const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
-                      const canSubmit = (item.status === "in_progress" || item.status === "reopened" || item.status === "paused") && myPivotStatus !== "submitted";
-                      return canSubmit && (
-                      <div style={{ position: "relative", display: "inline-flex" }}>
-                        <button 
-                          className="action-icon-btn action-submit" 
-                          title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"} 
-                          disabled={item.pending_deliverables_count > 0} 
-                          onClick={() => !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item })} 
-                          style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
-                        >
-                          <LuSend />
-                        </button>
+
+                  <div className="col-due-date">
+                    <div className="date-box">
+                      <div style={{ whiteSpace: "pre-line" }}>
+                        {(() => {
+                          const myPivotStart = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.start_date;
+                          return formatDate(myPivotStart || item.start_date);
+                        })()}
+                        {"\n"}
+                        {(() => {
+                          const myPivot = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.due_date;
+                          return formatDate(myPivot || item.end_date);
+                        })()}
                       </div>
-                      );
-                    })()}
+                    </div>
+                  </div>
+
+                  <div className="col-action">
+                    <div className="action-btns">
+                      <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}><IoEyeOutline /></button>
+                      {(() => {
+                        const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
+                        if (item.status === "pending") {
+                          return (
+                            <button className="action-icon-btn action-submit" title="Acknowledge Task" onClick={() => handleAcknowledge(item.id)}>
+                              <CheckCircle2 size={18} />
+                            </button>
+                          );
+                        }
+                        if (item.status === "paused") {
+                          return (
+                            <button className="action-icon-btn action-submit" title="Continue Task" onClick={() => handleContinue(item.id)}>
+                              <Play size={18} />
+                            </button>
+                          );
+                        }
+                        if ((item.status === "in_progress" || item.status === "reopened") && myPivotStatus !== "submitted") {
+                          return (
+                            <div style={{ position: "relative", display: "inline-flex" }}>
+                              <button
+                                className="action-icon-btn action-submit"
+                                title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"}
+                                disabled={item.pending_deliverables_count > 0}
+                                onClick={() => !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item })}
+                                style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                              >
+                                <LuSend />
+                              </button>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
                   </div>
                 </div>
               );
@@ -363,49 +483,16 @@ const SelfTasks = () => {
         <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
       )}
 
-      {/* Modals */}
-      {showTaskModal.open && (
-        <CreateTaskModal
-          key={`task-create-${showTaskModal.id}`}
-          isOpen={showTaskModal.open}
-          onClose={handleModalClose}
-          onTaskCreated={handleTaskCreated}
-          projectId={showTaskModal.projectId}
-        />
-      )}
+      <SubmitTaskModal
+        key={`guest-tasks-submit-${submitTaskModal.task?.id || "none"}`}
+        isOpen={submitTaskModal.open}
+        onClose={() => setSubmitTaskModal({ open: false, task: null })}
+        task={submitTaskModal.task}
+        onSubmitSuccess={handleTaskSubmitSuccess}
+      />
 
-      {submitTaskModal.open && (
-        <SubmitTaskModal
-          key={`task-submit-${submitTaskModal.task?.id || "none"}`}
-          isOpen={submitTaskModal.open}
-          onClose={() => setSubmitTaskModal({ open: false, task: null })}
-          task={submitTaskModal.task}
-          onSubmitSuccess={handleTaskSubmitSuccess}
-        />
-      )}
-
-      {showSubtaskSubmitModal.open && (
-        <SubmitDeliverableModal
-          key={`subtask-submit-${showSubtaskSubmitModal.subtask?.id || "none"}`}
-          isOpen={showSubtaskSubmitModal.open}
-          onClose={() => setShowSubtaskSubmitModal({ open: false, subtask: null })}
-          deliverable={showSubtaskSubmitModal.subtask}
-          onSubmitSuccess={handleSubtaskSubmitSuccess}
-        />
-      )}
-
-      {viewModal.open && (
-        <SelfDeliverableViewModal
-          key={`view-${viewModal.subtask?.id || "none"}`}
-          isOpen={viewModal.open}
-          onClose={() => setViewModal({ open: false, subtask: null })}
-          deliverable={viewModal.subtask}
-          onActionSuccess={handleSubtaskUpdate}
-          onResubmit={(subtask) => setShowSubtaskSubmitModal({ open: true, subtask })}
-        />
-      )}
     </DashboardLayout>
   );
-};
+}
 
-export default SelfTasks;
+export default GuestTasks;

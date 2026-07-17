@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { CiCalendar } from "react-icons/ci";
@@ -29,6 +29,7 @@ import "../pages/Task.css";
 const STATUS_COLORS = {
   pending: "#FEF3C7",
   in_progress: "#DBEAFE",
+  paused: "#FEF3C7",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -38,6 +39,7 @@ const STATUS_COLORS = {
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
   in_progress: "#1E40AF",
+  paused: "#92400E",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -110,7 +112,10 @@ const Taskby = () => {
     fetchTasks();
   }, [debouncedSearch, statusFilter, timeFilter]);
 
-  useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted'], fetchTasks);
+  useAutoRefresh(fetchTasks, {
+    events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
+    pollInterval: 30000,
+  });
 
   useEffect(() => {
     setOrderedItems(items);
@@ -176,16 +181,17 @@ const Taskby = () => {
     const map = {
       pending: "Pending",
       in_progress: "In Progress",
+      paused: "Paused",
       submitted: "Submitted",
       reopened: "Reopened",
       approved: "Approved",
-      rejected: "Rejected",
+      rejected: "Declined",
     };
     return map[status] || status;
   };
 
   const baseItems = orderedItems.length ? orderedItems : items;
-  const pendingStatuses = ["pending", "in_progress", "In Progress", "In-progress", "planned", "Planning", "Planned", "submitted", "reopened", "rejected"];
+  const pendingStatuses = ["pending", "in_progress", "paused", "In Progress", "In-progress", "planned", "Planning", "Planned", "submitted", "reopened", "rejected"];
 
   const filteredItems = baseItems.filter((item) => {
     if (statusFilter === "due_today") {
@@ -270,7 +276,7 @@ const Taskby = () => {
           <GoDotFill /> Approved
         </p>
         <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Rejected
+          <GoDotFill /> Declined
         </p>
       </div>
 
@@ -357,7 +363,7 @@ const Taskby = () => {
                         )}
                         {item.rejectedBy && (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#FEE2E2", color: "#991B1B", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 500 }}>
-                            Rejected: {item.rejectedBy.name}
+                            Declined: {item.rejectedBy.name}
                           </span>
                         )}
                       </div>

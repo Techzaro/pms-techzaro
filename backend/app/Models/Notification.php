@@ -56,6 +56,11 @@ class Notification extends Model
                 return;
             }
 
+            // Chat messages: in-app only — no email or push
+            if ($notification->related_module === 'chat') {
+                return;
+            }
+
             // Send email notification
             if (static::wantsChannel($notification, 'email')) {
                 try {

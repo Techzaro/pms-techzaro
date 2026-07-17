@@ -143,6 +143,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   const [projects, setProjects] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [displayUsers, setDisplayUsers] = useState([]);
+  const [projectEndDate, setProjectEndDate] = useState(null);
 
   const [form, setForm] = useState({
     project_id: projectId || "",
@@ -223,6 +224,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         else if (project?.members?.length) setDisplayUsers(ensureCurrentUser(project.members));
         else fetch(`${API_URL}/team-users`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
           .then((r) => (r.ok ? r.json() : { users: [] })).then((d) => { const u = ensureCurrentUser(Array.isArray(d) ? d : (d.users || [])); setAllUsers(u); setDisplayUsers(u); }).catch(() => {});
+        if (project?.end_date) setProjectEndDate(project.end_date);
       }).catch(() => {});
     } else {
       Promise.all([
@@ -346,6 +348,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
       if (validTemplates.length === 0) errors.recurring_templates = "Add at least one subtask template.";
       if (!form.start_date) errors.start_date = "Start date is required for recurring tasks.";
       if (!form.end_date) errors.end_date = "End date (due date) is required for recurring tasks.";
+    }
+    if (form.end_date && projectEndDate) {
+      const taskEnd = new Date(form.end_date);
+      const projEnd = new Date(projectEndDate);
+      if (taskEnd > projEnd) {
+        errors.end_date = "Task deadline cannot exceed the project deadline.";
+      }
     }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -580,7 +589,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                     <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
                     <input type="datetime-local" value={form.end_date}
                       onChange={(e) => { setIsDirty(true); setForm((prev) => ({ ...prev, end_date: e.target.value })); }}
-                      min={getNowDatetimeLocal()} />
+                      min={getNowDatetimeLocal()}
+                      max={projectEndDate ? toDatetimeLocal(projectEndDate) : undefined} />
+                    {projectEndDate && <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(projectEndDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
                   </div>
                 </div>
               </div>

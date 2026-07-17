@@ -53,7 +53,7 @@ const UserSelectDropdown = ({
 
   const formatRole = (role) => {
     if (!role) return "";
-    const map = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member" };
+    const map = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member", guest: "Guest" };
     return map[role] || role.charAt(0).toUpperCase() + role.slice(1);
   };
 

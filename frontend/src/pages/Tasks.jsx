@@ -7,13 +7,17 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { GoDotFill } from "react-icons/go";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
+import { CheckCircle2, Play } from "lucide-react";
+import { useNotification } from "../context/NotificationContext";
+import { showSuccessMessage } from "../utils/notify";
+import { publish } from "../utils/eventBus";
 import CreateTaskModal from "../components/CreateTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
@@ -26,6 +30,7 @@ import "../pages/Task.css";
 const STATUS_COLORS = {
   pending: "#FEF3C7",
   in_progress: "#DBEAFE",
+  paused: "#FEF3C7",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -35,6 +40,7 @@ const STATUS_COLORS = {
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
   in_progress: "#1E40AF",
+  paused: "#92400E",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -56,6 +62,7 @@ const PRIORITY_TEXT_COLORS = {
 /** Main Tasks page — renders tasks assigned to the current user by others. */
 function Tasks() {
   const navigate = useNavigate();
+  const { notify } = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [items, setItems] = useState([]);
@@ -107,7 +114,10 @@ function Tasks() {
     fetchTasks();
   }, [debouncedSearch, statusFilter]);
 
-  useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted'], fetchTasks);
+  useAutoRefresh(fetchTasks, {
+    events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
+    pollInterval: 30000,
+  });
 
   useEffect(() => {
     setOrderedItems(items);
@@ -178,10 +188,11 @@ function Tasks() {
     const map = {
       pending: "Pending",
       in_progress: "In Progress",
+      paused: "Paused",
       submitted: "Submitted",
       reopened: "Reopened",
       approved: "Approved",
-      rejected: "Rejected",
+      rejected: "Declined",
     };
     return map[status] || status;
   };
@@ -196,10 +207,60 @@ function Tasks() {
     );
   };
 
+  const handleAcknowledge = async (taskId) => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/acknowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "in_progress", ...data.task } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage("Task", "acknowledged");
+      } else {
+        notify.error(data.message || "Failed to acknowledge task.");
+      }
+    } catch {
+      notify.error("Failed to acknowledge task.");
+    }
+  };
 
+  const handleContinue = async (taskId) => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/continue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "in_progress", ...data.task } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage("Task", "resumed");
+      } else {
+        notify.error(data.message || "Failed to continue task.");
+      }
+    } catch {
+      notify.error("Failed to continue task.");
+    }
+  };
 
   const baseItems = orderedItems.length ? orderedItems : items;
-  const pendingStatuses = ["pending", "in_progress", "In Progress", "In-progress", "planned", "Planning", "Planned", "submitted", "reopened", "rejected"];
+  const pendingStatuses = ["pending", "in_progress", "paused", "In Progress", "In-progress", "planned", "Planning", "Planned", "submitted", "reopened", "rejected"];
   const filteredItems = statusFilter && statusFilter !== "due_today"
     ? items.filter((item) => {
         if (statusFilter === "pending") {
@@ -279,7 +340,7 @@ function Tasks() {
           <GoDotFill /> Approved
         </p>
         <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Rejected
+          <GoDotFill /> Declined
         </p>
       </div>
 
@@ -396,20 +457,36 @@ function Tasks() {
                       <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}><IoEyeOutline /></button>
                       {(() => {
                         const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
-                        const canSubmit = (item.status === "in_progress" || item.status === "reopened") && myPivotStatus !== "submitted";
-                        return canSubmit && (
-                        <div style={{ position: "relative", display: "inline-flex" }}>
-                          <button 
-                            className="action-icon-btn action-submit" 
-                            title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"} 
-                            disabled={item.pending_deliverables_count > 0} 
-                            onClick={() => !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item })} 
-                            style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
-                          >
-                            <LuSend />
-                          </button>
-                        </div>
-                        );
+                        if (item.status === "pending") {
+                          return (
+                            <button className="action-icon-btn action-submit" title="Acknowledge Task" onClick={() => handleAcknowledge(item.id)}>
+                              <CheckCircle2 size={18} />
+                            </button>
+                          );
+                        }
+                        if (item.status === "paused") {
+                          return (
+                            <button className="action-icon-btn action-submit" title="Continue Task" onClick={() => handleContinue(item.id)}>
+                              <Play size={18} />
+                            </button>
+                          );
+                        }
+                        if ((item.status === "in_progress" || item.status === "reopened") && myPivotStatus !== "submitted") {
+                          return (
+                            <div style={{ position: "relative", display: "inline-flex" }}>
+                              <button
+                                className="action-icon-btn action-submit"
+                                title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"}
+                                disabled={item.pending_deliverables_count > 0}
+                                onClick={() => !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item })}
+                                style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                              >
+                                <LuSend />
+                              </button>
+                            </div>
+                          );
+                        }
+                        return null;
                       })()}
                     </div>
                   </div>

@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -43,6 +43,7 @@ const PRIORITY_TEXT_COLORS = {
 const STATUS_COLORS = {
   pending: "#FEF3C7",
   in_progress: "#DBEAFE",
+  paused: "#FEF3C7",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -56,6 +57,7 @@ const STATUS_COLORS = {
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
   in_progress: "#1E40AF",
+  paused: "#92400E",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -163,7 +165,10 @@ function Projects() {
     fetchProjects();
   }, [statusFilter]);
 
-  useRefreshOnEvent(['project:created', 'project:updated', 'project:deleted'], fetchProjects);
+  useAutoRefresh(fetchProjects, {
+    events: ['project:created', 'project:updated', 'project:deleted', 'data:changed'],
+    pollInterval: 30000,
+  });
 
   useEffect(() => {
     const nextFilter = searchParams.get("filter") === "active" ? "active" : "";
@@ -240,7 +245,7 @@ function Projects() {
       submitted: "Submitted",
       reopened: "Reopened",
       approved: "Approved",
-      rejected: "Rejected",
+      rejected: "Declined",
     };
     return map[status] || status;
   };
@@ -312,7 +317,7 @@ function Projects() {
                 Pending: {filteredProjects.filter(p => p.status === "pending" || p.status === "submitted").length}
               </span>
               <span style={{ background: "#dcdcdc", color: "#991B1B", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-                Rejected: {filteredProjects.filter(p => p.status === "rejected" || p.status === "Pause").length}
+                Declined: {filteredProjects.filter(p => p.status === "rejected" || p.status === "Pause").length}
               </span>
             </div>
           </div>
@@ -383,7 +388,7 @@ function Projects() {
             <GoDotFill /> Approved
           </p>
           <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Rejected
+            <GoDotFill /> Declined
           </p>
         </div>
 
@@ -451,7 +456,7 @@ function Projects() {
                               <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "#DC2626", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
                                 {project.rejectedBy.name?.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
                               </span>
-                              Rejected: {project.rejectedBy.name}
+                              Declined: {project.rejectedBy.name}
                             </span>
                           )}
                         </div>

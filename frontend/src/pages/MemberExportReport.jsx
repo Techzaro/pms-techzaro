@@ -40,7 +40,7 @@ function formatDateShort(dateStr) {
 
 /** Capitalise and map raw status keys to display-friendly labels. */
 function formatStatus(status) {
-  const map = { pending: "Pending", submitted: "Submitted", reopened: "Reopened", approved: "Approved", rejected: "Rejected" };
+  const map = { pending: "Pending", submitted: "Submitted", reopened: "Reopened", approved: "Approved", rejected: "Declined" };
   return map[status] || status || "-";
 }
 
@@ -387,7 +387,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
         { label: "Submitted", count: delivSummary.submitted ?? 0, color: [245, 158, 11] },
         { label: "Approved", count: delivSummary.approved ?? 0, color: [34, 197, 94] },
         { label: "Pending Review", count: delivSummary.pending_review ?? 0, color: [245, 158, 11] },
-        { label: "Rejected", count: delivSummary.rejected ?? 0, color: [239, 68, 68] },
+        { label: "Declined", count: delivSummary.rejected ?? 0, color: [239, 68, 68] },
         { label: "Reopened", count: delivSummary.reopened ?? 0, color: [99, 102, 241] },
       ];
       delivItems.forEach((d, i) => {
@@ -714,7 +714,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                     { label: "Submitted", count: delivSummary.submitted ?? 0, color: "#f59e0b" },
                     { label: "Approved", count: delivSummary.approved ?? 0, color: "#22c55e" },
                     { label: "Pending Review", count: delivSummary.pending_review ?? 0, color: "#f59e0b" },
-                    { label: "Rejected", count: delivSummary.rejected ?? 0, color: "#ef4444" },
+                    { label: "Declined", count: delivSummary.rejected ?? 0, color: "#ef4444" },
                     { label: "Reopened", count: delivSummary.reopened ?? 0, color: "#6366f1" },
                   ].map((d) => (
                     <div key={d.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "2px 0", fontSize: 10 }}>

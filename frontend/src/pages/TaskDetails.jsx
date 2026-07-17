@@ -20,7 +20,9 @@ import {
   Copy,
   FolderOpen,
   Globe,
+  Pause,
   Pencil,
+  Play,
   Plus,
   Shield,
   Trash2,
@@ -52,7 +54,8 @@ function fileUrl(url) {
   return API_BASE + url;
 }
 import { publish } from "../utils/eventBus";
-import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
+import { useSubmit } from "../hooks/useSubmit";
 import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
 import { useActivityHighlight } from "../hooks/useActivityHighlight";
 import "../components/layout/ActivityHighlight.css";
@@ -75,10 +78,11 @@ function statusLabel(status) {
   const s = (status || "").toLowerCase();
   if (s === "pending") return "Pending";
   if (s === "in_progress" || s === "acknowledged") return "In Progress";
+  if (s === "paused") return "Paused";
   if (s === "submitted") return "Submitted";
   if (s === "reopened") return "Reopened";
   if (s === "approved") return "Approved";
-  if (s === "rejected") return "Rejected";
+  if (s === "rejected") return "Declined";
   return status || "Pending";
 }
 
@@ -88,6 +92,7 @@ function statusColor(status) {
   if (s === "approved") return "#166534";
   if (s === "pending") return "#92400E";
   if (s === "in_progress" || s === "acknowledged") return "#1E40AF";
+  if (s === "paused") return "#B45309";
   if (s === "reopened") return "#92400E";
   if (s === "submitted") return "#1E40AF";
   if (s === "rejected") return "#991B1B";
@@ -100,6 +105,7 @@ function statusBgColor(status) {
   if (s === "approved") return "#DCFCE7";
   if (s === "pending") return "#FEF3C7";
   if (s === "in_progress" || s === "acknowledged") return "#DBEAFE";
+  if (s === "paused") return "#FEF3C7";
   if (s === "reopened") return "#FEF3C7";
   if (s === "submitted") return "#DBEAFE";
   if (s === "rejected") return "#FEE2E2";
@@ -319,7 +325,10 @@ function TaskDetails() {
     if (taskId) fetchTask(true);
   }, [taskId, fetchTask]);
 
-  useRefreshOnEvent(["task:updated", "task:deleted", "deliverable:created", "deliverable:updated", "deliverable:deleted"], () => fetchTask(false));
+  useAutoRefresh(() => fetchTask(false), {
+    events: ["task:updated", "task:deleted", "deliverable:created", "deliverable:updated", "deliverable:deleted", "data:changed"],
+    pollInterval: 30000,
+  });
 
   const currentIdx = taskIds.findIndex(
     (id) => String(id) === String(taskId)
@@ -352,9 +361,16 @@ function TaskDetails() {
   const isCreator = task?.is_creator ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10));
   const isAssignee = task?.is_assignee ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)));
   const canEdit = task?.can_edit ?? (task && currentUser && isCreator && task?.status?.toLowerCase() !== "approved");
-  const canSubmitTask = task?.can_submit ?? (task && currentUser && isAssignee && ["pending", "in_progress", "reopened"].includes(task?.status));
+  const canSubmitTask = task?.can_submit ?? (task && currentUser && isAssignee && ["pending", "in_progress", "reopened", "paused"].includes(task?.status));
   const canAcknowledge = task && currentUser && isAssignee && task?.status === "pending";
+  const canPause = task && currentUser && isAssignee && task?.status === "in_progress";
+  const canContinue = task && currentUser && isAssignee && task?.status === "paused";
   const isApproved = task?.status?.toLowerCase() === "approved";
+
+  const { submitting: acknowledging, run: runAcknowledge } = useSubmit();
+  const { submitting: pausing, run: runPause } = useSubmit();
+  const { submitting: continuing, run: runContinue } = useSubmit();
+  const { submitting: deleting, run: runDelete } = useSubmit();
 
   const fetchAccessCredentials = useCallback(async () => {
     if (!task) return;
@@ -533,38 +549,90 @@ function TaskDetails() {
 
   const confirmDeleteTask = async () => {
     setDeleteTaskConfirmOpen(false);
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}`, {
-        method: "DELETE",
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        _notifHandled: true,
-      });
-      if (res.ok) { publish('task:deleted', { id: taskId }); publish('data:changed', { type: 'task', action: 'deleted' }); showSuccessMessage("Task", "deleted"); setTimeout(() => navigate(rolePath("tasks")), 800); }
-      else notify.error("Failed to delete task.");
-    } catch { notify.error("Failed to delete task."); }
+    await runDelete(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/tasks/${taskId}`, {
+          method: "DELETE",
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          _notifHandled: true,
+        });
+        if (res.ok) { publish('task:deleted', { id: taskId }); publish('data:changed', { type: 'task', action: 'deleted' }); showSuccessMessage("Task", "deleted"); setTimeout(() => navigate(rolePath("tasks")), 800); }
+        else notify.error("Failed to delete task.");
+      } catch { notify.error("Failed to delete task."); }
+    });
   };
 
   const handleAcknowledge = async () => {
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/acknowledge`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        _notifHandled: true,
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setTask(data.task);
-        publish('task:updated', { id: taskId, status: 'in_progress' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-        showSuccessMessage("Task", "acknowledged");
-      } else {
-        notify.error(data.message || "Failed to acknowledge task.");
+    await runAcknowledge(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/tasks/${taskId}/acknowledge`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setTask(data.task);
+          publish('task:updated', { id: taskId, status: 'in_progress' });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage("Task", "acknowledged");
+        } else {
+          notify.error(data.message || "Failed to acknowledge task.");
+        }
+      } catch {
+        notify.error("Failed to acknowledge task.");
       }
-    } catch {
-      notify.error("Failed to acknowledge task.");
-    }
+    });
+  };
+
+  const handlePause = async () => {
+    await runPause(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/tasks/${taskId}/pause`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setTask(data.task);
+          publish('task:updated', { id: taskId, status: 'paused' });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage("Task", "paused");
+        } else {
+          notify.error(data.message || "Failed to pause task.");
+        }
+      } catch {
+        notify.error("Failed to pause task.");
+      }
+    });
+  };
+
+  const handleContinue = async () => {
+    await runContinue(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/tasks/${taskId}/continue`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setTask(data.task);
+          publish('task:updated', { id: taskId, status: 'in_progress' });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage("Task", "resumed");
+        } else {
+          notify.error(data.message || "Failed to continue task.");
+        }
+      } catch {
+        notify.error("Failed to continue task.");
+      }
+    });
   };
 
   const handleStatusChange = async (newStatus) => {
@@ -612,24 +680,36 @@ function TaskDetails() {
                         <Pencil size={15} strokeWidth={2.5} />
                         Edit
                       </button>
-                      <button className="td-btn-danger" onClick={handleDeleteTask}>
-                        Delete
+                      <button className="td-btn-danger" onClick={handleDeleteTask} disabled={deleting} style={deleting ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
+                        {deleting ? "Deleting..." : "Delete"}
                       </button>
                     </>
                   )}
                   {canAcknowledge && (
-                    <button className="td-btn-primary" onClick={handleAcknowledge}>
+                    <button className="td-btn-primary" onClick={handleAcknowledge} disabled={acknowledging} style={acknowledging ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
                       <CheckCircle2 size={15} />
-                      Acknowledge
+                      {acknowledging ? "Acknowledging..." : "Acknowledge"}
                     </button>
                   )}
-                  {isAssignee && ["in_progress", "reopened"].includes(task?.status) && (
+                  {canPause && (
+                    <button className="td-btn-primary" onClick={handlePause} disabled={pausing} style={{ backgroundColor: pausing ? "#9CA3AF" : "#D97706", borderColor: pausing ? "#9CA3AF" : "#D97706", opacity: pausing ? 0.7 : 1, cursor: pausing ? "not-allowed" : "pointer" }}>
+                      <Pause size={15} />
+                      {pausing ? "Pausing..." : "Pause"}
+                    </button>
+                  )}
+                  {canContinue && (
+                    <button className="td-btn-primary" onClick={handleContinue} disabled={continuing} style={continuing ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
+                      <Play size={15} />
+                      {continuing ? "Resuming..." : "Continue"}
+                    </button>
+                  )}
+                  {isAssignee && ["in_progress", "reopened", "paused"].includes(task?.status) && (
                     <button
                       className="td-btn-primary"
-                      disabled={!canSubmitTask}
-                      title={!canSubmitTask ? "Submit all subtasks first" : ""}
+                      disabled={task?.status === "paused"}
+                      title={task?.status === "paused" ? "Continue the task first to submit" : ""}
                       onClick={() => setTaskSubmitModalOpen(true)}
-                      style={!canSubmitTask ? { opacity: 0.5, cursor: "not-allowed" } : {}}
+                      style={task?.status === "paused" ? { opacity: 0.5, cursor: "not-allowed" } : {}}
                     >
                       <LuSend size={15} />
                       {task.status === "reopened" ? "Resubmit Task" : "Submit Task"}
@@ -697,6 +777,14 @@ function TaskDetails() {
 
               {/* TAB CONTENT */}
               <div className="td-content">
+                {/* Heading based on source page */}
+                <div style={{ marginBottom: "16px", marginTop: "4px", paddingLeft: "4px" }}>
+                  <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#111827", margin: 0 }}>
+                    {location.state?.from === "taskby" && "Assigned by You"}
+                    {location.state?.from === "tasks" && "Assigned to You"}
+                    {location.state?.from === "self-tasks" && "Self Tasks"}
+                  </h2>
+                </div>
                 {/* TABS */}
                 <div className="td-tabs">
                   {[
@@ -980,11 +1068,13 @@ function TaskDetails() {
                               {item.action === 'created' && '📝'}
                               {item.action === 'submitted' && '📤'}
                               {item.action === 'acknowledged' && '👍'}
+                              {item.action === 'paused' && '⏸️'}
+                              {item.action === 'continued' && '▶️'}
                               {item.action === 'approved' && '✅'}
                               {item.action === 'rejected' && '❌'}
                               {item.action === 'reopened' && '🔄'}
                               {item.action === 'field_changed' && '✏️'}
-                              {!['created','submitted','acknowledged','approved','rejected','reopened','field_changed'].includes(item.action) && '📌'}
+                              {!['created','submitted','acknowledged','paused','continued','approved','rejected','reopened','field_changed'].includes(item.action) && '📌'}
                             </>
                           )}
                           {item.type === 'change' && '✏️'}

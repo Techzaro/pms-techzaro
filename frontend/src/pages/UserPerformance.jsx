@@ -21,7 +21,7 @@ import "../components/Charts.css";
 import "../pages/UserPerformance.css";
 import "../pages/Task.css";
 import { useApiQuery } from "../hooks/useApi";
-import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { getUser, rolePath, authToken } from "../utils/auth";
 import { formatDateTime } from "../utils/formatDateTime";
 import API_URL from "../config/api";
@@ -80,6 +80,7 @@ const ROLE_LABEL = { admin: "Admin", manager: "Manager", team_lead: "Team Lead",
 const STATUS_COLORS = {
   pending: "#FEF3C7",
   in_progress: "#DBEAFE",
+  paused: "#FEF3C7",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -89,6 +90,7 @@ const STATUS_COLORS = {
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
   in_progress: "#1E40AF",
+  paused: "#92400E",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -221,7 +223,7 @@ function UserPerformance() {
     fetchTasks();
   }, [fetchTasks]);
 
-  useRefreshOnEvent(['task:created', 'task:updated', 'task:deleted'], fetchTasks);
+  useAutoRefresh(fetchTasks, { events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'], pollInterval: 30000 });
 
   useEffect(() => {
     setOrderedItems(items);
@@ -232,7 +234,7 @@ function UserPerformance() {
   };
 
   const baseItems = orderedItems.length ? orderedItems : items;
-  const pendingStatuses = ["pending", "in_progress", "In Progress", "In-progress", "planned", "Planning", "Planned", "submitted", "reopened", "rejected"];
+  const pendingStatuses = ["pending", "in_progress", "paused", "In Progress", "In-progress", "planned", "Planning", "Planned", "submitted", "reopened", "rejected"];
 
   const filteredItems = baseItems.filter((item) => {
     if (statusFilter === "due_today") {
@@ -255,10 +257,11 @@ function UserPerformance() {
     const map = {
       pending: "Pending",
       in_progress: "In Progress",
+      paused: "Paused",
       submitted: "Submitted",
       reopened: "Reopened",
       approved: "Approved",
-      rejected: "Rejected",
+      rejected: "Declined",
     };
     return map[status] || status;
   };
@@ -396,7 +399,7 @@ function UserPerformance() {
               <GoDotFill /> Approved
             </p>
             <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-              <GoDotFill /> Rejected
+              <GoDotFill /> Declined
             </p>
           </div>
 

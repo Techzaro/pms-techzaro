@@ -14,8 +14,9 @@ import Breadcrumb from "../components/Breadcrumb";
 import { authToken, rolePath, getUser, normalizeRole } from "../utils/auth";
 import { getNotificationDestination } from "../utils/navigation";
 import { formatDateTimeInline } from "../utils/formatDateTime";
-import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { publish } from "../utils/eventBus";
+import { showDesktopNotification, getNotificationPermission } from "../utils/browserNotification";
 import API_URL from "../config/api";
 import "./Notifications.css";
 
@@ -156,6 +157,49 @@ function Notifications() {
   const [total, setTotal] = useState(0);
   const [typeFilterOpen, setTypeFilterOpen] = useState(false);
   const typeDropdownRef = useRef(null);
+  const lastSeenIdRef = useRef(0);
+
+  // Desktop notification polling - shows new notifications as desktop notifications
+  useEffect(() => {
+    const token = authToken();
+    if (!token) return;
+
+    const checkForNewNotifications = async () => {
+      if (getNotificationPermission() !== 'granted') return;
+      if (!document.hidden) return; // Only show desktop notifications when tab is in background
+      try {
+        const params = new URLSearchParams();
+        if (lastSeenIdRef.current > 0) {
+          params.set('after_id', lastSeenIdRef.current);
+        }
+        const url = `${API_URL}/notifications/latest?t=${Date.now()}${params.toString() ? '&' + params.toString() : ''}`;
+        const res = await fetch(url, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          skipLoader: true,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const newNotifs = data.notifications || [];
+          newNotifs.forEach((n) => {
+            showDesktopNotification(n);
+          });
+          // Update last seen ID
+          if (newNotifs.length > 0) {
+            const maxId = Math.max(...newNotifs.map(n => n.id));
+            if (maxId > lastSeenIdRef.current) {
+              lastSeenIdRef.current = maxId;
+            }
+          }
+        }
+      } catch {}
+    };
+
+    // Initial check
+    checkForNewNotifications();
+    const interval = setInterval(checkForNewNotifications, 15000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const NOTIFICATION_TYPES = [
     { value: "", label: "All Types" },
@@ -169,13 +213,13 @@ function Notifications() {
     { value: "task_submitted", label: "Task Submitted" },
     { value: "task_completed", label: "Task Completed" },
     { value: "task_approved", label: "Task Approved" },
-    { value: "task_rejected", label: "Task Rejected" },
+    { value: "task_rejected", label: "Task Declined" },
     { value: "task_reopened", label: "Task Reopened" },
     { value: "deliverable_assigned", label: "Subtask Assigned" },
     { value: "deliverable_updated", label: "Subtask Updated" },
     { value: "deliverable_submitted", label: "Subtask Submitted" },
     { value: "deliverable_approved", label: "Subtask Approved" },
-    { value: "deliverable_rejected", label: "Subtask Rejected" },
+    { value: "deliverable_rejected", label: "Subtask Declined" },
     { value: "deliverable_reopened", label: "Subtask Reopened" },
     { value: "deliverable_added", label: "Subtask Added" },
     { value: "event_created", label: "Event Created" },
@@ -233,7 +277,10 @@ function Notifications() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [typeFilterOpen]);
 
-  useRefreshOnEvent(["data:changed"], () => fetchNotifications(1, activeTab, search));
+  useAutoRefresh(() => fetchNotifications(1, activeTab, search), {
+    events: ["data:changed", "task:created", "task:updated", "task:deleted"],
+    pollInterval: 20000,
+  });
 
   const handleSearch = (q) => {
     setSearch(q);

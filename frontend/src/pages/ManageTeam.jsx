@@ -35,7 +35,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
-import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
 import API_URL from "../config/api";
 import Pagination from "../components/Pagination";
 import { useNotification } from "../context/NotificationContext";
@@ -175,7 +175,7 @@ function ManageTeam() {
   }, []);
 
   // Auto-refresh teams when data changes elsewhere in the app
-  useRefreshOnEvent(["data:changed"], fetchTeams);
+  useAutoRefresh(fetchTeams, { events: ["data:changed"], pollInterval: 60000 });
 
   // Sync selectedTeam from URL search params
   useEffect(() => {
@@ -186,7 +186,6 @@ function ManageTeam() {
   }, [searchParams]);
 
   // ... rest of the functions (handleSetLeader, handleRemoveMember, etc.)
-  useRefreshOnEvent(["data:changed"], fetchTeams);
 
   const handleSetLeader = async (teamId, memberId) => {
     const member = teams.flatMap(t => t.members).find(m => Number(m.id) === Number(memberId));
