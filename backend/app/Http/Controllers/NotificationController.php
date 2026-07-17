@@ -176,6 +176,52 @@ class NotificationController extends Controller
     }
 
     /**
+     * Get the latest unread notifications for desktop notification display.
+     *
+     * Returns the most recent unread notifications (up to 5) for showing
+     * as native desktop/browser notifications. Only returns notifications
+     * that have a title and message (not generic count-based).
+     *
+     * @param  Request  $request  Query parameter: after_id (optional) - only return notifications newer than this ID.
+     * @return JsonResponse JSON response with notifications array.
+     */
+    public function latest(Request $request)
+    {
+        $user = $request->user();
+
+        $query = Notification::where('user_id', $user->id)
+            ->where('is_read', false)
+            ->where(function ($q) use ($user) {
+                $q->whereNull('sender_user_id')
+                    ->orWhere('sender_user_id', '!=', $user->id);
+            })
+            ->with('sender:id,name')
+            ->latest();
+
+        if ($request->filled('after_id')) {
+            $query->where('id', '>', $request->input('after_id'));
+        }
+
+        $notifications = $query->limit(5)->get();
+
+        return response()->json([
+            'notifications' => $notifications->map(function ($n) {
+                return [
+                    'id' => $n->id,
+                    'type' => $n->type,
+                    'title' => $n->title,
+                    'message' => $n->message,
+                    'link' => $n->link,
+                    'related_module' => $n->related_module,
+                    'related_id' => $n->related_id,
+                    'sender' => $n->sender ? ['id' => $n->sender->id, 'name' => $n->sender->name] : null,
+                    'created_at' => $n->created_at,
+                ];
+            }),
+        ]);
+    }
+
+    /**
      * Mark all unread notifications as read for the authenticated user.
      *
      * @param  Request  $request  The incoming HTTP request.

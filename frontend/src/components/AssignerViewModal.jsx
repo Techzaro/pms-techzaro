@@ -117,8 +117,8 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
   // Confirmation dialog messages for each action type
   const confirmMessages = {
     approve: "Are you sure you want to approve this subtask?",
-    reject: "Are you sure you want to reject this subtask? The assignee will not be able to resubmit.",
-    reopen: "Are you sure you want to reject and reopen this subtask?",
+    reject: "Are you sure you want to decline this subtask? The assignee will not be able to resubmit.",
+    reopen: "Are you sure you want to decline and reopen this subtask?",
   };
 
   // Color codes for confirmation dialog confirm button
@@ -346,10 +346,10 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
                 Approve
               </button>
               <button className="avm-action-btn avm-reject-btn" disabled={acting} onClick={() => setConfirmDialog({ open: true, type: "reject" })}>
-                Reject
+                Decline
               </button>
               <button className="avm-action-btn avm-reopen-btn" disabled={acting} onClick={() => setReopenDialog(true)}>
-                Reject & Reopen
+                Decline & Reopen
               </button>
             </div>
           )}
@@ -364,9 +364,9 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
           setConfirmDialog({ open: false, type: null });
           handleAction(type);
         }}
-        title={confirmDialog.type === "approve" ? "Approve Subtask" : confirmDialog.type === "reject" ? "Reject Subtask" : "Reject & Reopen"}
+        title={confirmDialog.type === "approve" ? "Approve Subtask" : confirmDialog.type === "reject" ? "Decline Subtask" : "Decline & Reopen"}
         message={confirmMessages[confirmDialog.type] || ""}
-        confirmText={confirmDialog.type === "approve" ? "Approve" : confirmDialog.type === "reject" ? "Reject" : "Reject & Reopen"}
+        confirmText={confirmDialog.type === "approve" ? "Approve" : confirmDialog.type === "reject" ? "Decline" : "Decline & Reopen"}
         confirmColor={confirmColors[confirmDialog.type] || "#4F46E5"}
       />
 

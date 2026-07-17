@@ -13,7 +13,7 @@ import { useNavigate } from "react-router-dom";
 import API_URL from "../../config/api";
 import { authToken, getCurrentRole, getUser, setUser, clearSession, getToken, rolePath, normalizeRole } from "../../utils/auth";
 import { subscribe } from "../../utils/eventBus";
-import { requestNotificationPermission, showBrowserNotification } from "../../utils/browserNotification";
+import { requestNotificationPermissionAsync, showDesktopNotification, getNotificationPermission } from "../../utils/browserNotification";
 import { initFirebase } from "../../utils/firebase";
 import { formatDateTimeInline } from "../../utils/formatDateTime";
 import { getNotificationDestination } from "../../utils/navigation";
@@ -41,13 +41,13 @@ function Header() {
   const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth <= 1200);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const prevCountRef = useRef(0);
+  const initialPollDoneRef = useRef(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [notifPermission, setNotifPermission] = useState(() => getNotificationPermission());
 
-  // Request browser notification permission and initialise Firebase on mount
+  // Initialise Firebase on mount
   useEffect(() => {
-    requestNotificationPermission();
     initFirebase();
   }, []);
 
@@ -105,6 +105,29 @@ function Header() {
 
   const toggleProfileModal = () =>
     setIsProfileOpen((prev) => !prev);
+
+  /** Request notification permission on user click (required by browsers) */
+  const handleEnableNotifications = async () => {
+    const current = getNotificationPermission();
+
+    if (current === 'denied') {
+      // Browser ne permission deny kar di hai - manually settings mein jaake enable karna padega
+      alert(
+        'Desktop notifications are blocked by your browser.\n\n' +
+        'To enable them:\n' +
+        '1. Click the lock/icon in the address bar\n' +
+        '2. Set Notifications to "Allow"\n' +
+        '3. Refresh this page'
+      );
+      return;
+    }
+
+    const result = await requestNotificationPermissionAsync();
+    setNotifPermission(result);
+    if (result === 'granted') {
+      console.log('[PMS Notifications] Desktop notifications enabled!');
+    }
+  };
 
   // Debounce search input – only trigger after 300ms of inactivity
   useEffect(() => {
@@ -248,7 +271,7 @@ function Header() {
       .catch(() => {});
   }, []);
 
-  /** Fetch unread notification count; triggers a browser notification on increase. */
+  /** Fetch unread notification count; triggers desktop notifications on increase. */
   const fetchNotifications = useCallback(() => {
     const token = authToken();
     if (!token) return;
@@ -260,12 +283,22 @@ function Header() {
       .then((data) => {
         const newCount = data.unread_count || 0;
         setUnreadCount((prev) => {
-          if (newCount > prev && prev > 0) {
-            showBrowserNotification('New PMS Notification', {
-              body: `You have ${newCount} unread notification${newCount > 1 ? 's' : ''}`,
-              url: window.location.href,
-            });
+          const perm = getNotificationPermission();
+          if (newCount > prev && perm === 'granted' && initialPollDoneRef.current && document.hidden) {
+            fetch(`${API_URL}/notifications/latest?t=${Date.now()}`, {
+              headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+              skipLoader: true,
+            })
+              .then((res) => (res.ok ? res.json() : { notifications: [] }))
+              .then((notifData) => {
+                const latestNotifs = notifData.notifications || [];
+                latestNotifs.forEach((n) => {
+                  showDesktopNotification(n);
+                });
+              })
+              .catch(() => {});
           }
+          initialPollDoneRef.current = true;
           return newCount;
         });
       })
@@ -492,6 +525,32 @@ function Header() {
           >
             + Project
           </button>
+          )}
+
+          {/* Enable desktop notifications button - only shows when permission not granted */}
+          {notifPermission !== 'granted' && 'Notification' in window && (
+            <button
+              className="header-notif-link"
+              onClick={handleEnableNotifications}
+              title={notifPermission === 'denied' ? 'Notifications blocked - click for instructions' : 'Enable desktop notifications'}
+              style={{ cursor: 'pointer', padding: '6px 10px', borderRadius: 8, border: notifPermission === 'denied' ? '1px solid #f87171' : '1px solid #fbbf24', background: notifPermission === 'denied' ? '#fee2e2' : '#fef3c7', color: notifPermission === 'denied' ? '#991b1b' : '#92400e', fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={notifPermission === 'denied' ? '#991b1b' : '#92400e'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {notifPermission === 'denied' ? (
+                  <>
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </>
+                ) : (
+                  <>
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </>
+                )}
+              </svg>
+              {notifPermission === 'denied' ? 'Notifications Blocked' : 'Enable Notifications'}
+            </button>
           )}
 
           {/* Notification bell with unread badge */}

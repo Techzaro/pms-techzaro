@@ -86,7 +86,7 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
     <div className="rd-overlay">
       <div className="rd-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="rd-header">
-          <h2 className="rd-title">Reject & Reopen Subtask</h2>
+          <h2 className="rd-title">Decline & Reopen Subtask</h2>
           <p className="rd-subtitle">{subtask.title}</p>
         </div>
 
@@ -153,7 +153,7 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
         <div className="rd-footer">
           <button className="rd-cancel-btn" onClick={handleClose} disabled={submitting}>Cancel</button>
           <LoadingButton className="rd-submit-btn" onClick={handleSubmit} loading={submitting}>
-            Reject & Reopen
+            Decline & Reopen
           </LoadingButton>
         </div>
       </div>

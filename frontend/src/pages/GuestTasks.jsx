@@ -1,30 +1,30 @@
 /**
- * Tasks page component — "Tasks Assigned To You".
+ * GuestTasks page component — Tasks Assigned To Guest.
  *
- * Displays tasks that have been assigned to the current user
- * by others.  Provides search with debounce, status filtering, time-range
- * filtering, drag-and-drop reordering and pagination.
+ * Displays tasks that have been assigned to the current guest user
+ * by admin/manager. Provides search with debounce, status filtering,
+ * time-range filtering, drag-and-drop reordering and pagination.
+ * Same action pattern as Tasks Assigned To You (acknowledge/pause/continue/submit).
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { GoDotFill } from "react-icons/go";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import { CheckCircle2, Play } from "lucide-react";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { publish } from "../utils/eventBus";
-import CreateTaskModal from "../components/CreateTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
-import { formatDateTimeInline } from "../utils/formatDateTime";
+import { formatDateTime } from "../utils/formatDateTime";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
@@ -59,12 +59,11 @@ const PRIORITY_TEXT_COLORS = {
   Low: "#166534",
 };
 
-/** Main Tasks page — renders tasks assigned to the current user by others. */
-function Tasks() {
+/** Guest Tasks page — renders tasks assigned to the current guest user. */
+function GuestTasks() {
   const navigate = useNavigate();
   const { notify } = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [showTaskModal, setShowTaskModal] = useState(false);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -89,7 +88,7 @@ function Tasks() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  /** Fetch tasks assigned to the current user from the API. */
+  /** Fetch tasks assigned to the current guest user from the API. */
   const fetchTasks = () => {
     setLoading(true);
     const token = authToken();
@@ -158,11 +157,6 @@ function Tasks() {
     }
   };
 
-  const handleModalClose = (refresh) => {
-    setShowTaskModal(false);
-    if (refresh) fetchTasks();
-  };
-
   const getInitials = (name) => {
     if (!name) return "??";
     return name.split(" ").map((w) => w[0]).join("").substring(0, 2).toUpperCase();
@@ -181,7 +175,7 @@ function Tasks() {
   };
 
   const formatDate = (dateStr) => {
-    return formatDateTimeInline(dateStr);
+    return formatDateTime(dateStr);
   };
 
   const formatStatus = (status) => {
@@ -276,7 +270,7 @@ function Tasks() {
   const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   const breadcrumbs = [
-    { label: "Tasks", path: rolePath("tasks") },
+    { label: "Tasks", path: rolePath("guest-tasks") },
     { label: "Assigned To You" },
   ];
 
@@ -286,7 +280,7 @@ function Tasks() {
       <div className="Task">
         <div className="task-text">
           <h3>Tasks Assigned To You</h3>
-          <p>Manage and track your tasks and projects</p>
+          <p>View and manage tasks assigned to you</p>
           <div className="task-count-badge" style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
             <span style={{ background: "#dedfe0", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
               Total: {totalCount} items
@@ -306,20 +300,8 @@ function Tasks() {
               <option value="180">Last 6 Months</option>
             </select>
           </div>
-
-          <button
-            className="export task-btn--mobile"
-            onClick={() => setShowTaskModal(true)}
-            style={{ whiteSpace: "nowrap" }}
-          >
-            + Task
-          </button>
         </div>
       </div>
-
-      {showTaskModal && (
-        <CreateTaskModal onClose={handleModalClose} />
-      )}
 
       {/* STATUS FILTERS */}
       <div className="task-progress">
@@ -364,18 +346,18 @@ function Tasks() {
           <div className="status-column">Status</div>
           <div>Progress</div>
           <div className="priority-column">Priority</div>
-          <div className="date-column">Start & Due Date</div>
+          <div className="date-column">Date</div>
           <div>Action</div>
         </div>
 
         {loading ? (
           <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
         ) : filteredItems.length === 0 ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
+          <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No tasks assigned to you</div>
         ) : (
-          <SortableTableWrapper 
-            items={paginatedItems.map((i) => ({ ...i, sortableId: `task-${i.id}` }))} 
-            onReorder={(reordered) => handleTaskListReorder(reordered)} 
+          <SortableTableWrapper
+            items={paginatedItems.map((i) => ({ ...i, sortableId: `task-${i.id}` }))}
+            onReorder={(reordered) => handleTaskListReorder(reordered)}
             idKey="sortableId"
             as="div"
             handleOnly
@@ -396,16 +378,11 @@ function Tasks() {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="col-task-name">
                     <div className="task-title">{item.title}</div>
-                    {item.project && (
-                      <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
-                        {item.project.title}
-                      </Link>
-                    )}
                   </div>
-                  
+
                   <div className="col-status">
                     <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
                       <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
@@ -421,7 +398,7 @@ function Tasks() {
                       <div style={{ fontSize: "10px", color: "#92400E", marginTop: "2px" }}>by {item.reopenedBy.name}</div>
                     )}
                   </div>
-                  
+
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
                     <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
                       {item.deliverables_progress || 0}%
@@ -433,14 +410,14 @@ function Tasks() {
                       {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
                     </div>
                   </div>
-                  
+
                   <div className="col-priority">
                     <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
                       <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
                       {item.priority}
                     </span>
                   </div>
-                  
+
                   <div className="col-due-date">
                     <div className="date-box">
                       <div style={{ whiteSpace: "pre-line" }}>
@@ -456,10 +433,10 @@ function Tasks() {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="col-action">
                     <div className="action-btns">
-                      <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}><IoEyeOutline /></button>
+                      <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}><IoEyeOutline /></button>
                       {(() => {
                         const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
                         if (item.status === "pending") {
@@ -507,7 +484,7 @@ function Tasks() {
       )}
 
       <SubmitTaskModal
-        key={`tasks-submit-${submitTaskModal.task?.id || "none"}`}
+        key={`guest-tasks-submit-${submitTaskModal.task?.id || "none"}`}
         isOpen={submitTaskModal.open}
         onClose={() => setSubmitTaskModal({ open: false, task: null })}
         task={submitTaskModal.task}
@@ -518,4 +495,4 @@ function Tasks() {
   );
 }
 
-export default Tasks;
+export default GuestTasks;

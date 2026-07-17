@@ -380,10 +380,13 @@ export default function EditTaskModal({ task, onClose }) {
 
   /**
    * Uploads pending file attachments and links to the task.
+   * Throws if any uploads fail so the caller can handle the error.
    */
   const uploadAttachments = async () => {
     const token = authToken();
     const errors = [];
+
+    if (pendingFiles.length === 0 && links.length === 0) return;
 
     const fileResults = await Promise.allSettled(
       pendingFiles.map((file) => {
@@ -431,7 +434,7 @@ export default function EditTaskModal({ task, onClose }) {
     });
 
     if (errors.length > 0) {
-      notify.error(`Some attachments failed: ${errors.join("; ")}`);
+      throw new Error(`Attachments failed: ${errors.join("; ")}`);
     }
   };
 
@@ -440,6 +443,15 @@ export default function EditTaskModal({ task, onClose }) {
    */
   const handleSubmit = async (e) => {
     if (e?.preventDefault) e.preventDefault();
+    // Validate deadline against project deadline
+    if (form.end_date && task.project?.end_date) {
+      const taskEnd = new Date(form.end_date);
+      const projEnd = new Date(task.project.end_date);
+      if (taskEnd > projEnd) {
+        notify.error("Task deadline cannot exceed the project deadline.");
+        return;
+      }
+    }
     await run(async () => {
       try {
         let body;
@@ -821,7 +833,9 @@ export default function EditTaskModal({ task, onClose }) {
                     value={form.end_date}
                     onChange={(e) => { setIsDirty(true); setForm((prev) => ({ ...prev, end_date: e.target.value })); }}
                     min={getNowDatetimeLocal()}
+                    max={task.project?.end_date ? toDatetimeLocal(task.project.end_date) : undefined}
                   />
+                  {task.project?.end_date && <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(task.project.end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
                 </div>
               </div>
             </div>

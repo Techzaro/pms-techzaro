@@ -8,6 +8,7 @@ use App\Models\Project;
 use App\Models\ProjectChange;
 use App\Models\ProjectFile;
 use App\Models\ProjectAccessCredential;
+use App\Models\ProjectMilestone;
 use App\Models\ProjectVisibility;
 use App\Models\ProjectWorkflowEvent;
 use App\Models\Team;
@@ -1101,6 +1102,52 @@ class ProjectController extends Controller
                 ]);
             }
         }
+    }
+
+    /**
+     * Toggle milestone achievement status.
+     *
+     * Admins and managers can mark a milestone as achieved or unachieved.
+     * Sets completed_at timestamp when achieving, clears it when unachieving.
+     */
+    public function toggleMilestoneAchieve(Request $request, Project $project, ProjectMilestone $milestone)
+    {
+        $user = $request->user();
+
+        if (! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Only admins and managers can update milestone status'], 403);
+        }
+
+        if ((int) $milestone->project_id !== (int) $project->id) {
+            return response()->json(['success' => false, 'message' => 'Milestone does not belong to this project'], 404);
+        }
+
+        $isAchieved = $milestone->status === 'completed';
+
+        if ($isAchieved) {
+            $milestone->update([
+                'status' => 'planned',
+                'completed_at' => null,
+            ]);
+        } else {
+            $milestone->update([
+                'status' => 'completed',
+                'completed_at' => now(),
+            ]);
+        }
+
+        ProjectWorkflowEvent::create([
+            'project_id' => $project->id,
+            'user_id' => $user->id,
+            'action' => 'field_changed',
+            'comment' => $isAchieved ? 'Milestone "'.$milestone->title.'" unachieved' : 'Milestone "'.$milestone->title.'" achieved',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => $isAchieved ? 'Milestone unachieved' : 'Milestone achieved',
+            'milestone' => $milestone->fresh(),
+        ]);
     }
 
     /**

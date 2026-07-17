@@ -10,8 +10,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
-import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
-import { Link, useSearchParams } from "react-router-dom";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
+import { useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { authToken, rolePath } from "../utils/auth";
@@ -88,7 +88,7 @@ function DeliveriesByYou() {
     fetchSubtasks();
   }, [search, statusFilter, timeFilter]);
 
-  useRefreshOnEvent(['deliverable:updated', 'deliverable:created', 'deliverable:deleted'], fetchSubtasks);
+  useAutoRefresh(fetchSubtasks, { events: ['deliverable:updated', 'deliverable:created', 'deliverable:deleted', 'data:changed'], pollInterval: 30000 });
 
   useEffect(() => {
     const selectedId = searchParams.get("selectedDeliverable");
@@ -171,7 +171,7 @@ function DeliveriesByYou() {
       pending: "Pending",
       submitted: "Submitted",
       approved: "Approved",
-      rejected: "Rejected",
+      rejected: "Declined",
       reopened: "Reopened",
     };
     return map[status] || status;
@@ -231,7 +231,7 @@ function DeliveriesByYou() {
             <GoDotFill /> Approved
           </p>
           <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Rejected
+            <GoDotFill /> Declined
           </p>
         </div>
 
@@ -296,7 +296,7 @@ function DeliveriesByYou() {
                             )}
                             {item.rejectedBy && (
                               <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#FEE2E2", color: "#991B1B", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 500 }}>
-                                Rejected: {item.rejectedBy.name}
+                                Declined: {item.rejectedBy.name}
                               </span>
                             )}
                           </div>

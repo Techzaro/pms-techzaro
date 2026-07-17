@@ -225,6 +225,20 @@ class DeliverableController extends Controller
             'task_id' => 'nullable|exists:tasks,id',
         ]);
 
+        // Validate deliverable due_date does not exceed parent task end_date
+        if (! empty($validated['due_date']) && ! empty($validated['task_id'])) {
+            $task = Task::find($validated['task_id']);
+            if ($task && $task->end_date) {
+                $deliverableDate = \Carbon\Carbon::parse($validated['due_date']);
+                $taskEnd = \Carbon\Carbon::parse($task->end_date);
+                if ($deliverableDate->gt($taskEnd)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'due_date' => 'Subtask deadline cannot exceed the task deadline ('.$taskEnd->format('d M Y h:i A').').',
+                    ]);
+                }
+            }
+        }
+
         $user = $request->user();
 
         $deliverable = $project->deliverables()->create([
@@ -330,6 +344,20 @@ class DeliverableController extends Controller
             'status' => 'sometimes|string|max:64', 'priority' => 'sometimes|string|max:32',
             'due_date' => 'sometimes|nullable|date', 'assigned_to' => 'sometimes|nullable|exists:users,id',
         ]);
+
+        // Validate deliverable due_date does not exceed parent task end_date
+        if (! empty($validated['due_date']) && $deliverable->task_id) {
+            $task = Task::find($deliverable->task_id);
+            if ($task && $task->end_date) {
+                $deliverableDate = \Carbon\Carbon::parse($validated['due_date']);
+                $taskEnd = \Carbon\Carbon::parse($task->end_date);
+                if ($deliverableDate->gt($taskEnd)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'due_date' => 'Subtask deadline cannot exceed the task deadline ('.$taskEnd->format('d M Y h:i A').').',
+                    ]);
+                }
+            }
+        }
 
         $oldValues = [];
         foreach (['title', 'description', 'priority', 'due_date', 'status'] as $f) {

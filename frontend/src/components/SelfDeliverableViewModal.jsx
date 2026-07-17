@@ -311,7 +311,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, on
 
               {historyTimeline.length > 0 && (
                 <div className="sdvm-section">
-                  <h3 className="sdvm-section-title">Submission History</h3>
+                  <h3 className="sdvm-section-title">Timeline History</h3>
                   <div className="sdvm-history">
                     {historyTimeline.map((item) => (
                       <div key={item.id} className={`sdvm-history-item sdvm-history-${item.type}`}>

@@ -262,6 +262,18 @@ function Sidebar() {
             <span>Projects</span>
           </Link>
 
+          {/* Tasks link for guest – simple link below Projects */}
+          {user.role === "guest" && (
+          <Link
+            to={rolePath("guest-tasks")}
+            className={`sidebar-link ${isActive("guest-tasks") || location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "active" : ""}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MdTask />
+            <span>Tasks</span>
+          </Link>
+          )}
+
           {/* Tasks dropdown – sub-links for assigned/by-you/self; hidden for guest */}
           {user.role !== "guest" && (
           <div className={`sidebar-link ${isActive("tasks") || isActive("taskby") || isActive("self-tasks") || location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>

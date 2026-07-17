@@ -22,7 +22,8 @@ import { authToken, getUser, rolePath } from "../utils/auth";
 import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
-import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
+import { useSubmit } from "../hooks/useSubmit";
 import "./TaskDetails.css";
 import { formatDateTimeShort } from "../utils/formatDateTime";
 import "./SubtaskDetails.css";
@@ -80,6 +81,8 @@ function SubtaskDetails() {
   const filesInputRef = useRef(null);
   const [linkRemoveConfirmOpen, setLinkRemoveConfirmOpen] = useState(false);
   const [pendingLinkIndex, setPendingLinkIndex] = useState(-1);
+  const { submitting: approving, run: runApprove } = useSubmit();
+  const { submitting: declining, run: runDecline } = useSubmit();
 
   const notify = useNotification();
 
@@ -102,7 +105,7 @@ function SubtaskDetails() {
 
   useEffect(() => { fetchSubtask(); }, [fetchSubtask]);
 
-  useRefreshOnEvent(["deliverable:updated", "task:updated"], fetchSubtask);
+  useAutoRefresh(fetchSubtask, { events: ["deliverable:updated", "task:updated", "data:changed"], pollInterval: 30000 });
 
   // Auto-mark subtask changes as read
   useEffect(() => {
@@ -185,51 +188,55 @@ function SubtaskDetails() {
 
   // Approve the subtask (creator/admin/manager only)
   const handleApprove = async () => {
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/deliverables/${subtaskId}/approve`, {
-        method: "POST",
-        headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        _notifHandled: true,
-      });
-      const data = await res.json();
-      if (res.ok) {
-        publish('deliverable:updated', data.deliverable || data);
-        publish('data:changed', { type: 'deliverable', action: 'updated' });
-        showSuccessMessage("Subtask", "approved");
-        fetchSubtask();
-      } else {
-        notify.error(data.message || "Failed to approve");
+    await runApprove(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/deliverables/${subtaskId}/approve`, {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          publish('deliverable:updated', data.deliverable || data);
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          showSuccessMessage("Subtask", "approved");
+          fetchSubtask();
+        } else {
+          notify.error(data.message || "Failed to approve");
+        }
+      } catch {
+        notify.error("An error occurred");
       }
-    } catch {
-      notify.error("An error occurred");
-    }
+    });
   };
 
   // Reject the subtask with optional comment (creator/admin/manager only)
   const handleReject = async () => {
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/deliverables/${subtaskId}/reject`, {
-        method: "POST",
-        headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ comment: rejectComment }),
-        _notifHandled: true,
-      });
-      const data = await res.json();
-      if (res.ok) {
-        publish('deliverable:updated', data.deliverable || data);
-        publish('data:changed', { type: 'deliverable', action: 'updated' });
-        showSuccessMessage("Subtask", "rejected");
-        setShowRejectForm(false);
-        setRejectComment("");
-        fetchSubtask();
-      } else {
-        notify.error(data.message || "Failed to reject");
+    await runDecline(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/deliverables/${subtaskId}/reject`, {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ comment: rejectComment }),
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          publish('deliverable:updated', data.deliverable || data);
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          showSuccessMessage("Subtask", "declined");
+          setShowRejectForm(false);
+          setRejectComment("");
+          fetchSubtask();
+        } else {
+          notify.error(data.message || "Failed to decline");
+        }
+      } catch {
+        notify.error("An error occurred");
       }
-    } catch {
-      notify.error("An error occurred");
-    }
+    });
   };
 
   if (loading) {
@@ -422,24 +429,26 @@ function SubtaskDetails() {
             {isSubmitted && canApproveReject && (
               <div style={{ marginTop: "24px", display: "flex", gap: "10px", alignItems: "flex-start", flexDirection: "column" }}>
                 <div style={{ display: "flex", gap: "10px" }}>
-                  <button className="td-btn-primary" style={{ background: "#166534" }} onClick={handleApprove}>
-                    Approve
+                  <button className="td-btn-primary" onClick={handleApprove} disabled={approving} style={approving ? { background: "#9CA3AF", opacity: 0.7, cursor: "not-allowed" } : { background: "#166534" }}>
+                    {approving ? "Approving..." : "Approve"}
                   </button>
                   <button className="td-btn-danger" onClick={() => setShowRejectForm(true)}>
-                    Reject
+                    Decline
                   </button>
                 </div>
                 {showRejectForm && (
                   <div className="td-card" style={{ padding: "16px", width: "100%", maxWidth: "400px" }}>
-                    <label style={{ display: "block", marginBottom: "6px", fontSize: "13px", fontWeight: 500, color: "#374151" }}>Rejection Comment (optional)</label>
+                    <label style={{ display: "block", marginBottom: "6px", fontSize: "13px", fontWeight: 500, color: "#374151" }}>Decline Comment (optional)</label>
                     <textarea
                       style={{ width: "100%", minHeight: "60px", padding: "8px", border: "1px solid #e5e7eb", borderRadius: "8px", fontSize: "14px" }}
-                      placeholder="Reason for rejection..."
+                      placeholder="Reason for decline..."
                       value={rejectComment}
                       onChange={(e) => setRejectComment(e.target.value)}
                     />
                     <div style={{ marginTop: "10px", display: "flex", gap: "8px" }}>
-                      <button className="td-btn-danger" onClick={handleReject}>Confirm Reject</button>
+                      <button className="td-btn-danger" onClick={handleReject} disabled={declining} style={declining ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
+                        {declining ? "Declining..." : "Confirm Decline"}
+                      </button>
                       <button className="td-btn-outline" onClick={() => { setShowRejectForm(false); setRejectComment(""); }}>Cancel</button>
                     </div>
                   </div>
@@ -450,7 +459,7 @@ function SubtaskDetails() {
             {/* Rejection info - shown when rejected */}
             {isRejected && subtask.rejection_comment && (
               <div style={{ marginTop: "20px", padding: "16px", background: "#FEE2E2", borderRadius: "8px", border: "1px solid #FECACA" }}>
-                <h3 className="td-card-title" style={{ color: "#991B1B" }}>Rejection Reason</h3>
+                <h3 className="td-card-title" style={{ color: "#991B1B" }}>Decline Reason</h3>
                 <p style={{ color: "#7F1D1D", marginTop: "6px" }}>{subtask.rejection_comment}</p>
                 {subtask.rejected_by && <p style={{ color: "#7F1D1D", fontSize: "12px", marginTop: "4px" }}>By: {subtask.rejected_by.name}</p>}
               </div>
@@ -467,7 +476,7 @@ function SubtaskDetails() {
             {/* Submission History */}
             {submissions.length > 0 && (
               <div style={{ marginTop: "24px" }}>
-                <h2 className="td-section-title">Submission History</h2>
+                <h2 className="td-section-title">Timeline History</h2>
                 {submissions.map((sub) => (
                   <div key={sub.id} className="td-card" style={{ marginTop: "10px", padding: "16px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>

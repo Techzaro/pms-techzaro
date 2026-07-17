@@ -257,7 +257,7 @@ function MyActivity() {
                 <option value="updated">Updated</option>
                 <option value="deleted">Deleted</option>
                 <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
+                <option value="rejected">Declined</option>
                 <option value="submitted">Submitted</option>
                 <option value="completed">Completed</option>
                 <option value="login">Login</option>

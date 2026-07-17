@@ -25,7 +25,7 @@ function formatDateShort(dateStr) {
 }
 
 function formatStatus(status) {
-  const map = { pending: "Pending", submitted: "Submitted", reopened: "Reopened", approved: "Approved", rejected: "Rejected" };
+  const map = { pending: "Pending", submitted: "Submitted", reopened: "Reopened", approved: "Approved", rejected: "Declined" };
   return map[status] || status || "-";
 }
 

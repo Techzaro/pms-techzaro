@@ -2,6 +2,7 @@
  * @file firebase.js
  * @description Firebase Cloud Messaging (FCM) initialization and token management.
  * Handles push notification setup and device token registration with the backend.
+ * Service worker handles background notifications; this module handles foreground.
  */
 
 import { authToken } from "./auth";
@@ -11,7 +12,7 @@ import API_URL from "../config/api";
 let messaging = null;
 
 /**
- * Initializes Firebase and requests FCM token for push notifications.
+ * Initializes Firebase, registers the service worker, and requests FCM token.
  * Dynamically imports Firebase SDK to reduce initial bundle size.
  * Skips initialization if Firebase config is not provided.
  */
@@ -34,6 +35,19 @@ export async function initFirebase() {
       return;
     }
 
+    // Also inject config into the service worker's shared config file
+    if ("serviceWorker" in navigator) {
+      try {
+        const swReg = await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/" });
+        // Update the service worker with live config
+        if (swReg.active) {
+          swReg.active.postMessage({ type: "FIREBASE_CONFIG", config: firebaseConfig });
+        }
+      } catch (e) {
+        console.warn("Service worker registration failed:", e);
+      }
+    }
+
     const app = initializeApp(firebaseConfig);
     messaging = getMessaging(app);
 
@@ -46,9 +60,32 @@ export async function initFirebase() {
       await sendDeviceToken(token);
     }
 
-    // Handle foreground messages
+    // Handle foreground messages — show browser notification when tab is in background
+    // or just log when tab is active (in-app UI handles it)
     onMessage(messaging, (payload) => {
-      console.log("FCM foreground message received:", payload);
+      const title = payload.notification?.title || payload.data?.title || "PMS Notification";
+      const body = payload.notification?.body || payload.data?.body || "";
+      const url = payload.data?.url || "/";
+
+      // If tab is in background, show browser notification
+      if (document.hidden) {
+        try {
+          const n = new Notification(title, {
+            icon: "/TX.png",
+            badge: "/TX.ico",
+            body: body,
+            tag: "pms-fg-" + (payload.data?.tag || Date.now()),
+          });
+          n.onclick = () => {
+            window.focus();
+            window.location.href = url;
+            n.close();
+          };
+          setTimeout(() => n.close(), 8000);
+        } catch (_) {
+          // Notifications not supported or blocked
+        }
+      }
     });
   } catch (e) {
     console.warn("Firebase init failed:", e);

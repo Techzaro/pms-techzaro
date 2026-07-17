@@ -109,6 +109,9 @@ class NotificationService
             }
             if ($notification->type === 'user_updated') continue;
 
+            // Chat messages: in-app only — no email or push
+            if ($notification->related_module === 'chat') continue;
+
             if (Notification::wantsChannel($notification, 'email')) {
                 try {
                     $senderEmail = $notification->sender?->professional_email ?? '';

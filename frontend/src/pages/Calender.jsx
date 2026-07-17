@@ -12,7 +12,7 @@
  */
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { useUnifiedSummary } from "../hooks/useUnifiedSummary";
 import "../pages/Calender.css";
 import "../components/Event.css";
@@ -155,7 +155,7 @@ function Calender() {
     setShowDayPopup(true);
   }, [searchParams]);
   // Re-fetch events when events are created, updated, or deleted
-  useRefreshOnEvent(['event:created', 'event:updated', 'event:deleted'], fetchEvents);
+  useAutoRefresh(fetchEvents, { events: ['event:created', 'event:updated', 'event:deleted', 'data:changed'], pollInterval: 60000 });
 
   // Navigate to previous month/week/day
   const handlePrev = () => {

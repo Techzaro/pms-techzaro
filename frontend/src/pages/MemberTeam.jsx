@@ -14,7 +14,7 @@ import { Crown } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { authToken, rolePath } from "../utils/auth";
-import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
 import API_URL from "../config/api";
 import "./MemberTeam.css";
 
@@ -68,7 +68,7 @@ function MemberTeam() {
   };
 
   useEffect(() => { fetchTeams(); }, []);
-  useRefreshOnEvent(["team_created", "team_updated", "team_deleted", "team_leader_changed", "team_member_added", "team_member_removed"], fetchTeams);
+  useAutoRefresh(fetchTeams, { events: ["team_created", "team_updated", "team_deleted", "team_leader_changed", "team_member_added", "team_member_removed", "data:changed"], pollInterval: 30000 });
 
   const breadcrumbs = [
     { label: "Dashboard", path: rolePath("dashboard") },

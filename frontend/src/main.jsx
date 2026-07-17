@@ -17,6 +17,7 @@ import { ThemeProvider } from './context/ThemeContext.jsx'
 import LoadingSpinner from './components/LoadingSpinner.jsx'
 import ToastContainer from './components/Toast.jsx'
 import { queryClient } from './lib/queryClient.js'
+import { publish } from './utils/eventBus.js'
 
 // Scoped fetch interceptor — only invalidate related query keys, not ALL queries
 const originalFetch = window.fetch;
@@ -37,14 +38,18 @@ window.fetch = async function (...args) {
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
         queryClient.invalidateQueries({ queryKey: ['activities'] });
         window.dispatchEvent(new CustomEvent('calendar-sync'));
+        publish('data:changed', { url, method });
       } else if (url && url.includes('/teams')) {
         queryClient.invalidateQueries({ queryKey: ['teams'] });
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+        publish('data:changed', { url, method });
       } else if (url && url.includes('/notifications')) {
         queryClient.invalidateQueries({ queryKey: ['notifications'] });
+        publish('data:changed', { url, method });
       } else if (url && url.includes('/users')) {
         queryClient.invalidateQueries({ queryKey: ['users'] });
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+        publish('data:changed', { url, method });
       }
     }
   }

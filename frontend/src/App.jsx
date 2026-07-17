@@ -17,6 +17,7 @@ const Manager = lazy(() => import("./pages/Manager"));
 const TeamLead = lazy(() => import("./pages/TeamLead"));
 const Member = lazy(() => import("./pages/Member"));
 const Tasks = lazy(() => import("./pages/Tasks"));
+const GuestTasks = lazy(() => import("./pages/GuestTasks"));
 const Taskby = lazy(() => import("./pages/Taskby"));
 const SelfTasks = lazy(() => import("./pages/SelfTasks"));
 const Projects = lazy(() => import("./pages/Projects"));
@@ -92,6 +93,7 @@ function App() {
 
             {/* Task routes */}
             <Route path="/:role/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
+            <Route path="/:role/guest-tasks" element={<ProtectedRoute><GuestTasks /></ProtectedRoute>} />
             <Route path="/:role/taskby" element={<ProtectedRoute><Taskby /></ProtectedRoute>} />
             <Route path="/:role/self-tasks" element={<ProtectedRoute><SelfTasks /></ProtectedRoute>} />
             <Route path="/:role/tasks/task-details/:taskId" element={<ProtectedRoute><TaskDetails /></ProtectedRoute>} />

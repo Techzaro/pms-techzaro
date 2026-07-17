@@ -41,6 +41,8 @@ class Task extends Model
         'reopen_file_name',
         'acknowledged_at',
         'acknowledged_by',
+        'paused_at',
+        'paused_by',
         'sort_order',
         'task_type',
         'recurrence_settings',
@@ -176,6 +178,12 @@ class Task extends Model
     public function acknowledgedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'acknowledged_by');
+    }
+
+    /** The user who paused this task. */
+    public function pausedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'paused_by');
     }
 
     /** Field-level changes made to this task. */

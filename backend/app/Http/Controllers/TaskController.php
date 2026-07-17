@@ -50,14 +50,6 @@ class TaskController extends Controller
     {
         $user = $request->user();
 
-        // Guests only see tasks inside project details, not in standalone lists
-        if ($user->role === 'guest') {
-            return response()->json([
-                'data' => collect(),
-                'total' => 0,
-            ]);
-        }
-
         $isDueTodayFilter = $request->input('status') === 'due_today';
         $isPendingFilter = $request->input('status') === 'pending';
         $statusFilter = $request->input('status');
@@ -397,6 +389,7 @@ class TaskController extends Controller
             'rejectedBy:id,name',
             'reopenedBy:id,name',
             'acknowledgedBy:id,name',
+            'pausedBy:id,name',
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'changes' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'deliverableTemplates',
@@ -516,6 +509,17 @@ class TaskController extends Controller
             'deliverable_templates.*.quantity' => 'nullable|integer|min:1|max:100',
             'deliverable_templates.*.combined' => 'nullable|boolean',
         ]);
+
+        // Validate task end_date does not exceed project end_date
+        if (! empty($validated['end_date']) && $project->end_date) {
+            $taskEnd = \Carbon\Carbon::parse($validated['end_date']);
+            $projectEnd = \Carbon\Carbon::parse($project->end_date);
+            if ($taskEnd->gt($projectEnd)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'end_date' => 'Task deadline cannot exceed the project deadline ('.$projectEnd->format('d M Y h:i A').').',
+                ]);
+            }
+        }
 
         // Validate deliverable due_date does not exceed task end_date
         if (! empty($validated['end_date']) && ! empty($validated['deliverables'])) {
@@ -1067,10 +1071,21 @@ class TaskController extends Controller
 
         $assigneeIds = $validated['assigned_to'] ?? null;
         unset($validated['assigned_to']);
-        $dueDates = $validated['due_dates'] ?? [];
+        $dueDates = $validated['due_dates'] ?? null;
         unset($validated['due_dates']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
+
+        // Validate task end_date does not exceed project end_date
+        if (! empty($validated['end_date']) && $task->project && $task->project->end_date) {
+            $taskEnd = \Carbon\Carbon::parse($validated['end_date']);
+            $projectEnd = \Carbon\Carbon::parse($task->project->end_date);
+            if ($taskEnd->gt($projectEnd)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'end_date' => 'Task deadline cannot exceed the project deadline ('.$projectEnd->format('d M Y h:i A').').',
+                ]);
+            }
+        }
 
         $oldValues = [];
         foreach (['title', 'description', 'requirements', 'project_id', 'start_date', 'end_date', 'priority', 'status'] as $f) {
@@ -1569,6 +1584,138 @@ class TaskController extends Controller
     }
 
     /**
+     * Pause an in-progress task.
+     *
+     * Only assignees can pause. Changes status from in_progress to paused
+     * and notifies the task creator.
+     */
+    public function pause(Request $request, Task $task)
+    {
+        $user = $request->user();
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+
+        if (! $isAssignee) {
+            return response()->json(['success' => false, 'message' => 'Only assignees can pause this task'], 403);
+        }
+
+        if (strtolower((string) $task->status) !== 'in_progress') {
+            return response()->json(['success' => false, 'message' => 'This task cannot be paused in its current status'], 422);
+        }
+
+        $task->update([
+            'status' => 'paused',
+            'paused_at' => now(),
+            'paused_by' => $user->id,
+        ]);
+
+        $task->assignees()->updateExistingPivot($user->id, [
+            'status' => 'paused',
+        ]);
+
+        TaskWorkflowEvent::create([
+            'task_id' => $task->id,
+            'user_id' => $user->id,
+            'action' => 'paused',
+            'comment' => $user->name.' paused this task',
+        ]);
+
+        $task->load('project:id,title');
+
+        // Notify the task creator
+        if ($task->assigned_by && $task->assigned_by !== $user->id) {
+            $this->notificationService->notify(
+                $task->assigned_by,
+                $user->id,
+                'task_paused',
+                'task',
+                $task->id,
+                'Task Paused',
+                $user->name.' paused task "'.$task->title.'".',
+                '/tasks/task-details/'.$task->id.'?from=taskby'
+            );
+        }
+
+        $this->notificationService->confirmAction($user, 'Paused', 'task', $task->title);
+        $this->clearDashboardCache($user->id);
+
+        if ($task->assigned_by) {
+            $this->clearDashboardCache((int) $task->assigned_by);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task paused successfully',
+            'task' => $task->fresh()->load(['assignees:id,name,email,role', 'pausedBy:id,name']),
+        ]);
+    }
+
+    /**
+     * Continue a paused task (resume).
+     *
+     * Only assignees can continue. Changes status from paused back to in_progress
+     * and notifies the task creator.
+     */
+    public function continueTask(Request $request, Task $task)
+    {
+        $user = $request->user();
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+
+        if (! $isAssignee) {
+            return response()->json(['success' => false, 'message' => 'Only assignees can continue this task'], 403);
+        }
+
+        if (strtolower((string) $task->status) !== 'paused') {
+            return response()->json(['success' => false, 'message' => 'This task is not paused'], 422);
+        }
+
+        $task->update([
+            'status' => 'in_progress',
+            'paused_at' => null,
+            'paused_by' => null,
+        ]);
+
+        $task->assignees()->updateExistingPivot($user->id, [
+            'status' => 'in_progress',
+        ]);
+
+        TaskWorkflowEvent::create([
+            'task_id' => $task->id,
+            'user_id' => $user->id,
+            'action' => 'continued',
+            'comment' => $user->name.' continued this task',
+        ]);
+
+        $task->load('project:id,title');
+
+        // Notify the task creator
+        if ($task->assigned_by && $task->assigned_by !== $user->id) {
+            $this->notificationService->notify(
+                $task->assigned_by,
+                $user->id,
+                'task_continued',
+                'task',
+                $task->id,
+                'Task Continued',
+                $user->name.' continued task "'.$task->title.'".',
+                '/tasks/task-details/'.$task->id.'?from=taskby'
+            );
+        }
+
+        $this->notificationService->confirmAction($user, 'Continued', 'task', $task->title);
+        $this->clearDashboardCache($user->id);
+
+        if ($task->assigned_by) {
+            $this->clearDashboardCache((int) $task->assigned_by);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task resumed successfully',
+            'task' => $task->fresh()->load(['assignees:id,name,email,role']),
+        ]);
+    }
+
+    /**
      * Submit a task for review by its creator.
      *
      * Only the assignee can submit. All deliverables must be submitted first.
@@ -1586,7 +1733,7 @@ class TaskController extends Controller
         if (! $isAssignee) {
             return response()->json(['success' => false, 'message' => 'Only the assignee can submit this task'], 403);
         }
-        if (! in_array($task->status, ['pending', 'in_progress', 'reopened'])) {
+        if (! in_array($task->status, ['pending', 'in_progress', 'reopened', 'paused'])) {
             return response()->json(['success' => false, 'message' => 'This task cannot be submitted in its current status'], 422);
         }
 
@@ -1646,7 +1793,7 @@ class TaskController extends Controller
 
         $updateData = ['status' => 'submitted', 'submitted_at' => now()];
 
-        if (in_array($task->status, ['reopened', 'in_progress'])) {
+        if (in_array($task->status, ['reopened', 'in_progress', 'paused'])) {
             foreach (['rejected_at', 'rejected_by', 'rejection_comment', 'reopened_at', 'reopened_by', 'reopen_comment', 'reopen_instructions', 'reopen_new_deadline', 'reopen_file_path', 'reopen_file_name'] as $f) {
                 $updateData[$f] = null;
             }

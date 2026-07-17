@@ -216,6 +216,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Mark project as complete (any assigned user)
     Route::post('/projects/{project}/complete', [ProjectController::class, 'completeProject']);
 
+    // Toggle milestone achievement status
+    Route::post('/projects/{project}/milestones/{milestone}/achieve', [ProjectController::class, 'toggleMilestoneAchieve'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+
     /*
     | Task Management Routes
     | CRUD operations, submission workflows, file attachments, and personal notes for tasks.
@@ -239,8 +242,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/update-recurring', [TaskController::class, 'updateRecurring'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update recurring task with confirmation
 
     // Task submission workflow (submit for review, approve, reject, reopen)
-    Route::post('/tasks/{task}/acknowledge', [TaskController::class, 'acknowledge'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Acknowledge task assignment
-    Route::post('/tasks/{task}/submit', [TaskController::class, 'submit'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Submit task for review
+    Route::post('/tasks/{task}/acknowledge', [TaskController::class, 'acknowledge']); // Acknowledge task assignment
+    Route::post('/tasks/{task}/pause', [TaskController::class, 'pause']); // Pause an in-progress task
+    Route::post('/tasks/{task}/continue', [TaskController::class, 'continueTask']); // Continue a paused task
+    Route::post('/tasks/{task}/submit', [TaskController::class, 'submit']); // Submit task for review
     Route::get('/tasks/{task}/latest-submission', [TaskController::class, 'latestSubmission']); // Get latest submission
     Route::get('/tasks/submission-file/{submission}', [TaskController::class, 'downloadSubmissionFile']); // Download submission file
     Route::post('/tasks/{task}/approve', [TaskController::class, 'approve'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Approve submitted task
@@ -317,6 +322,7 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index']); // List notifications
     Route::get('/notifications/unread-count', [\App\Http\Controllers\NotificationController::class, 'unreadCount']); // Get unread count
+    Route::get('/notifications/latest', [\App\Http\Controllers\NotificationController::class, 'latest']); // Get latest unread for desktop notifications
     Route::post('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead']); // Mark notification as read
     Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead']); // Mark all as read
 

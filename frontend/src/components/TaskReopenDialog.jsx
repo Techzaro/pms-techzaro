@@ -90,7 +90,7 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
     <div className="rd-overlay">
       <div className="rd-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="rd-header">
-          <h2 className="rd-title">Reject & Reopen Task</h2>
+          <h2 className="rd-title">Decline & Reopen Task</h2>
           <p className="rd-subtitle">{task.title}</p>
         </div>
 
@@ -157,7 +157,7 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
         <div className="rd-footer">
           <button className="rd-cancel-btn" onClick={handleClose} disabled={submitting}>Cancel</button>
           <LoadingButton className="rd-submit-btn" onClick={handleSubmit} loading={submitting}>
-            Reject & Reopen
+            Decline & Reopen
           </LoadingButton>
         </div>
       </div>

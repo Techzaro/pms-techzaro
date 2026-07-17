@@ -31,7 +31,7 @@ import API_URL from "../config/api";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { authToken, getCurrentRole, getUser, setUser, rolePath, normalizeRole } from "../utils/auth";
-import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
@@ -290,7 +290,7 @@ function ManageUsers() {
     fetchUsers();
   }, [navigate]);
 
-  useRefreshOnEvent(["data:changed"], fetchUsers);
+  useAutoRefresh(fetchUsers, { events: ["data:changed"], pollInterval: 60000 });
 
   useEffect(() => {
     setLocalUsers(users);
