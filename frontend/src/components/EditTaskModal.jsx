@@ -357,10 +357,13 @@ export default function EditTaskModal({ task, onClose }) {
 
   /**
    * Uploads pending file attachments and links to the task.
+   * Throws if any uploads fail so the caller can handle the error.
    */
   const uploadAttachments = async () => {
     const token = authToken();
     const errors = [];
+
+    if (pendingFiles.length === 0 && links.length === 0) return;
 
     const fileResults = await Promise.allSettled(
       pendingFiles.map((file) => {
@@ -408,7 +411,7 @@ export default function EditTaskModal({ task, onClose }) {
     });
 
     if (errors.length > 0) {
-      notify.error(`Some attachments failed: ${errors.join("; ")}`);
+      throw new Error(`Attachments failed: ${errors.join("; ")}`);
     }
   };
 
