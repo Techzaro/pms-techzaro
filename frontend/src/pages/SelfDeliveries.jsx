@@ -11,7 +11,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect, useCallback } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
@@ -21,7 +21,7 @@ import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
 import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal";
-import { formatDateTime } from "../utils/formatDateTime";
+import { formatDateTimeInline } from "../utils/formatDateTime";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
 
@@ -136,7 +136,7 @@ function SelfDeliveries() {
   };
 
   const formatDate = (dateStr) => {
-    return formatDateTime(dateStr);
+    return formatDateTimeInline(dateStr);
   };
 
   const formatStatus = (status) => {
@@ -216,7 +216,7 @@ function SelfDeliveries() {
             <div>Subtask</div>
             <div>Related Task/Project</div>
             <div>Status</div>
-            <div>Date</div>
+            <div>Start & Due Date</div>
             <div>Action</div>
           </div>
 
@@ -239,6 +239,11 @@ function SelfDeliveries() {
                       </div>
                       <div>
                         <div className="user-name">{item.title}</div>
+                        {item.project && (
+                          <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
+                            {item.project.title}
+                          </Link>
+                        )}
                       </div>
                     </div>
                     <div>

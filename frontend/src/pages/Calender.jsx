@@ -331,7 +331,7 @@ function Calender() {
             </div>
 
             {loading ? (
-              <div style={{ padding: "60px 20px", textAlign: "center", color: "#9ca3af" }}>
+              <div style={{ padding: "60px 20px", textAlign: "center", color: "var(--text-muted)" }}>
                 Loading events...
               </div>
             ) : (
@@ -341,7 +341,7 @@ function Calender() {
                 ))}
 
                 {calendarDays.map((date, index) => {
-                  if (!date) return <div key={`empty-${index}`} className="calendar-date-box" style={{ background: "#fafafa" }} />;
+                  if (!date) return <div key={`empty-${index}`} className="calendar-date-box" style={{ background: "var(--color-calendar-cell)" }} />;
 
                   const dayEvents = getEventsForDate(date);
                   const today = isToday(date);

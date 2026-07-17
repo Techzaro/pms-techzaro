@@ -26,7 +26,7 @@
 /* Row drag handle dots — visible on hover, used for handleOnly mode */
 .row-drag-handle {
   cursor: grab;
-  color: #9ca3af;
+  color: var(--text-muted);
   opacity: 0;
   transition: opacity 0.2s;
   flex-shrink: 0;

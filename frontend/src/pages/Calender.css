@@ -26,12 +26,12 @@
     margin: 0 0 8px;
     font-size: 32px;
     font-weight: 700;
-    color: #111827;
+    color: var(--text-primary);
 }
 
 .calendar-header p {
     margin: 0;
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 15px;
     font-weight: 500;
 }
@@ -46,8 +46,8 @@
 .today-btn {
     padding: 10px 18px;
     border-radius: 12px;
-    border: 1px solid #e5e7eb;
-    background: white;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
     cursor: pointer;
     font-weight: 500;
 }
@@ -56,7 +56,7 @@
     padding: 10px 18px;
     border-radius: 12px;
     border: none;
-    background: #6366f1;
+    background: var(--color-primary);
     color: white;
     cursor: pointer;
     display: flex;
@@ -68,7 +68,7 @@
 /* CARD */
 
 .calendar-card {
-    background: white;
+    background: var(--bg-card);
     border-radius: 24px;
     padding: 24px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
@@ -108,7 +108,7 @@
 
 .calendar-tabs {
     display: flex;
-    background: #f3f4f6;
+    background: var(--bg-hover);
     padding: 4px;
     border-radius: 12px;
 }
@@ -119,12 +119,12 @@
     padding: 8px 18px;
     border-radius: 10px;
     cursor: pointer;
-    color: #6b7280;
+    color: var(--text-secondary);
     font-weight: 500;
 }
 
 .active-tab {
-    background: #6366f1 !important;
+    background: var(--color-primary) !important;
     color: white !important;
 }
 
@@ -134,7 +134,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 10px 14px;
     min-width: 220px;
@@ -152,7 +152,7 @@
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border-color);
     border-bottom: none;
 }
 
@@ -160,22 +160,23 @@
     padding: 14px;
     text-align: center;
     font-weight: 600;
-    background: #f9fafb;
-    color: #6b7280;
-    border-bottom: 1px solid #e5e7eb;
+    background: var(--bg-page);
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .calendar-date-box {
     min-height: 130px;
     padding: 10px;
-    border-right: 1px solid #e5e7eb;
-    border-bottom: 1px solid #e5e7eb;
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--color-calendar-cell);
 }
 
 .date-number {
     margin: 0 0 12px;
     font-weight: 600;
-    color: #374151;
+    color: var(--text-dark);
 }
 
 .today-box {
@@ -183,7 +184,7 @@
 }
 
 .today-number {
-    background: #6366f1;
+    background: var(--color-primary);
     color: white;
     width: 28px;
     height: 28px;
@@ -196,7 +197,7 @@
 
 .event-subtitle {
     font-size: 14px;
-    color: #6b7280;
+    color: var(--text-secondary);
     margin: 0;
 }
 
@@ -216,7 +217,7 @@
     width: 34px;
     height: 34px;
     border-radius: 50%;
-    background: #6366f1;
+    background: var(--color-primary);
     color: #fff;
     display: inline-flex;
     align-items: center;
@@ -231,14 +232,14 @@
     width: 34px;
     height: 34px;
     border-radius: 50%;
-    background: #e5e7eb;
-    color: #374151;
+    background: var(--border-color);
+    color: var(--text-dark);
     font-weight: 700;
 }
 
 .popup-divider {
     height: 1px;
-    background: #e5e7eb;
+    background: var(--border-color);
     margin: 20px 0;
 }
 
@@ -250,7 +251,7 @@
 
 .popup-section-heading {
     font-weight: 700;
-    color: #111827;
+    color: var(--text-primary);
 }
 
 .popup-file-row {
@@ -258,10 +259,10 @@
     justify-content: space-between;
     align-items: center;
     padding: 12px 16px;
-    background: #f8fafc;
+    background: var(--bg-page);
     border-radius: 14px;
-    border: 1px solid #e5e7eb;
-    color: #374151;
+    border: 1px solid var(--border-color);
+    color: var(--text-dark);
 }
 
 /* EVENTS */
@@ -280,41 +281,41 @@
 
 .calendar-event span {
     font-size: 11px;
-    color: #6b7280;
+    color: var(--text-secondary);
 }
 
 /* EVENT COLORS */
 
 .event-purple {
-    background: #eef2ff;
+    background: var(--color-primary-bg);
 }
 
 .event-purple p {
-    color: #6366f1;
+    color: var(--color-primary);
 }
 
 .event-green {
-    background: #ecfdf3;
+    background: var(--color-green-light);
 }
 
 .event-green p {
-    color: #10b981;
+    color: var(--color-green-text);
 }
 
 .event-blue {
-    background: #eff6ff;
+    background: var(--color-blue-light);
 }
 
 .event-blue p {
-    color: #3b82f6;
+    color: var(--color-blue-text);
 }
 
 .event-orange {
-    background: #fff7ed;
+    background: var(--color-orange-light);
 }
 
 .event-orange p {
-    color: #f59e0b;
+    color: var(--color-orange-text);
 }
 
 /* FOOTER */
@@ -330,7 +331,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 14px;
 }
 
@@ -366,11 +367,11 @@
     width: 100%;
     max-width: 300px;
     min-width: 260px;
-    background: white;
+    background: var(--bg-card);
     border-radius: 20px 0 0 20px;
     margin-top: 15px;
     padding: 15px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border-color);
     box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
     position: static;
     top: 75px;
@@ -379,8 +380,8 @@
 }
 
 .task-card {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
     border-radius: 18px;
     padding: 8px;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
@@ -390,13 +391,13 @@
     margin: 0;
     font-size: 24px;
     font-weight: 700;
-    color: #111827;
+    color: var(--text-primary);
 }
 
 /* TODAY TEXT */
 
 .today-date {
-    color: #9ca3af;
+    color: var(--text-tertiary);
     font-size: 18px;
 }
 
@@ -418,7 +419,7 @@
 .agenda-dot {
     width: 10px;
     height: 10px;
-    background: #6366f1;
+    background: var(--color-primary);
     border-radius: 50%;
     margin-top: 8px;
     flex-shrink: 0;
@@ -439,25 +440,25 @@
     margin: 0;
     font-size: 15px;
     font-weight: 700;
-    color: #111827;
+    color: var(--text-primary);
 }
 
 .agenda-top span {
     font-size: 13px;
-    color: #9ca3af;
+    color: var(--text-tertiary);
     font-weight: 600;
 }
 
 .agenda-content p {
     margin: 6px 0 0;
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 14px;
 }
 
 .card-link {
     margin-top: 24px;
     text-align: center;
-    color: #6366f1;
+    color: var(--color-primary);
     font-size: 15px;
     font-weight: 700;
     cursor: pointer;
@@ -482,13 +483,13 @@
 .deadline-item h4 {
     margin: 0 0 4px;
     font-size: 15px;
-    color: #111827;
+    color: var(--text-primary);
     font-weight: 700;
 }
 
 .deadline-item p {
     margin: 0;
-    color: #9ca3af;
+    color: var(--text-tertiary);
     font-size: 13px;
 }
 
@@ -518,7 +519,7 @@
         width: 100%;
         max-width: none;
         border-radius: 18px;
-        border: 1px solid #e5e7eb;
+        border: 1px solid var(--border-color);
     }
 
 }

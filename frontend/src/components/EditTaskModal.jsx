@@ -137,11 +137,13 @@ export default function EditTaskModal({ task, onClose }) {
 
   const currentUser = getUser();
 
+  const [projects, setProjects] = useState([]);
   const [form, setForm] = useState({
     title: task.title || "",
     description: task.description || "",
     priority: task.priority || "Medium",
     task_type: task.task_type || "standard",
+    project_id: task.project?.id || "",
     start_date: task.start_date ? toDatetimeLocal(task.start_date) : "",
     end_date: task.end_date ? toDatetimeLocal(task.end_date) : "",
   });
@@ -193,6 +195,20 @@ export default function EditTaskModal({ task, onClose }) {
 
   // Determine if this is a self-assigned task (created by current user and assigned only to themselves)
   const isSelfTask = currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10) && selectedAssigneeIds.length === 1 && selectedAssigneeIds[0] === parseInt(currentUser.id, 10);
+
+  useEffect(() => {
+    const token = authToken();
+    fetch(`${API_URL}/projects`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        const list = data?.data || data;
+        setProjects(Array.isArray(list) ? list : []);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const token = authToken();
@@ -295,8 +311,15 @@ export default function EditTaskModal({ task, onClose }) {
   };
 
   const handleFiles = (fileList) => {
+    console.log("[EditTaskModal] handleFiles called with", fileList.length, "files");
+    const arr = Array.from(fileList);
+    console.log("[EditTaskModal] file names:", arr.map(f => f.name));
     setIsDirty(true);
-    setPendingFiles((prev) => [...prev, ...Array.from(fileList).map((f) => ({ file: f, name: f.name, size: f.size, renaming: false }))]);
+    setPendingFiles((prev) => {
+      const next = [...prev, ...arr.map((f) => ({ file: f, name: f.name, size: f.size, renaming: false }))];
+      console.log("[EditTaskModal] pendingFiles updated, new length:", next.length);
+      return next;
+    });
   };
 
   const handleDrop = (e) => {
@@ -437,6 +460,7 @@ export default function EditTaskModal({ task, onClose }) {
         } else {
           body = {
             ...form,
+            project_id: form.project_id || null,
             start_date: toUTCIso(form.start_date),
             end_date: toUTCIso(form.end_date),
             assigned_to: selectedAssigneeIds,
@@ -513,7 +537,13 @@ export default function EditTaskModal({ task, onClose }) {
             <div className="task-grid-2">
               <div className="task-field">
                 <label>Project</label>
-                <div className="task-project-name">{task.project?.title || "—"}</div>
+                <CustomSelect
+                  name="project_id"
+                  value={form.project_id}
+                  onChange={(val) => { setIsDirty(true); setForm((prev) => ({ ...prev, project_id: val })); }}
+                  placeholder="Select project"
+                  options={[{ value: "", label: "No Project" }, ...projects.map((p) => ({ value: p.id, label: p.title }))]}
+                />
               </div>
               <div className="task-field">
                 <label>Assign To {!isSelfTask && <span>*</span>}</label>
@@ -563,7 +593,7 @@ export default function EditTaskModal({ task, onClose }) {
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => { console.log("[EditTaskModal] drop zone clicked, fileInputRef:", fileInputRef.current); fileInputRef.current?.click(); }}
               >
                 <div className="cp-drop-content">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -579,7 +609,7 @@ export default function EditTaskModal({ task, onClose }) {
                   type="file"
                   multiple
                   style={{ display: "none" }}
-                  onChange={(e) => { if (e.target.files.length > 0) handleFiles(e.target.files); e.target.value = ""; }}
+                  onChange={(e) => { console.log("[EditTaskModal] file input onChange, files:", e.target.files.length); if (e.target.files.length > 0) handleFiles(e.target.files); e.target.value = ""; }}
                 />
               </div>
 

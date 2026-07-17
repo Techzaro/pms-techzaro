@@ -323,7 +323,7 @@ function Reports() {
             </div>
             <div className="reports-donut-section">
               {isLoading ? (
-                <div style={{ padding: "40px", textAlign: "center", color: "#9ca3af" }}>Loading...</div>
+                <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>
               ) : (
                 <DonutChart
                   segments={statusItems}
@@ -342,7 +342,7 @@ function Reports() {
             </div>
             <div className="reports-priority-section">
               {isLoading ? (
-                <div style={{ padding: "40px", textAlign: "center", color: "#9ca3af" }}>Loading...</div>
+                <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>
               ) : (
                 <PriorityBarChart
                   bars={priorityItems}
@@ -375,7 +375,7 @@ function Reports() {
               </button>
             </div>
             {isTeamsLoading ? (
-              <div style={{ padding: "24px", textAlign: "center", color: "#9ca3af" }}>Loading...</div>
+              <div style={{ padding: "24px", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>
             ) : (
               <>
                 <div ref={sliderRef} style={{ overflow: "hidden" }}>
@@ -520,9 +520,9 @@ function Reports() {
                 </div>
 
                 {isTableLoading ? (
-                  <div style={{ padding: "24px", textAlign: "center", color: "#9ca3af" }}>Loading...</div>
+                  <div style={{ padding: "24px", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>
                 ) : (filteredUsers || []).length === 0 ? (
-                  <div style={{ padding: "24px", textAlign: "center", color: "#9ca3af" }}>No data available</div>
+                  <div style={{ padding: "24px", textAlign: "center", color: "var(--text-muted)" }}>No data available</div>
                 ) : (
                   (filteredUsers || []).map((member) => (
                     <div key={member.id} className="table-row">
@@ -572,9 +572,9 @@ function Reports() {
             {/* Mobile Card Layout */}
             <div className="reports-table-cards">
               {isTableLoading ? (
-                <div style={{ padding: "24px", textAlign: "center", color: "#9ca3af" }}>Loading...</div>
+                <div style={{ padding: "24px", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>
               ) : (filteredUsers || []).length === 0 ? (
-                <div style={{ padding: "24px", textAlign: "center", color: "#9ca3af" }}>No data available</div>
+                <div style={{ padding: "24px", textAlign: "center", color: "var(--text-muted)" }}>No data available</div>
               ) : (
                 (filteredUsers || []).map((member) => (
                   <div key={member.id} className="report-member-card">

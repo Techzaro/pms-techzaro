@@ -638,10 +638,6 @@ function TaskDetails() {
                 </div>
               </div>
 
-              {task.description && (
-                <p className="td-desc" style={{ color: "#6b7280", margin: "8px 0 0", fontSize: "14px", lineHeight: 1.6 }}>{task.description}</p>
-              )}
-
               <div className="td-badges">
                 <span className="td-badge" style={{ background: statusBgColor(task.status), color: statusColor(task.status) }}>
                   <span className="td-badge-dot" style={{ background: statusColor(task.status) }} />
@@ -772,8 +768,8 @@ function TaskDetails() {
                               <div></div>
                               <div>Subtask</div>
                               <div>{isCreator ? "Assigned To" : "Assigned By"}</div>
-                              <div>Due Date</div>
                               <div>Status</div>
+                              <div>Start & Due Date</div>
                               <div>Action</div>
                             </div>
                               <SortableTableWrapper
@@ -798,13 +794,13 @@ function TaskDetails() {
                                   <div className="user-name">{isCreator ? (d.assignee?.name || "—") : (d.creator?.name || "—")}</div>
                                   <div className="user-role">{isCreator ? (d.assignee?.role ? d.assignee.role.replace("_", " ") : "") : (d.creator?.role ? d.creator.role.replace("_", " ") : "")}</div>
                                 </div>
-                                <div className="date-box" style={{ whiteSpace: "pre-line" }}>{formatDateTime(d.due_date)}</div>
                                 <div>
                                   <span className="badge" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }}>
                                     <span className="dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }} />
                                     {statusLabel(d.status)}
                                   </span>
                                 </div>
+                                <div className="date-box" style={{ whiteSpace: "pre-line" }}>{formatDateTimeShort(d.start_date)}{"\n"}{formatDateTimeShort(d.due_date)}</div>
                                 <div className="action-btns">
                                   {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
                                     <button className="action-icon-btn action-submit" title="Submit" onClick={() => setSubmitModal({ open: true, subtask: d })}>
@@ -1229,10 +1225,13 @@ function FileUploadSection({ taskId, files, onReorder, onFilesChange }) {
           onReorder={onReorder}
           as="div"
         >
-          {(f, idx) => {
+          {(f, idx, dndProps) => {
             const bg = boxColors[idx % boxColors.length];
             return (
               <div key={f.id} className="pd-file-box" style={{ background: bg }}>
+                <div className="pd-file-box__drag-handle">
+                  <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                </div>
                 <div className="pd-file-box__content">
                   <div className="pd-file-box__name">
                     <FolderOpen size={18} />

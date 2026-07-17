@@ -1,7 +1,7 @@
 .rd-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--bg-modal-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10,7 +10,7 @@
 }
 
 .rd-modal {
-  background: #fff;
+  background: var(--bg-card);
   border-radius: 16px;
   width: 100%;
   max-width: 520px;
@@ -26,13 +26,13 @@
 .rd-title {
   font-size: 18px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-primary);
   margin: 0 0 4px;
 }
 
 .rd-subtitle {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -52,7 +52,7 @@
 .rd-label {
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-dark);
 }
 
 .rd-textarea {
@@ -63,7 +63,7 @@
   border-radius: 10px;
   font-size: 14px;
   color: #1e293b;
-  background: #fff;
+  background: var(--bg-card);
   resize: vertical;
   font-family: inherit;
   box-sizing: border-box;
@@ -83,7 +83,7 @@
   border-radius: 10px;
   font-size: 14px;
   color: #1e293b;
-  background: #fff;
+  background: var(--bg-card);
   box-sizing: border-box;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
@@ -110,7 +110,7 @@
 
 .rd-dropzone-text {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -129,7 +129,7 @@
 
 .rd-file-name {
   font-size: 13px;
-  color: #374151;
+  color: var(--text-dark);
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -161,8 +161,8 @@
   padding: 10px 20px;
   border: 1px solid #d1d5db;
   border-radius: 10px;
-  background: #fff;
-  color: #374151;
+  background: var(--bg-card);
+  color: var(--text-dark);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -170,7 +170,7 @@
 }
 
 .rd-cancel-btn:hover {
-  background: #f9fafb;
+  background: var(--bg-card-alt);
 }
 
 .rd-cancel-btn:disabled {
@@ -191,7 +191,7 @@
 }
 
 .rd-submit-btn:hover {
-  background: #4f46e5;
+  background: var(--color-primary);
 }
 
 .rd-submit-btn:disabled {

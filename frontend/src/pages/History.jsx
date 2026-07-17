@@ -277,7 +277,7 @@ function MyActivity() {
               <div className="audit-empty">
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="1.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
                 <p style={{ color: "#ef4444" }}>{error}</p>
-                <button onClick={() => fetchLogs(page)} style={{ marginTop: 8, padding: "6px 16px", border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff", cursor: "pointer", fontSize: 13 }}>Try again</button>
+                <button onClick={() => fetchLogs(page)} style={{ marginTop: 8, padding: "6px 16px", border: "1px solid var(--border-color)", borderRadius: 8, background: "var(--bg-card)", cursor: "pointer", fontSize: 13 }}>Try again</button>
               </div>
             ) : logs.length === 0 ? (
               <div className="audit-empty">

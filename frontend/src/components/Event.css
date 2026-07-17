@@ -1,7 +1,7 @@
 .event-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
+  background: var(--bg-modal-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -11,7 +11,7 @@
 }
 
 .event-modal {
-  background: #fff;
+  background: var(--bg-card);
   border-radius: 20px;
   width: 100%;
   max-width: 440px;
@@ -34,28 +34,28 @@
   position: sticky;
   top: 0;
   z-index: 10;
-  background: #ffffff;
+  background: var(--bg-card);
 }
 
 .event-header h2 {
   margin: 0;
   font-size: 22px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .event-close {
   background: none;
   border: none;
   font-size: 28px;
-  color: #9ca3af;
+  color: var(--text-muted);
   cursor: pointer;
   line-height: 1;
   padding: 0 4px;
 }
 
 .event-close:hover {
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .event-header-actions {
@@ -66,9 +66,9 @@
 
 .event-header-actions .btn-cancel {
   padding: 10px 20px;
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
-  color: #374151;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-dark);
   border-radius: 10px;
   font-size: 14px;
   font-weight: 600;
@@ -77,13 +77,13 @@
 }
 
 .event-header-actions .btn-cancel:hover {
-  background: #f3f4f6;
+  background: var(--bg-hover);
 }
 
 .event-header-actions .btn-primary {
   padding: 10px 20px;
   border: none;
-  background: #4f46e5;
+  background: var(--color-primary);
   color: #ffffff;
   border-radius: 10px;
   font-size: 14px;
@@ -93,7 +93,7 @@
 }
 
 .event-header-actions .btn-primary:hover {
-  background: #4338ca;
+  background: var(--color-primary-dark);
 }
 
 .event-header-actions .event-close {
@@ -101,10 +101,10 @@
   height: 42px;
   border: none;
   border-radius: 12px;
-  background: #f3f4f6;
+  background: var(--bg-hover);
   cursor: pointer;
   font-size: 18px;
-  color: #6b7280;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -118,7 +118,7 @@
   display: block;
   font-size: 15px;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-dark);
   margin-bottom: 8px;
   margin-top: 18px;
 }
@@ -136,12 +136,12 @@
   width: 100%;
   min-width: 0;
   padding: 12px 14px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   font-size: 14px;
-  color: #111827;
+  color: var(--text-primary);
   outline: none;
-  background: #fff;
+  background: var(--bg-card);
   box-sizing: border-box;
 }
 
@@ -151,17 +151,17 @@
 }
 
 .event-input::placeholder {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .event-textarea {
   width: 100%;
   min-width: 0;
   padding: 12px 14px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   font-size: 14px;
-  color: #111827;
+  color: var(--text-primary);
   outline: none;
   resize: vertical;
   font-family: inherit;
@@ -174,7 +174,7 @@
 }
 
 .event-textarea::placeholder {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .event-datetime-row {
@@ -206,7 +206,7 @@
 }
 
 .type-blue {
-  background: #eef2ff;
+  background: var(--color-primary-bg);
   color: #6366f1;
 }
 
@@ -217,7 +217,7 @@
 }
 
 .type-light-blue {
-  background: #eff6ff;
+  background: var(--color-blue-light);
   color: #3b82f6;
 }
 
@@ -228,7 +228,7 @@
 }
 
 .type-green {
-  background: #ecfdf5;
+  background: var(--color-success-bg);
   color: #10b981;
 }
 
@@ -239,7 +239,7 @@
 }
 
 .type-red {
-  background: #fef2f2;
+  background: var(--color-danger-bg);
   color: #ef4444;
 }
 
@@ -250,7 +250,7 @@
 }
 
 .type-orange {
-  background: #fff7ed;
+  background: var(--color-orange-light);
   color: #f59e0b;
 }
 
@@ -316,8 +316,8 @@
 }
 
 .type-gray {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
 }
 
 .type-gray.active,
@@ -353,17 +353,17 @@
 .btn-cancel {
   flex: 1;
   padding: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
-  background: #fff;
+  background: var(--bg-card);
   font-size: 15px;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-dark);
   cursor: pointer;
 }
 
 .btn-cancel:hover {
-  background: #f9fafb;
+  background: var(--bg-card-alt);
 }
 
 .btn-primary {
@@ -379,7 +379,7 @@
 }
 
 .btn-primary:hover {
-  background: #4f46e5;
+  background: var(--color-primary);
 }
 
 /* ── Responsive ── */

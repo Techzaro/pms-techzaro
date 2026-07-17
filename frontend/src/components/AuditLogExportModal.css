@@ -3,7 +3,7 @@
 .ael-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--bg-modal-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -13,7 +13,7 @@
 }
 
 .ael-modal {
-  background: #fff;
+  background: var(--bg-card);
   border-radius: 16px;
   width: 100%;
   max-width: 480px;
@@ -39,11 +39,11 @@
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: #f3f4f6;
+  background: var(--bg-hover);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6b7280;
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 
@@ -51,22 +51,22 @@
   margin: 0;
   font-size: 18px;
   font-weight: 800;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .ael-subtitle {
   margin: 2px 0 0;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .ael-close-btn {
   width: 32px;
   height: 32px;
   border: none;
-  background: #f3f4f6;
+  background: var(--bg-hover);
   border-radius: 8px;
-  color: #6b7280;
+  color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -77,7 +77,7 @@
 
 .ael-close-btn:hover {
   background: #e5e7eb;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .ael-body {
@@ -96,7 +96,7 @@
   align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.15s;
@@ -135,7 +135,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--bg-card);
 }
 
 .ael-radio-content {
@@ -147,12 +147,12 @@
 .ael-radio-title {
   font-size: 14px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .ael-radio-desc {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-secondary);
   line-height: 1.4;
 }
 
@@ -161,14 +161,14 @@
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  background: #f9fafb;
+  background: var(--bg-card-alt);
   border-radius: 10px;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .ael-preview strong {
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .ael-footer {
@@ -176,15 +176,15 @@
   justify-content: flex-end;
   gap: 10px;
   padding: 16px 24px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--border-light);
 }
 
 .ael-cancel-btn {
   padding: 9px 20px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 10px;
-  background: #fff;
-  color: #374151;
+  background: var(--bg-card);
+  color: var(--text-dark);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -192,7 +192,7 @@
 }
 
 .ael-cancel-btn:hover {
-  background: #f3f4f6;
+  background: var(--bg-hover);
   border-color: #d1d5db;
 }
 
@@ -212,7 +212,7 @@
 }
 
 .ael-export-btn:hover {
-  background: #4f46e5;
+  background: var(--color-primary);
 }
 
 /* ── Responsive ── */

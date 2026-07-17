@@ -571,7 +571,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                         return (
                           <div key={p.label} style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 0" }}>
                             <span style={{ fontSize: 14, color: "#374151", fontWeight: 500, minWidth: 60 }}>{p.label}</span>
-                            <div style={{ flex: 1, height: 10, background: "#f3f4f6", borderRadius: 5, overflow: "hidden" }}>
+                            <div style={{ flex: 1, height: 10, background: "var(--border-light)", borderRadius: 5, overflow: "hidden" }}>
                               <div style={{ width: `${pct}%`, height: "100%", borderRadius: 5, background: p.color, transition: "width 0.6s ease" }}></div>
                             </div>
                             <span style={{ fontSize: 14, fontWeight: 600, color: "#111827", minWidth: 80, textAlign: "right" }}>{p.count} ({Math.round(pct)}%)</span>
@@ -604,7 +604,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                       ) : employees.map((e, i) => {
                         const rate = e.completion_rate ?? (e.assigned > 0 ? Math.round((e.completed / e.assigned) * 100) : 0);
                         return (
-                          <tr key={e.id} style={{ borderBottom: "1px solid #f3f4f6", background: i % 2 ? "#f9fafb" : "#fff" }}>
+                          <tr key={e.id} style={{ borderBottom: "1px solid var(--border-light)", background: i % 2 ? "var(--bg-card-alt)" : "var(--bg-card)" }}>
                             <td data-label="#" style={{ textAlign: "center", color: "#6b7280" }}>{i + 1}</td>
                             <td data-label="Employee" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <div style={{ width: 26, height: 26, borderRadius: "50%", background: getAvatarColor(e.name), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
@@ -619,7 +619,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                             <td data-label="Overdue" style={{ textAlign: "center", fontWeight: 600, color: "#ef4444" }}>{e.overdue ?? 0}</td>
                             <td data-label="Rate">
                               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "#e5e7eb", overflow: "hidden" }}>
+                                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "var(--border-color)", overflow: "hidden" }}>
                                   <div style={{ width: `${rate}%`, height: "100%", borderRadius: 2, background: rate >= 80 ? "#22c55e" : rate >= 50 ? "#f59e0b" : "#ef4444" }}></div>
                                 </div>
                                 <span style={{ fontWeight: 600, fontSize: 9, color: "#374151", minWidth: 28 }}>{rate}%</span>
@@ -641,7 +641,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                   <div className="erm-table-wrapper" style={{ border: "none", borderRadius: 0 }}>
                     <table className="erm-table" style={{ tableLayout: "auto", minWidth: 0 }}>
                       <thead>
-                        <tr style={{ background: "#f9fafb", color: "#6b7280", fontWeight: 600 }}>
+                        <tr style={{ background: "var(--bg-card-alt)", color: "var(--text-secondary)", fontWeight: 600 }}>
                           <th style={{ padding: "4px 6px", textAlign: "left" }}>Team</th>
                           <th style={{ padding: "4px 6px", textAlign: "center" }}>Assigned</th>
                           <th style={{ padding: "4px 6px", textAlign: "center" }}>Completed</th>
@@ -651,7 +651,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                       </thead>
                       <tbody>
                         {teams.map((t, i) => (
-                          <tr key={i} style={{ borderBottom: "1px solid #f3f4f6", background: i % 2 ? "#f9fafb" : "#fff" }}>
+                          <tr key={i} style={{ borderBottom: "1px solid var(--border-light)", background: i % 2 ? "var(--bg-card-alt)" : "var(--bg-card)" }}>
                             <td data-label="Team" style={{ fontWeight: 600, color: "#111827" }}>{t.name}</td>
                             <td data-label="Assigned" style={{ textAlign: "center", color: "#374151" }}>{t.assigned ?? 0}</td>
                             <td data-label="Completed" style={{ textAlign: "center", color: "#22c55e", fontWeight: 600 }}>{t.completed ?? 0}</td>

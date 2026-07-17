@@ -14,7 +14,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect, useCallback } from "react";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
@@ -22,7 +22,7 @@ import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
 import ViewDeliverableModal from "../components/ViewDeliverableModal";
-import { formatDateTime } from "../utils/formatDateTime";
+import { formatDateTimeInline } from "../utils/formatDateTime";
 import "../pages/Deliveries.css";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
@@ -176,7 +176,7 @@ function Deliveries() {
   };
 
   const formatDate = (dateStr) => {
-    return formatDateTime(dateStr);
+    return formatDateTimeInline(dateStr);
   };
 
   const formatStatus = (status) => {
@@ -260,11 +260,11 @@ function Deliveries() {
         <div className="container">
           <div className="deliveries-table-header">
             <div></div>
+            <div>Assigned By</div>
             <div>Subtask</div>
             <div>Task</div>
-            <div>Assigned By</div>
             <div>Status</div>
-            <div>Date</div>
+            <div>Start & Due Date</div>
             <div>Action</div>
           </div>
 
@@ -281,17 +281,6 @@ function Deliveries() {
                     <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                     <div className="user-box">
                       <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                        {getInitials(item.title)}
-                      </div>
-                      <div>
-                        <div className="user-name">{item.title}</div>
-                      </div>
-                    </div>
-                     <div>
-                       <div className="task-title">{item.task?.title || item.project?.title || "-"}</div>
-                     </div>
-                    <div className="user-box">
-                      <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                         {getInitials(item.creator?.name)}
                       </div>
                       <div>
@@ -299,6 +288,27 @@ function Deliveries() {
                         <div className="user-role">{item.creator?.role ? item.creator.role.replace("_", " ") : ""}</div>
                       </div>
                     </div>
+                    <div className="user-box">
+                      <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
+                        {getInitials(item.title)}
+                      </div>
+                      <div>
+                        <div className="user-name">{item.title}</div>
+                        {item.project && (
+                          <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
+                            {item.project.title}
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                     <div>
+                       <div className="task-title">{item.task?.title || item.project?.title || "-"}</div>
+                       {(item.project || item.task?.project) && item.task?.title && (
+                         <Link to={rolePath(`projects/project-details/${(item.project || item.task.project).id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
+                           {(item.project || item.task.project).title}
+                         </Link>
+                       )}
+                     </div>
                     <div>
                       <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>
                         <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
@@ -315,7 +325,7 @@ function Deliveries() {
                       )}
                     </div>
                     <div className="date-box">
-                      <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.start_date)}{"\n"}{formatDate(item.due_date)}</div>
+                      <div style={{ whiteSpace: "pre-line" }}>{formatDateTimeInline(item.start_date)}{"\n"}{formatDateTimeInline(item.due_date)}</div>
                     </div>
                     <div className="action-btns">
                       {(item.status === "pending" || item.status === "rejected" || item.status === "reopened") ? (

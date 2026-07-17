@@ -119,15 +119,17 @@ function RightSidebar({ isOpen, onClose }) {
               <h3>Calendar</h3>
             </div>
             <div className="calendar-header-actions">
-              <button className="calendar-nav-btn" onClick={() => navigateMonth(-1)} aria-label="Previous month">
-                <ChevronLeft size={16} />
-              </button>
-              <button className="calendar-nav-btn" onClick={goToToday} aria-label="Go to today">
-                <Calendar size={16} />
-              </button>
-              <button className="calendar-nav-btn" onClick={() => navigateMonth(1)} aria-label="Next month">
-                <ChevronRight size={16} />
-              </button>
+              <div className="calendar-nav-group">
+                <button className="calendar-nav-btn" onClick={() => navigateMonth(-1)} aria-label="Previous month">
+                  <ChevronLeft size={16} />
+                </button>
+                <button className="calendar-nav-btn" onClick={goToToday} aria-label="Go to today">
+                  <Calendar size={16} />
+                </button>
+                <button className="calendar-nav-btn" onClick={() => navigateMonth(1)} aria-label="Next month">
+                  <ChevronRight size={16} />
+                </button>
+              </div>
               <button className="calendar-action" onClick={handleViewAllClick}>View All</button>
             </div>
           </div>

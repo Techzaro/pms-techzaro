@@ -13,7 +13,7 @@
   transition: opacity 0.2s, background 0.2s, transform 0.15s;
   white-space: nowrap;
   border: none;
-  background: #4f46e5;
+  background: var(--color-primary);
   color: #fff;
 }
 
@@ -69,13 +69,13 @@
 
 /* Outline variant */
 .lb-btn--outline {
-  background: #fff;
+  background: var(--bg-card);
   color: #475569;
   border: 1px solid #e2e8f0;
 }
 
 .lb-btn--outline:hover:not(:disabled) {
-  background: #f8fafc;
+  background: var(--bg-card-alt);
   border-color: #cbd5e1;
 }
 

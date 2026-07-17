@@ -32,7 +32,7 @@
 
 .donut-legend-label {
   font-size: 14px;
-  color: #374151;
+  color: var(--text-dark);
   font-weight: 500;
   flex: 1;
 }
@@ -40,7 +40,7 @@
 .donut-legend-count {
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 /* ── Priority Bar Chart Component ── */
@@ -65,7 +65,7 @@
 
 .priority-bar-label {
   font-size: 14px;
-  color: #374151;
+  color: var(--text-dark);
   font-weight: 500;
   min-width: 60px;
 }
@@ -73,7 +73,7 @@
 .priority-bar-track {
   flex: 1;
   height: 10px;
-  background: #f3f4f6;
+  background: var(--bg-hover);
   border-radius: 5px;
   overflow: hidden;
 }
@@ -87,14 +87,14 @@
 .priority-bar-value {
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
   min-width: 80px;
   text-align: right;
 }
 
 .priority-bar-footer {
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--text-muted);
   margin-top: 8px;
 }
 

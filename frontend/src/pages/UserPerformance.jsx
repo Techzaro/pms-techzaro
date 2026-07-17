@@ -411,12 +411,12 @@ function UserPerformance() {
           </div>
 
           <div className="container">
-            <div className="table-header-compact">
-              <div className="task-name-column">Task Name</div>
-              <div className="status-column">Status</div>
+            <div className="up-table-header">
+              <div>Task Name</div>
+              <div>Status</div>
               <div>Progress</div>
-              <div className="priority-column">Priority</div>
-              <div className="date-column">Due Date</div>
+              <div>Priority</div>
+              <div>Due Date</div>
               <div>Action</div>
             </div>
 
@@ -430,7 +430,7 @@ function UserPerformance() {
                   const uniqueKey = `task-${item.id}-${idx}`;
 
                   return (
-                    <div className="taskby-row-compact" key={uniqueKey}>
+                    <div className="up-table-row" key={uniqueKey}>
                       <div className="col-task-name">
                         <div className="task-title">{item.title}</div>
                       </div>
@@ -488,9 +488,9 @@ function UserPerformance() {
           {/* Mobile Task Cards */}
           <div className="up-task-cards">
             {tasksLoading ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
+              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-secondary)" }}>Loading...</div>
             ) : filteredItems.length === 0 ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
+              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-secondary)" }}>No items found</div>
             ) : (
               filteredItems.map((item, idx) => {
                 const uniqueKey = `card-task-${item.id}-${idx}`;

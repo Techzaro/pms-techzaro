@@ -294,24 +294,16 @@ class TaskController extends Controller
         $userId = $user->id;
         $isDueTodayFilter = $request->input('status') === 'due_today';
         $isPendingFilter = $request->input('status') === 'pending';
-        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
-
-        if ($isAdminOrManager) {
-            $adminManagerIds = Cache::remember('admin_manager_ids', 300, fn () => User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray()
-            );
-        }
 
         $tasksQuery = Task::with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role']);
 
         if ($user->role === 'guest') {
             $tasksQuery->whereHas('project', fn ($q) => $q->where('client_name', $user->name));
-        } elseif ($isAdminOrManager) {
-            $tasksQuery->whereIn('assigned_by', $adminManagerIds)
+        } else {
+            $tasksQuery->where('assigned_by', $userId)
                 ->where(function ($q) {
                     $q->whereColumn('assigned_by', '!=', 'assigned_to')->orWhereNull('assigned_to');
                 });
-        } else {
-            $tasksQuery->where('assigned_by', $userId);
         }
 
         $tasks = $tasksQuery->orderBy('sort_order')->latest('updated_at')
@@ -1052,6 +1044,7 @@ class TaskController extends Controller
             'description' => 'sometimes|nullable|string',
             'requirements' => 'sometimes|nullable|array',
             'requirements.*' => 'required_with:requirements|string|max:500',
+            'project_id' => 'sometimes|nullable|integer|exists:projects,id',
             'start_date' => 'sometimes|nullable|date',
             'end_date' => 'sometimes|nullable|date',
             'priority' => 'sometimes|string|max:32',
@@ -1080,7 +1073,7 @@ class TaskController extends Controller
         unset($validated['existing_file_names']);
 
         $oldValues = [];
-        foreach (['title', 'description', 'requirements', 'start_date', 'end_date', 'priority', 'status'] as $f) {
+        foreach (['title', 'description', 'requirements', 'project_id', 'start_date', 'end_date', 'priority', 'status'] as $f) {
             if (array_key_exists($f, $validated)) {
                 $oldValues[$f] = $task->{$f};
             }
@@ -2096,7 +2089,8 @@ class TaskController extends Controller
         $file = $request->file('file');
         $path = $file->store('task-files/'.$task->id, 'public');
         $customName = $request->input('name') ?: $file->getClientOriginalName();
-        $fileRecord = $task->files()->create(['name' => $customName, 'url' => '/storage/'.$path]);
+        $nextOrder = $task->files()->max('sort_order') + 1;
+        $fileRecord = $task->files()->create(['name' => $customName, 'url' => '/storage/'.$path, 'sort_order' => $nextOrder]);
 
         TaskChange::create([
             'task_id' => $task->id,
@@ -2139,7 +2133,8 @@ class TaskController extends Controller
 
         $validated = $request->validate(['url' => 'required|url|max:2048', 'name' => 'nullable|string|max:255']);
         $linkName = $validated['name'] ?? $validated['url'];
-        $fileRecord = $task->files()->create(['name' => $linkName, 'url' => $validated['url']]);
+        $nextOrder = $task->files()->max('sort_order') + 1;
+        $fileRecord = $task->files()->create(['name' => $linkName, 'url' => $validated['url'], 'sort_order' => $nextOrder]);
 
         TaskChange::create([
             'task_id' => $task->id,

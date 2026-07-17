@@ -2,11 +2,11 @@
     width: 100%;
     max-width: 300px;
     min-width: 260px;
-    background: white;
+    background: var(--bg-card);
     border-radius: 20px 0 0 20px;
     margin-top: 0;
     padding: 20px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border-color);
     box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
     position: relative;
     align-self: flex-start;
@@ -15,9 +15,9 @@
 }
 
 .right-card {
-    background: white;
+    background: var(--bg-card);
     border-radius: 24px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border-color);
     padding: 18px;
     margin-bottom: 20px;
 }
@@ -34,14 +34,14 @@
 .right-card-header h3 {
     margin: 0;
     font-size: 18px;
-    color: #0f172a;
+    color: var(--text-heading);
 }
 
 .calendar-label,
 .event-count {
     display: block;
     font-size: 12px;
-    color: #6b7280;
+    color: var(--text-secondary);
     margin-bottom: 6px;
 }
 
@@ -64,7 +64,7 @@
 }
 
 .calendar-card {
-    background: white;
+    background: var(--bg-card);
     border-radius: 24px;
     padding: 24px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
@@ -75,8 +75,8 @@
     width: 32px;
     height: 32px;
     border-radius: 8px;
-    border: 1px solid #e5e7eb;
-    background: white;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -85,7 +85,20 @@
 }
 
 .calendar-nav-btn:hover {
-    background: #f3f4f6;
+    background: var(--bg-hover);
+}
+
+.calendar-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.calendar-nav-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .calendar-grid {
@@ -95,7 +108,7 @@
 }
 
 .calendar-day-label {
-    color: #64748b;
+    color: var(--text-secondary);
     font-size: 11px;
     text-align: center;
 }
@@ -108,9 +121,9 @@
     align-items: center;
     justify-content: center;
     font-size: 13px;
-    color: #0f172a;
+    color: var(--text-heading);
     border-radius: 12px;
-    background: #f8fafc;
+    background: var(--bg-card-alt);
 }
 
 .calendar-cell.empty {
@@ -133,7 +146,7 @@
 }
 
 .calendar-cell.hovered {
-    background: #dbeafe;
+    background: var(--color-blue-bg);
     outline: 2px solid #2563eb;
     outline-offset: -1px;
 }
@@ -156,16 +169,16 @@
 }
 
 .calendar-cell.today .calendar-cell-dot {
-    background: white;
+    background: var(--bg-card);
 }
 
 .event-item,
 .task-item {
-    background: #f8fafc;
+    background: var(--bg-card-alt);
     border-radius: 18px;
     padding: 14px 16px;
     margin-bottom: 12px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border-color);
 }
 
 .event-item:last-child,
@@ -177,13 +190,13 @@
 .task-item h4 {
     margin: 0 0 6px;
     font-size: 15px;
-    color: #111827;
+    color: var(--text-primary);
 }
 
 .event-item p,
 .task-item p {
     margin: 0;
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 13px;
     line-height: 1.5;
 }
@@ -229,7 +242,7 @@
         display: block;
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,0.4);
+        background: var(--bg-modal-overlay);
         z-index: 10001;
     }
 }
@@ -420,13 +433,13 @@
 .hover-popup {
     position: fixed;
     z-index: 10010;
-    background: #fff;
+    background: var(--bg-card);
     border-radius: 14px;
     padding: 14px;
     min-width: 220px;
     max-width: 260px;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border-color);
     pointer-events: auto;
 }
 
@@ -440,19 +453,19 @@
     align-items: center;
     margin-bottom: 10px;
     padding-bottom: 8px;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid var(--border-light);
 }
 
 .hover-popup-date {
     font-weight: 700;
     font-size: 14px;
-    color: #0f172a;
+    color: var(--text-heading);
 }
 
 .hover-popup-count {
     font-size: 12px;
-    color: #6b7280;
-    background: #f3f4f6;
+    color: var(--text-secondary);
+    background: var(--bg-hover);
     padding: 2px 10px;
     border-radius: 20px;
 }
@@ -467,19 +480,19 @@
     padding: 8px 10px;
     border-radius: 10px;
     border-left: 3px solid;
-    background: #f9fafb;
+    background: var(--bg-card-alt);
     cursor: pointer;
     transition: background 0.15s;
 }
 
 .hover-popup-event:hover {
-    background: #f3f4f6;
+    background: var(--bg-hover);
 }
 
 .hover-popup-event-title {
     font-weight: 600;
     font-size: 13px;
-    color: #111827;
+    color: var(--text-primary);
     margin-bottom: 3px;
     white-space: nowrap;
     overflow: hidden;
@@ -498,13 +511,13 @@
 }
 
 .hover-popup-event-time {
-    color: #6b7280;
+    color: var(--text-secondary);
 }
 
 .hover-popup-more {
     text-align: center;
     font-size: 12px;
-    color: #6b7280;
+    color: var(--text-secondary);
     padding: 6px 0;
 }
 
@@ -537,7 +550,7 @@
 
 .task-label {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-weight: 500;
 }
 
@@ -564,8 +577,8 @@
 }
 
 .task-item {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-card-alt);
+  border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 14px;
   transition: all 0.2s ease;
@@ -579,12 +592,12 @@
   margin: 0 0 6px;
   font-size: 15px;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-dark);
 }
 
 .task-item p {
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
-  color: #6b7280;
+  color: var(--text-secondary);
 }

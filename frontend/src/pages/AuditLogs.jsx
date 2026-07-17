@@ -266,7 +266,7 @@ function AuditLogs() {
                 <p style={{ color: "#ef4444" }}>{error}</p>
                 <button
                   onClick={() => fetchLogs(page)}
-                  style={{ marginTop: 8, padding: "6px 16px", border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff", cursor: "pointer", fontSize: 13 }}
+                  style={{ marginTop: 8, padding: "6px 16px", border: "1px solid var(--border-color)", borderRadius: 8, background: "var(--bg-card)", cursor: "pointer", fontSize: 13 }}
                 >
                   Try again
                 </button>

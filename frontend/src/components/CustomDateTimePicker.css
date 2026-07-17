@@ -12,10 +12,10 @@
   padding: 10px 14px;
   border: 1px solid #d1d5db;
   border-radius: 12px;
-  background: #fff;
+  background: var(--bg-card);
   font-size: 14px;
   font-weight: 500;
-  color: #111827;
+  color: var(--text-primary);
   cursor: pointer;
   text-align: left;
   box-sizing: border-box;
@@ -29,14 +29,14 @@
 }
 
 .cdt-placeholder {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-weight: 400;
 }
 
 .cdt-arrow {
   flex-shrink: 0;
   transition: transform 0.2s;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .cdt-arrow-open {
@@ -48,8 +48,8 @@
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   z-index: 100;
@@ -64,7 +64,7 @@
 .cdt-time-row {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--border-light);
 }
 
 .cdt-col {
@@ -76,7 +76,7 @@
   display: block;
   font-size: 11px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--text-secondary);
   margin-bottom: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -89,8 +89,8 @@
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
-  color: #111827;
-  background: #f9fafb;
+  color: var(--text-primary);
+  background: var(--bg-card-alt);
   cursor: pointer;
   box-sizing: border-box;
   -webkit-appearance: auto;
@@ -107,7 +107,7 @@
   gap: 8px;
   margin-top: 10px;
   padding-top: 8px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--border-light);
 }
 
 .cdt-today,
@@ -118,23 +118,23 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  color: #374151;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-dark);
 }
 
 .cdt-today {
-  background: #4f46e5;
+  background: var(--color-primary);
   color: #fff;
-  border-color: #4f46e5;
+  border-color: var(--color-primary);
 }
 
 .cdt-today:hover {
-  background: #4338ca;
+  background: var(--color-primary-dark);
 }
 
 .cdt-clear:hover {
-  background: #f3f4f6;
+  background: var(--bg-hover);
 }
 
 /* ── Mobile Responsive ── */
