@@ -648,6 +648,8 @@ function ProjectDetails() {
 
   const { isDirty: mgrIsDirty, setIsDirty: setMgrIsDirty, handleClose: handleMgrClose, ConfirmDialog:MgrConfirmDialog } = useConfirmOnClose(() => setShowManagerModal(false));
 
+  const { submitting: milestoneToggling, run: runMilestoneToggle } = useSubmit();
+
   if (loading) {
     return (
       <DashboardLayout hideRightSidebar={true}>
@@ -696,8 +698,6 @@ function ProjectDetails() {
   const isAdminOrManager = project.is_admin_or_manager;
 
   const canEdit = project.can_edit;
-
-  const { submitting: milestoneToggling, run: runMilestoneToggle } = useSubmit();
 
   const handleMilestoneToggle = async (milestone) => {
     await runMilestoneToggle(async () => {
