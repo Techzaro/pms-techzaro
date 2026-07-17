@@ -63,7 +63,7 @@ class DeliverableController extends Controller
 
         $query = Deliverable::with([
             'project:id,title', 'assignee:id,name,email,role',
-            'creator:id,name,role', 'task:id,title', 'latestSubmission',
+            'creator:id,name,role', 'task:id,title,project_id', 'task.project:id,title', 'latestSubmission',
             'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role',
         ]);
 
@@ -112,7 +112,6 @@ class DeliverableController extends Controller
             return response()->json(['success' => true, 'data' => collect()]);
         }
 
-        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
         $isDueTodayFilter = $request->input('status') === 'due_today';
         $filters = $request->query();
         if ($isDueTodayFilter) {
@@ -121,19 +120,13 @@ class DeliverableController extends Controller
 
         $query = Deliverable::with([
             'project:id,title', 'assignee:id,name,email,role',
-            'creator:id,name,role', 'task:id,title',
+            'creator:id,name,role', 'task:id,title,project_id', 'task.project:id,title',
             'latestSubmission', 'latestSubmission.submittedBy:id,name,email',
             'latestSubmission.attachments', 'reopenedBy:id,name,role',
             'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'updatedBy:id,name,role',
         ]);
 
-        if ($isAdminOrManager) {
-            $adminManagerIds = Cache::remember('admin_manager_ids', 300, fn () => User::whereIn('role', ['admin', 'manager'])->pluck('id')->toArray()
-            );
-            $query->whereIn('created_by', $adminManagerIds);
-        } else {
-            $query->where('created_by', $user->id);
-        }
+        $query->where('created_by', $user->id);
 
         $query->whereColumn('created_by', '!=', 'assigned_to');
         $query->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()));
@@ -164,7 +157,7 @@ class DeliverableController extends Controller
 
         $deliverables = Deliverable::with([
             'project:id,title', 'assignee:id,name,email,role',
-            'creator:id,name,role', 'task:id,title',
+            'creator:id,name,role', 'task:id,title,project_id', 'task.project:id,title',
             'latestSubmission', 'latestSubmission.submittedBy:id,name,email', 'latestSubmission.attachments',
         ])
             ->where('assigned_to', $user->id)

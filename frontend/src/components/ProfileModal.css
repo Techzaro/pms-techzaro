@@ -1,7 +1,7 @@
 .profile-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
+  background: var(--bg-modal-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -14,7 +14,7 @@
 .profile-modal {
   width: 100%;
   max-width: 460px;
-  background: white;
+  background: var(--bg-card);
   border-radius: 24px;
   overflow: hidden;
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.2);
@@ -23,11 +23,11 @@
 
 .profile-header {
   padding: 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
   z-index: 10;
-  background: #ffffff;
+  background: var(--bg-card);
 }
 
 .profile-user {
@@ -52,12 +52,12 @@
 .profile-user h2 {
   margin: 0;
   font-size: 22px;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .profile-user p {
   margin-top: 4px;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
@@ -77,7 +77,7 @@
   margin-bottom: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .profile-field input {
@@ -96,7 +96,7 @@
   display: flex;
   justify-content: space-between;
   padding: 20px 24px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border-color);
   gap: 12px;
 }
 
@@ -112,7 +112,7 @@
 
 .close-btn {
   border: 1px solid #d1d5db;
-  background: white;
+  background: var(--bg-card);
   padding: 12px 18px;
   border-radius: 12px;
   cursor: pointer;

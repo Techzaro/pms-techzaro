@@ -12,7 +12,7 @@
   border-radius: 10px;
   padding: 0 12px;
   font-size: 14px;
-  background: #fff;
+  background: var(--bg-card);
   cursor: pointer;
   box-sizing: border-box;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -52,7 +52,7 @@
 .cs-selected-text {
   font-size: 14px;
   font-weight: 500;
-  color: #111827;
+  color: var(--text-primary);
   flex: 1;
   white-space: nowrap;
   overflow: hidden;
@@ -71,7 +71,7 @@
 .cs-arrow {
   flex-shrink: 0;
   transition: transform 0.2s;
-  color: #6b7280;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 2px;
 }
@@ -85,8 +85,8 @@
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   z-index: 100;
@@ -115,7 +115,7 @@
   padding: 10px 14px;
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-dark);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -129,15 +129,15 @@
 }
 
 .cs-option:hover {
-  background: #f3f4f6;
+  background: var(--bg-hover);
 }
 
 .cs-selected {
-  background: #eef2ff;
-  color: #4f46e5;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
   font-weight: 600;
 }
 
 .cs-selected:hover {
-  background: #e0e7ff;
+  background: var(--color-primary-bg-hover);
 }

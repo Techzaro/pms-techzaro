@@ -4,7 +4,7 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--bg-modal-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -13,7 +13,7 @@
 }
 
 .sdvm-modal {
-  background: white;
+  background: var(--bg-card);
   border-radius: 16px;
   width: 100%;
   max-width: 640px;
@@ -27,7 +27,7 @@
   position: sticky;
   top: 0;
   z-index: 10;
-  background: #ffffff;
+  background: var(--bg-card);
 }
 
 .sdvm-header-top {
@@ -41,7 +41,7 @@
   margin: 0;
   font-size: 22px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .sdvm-status-badge {
@@ -55,7 +55,7 @@
   font-weight: 600;
 }
 
-.sdvm-status-pending { background: #F3F4F6; color: #374151; }
+.sdvm-status-pending { background: var(--bg-hover); color: var(--text-dark); }
 .sdvm-status-submitted { background: #DBEAFE; color: #1E40AF; }
 .sdvm-status-approved { background: #DCFCE7; color: #166534; }
 .sdvm-status-rework_required { background: #FEF3C7; color: #92400E; }
@@ -63,7 +63,7 @@
 .sdvm-due {
   margin-top: 6px;
   font-size: 13px;
-  color: #6B7280;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
@@ -74,7 +74,7 @@
 .sdvm-section {
   margin-bottom: 24px;
   padding-bottom: 20px;
-  border-bottom: 1px solid #F3F4F6;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .sdvm-section:last-child {
@@ -87,7 +87,7 @@
   margin: 0 0 16px;
   font-size: 16px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .sdvm-details-grid,
@@ -106,25 +106,25 @@
 .sdvm-detail-label {
   font-size: 12px;
   font-weight: 500;
-  color: #9CA3AF;
+  color: var(--text-muted);
 }
 
 .sdvm-detail-value {
   font-size: 14px;
   font-weight: 500;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .sdvm-description-text {
   margin: 4px 0 0;
   font-size: 14px;
-  color: #6B7280;
+  color: var(--text-secondary);
   line-height: 1.6;
   white-space: pre-wrap;
 }
 
 .sdvm-submission {
-  background: #F9FAFB;
+  background: var(--bg-card-alt);
   border-radius: 12px;
   padding: 16px;
 }
@@ -146,8 +146,8 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: white;
-  border: 1px solid #E5E7EB;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   color: #6366F1;
   text-decoration: none;
@@ -169,7 +169,7 @@
 .sdvm-history-item {
   padding: 14px;
   border-radius: 10px;
-  border: 1px solid #E5E7EB;
+  border: 1px solid var(--border-color);
   background: #FAFAFA;
 }
 
@@ -198,24 +198,24 @@
 .sdvm-history-label {
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .sdvm-history-date {
   font-size: 12px;
-  color: #9CA3AF;
+  color: var(--text-muted);
 }
 
 .sdvm-history-user {
   font-size: 12px;
-  color: #6B7280;
+  color: var(--text-secondary);
   margin-top: 4px;
 }
 
 .sdvm-history-text {
   margin: 8px 0 0;
   font-size: 13px;
-  color: #374151;
+  color: var(--text-dark);
   line-height: 1.5;
 }
 
@@ -223,7 +223,7 @@
 .sdvm-empty {
   text-align: center;
   padding: 30px 0;
-  color: #6B7280;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
@@ -249,17 +249,17 @@
 
 .sdvm-close-btn {
   padding: 10px 20px;
-  border: 1px solid #E5E7EB;
-  background: white;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   border-radius: 10px;
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-dark);
   cursor: pointer;
 }
 
 .sdvm-close-btn:hover {
-  background: #F3F4F6;
+  background: var(--bg-hover);
 }
 
 .sdvm-action-btn,
@@ -288,7 +288,7 @@
 }
 
 .sdvm-resubmit-btn {
-  background: #4F46E5;
+  background: var(--color-primary);
   color: white;
 }
 

@@ -14,7 +14,7 @@ import Breadcrumb from "../components/Breadcrumb";
 import { CiCalendar } from "react-icons/ci";
 import { IoIosArrowDown } from "react-icons/io";
 import { GoDotFill } from "react-icons/go";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
 import { Pencil } from "lucide-react";
 import CreateTaskModal from "../components/CreateTaskModal";
@@ -23,7 +23,7 @@ import SortableTableWrapper, { DragHandle } from "../components/SortableTableWra
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
-import { formatDateOnly, formatDateTime } from "../utils/formatDateTime";
+import { formatDateTimeInline } from "../utils/formatDateTime";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
@@ -174,7 +174,7 @@ const Taskby = () => {
   };
 
   const formatDate = (dateStr) => {
-    return formatDateTime(dateStr);
+    return formatDateTimeInline(dateStr);
   };
 
   const formatStatus = (status) => {
@@ -301,7 +301,7 @@ const Taskby = () => {
           <div className="status-column">Status</div>
           <div>Progress</div>
           <div className="priority-column">Priority</div>
-          <div className="date-column">Date</div>
+          <div className="date-column">Start & Due Date</div>
           <div>Action</div>
         </div>
 
@@ -370,17 +370,10 @@ const Taskby = () => {
                     </div>
 
                     <div className="col-status">
-                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                        <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
-                          <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
-                          {formatStatus(item.status)}
-                        </span>
-                        {item.assignees?.[0]?.pivot?.status === "submitted" && (
-                          <span className="badge" style={{ background: "#DBEAFE", color: "#1E40AF", fontSize: "10px" }}>
-                            Submitted
-                          </span>
-                        )}
-                      </div>
+                      <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
+                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                        {formatStatus(item.status)}
+                      </span>
                     </div>
 
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>

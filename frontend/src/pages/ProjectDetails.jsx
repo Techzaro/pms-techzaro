@@ -860,7 +860,6 @@ function ProjectDetails() {
   const tabs = [
     { id: "overview", label: "Overview", icon: ListChecks },
     { id: "tasks", label: "Tasks", icon: ClipboardList },
-    { id: "subtasks", label: "Subtasks", icon: Calendar },
     { id: "files", label: "Platform files & links", icon: FolderOpen },
     { id: "access", label: "Accessess", icon: Shield },
     { id: "members", label: "Members", icon: Users },
@@ -920,6 +919,12 @@ function ProjectDetails() {
 
   const overviewInner = (
     <>
+      {project.description && (
+        <div style={{ marginBottom: 20 }}>
+          <h2 className="pd-block-title">Description</h2>
+          <div className="pd-desc-tx pd-rich" dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.description) }} />
+        </div>
+      )}
       <div className="pd-shell-split">
         <div className="pd-shell-left">
           <h2 className="pd-block-title">Project Milestones</h2>
@@ -1117,9 +1122,6 @@ function ProjectDetails() {
                     )}
                   </div>
                 </div>
-                {project.description && (
-                  <div className="pd-desc-tx pd-rich" dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.description) }} />
-                )}
               </div>
             </header>
 
@@ -1200,7 +1202,7 @@ function ProjectDetails() {
                                 <div>Status</div>
                                 <div>Progress</div>
                                 <div>Priority</div>
-                                <div>Due Date</div>
+                                <div>Start & Due Date</div>
                                 <div>Action</div>
                               </div>
                               {filteredTasks.length === 0 ? (
@@ -1243,7 +1245,15 @@ function ProjectDetails() {
                                             {t.priority}
                                           </span>
                                         </div>
-                                        <div style={{ whiteSpace: "pre-line" }}>{formatDateTime(t.end_date)}</div>
+                                        <div className="col-due-date">
+                                          <div className="date-box">
+                                            <div style={{ whiteSpace: "pre-line" }}>
+                                              {formatDateTimeInline(t.start_date)}
+                                              {"\n"}
+                                              {formatDateTimeInline(t.end_date)}
+                                            </div>
+                                          </div>
+                                        </div>
                                         <div>
                                           <div className="action-btns">
                                             <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${t.id}`), { state: { from: getTaskFrom(t) } })}><IoEyeOutline /></button>
@@ -1281,95 +1291,6 @@ function ProjectDetails() {
                                 </SortableTableWrapper>
                               )}
                             </div>
-                          </div>
-                        </section>
-                      </div>
-                    )}
-
-                    {tab === "subtasks" && (
-                      <div className="pd-tab-panel">
-                        <section className="pd-card-flat pd-card-flat--table">
-                          <div className="pd-card-flat__head">
-                            <h2 className="pd-block-title pd-block-title--inline">Subtasks</h2>
-                            <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                              <input type="text" placeholder="Search subtasks..." value={subtaskSearch} onChange={(e) => setSubtaskSearch(e.target.value)} />
-                            </div>
-                          </div>
-                          <div className="pd-table-wrap">
-                            <div className="deliveries-table-header pd-subtasks-grid">
-                              <div></div>
-                              <div>Subtask</div>
-                              <div>{isAdminOrManager || isCreator ? "Assigned To" : "Assigned By"}</div>
-                              <div>Due Date</div>
-                              <div>Status</div>
-                              <div>Action</div>
-                            </div>
-                            {(filteredSubtasks.length === 0) ? (
-                              <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>{subtaskSearch ? "No subtasks match your search." : "No subtasks."}</div>
-                            ) : (
-                              <SortableTableWrapper
-                                items={filteredSubtasks.map((d, idx) => ({ ...d, sortableId: `del-${d.id || idx}` }))}
-                                onReorder={handleSubtaskReorder}
-                                idKey="sortableId"
-                                as="div"
-                                handleOnly
-                              >
-                                {(d, idx, dndProps) => {
-                                  const subtaskName = d.deliverable_name || d.name || d.title || d.label || d.description || '';
-                                  const displayName = subtaskName || `Subtask ${idx + 1}`;
-                                  const isAssigner = d.created_by && d.created_by === currentUserId;
-                                  const isAssignee = d.assignee?.id && d.assignee.id === currentUserId;
-                                  const isSubmittable = d.status === "pending" || d.status === "rejected" || d.status === "reopened";
-                                  const showSubmit = isSubmittable && isAssignee;
-                                  const showView = !isSubmittable || isAssigner || isAdminOrManager;
-                                  const statusKey = (d.status || '').toLowerCase();
-
-                                  return (
-                                    <div className="deliveries-table-row pd-subtasks-grid" key={d.sortableId}>
-                                      <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
-                                      <div className="user-box">
-                                        <div className="avatar" style={{ background: '#EEF2FF', color: '#4F46E5', width: '42px', height: '42px', fontSize: '14px' }}>
-                                          {initials(displayName)}
-                                        </div>
-                                        <div>
-                                          <div className="user-name">{displayName}</div>
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <div className="user-name">{isAdminOrManager || isCreator ? (d.assignee?.name || d.assigned_to?.name || "—") : (d.creator?.name || "—")}</div>
-                                        <div className="user-role">{isAdminOrManager || isCreator ? (d.assignee?.role ? d.assignee.role.replace("_", " ") : "") : (d.creator?.role ? d.creator.role.replace("_", " ") : "")}</div>
-                                      </div>
-                                      <div className="date-box" style={{ whiteSpace: "pre-line" }}>{formatDateTime(d.due_date || d.dueDate)}</div>
-                                      <div>
-                                        <span className="badge" style={{ background: STATUS_COLORS[statusKey] || "#F3F4F6", color: STATUS_TEXT_COLORS[statusKey] || "#374151" }}>
-                                          <span className="dot" style={{ background: STATUS_TEXT_COLORS[statusKey] || "#374151" }}></span>
-                                          {formatStatus(d.status)}
-                                        </span>
-                                      </div>
-                                      <div className="action-btns">
-                                        {showSubmit && (
-                                          <button className="action-icon-btn action-submit" title="Submit" onClick={() => setSubmitModal({ open: true, subtask: d })}>
-                                            <LuSend size={16} />
-                                          </button>
-                                        )}
-                                        {showView && (
-                                          <button className="action-icon-btn action-view" title="View" onClick={() => {
-                                            if (isAssigner || isAdminOrManager) {
-                                              setAssignerModal({ open: true, subtask: d });
-                                            } else {
-                                              setViewModal({ open: true, subtask: d });
-                                            }
-                                          }}>
-                                            <IoEyeOutline size={16} />
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                }}
-                              </SortableTableWrapper>
-                            )}
                           </div>
                         </section>
                       </div>
@@ -1773,7 +1694,7 @@ function ProjectDetails() {
       {/* Edit File/Link Popup */}
       {editFileItem && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={() => setEditFileItem(null)}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 460, maxWidth: "90vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 460, maxWidth: "90vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#1e293b" }}>Edit File / Link</h3>
             <p style={{ margin: "6px 0 0", fontSize: 13, color: "#64748b" }}>Rename or update the URL below.</p>
             <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1801,7 +1722,7 @@ function ProjectDetails() {
               )}
             </div>
             <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button type="button" onClick={() => setEditFileItem(null)} style={{ padding: "8px 18px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "#374151" }}>Cancel</button>
+              <button type="button" onClick={() => setEditFileItem(null)} style={{ padding: "8px 18px", borderRadius: 8, border: "1px solid var(--border-medium)", background: "var(--bg-card)", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--text-dark)" }}>Cancel</button>
               <button type="button" onClick={handleRenameFile} disabled={!editFileName.trim()} style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: editFileName.trim() ? "#6366f1" : "#e5e7eb", color: editFileName.trim() ? "#fff" : "#9ca3af", fontSize: 13, fontWeight: 600, cursor: editFileName.trim() ? "pointer" : "not-allowed" }}>Save</button>
             </div>
           </div>

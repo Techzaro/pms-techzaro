@@ -12,7 +12,7 @@ import { useAutoRefresh } from "../utils/useAutoRefresh";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { GoDotFill } from "react-icons/go";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import CreateTaskModal from "../components/CreateTaskModal";
@@ -23,7 +23,7 @@ import SortableTableWrapper, { DragHandle } from "../components/SortableTableWra
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
-import { formatDateTime } from "../utils/formatDateTime";
+import { formatDateTimeInline } from "../utils/formatDateTime";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
@@ -162,7 +162,7 @@ const SelfTasks = () => {
   };
 
   const formatDate = (dateStr) => {
-    return formatDateTime(dateStr);
+    return formatDateTimeInline(dateStr);
   };
 
   const formatStatus = (status) => {
@@ -276,7 +276,7 @@ const SelfTasks = () => {
           <div>Status</div>
           <div>Progress</div>
           <div>Priority</div>
-          <div>Date</div>
+          <div>Start & Due Date</div>
           <div>Action</div>
         </div>
 
@@ -298,6 +298,11 @@ const SelfTasks = () => {
                   <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                   <div>
                     <div className="task-title">{item.title}</div>
+                    {item.project && (
+                      <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
+                        {item.project.title}
+                      </Link>
+                    )}
                   </div>
                   <div>
                     <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>

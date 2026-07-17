@@ -1016,9 +1016,9 @@ function UserProfile() {
                 <button
                   disabled={!hasPrev}
                   onClick={() => { if (hasPrev) navigate(rolePath(`manage-users/user-profile/${allUsers[currentUserIndex - 1].id}`)); }}
-                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid #d1d5db", background: hasPrev ? "#fff" : "#f9fafb", color: hasPrev ? "#374151" : "#9ca3af", fontWeight: 600, fontSize: 13, cursor: hasPrev ? "pointer" : "not-allowed", transition: "all 0.15s", whiteSpace: "nowrap" }}
-                  onMouseEnter={(e) => { if (hasPrev) e.target.style.background = "#f3f4f6"; }}
-                  onMouseLeave={(e) => { if (hasPrev) e.target.style.background = "#fff"; }}
+                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border-medium)", background: hasPrev ? "var(--bg-card)" : "var(--bg-card-alt)", color: hasPrev ? "var(--text-dark)" : "var(--text-muted)", fontWeight: 600, fontSize: 13, cursor: hasPrev ? "pointer" : "not-allowed", transition: "all 0.15s", whiteSpace: "nowrap" }}
+                  onMouseEnter={(e) => { if (hasPrev) e.target.style.background = "var(--border-light)"; }}
+                  onMouseLeave={(e) => { if (hasPrev) e.target.style.background = "var(--bg-card)"; }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
                   Previous
@@ -1026,9 +1026,9 @@ function UserProfile() {
                 <button
                   disabled={!hasNext}
                   onClick={() => { if (hasNext) navigate(rolePath(`manage-users/user-profile/${allUsers[currentUserIndex + 1].id}`)); }}
-                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid #d1d5db", background: hasNext ? "#fff" : "#f9fafb", color: hasNext ? "#374151" : "#9ca3af", fontWeight: 600, fontSize: 13, cursor: hasNext ? "pointer" : "not-allowed", transition: "all 0.15s", whiteSpace: "nowrap" }}
-                  onMouseEnter={(e) => { if (hasNext) e.target.style.background = "#f3f4f6"; }}
-                  onMouseLeave={(e) => { if (hasNext) e.target.style.background = "#fff"; }}
+                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border-medium)", background: hasNext ? "var(--bg-card)" : "var(--bg-card-alt)", color: hasNext ? "var(--text-dark)" : "var(--text-muted)", fontWeight: 600, fontSize: 13, cursor: hasNext ? "pointer" : "not-allowed", transition: "all 0.15s", whiteSpace: "nowrap" }}
+                  onMouseEnter={(e) => { if (hasNext) e.target.style.background = "var(--border-light)"; }}
+                  onMouseLeave={(e) => { if (hasNext) e.target.style.background = "var(--bg-card)"; }}
                 >
                   Next
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
@@ -1900,7 +1900,7 @@ function UserProfile() {
       {/* Edit Document Popup — same as ManageUsers edit file popup */}
       {editDocItem && (
         <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditDocItem(null); setEditDocNewFile(null); setEditDocDeleted(false); setEditDocDeleteConfirm(false); }}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>Edit File</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or replace this file.</p>
             <div style={{ marginBottom: 16 }}>
@@ -1913,7 +1913,7 @@ function UserProfile() {
             <div style={{ marginBottom: 24 }}>
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>File</label>
               {editDocItem.existingFileName && !editDocDeleted && !editDocNewFile ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--bg-card-alt)", border: "1px solid var(--border-color)", borderRadius: 8 }}>
                   <span style={{ fontSize: 14 }}>📄</span>
                   <span style={{ flex: 1, fontSize: 13, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editDocItem.existingFileName}</span>
                   <button type="button" onClick={() => setEditDocDeleteConfirm(true)} className="mu-action-btn mu-action-btn-delete" title="Delete current file" style={{ width: 24, height: 24 }}>
@@ -1921,14 +1921,14 @@ function UserProfile() {
                   </button>
                 </div>
               ) : editDocNewFile ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--color-success-bg)", border: "1px solid #bbf7d0", borderRadius: 8 }}>
                   <span style={{ fontSize: 14 }}>📄</span>
                   <span style={{ flex: 1, fontSize: 13, color: "#166534", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editDocNewFile.name}</span>
                   <span style={{ fontSize: 11, color: "#6b7280" }}>{(editDocNewFile.size / 1024).toFixed(1)} KB</span>
                   <button type="button" onClick={() => { setEditDocNewFile(null); setEditDocDeleted(false); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: 0 }}>✕</button>
                 </div>
               ) : (
-                <label style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "10px 12px", border: "1px dashed #d1d5db", borderRadius: 8, background: "#f9fafb", color: "#6b7280", fontSize: 13, cursor: "pointer", textAlign: "center" }}>
+                <label style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "10px 12px", border: "1px dashed #d1d5db", borderRadius: 8, background: "var(--bg-card-alt)", color: "var(--text-secondary)", fontSize: 13, cursor: "pointer", textAlign: "center" }}>
                   Click to select a file
                   <input type="file" style={{ display: "none" }}
                     accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.bmp,.svg,.tiff,.tif"
@@ -1938,8 +1938,8 @@ function UserProfile() {
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <button type="button" onClick={() => { setEditDocItem(null); setEditDocNewFile(null); setEditDocDeleted(false); setEditDocDeleteConfirm(false); }}
-                style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }}
-                onMouseEnter={(e) => e.target.style.background = "#f9fafb"} onMouseLeave={(e) => e.target.style.background = "#fff"}>Cancel</button>
+                style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid var(--border-medium)", background: "var(--bg-card)", color: "var(--text-dark)", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }}
+                onMouseEnter={(e) => e.target.style.background = "var(--bg-card-alt)"} onMouseLeave={(e) => e.target.style.background = "var(--bg-card)"}>Cancel</button>
               <button type="button" onClick={handleSaveEditDoc}
                 style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "#6366f1", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }}
                 onMouseEnter={(e) => e.target.style.background = "#4f46e5"} onMouseLeave={(e) => e.target.style.background = "#6366f1"}>Save</button>
@@ -2049,15 +2049,15 @@ function UserProfile() {
                 </div>
               </div>
 
-              <h3 className="form-section-title">Client Information</h3>
+              <h3 className="form-section-title">Guest Information</h3>
               <div className="user-form-grid">
                 <div className="form-row">
-                  <label>Client Name *</label>
-                  <input type="text" value={guestEditData.name} onChange={(e) => { setGuestEditData((p) => ({ ...p, name: e.target.value })); setGuestIsDirty(true); }} placeholder="Enter client / company name" />
+                  <label>Guest Name *</label>
+                  <input type="text" value={guestEditData.name} onChange={(e) => { setGuestEditData((p) => ({ ...p, name: e.target.value })); setGuestIsDirty(true); }} placeholder="Enter guest / company name" />
                 </div>
                 <div className="form-row">
                   <label>Personal Email *</label>
-                  <input type="email" value={guestEditData.personal_email} onChange={(e) => { setGuestEditData((p) => ({ ...p, personal_email: e.target.value })); setGuestIsDirty(true); }} placeholder="client@example.com" />
+                  <input type="email" value={guestEditData.personal_email} onChange={(e) => { setGuestEditData((p) => ({ ...p, personal_email: e.target.value })); setGuestIsDirty(true); }} placeholder="guest@example.com" />
                 </div>
                 <div className="form-row">
                   <label>Phone Number</label>

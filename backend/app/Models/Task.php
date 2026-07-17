@@ -135,7 +135,7 @@ class Task extends Model
     /** File attachments for this task. */
     public function files()
     {
-        return $this->hasMany(\App\Models\TaskFile::class)->latest();
+        return $this->hasMany(\App\Models\TaskFile::class)->orderBy('sort_order');
     }
 
     /** All submissions for this task. */

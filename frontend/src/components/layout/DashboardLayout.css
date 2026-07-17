@@ -11,7 +11,7 @@ html, body, #root {
 }
 
 .dashboard-page {
-  background: #f5f7fb;
+  background: var(--bg-page);
   min-height: 100vh;
   overflow-x: clip;
   position: relative;
@@ -71,12 +71,12 @@ html, body, #root {
 .welcome-box h1 {
   font-size: 32px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-primary);
   margin: 0 0 8px;
 }
 
 .welcome-box p {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 15px;
   font-weight: 500;
 }
@@ -91,8 +91,8 @@ html, body, #root {
 .status-btn {
   padding: 10px 18px;
   border-radius: 10px;
-  border: 1px solid #dbe2ea;
-  background: white;
+  border: 1px solid var(--border-input);
+  background: var(--bg-card);
   font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
@@ -104,10 +104,10 @@ html, body, #root {
   transform: translateY(-2px);
 }
 
-.all { color: #222; }
+.all { color: var(--text-primary); }
 .pending { color: #f59e0b; }
 .in-progress { color: #2563eb; }
-.completed { color: #111827; font-weight: bold; }
+.completed { color: var(--text-primary); font-weight: bold; }
 .failed { color: #ef4444; }
 .abandoned { color: grey; }
 
@@ -118,10 +118,10 @@ html, body, #root {
 }
 
 .card-box {
-  background: white;
+  background: var(--bg-card);
   border-radius: 16px;
   padding: 25px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  box-shadow: var(--shadow-sm);
   transition: 0.3s;
 }
 
@@ -131,13 +131,13 @@ html, body, #root {
 
 .card-box h3 {
   font-size: 17px;
-  color: #475569;
+  color: var(--text-secondary);
   margin-bottom: 12px;
 }
 
 .card-box h2 {
   font-size: 32px;
-  color: #0f172a;
+  color: var(--text-heading);
 }
 
 .summary-cards {
@@ -148,10 +148,10 @@ html, body, #root {
 }
 
 .summary-card {
-  background: white;
+  background: var(--bg-card);
   border-radius: 16px;
   padding: 22px 24px;
-  box-shadow: 0 2px 14px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--shadow-md);
 }
 
 .summary-badge {
@@ -163,15 +163,15 @@ html, body, #root {
   margin-bottom: 18px;
 }
 
-.summary-badge.summary-badge-blue { background: #eff6ff; color: #1d4ed8; }
-.summary-badge.summary-badge-yellow { background: #fffbeb; color: #b45309; }
-.summary-badge.summary-badge-green { background: #ecfdf5; color: #166534; }
-.summary-badge.summary-badge-red { background: #fef2f2; color: #b91c1c; }
+.summary-badge.summary-badge-blue { background: var(--color-blue-light); color: var(--color-blue-text); }
+.summary-badge.summary-badge-yellow { background: var(--color-warning-bg); color: var(--color-warning); }
+.summary-badge.summary-badge-green { background: var(--color-success-bg); color: var(--color-success); }
+.summary-badge.summary-badge-red { background: var(--color-danger-bg); color: var(--color-danger); }
 
 .summary-card-value {
   font-size: 36px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-heading);
   margin-bottom: 10px;
 }
 
@@ -183,10 +183,10 @@ html, body, #root {
 }
 
 .section-card {
-  background: white;
+  background: var(--bg-card);
   border-radius: 20px;
   padding: 24px;
-  box-shadow: 0 2px 18px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--shadow-md);
 }
 
 .section-header {
@@ -203,16 +203,16 @@ html, body, #root {
 }
 
 .section-header p {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
 .view-link {
   padding: 10px 18px;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-heading);
   font-weight: 600;
   cursor: pointer;
 }
@@ -226,7 +226,7 @@ html, body, #root {
 .workload-item,
 .activity-item,
 .project-card {
-  background: #f8fafc;
+  background: var(--bg-card-alt);
   border-radius: 16px;
   padding: 16px 18px;
   display: flex;
@@ -241,7 +241,7 @@ html, body, #root {
   gap: 10px;
   width: 110px;
   min-width: 110px;
-  color: #475569;
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 600;
 }
@@ -271,14 +271,14 @@ html, body, #root {
 .activity-item p {
   margin: 0;
   font-size: 15px;
-  color: #0f172a;
+  color: var(--text-heading);
 }
 
 .workload-detail p,
 .project-card p,
 .activity-item span {
   margin: 4px 0 0;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -290,9 +290,9 @@ html, body, #root {
   white-space: nowrap;
 }
 
-.priority-pill.high-priority { background: #fee2e2; color: #b91c1c; }
-.priority-pill.medium-priority { background: #fef3c7; color: #b45309; }
-.priority-pill.low-priority { background: #f0fdf4; color: #166534; }
+.priority-pill.high-priority { background: var(--color-danger-bg); color: var(--color-danger); }
+.priority-pill.medium-priority { background: var(--color-warning-bg); color: var(--color-warning); }
+.priority-pill.low-priority { background: var(--color-success-bg); color: var(--color-success); }
 
 .projects-grid {
   display: grid;
@@ -317,7 +317,7 @@ html, body, #root {
   height: 42px;
   border-radius: 14px;
   padding: 10px;
-  background: #fef3c7;
+  background: var(--color-warning-bg);
   display: grid;
   place-items: center;
 }
@@ -326,7 +326,7 @@ html, body, #root {
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  background: #eef2ff;
+  background: var(--color-primary-bg);
   display: grid;
   place-items: center;
   font-weight: 700;
@@ -336,13 +336,13 @@ html, body, #root {
 .project-progress-meta {
   display: flex;
   justify-content: space-between;
-  color: #475569;
+  color: var(--text-secondary);
   font-size: 13px;
   margin-bottom: 10px;
 }
 
 .progress-bar {
-  background: #e2e8f0;
+  background: var(--border-color);
   border-radius: 9999px;
   height: 10px;
   overflow: hidden;
@@ -351,7 +351,7 @@ html, body, #root {
 .progress-fill {
   height: 100%;
   border-radius: 9999px;
-  background: #4f46e5;
+  background: var(--color-primary);
 }
 
 .project-members {
@@ -377,7 +377,7 @@ html, body, #root {
 .activity-item {
   align-items: flex-start;
   padding: 16px 18px;
-  background: white;
+  background: var(--bg-card);
   border-radius: 16px;
 }
 
@@ -405,7 +405,7 @@ html, body, #root {
   height: 48px;
   border: none;
   border-radius: 50%;
-  background: #4f46e5;
+  background: var(--color-primary);
   color: white;
   cursor: pointer;
   align-items: center;
@@ -415,7 +415,7 @@ html, body, #root {
 }
 
 .right-toggle:hover {
-  background: #4338ca;
+  background: var(--color-primary-dark);
   transform: scale(1.05);
 }
 

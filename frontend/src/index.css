@@ -1,9 +1,3 @@
-/**
- * @file index.css
- * @description Global styles and Tailwind CSS configuration.
- * Imports Tailwind layers, Google Fonts, and base reset styles.
- */
-
 @import "tailwindcss";
 @import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/theme.css" layer(theme);
@@ -12,17 +6,149 @@
 @layer theme, base, components, utilities;
 @config "../tailwind.config.js";
 
-/* Prevent horizontal overflow */
+:root {
+  --bg-page: #f5f7fb;
+  --bg-card: #ffffff;
+  --bg-card-alt: #f8fafc;
+  --bg-input: #f9fafb;
+  --bg-hover: #f3f4f6;
+  --bg-input-focus: #ffffff;
+  --bg-badge: #f3f4f6;
+  --bg-badge-blue: #eff6ff;
+  --bg-badge-yellow: #fffbeb;
+  --bg-badge-green: #ecfdf5;
+  --bg-badge-red: #fef2f2;
+  --bg-modal-overlay: rgba(15, 23, 42, 0.45);
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --text-heading: #0f172a;
+  --text-dark: #374151;
+  --text-dark-alt: #1f2937;
+  --border-color: #e5e7eb;
+  --border-light: #f3f4f6;
+  --border-medium: #d1d5db;
+  --border-input: #dbe2ea;
+  --shadow-sm: 0 2px 10px rgba(0,0,0,0.05);
+  --shadow-md: 0 2px 18px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.12);
+  --shadow-xl: 0 24px 60px rgba(15, 23, 42, 0.14);
+  --shadow-card: 0 10px 25px rgba(0, 0, 0, 0.08);
+  --color-primary: #4f46e5;
+  --color-primary-dark: #4338ca;
+  --color-primary-light: #6366f1;
+  --color-primary-bg: #eef2ff;
+  --color-primary-bg-hover: #e0e7ff;
+  --color-primary-ring: rgba(99, 91, 255, 0.12);
+  --color-primary-ring2: rgba(79, 70, 229, 0.08);
+  --color-danger: #ef4444;
+  --color-danger-bg: #fef2f2;
+  --color-danger-bg-hover: #fee2e2;
+  --color-success: #22c55e;
+  --color-success-bg: #dcfce7;
+  --color-warning: #f59e0b;
+  --color-warning-bg: #fef3c7;
+  --color-blue: #2563eb;
+  --color-blue-bg: #dbeafe;
+  --color-table-header: #F8FAFC;
+  --color-table-border: #E5E7EB;
+  --color-table-row-border: #F1F5F9;
+  --color-table-row-hover: #F9FAFB;
+  --color-scrollbar: #cbd5e1;
+  --color-notif-unread: #fef2f2;
+  --color-notif-read: #f9fafb;
+  --color-overlay-bg: rgba(15, 23, 42, 0.45);
+  --color-backdrop: rgba(0, 0, 0, 0.3);
+  --color-green-light: #ecfdf5;
+  --color-green-text: #10b981;
+  --color-blue-light: #eff6ff;
+  --color-blue-text: #3b82f6;
+  --color-orange-light: #fff7ed;
+  --color-orange-text: #f59e0b;
+  --color-today-bg: #f0f0ff;
+  --color-calendar-cell: #ffffff;
+  --color-input-bg: #f1f2f6;
+  --color-input-border: #dfe4ea;
+  --color-gray-bg: #d9d9d9;
+}
+
+html.dark {
+  --bg-page: #0f172a;
+  --bg-card: #1e293b;
+  --bg-card-alt: #1e293b;
+  --bg-input: #1e293b;
+  --bg-hover: #334155;
+  --bg-input-focus: #1e293b;
+  --bg-badge: #334155;
+  --bg-badge-blue: #1e3a5f;
+  --bg-badge-yellow: #422006;
+  --bg-badge-green: #14532d;
+  --bg-badge-red: #450a0a;
+  --bg-modal-overlay: rgba(0, 0, 0, 0.6);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-heading: #e2e8f0;
+  --text-dark: #cbd5e1;
+  --text-dark-alt: #e2e8f0;
+  --border-color: #334155;
+  --border-light: #1e293b;
+  --border-medium: #475569;
+  --border-input: #475569;
+  --shadow-sm: 0 2px 10px rgba(0,0,0,0.2);
+  --shadow-md: 0 2px 18px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.35);
+  --shadow-xl: 0 24px 60px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 10px 25px rgba(0, 0, 0, 0.3);
+  --color-primary: #818cf8;
+  --color-primary-dark: #6366f1;
+  --color-primary-light: #a5b4fc;
+  --color-primary-bg: #1e1b4b;
+  --color-primary-bg-hover: #312e81;
+  --color-primary-ring: rgba(129, 140, 248, 0.2);
+  --color-primary-ring2: rgba(99, 102, 241, 0.15);
+  --color-danger: #f87171;
+  --color-danger-bg: #2d1215;
+  --color-danger-bg-hover: #3b1a1e;
+  --color-success: #4ade80;
+  --color-success-bg: #14532d;
+  --color-warning: #fbbf24;
+  --color-warning-bg: #422006;
+  --color-blue: #60a5fa;
+  --color-blue-bg: #1e3a5f;
+  --color-table-header: #1e293b;
+  --color-table-border: #334155;
+  --color-table-row-border: #1e293b;
+  --color-table-row-hover: #334155;
+  --color-scrollbar: #475569;
+  --color-notif-unread: #450a0a;
+  --color-notif-read: #1e293b;
+  --color-overlay-bg: rgba(0, 0, 0, 0.6);
+  --color-backdrop: rgba(0, 0, 0, 0.5);
+  --color-green-light: #052e16;
+  --color-green-text: #4ade80;
+  --color-blue-light: #172554;
+  --color-blue-text: #60a5fa;
+  --color-orange-light: #431407;
+  --color-orange-text: #fbbf24;
+  --color-today-bg: #1e1b4b;
+  --color-calendar-cell: #1e293b;
+  --color-input-bg: #1e293b;
+  --color-input-border: #475569;
+  --color-gray-bg: #334155;
+}
+
 html {
   overflow-x: hidden;
 }
 
-/* Reset body styles */
 body {
   @apply leading-[normal] m-0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Base layer: remove default borders */
 @layer base {
   *,
   *::before,
@@ -31,13 +157,11 @@ body {
   }
 }
 
-/* Responsive images */
 img {
   max-width: 100%;
   height: auto;
 }
 
-/* Inherit font family for form elements */
 input, button, select, textarea {
   font-family: inherit;
 }

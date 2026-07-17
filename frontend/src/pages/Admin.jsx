@@ -69,8 +69,8 @@ const getRoleLabel = (role) => {
 const SummaryCard = memo(function SummaryCard({ card, onClick }) {
   return (
     <div className="summary-card" style={{
-      background: "#fff", borderRadius: "16px", padding: "20px",
-      boxShadow: "0 2px 10px rgba(0,0,0,0.05)", display: "flex",
+      background: "var(--bg-card)", borderRadius: "16px", padding: "20px",
+      boxShadow: "var(--shadow-sm)", display: "flex",
       flexDirection: "column", gap: "18px",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
@@ -93,7 +93,7 @@ const SummaryCard = memo(function SummaryCard({ card, onClick }) {
               }
             }}
             style={{
-              margin: 0, fontSize: "15px", color: card.filter ? "#2563EB" : "#6b7280",
+              margin: 0, fontSize: "15px",               color: card.filter ? "#2563EB" : "var(--text-secondary)",
               cursor: card.filter ? "pointer" : "default", textUnderlineOffset: "2px",
             }}
           >
@@ -755,8 +755,8 @@ function Admin() {
           {/* admin/manager: show on "user" mode; teamlead/member: show on "my" mode */}
           {(isAdminManager ? dashboardMode === "user" : dashboardMode === "my") && (<>
           <div className="active-projects-section" style={{
-            background: "#fff", borderRadius: "20px", padding: "24px",
-            boxShadow: "0 2px 10px rgba(0,0,0,0.05)", marginBottom: "30px", overflow: "hidden",
+            background: "var(--bg-card)", borderRadius: "20px", padding: "24px",
+            boxShadow: "var(--shadow-sm)", marginBottom: "30px", overflow: "hidden",
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
               <h3 style={{ margin: 0, fontSize: "22px", fontWeight: "700" }}>Active Projects</h3>
@@ -768,7 +768,7 @@ function Admin() {
               </button>
             </div>
             {activeProjects.length === 0 ? (
-              <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No active projects</p>
+              <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No active projects</p>
             ) : (
               <>
                 <div ref={sliderRef} style={{ overflow: "hidden" }}>
@@ -839,7 +839,7 @@ function Admin() {
 
           {/* TODAY'S ACTIVITY */}
           {(isAdminManager ? dashboardMode === "user" : dashboardMode === "my") && (<>
-          <div className="today-activity-section" style={{ background: "#fff", borderRadius: "20px", padding: "24px", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", marginBottom: "30px" }}>
+          <div className="today-activity-section" style={{ background: "var(--bg-card)", borderRadius: "20px", padding: "24px", boxShadow: "var(--shadow-sm)", marginBottom: "30px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
               <h3 style={{ margin: 0,fontSize: "22px", fontWeight: "700"}}>Today's Activity</h3>
               <button
@@ -850,7 +850,7 @@ function Admin() {
               </button>
             </div>
             {completedToday.length === 0 ? (
-              <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No activity today</p>
+              <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No activity today</p>
             ) : (
               completedToday.map((item, index) => {
                 const cfg = activityActionConfig[item.action] || activityActionConfig.submitted;
@@ -917,7 +917,7 @@ function Admin() {
 
           {/* PAST ACTIVITY (expandable) */}
           {pastActivityOpen && (
-            <div className="past-activity-section" style={{ background: "#fff", borderRadius: "20px", padding: "24px", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", marginBottom: "30px" }}>
+            <div className="past-activity-section" style={{ background: "var(--bg-card)", borderRadius: "20px", padding: "24px", boxShadow: "var(--shadow-sm)", marginBottom: "30px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
                 <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "600" }}>Past Activity</h3>
                 <button
@@ -928,13 +928,13 @@ function Admin() {
                 </button>
               </div>
               {pastLoading ? (
-                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>Loading past activities...</p>
+                <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>Loading past activities...</p>
               ) : (pastActivityData?.data || []).length === 0 ? (
-                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No past activities</p>
+                <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No past activities</p>
               ) : (
                 (pastActivityData?.data || []).map((group, gi) => (
                   <div key={group.date} style={{ marginBottom: gi < (pastActivityData?.data || []).length - 1 ? "24px" : "0" }}>
-                    <h4 style={{ margin: "0 0 12px 0", fontSize: "15px", fontWeight: "600", color: "#374151", borderBottom: "1px solid #F3F4F6", paddingBottom: "8px" }}>
+                    <h4 style={{ margin: "0 0 12px 0", fontSize: "15px", fontWeight: "600", color: "var(--text-dark)", borderBottom: "1px solid var(--border-light)", paddingBottom: "8px" }}>
                       {group.label}
                     </h4>
                     {group.activities.map((item, index) => {

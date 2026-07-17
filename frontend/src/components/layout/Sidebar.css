@@ -1,6 +1,6 @@
 .sidebar {
   width: 220px;
-  background: #ffffff;
+  background: var(--bg-card);
   height: calc(100vh - 90px);
   margin-top: 0;
   position: sticky;
@@ -10,7 +10,7 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: none;
@@ -34,7 +34,7 @@
   align-items: center;
   gap: 12px;
   text-decoration: none;
-  color: #374151;
+  color: var(--text-dark);
   padding: 13px 15px;
   border-radius: 14px;
   margin-bottom: 10px;
@@ -48,7 +48,7 @@
 
 .sidebar-link:hover,
 .sidebar-link.active {
-  background: #4f46e5;
+  background: var(--color-primary);
   color: white;
 }
 
@@ -58,7 +58,7 @@
   margin-left: 6px;
   border-radius: 12px;
   padding: 4px;
-  background: #4f46e5;
+  background: var(--color-primary);
 }
 
 .sidebar-sub-link {
@@ -79,14 +79,14 @@
 }
 
 .sidebar-sub-link.active {
-  background: #fff;
-  color: #111827;
+  background: var(--bg-card);
+  color: var(--text-primary);
   font-weight: 600;
 }
 
 .sidebar hr {
   border: none;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border-color);
   margin: 18px 0;
 }
 
@@ -104,13 +104,13 @@
 }
 
 .logout-link {
-  color: #ef4444;
+  color: var(--color-danger);
 }
 
 .profile-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
+  background: var(--color-overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -122,10 +122,10 @@
 .profile-modal {
   width: 100%;
   max-width: 430px;
-  background: #ffffff;
+  background: var(--bg-card);
   border-radius: 28px;
   overflow: hidden;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 25px 60px var(--shadow-xl);
   animation: popup 0.25s ease;
 }
 
@@ -143,7 +143,7 @@
 
 .profile-header {
   padding: 18px 20px 14px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .profile-user {
@@ -169,13 +169,13 @@
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .profile-user p {
   margin-top: 4px;
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .profile-body {
@@ -194,19 +194,19 @@
   margin-bottom: 10px;
   font-size: 14px;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-dark);
 }
 
 .profile-field input {
   width: 100%;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 14px;
   font-size: 14px;
   outline: none;
   transition: 0.3s;
   box-sizing: border-box;
-  background: #ffffff;
+  background: var(--bg-card);
 }
 
 .profile-field input:focus {
@@ -231,26 +231,26 @@
   font-weight: 600;
   cursor: pointer;
   padding: 11px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   transition: 0.3s;
 }
 
 .change-btn {
-  background: #4f46e5;
+  background: var(--color-primary);
   color: white;
   border: none;
 }
 
 .change-btn:hover {
-  background: #4338ca;
+  background: var(--color-primary-dark);
 }
 
 .close-btn {
-  background: white;
+  background: var(--bg-card);
 }
 
 .close-btn:hover {
-  background: #f9fafb;
+  background: var(--bg-input);
 }
 
 .sidebar-mobile-header {
@@ -298,7 +298,7 @@
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--color-backdrop);
     z-index: 10000;
   }
 
@@ -343,7 +343,7 @@
   }
 
   .sidebar-link.active {
-    background: #4f46e5;
+    background: var(--color-primary);
     color: white;
   }
 
@@ -417,7 +417,7 @@
     flex-direction: column;
     gap: 0;
     border: none;
-    box-shadow: 4px 0 24px rgba(15, 23, 42, 0.12);
+    box-shadow: 4px 0 24px var(--shadow-lg);
   }
 
   .sidebar--open {
@@ -439,16 +439,16 @@
     justify-content: center;
     width: 34px;
     height: 34px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border-color);
     border-radius: 10px;
-    background: #fff;
-    color: #374151;
+    background: var(--bg-card);
+    color: var(--text-dark);
     cursor: pointer;
     flex-shrink: 0;
   }
 
   .sidebar-close-btn:hover {
-    background: #f3f4f6;
+    background: var(--bg-hover);
   }
 
   .sidebar-logo-box {
@@ -469,20 +469,20 @@
     margin: 0;
     font-size: 15px;
     font-weight: 700;
-    color: #111827;
+    color: var(--text-primary);
     line-height: 1.2;
   }
 
   .sidebar-logo-text span {
     font-size: 10px;
-    color: #9ca3af;
+    color: var(--text-muted);
   }
 
   .sidebar-backdrop {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.4);
+    background: var(--color-backdrop);
     z-index: 99;
   }
 

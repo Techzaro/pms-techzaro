@@ -1,7 +1,7 @@
 .cm-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.5);
+  background: var(--bg-modal-overlay);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -11,7 +11,7 @@
 }
 
 .cm-modal {
-  background: #fff;
+  background: var(--bg-card);
   border-radius: 20px;
   padding: 32px;
   max-width: 420px;
@@ -40,13 +40,13 @@
   margin: 0 0 8px;
   font-size: 18px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .cm-modal p {
   margin: 0 0 24px;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--text-secondary);
   line-height: 1.6;
 }
 
@@ -59,10 +59,10 @@
 .cm-cancel-btn {
   flex: 1;
   padding: 12px 20px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
-  background: #fff;
-  color: #374151;
+  background: var(--bg-card);
+  color: var(--text-dark);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -70,7 +70,7 @@
 }
 
 .cm-cancel-btn:hover {
-  background: #f9fafb;
+  background: var(--bg-card-alt);
   border-color: #d1d5db;
 }
 

@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { MdKeyboardArrowDown, MdNotifications, MdPerson, MdHistory, MdLogout, MdLock } from "react-icons/md";
+import { MdKeyboardArrowDown, MdNotifications, MdPerson, MdHistory, MdLogout, MdLock, MdDarkMode, MdLightMode } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 
 import API_URL from "../../config/api";
@@ -17,6 +17,7 @@ import { requestNotificationPermissionAsync, showDesktopNotification, getNotific
 import { initFirebase } from "../../utils/firebase";
 import { formatDateTimeInline } from "../../utils/formatDateTime";
 import { getNotificationDestination } from "../../utils/navigation";
+import { useTheme } from "../../context/ThemeContext.jsx";
 import "./Header.css";
 
 import CreateTaskModal from "../CreateTaskModal";
@@ -30,6 +31,7 @@ function Header() {
   const navigate = useNavigate();
   const searchRef = useRef(null);
   const notifRef = useRef(null);
+  const { theme, toggleTheme } = useTheme();
 
   // ── State ──
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -596,6 +598,11 @@ function Header() {
               </div>
             )}
           </div>
+
+          {/* Theme toggle button */}
+          <button className="theme-toggle-btn" onClick={toggleTheme} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+            {theme === "dark" ? <MdLightMode fontSize="20px" /> : <MdDarkMode fontSize="20px" />}
+          </button>
 
           <hr />
 

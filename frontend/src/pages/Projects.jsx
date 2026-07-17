@@ -24,7 +24,7 @@ import { GoDotFill } from "react-icons/go";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath, getUser } from "../utils/auth";
 import "./Projects.css";
-import { formatDateTime } from "../utils/formatDateTime";
+import { formatDateTime, formatDateTimeInline } from "../utils/formatDateTime";
 import Pagination from "../components/Pagination";
 import "../pages/Task.css";
 
@@ -304,16 +304,16 @@ function Projects() {
             <h1>Projects</h1>
             <p>Manage and track your projects</p>
             <div className="task-count-badge" style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
-              <span style={{ background: "#dedfe0", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
+              <span style={{ background: "var(--border-medium)", color: "var(--color-primary)", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
                 Total: {filteredProjects.length} projects
               </span>
-              <span style={{ background: "#d6d6d6", color: "#92400E", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
+              <span style={{ background: "var(--color-blue-light)", color: "var(--color-warning)", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
                 Active: {filteredProjects.filter(p => p.status === "In-progress" || p.status === "in_progress" || p.status === "Planning" || p.status === "planned").length}
               </span>
-              <span style={{ background: "#d4d4d4", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
+              <span style={{ background: "var(--color-success-bg)", color: "var(--color-success)", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
                 Completed: {filteredProjects.filter(p => p.status === "Completed" || p.status === "approved").length}
               </span>
-              <span style={{ background: "#d8d8d8", color: "#1E40AF", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
+              <span style={{ background: "var(--bg-badge)", color: "var(--color-blue)", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
                 Pending: {filteredProjects.filter(p => p.status === "pending" || p.status === "submitted").length}
               </span>
               <span style={{ background: "#dcdcdc", color: "#991B1B", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
@@ -422,8 +422,8 @@ function Projects() {
                         {/* OWNERSHIP INFO */}
                         <div className="ownership-info" style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "6px", marginBottom: "4px" }}>
                           {project.creator && (
-                            <span className="ownership-badge" style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#EEF2FF", color: "#4F46E5", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 500 }}>
-                              <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "#4F46E5", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
+                            <span className="ownership-badge" style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "var(--color-primary-bg)", color: "var(--color-primary)", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 500 }}>
+                              <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "var(--color-primary)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
                                 {project.creator.name?.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
                               </span>
                               Created: {project.creator.name}
@@ -433,8 +433,8 @@ function Projects() {
                             </span>
                           )}
                           {project.updatedBy && project.updated_by !== project.created_by && (
-                            <span className="ownership-badge" style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#FEF3C7", color: "#92400E", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 500 }}>
-                              <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "#D97706", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
+                            <span className="ownership-badge" style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "var(--color-warning-bg)", color: "var(--color-warning)", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 500 }}>
+                              <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "var(--color-warning)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
                                 {project.updatedBy.name?.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
                               </span>
                               Updated: {project.updatedBy.name}
@@ -444,8 +444,8 @@ function Projects() {
                             </span>
                           )}
                           {project.approvedBy && (
-                            <span className="ownership-badge" style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#DCFCE7", color: "#166534", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 500 }}>
-                              <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "#16A34A", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
+                            <span className="ownership-badge" style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "var(--color-success-bg)", color: "var(--color-success)", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 500 }}>
+                              <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "var(--color-success)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
                                 {project.approvedBy.name?.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
                               </span>
                               Approved: {project.approvedBy.name}
@@ -572,7 +572,7 @@ function Projects() {
               <div>Status</div>
               <div>Progress</div>
               <div>Priority</div>
-              <div>Date</div>
+              <div>Start & Due Date</div>
               <div>Action</div>
             </div>
 
@@ -631,9 +631,9 @@ function Projects() {
                     <div className="col-due-date">
                       <div className="date-box">
                         <div style={{ whiteSpace: "pre-line" }}>
-                          {formatDateTime(project.start_date)}
+                          {formatDateTimeInline(project.start_date)}
                           {"\n"}
-                          {formatDateTime(project.end_date)}
+                          {formatDateTimeInline(project.end_date)}
                         </div>
                       </div>
                     </div>
