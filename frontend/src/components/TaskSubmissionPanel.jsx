@@ -44,6 +44,7 @@ function actionLabel(action) {
   const map = {
     submitted: "Submitted",
     resubmitted: "Resubmitted",
+    acknowledged: "Acknowledged",
     approved: "Approved",
     rejected: "Rejected",
     reopened: "Reopened",

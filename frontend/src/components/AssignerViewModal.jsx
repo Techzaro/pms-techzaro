@@ -1,6 +1,6 @@
 /**
  * AssignerViewModal.jsx
- * Modal component for assigners to view deliverable details, submissions,
+ * Modal component for assigners to view subtask details, submissions,
  * attachments (files, images, links), and take actions (approve, reject, reopen).
  */
 
@@ -31,13 +31,13 @@ function formatFileSize(bytes) {
 }
 
 /**
- * Modal for assigners to view deliverable details, submissions, and perform actions.
+ * Modal for assigners to view subtask details, submissions, and perform actions.
  * @param {boolean} isOpen - Whether the modal is visible
  * @param {Function} onClose - Callback to close the modal
- * @param {Object} deliverable - The deliverable object to display
+ * @param {Object} subtask - The subtask object to display
  * @param {Function} onActionSuccess - Callback when an action (approve/reject/reopen) succeeds
  */
-function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
+function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
   useEscapeKey(isOpen, onClose);
 
   const [submission, setSubmission] = useState(null);
@@ -47,14 +47,14 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
   const [acting, setActing] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
 
-  // Fetch the latest submission when modal opens or deliverable changes
+  // Fetch the latest submission when modal opens or subtask changes
   useEffect(() => {
-    if (!isOpen || !deliverable) return;
+    if (!isOpen || !subtask) return;
     // Prevent background scrolling while modal is open
     document.body.style.overflow = "hidden";
 
     const token = authToken();
-    fetch(`${API_URL}/deliverables/${deliverable.id}/latest-submission`, {
+    fetch(`${API_URL}/deliverables/${subtask.id}/latest-submission`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       skipLoader: true,
     })
@@ -64,10 +64,10 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
 
     // Restore scrolling on unmount
     return () => { document.body.style.overflow = ""; };
-  }, [isOpen, deliverable]);
+  }, [isOpen, subtask]);
 
   /**
-   * Handles approve, reject, or reopen actions on the deliverable.
+   * Handles approve, reject, or reopen actions on the subtask.
    * Uses FormData for reopen (supports file uploads), JSON for other actions.
    * @param {string} action - The action to perform: "approve", "reject", or "reopen"
    * @param {Object} body - Optional payload (comment, instructions, new_deadline, file)
@@ -84,7 +84,7 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
         if (body.instructions) formData.append("instructions", body.instructions);
         if (body.new_deadline) formData.append("new_deadline", body.new_deadline);
         if (body.file) formData.append("file", body.file);
-        res = await fetch(`${API_URL}/deliverables/${deliverable.id}/reopen`, {
+        res = await fetch(`${API_URL}/deliverables/${subtask.id}/reopen`, {
           method: "POST",
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
           body: formData,
@@ -92,7 +92,7 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
         });
       } else {
         // Approve/reject use JSON payload
-        res = await fetch(`${API_URL}/deliverables/${deliverable.id}/${action}`, {
+        res = await fetch(`${API_URL}/deliverables/${subtask.id}/${action}`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify(body),
@@ -128,12 +128,12 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
     reopen: "#D97706",
   };
 
-  if (!isOpen || !deliverable) return null;
+  if (!isOpen || !subtask) return null;
 
   const token = authToken();
 
   /**
-   * Builds a download URL for a deliverable attachment.
+   * Builds a download URL for a subtask attachment.
    * @param {number} attId - Attachment ID
    * @param {string} [action] - Optional action parameter (e.g., "download")
    * @returns {string} Full attachment URL with auth token
@@ -148,7 +148,7 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
   };
 
   // Capitalize status for display
-  const statusLabel = (deliverable.status || "pending").charAt(0).toUpperCase() + (deliverable.status || "pending").slice(1);
+  const statusLabel = (subtask.status || "pending").charAt(0).toUpperCase() + (subtask.status || "pending").slice(1);
   // Separate attachments by type for organized display
   const attachments = submission?.attachments || [];
   const files = attachments.filter((a) => a.attachment_type === "file");
@@ -160,11 +160,11 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
       <div className="avm-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="avm-header">
           <div className="avm-header-top">
-            <h2 className="avm-title">{deliverable.title}</h2>
-            <span className={`avm-status-badge avm-status-${deliverable.status}`}>{statusLabel}</span>
+            <h2 className="avm-title">{subtask.title}</h2>
+            <span className={`avm-status-badge avm-status-${subtask.status}`}>{statusLabel}</span>
           </div>
-          {deliverable.due_date && (
-            <div className="avm-due">Due Date & Time {formatDateTime(deliverable.due_date)}</div>
+          {subtask.due_date && (
+            <div className="avm-due">Due Date & Time {formatDateTime(subtask.due_date)}</div>
           )}
         </div>
 
@@ -175,30 +175,30 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
             <div className="avm-details-grid">
               <div className="avm-detail-item">
                 <span className="avm-detail-label">Task / Project</span>
-                <span className="avm-detail-value">{deliverable.task?.title || deliverable.project?.title || "\u2014"}</span>
+                <span className="avm-detail-value">{subtask.task?.title || subtask.project?.title || "\u2014"}</span>
               </div>
               <div className="avm-detail-item">
                 <span className="avm-detail-label">Priority</span>
-                <span className="avm-detail-value">{deliverable.priority || "Medium"}</span>
+                <span className="avm-detail-value">{subtask.priority || "Medium"}</span>
               </div>
               <div className="avm-detail-item">
                 <span className="avm-detail-label">Assigned To</span>
-                <span className="avm-detail-value">{deliverable.assignee?.name || "Unassigned"}</span>
+                <span className="avm-detail-value">{subtask.assignee?.name || "Unassigned"}</span>
               </div>
               <div className="avm-detail-item">
                 <span className="avm-detail-label">Created By</span>
-                <span className="avm-detail-value">{deliverable.creator?.name || "\u2014"}</span>
+                <span className="avm-detail-value">{subtask.creator?.name || "\u2014"}</span>
               </div>
             </div>
-            {deliverable.description && (
+            {subtask.description && (
               <div className="avm-description">
                 <span className="avm-detail-label">Description</span>
-                <p className="avm-description-text">{deliverable.description}</p>
+                <p className="avm-description-text">{subtask.description}</p>
               </div>
             )}
             <div className="avm-detail-item">
               <span className="avm-detail-label">Created On</span>
-              <span className="avm-detail-value">{formatDateTime(deliverable.created_at)}</span>
+              <span className="avm-detail-value">{formatDateTime(subtask.created_at)}</span>
             </div>
           </div>
 
@@ -290,41 +290,41 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
               </div>
             ) : (
               <div className="avm-empty">
-                <p>Waiting for deliverable submission.</p>
+                <p>Waiting for subtask submission.</p>
               </div>
             )}
           </div>
 
           {/* Reopen Details (if reopened) */}
-          {deliverable.status === "reopened" && (
+          {subtask.status === "reopened" && (
             <div className="avm-section avm-reopen-section">
               <h3 className="avm-section-title">Reopen Details</h3>
               <div className="avm-submission-grid">
                 <div className="avm-detail-item">
                   <span className="avm-detail-label">Reopened By</span>
-                  <span className="avm-detail-value">{deliverable.reopenedBy?.name || "\u2014"}</span>
+                  <span className="avm-detail-value">{subtask.reopenedBy?.name || "\u2014"}</span>
                 </div>
                 <div className="avm-detail-item">
                   <span className="avm-detail-label">Reopened On</span>
-                  <span className="avm-detail-value">{formatDateTime(deliverable.reopened_at)}</span>
+                  <span className="avm-detail-value">{formatDateTime(subtask.reopened_at)}</span>
                 </div>
               </div>
-              {deliverable.reopen_comment && (
+              {subtask.reopen_comment && (
                 <div className="avm-detail-item" style={{ marginTop: "12px" }}>
                   <span className="avm-detail-label">Comment</span>
-                  <p className="avm-description-text">{deliverable.reopen_comment}</p>
+                  <p className="avm-description-text">{subtask.reopen_comment}</p>
                 </div>
               )}
-              {deliverable.reopen_instructions && (
+              {subtask.reopen_instructions && (
                 <div className="avm-detail-item" style={{ marginTop: "12px" }}>
                   <span className="avm-detail-label">Instructions</span>
-                  <p className="avm-description-text">{deliverable.reopen_instructions}</p>
+                  <p className="avm-description-text">{subtask.reopen_instructions}</p>
                 </div>
               )}
-              {deliverable.reopen_new_deadline && (
+              {subtask.reopen_new_deadline && (
                 <div className="avm-detail-item" style={{ marginTop: "12px" }}>
                   <span className="avm-detail-label">New Deadline</span>
-                  <span className="avm-detail-value">{formatDateTime(deliverable.reopen_new_deadline)}</span>
+                  <span className="avm-detail-value">{formatDateTime(subtask.reopen_new_deadline)}</span>
                 </div>
               )}
             </div>
@@ -340,7 +340,7 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
 
         <div className="avm-footer">
           <button className="avm-close-btn" onClick={onClose}>Close</button>
-          {deliverable.status === "submitted" && (
+          {subtask.status === "submitted" && (
             <div className="avm-action-btns">
               <button className="avm-action-btn avm-approve-btn" disabled={acting} onClick={() => setConfirmDialog({ open: true, type: "approve" })}>
                 Approve
@@ -373,7 +373,7 @@ function AssignerViewModal({ isOpen, onClose, deliverable, onActionSuccess }) {
       <ReopenDialog
         isOpen={reopenDialog}
         onClose={() => setReopenDialog(false)}
-        deliverable={deliverable}
+        subtask={subtask}
         onReopenSuccess={(updated) => {
           onActionSuccess(updated);
           onClose();

@@ -1,13 +1,13 @@
 /**
- * Deliveries.jsx — Deliverables Assigned To You Page
+ * Deliveries.jsx — Subtasks Assigned To You Page
  *
- * Lists all deliverables assigned to the current user with:
+ * Lists all subtasks assigned to the current user with:
  * - Status filter tabs (Due Today, Pending, Submitted, Reopened, Approved, Rejected)
- * - Search by deliverable name
+ * - Search by subtask name
  * - Time filter (All Time, Last 7/30 Days, Last 6 Months)
  * - Sortable table with drag-and-drop reordering
  * - Pagination
- * - Submit/View modals for deliverable actions
+ * - Submit/View modals for subtask actions
  * - Deep-linking support via ?selectedDeliverable= param
  */
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -46,13 +46,13 @@ const STATUS_TEXT_COLORS = {
 };
 
 /**
- * Deliveries — Lists deliverables assigned to the current user.
+ * Deliveries — Lists subtasks assigned to the current user.
  * Supports filtering, searching, pagination, sortable reordering, and submit/view modals.
  */
 function Deliveries() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [deliverables, setDeliverables] = useState([]);
-  const [orderedDeliverables, setOrderedDeliverables] = useState([]);
+  const [subtasks, setSubtasks] = useState([]);
+  const [orderedSubtasks, setOrderedSubtasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(() => {
@@ -61,14 +61,14 @@ function Deliveries() {
     return "";
   });
   const [timeFilter, setTimeFilter] = useState("");
-  const [submitModal, setSubmitModal] = useState({ open: false, deliverable: null });
-  const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
+  const [submitModal, setSubmitModal] = useState({ open: false, subtask: null });
+  const [viewModal, setViewModal] = useState({ open: false, subtask: null });
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const ITEMS_PER_PAGE = 10;
 
-  // Fetch deliverables from API with search and status filters
-  const fetchDeliverables = () => {
+  // Fetch subtasks from API with search and status filters
+  const fetchSubtasks = () => {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
@@ -82,17 +82,17 @@ function Deliveries() {
       .then((res) => (res.ok ? res.json() : { data: [] }))
       .then((data) => {
         const items = data?.data;
-        setDeliverables(Array.isArray(items) ? items : (Array.isArray(items?.data) ? items.data : []));
+        setSubtasks(Array.isArray(items) ? items : (Array.isArray(items?.data) ? items.data : []));
       })
-      .catch(() => setDeliverables([]))
+      .catch(() => setSubtasks([]))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
-    fetchDeliverables();
+    fetchSubtasks();
   }, [search, statusFilter, timeFilter]);
 
-  useRefreshOnEvent(['deliverable:updated', 'deliverable:created', 'deliverable:deleted'], fetchDeliverables);
+  useRefreshOnEvent(['deliverable:updated', 'deliverable:created', 'deliverable:deleted'], fetchSubtasks);
 
   // Deep linking: auto-open submit/view modal when ?selectedDeliverable= is in URL
   useEffect(() => {
@@ -106,7 +106,7 @@ function Deliveries() {
       return next;
     }, { replace: true });
 
-    // Fetch the specific deliverable and open appropriate modal
+    // Fetch the specific subtask and open appropriate modal
     const token = authToken();
     fetch(`${API_URL}/deliverables/${selectedId}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -116,9 +116,9 @@ function Deliveries() {
         if (data?.deliverable) {
           const d = data.deliverable;
           if (d.status === "pending" || d.status === "rejected" || d.status === "reopened") {
-            setSubmitModal({ open: true, deliverable: d });
+            setSubmitModal({ open: true, subtask: d });
           } else {
-            setViewModal({ open: true, deliverable: d });
+            setViewModal({ open: true, subtask: d });
           }
         }
       })
@@ -131,8 +131,8 @@ function Deliveries() {
   }, [searchParams]);
 
   useEffect(() => {
-    setOrderedDeliverables(deliverables);
-  }, [deliverables]);
+    setOrderedSubtasks(subtasks);
+  }, [subtasks]);
 
   const selectStatusFilter = (filter) => {
     setStatusFilter(filter);
@@ -146,8 +146,8 @@ function Deliveries() {
   };
 
   // Handle drag-and-drop reorder and persist sort order to API
-  const handleDeliverableReorder = useCallback((reordered) => {
-    setOrderedDeliverables(reordered);
+  const handleSubtaskReorder = useCallback((reordered) => {
+    setOrderedSubtasks(reordered);
     const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
     const token = authToken();
     fetch(`${API_URL}/deliverables/reorder`, {
@@ -191,17 +191,17 @@ function Deliveries() {
   };
 
   // Update local state after successful submission to reflect new status
-  const handleSubmissionSuccess = (updatedDeliverable) => {
-    setDeliverables((prev) =>
+  const handleSubmissionSuccess = (updatedSubtask) => {
+    setSubtasks((prev) =>
       prev.map((d) =>
-        d.id === updatedDeliverable.id
+        d.id === updatedSubtask.id
           ? { ...d, status: "submitted", has_submitted: true }
           : d
       )
     );
   };
 
-  const displayItems = orderedDeliverables.length ? orderedDeliverables : deliverables;
+  const displayItems = orderedSubtasks.length ? orderedSubtasks : subtasks;
 
   const totalPages = showAll ? 1 : Math.ceil(displayItems.length / ITEMS_PER_PAGE);
   const paginatedItems = showAll ? displayItems : displayItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
@@ -264,7 +264,7 @@ function Deliveries() {
             <div>Task</div>
             <div>Assigned By</div>
             <div>Status</div>
-            <div>Due Date</div>
+            <div>Date</div>
             <div>Action</div>
           </div>
 
@@ -273,7 +273,7 @@ function Deliveries() {
           ) : displayItems.length === 0 ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No subtasks found</div>
           ) : (
-            <SortableTableWrapper items={paginatedItems} onReorder={handleDeliverableReorder} as="div" handleOnly>
+            <SortableTableWrapper items={paginatedItems} onReorder={handleSubtaskReorder} as="div" handleOnly>
               {(item, idx, dndProps) => {
                 const colors = getRandomColors(item.id);
                 return (
@@ -315,15 +315,15 @@ function Deliveries() {
                       )}
                     </div>
                     <div className="date-box">
-                      <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.due_date)}</div>
+                      <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.start_date)}{"\n"}{formatDate(item.due_date)}</div>
                     </div>
                     <div className="action-btns">
                       {(item.status === "pending" || item.status === "rejected" || item.status === "reopened") ? (
-                        <button className="action-icon-btn action-submit" title="Submit Subtask" onClick={() => setSubmitModal({ open: true, deliverable: item })}>
+                        <button className="action-icon-btn action-submit" title="Submit Subtask" onClick={() => setSubmitModal({ open: true, subtask: item })}>
                           <LuSend />
                         </button>
                       ) : (
-                        <button className="action-icon-btn action-view" title="View Submission" onClick={() => setViewModal({ open: true, deliverable: item })}>
+                        <button className="action-icon-btn action-view" title="View Submission" onClick={() => setViewModal({ open: true, subtask: item })}>
                           <IoEyeOutline />
                         </button>
                       )}
@@ -341,18 +341,18 @@ function Deliveries() {
       )}
 
       <SubmitDeliverableModal
-        key={`submit-${submitModal.deliverable?.id || "none"}`}
+        key={`submit-${submitModal.subtask?.id || "none"}`}
         isOpen={submitModal.open}
-        onClose={() => setSubmitModal({ open: false, deliverable: null })}
-        deliverable={submitModal.deliverable}
+        onClose={() => setSubmitModal({ open: false, subtask: null })}
+        deliverable={submitModal.subtask}
         onSubmitSuccess={handleSubmissionSuccess}
       />
 
       <ViewDeliverableModal
-        key={`view-${viewModal.deliverable?.id || "none"}`}
+        key={`view-${viewModal.subtask?.id || "none"}`}
         isOpen={viewModal.open}
-        onClose={() => setViewModal({ open: false, deliverable: null })}
-        deliverable={viewModal.deliverable}
+        onClose={() => setViewModal({ open: false, subtask: null })}
+        deliverable={viewModal.subtask}
         onSubmitSuccess={handleSubmissionSuccess}
       />
     </DashboardLayout>

@@ -5,10 +5,10 @@
  * viewing own data).
  *
  * The component accepts user data, summary statistics, task/project lists and
- * deliverable information, then renders a configuration modal (date-range
+ * subtask information, then renders a configuration modal (date-range
  * picker) followed by a full preview modal.  The "Export PDF" button triggers
  * jsPDF to build a multi-section A4 document containing header, profile,
- * summary cards, status breakdown, workload chart, tasks table, deliverables
+ * summary cards, status breakdown, workload chart, tasks table, subtasks
  * summary and a manager-remarks section.
  */
 
@@ -103,7 +103,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
   const statusDistribution = userData?.status_distribution || {};
   const priorityDistribution = userData?.priority_distribution || {};
   const tasks = userData?.tasks || [];
-  const deliverables = userData?.deliverables || [];
+  const subtasks = userData?.deliverables || [];
   const delivSummary = userData?.deliverable_summary || {};
 
   // "MY" for member/team_lead viewing own page, "USER" for admin/manager viewing others
@@ -373,11 +373,11 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
       });
       y = doc.lastAutoTable.finalY + 5;
 
-      // ── DELIVERABLES ──
+      // ── SUBTASKS ──
       if (y > 220) { doc.addPage(); y = 16; }
       const qHalf = (CW - 5) / 2;
 
-      // Left: Deliverables Summary
+      // Left: Subtasks Summary
       doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
       doc.roundedRect(M, y, qHalf, 42, 2, 2, "S");
       doc.setFontSize(8); doc.setFont("helvetica", "bold");
@@ -399,17 +399,17 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
         doc.text(String(d.count), M + qHalf - 5, dy + 0.5, { align: "right" });
       });
 
-      // Right: Deliverables Details
+      // Right: Subtasks Details
       const ddX = M + qHalf + 5;
       doc.setDrawColor(229, 231, 235); doc.setLineWidth(0.3);
       doc.roundedRect(ddX, y, qHalf, 42, 2, 2, "S");
       doc.setFontSize(8); doc.setFont("helvetica", "bold");
       doc.setTextColor(17, 24, 39); doc.text("SUBTASKS DETAILS", ddX + 5, y + 7);
-      if (deliverables.length === 0) {
+      if (subtasks.length === 0) {
         doc.setFontSize(5.5); doc.setFont("helvetica", "normal"); doc.setTextColor(152, 163, 175);
         doc.text("No subtasks found.", ddX + qHalf / 2, y + 24, { align: "center" });
       } else {
-        const delivTableData = deliverables.slice(0, 6).map((d, i) => [
+        const delivTableData = subtasks.slice(0, 6).map((d, i) => [
           String(i + 1),
           (d.title || "-").substring(0, 20),
           formatStatus(d.status),
@@ -704,8 +704,8 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                 </div>
               </div>
 
-              {/* ═══ DELIVERABLES ═══ */}
-              <div className="erm-deliverables-grid">
+              {/* ═══ SUBTASKS ═══ */}
+              <div className="erm-subtasks-grid">
                 {/* Left */}
                 <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>SUBTASKS SUMMARY</div>
@@ -730,7 +730,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                 {/* Right */}
                 <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>SUBTASKS DETAILS</div>
-                  {deliverables.length === 0 ? (
+                  {subtasks.length === 0 ? (
                     <div style={{ textAlign: "center", padding: 20, color: "#9ca3af", fontSize: 10 }}>No subtasks found.</div>
                   ) : (
                     <div className="erm-table-wrapper">
@@ -745,7 +745,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {deliverables.slice(0, 6).map((d, i) => {
+                          {subtasks.slice(0, 6).map((d, i) => {
                             const ss = getStatusStyle(d.status);
                             return (
                               <tr key={i} style={{ borderBottom: "1px solid #f3f4f6", background: i % 2 ? "#f9fafb" : "#fff" }}>

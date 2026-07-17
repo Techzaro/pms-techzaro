@@ -284,6 +284,12 @@ function UserProfile() {
     }
   };
 
+  const { isDirty: guestIsDirty, setIsDirty: setGuestIsDirty, handleClose: handleGuestEditClose, ConfirmDialog: GuestEditConfirmDialog } = useConfirmOnClose(() => {
+    setGuestEditModal(false);
+    setGuestIsDirty(false);
+  });
+  useEscapeKey(guestEditModal, handleGuestEditClose);
+
   const openGuestEditModal = () => {
     setGuestEditData({
       name: user.name || "",
@@ -293,6 +299,7 @@ function UserProfile() {
       avatar: null,
       _existingAvatar: user.avatar || null,
     });
+    setGuestIsDirty(false);
     setGuestEditModal(true);
   };
 
@@ -1996,7 +2003,7 @@ function UserProfile() {
 
       {/* Guest Edit Modal */}
       {guestEditModal && createPortal(
-        <div className="user-modal-overlay" onClick={() => setGuestEditModal(false)}>
+        <div className="user-modal-overlay" onClick={handleGuestEditClose}>
           <div className="user-modal-content" style={{ maxWidth: "560px", width: "100%" }} onClick={(e) => e.stopPropagation()}>
             <div className="user-modal-header">
               <div className="user-header-left">
@@ -2009,7 +2016,7 @@ function UserProfile() {
                 <button className="primary-button" disabled={guestEditSubmitting} onClick={handleGuestEditSubmit}>
                   {guestEditSubmitting ? "Updating..." : "Update Guest"}
                 </button>
-                <button className="user-modal-close" onClick={() => setGuestEditModal(false)}>&#10005;</button>
+                <button className="user-modal-close" onClick={handleGuestEditClose}>&#10005;</button>
               </div>
             </div>
             <form className="user-form" onSubmit={handleGuestEditSubmit} style={{ pointerEvents: guestEditSubmitting ? "none" : "auto", opacity: guestEditSubmitting ? 0.7 : 1 }}>
@@ -2032,7 +2039,7 @@ function UserProfile() {
                       </>
                     )}
                   </div>
-                  <input id="guest-profile-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) setGuestEditData((prev) => ({ ...prev, avatar: file })); }} />
+                  <input id="guest-profile-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) { setGuestEditData((prev) => ({ ...prev, avatar: file })); setGuestIsDirty(true); } }} />
                   {(guestEditData.avatar || guestEditData._existingAvatar) && (
                     <button type="button" className="avatar-remove-btn" onClick={() => setGuestEditData((prev) => ({ ...prev, avatar: null, _existingAvatar: null }))}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -2046,19 +2053,19 @@ function UserProfile() {
               <div className="user-form-grid">
                 <div className="form-row">
                   <label>Client Name *</label>
-                  <input type="text" value={guestEditData.name} onChange={(e) => setGuestEditData((p) => ({ ...p, name: e.target.value }))} placeholder="Enter client / company name" />
+                  <input type="text" value={guestEditData.name} onChange={(e) => { setGuestEditData((p) => ({ ...p, name: e.target.value })); setGuestIsDirty(true); }} placeholder="Enter client / company name" />
                 </div>
                 <div className="form-row">
                   <label>Personal Email *</label>
-                  <input type="email" value={guestEditData.personal_email} onChange={(e) => setGuestEditData((p) => ({ ...p, personal_email: e.target.value }))} placeholder="client@example.com" />
+                  <input type="email" value={guestEditData.personal_email} onChange={(e) => { setGuestEditData((p) => ({ ...p, personal_email: e.target.value })); setGuestIsDirty(true); }} placeholder="client@example.com" />
                 </div>
                 <div className="form-row">
                   <label>Phone Number</label>
-                  <input type="text" value={guestEditData.phone_number} onChange={(e) => setGuestEditData((p) => ({ ...p, phone_number: e.target.value }))} placeholder="03XX-XXXXXXX" />
+                  <input type="text" value={guestEditData.phone_number} onChange={(e) => { setGuestEditData((p) => ({ ...p, phone_number: e.target.value })); setGuestIsDirty(true); }} placeholder="03XX-XXXXXXX" />
                 </div>
                 <div className="form-row">
                   <label>Company Name</label>
-                  <input type="text" value={guestEditData.company_name} onChange={(e) => setGuestEditData((p) => ({ ...p, company_name: e.target.value }))} placeholder="Enter company name (optional)" />
+                  <input type="text" value={guestEditData.company_name} onChange={(e) => { setGuestEditData((p) => ({ ...p, company_name: e.target.value })); setGuestIsDirty(true); }} placeholder="Enter company name (optional)" />
                 </div>
               </div>
             </form>
@@ -2066,6 +2073,7 @@ function UserProfile() {
         </div>,
         document.body
       )}
+      {GuestEditConfirmDialog}
     </DashboardLayout>
   );
 }

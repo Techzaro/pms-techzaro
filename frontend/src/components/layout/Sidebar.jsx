@@ -1,7 +1,7 @@
 /**
  * Sidebar - Main navigation sidebar for the PMS dashboard.
  * Renders role-based navigation links (dashboard, projects, tasks,
- * deliverables, calendar, reports, users, team) with collapsible
+ * subtasks, calendar, reports, users, team) with collapsible
  * dropdowns. Supports three viewport modes:
  *   - Desktop (>1200px): always visible, icon+text
  *   - Tablet (769-1200px): collapsible on hover/click
@@ -51,11 +51,11 @@ function Sidebar() {
     });
   };
 
-  const [deliverablesOpen, setDeliverablesOpen] = useState(() => sessionStorage.getItem("deliverablesOpen") === "true");
-  const toggleDeliverables = () => {
-    setDeliverablesOpen((prev) => {
+  const [subtasksOpen, setSubtasksOpen] = useState(() => sessionStorage.getItem("subtasksOpen") === "true");
+  const toggleSubtasks = () => {
+    setSubtasksOpen((prev) => {
       const next = !prev;
-      sessionStorage.setItem("deliverablesOpen", next);
+      sessionStorage.setItem("subtasksOpen", next);
       return next;
     });
   };
@@ -99,9 +99,9 @@ function Sidebar() {
     // Default to "tasks" (Assigned To You) when no from state is available
     return "tasks";
   };
-  const isDeliverableDetailPage = location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`);
-  /** Determine the parent deliverable list for active-state highlighting. */
-  const getDeliverableFrom = () => {
+  const isSubtaskDetailPage = location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`);
+  /** Determine the parent subtask list for active-state highlighting. */
+  const getSubtaskFrom = () => {
     if (location.state?.from) return location.state.from;
     const queryFrom = new URLSearchParams(location.search).get("from");
     if (queryFrom) return queryFrom;
@@ -154,18 +154,18 @@ function Sidebar() {
       sessionStorage.setItem("tasksOpen", false);
     }
 
-    const isDeliverablesRoute =
+    const isSubtasksRoute =
       isActive("deliveries") ||
       isActive("deliveries-by-you") ||
       isActive("self-deliveries") ||
       location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`);
 
-    if (isDeliverablesRoute) {
-      setDeliverablesOpen(true);
-      sessionStorage.setItem("deliverablesOpen", true);
+    if (isSubtasksRoute) {
+      setSubtasksOpen(true);
+      sessionStorage.setItem("subtasksOpen", true);
     } else {
-      setDeliverablesOpen(false);
-      sessionStorage.setItem("deliverablesOpen", false);
+      setSubtasksOpen(false);
+      sessionStorage.setItem("subtasksOpen", false);
     }
 
     const isReportsRoute =
@@ -311,11 +311,11 @@ function Sidebar() {
           </div>
           )}
 
-          {/* Deliverables dropdown – sub-links for assigned/by-you/self; hidden for guest */}
+          {/* Subtasks dropdown – sub-links for assigned/by-you/self; hidden for guest */}
           {user.role !== "guest" && (
           <div className={`sidebar-link ${isActive("deliveries") || isActive("deliveries-by-you") || isActive("self-deliveries") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
             <div
-              onClick={toggleDeliverables}
+              onClick={toggleSubtasks}
               style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
             >
               <MdAssignment />
@@ -324,15 +324,15 @@ function Sidebar() {
                 size={18}
                 style={{
                   transition: "transform 0.2s",
-                  transform: deliverablesOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  transform: subtasksOpen ? "rotate(180deg)" : "rotate(0deg)",
                 }}
               />
             </div>
-            {deliverablesOpen && (
+            {subtasksOpen && (
               <div className="sidebar-sub-links">
                 <Link
                   to={rolePath("deliveries")}
-                  className={`sidebar-sub-link ${isActive("deliveries") || (isDeliverableDetailPage && getDeliverableFrom() === "deliveries") ? "active" : ""}`}
+                  className={`sidebar-sub-link ${isActive("deliveries") || (isSubtaskDetailPage && getSubtaskFrom() === "deliveries") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Assigned To You
@@ -341,14 +341,14 @@ function Sidebar() {
                 <>
                 <Link
                   to={rolePath("deliveries-by-you")}
-                  className={`sidebar-sub-link ${isActive("deliveries-by-you") || (isDeliverableDetailPage && getDeliverableFrom() === "deliveries-by-you") ? "active" : ""}`}
+                  className={`sidebar-sub-link ${isActive("deliveries-by-you") || (isSubtaskDetailPage && getSubtaskFrom() === "deliveries-by-you") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Assigned By You
                 </Link>
                 <Link
                   to={rolePath("self-deliveries")}
-                  className={`sidebar-sub-link ${isActive("self-deliveries") || (isDeliverableDetailPage && getDeliverableFrom() === "self-deliveries") ? "active" : ""}`}
+                  className={`sidebar-sub-link ${isActive("self-deliveries") || (isSubtaskDetailPage && getSubtaskFrom() === "self-deliveries") ? "active" : ""}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Self Subtasks

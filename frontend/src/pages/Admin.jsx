@@ -224,6 +224,7 @@ const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, r
 /** Status badge colors matching the Projects list page */
 const STATUS_COLORS = {
   pending: "#FEF3C7",
+  in_progress: "#DBEAFE",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -237,6 +238,7 @@ const STATUS_COLORS = {
 
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
+  in_progress: "#1E40AF",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -287,13 +289,24 @@ const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, ge
 
       {/* FOOTER */}
       <div className="dash-card-footer">
-        <div className="dash-date-info">
-          <span className="dash-date-icon">📅</span>
-          {project.active_deadline ? (
-            <span>{new Date(project.active_deadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
-          ) : (
-            <span>No deadline set</span>
-          )}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <span
+            className="status-badge"
+            style={{
+              backgroundColor: STATUS_COLORS[project.status] || "#e0e7ff",
+              color: STATUS_TEXT_COLORS[project.status] || "#374151",
+            }}
+          >
+            {project.status || "Planning"}
+          </span>
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+            <span style={{ fontSize: "13px", color: "#6B7280", fontWeight: 500 }}>
+              📅 {project.start_date ? new Date(project.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "-"}
+            </span>
+            <span style={{ fontSize: "13px", color: "#6B7280", fontWeight: 500 }}>
+              📅 {project.end_date ? new Date(project.end_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "No deadline"}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -345,7 +358,7 @@ function Admin() {
     { staleTime: 120000, refetchOnMount: false, refetchOnWindowFocus: false, refetchInterval: false }
   );
 
-  // Auto-refresh dashboard when tasks, projects, or deliverables change
+  // Auto-refresh dashboard when tasks, projects, or subtasks change
   useRefreshOnEvent(["task:created", "task:updated", "task:deleted", "project:created", "project:updated", "project:deleted", "deliverable:updated", "data:changed"], () => refetchDashboard());
 
   // Listen for modal open/close events from child components
@@ -437,6 +450,7 @@ function Admin() {
       id: p.id, name: p.name, title: p.title || p.name, client: p.client || '\u2014',
       description: p.description || '',
       progress: Number(p.progress || p.progress_percent) || 0,       deadline: p.deadline || p.due_date || '\u2014',
+      start_date: p.start_date || null,
       end_date: p.active_deadline || p.end_date || p.deadline || p.due_date || null,
       status: p.status || 'In_progress',
       team: p.team || '\u2014', assigned_users: p.assigned_users || [],
@@ -489,7 +503,7 @@ function Admin() {
     access_removed:  { icon: "🔒", color: "#EF4444", bg: "#FEF2F2" },
   };
 
-  /** Returns a human-readable label for the activity module (task, project, deliverable) */
+  /** Returns a human-readable label for the activity module (task, project, subtask) */
   const getModuleLabel = (module) => {
     if (module === "task") return "Task";
     if (module === "project") return "Project";

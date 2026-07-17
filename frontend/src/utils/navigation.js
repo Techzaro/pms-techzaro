@@ -208,7 +208,7 @@ export function getActivityDestination(item) {
     return rolePath("projects");
   }
 
-  // Deliverable module
+  // Subtask module
   if (mod === "deliverable") {
     if (resolvedId) {
       return rolePath(`deliveries/deliverable-details/${resolvedId}`);
@@ -239,7 +239,7 @@ export function getActivityDestination(item) {
  * Uses the activity's action to determine the correct "from" value:
  * - Tasks: "created" → "taskby" (Assigned by You), others → "tasks" (Assigned to You)
  * - Projects: always "projects"
- * - Deliverables: always "deliveries"
+ * - Subtasks: always "deliveries"
  *
  * @param {Object} item - Activity item
  * @returns {string} The "from" query parameter value

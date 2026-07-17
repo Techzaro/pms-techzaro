@@ -1,6 +1,6 @@
 /**
  * SubmitDeliverableModal.jsx
- * Modal form for submitting a deliverable. Supports file uploads via drag-and-drop,
+ * Modal form for submitting a subtask. Supports file uploads via drag-and-drop,
  * link attachments, and submission notes. Handles both initial submissions and
  * resubmissions for rework-required status.
  */
@@ -22,13 +22,13 @@ import "./SubmitDeliverableModal.css";
 import "./layout/CreateTaskModal.css";
 
 /**
- * Modal form for submitting or resubmitting a deliverable.
+ * Modal form for submitting or resubmitting a subtask.
  * @param {boolean} isOpen - Whether the modal is visible.
  * @param {Function} onClose - Callback to close the modal.
- * @param {Object} deliverable - The deliverable being submitted.
- * @param {Function} onSubmitSuccess - Callback after successful submission, receives updated deliverable.
+ * @param {Object} subtask - The subtask being submitted.
+ * @param {Function} onSubmitSuccess - Callback after successful submission, receives updated subtask.
  */
-function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess }) {
+function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(isOpen, handleClose);
 
@@ -70,7 +70,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
   };
 
   /**
-   * Validates form data and submits the deliverable with files, links, and notes.
+   * Validates form data and submits the subtask with files, links, and notes.
    * Shows error if no content (comment, files, or links) is provided.
    */
   const handleSubmit = async () => {
@@ -87,7 +87,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
         files.forEach((f) => formData.append("files[]", f));
         validLinks.forEach((l) => formData.append("links[]", l));
 
-        const res = await fetch(`${API_URL}/deliverables/${deliverable.id}/submit`, {
+        const res = await fetch(`${API_URL}/deliverables/${subtask.id}/submit`, {
           method: "POST",
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
           body: formData,
@@ -100,7 +100,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
           onSubmitSuccess(data.deliverable);
           onClose();
         } else {
-          notify.error(data.message || "Failed to submit deliverable.");
+          notify.error(data.message || "Failed to submit subtask.");
         }
       } catch {
         notify.error("An error occurred. Please try again.");
@@ -108,9 +108,9 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
     });
   };
 
-  if (!isOpen || !deliverable) return null;
+  if (!isOpen || !subtask) return null;
 
-  const statusLabel = (deliverable.status || "pending").charAt(0).toUpperCase() + (deliverable.status || "pending").slice(1);
+  const statusLabel = (subtask.status || "pending").charAt(0).toUpperCase() + (subtask.status || "pending").slice(1);
   const isImageFile = (f) => f.type?.startsWith("image/");
 
   return createPortal(
@@ -119,11 +119,11 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
       <div className="sd-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="sd-header">
           <div>
-            <h2 className="sd-title">{deliverable.title}</h2>
+            <h2 className="sd-title">{subtask.title}</h2>
             <div className="sd-meta">
-              <span className={`sd-status-badge sd-status-${deliverable.status || "pending"}`}>{statusLabel}</span>
-              {deliverable.due_date && (
-                <span className="sd-due-date">Due Date {formatDateTimeShort(deliverable.due_date)}</span>
+              <span className={`sd-status-badge sd-status-${subtask.status || "pending"}`}>{statusLabel}</span>
+              {subtask.due_date && (
+                <span className="sd-due-date">Due Date {formatDateTimeShort(subtask.due_date)}</span>
               )}
             </div>
           </div>
@@ -149,7 +149,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
               className="sd-dropzone"
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleDrop}
-              onClick={() => document.getElementById(`sdm-file-${deliverable.id}`)?.click()}
+              onClick={() => document.getElementById(`sdm-file-${subtask.id}`)?.click()}
             >
               <div className="sd-dropzone-icon">
                 <Upload size={24} strokeWidth={1.5} />
@@ -158,7 +158,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
               <p className="sd-dropzone-hint">Supports: PDF, DOC, XLS, PPT, images, ZIP, RAR</p>
             </div>
             <input
-              id={`sdm-file-${deliverable.id}`}
+              id={`sdm-file-${subtask.id}`}
               type="file"
               multiple
               style={{ display: "none" }}
@@ -192,7 +192,7 @@ function SubmitDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess 
         <div className="sd-footer">
           <button className="sd-cancel-btn" onClick={handleClose} disabled={submitting}>Cancel</button>
           <LoadingButton className="sd-submit-btn" onClick={handleSubmit} loading={submitting}>
-            {deliverable.status === "rework_required" ? "Resubmit Subtask" : "Submit Subtask"}
+            {subtask.status === "rework_required" ? "Resubmit Subtask" : "Submit Subtask"}
           </LoadingButton>
         </div>
       </div>

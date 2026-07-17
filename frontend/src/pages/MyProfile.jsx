@@ -16,6 +16,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { authToken, getCurrentRole, getUser, setUser, normalizeRole } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
@@ -84,7 +85,11 @@ function MyProfile() {
     markViewed: markMyViewed,
   } = useActivityHighlight("user", profileData?.user?.id, profileData?.activity_max_id || 0, changes);
 
-  useEscapeKey(isPasswordModalOpen, () => setIsPasswordModalOpen(false));
+  const { isDirty: passwordIsDirty, setIsDirty: setPasswordIsDirty, handleClose: handlePasswordClose, ConfirmDialog: PasswordConfirmDialog } = useConfirmOnClose(() => {
+    setIsPasswordModalOpen(false);
+    setPasswordIsDirty(false);
+  });
+  useEscapeKey(isPasswordModalOpen, handlePasswordClose);
 
   /** Build auth headers for API requests. */
   const authHeaders = () => {
@@ -170,6 +175,7 @@ function MyProfile() {
   const openPasswordModal = () => {
     setPasswordForm({ old_password: "", new_password: "", confirm_password: "" });
     setPasswordErrors({});
+    setPasswordIsDirty(false);
     setIsPasswordModalOpen(true);
   };
 
@@ -704,7 +710,7 @@ function MyProfile() {
                 <h2>Change Password</h2>
                 <p className="modal-subtitle">Update your account password.</p>
               </div>
-              <button className="user-modal-close" onClick={() => setIsPasswordModalOpen(false)}>
+              <button className="user-modal-close" onClick={handlePasswordClose}>
                 &#10005;
               </button>
             </div>
@@ -723,7 +729,7 @@ function MyProfile() {
                       id="old-password"
                       name="old_password"
                       value={passwordForm.old_password}
-                      onChange={handlePasswordChange}
+                      onChange={(e) => { handlePasswordChange(e); setPasswordIsDirty(true); }}
                       placeholder="Enter current password"
                       className={passwordErrors.old_password ? "field-error" : ""}
                       style={{ width: "100%", padding: "8px 36px 8px 32px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "14px", outline: "none", boxSizing: "border-box" }}
@@ -743,7 +749,7 @@ function MyProfile() {
                   id="new-password"
                   name="new_password"
                   value={passwordForm.new_password}
-                  onChange={handlePasswordChange}
+                  onChange={(e) => { handlePasswordChange(e); setPasswordIsDirty(true); }}
                   placeholder="Enter new password"
                   label="New Password"
                   error={passwordErrors.new_password}
@@ -753,7 +759,7 @@ function MyProfile() {
                   id="confirm-password"
                   name="confirm_password"
                   value={passwordForm.confirm_password}
-                  onChange={handlePasswordChange}
+                  onChange={(e) => { handlePasswordChange(e); setPasswordIsDirty(true); }}
                   placeholder="Confirm new password"
                   label="Confirm New Password"
                   showStrength={false}
@@ -766,7 +772,7 @@ function MyProfile() {
                 <button
                   type="button"
                   className="secondary-button"
-                  onClick={() => setIsPasswordModalOpen(false)}
+                  onClick={handlePasswordClose}
                 >
                   Cancel
                 </button>
@@ -783,6 +789,7 @@ function MyProfile() {
         </div>,
         document.body
       )}
+      {PasswordConfirmDialog}
     </DashboardLayout>
   );
 }

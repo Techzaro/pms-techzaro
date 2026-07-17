@@ -182,4 +182,29 @@ class Project extends Model
         // Fallback to end_date if no milestones at all
         return $this->end_date;
     }
+
+    /**
+     * Sync project start_date and end_date from milestones.
+     * start_date = earliest milestone due_date
+     * end_date   = latest milestone due_date (final deadline)
+     */
+    public function syncDatesFromMilestones(): void
+    {
+        $milestones = $this->milestones()
+            ->whereNotNull('due_date')
+            ->orderBy('due_date', 'asc')
+            ->get();
+
+        if ($milestones->isEmpty()) {
+            return;
+        }
+
+        $earliest = $milestones->first()->due_date;
+        $latest = $milestones->last()->due_date;
+
+        $this->updateQuietly([
+            'start_date' => $earliest,
+            'end_date' => $latest,
+        ]);
+    }
 }

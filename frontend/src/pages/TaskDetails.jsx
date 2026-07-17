@@ -2,7 +2,7 @@
  * TaskDetails page component.
  *
  * Full detail view for a single task.  Shows task metadata (status, priority,
- * assignees, dates), deliverables table (sortable, with submit/view actions),
+ * assignees, dates), subtasks table (sortable, with submit/view actions),
  * task submission workflow panel, file attachments, a sidebar with task info
  * and a personal notes section.  Supports navigation between tasks via
  * previous/next buttons and tracks which tasks have been viewed.
@@ -74,6 +74,7 @@ function timeAgo(iso) {
 function statusLabel(status) {
   const s = (status || "").toLowerCase();
   if (s === "pending") return "Pending";
+  if (s === "in_progress" || s === "acknowledged") return "In Progress";
   if (s === "submitted") return "Submitted";
   if (s === "reopened") return "Reopened";
   if (s === "approved") return "Approved";
@@ -85,7 +86,9 @@ function statusLabel(status) {
 function statusColor(status) {
   const s = (status || "").toLowerCase();
   if (s === "approved") return "#166534";
-  if (s === "pending" || s === "reopened") return "#92400E";
+  if (s === "pending") return "#92400E";
+  if (s === "in_progress" || s === "acknowledged") return "#1E40AF";
+  if (s === "reopened") return "#92400E";
   if (s === "submitted") return "#1E40AF";
   if (s === "rejected") return "#991B1B";
   return "#374151";
@@ -95,7 +98,9 @@ function statusColor(status) {
 function statusBgColor(status) {
   const s = (status || "").toLowerCase();
   if (s === "approved") return "#DCFCE7";
-  if (s === "pending" || s === "reopened") return "#FEF3C7";
+  if (s === "pending") return "#FEF3C7";
+  if (s === "in_progress" || s === "acknowledged") return "#DBEAFE";
+  if (s === "reopened") return "#FEF3C7";
   if (s === "submitted") return "#DBEAFE";
   if (s === "rejected") return "#FEE2E2";
   return "#F3F4F6";
@@ -233,7 +238,7 @@ function CredentialRow({ credential, onDelete }) {
 
 /**
  * Main TaskDetails component — renders the full task detail view with
- * sidebar, tabs, deliverables table and submission workflow.
+ * sidebar, tabs, subtasks table and submission workflow.
  */
 function TaskDetails() {
   const { taskId } = useParams();
@@ -251,10 +256,10 @@ function TaskDetails() {
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
   const [deleteTaskConfirmOpen, setDeleteTaskConfirmOpen] = useState(false);
-  const [tab, setTab] = useState("deliverables");
-  const [submitModal, setSubmitModal] = useState({ open: false, deliverable: null });
-  const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
-  const [assignerModal, setAssignerModal] = useState({ open: false, deliverable: null });
+  const [tab, setTab] = useState("overview");
+  const [submitModal, setSubmitModal] = useState({ open: false, subtask: null });
+  const [viewModal, setViewModal] = useState({ open: false, subtask: null });
+  const [assignerModal, setAssignerModal] = useState({ open: false, subtask: null });
   const [taskSubmitModalOpen, setTaskSubmitModalOpen] = useState(false);
   const [taskConfirmDialog, setTaskConfirmDialog] = useState({ open: false, type: null });
   const [taskReopenDialog, setTaskReopenDialog] = useState(false);
@@ -264,8 +269,8 @@ function TaskDetails() {
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteDeleteOpen, setNoteDeleteOpen] = useState(false);
   const [pendingNoteId, setPendingNoteId] = useState(null);
-  const [orderedDeliverables, setOrderedDeliverables] = useState([]);
-  const [deliverableSearch, setDeliverableSearch] = useState("");
+  const [orderedSubtasks, setOrderedSubtasks] = useState([]);
+  const [subtaskSearch, setSubtaskSearch] = useState("");
   const [overviewSearch, setOverviewSearch] = useState("");
   const [accessSearch, setAccessSearch] = useState("");
   const [showAddAccessModal, setShowAddAccessModal] = useState(false);
@@ -329,11 +334,11 @@ function TaskDetails() {
       : null;
 
   useEffect(() => {
-    setOrderedDeliverables(task?.deliverables || []);
+    setOrderedSubtasks(task?.deliverables || []);
   }, [task?.deliverables]);
 
-  const handleDeliverableReorder = useCallback((reordered) => {
-    setOrderedDeliverables(reordered);
+  const handleSubtaskReorder = useCallback((reordered) => {
+    setOrderedSubtasks(reordered);
     const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
     fetch(`${API_URL}/deliverables/reorder`, {
       method: 'POST',
@@ -347,7 +352,8 @@ function TaskDetails() {
   const isCreator = task?.is_creator ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10));
   const isAssignee = task?.is_assignee ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)));
   const canEdit = task?.can_edit ?? (task && currentUser && isCreator && task?.status?.toLowerCase() !== "approved");
-  const canSubmitTask = task?.can_submit ?? (task && currentUser && isAssignee && ["pending", "reopened"].includes(task?.status));
+  const canSubmitTask = task?.can_submit ?? (task && currentUser && isAssignee && ["pending", "in_progress", "reopened"].includes(task?.status));
+  const canAcknowledge = task && currentUser && isAssignee && task?.status === "pending";
   const isApproved = task?.status?.toLowerCase() === "approved";
 
   const fetchAccessCredentials = useCallback(async () => {
@@ -475,18 +481,18 @@ function TaskDetails() {
     }
   };
 
-  const handleDeliverableActionSuccess = (updatedDeliverable) => {
+  const handleSubtaskActionSuccess = (updatedSubtask) => {
     setTask((prev) => {
       if (!prev) return prev;
-      const deliverables = (prev.deliverables || []).map((d) =>
-        d.id === updatedDeliverable.id ? { ...d, ...updatedDeliverable } : d
+      const localSubtasks = (prev.deliverables || []).map((d) =>
+        d.id === updatedSubtask.id ? { ...d, ...updatedSubtask } : d
       );
-      const previousDeliverable = (prev.deliverables || []).find((d) => d.id === updatedDeliverable.id);
-      const wasApproved = previousDeliverable?.status === "approved";
-      const isApprovedNow = updatedDeliverable.status === "approved";
-      const wasPending = previousDeliverable?.status === "pending";
-      const isPendingNow = updatedDeliverable.status === "pending";
-      const delTotal = prev.total_deliverables ?? deliverables.length;
+      const previousSubtask = (prev.deliverables || []).find((d) => d.id === updatedSubtask.id);
+      const wasApproved = previousSubtask?.status === "approved";
+      const isApprovedNow = updatedSubtask.status === "approved";
+      const wasPending = previousSubtask?.status === "pending";
+      const isPendingNow = updatedSubtask.status === "pending";
+      const delTotal = prev.total_deliverables ?? localSubtasks.length;
       const delCompleted = Math.max(
         0,
         (prev.completed_deliverables ?? 0) + (isApprovedNow && !wasApproved ? 1 : !isApprovedNow && wasApproved ? -1 : 0)
@@ -497,7 +503,7 @@ function TaskDetails() {
       );
       return {
         ...prev,
-        deliverables,
+        deliverables: localSubtasks,
         total_deliverables: delTotal,
         completed_deliverables: delCompleted,
         pending_deliverables_count: pendingCount,
@@ -537,6 +543,28 @@ function TaskDetails() {
       if (res.ok) { publish('task:deleted', { id: taskId }); publish('data:changed', { type: 'task', action: 'deleted' }); showSuccessMessage("Task", "deleted"); setTimeout(() => navigate(rolePath("tasks")), 800); }
       else notify.error("Failed to delete task.");
     } catch { notify.error("Failed to delete task."); }
+  };
+
+  const handleAcknowledge = async () => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/acknowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTask(data.task);
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage("Task", "acknowledged");
+      } else {
+        notify.error(data.message || "Failed to acknowledge task.");
+      }
+    } catch {
+      notify.error("Failed to acknowledge task.");
+    }
   };
 
   const handleStatusChange = async (newStatus) => {
@@ -589,7 +617,13 @@ function TaskDetails() {
                       </button>
                     </>
                   )}
-                  {isAssignee && ["pending", "reopened"].includes(task?.status) && (
+                  {canAcknowledge && (
+                    <button className="td-btn-primary" onClick={handleAcknowledge}>
+                      <CheckCircle2 size={15} />
+                      Acknowledge
+                    </button>
+                  )}
+                  {isAssignee && ["in_progress", "reopened"].includes(task?.status) && (
                     <button
                       className="td-btn-primary"
                       disabled={!canSubmitTask}
@@ -666,8 +700,8 @@ function TaskDetails() {
                 {/* TABS */}
                 <div className="td-tabs">
                   {[
-                    { id: "deliverables", label: "Subtasks", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg> },
                     { id: "overview", label: "Overview", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
+                    { id: "subtasks", label: "Subtasks", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg> },
                     { id: "files", label: "Platform files & links", icon: <FolderOpen size={16} /> },
                     { id: "access", label: "Access", icon: <Shield size={16} /> },
                   ].map(({ id, label, icon }) => (
@@ -714,24 +748,24 @@ function TaskDetails() {
                     </div>
                   )}
 
-                  {tab === "deliverables" && (
+                  {tab === "subtasks" && (
                     <div>
                       <div className="td-section-header">
                         <h2 className="td-section-title">Subtasks</h2>
                         <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                          <input type="text" placeholder="Search subtasks..." value={deliverableSearch} onChange={(e) => setDeliverableSearch(e.target.value)} />
+                          <input type="text" placeholder="Search subtasks..." value={subtaskSearch} onChange={(e) => setSubtaskSearch(e.target.value)} />
                         </div>
                         <span className="td-section-count">{task.completed_deliverables || 0}/{task.total_deliverables || 0} Completed</span>
                       </div>
                       {(() => {
-                        const allDeliverables = orderedDeliverables.length ? orderedDeliverables : (task.deliverables || []);
-                        const filteredDeliverables = deliverableSearch ? allDeliverables.filter((d) => {
-                          const q = deliverableSearch.toLowerCase();
+                        const allSubtasks = orderedSubtasks.length ? orderedSubtasks : (task.deliverables || []);
+                        const subtasksSearch = subtaskSearch ? allSubtasks.filter((d) => {
+                          const q = subtaskSearch.toLowerCase();
                           return (d.title || "").toLowerCase().includes(q) || (d.description || "").toLowerCase().includes(q);
-                        }) : allDeliverables;
-                        return filteredDeliverables.length === 0 ? (
-                          <p className="td-empty">{deliverableSearch ? "No subtasks match your search." : "No subtasks linked to this task."}</p>
+                        }) : allSubtasks;
+                        return subtasksSearch.length === 0 ? (
+                          <p className="td-empty">{subtaskSearch ? "No subtasks match your search." : "No subtasks linked to this task."}</p>
                         ) : (
                           <div className="pd-table-wrap">
                             <div className="deliveries-table-header" style={{ gridTemplateColumns: "32px minmax(150px, 1.6fr) minmax(160px, 1.8fr) minmax(110px, 1.1fr) minmax(90px, 0.9fr) minmax(70px, 0.5fr)" }}>
@@ -742,9 +776,9 @@ function TaskDetails() {
                               <div>Status</div>
                               <div>Action</div>
                             </div>
-                            <SortableTableWrapper
-                              items={filteredDeliverables}
-                            onReorder={handleDeliverableReorder}
+                              <SortableTableWrapper
+                                items={subtasksSearch}
+                              onReorder={handleSubtaskReorder}
                             as="div"
                             handleOnly
                           >
@@ -773,15 +807,15 @@ function TaskDetails() {
                                 </div>
                                 <div className="action-btns">
                                   {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
-                                    <button className="action-icon-btn action-submit" title="Submit" onClick={() => setSubmitModal({ open: true, deliverable: d })}>
+                                    <button className="action-icon-btn action-submit" title="Submit" onClick={() => setSubmitModal({ open: true, subtask: d })}>
                                       <LuSend size={16} />
                                     </button>
                                   ) : (
                                     <button className="action-icon-btn action-view" title="View" onClick={() => {
                                       if (isCreator) {
-                                        setAssignerModal({ open: true, deliverable: d });
+                                        setAssignerModal({ open: true, subtask: d });
                                       } else {
-                                        setViewModal({ open: true, deliverable: d });
+                                        setViewModal({ open: true, subtask: d });
                                       }
                                     }}>
                                       <IoEyeOutline size={16} />
@@ -945,11 +979,12 @@ function TaskDetails() {
                             <>
                               {item.action === 'created' && '📝'}
                               {item.action === 'submitted' && '📤'}
+                              {item.action === 'acknowledged' && '👍'}
                               {item.action === 'approved' && '✅'}
                               {item.action === 'rejected' && '❌'}
                               {item.action === 'reopened' && '🔄'}
                               {item.action === 'field_changed' && '✏️'}
-                              {!['created','submitted','approved','rejected','reopened','field_changed'].includes(item.action) && '📌'}
+                              {!['created','submitted','acknowledged','approved','rejected','reopened','field_changed'].includes(item.action) && '📌'}
                             </>
                           )}
                           {item.type === 'change' && '✏️'}
@@ -1008,27 +1043,27 @@ function TaskDetails() {
       </DashboardLayout>
 
       <SubmitDeliverableModal
-        key={`td-submit-${submitModal.deliverable?.id || "none"}`}
+        key={`td-submit-${submitModal.subtask?.id || "none"}`}
         isOpen={submitModal.open}
-        onClose={() => setSubmitModal({ open: false, deliverable: null })}
-        deliverable={submitModal.deliverable}
-        onSubmitSuccess={handleDeliverableActionSuccess}
+        onClose={() => setSubmitModal({ open: false, subtask: null })}
+        subtask={submitModal.subtask}
+        onSubmitSuccess={handleSubtaskActionSuccess}
       />
 
       <ViewDeliverableModal
-        key={`td-view-${viewModal.deliverable?.id || "none"}`}
+        key={`td-view-${viewModal.subtask?.id || "none"}`}
         isOpen={viewModal.open}
-        onClose={() => setViewModal({ open: false, deliverable: null })}
-        deliverable={viewModal.deliverable}
-        onSubmitSuccess={handleDeliverableActionSuccess}
+        onClose={() => setViewModal({ open: false, subtask: null })}
+        subtask={viewModal.subtask}
+        onSubmitSuccess={handleSubtaskActionSuccess}
       />
 
       <AssignerViewModal
-        key={`td-assigner-${assignerModal.deliverable?.id || "none"}`}
+        key={`td-assigner-${assignerModal.subtask?.id || "none"}`}
         isOpen={assignerModal.open}
-        onClose={() => setAssignerModal({ open: false, deliverable: null })}
-        deliverable={assignerModal.deliverable}
-        onActionSuccess={handleDeliverableActionSuccess}
+        onClose={() => setAssignerModal({ open: false, subtask: null })}
+        subtask={assignerModal.subtask}
+        onActionSuccess={handleSubtaskActionSuccess}
       />
 
       <SubmitTaskModal

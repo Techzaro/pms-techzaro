@@ -61,7 +61,7 @@ function Header() {
     { name: "Projects", path: rolePath("projects"), keywords: "projects list" },
     { name: "Tasks Assigned to You", path: rolePath("tasks"), keywords: "my tasks assigned" },
     { name: "Tasks Assigned by You", path: rolePath("taskby"), keywords: "tasks created by me" },
-    { name: "Subtasks", path: rolePath("deliveries"), keywords: "deliveries deliverables subtasks" },
+    { name: "Subtasks", path: rolePath("deliveries"), keywords: "deliveries subtasks" },
     { name: "Calendar", path: rolePath("calender"), keywords: "calendar events schedule" },
     { name: "Manage Users", path: rolePath("manage-users"), keywords: "users manage" },
     { name: "Manage Team", path: rolePath("manage-team"), keywords: "team manage" },

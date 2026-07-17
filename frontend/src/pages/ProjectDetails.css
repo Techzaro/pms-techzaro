@@ -1416,7 +1416,7 @@
   min-width: 900px;
 }
 
-.pd-deliverables-grid {
+.pd-subtasks-grid {
   grid-template-columns: 32px minmax(140px, 2fr) minmax(140px, 2fr) minmax(100px, 1.1fr) minmax(110px, 1.2fr) minmax(80px, 0.6fr) !important;
 }
 
@@ -1760,7 +1760,7 @@
     font-size: 14px;
   }
 
-  .pd-deliverables-grid {
+  .pd-subtasks-grid {
     grid-template-columns: 32px minmax(120px, 2fr) minmax(120px, 2fr) minmax(90px, 1.1fr) minmax(90px, 1.2fr) minmax(70px, 0.6fr) !important;
     gap: 8px;
   }
@@ -1784,7 +1784,7 @@
     padding: 10px 12px;
   }
 
-  .pd-deliverables-grid {
+  .pd-subtasks-grid {
     grid-template-columns: 32px minmax(100px, 2fr) minmax(100px, 2fr) minmax(80px, 1.1fr) minmax(80px, 1.2fr) minmax(60px, 0.6fr) !important;
     gap: 6px;
   }
@@ -1814,7 +1814,7 @@
   }
 
   .ptt-row > div,
-  .deliveries-table-row > div {
+  .subtasks-table-row > div {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1839,7 +1839,7 @@
     padding: 8px 10px;
   }
 
-  .pd-deliverables-grid {
+  .pd-subtasks-grid {
     grid-template-columns: 32px minmax(90px, 2fr) minmax(90px, 2fr) minmax(70px, 1.1fr) minmax(70px, 1.2fr) minmax(50px, 0.6fr) !important;
     gap: 5px;
   }

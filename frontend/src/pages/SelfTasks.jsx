@@ -4,7 +4,7 @@
  * Displays tasks that the current user assigned to themselves.
  * Includes search with debounce, status filtering, time-range filtering,
  * drag-and-drop reordering and pagination.  Modals are available for
- * creating new tasks and submitting deliverables.
+ * creating new tasks and submitting subtasks.
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -28,6 +28,7 @@ import "../pages/Task.css";
 
 const STATUS_COLORS = {
   pending: "#FEF3C7",
+  in_progress: "#DBEAFE",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -36,6 +37,7 @@ const STATUS_COLORS = {
 
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
+  in_progress: "#1E40AF",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -61,9 +63,9 @@ const SelfTasks = () => {
   
   // State declarations
   const [showTaskModal, setShowTaskModal] = useState({ open: false, projectId: null, id: null }); // Fixed to object
-  const [showDeliverableSubmitModal, setShowDeliverableSubmitModal] = useState({ open: false, deliverable: null }); // Added missing state
+  const [showSubtaskSubmitModal, setShowSubtaskSubmitModal] = useState({ open: false, subtask: null }); // Added missing state
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
-  const [viewModal, setViewModal] = useState({ open: false, deliverable: null }); // Added missing state
+  const [viewModal, setViewModal] = useState({ open: false, subtask: null }); // Added missing state
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -142,7 +144,7 @@ const SelfTasks = () => {
     fetchTasks();
   };
 
-  const handleDeliverableSubmitSuccess = () => {
+  const handleSubtaskSubmitSuccess = () => {
     fetchTasks();
   };
 
@@ -150,7 +152,7 @@ const SelfTasks = () => {
     fetchTasks();
   };
 
-  const handleDeliverableUpdate = () => {
+  const handleSubtaskUpdate = () => {
     fetchTasks();
   };
 
@@ -161,6 +163,7 @@ const SelfTasks = () => {
   const formatStatus = (status) => {
     const map = {
       pending: "Pending",
+      in_progress: "In Progress",
       submitted: "Submitted",
       reopened: "Reopened",
       approved: "Approved",
@@ -267,7 +270,7 @@ const SelfTasks = () => {
           <div>Status</div>
           <div>Progress</div>
           <div>Priority</div>
-          <div>Due Date</div>
+          <div>Date</div>
           <div>Action</div>
         </div>
 
@@ -305,8 +308,14 @@ const SelfTasks = () => {
                       <div style={{ fontSize: "10px", color: "#92400E", marginTop: "2px" }}>by {item.reopenedBy.name}</div>
                     )}
                   </div>
-                  <div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                      {item.deliverables_progress || 0}%
+                    </div>
                     <div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div></div>
+                    <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
+                    </div>
                   </div>
                   <div>
                     <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
@@ -315,13 +324,13 @@ const SelfTasks = () => {
                     </span>
                   </div>
                   <div className="date-box">
-                    <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.end_date)}</div>
+                    <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.start_date)}{"\n"}{formatDate(item.end_date)}</div>
                   </div>
                   <div className="action-btns">
                     <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}><IoEyeOutline /></button>
                     {(() => {
                       const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
-                      const canSubmit = (item.status === "pending" || item.status === "reopened") && myPivotStatus !== "submitted";
+                      const canSubmit = (item.status === "in_progress" || item.status === "reopened") && myPivotStatus !== "submitted";
                       return canSubmit && (
                       <div style={{ position: "relative", display: "inline-flex" }}>
                         <button 
@@ -369,24 +378,24 @@ const SelfTasks = () => {
         />
       )}
 
-      {showDeliverableSubmitModal.open && (
+      {showSubtaskSubmitModal.open && (
         <SubmitDeliverableModal
-          key={`deliverable-submit-${showDeliverableSubmitModal.deliverable?.id || "none"}`}
-          isOpen={showDeliverableSubmitModal.open}
-          onClose={() => setShowDeliverableSubmitModal({ open: false, deliverable: null })}
-          deliverable={showDeliverableSubmitModal.deliverable}
-          onSubmitSuccess={handleDeliverableSubmitSuccess}
+          key={`subtask-submit-${showSubtaskSubmitModal.subtask?.id || "none"}`}
+          isOpen={showSubtaskSubmitModal.open}
+          onClose={() => setShowSubtaskSubmitModal({ open: false, subtask: null })}
+          deliverable={showSubtaskSubmitModal.subtask}
+          onSubmitSuccess={handleSubtaskSubmitSuccess}
         />
       )}
 
       {viewModal.open && (
         <SelfDeliverableViewModal
-          key={`view-${viewModal.deliverable?.id || "none"}`}
+          key={`view-${viewModal.subtask?.id || "none"}`}
           isOpen={viewModal.open}
-          onClose={() => setViewModal({ open: false, deliverable: null })}
-          deliverable={viewModal.deliverable}
-          onActionSuccess={handleDeliverableUpdate}
-          onResubmit={(deliverable) => setShowDeliverableSubmitModal({ open: true, deliverable })}
+          onClose={() => setViewModal({ open: false, subtask: null })}
+          deliverable={viewModal.subtask}
+          onActionSuccess={handleSubtaskUpdate}
+          onResubmit={(subtask) => setShowSubtaskSubmitModal({ open: true, subtask })}
         />
       )}
     </DashboardLayout>

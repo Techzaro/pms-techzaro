@@ -2,7 +2,7 @@
  * CreateProjectModal.jsx
  * Full-featured modal form for creating a new project.
  * Includes fields for title, description, category, team assignment, milestones,
- * deliverables, attachments (files & links), client info, and priority.
+ * subtasks, attachments (files & links), client info, and priority.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -22,19 +22,6 @@ import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import "./layout/CreateProjectModal.css";
 
-const PRESET_PHASES = [
-  "Planned",
-  "In Progress",
-  "Paused",
-  "Completed",
-];
-
-const TEAM_ROLES = ["Solution", "Tech", "Developer"];
-
-/**
- * Modal form for creating a new project with all associated metadata.
- * @param {Function} onClose - Callback to close the modal; receives boolean (true if created)
- */
 const CreateProjectModal = ({ onClose }) => {
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(true, handleClose);
@@ -80,14 +67,16 @@ const CreateProjectModal = ({ onClose }) => {
   const [phaseName, setPhaseName] = useState("");
   const [phaseDate, setPhaseDate] = useState("");
   const [phaseDropdownOpen, setPhaseDropdownOpen] = useState(false);
+  const [phaseSearch, setPhaseSearch] = useState("");
   const phaseDropdownRef = useRef(null);
+  const [savedMilestones, setSavedMilestones] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("persisted_milestones") || "[]"); } catch { return []; }
+  });
 
   const [pendingFiles, setPendingFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const [linkInput, setLinkInput] = useState("");
   const [linkTitleInput, setLinkTitleInput] = useState("");
-  const [deliverablesProj, setDeliverablesProj] = useState([]);
-  const [deliverableProjInput, setDeliverableProjInput] = useState({ title: "", due_datetime: "" });
   const fileInputRef = useRef(null);
   const dropRef = useRef(null);
   const [editingLink, setEditingLink] = useState(null);
@@ -211,8 +200,16 @@ const CreateProjectModal = ({ onClose }) => {
     const formattedDt = toUTCIso(phaseDate);
     setIsDirty(true);
     setMilestones((prev) => [...prev, { title: phaseName.trim(), due_date: formattedDt, status: "planned" }]);
+    const name = phaseName.trim();
     setPhaseName("");
     setPhaseDate("");
+    setPhaseDropdownOpen(false);
+    setPhaseSearch("");
+    if (name && !savedMilestones.includes(name)) {
+      const updated = [...savedMilestones, name].sort();
+      setSavedMilestones(updated);
+      localStorage.setItem("persisted_milestones", JSON.stringify(updated));
+    }
   };
 
   const handleRemovePhase = (index) => {
@@ -273,7 +270,6 @@ const CreateProjectModal = ({ onClose }) => {
     else if (type === "link") handleRemoveLink(index);
     else if (type === "category") handleRemoveCategory(index);
     else if (type === "phase") handleRemovePhase(index);
-    else if (type === "deliverable") handleRemoveDeliverableProj(index);
     setRemoveConfirmOpen(false);
     setPendingRemoveItem({ type: "", index: -1 });
   };
@@ -337,24 +333,6 @@ const CreateProjectModal = ({ onClose }) => {
 
   const handleLinkKeyDown = (e) => {
     if (e.key === "Enter") { e.preventDefault(); handleAddLink(); }
-  };
-
-  const handleAddDeliverableProj = () => {
-    if (!deliverableProjInput.title.trim()) return;
-    const dt = deliverableProjInput.due_datetime;
-    const dueDate = toUTCIso(dt);
-    setIsDirty(true);
-    setDeliverablesProj((prev) => [...prev, { title: deliverableProjInput.title.trim(), due_date: dueDate }]);
-    setDeliverableProjInput({ title: "", due_datetime: "" });
-  };
-
-  const handleRemoveDeliverableProj = (index) => {
-    setIsDirty(true);
-    setDeliverablesProj((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleDeliverableProjKeyDown = (e) => {
-    if (e.key === "Enter") { e.preventDefault(); handleAddDeliverableProj(); }
   };
 
   /**
@@ -431,7 +409,6 @@ const CreateProjectModal = ({ onClose }) => {
           budget: form.budget ? parseFloat(form.budget) : null,
           milestones: milestones.length > 0 ? milestones : [],
           team_roles: form.team_roles,
-          deliverables: deliverablesProj.length > 0 ? deliverablesProj.map(d => ({ title: d.title, due_date: d.due_date || null })) : undefined,
         };
 
         const response = await fetch(`${API_URL}/projects`, {
@@ -525,7 +502,7 @@ const CreateProjectModal = ({ onClose }) => {
               </div>
 
               <div className="cp-deadline-grid">
-                <div className="cp-field">
+                <div className="cp-field" ref={phaseDropdownRef}>
                   <label style={{ fontSize: "13px" }}>Phase</label>
                   <input
                     type="text"
@@ -533,14 +510,17 @@ const CreateProjectModal = ({ onClose }) => {
                     value={phaseName}
                     onChange={(e) => {
                       setPhaseName(e.target.value);
-                      setPhaseDropdownOpen(false);
+                      setPhaseDropdownOpen(true);
+                      setPhaseSearch(e.target.value);
                     }}
-                    onFocus={() => { if (!phaseName) setPhaseDropdownOpen(true); }}
+                    onFocus={() => { setPhaseDropdownOpen(true); setPhaseSearch(phaseName); }}
                     onKeyDown={handlePhaseKeyDown}
                   />
                   {phaseDropdownOpen && (
-                    <div className="cp-dropdown-menu" style={{ position: "relative", top: "4px", boxShadow: "0 8px 24px rgba(0,0,0,0.1)" }}>
-                      {PRESET_PHASES.map((p) => (
+                    <div className="cp-dropdown-menu" style={{ position: "relative", top: "4px", boxShadow: "0 8px 24px rgba(0,0,0,0.1)", maxHeight: "200px", overflowY: "auto" }}>
+                      {savedMilestones
+                        .filter((p) => !phaseSearch.trim() || p.toLowerCase().includes(phaseSearch.toLowerCase()))
+                        .map((p) => (
                         <div
                           key={p}
                           className="cp-dropdown-item"
@@ -548,11 +528,17 @@ const CreateProjectModal = ({ onClose }) => {
                             e.preventDefault();
                             setPhaseName(p);
                             setPhaseDropdownOpen(false);
+                            setPhaseSearch("");
                           }}
                         >
                           {p}
                         </div>
                       ))}
+                      {savedMilestones.filter((p) => !phaseSearch.trim() || p.toLowerCase().includes(phaseSearch.toLowerCase())).length === 0 && phaseSearch.trim() && (
+                        <div className="cp-dropdown-item" style={{ color: "#9ca3af", fontStyle: "italic" }}>
+                          Type and press Enter to add "{phaseSearch}"
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -603,65 +589,6 @@ const CreateProjectModal = ({ onClose }) => {
                   <strong>{formatDateDisplay(milestones[milestones.length - 1].due_date)}</strong>
                 </div>
               )}
-            </div>
-
-            <div className="cp-grid-2">
-              <div className="cp-field">
-                <label>Teams (Optional)</label>
-                <div className="cp-dropdown-wrap cp-combo-trigger" ref={teamRolesRef} onClick={() => { if (!teamRolesOpen) { setTeamRolesOpen(true); setTeamRolesSearch(""); } }}>
-                  {form.team_ids.length > 0 && (
-                    <span className="cp-combo-count">{form.team_ids.length} selected</span>
-                  )}
-                  {form.team_ids.length === 0 && !teamRolesOpen && (
-                    <span className="cp-combo-placeholder">Select Teams</span>
-                  )}
-                  {teamRolesOpen && (
-                    <input
-                      type="text"
-                      className="cp-combo-input"
-                      placeholder="Search teams..."
-                      value={teamRolesSearch}
-                      onChange={(e) => setTeamRolesSearch(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Escape") { setTeamRolesSearch(""); setTeamRolesOpen(false); } }}
-                      autoFocus
-                    />
-                  )}
-                  <svg className={`cp-dropdown-arrow ${teamRolesOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" onClick={(e) => { e.stopPropagation(); if (teamRolesOpen) { setTeamRolesOpen(false); setTeamRolesSearch(""); } else { setTeamRolesOpen(true); setTeamRolesSearch(""); } }}><polyline points="6 9 12 15 18 9" /></svg>
-                  {teamRolesOpen && (
-                    <div className="cp-dropdown-menu" onClick={(e) => e.stopPropagation()}>
-                      {teams.filter((t) => !teamRolesSearch.trim() || t.name.toLowerCase().includes(teamRolesSearch.toLowerCase())).map((team) => (
-                        <label key={team.id} className="cp-dropdown-item">
-                          <input
-                            type="checkbox"
-                            checked={form.team_ids.includes(team.id)}
-                            onChange={() => {
-                              setIsDirty(true);
-                              setForm((prev) => ({
-                                ...prev,
-                                team_ids: prev.team_ids.includes(team.id)
-                                  ? prev.team_ids.filter((id) => id !== team.id)
-                                  : [...prev.team_ids, team.id],
-                              }));
-                            }}
-                          />
-                          <span>{team.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="cp-field">
-                <label>Team Members (Optional)</label>
-                <UserSelectDropdown
-                  users={displayUsers}
-                  selectedIds={form.assigned_users}
-                  onChange={handleAssignedUsersChange}
-                  placeholder="Click to select members"
-                  viewOnly={!!form.team_id}
-                />
-              </div>
             </div>
 
             {/* ATTACHMENTS */}
@@ -923,63 +850,62 @@ const CreateProjectModal = ({ onClose }) => {
               )}
             </div>
 
-            {/* DELIVERABLES */}
-            <div className="cp-card">
-              <div className="cp-card-top">
-                <span>Subtasks (Optional)</span>
-              </div>
-
-              <div className="cp-deadline-grid">
-                <div className="cp-field">
-                  <label style={{ fontSize: "13px" }}>Subtask Name</label>
+            {/* TEAMS & MEMBERS */}
+            <div className="cp-field">
+              <label>Teams (Optional)</label>
+              <div className="cp-dropdown-wrap cp-combo-trigger" ref={teamRolesRef} onClick={() => { if (!teamRolesOpen) { setTeamRolesOpen(true); setTeamRolesSearch(""); } }}>
+                {form.team_ids.length > 0 && (
+                  <span className="cp-combo-count">{form.team_ids.length} selected</span>
+                )}
+                {form.team_ids.length === 0 && !teamRolesOpen && (
+                  <span className="cp-combo-placeholder">Select Teams</span>
+                )}
+                {teamRolesOpen && (
                   <input
                     type="text"
-                    placeholder="Enter subtask name"
-                    value={deliverableProjInput.title}
-                    onChange={(e) => { setIsDirty(true); setDeliverableProjInput((prev) => ({ ...prev, title: e.target.value })); }}
-                    onKeyDown={handleDeliverableProjKeyDown}
+                    className="cp-combo-input"
+                    placeholder="Search teams..."
+                    value={teamRolesSearch}
+                    onChange={(e) => setTeamRolesSearch(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Escape") { setTeamRolesSearch(""); setTeamRolesOpen(false); } }}
+                    autoFocus
                   />
-                </div>
-                <div className="cp-field">
-                  <label style={{ fontSize: "13px" }}>Due Date & Time</label>
-                  <input
-                    type="datetime-local"
-                    value={deliverableProjInput.due_datetime}
-                    onChange={(e) => { setIsDirty(true); setDeliverableProjInput((prev) => ({ ...prev, due_datetime: e.target.value })); }}
-                    min={getNowDatetimeLocal()}
-                  />
-                </div>
+                )}
+                <svg className={`cp-dropdown-arrow ${teamRolesOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" onClick={(e) => { e.stopPropagation(); if (teamRolesOpen) { setTeamRolesOpen(false); setTeamRolesSearch(""); } else { setTeamRolesOpen(true); setTeamRolesSearch(""); } }}><polyline points="6 9 12 15 18 9" /></svg>
+                {teamRolesOpen && (
+                  <div className="cp-dropdown-menu" onClick={(e) => e.stopPropagation()}>
+                    {teams.filter((t) => !teamRolesSearch.trim() || t.name.toLowerCase().includes(teamRolesSearch.toLowerCase())).map((team) => (
+                      <label key={team.id} className="cp-dropdown-item">
+                        <input
+                          type="checkbox"
+                          checked={form.team_ids.includes(team.id)}
+                          onChange={() => {
+                            setIsDirty(true);
+                            setForm((prev) => ({
+                              ...prev,
+                              team_ids: prev.team_ids.includes(team.id)
+                                ? prev.team_ids.filter((id) => id !== team.id)
+                                : [...prev.team_ids, team.id],
+                            }));
+                          }}
+                        />
+                        <span>{team.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
+            </div>
 
-              <button
-                type="button"
-                className="cp-add-phase-btn"
-                onClick={handleAddDeliverableProj}
-                disabled={!deliverableProjInput.title.trim()}
-              >
-                + Add Subtask
-              </button>
-
-              {deliverablesProj.length > 0 && (
-                <div className="cp-phase-list">
-                  {deliverablesProj.map((d, index) => (
-                    <div key={index} className="cp-phase-item">
-                      <div className="cp-phase-item-dot" style={{ background: "#8b5cf6" }} />
-                      <div className="cp-phase-item-info">
-                        <div className="cp-phase-item-title">{d.title}</div>
-                        <div className="cp-phase-item-date">{d.due_date ? formatDateTime(d.due_date).replace("\n", " ") : "No due date"}</div>
-                      </div>
-                      <button
-                        type="button"
-                        className="cp-phase-item-remove"
-                        onClick={() => { setPendingRemoveItem({ type: "deliverable", index }); setRemoveConfirmOpen(true); }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <div className="cp-field">
+              <label>Team Members (Optional)</label>
+              <UserSelectDropdown
+                users={displayUsers}
+                selectedIds={form.assigned_users}
+                onChange={handleAssignedUsersChange}
+                placeholder="Click to select members"
+                viewOnly={!!form.team_id}
+              />
             </div>
 
             {/* CLIENT INFO */}

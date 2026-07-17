@@ -17,13 +17,13 @@ function ChatWidget() {
   const [users, setUsers] = useState([]);
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [deliverables, setDeliverables] = useState([]);
+  const [subtasks, setSubtasks] = useState([]);
   const [selectedProject, setSelectedProject] = useState("");
   const [selectedTask, setSelectedTask] = useState("");
-  const [selectedDeliverable, setSelectedDeliverable] = useState("");
+  const [selectedSubtask, setSelectedSubtask] = useState("");
   const [linkProject, setLinkProject] = useState(false);
   const [linkTask, setLinkTask] = useState(false);
-  const [linkDeliverable, setLinkDeliverable] = useState(false);
+  const [linkSubtask, setLinkSubtask] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [chatSubject, setChatSubject] = useState("");
   const messagesEndRef = useRef(null);
@@ -34,6 +34,19 @@ function ChatWidget() {
       fetchConversations();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    const handleChatWidgetOpen = (e) => {
+      const { conversationId } = e.detail || {};
+      setIsOpen(true);
+      setShowNewChat(false);
+      if (conversationId) {
+        setTimeout(() => loadConversation(conversationId), 400);
+      }
+    };
+    window.addEventListener("chat-widget-open", handleChatWidgetOpen);
+    return () => window.removeEventListener("chat-widget-open", handleChatWidgetOpen);
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -111,10 +124,10 @@ function ChatWidget() {
     setShowNewChat(true);
     setLinkProject(false);
     setLinkTask(false);
-    setLinkDeliverable(false);
+    setLinkSubtask(false);
     setSelectedProject("");
     setSelectedTask("");
-    setSelectedDeliverable("");
+    setSelectedSubtask("");
     try {
       const token = authToken();
       const [usersRes, itemsRes] = await Promise.all([
@@ -127,7 +140,7 @@ function ChatWidget() {
       if (itemsData.success) {
         setProjects(itemsData.projects || []);
         setTasks(itemsData.tasks || []);
-        setDeliverables(itemsData.deliverables || []);
+        setSubtasks(itemsData.deliverables || []);
       }
     } catch (err) {
       notify.error("Failed to load data");
@@ -151,7 +164,7 @@ function ChatWidget() {
         body: JSON.stringify({
           project_id: linkProject && selectedProject ? selectedProject : null,
           task_id: linkTask && selectedTask ? selectedTask : null,
-          deliverable_id: linkDeliverable && selectedDeliverable ? selectedDeliverable : null,
+          deliverable_id: linkSubtask && selectedSubtask ? selectedSubtask : null,
           participant_ids: selectedUsers,
           subject: chatSubject || null,
           message: newMessage || "Conversation started",
@@ -164,10 +177,10 @@ function ChatWidget() {
         setChatSubject("");
         setSelectedProject("");
         setSelectedTask("");
-        setSelectedDeliverable("");
+        setSelectedSubtask("");
         setLinkProject(false);
         setLinkTask(false);
-        setLinkDeliverable(false);
+        setLinkSubtask(false);
         setSelectedUsers([]);
         fetchConversations();
         if (data.conversation) {
@@ -299,13 +312,13 @@ function ChatWidget() {
                     </div>
                     <div className="cw-link-to-row">
                       <label className="cw-link-toggle">
-                        <input type="checkbox" checked={linkDeliverable} onChange={(e) => { setLinkDeliverable(e.target.checked); if (!e.target.checked) setSelectedDeliverable(""); }} />
-                        <span>Deliverable</span>
+                        <input type="checkbox" checked={linkSubtask} onChange={(e) => { setLinkSubtask(e.target.checked); if (!e.target.checked) setSelectedSubtask(""); }} />
+                        <span>Subtask</span>
                       </label>
-                      {linkDeliverable && (
-                        <select className="cw-link-select" value={selectedDeliverable} onChange={(e) => setSelectedDeliverable(e.target.value)}>
-                          <option value="">Select deliverable</option>
-                          {deliverables.map((d) => (
+                      {linkSubtask && (
+                        <select className="cw-link-select" value={selectedSubtask} onChange={(e) => setSelectedSubtask(e.target.value)}>
+                          <option value="">Select subtask</option>
+                          {subtasks.map((d) => (
                             <option key={d.id} value={d.id}>{d.title}</option>
                           ))}
                         </select>

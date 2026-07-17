@@ -2,7 +2,7 @@
  * SubmissionLinkSection.jsx
  * Reusable component for managing a list of URLs during submission forms.
  * Supports adding links via text input, removing them, and automatic URL normalization.
- * Used in SubmitDeliverableModal and SubmitTaskModal.
+ * Used in SubmitSubtaskModal and SubmitTaskModal.
  */
 
 import { useState } from "react";

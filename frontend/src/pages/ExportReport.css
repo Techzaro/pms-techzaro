@@ -1291,7 +1291,7 @@
   vertical-align: middle;
 }
 
-.erm-deliverables-grid {
+.erm-subtasks-grid {
   margin: 0 28px 14px;
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1405,7 +1405,7 @@
     min-width: 500px;
   }
 
-  .erm-deliverables-grid {
+  .erm-subtasks-grid {
     margin: 0 12px 12px;
     grid-template-columns: 1fr;
     gap: 10px;

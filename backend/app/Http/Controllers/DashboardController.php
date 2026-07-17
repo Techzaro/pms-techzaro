@@ -439,8 +439,11 @@ class DashboardController extends Controller
 
             return [
                 'id' => $project->id, 'name' => $project->title, 'client' => $project->client_name,
+                'status' => $project->status,
                 'progress' => $progress, 'total_tasks' => $total, 'completed_tasks' => $done,
-                'deadline' => $project->active_deadline?->format('M d, Y h:i A'),
+                'start_date' => $project->start_date?->format('Y-m-d'),
+                'end_date' => $project->end_date?->format('Y-m-d'),
+                'deadline' => $project->end_date?->format('M d, Y h:i A'),
                 'team' => $project->team?->name,
                 'assigned_users' => $assignedUsers->toArray(),
             ];

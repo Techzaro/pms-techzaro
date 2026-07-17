@@ -404,6 +404,7 @@ class TaskController extends Controller
             'approvedBy:id,name',
             'rejectedBy:id,name',
             'reopenedBy:id,name',
+            'acknowledgedBy:id,name',
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'changes' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'deliverableTemplates',
@@ -1065,7 +1066,8 @@ class TaskController extends Controller
             'deliverables.*.assigned_to' => 'nullable|exists:users,id',
             'existing_file_names' => 'nullable|array',
             'existing_file_names.*.id' => 'required_with:existing_file_names|exists:task_files,id',
-            'existing_file_names.*.name' => 'required_with:existing_file_names|string|max:255',
+            'existing_file_names.*.name' => 'nullable|string|max:255',
+            'existing_file_names.*.url' => 'nullable|string|max:2048',
             'due_dates' => 'nullable|array',
             'due_dates.*' => 'nullable|date',
         ]);
@@ -1091,9 +1093,14 @@ class TaskController extends Controller
         // Rename existing files/links if provided
         if ($existingFileNames) {
             foreach ($existingFileNames as $item) {
-                \App\Models\TaskFile::where('id', $item['id'])
-                    ->where('task_id', $task->id)
-                    ->update(['name' => $item['name']]);
+                $updateData = [];
+                if (isset($item['name'])) $updateData['name'] = $item['name'];
+                if (isset($item['url'])) $updateData['url'] = $item['url'];
+                if (!empty($updateData)) {
+                    \App\Models\TaskFile::where('id', $item['id'])
+                        ->where('task_id', $task->id)
+                        ->update($updateData);
+                }
             }
         }
 
@@ -1498,6 +1505,77 @@ class TaskController extends Controller
     }
 
     /**
+     * Acknowledge a task assignment.
+     *
+     * Only assignees can acknowledge. Changes status from pending to in_progress
+     * and notifies the task creator.
+     *
+     * @param  Request  $request  The incoming HTTP request.
+     * @param  Task  $task  The task to acknowledge.
+     * @return JsonResponse JSON response with the updated task.
+     */
+    public function acknowledge(Request $request, Task $task)
+    {
+        $user = $request->user();
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+
+        if (! $isAssignee) {
+            return response()->json(['success' => false, 'message' => 'Only assignees can acknowledge this task'], 403);
+        }
+
+        if (strtolower((string) $task->status) !== 'pending') {
+            return response()->json(['success' => false, 'message' => 'This task cannot be acknowledged in its current status'], 422);
+        }
+
+        $task->update([
+            'status' => 'in_progress',
+            'acknowledged_at' => now(),
+            'acknowledged_by' => $user->id,
+        ]);
+
+        // Update the assignee's pivot status
+        $task->assignees()->updateExistingPivot($user->id, [
+            'status' => 'in_progress',
+        ]);
+
+        TaskWorkflowEvent::create([
+            'task_id' => $task->id,
+            'user_id' => $user->id,
+            'action' => 'acknowledged',
+            'comment' => $user->name.' acknowledged this task',
+        ]);
+
+        $task->load('project:id,title');
+
+        // Notify the task creator
+        if ($task->assigned_by && $task->assigned_by !== $user->id) {
+            $this->notificationService->notify(
+                $task->assigned_by,
+                $user->id,
+                'task_acknowledged',
+                'task',
+                $task->id,
+                'Task Acknowledged',
+                $user->name.' acknowledged task "'.$task->title.'".',
+                '/tasks/task-details/'.$task->id.'?from=taskby'
+            );
+        }
+
+        $this->notificationService->confirmAction($user, 'Acknowledged', 'task', $task->title);
+        $this->clearDashboardCache($user->id);
+
+        if ($task->assigned_by) {
+            $this->clearDashboardCache((int) $task->assigned_by);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task acknowledged successfully',
+            'task' => $task->fresh()->load(['assignees:id,name,email,role', 'acknowledgedBy:id,name']),
+        ]);
+    }
+
+    /**
      * Submit a task for review by its creator.
      *
      * Only the assignee can submit. All deliverables must be submitted first.
@@ -1515,7 +1593,7 @@ class TaskController extends Controller
         if (! $isAssignee) {
             return response()->json(['success' => false, 'message' => 'Only the assignee can submit this task'], 403);
         }
-        if (! in_array($task->status, ['pending', 'reopened'])) {
+        if (! in_array($task->status, ['pending', 'in_progress', 'reopened'])) {
             return response()->json(['success' => false, 'message' => 'This task cannot be submitted in its current status'], 422);
         }
 
@@ -1575,7 +1653,7 @@ class TaskController extends Controller
 
         $updateData = ['status' => 'submitted', 'submitted_at' => now()];
 
-        if ($task->status === 'reopened') {
+        if (in_array($task->status, ['reopened', 'in_progress'])) {
             foreach (['rejected_at', 'rejected_by', 'rejection_comment', 'reopened_at', 'reopened_by', 'reopen_comment', 'reopen_instructions', 'reopen_new_deadline', 'reopen_file_path', 'reopen_file_name'] as $f) {
                 $updateData[$f] = null;
             }
@@ -2014,16 +2092,17 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Approved tasks cannot be modified.'], 403);
         }
 
-        $request->validate(['file' => 'required|file|max:10240']);
+        $request->validate(['file' => 'required|file|max:10240', 'name' => 'nullable|string|max:255']);
         $file = $request->file('file');
         $path = $file->store('task-files/'.$task->id, 'public');
-        $fileRecord = $task->files()->create(['name' => $file->getClientOriginalName(), 'url' => '/storage/'.$path]);
+        $customName = $request->input('name') ?: $file->getClientOriginalName();
+        $fileRecord = $task->files()->create(['name' => $customName, 'url' => '/storage/'.$path]);
 
         TaskChange::create([
             'task_id' => $task->id,
             'field_name' => 'file_uploaded',
             'old_value' => null,
-            'new_value' => $file->getClientOriginalName(),
+            'new_value' => $customName,
             'modified_by' => $user->id,
             'is_viewed' => false,
         ]);

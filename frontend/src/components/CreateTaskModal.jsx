@@ -128,7 +128,7 @@ function generatePreview(templates, settings, startDate, endDate) {
   return {
     previewPeriods,
     totalPeriods,
-    totalDeliverables: globalCounter + remainingTemplatesTotal,
+    totalSubtasks: globalCounter + remainingTemplatesTotal,
     hasMore: totalPeriods > showPeriods,
     remainingPeriods: totalPeriods - showPeriods,
   };
@@ -164,9 +164,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     { title: "", description: "", quantity: 1, combined: false },
   ]);
 
-  const [deliverables, setDeliverables] = useState([]);
-  const [deliverableInput, setDeliverableInput] = useState({ title: "", due_datetime: "" });
-  const [openDeliverableDropdown, setOpenDeliverableDropdown] = useState(null);
+  const [subtasks, setSubtasks] = useState([]);
+  const [subtaskInput, setSubtaskInput] = useState({ title: "", due_datetime: "" });
+  const [openSubtaskDropdown, setOpenSubtaskDropdown] = useState(null);
 
   const [requirementsList, setRequirementsList] = useState([]);
   const [reqInput, setReqInput] = useState("");
@@ -200,11 +200,11 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   }, []);
 
   useEffect(() => {
-    if (openDeliverableDropdown === null) return;
-    const handleClick = () => setOpenDeliverableDropdown(null);
+    if (openSubtaskDropdown === null) return;
+    const handleClick = () => setOpenSubtaskDropdown(null);
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
-  }, [openDeliverableDropdown]);
+  }, [openSubtaskDropdown]);
 
   useEffect(() => {
     const token = authToken();
@@ -277,19 +277,19 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     });
   }, [recurringTemplates.length]);
 
-  const handleAddDeliverable = () => {
-    if (!deliverableInput.title.trim()) return;
-    const dt = deliverableInput.due_datetime;
+  const handleAddSubtask = () => {
+    if (!subtaskInput.title.trim()) return;
+    const dt = subtaskInput.due_datetime;
     const dueDate = toUTCIso(dt);
     setIsDirty(true);
-    setDeliverables((prev) => [...prev, { title: deliverableInput.title.trim(), due_date: dueDate, assigned_to: null }]);
-    setDeliverableInput({ title: "", due_datetime: "" });
+    setSubtasks((prev) => [...prev, { title: subtaskInput.title.trim(), due_date: dueDate, assigned_to: null }]);
+    setSubtaskInput({ title: "", due_datetime: "" });
   };
-  const handleRemoveDeliverable = (index) => { setIsDirty(true); setDeliverables((prev) => prev.filter((_, i) => i !== index)); };
-  const handleDeliverableKeyDown = (e) => { if (e.key === "Enter") { e.preventDefault(); handleAddDeliverable(); } };
-  const handleDeliverableAssignee = (index, userId) => {
-    setDeliverables((prev) => prev.map((d, i) => i === index ? { ...d, assigned_to: userId || null } : d));
-    setOpenDeliverableDropdown(null);
+  const handleRemoveSubtask = (index) => { setIsDirty(true); setSubtasks((prev) => prev.filter((_, i) => i !== index)); };
+  const handleSubtaskKeyDown = (e) => { if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); } };
+  const handleSubtaskAssignee = (index, userId) => {
+    setSubtasks((prev) => prev.map((d, i) => i === index ? { ...d, assigned_to: userId || null } : d));
+    setOpenSubtaskDropdown(null);
   };
 
   const confirmRemoveItem = () => {
@@ -298,7 +298,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     else if (type === "link") handleRemoveLink(index);
     else if (type === "requirement") handleRemoveRequirement(index);
     else if (type === "template") handleRemoveTemplate(index);
-    else if (type === "deliverable") handleRemoveDeliverable(index);
+    else if (type === "subtask") handleRemoveSubtask(index);
     setRemoveConfirmOpen(false);
     setPendingRemoveItem({ type: "", index: -1 });
   };
@@ -374,7 +374,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
           task_type: form.task_type,
           recurrence_settings: settings,
           deliverable_templates: validTemplates.length > 0 ? validTemplates.map((t) => ({ title: t.title.trim(), description: t.description || null, quantity: t.quantity || 1, combined: t.combined || false })) : undefined,
-          deliverables: deliverables.length > 0 ? deliverables.map((d) => ({ title: d.title, due_date: d.due_date || null, assigned_to: d.assigned_to || null })) : undefined,
+          deliverables: subtasks.length > 0 ? subtasks.map((d) => ({ title: d.title, due_date: d.due_date || null, assigned_to: d.assigned_to || null })) : undefined,
         };
 
         const pid = projectId || form.project_id;
@@ -640,7 +640,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                     )}
 
                     <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>
-                      Deliverables auto-distribute between <strong>Start Date</strong> and <strong>Due Date</strong>.
+                      Subtasks auto-distribute between <strong>Start Date</strong> and <strong>Due Date</strong>.
                     </p>
                   </div>
 
@@ -699,7 +699,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
 
                     {recurringTemplates.length === 0 && (
                       <p style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", padding: 16 }}>
-                        No templates yet. Click + Add to create your first deliverable template.
+                        No templates yet. Click + Add to create your first subtask template.
                       </p>
                     )}
                   </div>
@@ -708,7 +708,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                     <div className="task-card" style={{ border: "1px solid #c7d2fe", background: "#f8faff" }}>
                       <div className="task-card-top">
                         <span>Recurring Preview</span>
-                        <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 600 }}>{preview.totalDeliverables} Total</span>
+                        <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 600 }}>{preview.totalSubtasks} Total</span>
                       </div>
                       <div style={{ maxHeight: 220, overflowY: "auto" }}>
                         {preview.previewPeriods.map((pd) => (
@@ -740,22 +740,22 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 <div className="task-deadline-grid">
                   <div>
                     <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Subtask Name</label>
-                    <input type="text" placeholder="Enter subtask name" value={deliverableInput.title}
-                      onChange={(e) => { setIsDirty(true); setDeliverableInput((prev) => ({ ...prev, title: e.target.value })); }}
-                      onKeyDown={handleDeliverableKeyDown} />
+                    <input type="text" placeholder="Enter subtask name" value={subtaskInput.title}
+                      onChange={(e) => { setIsDirty(true); setSubtaskInput((prev) => ({ ...prev, title: e.target.value })); }}
+                      onKeyDown={handleSubtaskKeyDown} />
                   </div>
                   <div>
                     <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Due Date & Time</label>
-                    <input type="datetime-local" value={deliverableInput.due_datetime}
+                    <input type="datetime-local" value={subtaskInput.due_datetime}
                       min={getNowDatetimeLocal()}
                       max={form.end_date || undefined}
                       onChange={(e) => {
                         setIsDirty(true);
                         const val = e.target.value;
                         if (form.end_date && val && val > form.end_date) {
-                          setDeliverableInput((prev) => ({ ...prev, due_datetime: form.end_date }));
+                          setSubtaskInput((prev) => ({ ...prev, due_datetime: form.end_date }));
                         } else {
-                          setDeliverableInput((prev) => ({ ...prev, due_datetime: val }));
+                          setSubtaskInput((prev) => ({ ...prev, due_datetime: val }));
                         }
                       }} />
                     {form.end_date && (
@@ -763,14 +763,14 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                     )}
                   </div>
                 </div>
-                <button type="button" className="task-add-phase-btn" onClick={handleAddDeliverable}
-                  disabled={!deliverableInput.title.trim()} style={{ marginTop: 8 }}>+ Add Subtask</button>
+                <button type="button" className="task-add-phase-btn" onClick={handleAddSubtask}
+                  disabled={!subtaskInput.title.trim()} style={{ marginTop: 8 }}>+ Add Subtask</button>
 
-                {deliverables.length > 0 && (
+                {subtasks.length > 0 && (
                   <div className="task-phase-list" style={{ marginTop: 10 }}>
-                    {deliverables.map((d, index) => {
+                    {subtasks.map((d, index) => {
                       const assignedUser = d.assigned_to ? displayUsers.find(u => String(u.id) === String(d.assigned_to)) : null;
-                      const isDropdownOpen = openDeliverableDropdown === index;
+                      const isDropdownOpen = openSubtaskDropdown === index;
                       return (
                         <div key={index} className="task-phase-item" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #f3f4f6", position: "relative" }}>
                           <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7c3aed", display: "inline-block", flexShrink: 0 }}></span>
@@ -779,7 +779,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                           <div style={{ position: "relative" }}>
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); setOpenDeliverableDropdown(isDropdownOpen ? null : index); }}
+                              onClick={(e) => { e.stopPropagation(); setOpenSubtaskDropdown(isDropdownOpen ? null : index); }}
                               style={{
                                 fontSize: 11, cursor: "pointer", padding: "3px 8px", borderRadius: 4, border: "1px solid #e5e7eb",
                                 background: assignedUser ? "#eef2ff" : "#f9fafb", color: assignedUser ? "#6366f1" : "#6b7280",
@@ -796,7 +796,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                               }}>
                                 <button
                                   type="button"
-                                  onClick={(e) => { e.stopPropagation(); handleDeliverableAssignee(index, null); }}
+                                   onClick={(e) => { e.stopPropagation(); handleSubtaskAssignee(index, null); }}
                                   style={{
                                     display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
                                     fontSize: 12, cursor: "pointer", background: !assignedUser ? "#f3f4f6" : "transparent",
@@ -809,7 +809,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                                   <button
                                     key={u.id}
                                     type="button"
-                                    onClick={(e) => { e.stopPropagation(); handleDeliverableAssignee(index, u.id); }}
+                                     onClick={(e) => { e.stopPropagation(); handleSubtaskAssignee(index, u.id); }}
                                     style={{
                                       display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
                                       fontSize: 12, cursor: "pointer",
@@ -825,7 +825,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                               </div>
                             )}
                           </div>
-                          <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "deliverable", index }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
+                          <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "subtask", index }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
                         </div>
                       );
                     })}

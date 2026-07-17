@@ -20,6 +20,7 @@ class Deliverable extends Model
         'description',
         'status',
         'priority',
+        'start_date',
         'due_date',
         'assigned_to',
         'created_by',
@@ -46,6 +47,7 @@ class Deliverable extends Model
     ];
 
     protected $casts = [
+        'start_date' => 'datetime:Y-m-d\TH:i:s',
         'due_date' => 'datetime:Y-m-d\TH:i:s',
         'submitted_at' => 'datetime:Y-m-d\TH:i:s',
         'approved_at' => 'datetime:Y-m-d\TH:i:s',

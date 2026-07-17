@@ -510,6 +510,7 @@ function ManageUsers() {
   // ── Guest Management Functions ──
   const openGuestModal = (guest = null) => {
     setGuestErrors({});
+    setGuestIsDirty(false);
     if (guest) {
       setEditingGuest(guest);
       setNewGuest({
@@ -533,6 +534,9 @@ function ManageUsers() {
     setNewGuest({ name: "", personal_email: "", phone_number: "", company_name: "", avatar: null, _existingAvatar: null });
     setGuestErrors({});
   };
+
+  const { isDirty: guestIsDirty, setIsDirty: setGuestIsDirty, handleClose: handleGuestClose, ConfirmDialog: GuestConfirmDialog } = useConfirmOnClose(closeGuestModal);
+  useEscapeKey(isGuestModalOpen, handleGuestClose);
 
   const validateGuestForm = () => {
     const errors = {};
@@ -2160,7 +2164,7 @@ function ManageUsers() {
 
     {/* ===================== GUEST MODAL ===================== */}
     {isGuestModalOpen && createPortal(
-      <div className="user-modal-overlay" onClick={closeGuestModal}>
+      <div className="user-modal-overlay" onClick={handleGuestClose}>
         <div className="user-modal-content" style={{ maxWidth: "560px", width: "100%" }} onClick={(e) => e.stopPropagation()}>
           <div className="user-modal-header">
             <div className="user-header-left">
@@ -2173,7 +2177,7 @@ function ManageUsers() {
               <LoadingButton type="button" className="primary-button" loading={guestSubmitting} onClick={handleGuestSubmit}>
                 {guestSubmitting ? (editingGuest ? "Updating..." : "Creating...") : (editingGuest ? "Update Guest" : "Create Guest")}
               </LoadingButton>
-              <button className="user-modal-close" onClick={closeGuestModal}>&#10005;</button>
+              <button className="user-modal-close" onClick={handleGuestClose}>&#10005;</button>
             </div>
           </div>
           <form className="user-form" onSubmit={handleGuestSubmit} style={{ pointerEvents: guestSubmitting ? "none" : "auto", opacity: guestSubmitting ? 0.7 : 1 }}>
@@ -2196,7 +2200,7 @@ function ManageUsers() {
                     </>
                   )}
                 </div>
-                <input id="guest-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) setNewGuest((prev) => ({ ...prev, avatar: file })); }} />
+                <input id="guest-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) { setNewGuest((prev) => ({ ...prev, avatar: file })); setGuestIsDirty(true); } }} />
                 {(newGuest.avatar || newGuest._existingAvatar) && (
                   <button type="button" className="avatar-remove-btn" onClick={() => setNewGuest((prev) => ({ ...prev, avatar: null, _existingAvatar: null }))}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -2210,21 +2214,21 @@ function ManageUsers() {
             <div className="user-form-grid">
               <div className="form-row">
                 <label htmlFor="guest-name">Client Name *</label>
-                <input type="text" id="guest-name" value={newGuest.name} onChange={(e) => { setNewGuest((p) => ({ ...p, name: e.target.value })); if (guestErrors.name) setGuestErrors((p) => { const n = { ...p }; delete n.name; return n; }); }} placeholder="Enter client / company name" className={guestErrors.name ? "field-error" : ""} />
+                <input type="text" id="guest-name" value={newGuest.name} onChange={(e) => { setNewGuest((p) => ({ ...p, name: e.target.value })); setGuestIsDirty(true); if (guestErrors.name) setGuestErrors((p) => { const n = { ...p }; delete n.name; return n; }); }} placeholder="Enter client / company name" className={guestErrors.name ? "field-error" : ""} />
                 {guestErrors.name && <span className="field-error-text">{guestErrors.name}</span>}
               </div>
               <div className="form-row">
                 <label htmlFor="guest-email">Personal Email *</label>
-                <input type="email" id="guest-email" value={newGuest.personal_email} onChange={(e) => { setNewGuest((p) => ({ ...p, personal_email: e.target.value })); if (guestErrors.personal_email) setGuestErrors((p) => { const n = { ...p }; delete n.personal_email; return n; }); }} placeholder="client@example.com" className={guestErrors.personal_email ? "field-error" : ""} />
+                <input type="email" id="guest-email" value={newGuest.personal_email} onChange={(e) => { setNewGuest((p) => ({ ...p, personal_email: e.target.value })); setGuestIsDirty(true); if (guestErrors.personal_email) setGuestErrors((p) => { const n = { ...p }; delete n.personal_email; return n; }); }} placeholder="client@example.com" className={guestErrors.personal_email ? "field-error" : ""} />
                 {guestErrors.personal_email && <span className="field-error-text">{guestErrors.personal_email}</span>}
               </div>
               <div className="form-row">
                 <label htmlFor="guest-phone">Phone Number</label>
-                <input type="text" id="guest-phone" value={newGuest.phone_number} onChange={(e) => setNewGuest((p) => ({ ...p, phone_number: e.target.value }))} placeholder="03XX-XXXXXXX" />
+                <input type="text" id="guest-phone" value={newGuest.phone_number} onChange={(e) => { setNewGuest((p) => ({ ...p, phone_number: e.target.value })); setGuestIsDirty(true); }} placeholder="03XX-XXXXXXX" />
               </div>
               <div className="form-row">
                 <label htmlFor="guest-company">Company Name</label>
-                <input type="text" id="guest-company" value={newGuest.company_name} onChange={(e) => setNewGuest((p) => ({ ...p, company_name: e.target.value }))} placeholder="Enter company name (optional)" />
+                <input type="text" id="guest-company" value={newGuest.company_name} onChange={(e) => { setNewGuest((p) => ({ ...p, company_name: e.target.value })); setGuestIsDirty(true); }} placeholder="Enter company name (optional)" />
               </div>
             </div>
           </form>
@@ -2232,6 +2236,8 @@ function ManageUsers() {
       </div>,
       document.body
     )}
+
+    {GuestConfirmDialog}
 
     {/* Guest Action Confirmation Modal */}
     <ConfirmModal

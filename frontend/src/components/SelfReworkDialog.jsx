@@ -1,6 +1,6 @@
 /**
  * SelfReworkDialog.jsx
- * Modal dialog allowing a team member to mark their own deliverable as needing
+ * Modal dialog allowing a team member to mark their own subtask as needing
  * rework. Used for self-review workflows where the submitter identifies issues
  * and requests improvements before final approval.
  */
@@ -18,7 +18,7 @@ import "./ReopenDialog.css";
 import { toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
 
 /**
- * Dialog for marking a deliverable as needing rework by the assignee themselves.
+ * Dialog for marking a subtask as needing rework by the assignee themselves.
  * @param {boolean} isOpen - Whether the dialog is visible.
  * @param {Function} onClose - Callback to close the dialog.
  * @param {Object} deliverable - The deliverable being marked for rework.

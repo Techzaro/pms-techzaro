@@ -79,6 +79,7 @@ const ROLE_LABEL = { admin: "Admin", manager: "Manager", team_lead: "Team Lead",
 
 const STATUS_COLORS = {
   pending: "#FEF3C7",
+  in_progress: "#DBEAFE",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -87,6 +88,7 @@ const STATUS_COLORS = {
 
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
+  in_progress: "#1E40AF",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -252,6 +254,7 @@ function UserPerformance() {
   const formatStatus = (status) => {
     const map = {
       pending: "Pending",
+      in_progress: "In Progress",
       submitted: "Submitted",
       reopened: "Reopened",
       approved: "Approved",
@@ -439,9 +442,15 @@ function UserPerformance() {
                         </span>
                       </div>
 
-                      <div className="col-progress">
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                          {item.deliverables_progress || 0}%
+                        </div>
                         <div className="progress-bar-track">
                           <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
                         </div>
                       </div>
 
@@ -527,7 +536,7 @@ function UserPerformance() {
                           {item.deliverables_progress || 0}%
                         </span>
                         <span className="up-task-card-progress-detail">
-                          {item.approved_deliverables || 0}/{item.total_deliverables || 0} deliverables
+                          {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
                         </span>
                       </div>
                       <div className="progress-bar-track">

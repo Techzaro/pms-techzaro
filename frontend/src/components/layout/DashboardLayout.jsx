@@ -20,7 +20,7 @@ function DashboardLayout({ children, hideRightSidebar = false }) {
   const [rightOpen, setRightOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
 
-  // Sync modal-open state from child modals (e.g., CreateDeliverableTask)
+  // Sync modal-open state from child modals (e.g., CreateSubtaskTask)
   useEffect(() => {
     const handler = (e) => setModalOpen(e.detail.open);
     window.addEventListener("modal-state", handler);

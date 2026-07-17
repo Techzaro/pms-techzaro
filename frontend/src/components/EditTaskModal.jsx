@@ -1,7 +1,7 @@
 /**
  * EditTaskModal.jsx
  * Modal form for editing an existing task's details.
- * Supports updating title, description, priority, dates, assignees, and deliverables.
+ * Supports updating title, description, priority, dates, assignees, and subtasks.
  * Includes special handling for self-assigned tasks.
  */
 
@@ -115,7 +115,7 @@ function generatePreview(templates, settings, startDate, endDate) {
   const remainingTemplatesTotal = (totalPeriods - showPeriods) * templates.reduce((s, t) => s + (parseInt(t.quantity) || 1), 0);
   return {
     previewPeriods, totalPeriods,
-    totalDeliverables: globalCounter + remainingTemplatesTotal,
+    totalSubtasks: globalCounter + remainingTemplatesTotal,
     hasMore: totalPeriods > showPeriods,
     remainingPeriods: totalPeriods - showPeriods,
   };
@@ -170,9 +170,9 @@ export default function EditTaskModal({ task, onClose }) {
   );
   const [requirementsList, setRequirementsList] = useState(task.requirements || []);
   const [reqInput, setReqInput] = useState("");
-  const [deliverables, setDeliverables] = useState(task.deliverables || []);
-  const [deliverableInput, setDeliverableInput] = useState({ title: "", due_datetime: "" });
-  const [openDeliverableDropdown, setOpenDeliverableDropdown] = useState(null);
+  const [subtasks, setSubtasks] = useState(task.deliverables || []);
+  const [subtaskInput, setSubtaskInput] = useState({ title: "", due_datetime: "" });
+  const [openSubtaskDropdown, setOpenSubtaskDropdown] = useState(null);
   const [pendingFiles, setPendingFiles] = useState([]);
   const [existingFiles, setExistingFiles] = useState(task.files || []);
   const [links, setLinks] = useState([]);
@@ -210,11 +210,11 @@ export default function EditTaskModal({ task, onClose }) {
   }, []);
 
   useEffect(() => {
-    if (openDeliverableDropdown === null) return;
-    const handleClick = () => setOpenDeliverableDropdown(null);
+    if (openSubtaskDropdown === null) return;
+    const handleClick = () => setOpenSubtaskDropdown(null);
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
-  }, [openDeliverableDropdown]);
+  }, [openSubtaskDropdown]);
 
   const handleChange = (e) => {
     setIsDirty(true);
@@ -252,23 +252,23 @@ export default function EditTaskModal({ task, onClose }) {
     if (e.key === "Enter") { e.preventDefault(); handleAddRequirement(); }
   };
 
-  const handleAddDeliverable = () => {
-    if (!deliverableInput.title.trim()) return;
-    const dt = deliverableInput.due_datetime;
+  const handleAddSubtask = () => {
+    if (!subtaskInput.title.trim()) return;
+    const dt = subtaskInput.due_datetime;
     const dueDate = toUTCIso(dt);
     setIsDirty(true);
-    setDeliverables((prev) => [...prev, { title: deliverableInput.title.trim(), due_date: dueDate, assigned_to: null }]);
-    setDeliverableInput({ title: "", due_datetime: "" });
+    setSubtasks((prev) => [...prev, { title: subtaskInput.title.trim(), due_date: dueDate, assigned_to: null }]);
+    setSubtaskInput({ title: "", due_datetime: "" });
   };
 
-  const handleRemoveDeliverable = (index) => {
+  const handleRemoveSubtask = (index) => {
     setIsDirty(true);
-    setDeliverables((prev) => prev.filter((_, i) => i !== index));
+    setSubtasks((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleDeliverableAssignee = (index, userId) => {
-    setDeliverables((prev) => prev.map((d, i) => i === index ? { ...d, assigned_to: userId || null } : d));
-    setOpenDeliverableDropdown(null);
+  const handleSubtaskAssignee = (index, userId) => {
+    setSubtasks((prev) => prev.map((d, i) => i === index ? { ...d, assigned_to: userId || null } : d));
+    setOpenSubtaskDropdown(null);
   };
 
   const confirmRemoveItem = () => {
@@ -279,8 +279,8 @@ export default function EditTaskModal({ task, onClose }) {
       handleRemoveFile(index);
     } else if (type === "pending-link") {
       handleRemoveLink(index);
-    } else if (type === "deliverable") {
-      handleRemoveDeliverable(index);
+    } else if (type === "subtask") {
+      handleRemoveSubtask(index);
     } else if (type === "requirement") {
       handleRemoveRequirement(index);
     } else if (type === "template") {
@@ -290,8 +290,8 @@ export default function EditTaskModal({ task, onClose }) {
     setPendingRemoveItem({ type: "", index: -1, id: "" });
   };
 
-  const handleDeliverableKeyDown = (e) => {
-    if (e.key === "Enter") { e.preventDefault(); handleAddDeliverable(); }
+  const handleSubtaskKeyDown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
   };
 
   const handleFiles = (fileList) => {
@@ -360,8 +360,10 @@ export default function EditTaskModal({ task, onClose }) {
    */
   const uploadAttachments = async () => {
     const token = authToken();
-    await Promise.all([
-      ...pendingFiles.map((file) => {
+    const errors = [];
+
+    const fileResults = await Promise.allSettled(
+      pendingFiles.map((file) => {
         const fd = new FormData();
         fd.append("file", file.file);
         fd.append("name", file.customName || file.name);
@@ -370,17 +372,44 @@ export default function EditTaskModal({ task, onClose }) {
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
           body: fd,
           _notifHandled: true,
-        }).catch(() => {});
-      }),
-      ...links.map((link) => {
+        }).then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || "File upload failed");
+          return data;
+        });
+      })
+    );
+
+    fileResults.forEach((result, i) => {
+      if (result.status === "rejected") {
+        errors.push(`File "${pendingFiles[i].name}": ${result.reason?.message || "upload failed"}`);
+      }
+    });
+
+    const linkResults = await Promise.allSettled(
+      links.map((link) => {
         return fetch(`${API_URL}/tasks/${task.id}/links`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ url: link.url, name: link.customName || link.name }),
           _notifHandled: true,
-        }).catch(() => {});
-      }),
-    ]);
+        }).then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || "Link add failed");
+          return data;
+        });
+      })
+    );
+
+    linkResults.forEach((result, i) => {
+      if (result.status === "rejected") {
+        errors.push(`Link "${links[i].name}": ${result.reason?.message || "add failed"}`);
+      }
+    });
+
+    if (errors.length > 0) {
+      notify.error(`Some attachments failed: ${errors.join("; ")}`);
+    }
   };
 
   /**
@@ -412,14 +441,19 @@ export default function EditTaskModal({ task, onClose }) {
             end_date: toUTCIso(form.end_date),
             assigned_to: selectedAssigneeIds,
             existing_file_names: existingFiles.reduce((acc, f) => {
-              if (f.customName && f.customName !== f.name) {
-                acc.push({ id: f.id, name: f.customName });
+              const nameChanged = f.customName && f.customName !== f.name;
+              const urlChanged = f.customUrl && f.customUrl !== f.url;
+              if (nameChanged || urlChanged) {
+                const entry = { id: f.id };
+                if (nameChanged) entry.name = f.customName;
+                if (urlChanged) entry.url = f.customUrl;
+                acc.push(entry);
               }
               return acc;
             }, []),
           };
-          if (deliverables.length > 0) {
-            body.deliverables = deliverables.map((d) => ({ id: d.id || null, title: d.title, due_date: d.due_date || null, assigned_to: d.assigned_to || null }));
+          if (subtasks.length > 0) {
+            body.deliverables = subtasks.map((d) => ({ id: d.id || null, title: d.title, due_date: d.due_date || null, assigned_to: d.assigned_to || null }));
           }
           url = `${API_URL}/tasks/${task.id}`;
         }
@@ -834,7 +868,7 @@ export default function EditTaskModal({ task, onClose }) {
                     </div>
                   )}
                   <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>
-                    Deliverables auto-distribute between <strong>Start Date</strong> and <strong>Due Date</strong>.
+                    Subtasks auto-distribute between <strong>Start Date</strong> and <strong>Due Date</strong>.
                   </p>
                 </div>
 
@@ -895,7 +929,7 @@ export default function EditTaskModal({ task, onClose }) {
                   <div className="task-card" style={{ border: "1px solid #c7d2fe", background: "#f8faff" }}>
                     <div className="task-card-top">
                       <span>Recurring Preview</span>
-                      <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 600 }}>{preview.totalDeliverables} Total</span>
+                      <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 600 }}>{preview.totalSubtasks} Total</span>
                     </div>
                     <div style={{ maxHeight: 220, overflowY: "auto" }}>
                       {preview.previewPeriods.map((pd) => (
@@ -922,7 +956,7 @@ export default function EditTaskModal({ task, onClose }) {
               </>
             )}
 
-            {/* DELIVERABLES */}
+            {/* SUBTASKS */}
             <div className="task-card">
               <div className="task-card-top">
                 <span>Subtasks</span>
@@ -933,25 +967,25 @@ export default function EditTaskModal({ task, onClose }) {
                   <input
                     type="text"
                     placeholder="Enter subtask name"
-                    value={deliverableInput.title}
-                    onChange={(e) => { setIsDirty(true); setDeliverableInput((prev) => ({ ...prev, title: e.target.value })); }}
-                    onKeyDown={handleDeliverableKeyDown}
+                    value={subtaskInput.title}
+                    onChange={(e) => { setIsDirty(true); setSubtaskInput((prev) => ({ ...prev, title: e.target.value })); }}
+                    onKeyDown={handleSubtaskKeyDown}
                   />
                 </div>
                 <div className="task-field">
                   <label style={{ fontSize: "13px" }}>Due Date & Time</label>
                   <input
                     type="datetime-local"
-                    value={deliverableInput.due_datetime}
+                    value={subtaskInput.due_datetime}
                     min={getNowDatetimeLocal()}
                     max={form.end_date || undefined}
                     onChange={(e) => {
                       setIsDirty(true);
                       const val = e.target.value;
                       if (form.end_date && val && val > form.end_date) {
-                        setDeliverableInput((prev) => ({ ...prev, due_datetime: form.end_date }));
+                        setSubtaskInput((prev) => ({ ...prev, due_datetime: form.end_date }));
                       } else {
-                        setDeliverableInput((prev) => ({ ...prev, due_datetime: val }));
+                        setSubtaskInput((prev) => ({ ...prev, due_datetime: val }));
                       }
                     }}
                   />
@@ -963,16 +997,16 @@ export default function EditTaskModal({ task, onClose }) {
               <button
                 type="button"
                 className="task-add-phase-btn"
-                onClick={handleAddDeliverable}
-                disabled={!deliverableInput.title.trim()}
+                onClick={handleAddSubtask}
+                disabled={!subtaskInput.title.trim()}
               >
                 + Add Subtask
               </button>
-              {deliverables.length > 0 && (
+              {subtasks.length > 0 && (
                 <div className="task-phase-list">
-                  {deliverables.map((d, index) => {
+                  {subtasks.map((d, index) => {
                     const assignedUser = d.assigned_to ? displayUsers.find(u => String(u.id) === String(d.assigned_to)) : null;
-                    const isDropdownOpen = openDeliverableDropdown === index;
+                    const isDropdownOpen = openSubtaskDropdown === index;
                     return (
                     <div key={index} className="task-phase-item" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #f3f4f6", position: "relative" }}>
                       <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#8b5cf6", display: "inline-block", flexShrink: 0 }}></span>
@@ -981,7 +1015,7 @@ export default function EditTaskModal({ task, onClose }) {
                       <div style={{ position: "relative" }}>
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); setOpenDeliverableDropdown(isDropdownOpen ? null : index); }}
+                          onClick={(e) => { e.stopPropagation(); setOpenSubtaskDropdown(isDropdownOpen ? null : index); }}
                           style={{
                             fontSize: 11, cursor: "pointer", padding: "3px 8px", borderRadius: 4, border: "1px solid #e5e7eb",
                             background: assignedUser ? "#eef2ff" : "#f9fafb", color: assignedUser ? "#6366f1" : "#6b7280",
@@ -998,7 +1032,7 @@ export default function EditTaskModal({ task, onClose }) {
                           }}>
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); handleDeliverableAssignee(index, null); }}
+                              onClick={(e) => { e.stopPropagation(); handleSubtaskAssignee(index, null); }}
                               style={{
                                 display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
                                 fontSize: 12, cursor: "pointer", background: !assignedUser ? "#f3f4f6" : "transparent",
@@ -1011,7 +1045,7 @@ export default function EditTaskModal({ task, onClose }) {
                               <button
                                 key={u.id}
                                 type="button"
-                                onClick={(e) => { e.stopPropagation(); handleDeliverableAssignee(index, u.id); }}
+                                onClick={(e) => { e.stopPropagation(); handleSubtaskAssignee(index, u.id); }}
                                 style={{
                                   display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
                                   fontSize: 12, cursor: "pointer",
@@ -1027,7 +1061,7 @@ export default function EditTaskModal({ task, onClose }) {
                           </div>
                         )}
                       </div>
-                      <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "deliverable", index, id: "" }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
+                      <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "subtask", index, id: "" }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
                     </div>
                     );
                   })}

@@ -1,8 +1,8 @@
 /**
  * ViewDeliverableModal.jsx
- * Modal for viewing a deliverable's submission details as an admin/manager.
+ * Modal for viewing a subtask's submission details as an admin/manager.
  * Displays reopen info, submission notes, file/image/link attachments, and
- * allows resubmission when the deliverable is in reopened status.
+ * allows resubmission when the subtask is in reopened status.
  */
 
 import { useEffect, useState } from "react";
@@ -40,13 +40,13 @@ function formatFileSize(bytes) {
 }
 
 /**
- * Modal for viewing deliverable details and resubmitting when reopened.
+ * Modal for viewing subtask details and resubmitting when reopened.
  * @param {boolean} isOpen - Whether the modal is visible.
  * @param {Function} onClose - Callback to close the modal.
- * @param {Object} deliverable - The deliverable to display.
+ * @param {Object} subtask - The subtask to display.
  * @param {Function} onSubmitSuccess - Callback after successful resubmission.
  */
-function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess }) {
+function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(isOpen, handleClose);
 
@@ -59,11 +59,11 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
   const [imagePreview, setImagePreview] = useState(null);
 
   useEffect(() => {
-    if (!isOpen || !deliverable) return;
+    if (!isOpen || !subtask) return;
     document.body.style.overflow = "hidden";
 
     const token = authToken();
-    fetch(`${API_URL}/deliverables/${deliverable.id}/latest-submission`, {
+    fetch(`${API_URL}/deliverables/${subtask.id}/latest-submission`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       skipLoader: true,
     })
@@ -72,7 +72,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
       .catch(() => { setLoading(false); });
 
     return () => { document.body.style.overflow = ""; };
-  }, [isOpen, deliverable]);
+  }, [isOpen, subtask]);
 
   /**
    * Normalizes a URL by trimming whitespace and prepending https:// if missing.
@@ -85,7 +85,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
     return url;
   };
 
-  /** Handles resubmission of the deliverable with updated files, links, and comment */
+   /** Handles resubmission of the subtask with updated files, links, and comment */
   const handleResubmit = async () => {
     const validLinks = links.filter((l) => l.trim()).map(normalizeUrl);
     if (!comment.trim() && files.length === 0 && validLinks.length === 0) {
@@ -100,7 +100,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
       files.forEach((f) => formData.append("files[]", f));
       validLinks.forEach((l) => formData.append("links[]", l));
 
-      const res = await fetch(`${API_URL}/deliverables/${deliverable.id}/submit`, {
+      const res = await fetch(`${API_URL}/deliverables/${subtask.id}/submit`, {
         method: "POST",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         body: formData,
@@ -113,7 +113,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
         if (onSubmitSuccess) onSubmitSuccess(data.deliverable);
         onClose();
       } else {
-        notify.error(data.message || "Failed to resubmit deliverable.");
+        notify.error(data.message || "Failed to resubmit subtask.");
       }
     } catch {
       notify.error("An error occurred. Please try again.");
@@ -122,7 +122,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
     }
   };
 
-  if (!isOpen || !deliverable) return null;
+  if (!isOpen || !subtask) return null;
 
   const token = authToken();
   /** Constructs download URL for a specific attachment with optional action param */
@@ -135,8 +135,8 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
     return url;
   };
 
-  const statusLabel = (deliverable.status || "pending").charAt(0).toUpperCase() + (deliverable.status || "pending").slice(1);
-  const isReopened = deliverable.status === "reopened";
+  const statusLabel = (subtask.status || "pending").charAt(0).toUpperCase() + (subtask.status || "pending").slice(1);
+  const isReopened = subtask.status === "reopened";
   const attachments = submission?.attachments || [];
   const viewFiles = attachments.filter((a) => a.attachment_type === "file");
   const viewImages = attachments.filter((a) => a.attachment_type === "image");
@@ -147,11 +147,11 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
       <div className="vd-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="vd-header">
           <div>
-            <h2 className="vd-title">{deliverable.title}</h2>
+            <h2 className="vd-title">{subtask.title}</h2>
             <div className="vd-meta">
-              <span className={`vd-status-badge vd-status-${deliverable.status || "pending"}`}>{statusLabel}</span>
-              {deliverable.due_date && (
-                <span className="vd-due-date">Due Date & Time {formatDateTime(deliverable.due_date)}</span>
+              <span className={`vd-status-badge vd-status-${subtask.status || "pending"}`}>{statusLabel}</span>
+              {subtask.due_date && (
+                <span className="vd-due-date">Due Date & Time {formatDateTime(subtask.due_date)}</span>
               )}
             </div>
           </div>
@@ -169,29 +169,29 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
                   <div className="vd-details-grid">
                     <div className="vd-detail-item">
                       <span className="vd-detail-label">Reopened By</span>
-                      <span className="vd-detail-value">{deliverable.reopenedBy?.name || "\u2014"}</span>
+                      <span className="vd-detail-value">{subtask.reopenedBy?.name || "\u2014"}</span>
                     </div>
                     <div className="vd-detail-item">
                       <span className="vd-detail-label">Reopened On</span>
-                      <span className="vd-detail-value">{formatDateTime(deliverable.reopened_at)}</span>
+                      <span className="vd-detail-value">{formatDateTime(subtask.reopened_at)}</span>
                     </div>
                   </div>
-                  {deliverable.reopen_comment && (
+                  {subtask.reopen_comment && (
                     <div className="vd-detail-item" style={{ marginTop: "12px" }}>
                       <span className="vd-detail-label">Comment</span>
-                      <p className="vd-text">{deliverable.reopen_comment}</p>
+                      <p className="vd-text">{subtask.reopen_comment}</p>
                     </div>
                   )}
-                  {deliverable.reopen_instructions && (
+                  {subtask.reopen_instructions && (
                     <div className="vd-detail-item" style={{ marginTop: "12px" }}>
                       <span className="vd-detail-label">Instructions</span>
-                      <p className="vd-text">{deliverable.reopen_instructions}</p>
+                      <p className="vd-text">{subtask.reopen_instructions}</p>
                     </div>
                   )}
-                  {deliverable.reopen_new_deadline && (
+                  {subtask.reopen_new_deadline && (
                     <div className="vd-detail-item" style={{ marginTop: "12px" }}>
                       <span className="vd-detail-label">New Deadline</span>
-                      <span className="vd-detail-value">{formatDateTime(deliverable.reopen_new_deadline)}</span>
+                      <span className="vd-detail-value">{formatDateTime(subtask.reopen_new_deadline)}</span>
                     </div>
                   )}
                 </div>
@@ -301,7 +301,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
                     <label className="vd-label">Attachments</label>
                     <div
                       className="vd-dropzone"
-                      onClick={() => document.getElementById(`vd-file-${deliverable.id}`)?.click()}
+                      onClick={() => document.getElementById(`vd-file-${subtask.id}`)?.click()}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) { setIsDirty(true); setFiles(Array.from(e.dataTransfer.files)); } }}
                     >
@@ -310,7 +310,7 @@ function ViewDeliverableModal({ isOpen, onClose, deliverable, onSubmitSuccess })
                     <input
                       type="file"
                       multiple
-                      id={`vd-file-${deliverable.id}`}
+                      id={`vd-file-${subtask.id}`}
                       style={{ display: "none" }}
                       onChange={(e) => { setIsDirty(true); setFiles(Array.from(e.target.files || [])); }}
                     />

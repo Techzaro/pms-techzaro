@@ -1,8 +1,8 @@
 /**
  * SelfDeliverableViewModal.jsx
- * Modal for a team member to view their own deliverable details, including
+ * Modal for a team member to view their own subtask details, including
  * submission history, rework instructions, and approval status. Supports
- * self-approval and requesting rework on submitted deliverables.
+ * self-approval and requesting rework on submitted subtasks.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -76,51 +76,51 @@ function buildHistoryTimeline(deliverable) {
 }
 
 /**
- * Modal for viewing own deliverable with full submission history and actions.
+ * Modal for viewing own subtask with full submission history and actions.
  * @param {boolean} isOpen - Whether the modal is visible.
  * @param {Function} onClose - Callback to close the modal.
- * @param {Object} deliverable - The initial deliverable data.
+ * @param {Object} subtask - The initial subtask data.
  * @param {Function} onActionSuccess - Callback after a successful action (approve/rework).
  * @param {Function} [onResubmit] - Callback to open the resubmit form.
  */
-function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliverable, onActionSuccess, onResubmit }) {
+function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, onActionSuccess, onResubmit }) {
   useEscapeKey(isOpen, onClose);
 
-  const [deliverable, setDeliverable] = useState(null);
+  const [subtask, setSubtask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [reworkDialog, setReworkDialog] = useState(false);
   const [acting, setActing] = useState(false);
 
   useEffect(() => {
-    if (!isOpen || !initialDeliverable) return;
+    if (!isOpen || !initialSubtask) return;
     document.body.style.overflow = "hidden";
     setLoading(true);
 
     const token = authToken();
-    fetch(`${API_URL}/deliverables/${initialDeliverable.id}`, {
+    fetch(`${API_URL}/deliverables/${initialSubtask.id}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       skipLoader: true,
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        setDeliverable(data?.deliverable || initialDeliverable);
+        setSubtask(data?.deliverable || initialSubtask);
         setLoading(false);
       })
       .catch(() => {
-        setDeliverable(initialDeliverable);
+        setSubtask(initialSubtask);
         setLoading(false);
       });
 
     return () => { document.body.style.overflow = ""; };
-  }, [isOpen, initialDeliverable]);
+  }, [isOpen, initialSubtask]);
 
-  /** Self-approves the deliverable via the API */
+  /** Self-approves the subtask via the API */
   const handleSelfApprove = async () => {
     setActing(true);
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/deliverables/${deliverable.id}/self-approve`, {
+      const res = await fetch(`${API_URL}/deliverables/${subtask.id}/self-approve`, {
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
@@ -144,14 +144,14 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
     onClose();
   };
 
-  /** Builds the memoized history timeline from deliverable data */
-  const historyTimeline = useMemo(() => buildHistoryTimeline(deliverable), [deliverable]);
+  /** Builds the memoized history timeline from subtask data */
+  const historyTimeline = useMemo(() => buildHistoryTimeline(subtask), [subtask]);
 
-  if (!isOpen || !initialDeliverable) return null;
+  if (!isOpen || !initialSubtask) return null;
 
-  const status = deliverable?.status || initialDeliverable.status || "pending";
+  const status = subtask?.status || initialSubtask.status || "pending";
   const statusLabel = status === "pending" ? "Draft" : status === "rework_required" ? "Rework Required" : status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, " ");
-  const latestSubmission = deliverable?.latest_submission || deliverable?.latestSubmission;
+  const latestSubmission = subtask?.latest_submission || subtask?.latestSubmission;
   const isSubmitted = status === "submitted";
   const isReworkRequired = status === "rework_required";
   const isApproved = status === "approved";
@@ -172,11 +172,11 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
       <div className="sdvm-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="sdvm-header">
           <div className="sdvm-header-top">
-            <h2 className="sdvm-title">{deliverable?.title || initialDeliverable.title}</h2>
+            <h2 className="sdvm-title">{subtask?.title || initialSubtask.title}</h2>
             <span className={`sdvm-status-badge sdvm-status-${status}`}>{statusLabel}</span>
           </div>
-          {(deliverable?.due_date || initialDeliverable.due_date) && (
-            <div className="sdvm-due">Due Date & Time {formatDateTime(deliverable?.due_date || initialDeliverable.due_date)}</div>
+          {(subtask?.due_date || initialSubtask.due_date) && (
+            <div className="sdvm-due">Due Date & Time {formatDateTime(subtask?.due_date || initialSubtask.due_date)}</div>
           )}
         </div>
 
@@ -358,7 +358,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
 
               {!latestSubmission && !isReworkRequired && status === "pending" && (
                 <div className="sdvm-empty">
-                  <p>No submission yet. Submit your deliverable to begin review.</p>
+                  <p>No submission yet. Submit your subtask to begin review.</p>
                 </div>
               )}
             </>
@@ -369,7 +369,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, deliverable: initialDeliver
           <button className="sdvm-close-btn" onClick={onClose}>Close</button>
           {isReworkRequired && onResubmit && (
             <button className="sdvm-resubmit-btn" onClick={() => { onResubmit(deliverable || initialDeliverable); onClose(); }}>
-              Resubmit Deliverable
+              Resubmit Subtask
             </button>
           )}
           {isSubmitted && (

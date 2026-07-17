@@ -463,7 +463,17 @@ function Notifications() {
                     <span className="notif-checkbox-mark" />
                   </label>
 
-                  <Link to={getLinkPath(n)} style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1, minWidth: 0, textDecoration: "none" }} onClick={() => !n.is_read && markAsRead(n.id)}>
+                  <Link
+                    to={n.type === "chat_message" ? "#" : getLinkPath(n)}
+                    style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1, minWidth: 0, textDecoration: "none" }}
+                    onClick={(e) => {
+                      if (!n.is_read) markAsRead(n.id);
+                      if (n.type === "chat_message") {
+                        e.preventDefault();
+                        window.dispatchEvent(new CustomEvent("chat-widget-open", { detail: { conversationId: n.related_id } }));
+                      }
+                    }}
+                  >
                     <TypeIcon type={n.type} />
 
                     <div className="notif-content">

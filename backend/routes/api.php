@@ -239,6 +239,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/update-recurring', [TaskController::class, 'updateRecurring'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update recurring task with confirmation
 
     // Task submission workflow (submit for review, approve, reject, reopen)
+    Route::post('/tasks/{task}/acknowledge', [TaskController::class, 'acknowledge'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Acknowledge task assignment
     Route::post('/tasks/{task}/submit', [TaskController::class, 'submit'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Submit task for review
     Route::get('/tasks/{task}/latest-submission', [TaskController::class, 'latestSubmission']); // Get latest submission
     Route::get('/tasks/submission-file/{submission}', [TaskController::class, 'downloadSubmissionFile']); // Download submission file

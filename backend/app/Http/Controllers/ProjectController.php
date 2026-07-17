@@ -153,16 +153,10 @@ class ProjectController extends Controller
             'milestones.*.title' => 'nullable|string|max:255',
             'milestones.*.due_date' => 'nullable|date',
             'milestones.*.status' => 'nullable|string|max:32',
-            'deliverables' => 'nullable|array',
-            'deliverables.*.title' => 'required_with:deliverables|string|max:255',
-            'deliverables.*.description' => 'nullable|string|max:2000',
-            'deliverables.*.due_date' => 'nullable|date',
         ]);
 
         $milestones = $validated['milestones'] ?? null;
         unset($validated['milestones']);
-        $deliverables = $validated['deliverables'] ?? null;
-        unset($validated['deliverables']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
 
@@ -185,6 +179,7 @@ class ProjectController extends Controller
 
         $project = Project::create($validated);
         $this->replaceProjectMilestones($project, $milestones);
+        $project->syncDatesFromMilestones();
 
         $assigneeNames = ! empty($validated['assigned_users'])
             ? User::whereIn('id', $validated['assigned_users'])->pluck('name')->implode(', ')
@@ -241,40 +236,9 @@ class ProjectController extends Controller
             \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
         }
 
-        if (! empty($deliverables)) {
-            $assignedUsers = $validated['assigned_users'] ?? [];
-            if (! empty($assignedUsers)) {
-                $createdDeliverables = $project->deliverables()->createMany(
-                    collect($deliverables)->flatMap(fn ($del) => collect($assignedUsers)->map(fn ($userId) => [
-                        'title' => $del['title'], 'description' => $del['description'] ?? null,
-                        'status' => 'pending', 'priority' => $validated['priority'] ?? 'Medium',
-                        'due_date' => $del['due_date'] ?? null, 'assigned_to' => $userId,
-                        'created_by' => $request->user()->id,
-                    ]))->toArray()
-                );
-                $dlvNotifications = [];
-                foreach ($createdDeliverables as $dlv) {
-                    if ((int) $dlv->assigned_to !== (int) $request->user()->id) {
-                        $dlvNotifications[] = [
-                            'user_id' => $dlv->assigned_to, 'sender_user_id' => $request->user()->id,
-                            'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
-                            'related_id' => $dlv->id,
-                            'title' => 'Deliverable Assigned',
-                            'message' => 'A new deliverable "'.$dlv->title.'" has been assigned to you by '.$request->user()->name.'.',
-                            'link' => '/deliveries?selectedDeliverable='.$dlv->id,
-                        ];
-                    }
-                }
-                if (! empty($dlvNotifications)) {
-                    $this->notificationService->createBulk($dlvNotifications);
-                }
-            }
-        }
-
         // Send confirmation email to performer
         $this->notificationService->confirmAction($request->user(), 'Created & Assigned', 'project', $project->title, [
             'Assigned To' => $assigneeNames ?: 'N/A',
-            'Deliverables' => ! empty($deliverables) ? (string) count($deliverables).' added' : 'None',
         ]);
 
         return response()->json([
@@ -455,10 +419,6 @@ class ProjectController extends Controller
             'milestones.*.title' => 'nullable|string|max:255',
             'milestones.*.due_date' => 'nullable|date',
             'milestones.*.status' => 'nullable|string|max:32',
-            'deliverables' => 'nullable|array',
-            'deliverables.*.title' => 'required_with:deliverables|string|max:255',
-            'deliverables.*.description' => 'nullable|string|max:2000',
-            'deliverables.*.due_date' => 'nullable|date',
             'existing_file_names' => 'nullable|array',
             'existing_file_names.*.id' => 'required_with:existing_file_names|exists:project_files,id',
             'existing_file_names.*.name' => 'required_with:existing_file_names|string|max:255',
@@ -466,8 +426,6 @@ class ProjectController extends Controller
 
         $milestones = $validated['milestones'] ?? null;
         unset($validated['milestones']);
-        $deliverables = $validated['deliverables'] ?? null;
-        unset($validated['deliverables']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
 
@@ -523,47 +481,7 @@ class ProjectController extends Controller
 
         if ($request->has('milestones')) {
             $this->replaceProjectMilestones($project, $milestones);
-        }
-
-        $addedDeliverables = [];
-        if (! empty($deliverables)) {
-            $assignedUsers = $project->assigned_users ?? [];
-            if (! empty($assignedUsers)) {
-                $bulkDeliverables = [];
-                foreach ($deliverables as $del) {
-                    foreach ($assignedUsers as $userId) {
-                        $bulkDeliverables[] = [
-                            'title' => $del['title'], 'description' => $del['description'] ?? null,
-                            'status' => 'pending', 'priority' => $project->priority ?? 'Medium',
-                            'due_date' => $del['due_date'] ?? null, 'assigned_to' => $userId,
-                            'created_by' => $request->user()->id,
-                        ];
-                    }
-                    $addedDeliverables[] = $del['title'];
-                }
-                if (! empty($bulkDeliverables)) {
-                    $createdDeliverables = $project->deliverables()->createMany($bulkDeliverables);
-                    $bulkNotifications = [];
-                    foreach ($createdDeliverables as $dlv) {
-                        if ((int) $dlv->assigned_to !== (int) $user->id) {
-                            $bulkNotifications[] = [
-                                'user_id' => $dlv->assigned_to, 'sender_user_id' => $user->id,
-                                'type' => 'deliverable_assigned', 'related_module' => 'deliverable',
-                                'related_id' => $dlv->id,
-                                'title' => 'Deliverable Assigned',
-                                'message' => 'A new deliverable "'.$dlv->title.'" has been assigned to you by '.$user->name.'.',
-                                'link' => '/deliveries?selectedDeliverable='.$dlv->id,
-                            ];
-                        }
-                    }
-                    if (! empty($bulkNotifications)) {
-                        $this->notificationService->createBulk($bulkNotifications);
-                    }
-                }
-            }
-        }
-        if (! empty($addedDeliverables)) {
-            $changes[] = ['field_name' => 'deliverables', 'label' => 'Deliverable Added', 'old_value' => '', 'new_value' => implode(', ', $addedDeliverables)];
+            $project->syncDatesFromMilestones();
         }
 
         $changeRecords = array_map(fn ($c) => [

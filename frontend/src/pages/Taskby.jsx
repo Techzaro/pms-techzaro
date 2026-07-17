@@ -28,6 +28,7 @@ import "../pages/Task.css";
 
 const STATUS_COLORS = {
   pending: "#FEF3C7",
+  in_progress: "#DBEAFE",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -36,6 +37,7 @@ const STATUS_COLORS = {
 
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
+  in_progress: "#1E40AF",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -173,6 +175,7 @@ const Taskby = () => {
   const formatStatus = (status) => {
     const map = {
       pending: "Pending",
+      in_progress: "In Progress",
       submitted: "Submitted",
       reopened: "Reopened",
       approved: "Approved",
@@ -292,7 +295,7 @@ const Taskby = () => {
           <div className="status-column">Status</div>
           <div>Progress</div>
           <div className="priority-column">Priority</div>
-          <div className="date-column">Due Date</div>
+          <div className="date-column">Date</div>
           <div>Action</div>
         </div>
 
@@ -374,9 +377,15 @@ const Taskby = () => {
                       </div>
                     </div>
 
-                    <div className="col-progress">
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                      <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                        {item.deliverables_progress || 0}%
+                      </div>
                       <div className="progress-bar-track">
                         <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
                       </div>
                     </div>
 
@@ -390,6 +399,10 @@ const Taskby = () => {
                     <div className="col-due-date">
                       <div className="date-box">
                         <div style={{ whiteSpace: "pre-line" }}>
+                          {item.assignees?.[0]?.pivot?.start_date
+                            ? formatDate(item.assignees[0].pivot.start_date)
+                            : formatDate(item.start_date)}
+                          {"\n"}
                           {item.assignees?.[0]?.pivot?.due_date
                             ? formatDate(item.assignees[0].pivot.due_date)
                             : formatDate(item.end_date)}

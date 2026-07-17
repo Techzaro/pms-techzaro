@@ -42,6 +42,7 @@ const PRIORITY_TEXT_COLORS = {
 
 const STATUS_COLORS = {
   pending: "#FEF3C7",
+  in_progress: "#DBEAFE",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -54,6 +55,7 @@ const STATUS_COLORS = {
 
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
+  in_progress: "#1E40AF",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -251,7 +253,7 @@ function Projects() {
     return Math.round((completed / total) * 100) || 0;
   };
 
-  const hasPendingDeliverables = (project) => {
+  const hasPendingSubtasks = (project) => {
     return (project.pending_deliverables_count || 0) > 0;
   };
 
@@ -493,29 +495,27 @@ function Projects() {
                       </div>
                     </div>
 
-                    {/* FOOTER */}
-                    <div className="card-footer">
-                      <div className="date-info">
-                        <span className="date-icon">📅</span>
-                        {project.active_deadline ? (
-                          <span>{formatDateTime(project.active_deadline).replace("\n", " ")}</span>
-                        ) : (
-                          <span>No deadline set</span>
-                        )}
-                      </div>
-                    </div>
-
                     {/* ACTIONS */}
                     <div className="project-card-actions">
-                      <span
-                        className="status-badge"
-                        style={{
-                          backgroundColor: STATUS_COLORS[project.status] || "#e0e7ff",
-                          color: STATUS_TEXT_COLORS[project.status] || "#374151",
-                        }}
-                      >
-                        {project.status || "Planning"}
-                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                        <span
+                          className="status-badge"
+                          style={{
+                            backgroundColor: STATUS_COLORS[project.status] || "#e0e7ff",
+                            color: STATUS_TEXT_COLORS[project.status] || "#374151",
+                          }}
+                        >
+                          {project.status || "Planning"}
+                        </span>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                          <span style={{ fontSize: "13px", color: "#6B7280", fontWeight: 500 }}>
+                            📅 {project.start_date ? formatDateTime(project.start_date).replace("\n", " ") : "-"}
+                          </span>
+                          <span style={{ fontSize: "13px", color: "#6B7280", fontWeight: 500 }}>
+                            📅 {project.end_date ? formatDateTime(project.end_date).replace("\n", " ") : "No deadline"}
+                          </span>
+                        </div>
+                      </div>
 
                       <div className="project-card-actions-right">
                         <button
@@ -567,7 +567,7 @@ function Projects() {
               <div>Status</div>
               <div>Progress</div>
               <div>Priority</div>
-              <div>Due Date</div>
+              <div>Date</div>
               <div>Action</div>
             </div>
 
@@ -611,7 +611,7 @@ function Projects() {
                       <div className="progress-bar-track">
                         <div className="progress-bar-fill" style={{ width: `${progress}%` }}></div>
                       </div>
-                      <div className="deliverables-approved-text">
+                      <div className="subtasks-approved-text">
                         {project.completed_tasks || 0}/{project.total_tasks || 0} tasks
                       </div>
                     </div>
@@ -626,7 +626,9 @@ function Projects() {
                     <div className="col-due-date">
                       <div className="date-box">
                         <div style={{ whiteSpace: "pre-line" }}>
-                          {project.active_deadline ? formatDateTime(project.active_deadline) : "No deadline"}
+                          {formatDateTime(project.start_date)}
+                          {"\n"}
+                          {formatDateTime(project.end_date)}
                         </div>
                       </div>
                     </div>

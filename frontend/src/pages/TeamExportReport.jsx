@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import DonutChart from "../components/DonutChart";
+import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import "../components/Charts.css";
 import "../pages/ExportReport.css";
 
@@ -58,6 +60,9 @@ function TeamExportReport({ isOpen, onClose, team }) {
   const [customEnd, setCustomEnd] = useState("");
   const [generating, setGenerating] = useState(false);
   const [showReview, setShowReview] = useState(false);
+
+  const { isDirty: configIsDirty, setIsDirty: setConfigIsDirty, handleClose: handleConfigClose, ConfirmDialog: ConfigConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(isOpen && !showReview, handleConfigClose);
 
   if (!isOpen || !team) return null;
 
@@ -394,7 +399,7 @@ function TeamExportReport({ isOpen, onClose, team }) {
                 <h2>Export Team Report</h2>
                 <p>Select date range and review team performance report for <strong>{team.name}</strong>.</p>
               </div>
-              <button className="er-close-btn" onClick={onClose}>
+              <button className="er-close-btn" onClick={handleConfigClose}>
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M15 5L5 15M5 5l10 10" />
                 </svg>
@@ -410,22 +415,22 @@ function TeamExportReport({ isOpen, onClose, team }) {
                   { value: "month", label: "This Month" },
                   { value: "custom", label: "Custom Range" },
                 ].map((opt) => (
-                  <button key={opt.value} className={`er-date-btn ${dateRange === opt.value ? "active" : ""}`} onClick={() => setDateRange(opt.value)}>
+                  <button key={opt.value} className={`er-date-btn ${dateRange === opt.value ? "active" : ""}`} onClick={() => { setDateRange(opt.value); setConfigIsDirty(true); }}>
                     {opt.label}
                   </button>
                 ))}
               </div>
               {dateRange === "custom" && (
                 <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-                  <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
+                  <input type="date" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setConfigIsDirty(true); }}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 13, color: "#374151", outline: "none" }} />
-                  <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)}
+                  <input type="date" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setConfigIsDirty(true); }}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 13, color: "#374151", outline: "none" }} />
                 </div>
               )}
             </div>
             <div className="er-footer">
-              <button className="er-cancel-btn" onClick={onClose}>Cancel</button>
+              <button className="er-cancel-btn" onClick={handleConfigClose}>Cancel</button>
               <button className="er-export-btn" onClick={() => setShowReview(true)}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M8 2v8M4 6l4 4 4-4M2 14h12" />
@@ -658,6 +663,7 @@ function TeamExportReport({ isOpen, onClose, team }) {
           </div>
         </div>
       )}
+      {ConfigConfirmDialog}
     </>,
     document.body
   );

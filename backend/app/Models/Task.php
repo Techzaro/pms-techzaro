@@ -39,6 +39,8 @@ class Task extends Model
         'reopen_new_deadline',
         'reopen_file_path',
         'reopen_file_name',
+        'acknowledged_at',
+        'acknowledged_by',
         'sort_order',
         'task_type',
         'recurrence_settings',
@@ -168,6 +170,12 @@ class Task extends Model
     public function reopenedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reopened_by');
+    }
+
+    /** The user who acknowledged this task. */
+    public function acknowledgedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'acknowledged_by');
     }
 
     /** Field-level changes made to this task. */

@@ -278,8 +278,9 @@
 .dash-card-footer {
   padding: 0 0 18px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
 .dash-date-info {

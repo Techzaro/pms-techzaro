@@ -32,7 +32,7 @@ const Reports = lazy(() => import("./pages/Reports"));
 const ManageTeam = lazy(() => import("./pages/ManageTeam"));
 const MemberTeam = lazy(() => import("./pages/MemberTeam"));
 const TaskDetails = lazy(() => import("./pages/TaskDetails"));
-const DeliverableDetails = lazy(() => import("./pages/DeliverableDetails"));
+const SubtaskDetails = lazy(() => import("./pages/DeliverableDetails"));
 const SelfDeliveries = lazy(() => import("./pages/SelfDeliveries"));
 const Calender = lazy(() => import("./pages/Calender"));
 const Notifications = lazy(() => import("./pages/Notifications"));
@@ -101,11 +101,11 @@ function App() {
             <Route path="/:role/create-project" element={<ProtectedRoute><CreateProject /></ProtectedRoute>} />
             <Route path="/:role/projects/project-details/:projectId" element={<ProtectedRoute><ProjectDetails /></ProtectedRoute>} />
 
-            {/* Deliverable routes */}
+            {/* Subtask routes */}
             <Route path="/:role/deliveries" element={<ProtectedRoute><Deliveries /></ProtectedRoute>} />
             <Route path="/:role/deliveries-by-you" element={<ProtectedRoute><DeliveriesByYou /></ProtectedRoute>} />
             <Route path="/:role/self-deliveries" element={<ProtectedRoute><SelfDeliveries /></ProtectedRoute>} />
-            <Route path="/:role/deliveries/deliverable-details/:deliverable" element={<ProtectedRoute><DeliverableDetails /></ProtectedRoute>} />
+            <Route path="/:role/deliveries/deliverable-details/:deliverable" element={<ProtectedRoute><SubtaskDetails /></ProtectedRoute>} />
 
             {/* Admin/Manager only routes */}
             <Route path="/:role/manage-users" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><ManageUsers /></RoleProtectedRoute>} />

@@ -1,6 +1,6 @@
 /* OVERLAY */
 
-.deliverable-overlay {
+.subtask-overlay {
   position: fixed;
   inset: 0;
 
@@ -20,7 +20,7 @@
 
 /* MODAL */
 
-.deliverable-modal {
+.subtask-modal {
   width: 100%;
   max-width: 1280px;
 
@@ -39,9 +39,9 @@
   flex-direction: column;
 }
 
-.deliverable-modal select,
-.deliverable-modal input,
-.deliverable-modal textarea {
+.subtask-modal select,
+.subtask-modal input,
+.subtask-modal textarea {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -49,7 +49,7 @@
 
 /* HEADER */
 
-.deliverable-header {
+.subtask-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -64,13 +64,13 @@
   background: #ffffff;
 }
 
-.deliverable-header-left {
+.subtask-header-left {
   display: flex;
   align-items: center;
   gap: 16px;
 }
 
-.deliverable-icon {
+.subtask-icon {
   width: 52px;
   height: 52px;
 
@@ -86,7 +86,7 @@
   font-size: 22px;
 }
 
-.deliverable-header h2 {
+.subtask-header h2 {
   margin: 0;
 
   font-size: 30px;
@@ -95,7 +95,7 @@
   color: #111827;
 }
 
-.deliverable-header p {
+.subtask-header p {
   margin-top: 6px;
 
   font-size: 14px;
@@ -103,7 +103,7 @@
   color: #6b7280;
 }
 
-.deliverable-close-btn {
+.subtask-close-btn {
   border: none;
   background: transparent;
 
@@ -114,13 +114,13 @@
   color: #6b7280;
 }
 
-.deliverable-header-actions {
+.subtask-header-actions {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.deliverable-header-actions .deliverable-cancel-btn {
+.subtask-header-actions .subtask-cancel-btn {
   padding: 10px 20px;
   border: 1px solid #e5e7eb;
   background: #ffffff;
@@ -132,11 +132,11 @@
   transition: 0.3s ease;
 }
 
-.deliverable-header-actions .deliverable-cancel-btn:hover {
+.subtask-header-actions .subtask-cancel-btn:hover {
   background: #f3f4f6;
 }
 
-.deliverable-header-actions .deliverable-create-btn {
+.subtask-header-actions .subtask-create-btn {
   padding: 10px 20px;
   border: none;
   background: #4f46e5;
@@ -148,11 +148,11 @@
   transition: 0.3s ease;
 }
 
-.deliverable-header-actions .deliverable-create-btn:hover {
+.subtask-header-actions .subtask-create-btn:hover {
   background: #4338ca;
 }
 
-.deliverable-header-actions .deliverable-close-btn {
+.subtask-header-actions .subtask-close-btn {
   width: 42px;
   height: 42px;
   border: none;
@@ -168,7 +168,7 @@
 
 /* BODY */
 
-.deliverable-body {
+.subtask-body {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
 
@@ -184,14 +184,14 @@
 
 /* LEFT */
 
-.deliverable-left {
+.subtask-left {
   display: flex;
   flex-direction: column;
   gap: 24px;
   min-width: 0;
 }
 
-.deliverable-grid-2 {
+.subtask-grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
@@ -199,12 +199,12 @@
 
 /* FIELD */
 
-.deliverable-field {
+.subtask-field {
   display: flex;
   flex-direction: column;
 }
 
-.deliverable-field label {
+.subtask-field label {
   margin-bottom: 10px;
 
   font-size: 14px;
@@ -213,13 +213,13 @@
   color: #111827;
 }
 
-.deliverable-field label span {
+.subtask-field label span {
   color: red;
 }
 
-.deliverable-field input,
-.deliverable-field select,
-.deliverable-field textarea {
+.subtask-field input,
+.subtask-field select,
+.subtask-field textarea {
   width: 100%;
 
   border: 1px solid #d1d5db;
@@ -237,18 +237,18 @@
   background: #fff;
 }
 
-.deliverable-field textarea {
+.subtask-field textarea {
   min-height: 250px;
   resize: none;
 }
 
-.deliverable-field input:focus,
-.deliverable-field select:focus,
-.deliverable-field textarea:focus {
+.subtask-field input:focus,
+.subtask-field select:focus,
+.subtask-field textarea:focus {
   border-color: #4f46e5;
 }
 
-.deliverable-field small {
+.subtask-field small {
   margin-top: 8px;
 
   color: #6b7280;
@@ -258,14 +258,14 @@
 
 /* RIGHT */
 
-.deliverable-right {
+.subtask-right {
   display: flex;
   flex-direction: column;
   gap: 20px;
   min-width: 0;
 }
 
-.deliverable-card {
+.subtask-card {
   border: 1px solid #e5e7eb;
 
   border-radius: 18px;
@@ -275,7 +275,7 @@
   background: #fff;
 }
 
-.deliverable-card label {
+.subtask-card label {
   display: block;
 
   margin-bottom: 12px;
@@ -286,8 +286,8 @@
   color: #111827;
 }
 
-.deliverable-card select,
-.deliverable-card input {
+.subtask-card select,
+.subtask-card input {
   width: 100%;
 
   border: 1px solid #d1d5db;
@@ -299,13 +299,13 @@
   outline: none;
 }
 
-.deliverable-date-grid {
+.subtask-date-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
 
-.deliverable-date-grid span {
+.subtask-date-grid span {
   display: block;
 
   margin-bottom: 8px;
@@ -317,7 +317,7 @@
 
 /* FOOTER */
 
-.deliverable-footer {
+.subtask-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -331,7 +331,7 @@
   background: #fff;
 }
 
-.deliverable-cancel-btn {
+.subtask-cancel-btn {
   border: 1px solid #d1d5db;
 
   background: white;
@@ -343,7 +343,7 @@
   cursor: pointer;
 }
 
-.deliverable-create-btn {
+.subtask-create-btn {
   border: none;
 
   background: #4f46e5;
@@ -362,158 +362,158 @@
 
 @media (max-width: 992px) {
 
-  .deliverable-body {
+  .subtask-body {
     grid-template-columns: 1fr;
   }
 
-  .deliverable-grid-2,
-  .deliverable-date-grid {
+  .subtask-grid-2,
+  .subtask-date-grid {
     grid-template-columns: 1fr;
   }
 
-  .deliverable-modal {
+  .subtask-modal {
     max-height: 100vh;
     border-radius: 18px;
   }
 
-  .deliverable-footer {
+  .subtask-footer {
     flex-direction: column;
   }
 
-  .deliverable-footer button {
+  .subtask-footer button {
     width: 100%;
   }
 }
 
 @media (max-width: 768px) {
-  .deliverable-header {
+  .subtask-header {
     padding: 16px 20px;
   }
-  .deliverable-header h2 {
+  .subtask-header h2 {
     font-size: 22px;
   }
-  .deliverable-body {
+  .subtask-body {
     padding: 18px;
   }
-  .deliverable-close-btn {
+  .subtask-close-btn {
     width: 36px;
     height: 36px;
     font-size: 16px;
   }
-  .deliverable-date-grid {
+  .subtask-date-grid {
     grid-template-columns: 1fr;
     gap: 12px;
   }
 }
 
 @media (max-width: 480px) {
-  .deliverable-modal {
+  .subtask-modal {
     max-height: 100vh;
     border-radius: 14px;
   }
-  .deliverable-overlay {
+  .subtask-overlay {
     padding: 8px;
   }
-  .deliverable-header {
+  .subtask-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
     padding: 14px 16px;
   }
-  .deliverable-header h2 {
+  .subtask-header h2 {
     font-size: 18px;
   }
-  .deliverable-header p {
+  .subtask-header p {
     font-size: 13px;
   }
-  .deliverable-header-left {
+  .subtask-header-left {
     gap: 12px;
   }
-  .deliverable-body {
+  .subtask-body {
     padding: 12px;
     gap: 14px;
   }
-  .deliverable-field textarea {
+  .subtask-field textarea {
     min-height: 120px;
   }
-  .deliverable-icon {
+  .subtask-icon {
     width: 36px;
     height: 36px;
     font-size: 16px;
   }
-  .deliverable-close-btn {
+  .subtask-close-btn {
     align-self: flex-end;
   }
-  .deliverable-date-grid {
+  .subtask-date-grid {
     grid-template-columns: 1fr;
     gap: 10px;
   }
-  .deliverable-card {
+  .subtask-card {
     padding: 14px;
   }
-  .deliverable-field input,
-  .deliverable-field select,
-  .deliverable-field textarea {
+  .subtask-field input,
+  .subtask-field select,
+  .subtask-field textarea {
     padding: 10px 12px;
     font-size: 13px;
   }
 }
 
 @media (max-width: 360px) {
-  .deliverable-overlay {
+  .subtask-overlay {
     padding: 4px;
   }
-  .deliverable-modal {
+  .subtask-modal {
     border-radius: 10px;
   }
-  .deliverable-header {
+  .subtask-header {
     padding: 10px 12px;
     gap: 8px;
   }
-  .deliverable-header h2 {
+  .subtask-header h2 {
     font-size: 16px;
   }
-  .deliverable-header p {
+  .subtask-header p {
     font-size: 12px;
   }
-  .deliverable-header-left {
+  .subtask-header-left {
     gap: 8px;
   }
-  .deliverable-icon {
+  .subtask-icon {
     width: 30px;
     height: 30px;
     font-size: 14px;
   }
-  .deliverable-body {
+  .subtask-body {
     padding: 10px;
     gap: 12px;
   }
-  .deliverable-field label {
+  .subtask-field label {
     font-size: 12px;
     margin-bottom: 6px;
   }
-  .deliverable-field input,
-  .deliverable-field select,
-  .deliverable-field textarea {
+  .subtask-field input,
+  .subtask-field select,
+  .subtask-field textarea {
     padding: 8px 10px;
     font-size: 12px;
   }
-  .deliverable-field textarea {
+  .subtask-field textarea {
     min-height: 100px;
   }
-  .deliverable-card {
+  .subtask-card {
     padding: 10px;
   }
-  .deliverable-card label {
+  .subtask-card label {
     font-size: 12px;
     margin-bottom: 8px;
   }
-  .deliverable-footer {
+  .subtask-footer {
     padding: 12px 14px;
     gap: 8px;
   }
-  .deliverable-cancel-btn,
-  .deliverable-create-btn {
+  .subtask-cancel-btn,
+  .subtask-create-btn {
     padding: 8px 14px;
     font-size: 12px;
     width: 100%;

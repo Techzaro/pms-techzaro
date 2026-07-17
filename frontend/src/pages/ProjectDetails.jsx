@@ -69,6 +69,7 @@ function fileUrl(url) {
 
 const STATUS_COLORS = {
   pending: "#FEF3C7",
+  in_progress: "#DBEAFE",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -77,6 +78,7 @@ const STATUS_COLORS = {
 
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
+  in_progress: "#1E40AF",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -299,13 +301,13 @@ function ProjectDetails() {
   const [deleteProjectConfirmOpen, setDeleteProjectConfirmOpen] = useState(false);
   const [deleteTaskConfirmOpen, setDeleteTaskConfirmOpen] = useState(false);
   const [deleteTaskId, setDeleteTaskId] = useState(null);
-  const [submitModal, setSubmitModal] = useState({ open: false, deliverable: null });
-  const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
-  const [assignerModal, setAssignerModal] = useState({ open: false, deliverable: null });
+  const [submitModal, setSubmitModal] = useState({ open: false, subtask: null });
+  const [viewModal, setViewModal] = useState({ open: false, subtask: null });
+  const [assignerModal, setAssignerModal] = useState({ open: false, subtask: null });
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [fileSearch, setFileSearch] = useState("");
   const [taskSearch, setTaskSearch] = useState("");
-  const [deliverableSearch, setDeliverableSearch] = useState("");
+  const [subtaskSearch, setSubtaskSearch] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
   const [viewAccessSearch, setViewAccessSearch] = useState("");
   const [accessSearch, setAccessSearch] = useState("");
@@ -318,7 +320,7 @@ function ProjectDetails() {
   const [pendingDeleteCredential, setPendingDeleteCredential] = useState(null);
   const [showAddFileModal, setShowAddFileModal] = useState(false);
   const [orderedTasks, setOrderedTasks] = useState([]);
-  const [orderedDeliverables, setOrderedDeliverables] = useState([]);
+  const [orderedSubtasks, setOrderedSubtasks] = useState([]);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [visibilityUsers, setVisibilityUsers] = useState([]);
   const [visibilitySelected, setVisibilitySelected] = useState({});
@@ -355,7 +357,7 @@ function ProjectDetails() {
   }, [project?.tasks]);
 
   useEffect(() => {
-    setOrderedDeliverables(project?.deliverables || []);
+    setOrderedSubtasks(project?.deliverables || []);
   }, [project?.deliverables]);
 
   useEffect(() => {
@@ -385,8 +387,8 @@ function ProjectDetails() {
     }).catch(() => { });
   }, []);
 
-  const handleDeliverableReorder = useCallback((reordered) => {
-    setOrderedDeliverables(reordered);
+  const handleSubtaskReorder = useCallback((reordered) => {
+    setOrderedSubtasks(reordered);
     const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
     fetch(`${API}/deliverables/reorder`, {
       method: 'POST',
@@ -463,21 +465,21 @@ function ProjectDetails() {
     }
   }, [editFileItem, editFileName, projectId, notify]);
 
-  const handleDeliverableActionSuccess = (updatedDeliverable) => {
+  const handleSubtaskActionSuccess = (updatedSubtask) => {
     setProject((prev) => {
-      const updatedDeliverables = (prev.deliverables || []).map((d) =>
-        d.id === updatedDeliverable.id ? { ...d, ...updatedDeliverable } : d
+      const updatedSubtasks = (prev.deliverables || []).map((d) =>
+        d.id === updatedSubtask.id ? { ...d, ...updatedSubtask } : d
       );
-      const delTotal = updatedDeliverables.length;
-      const delCompleted = updatedDeliverables.filter((d) => d.status === "approved").length;
+      const delTotal = updatedSubtasks.length;
+      const delCompleted = updatedSubtasks.filter((d) => d.status === "approved").length;
       return {
         ...prev,
-        deliverables: updatedDeliverables,
+        deliverables: updatedSubtasks,
         total_deliverables: delTotal,
         completed_deliverables: delCompleted,
       };
     });
-    publish('deliverable:updated', updatedDeliverable);
+    publish('deliverable:updated', updatedSubtask);
     publish('data:changed', { type: 'deliverable', action: 'updated' });
   };
 
@@ -662,12 +664,12 @@ function ProjectDetails() {
   const filteredTasks = taskSearch ? tasks.filter((t) => (t.title || "").toLowerCase().includes(taskSearch.toLowerCase())) : tasks;
   const progress = typeof project.progress_percent === "number" ? project.progress_percent : calculateProjectProgress(project.tasks || []);
 
-  const deliverablesList = orderedDeliverables.length ? orderedDeliverables : (project.deliverables || []);
-  const filteredDeliverables = deliverableSearch ? deliverablesList.filter((d) => {
-    const q = deliverableSearch.toLowerCase();
+  const subtasksList = orderedSubtasks.length ? orderedSubtasks : (project.deliverables || []);
+  const filteredSubtasks = subtaskSearch ? subtasksList.filter((d) => {
+    const q = subtaskSearch.toLowerCase();
     const name = d.deliverable_name || d.name || d.title || d.label || d.description || "";
     return name.toLowerCase().includes(q);
-  }) : deliverablesList;
+  }) : subtasksList;
 
   const currentUser = getUser();
   const currentUserId = currentUser?.id;
@@ -822,7 +824,7 @@ function ProjectDetails() {
   const tabs = [
     { id: "overview", label: "Overview", icon: ListChecks },
     { id: "tasks", label: "Tasks", icon: ClipboardList },
-    { id: "deliverables", label: "Subtasks", icon: Calendar },
+    { id: "subtasks", label: "Subtasks", icon: Calendar },
     { id: "files", label: "Platform files & links", icon: FolderOpen },
     { id: "access", label: "Accessess", icon: Shield },
     { id: "members", label: "Members", icon: Users },
@@ -1067,7 +1069,7 @@ function ProjectDetails() {
                 <div className="td-trio-item">
                   <div className="td-stat-ic td-stat-ic--green"><CalendarDays size={18} /></div>
                   <div>
-                    <span className="td-stat-big td-stat-big--sm">{formatDateTimeShort(project.active_deadline)}</span>
+                    <span className="td-stat-big td-stat-big--sm">{formatDateTimeShort(project.end_date)}</span>
                     <span className="td-stat-label">Deadline</span>
                   </div>
                 </div>
@@ -1177,7 +1179,7 @@ function ProjectDetails() {
                                                   {showSubmit && (
                                                     <button
                                                       className="action-icon-btn action-submit"
-                                                      title={t.pending_deliverables_count > 0 ? "Submit all deliverables first" : "Submit Task"}
+                                                      title={t.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"}
                                                       disabled={t.pending_deliverables_count > 0}
                                                       onClick={() => !t.pending_deliverables_count && setSubmitTaskModal({ open: true, task: t })}
                                                       style={t.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
@@ -1206,18 +1208,18 @@ function ProjectDetails() {
                       </div>
                     )}
 
-                    {tab === "deliverables" && (
+                    {tab === "subtasks" && (
                       <div className="pd-tab-panel">
                         <section className="pd-card-flat pd-card-flat--table">
                           <div className="pd-card-flat__head">
                             <h2 className="pd-block-title pd-block-title--inline">Subtasks</h2>
                             <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                              <input type="text" placeholder="Search subtasks..." value={deliverableSearch} onChange={(e) => setDeliverableSearch(e.target.value)} />
+                              <input type="text" placeholder="Search subtasks..." value={subtaskSearch} onChange={(e) => setSubtaskSearch(e.target.value)} />
                             </div>
                           </div>
                           <div className="pd-table-wrap">
-                            <div className="deliveries-table-header pd-deliverables-grid">
+                            <div className="deliveries-table-header pd-subtasks-grid">
                               <div></div>
                               <div>Subtask</div>
                               <div>{isAdminOrManager || isCreator ? "Assigned To" : "Assigned By"}</div>
@@ -1225,19 +1227,19 @@ function ProjectDetails() {
                               <div>Status</div>
                               <div>Action</div>
                             </div>
-                            {(filteredDeliverables.length === 0) ? (
-                              <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>{deliverableSearch ? "No subtasks match your search." : "No subtasks."}</div>
+                            {(filteredSubtasks.length === 0) ? (
+                              <div className="pd-muted pd-table-empty" style={{ padding: "20px", textAlign: "center" }}>{subtaskSearch ? "No subtasks match your search." : "No subtasks."}</div>
                             ) : (
                               <SortableTableWrapper
-                                items={filteredDeliverables.map((d, idx) => ({ ...d, sortableId: `del-${d.id || idx}` }))}
-                                onReorder={handleDeliverableReorder}
+                                items={filteredSubtasks.map((d, idx) => ({ ...d, sortableId: `del-${d.id || idx}` }))}
+                                onReorder={handleSubtaskReorder}
                                 idKey="sortableId"
                                 as="div"
                                 handleOnly
                               >
                                 {(d, idx, dndProps) => {
-                                  const deliverableName = d.deliverable_name || d.name || d.title || d.label || d.description || '';
-                                  const displayName = deliverableName || `Deliverable ${idx + 1}`;
+                                  const subtaskName = d.deliverable_name || d.name || d.title || d.label || d.description || '';
+                                  const displayName = subtaskName || `Subtask ${idx + 1}`;
                                   const isAssigner = d.created_by && d.created_by === currentUserId;
                                   const isAssignee = d.assignee?.id && d.assignee.id === currentUserId;
                                   const isSubmittable = d.status === "pending" || d.status === "rejected" || d.status === "reopened";
@@ -1246,7 +1248,7 @@ function ProjectDetails() {
                                   const statusKey = (d.status || '').toLowerCase();
 
                                   return (
-                                    <div className="deliveries-table-row pd-deliverables-grid" key={d.sortableId}>
+                                    <div className="deliveries-table-row pd-subtasks-grid" key={d.sortableId}>
                                       <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                                       <div className="user-box">
                                         <div className="avatar" style={{ background: '#EEF2FF', color: '#4F46E5', width: '42px', height: '42px', fontSize: '14px' }}>
@@ -1269,16 +1271,16 @@ function ProjectDetails() {
                                       </div>
                                       <div className="action-btns">
                                         {showSubmit && (
-                                          <button className="action-icon-btn action-submit" title="Submit" onClick={() => setSubmitModal({ open: true, deliverable: d })}>
+                                          <button className="action-icon-btn action-submit" title="Submit" onClick={() => setSubmitModal({ open: true, subtask: d })}>
                                             <LuSend size={16} />
                                           </button>
                                         )}
                                         {showView && (
                                           <button className="action-icon-btn action-view" title="View" onClick={() => {
                                             if (isAssigner || isAdminOrManager) {
-                                              setAssignerModal({ open: true, deliverable: d });
+                                              setAssignerModal({ open: true, subtask: d });
                                             } else {
-                                              setViewModal({ open: true, deliverable: d });
+                                              setViewModal({ open: true, subtask: d });
                                             }
                                           }}>
                                             <IoEyeOutline size={16} />
@@ -1556,27 +1558,27 @@ function ProjectDetails() {
       </DashboardLayout>
 
       <SubmitDeliverableModal
-        key={`pd-submit-${submitModal.deliverable?.id || "none"}`}
+        key={`pd-submit-${submitModal.subtask?.id || "none"}`}
         isOpen={submitModal.open}
-        onClose={() => setSubmitModal({ open: false, deliverable: null })}
-        deliverable={submitModal.deliverable}
-        onSubmitSuccess={handleDeliverableActionSuccess}
+        onClose={() => setSubmitModal({ open: false, subtask: null })}
+        deliverable={submitModal.subtask}
+        onSubmitSuccess={handleSubtaskActionSuccess}
       />
 
       <ViewDeliverableModal
-        key={`pd-view-${viewModal.deliverable?.id || "none"}`}
+        key={`pd-view-${viewModal.subtask?.id || "none"}`}
         isOpen={viewModal.open}
-        onClose={() => setViewModal({ open: false, deliverable: null })}
-        deliverable={viewModal.deliverable}
-        onSubmitSuccess={handleDeliverableActionSuccess}
+        onClose={() => setViewModal({ open: false, subtask: null })}
+        deliverable={viewModal.subtask}
+        onSubmitSuccess={handleSubtaskActionSuccess}
       />
 
       <AssignerViewModal
-        key={`pd-assigner-${assignerModal.deliverable?.id || "none"}`}
+        key={`pd-assigner-${assignerModal.subtask?.id || "none"}`}
         isOpen={assignerModal.open}
-        onClose={() => setAssignerModal({ open: false, deliverable: null })}
-        deliverable={assignerModal.deliverable}
-        onActionSuccess={handleDeliverableActionSuccess}
+        onClose={() => setAssignerModal({ open: false, subtask: null })}
+        deliverable={assignerModal.subtask}
+        onActionSuccess={handleSubtaskActionSuccess}
       />
 
       {showTaskModal && (

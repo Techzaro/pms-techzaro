@@ -1,6 +1,6 @@
 /**
  * ReopenDialog.jsx
- * Modal dialog for rejecting and reopening a deliverable submission.
+ * Modal dialog for rejecting and reopening a subtask submission.
  * Allows the reviewer to provide a comment, additional instructions,
  * set a new deadline, and attach a file before reopening.
  */
@@ -18,13 +18,13 @@ import "./ReopenDialog.css";
 import { toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
 
 /**
- * Dialog for rejecting and reopening a deliverable with feedback.
+ * Dialog for rejecting and reopening a subtask with feedback.
  * @param {boolean} isOpen - Whether the dialog is visible.
  * @param {Function} onClose - Callback to close the dialog.
- * @param {Object} deliverable - The deliverable being reopened.
- * @param {Function} onReopenSuccess - Callback after successful reopen, receives updated deliverable.
+ * @param {Object} subtask - The subtask being reopened.
+ * @param {Function} onReopenSuccess - Callback after successful reopen, receives updated subtask.
  */
-function ReopenDialog({ isOpen, onClose, deliverable, onReopenSuccess }) {
+function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(isOpen, handleClose);
 
@@ -60,7 +60,7 @@ function ReopenDialog({ isOpen, onClose, deliverable, onReopenSuccess }) {
         if (newDeadline) formData.append("new_deadline", toUTCIso(newDeadline));
         if (file) formData.append("file", file);
 
-        const res = await fetch(`${API_URL}/deliverables/${deliverable.id}/reopen`, {
+        const res = await fetch(`${API_URL}/deliverables/${subtask.id}/reopen`, {
           method: "POST",
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
           body: formData,
@@ -72,7 +72,7 @@ function ReopenDialog({ isOpen, onClose, deliverable, onReopenSuccess }) {
           onReopenSuccess(data.deliverable);
           onClose();
         } else {
-          notify.error(data.message || "Failed to reopen deliverable.");
+          notify.error(data.message || "Failed to reopen subtask.");
         }
       } catch {
         notify.error("An error occurred. Please try again.");
@@ -80,14 +80,14 @@ function ReopenDialog({ isOpen, onClose, deliverable, onReopenSuccess }) {
     });
   };
 
-  if (!isOpen || !deliverable) return null;
+  if (!isOpen || !subtask) return null;
 
   return createPortal(
     <div className="rd-overlay">
       <div className="rd-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="rd-header">
           <h2 className="rd-title">Reject & Reopen Subtask</h2>
-          <p className="rd-subtitle">{deliverable.title}</p>
+          <p className="rd-subtitle">{subtask.title}</p>
         </div>
 
         <div className="rd-body">

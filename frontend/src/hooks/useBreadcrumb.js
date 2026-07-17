@@ -22,9 +22,9 @@ export default function useBreadcrumb() {
     taskby: "Tasks",
     "self-tasks": "Tasks",
     projects: "Projects",
-    deliveries: "Deliverables",
-    "deliveries-by-you": "Deliverables",
-    "self-deliveries": "Deliverables",
+    deliveries: "Subtasks",
+    "deliveries-by-you": "Subtasks",
+    "self-deliveries": "Subtasks",
     "manage-users": "Users",
     "manage-team": "Teams",
     calender: "Calendar",
@@ -42,13 +42,13 @@ export default function useBreadcrumb() {
     "self-tasks": "Self Tasks",
     deliveries: "Assigned To You",
     "deliveries-by-you": "Assigned By You",
-    "self-deliveries": "Self Deliverables",
+    "self-deliveries": "Self Subtasks",
   };
 
   // Detail page labels
   const detailLabels = {
     "task-details": "Task Details",
-    "deliverable-details": "Deliverable Details",
+    "deliverable-details": "Subtask Details",
     "project-details": "Project Details",
     "user-profile": "User Profile",
   };
@@ -64,7 +64,7 @@ export default function useBreadcrumb() {
     if (mainRoute === "taskby" || mainRoute === "self-tasks") {
       breadcrumbs.push({ label: "Tasks", path: rolePath("tasks") });
     } else if (mainRoute === "deliveries-by-you" || mainRoute === "self-deliveries") {
-      breadcrumbs.push({ label: "Deliverables", path: rolePath("deliveries") });
+      breadcrumbs.push({ label: "Subtasks", path: rolePath("deliveries") });
     } else if (mainRoute === "create-project") {
       breadcrumbs.push({ label: "Projects", path: rolePath("projects") });
     } else if (mainRoute === "manage-users") {

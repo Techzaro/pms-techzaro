@@ -2,7 +2,7 @@
  * Calender.jsx — Calendar Page Component
  *
  * Unified calendar view for the PMS that displays events, tasks, projects,
- * and deliverables in Month/Week/Day views. Features:
+ * and subtasks in Month/Week/Day views. Features:
  * - Month/Week/Day view toggle with navigation (prev/next/today)
  * - Event creation/editing modal (admin/manager only)
  * - Day popup showing events for a specific date (supports deep-linking via ?date= param)

@@ -1,7 +1,7 @@
 /**
- * DeliveriesByYou.jsx — Deliverables Assigned By You Page
+ * DeliveriesByYou.jsx — Subtasks Assigned By You Page
  *
- * Lists all deliverables that the current user has assigned to others.
+ * Lists all subtasks that the current user has assigned to others.
  * Features identical to Deliveries.jsx but from the assigner's perspective:
  * - Status filter tabs, search, time filter, sortable table, pagination
  * - View modal to review submissions (approve/reject actions)
@@ -42,13 +42,13 @@ const STATUS_TEXT_COLORS = {
 };
 
 /**
- * DeliveriesByYou — Lists deliverables assigned by the current user to others.
+ * DeliveriesByYou — Lists subtasks assigned by the current user to others.
  * Allows viewing submissions and performing approve/reject actions.
  */
 function DeliveriesByYou() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [deliverables, setDeliverables] = useState([]);
-  const [orderedDeliverables, setOrderedDeliverables] = useState([]);
+  const [subtasks, setSubtasks] = useState([]);
+  const [orderedSubtasks, setOrderedSubtasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(() => {
@@ -57,13 +57,13 @@ function DeliveriesByYou() {
     return "";
   });
   const [timeFilter, setTimeFilter] = useState("");
-  const [viewModal, setViewModal] = useState({ open: false, deliverable: null });
+  const [viewModal, setViewModal] = useState({ open: false, subtask: null });
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const ITEMS_PER_PAGE = 10;
 
-  // Fetch deliverables assigned by the current user from API
-  const fetchDeliverables = () => {
+  // Fetch subtasks assigned by the current user from API
+  const fetchSubtasks = () => {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
@@ -78,17 +78,17 @@ function DeliveriesByYou() {
       .then((res) => (res.ok ? res.json() : { data: [] }))
       .then((data) => {
         const items = data?.data;
-        setDeliverables(Array.isArray(items) ? items : (Array.isArray(items?.data) ? items.data : []));
+        setSubtasks(Array.isArray(items) ? items : (Array.isArray(items?.data) ? items.data : []));
       })
-      .catch(() => setDeliverables([]))
+      .catch(() => setSubtasks([]))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
-    fetchDeliverables();
+    fetchSubtasks();
   }, [search, statusFilter, timeFilter]);
 
-  useRefreshOnEvent(['deliverable:updated', 'deliverable:created', 'deliverable:deleted'], fetchDeliverables);
+  useRefreshOnEvent(['deliverable:updated', 'deliverable:created', 'deliverable:deleted'], fetchSubtasks);
 
   useEffect(() => {
     const selectedId = searchParams.get("selectedDeliverable");
@@ -107,7 +107,7 @@ function DeliveriesByYou() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.deliverable) {
-          setViewModal({ open: true, deliverable: data.deliverable });
+          setViewModal({ open: true, subtask: data.deliverable });
         }
       })
       .catch(() => { });
@@ -119,8 +119,8 @@ function DeliveriesByYou() {
   }, [searchParams]);
 
   useEffect(() => {
-    setOrderedDeliverables(deliverables);
-  }, [deliverables]);
+    setOrderedSubtasks(subtasks);
+  }, [subtasks]);
 
   const selectStatusFilter = (filter) => {
     setStatusFilter(filter);
@@ -133,8 +133,8 @@ function DeliveriesByYou() {
     }
   };
 
-  const handleDeliverableReorder = useCallback((reordered) => {
-    setOrderedDeliverables(reordered);
+  const handleSubtaskReorder = useCallback((reordered) => {
+    setOrderedSubtasks(reordered);
     const payload = reordered.map((item, idx) => ({ id: item.id, sort_order: idx }));
     const token = authToken();
     fetch(`${API_URL}/deliverables/reorder`, {
@@ -178,13 +178,13 @@ function DeliveriesByYou() {
   };
 
   // Update local state after approve/reject action from the AssignerViewModal
-  const handleActionSuccess = (updatedDeliverable) => {
-    setDeliverables((prev) =>
-      prev.map((d) => (d.id === updatedDeliverable.id ? { ...d, ...updatedDeliverable } : d))
+  const handleActionSuccess = (updatedSubtask) => {
+    setSubtasks((prev) =>
+      prev.map((d) => (d.id === updatedSubtask.id ? { ...d, ...updatedSubtask } : d))
     );
   };
 
-  const displayItems = orderedDeliverables.length ? orderedDeliverables : deliverables;
+  const displayItems = orderedSubtasks.length ? orderedSubtasks : subtasks;
 
   const totalPages = showAll ? 1 : Math.ceil(displayItems.length / ITEMS_PER_PAGE);
   const paginatedItems = showAll ? displayItems : displayItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
@@ -248,7 +248,7 @@ function DeliveriesByYou() {
             <div>Task</div>
             <div>Assigned To</div>
             <div>Status</div>
-            <div>Due Date</div>
+            <div>Date</div>
             <div>Action</div>
           </div>
 
@@ -258,11 +258,11 @@ function DeliveriesByYou() {
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No subtasks found</div>
           ) : (
             <div className="sortable-table-container">
-              <SortableTableWrapper items={paginatedItems} onReorder={handleDeliverableReorder} as="div" handleOnly>
+              <SortableTableWrapper items={paginatedItems} onReorder={handleSubtaskReorder} as="div" handleOnly>
               {(item, index, dndProps) => {
                 const colors = getRandomColors(item.id);
                 return (
-                  <div className="deliveries-table-row" key={`deliverable-${item.id}-${index}`}>
+                  <div className="deliveries-table-row" key={`subtask-${item.id}-${index}`}>
                     <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                     <div>
                       <div className="user-box">
@@ -316,7 +316,7 @@ function DeliveriesByYou() {
                     </div>
                     <div>
                       <div className="date-box">
-                        <div>{formatDate(item.due_date)}</div>
+                        <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.start_date)}{"\n"}{formatDate(item.due_date)}</div>
                       </div>
                     </div>
                     <div>
@@ -324,7 +324,7 @@ function DeliveriesByYou() {
                         <button
                           className="action-icon-btn action-view"
                           title="View"
-                          onClick={() => setViewModal({ open: true, deliverable: item })}
+                          onClick={() => setViewModal({ open: true, subtask: item })}
                         >
                           <IoEyeOutline />
                         </button>
@@ -344,10 +344,10 @@ function DeliveriesByYou() {
       )}
 
       <AssignerViewModal
-        key={`avm-${viewModal.deliverable?.id || "none"}`}
+        key={`avm-${viewModal.subtask?.id || "none"}`}
         isOpen={viewModal.open}
-        onClose={() => setViewModal({ open: false, deliverable: null })}
-        deliverable={viewModal.deliverable}
+        onClose={() => setViewModal({ open: false, subtask: null })}
+        deliverable={viewModal.subtask}
         onActionSuccess={handleActionSuccess}
       />
     </DashboardLayout>

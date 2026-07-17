@@ -1,5 +1,5 @@
 /**
- * CreateDeliverableTask - Modal form for creating a new deliverable task.
+ * CreateSubtaskTask - Modal form for creating a new subtask.
  * Provides fields for task selection, assignment, description, status,
  * priority, and date range. Dispatches a modal-state custom event to
  * coordinate with other layout components (e.g., hiding toggles).
@@ -16,7 +16,7 @@ import "../layout/CreateDeliverableModel.css";
 /**
  * @param {{ onClose: () => void }} props - Callback to close the modal
  */
-const CreateDeliverableTask = ({ onClose }) => {
+const CreateSubtaskTask = ({ onClose }) => {
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(true, handleClose);
 
@@ -36,16 +36,16 @@ const CreateDeliverableTask = ({ onClose }) => {
   }, []);
 
   return createPortal(
-    <div className="deliverable-overlay">
+    <div className="subtask-overlay">
 
-      <div className="deliverable-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="subtask-modal" onClick={(e) => e.stopPropagation()}>
 
         {/* ── Header: Title and close button ── */}
-        <div className="deliverable-header">
+        <div className="subtask-header">
 
-          <div className="deliverable-header-left">
+          <div className="subtask-header-left">
 
-            <div className="deliverable-icon">
+            <div className="subtask-icon">
               ⊕
             </div>
 
@@ -53,17 +53,17 @@ const CreateDeliverableTask = ({ onClose }) => {
               <h2>Create New Subtask</h2>
 
               <p>
-                Add deliverable task details.
+                Add subtask details.
               </p>
             </div>
 
           </div>
 
-          <div className="deliverable-header-actions">
-            <button className="deliverable-create-btn">
+          <div className="subtask-header-actions">
+            <button className="subtask-create-btn">
               ⊕ Create Task
             </button>
-            <button className="deliverable-close-btn" onClick={handleClose}>
+            <button className="subtask-close-btn" onClick={handleClose}>
               ✕
             </button>
           </div>
@@ -71,17 +71,17 @@ const CreateDeliverableTask = ({ onClose }) => {
         </div>
 
         {/* ── Body: Left (form fields) + Right (status/priority/dates) ── */}
-        <div className="deliverable-body">
+        <div className="subtask-body">
 
           {/* Left column – task, assignment, description */}
-          <div className="deliverable-left">
+          <div className="subtask-left">
 
-            <div className="deliverable-grid-2">
+            <div className="subtask-grid-2">
 
-              <div className="deliverable-field">
+              <div className="subtask-field">
 
                 <label>
-                  Deliverable Task
+                  Subtask
                 </label>
 
                 <CustomSelect
@@ -95,7 +95,7 @@ const CreateDeliverableTask = ({ onClose }) => {
 
               </div>
 
-              <div className="deliverable-field">
+              <div className="subtask-field">
 
                 <label>
                   Assign To <span>*</span>
@@ -114,7 +114,7 @@ const CreateDeliverableTask = ({ onClose }) => {
 
             </div>
 
-            <div className="deliverable-field">
+            <div className="subtask-field">
 
               <label>
                 Description
@@ -129,11 +129,11 @@ const CreateDeliverableTask = ({ onClose }) => {
           </div>
 
           {/* Right column – status, priority, date pickers */}
-          <div className="deliverable-right">
+          <div className="subtask-right">
 
             {/* Status selection card */}
 
-            <div className="deliverable-card">
+            <div className="subtask-card">
 
               <label>
                 Status
@@ -155,7 +155,7 @@ const CreateDeliverableTask = ({ onClose }) => {
 
             {/* Priority selection card */}
 
-            <div className="deliverable-card">
+            <div className="subtask-card">
 
               <label>
                 Priority
@@ -175,13 +175,13 @@ const CreateDeliverableTask = ({ onClose }) => {
 
             {/* Date range pickers card */}
 
-            <div className="deliverable-card">
+            <div className="subtask-card">
 
               <label>
                 Date
               </label>
 
-              <div className="deliverable-date-grid">
+              <div className="subtask-date-grid">
 
                 <div>
                   <span>Start Date</span>
@@ -222,4 +222,4 @@ const CreateDeliverableTask = ({ onClose }) => {
   );
 };
 
-export default CreateDeliverableTask;
+export default CreateSubtaskTask;

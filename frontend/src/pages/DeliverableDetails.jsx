@@ -1,12 +1,12 @@
 /**
- * DeliverableDetails.jsx — Deliverable Details Page
+ * SubtaskDetails.jsx — Subtask Details Page
  *
- * Displays full details of a single deliverable including:
+ * Displays full details of a single subtask including:
  * - Title, status badge, related task, assignee, due date, and description
  * - Submit/resubmit form for assignees (comment + file + links)
  * - Approve/reject actions for creators and managers
  * - Submission history with attachments and links
- * - Sidebar with deliverable metadata
+ * - Sidebar with subtask metadata
  * - Unviewed changes panel (auto-marked as read on view)
  *
  * Supports deep-linking from Deliveries, DeliveriesByYou, or SelfDeliveries pages.
@@ -25,7 +25,7 @@ import { showSuccessMessage } from "../utils/notify";
 import { useRefreshOnEvent } from "../utils/useRefreshOnEvent";
 import "./TaskDetails.css";
 import { formatDateTimeShort } from "../utils/formatDateTime";
-import "./DeliverableDetails.css";
+import "./SubtaskDetails.css";
 import "../components/layout/CreateTaskModal.css";
 
 /** Converts an ISO timestamp to relative time string (e.g. "5 min ago") */
@@ -39,7 +39,7 @@ function timeAgo(iso) {
   return `${Math.floor(sec / 86400)} days ago`;
 }
 
-/** Returns background and text color pair based on deliverable status */
+/** Returns background and text color pair based on subtask status */
 function statusStyle(status) {
   const s = (status || "").toLowerCase();
   if (s === "approved") return { bg: "#DCFCE7", text: "#166534" };
@@ -49,23 +49,23 @@ function statusStyle(status) {
 }
 
 /**
- * DeliverableDetails — Main page component for viewing a single deliverable.
- * Manages fetching, submission, approval, rejection, and display of deliverable data.
+ * SubtaskDetails — Main page component for viewing a single subtask.
+ * Manages fetching, submission, approval, rejection, and display of subtask data.
  */
-function DeliverableDetails() {
+function SubtaskDetails() {
   const params = useParams();
   const location = useLocation();
-  const deliverableId = params.deliverable;
+  const subtaskId = params.deliverable;
 
   // Map of source page keys to breadcrumb labels and paths (for back navigation)
-  const deliverableSourcePages = {
+  const subtaskSourcePages = {
     deliveries: { label: "Subtasks Assigned To You", path: rolePath("deliveries") },
     "deliveries-by-you": { label: "Subtasks Assigned By You", path: rolePath("deliveries-by-you") },
     "self-deliveries": { label: "Self Subtasks", path: rolePath("self-deliveries") },
   };
-  const deliverableSource = deliverableSourcePages[location.state?.from] || null;
+  const subtaskSource = subtaskSourcePages[location.state?.from] || null;
 
-  const [deliverable, setDeliverable] = useState(null);
+  const [subtask, setSubtask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showSubmitForm, setShowSubmitForm] = useState(false);
   const [submitComment, setSubmitComment] = useState("");
@@ -83,43 +83,43 @@ function DeliverableDetails() {
 
   const notify = useNotification();
 
-  // Fetch deliverable data from API
-  const fetchDeliverable = useCallback(() => {
+  // Fetch subtask data from API
+  const fetchSubtask = useCallback(() => {
     setLoading(true);
     const token = authToken();
-    fetch(`${API_URL}/deliverables/${deliverableId}`, {
+    fetch(`${API_URL}/deliverables/${subtaskId}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        setDeliverable(data?.deliverable || null);
+        setSubtask(data?.deliverable || null);
         setShowSubmitForm(false);
         setShowRejectForm(false);
       })
-      .catch(() => setDeliverable(null))
+      .catch(() => setSubtask(null))
       .finally(() => setLoading(false));
-  }, [deliverableId]);
+  }, [subtaskId]);
 
-  useEffect(() => { fetchDeliverable(); }, [fetchDeliverable]);
+  useEffect(() => { fetchSubtask(); }, [fetchSubtask]);
 
-  useRefreshOnEvent(["deliverable:updated", "task:updated"], fetchDeliverable);
+  useRefreshOnEvent(["deliverable:updated", "task:updated"], fetchSubtask);
 
-  // Auto-mark deliverable changes as read
+  // Auto-mark subtask changes as read
   useEffect(() => {
-    if (!deliverable?.id || !deliverable?.unviewed_changes_count) return;
+    if (!subtask?.id || !subtask?.unviewed_changes_count) return;
     const token = authToken();
-    fetch(`${API_URL}/deliverables/${deliverable.id}/changes/mark-read`, {
+    fetch(`${API_URL}/deliverables/${subtask.id}/changes/mark-read`, {
       method: "POST",
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       _notifHandled: true,
     }).catch(() => {});
-  }, [deliverable?.id, deliverable?.unviewed_changes_count]);
+  }, [subtask?.id, subtask?.unviewed_changes_count]);
 
-  // Determine user permissions for this deliverable
+  // Determine user permissions for this subtask
   const currentUser = getUser();
-  const isCreator = deliverable && currentUser && parseInt(deliverable.created_by, 10) === parseInt(currentUser.id, 10);
+  const isCreator = subtask && currentUser && parseInt(subtask.created_by, 10) === parseInt(currentUser.id, 10);
   const isAdminManager = currentUser && ["admin", "manager"].includes(currentUser.role);
-  const isAssignee = deliverable && currentUser && deliverable.assigned_to && parseInt(deliverable.assigned_to, 10) === parseInt(currentUser.id, 10);
+  const isAssignee = subtask && currentUser && subtask.assigned_to && parseInt(subtask.assigned_to, 10) === parseInt(currentUser.id, 10);
   const canApproveReject = isCreator || isAdminManager;
 
   /** Adds a URL link to the submission links list */
@@ -139,7 +139,7 @@ function DeliverableDetails() {
     if (e.key === "Enter") { e.preventDefault(); handleAddLink(); }
   };
 
-  // Submit deliverable with comment, files, and links via FormData POST
+  // Submit subtask with comment, files, and links via FormData POST
   const handleSubmit = async () => {
     if (!submitComment.trim() && !submitFile) {
       notify.error("Please add a comment or attach a file.");
@@ -154,7 +154,7 @@ function DeliverableDetails() {
       submitFiles.forEach((f) => formData.append("files[]", f));
       links.forEach((l) => formData.append("links[]", l.url));
 
-      const res = await fetch(`${API_URL}/deliverables/${deliverableId}/submit`, {
+      const res = await fetch(`${API_URL}/deliverables/${subtaskId}/submit`, {
         method: "POST",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         body: formData,
@@ -172,7 +172,7 @@ function DeliverableDetails() {
         setSubmitFiles([]);
         setLinks([]);
         setLinkInput("");
-        fetchDeliverable();
+        fetchSubtask();
       } else {
         notify.error(data.message || "Failed to submit");
       }
@@ -183,11 +183,11 @@ function DeliverableDetails() {
     }
   };
 
-  // Approve the deliverable (creator/admin/manager only)
+  // Approve the subtask (creator/admin/manager only)
   const handleApprove = async () => {
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/deliverables/${deliverableId}/approve`, {
+      const res = await fetch(`${API_URL}/deliverables/${subtaskId}/approve`, {
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
@@ -197,7 +197,7 @@ function DeliverableDetails() {
         publish('deliverable:updated', data.deliverable || data);
         publish('data:changed', { type: 'deliverable', action: 'updated' });
         showSuccessMessage("Subtask", "approved");
-        fetchDeliverable();
+        fetchSubtask();
       } else {
         notify.error(data.message || "Failed to approve");
       }
@@ -206,11 +206,11 @@ function DeliverableDetails() {
     }
   };
 
-  // Reject the deliverable with optional comment (creator/admin/manager only)
+  // Reject the subtask with optional comment (creator/admin/manager only)
   const handleReject = async () => {
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/deliverables/${deliverableId}/reject`, {
+      const res = await fetch(`${API_URL}/deliverables/${subtaskId}/reject`, {
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ comment: rejectComment }),
@@ -223,7 +223,7 @@ function DeliverableDetails() {
         showSuccessMessage("Subtask", "rejected");
         setShowRejectForm(false);
         setRejectComment("");
-        fetchDeliverable();
+        fetchSubtask();
       } else {
         notify.error(data.message || "Failed to reject");
       }
@@ -235,12 +235,12 @@ function DeliverableDetails() {
   if (loading) {
     return (
       <DashboardLayout hideRightSidebar>
-        <div className="td-loading">Loading deliverable...</div>
+        <div className="td-loading">Loading subtask...</div>
       </DashboardLayout>
     );
   }
 
-  if (!deliverable) {
+  if (!subtask) {
     return (
       <DashboardLayout hideRightSidebar>
         <div className="td-loading td-error">Subtask not found.</div>
@@ -248,14 +248,14 @@ function DeliverableDetails() {
     );
   }
 
-  // Derive display properties from deliverable status
-  const ss = statusStyle(deliverable.status);
-  const submissions = (deliverable.submissions || []).slice().reverse();
+  // Derive display properties from subtask status
+  const ss = statusStyle(subtask.status);
+  const submissions = (subtask.submissions || []).slice().reverse();
   // Only assignee can submit if status is pending or rejected
-  const canSubmit = isAssignee && (deliverable.status === "pending" || deliverable.status === "rejected");
-  const isApproved = deliverable.status === "approved";
-  const isSubmitted = deliverable.status === "submitted";
-  const isRejected = deliverable.status === "rejected";
+  const canSubmit = isAssignee && (subtask.status === "pending" || subtask.status === "rejected");
+  const isApproved = subtask.status === "approved";
+  const isSubmitted = subtask.status === "submitted";
+  const isRejected = subtask.status === "rejected";
 
   return (
     <>
@@ -266,20 +266,20 @@ function DeliverableDetails() {
           <div className="td-main">
             <Breadcrumb items={[
               { label: "Subtasks", path: rolePath("deliveries") },
-              ...(deliverableSource ? [{ label: deliverableSource.label, path: deliverableSource.path }] : []),
-              { label: deliverable.title },
+              ...(subtaskSource ? [{ label: subtaskSource.label, path: subtaskSource.path }] : []),
+              { label: subtask.title },
             ]} />
 
 
 
             <div className="td-title-row">
-              <h1 className="td-title">{deliverable.title}</h1>
+              <h1 className="td-title">{subtask.title}</h1>
             </div>
 
             <div className="td-badges">
               <span className="td-badge" style={{ background: ss.bg, color: ss.text }}>
                 <span className="td-badge-dot" style={{ background: ss.text }} />
-                {(deliverable.status || "").charAt(0).toUpperCase() + (deliverable.status || "").slice(1)}
+                {(subtask.status || "").charAt(0).toUpperCase() + (subtask.status || "").slice(1)}
               </span>
             </div>
 
@@ -289,29 +289,29 @@ function DeliverableDetails() {
                 <div className="td-trio-item">
                   <div>
                     <span className="td-stat-label">Related Task</span>
-                    <span className="td-stat-big td-stat-big--sm" style={{ display: "block" }}>{deliverable.task?.title || "\u2014"}</span>
+                    <span className="td-stat-big td-stat-big--sm" style={{ display: "block" }}>{subtask.task?.title || "\u2014"}</span>
                   </div>
                 </div>
                 <div className="td-trio-item">
                   <div>
                     <span className="td-stat-label">Assigned To</span>
-                    <span className="td-stat-big td-stat-big--sm" style={{ display: "block" }}>{deliverable.assignee?.name || "\u2014"}</span>
+                    <span className="td-stat-big td-stat-big--sm" style={{ display: "block" }}>{subtask.assignee?.name || "\u2014"}</span>
                   </div>
                 </div>
                 <div className="td-trio-item">
                   <div>
                     <span className="td-stat-label">Due Date</span>
-                    <span className="td-stat-big td-stat-big--sm" style={{ display: "block" }}>{formatDateTimeShort(deliverable.due_date)}</span>
+                    <span className="td-stat-big td-stat-big--sm" style={{ display: "block" }}>{formatDateTimeShort(subtask.due_date)}</span>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Description */}
-            {deliverable.description && (
+            {subtask.description && (
               <div style={{ marginTop: "20px" }}>
                 <h2 className="td-section-title">Description</h2>
-                <p style={{ color: "#6b7280", lineHeight: 1.6 }}>{deliverable.description}</p>
+                <p style={{ color: "#6b7280", lineHeight: 1.6 }}>{subtask.description}</p>
               </div>
             )}
 
@@ -418,7 +418,7 @@ function DeliverableDetails() {
               </div>
             )}
 
-            {/* Review Deliverable - Assigner: show Approve/Reject buttons when submitted */}
+            {/* Review Subtask - Assigner: show Approve/Reject buttons when submitted */}
             {isSubmitted && canApproveReject && (
               <div style={{ marginTop: "24px", display: "flex", gap: "10px", alignItems: "flex-start", flexDirection: "column" }}>
                 <div style={{ display: "flex", gap: "10px" }}>
@@ -448,11 +448,11 @@ function DeliverableDetails() {
             )}
 
             {/* Rejection info - shown when rejected */}
-            {isRejected && deliverable.rejection_comment && (
+            {isRejected && subtask.rejection_comment && (
               <div style={{ marginTop: "20px", padding: "16px", background: "#FEE2E2", borderRadius: "8px", border: "1px solid #FECACA" }}>
                 <h3 className="td-card-title" style={{ color: "#991B1B" }}>Rejection Reason</h3>
-                <p style={{ color: "#7F1D1D", marginTop: "6px" }}>{deliverable.rejection_comment}</p>
-                {deliverable.rejected_by && <p style={{ color: "#7F1D1D", fontSize: "12px", marginTop: "4px" }}>By: {deliverable.rejected_by.name}</p>}
+                <p style={{ color: "#7F1D1D", marginTop: "6px" }}>{subtask.rejection_comment}</p>
+                {subtask.rejected_by && <p style={{ color: "#7F1D1D", fontSize: "12px", marginTop: "4px" }}>By: {subtask.rejected_by.name}</p>}
               </div>
             )}
 
@@ -460,7 +460,7 @@ function DeliverableDetails() {
             {isApproved && (
               <div style={{ marginTop: "20px", padding: "16px", background: "#DCFCE7", borderRadius: "8px", border: "1px solid #BBF7D0" }}>
                 <h3 className="td-card-title" style={{ color: "#166534" }}>Approved</h3>
-                {deliverable.approved_by && <p style={{ color: "#166534", marginTop: "4px", fontSize: "13px" }}>Approved by: {deliverable.approved_by.name}</p>}
+                {subtask.approved_by && <p style={{ color: "#166534", marginTop: "4px", fontSize: "13px" }}>Approved by: {subtask.approved_by.name}</p>}
               </div>
             )}
 
@@ -524,35 +524,35 @@ function DeliverableDetails() {
                   <span className="td-dot" style={{ background: "#3b82f6" }} />
                   <div>
                     <span className="td-info-label">Task</span>
-                    <span className="td-info-val">{deliverable.task?.title || "\u2014"}</span>
+                    <span className="td-info-val">{subtask.task?.title || "\u2014"}</span>
                   </div>
                 </li>
                 <li>
                   <span className="td-dot" style={{ background: "#f59e0b" }} />
                   <div>
                     <span className="td-info-label">Assigned To</span>
-                    <span className="td-info-val">{deliverable.assignee?.name || "\u2014"}</span>
+                    <span className="td-info-val">{subtask.assignee?.name || "\u2014"}</span>
                   </div>
                 </li>
                 <li>
                   <span className="td-dot" style={{ background: "#8b5cf6" }} />
                   <div>
                     <span className="td-info-label">Created By</span>
-                    <span className="td-info-val">{deliverable.creator?.name || "\u2014"}</span>
+                    <span className="td-info-val">{subtask.creator?.name || "\u2014"}</span>
                   </div>
                 </li>
                 <li>
                   <span className="td-dot" style={{ background: "#22c55e" }} />
                   <div>
                     <span className="td-info-label">Due Date</span>
-                    <span className="td-info-val">{formatDateTimeShort(deliverable.due_date)}</span>
+                    <span className="td-info-val">{formatDateTimeShort(subtask.due_date)}</span>
                   </div>
                 </li>
                 <li>
                   <span className="td-dot" style={{ background: "#ef4444" }} />
                   <div>
                     <span className="td-info-label">Status</span>
-                    <span className="td-info-val">{(deliverable.status || "").charAt(0).toUpperCase() + (deliverable.status || "").slice(1)}</span>
+                    <span className="td-info-val">{(subtask.status || "").charAt(0).toUpperCase() + (subtask.status || "").slice(1)}</span>
                   </div>
                 </li>
               </ul>
@@ -575,4 +575,4 @@ function DeliverableDetails() {
   );
 }
 
-export default DeliverableDetails;
+export default SubtaskDetails;

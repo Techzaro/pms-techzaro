@@ -1,7 +1,7 @@
 /**
  * ItemDetailPopup.jsx
  * Modal popup that displays detailed information about a calendar item
- * (manual event, task, deliverable, or project). Shows metadata based on
+ * (manual event, task, subtask, or project). Shows metadata based on
  * source type and provides navigation to full detail pages.
  */
 
@@ -26,7 +26,7 @@ const SOURCE_COLORS = {
 };
 
 /**
- * Displays a detail popup for a calendar item (event, task, deliverable, or project).
+ * Displays a detail popup for a calendar item (event, task, subtask, or project).
  * @param {Object} item - The calendar item to display.
  * @param {string} role - Current user role (admin, manager, etc.).
  * @param {Function} onClose - Callback to close the popup.
@@ -47,7 +47,7 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
   // Extract the numeric ID by stripping the type prefix (e.g. "task-123" -> "123")
   const rawId = item.id ? String(item.id).replace(/^(task|project|deliverable)-/, "") : null;
 
-  /** Navigate to the full detail page for tasks, projects, or deliverables */
+  /** Navigate to the full detail page for tasks, projects, or subtasks */
   const handleViewDetails = () => {
     if (!rawId) return;
     let path;

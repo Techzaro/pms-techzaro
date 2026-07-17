@@ -25,6 +25,7 @@ import "../pages/Task.css";
 
 const STATUS_COLORS = {
   pending: "#FEF3C7",
+  in_progress: "#DBEAFE",
   submitted: "#DBEAFE",
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
@@ -33,6 +34,7 @@ const STATUS_COLORS = {
 
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
+  in_progress: "#1E40AF",
   submitted: "#1E40AF",
   reopened: "#5B21B6",
   approved: "#166534",
@@ -175,6 +177,7 @@ function Tasks() {
   const formatStatus = (status) => {
     const map = {
       pending: "Pending",
+      in_progress: "In Progress",
       submitted: "Submitted",
       reopened: "Reopened",
       approved: "Approved",
@@ -300,7 +303,7 @@ function Tasks() {
           <div className="status-column">Status</div>
           <div>Progress</div>
           <div className="priority-column">Priority</div>
-          <div className="date-column">Due Date</div>
+          <div className="date-column">Date</div>
           <div>Action</div>
         </div>
 
@@ -353,9 +356,15 @@ function Tasks() {
                     )}
                   </div>
                   
-                  <div className="col-progress">
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                      {item.deliverables_progress || 0}%
+                    </div>
                     <div className="progress-bar-track">
                       <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
                     </div>
                   </div>
                   
@@ -370,6 +379,11 @@ function Tasks() {
                     <div className="date-box">
                       <div style={{ whiteSpace: "pre-line" }}>
                         {(() => {
+                          const myPivotStart = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.start_date;
+                          return formatDate(myPivotStart || item.start_date);
+                        })()}
+                        {"\n"}
+                        {(() => {
                           const myPivot = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.due_date;
                           return formatDate(myPivot || item.end_date);
                         })()}
@@ -382,7 +396,7 @@ function Tasks() {
                       <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}><IoEyeOutline /></button>
                       {(() => {
                         const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
-                        const canSubmit = (item.status === "pending" || item.status === "reopened") && myPivotStatus !== "submitted";
+                        const canSubmit = (item.status === "in_progress" || item.status === "reopened") && myPivotStatus !== "submitted";
                         return canSubmit && (
                         <div style={{ position: "relative", display: "inline-flex" }}>
                           <button 
