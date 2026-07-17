@@ -346,27 +346,11 @@ const Taskby = () => {
 
                     <div className="col-task-name">
                       <div className="task-title">{item.title}</div>
-                      {/* OWNERSHIP INFO */}
-                      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginTop: "4px" }}>
-                        {item.assigner && (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#EEF2FF", color: "#4F46E5", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 500 }}>
-                            By: {item.assigner.name}
-                            <span style={{ background: item.assigner.role === "admin" ? "#4F46E5" : "#059669", color: "#fff", padding: "0 3px", borderRadius: "3px", fontSize: "8px" }}>
-                              {item.assigner.role === "admin" ? "Admin" : "Manager"}
-                            </span>
-                          </span>
-                        )}
-                        {item.approvedBy && (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#DCFCE7", color: "#166534", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 500 }}>
-                            Approved: {item.approvedBy.name}
-                          </span>
-                        )}
-                        {item.rejectedBy && (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#FEE2E2", color: "#991B1B", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 500 }}>
-                            Declined: {item.rejectedBy.name}
-                          </span>
-                        )}
-                      </div>
+                      {item.project && (
+                        <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
+                          {item.project.title}
+                        </Link>
+                      )}
                     </div>
 
                     <div className="col-status">

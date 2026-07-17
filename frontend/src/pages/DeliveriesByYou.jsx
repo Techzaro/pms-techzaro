@@ -11,7 +11,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { authToken, rolePath } from "../utils/auth";
@@ -287,19 +287,6 @@ function DeliveriesByYou() {
                               {item.project.title}
                             </Link>
                           )}
-                          {/* OWNERSHIP INFO */}
-                          <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginTop: "2px" }}>
-                            {item.approvedBy && (
-                              <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#DCFCE7", color: "#166534", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 500 }}>
-                                Approved: {item.approvedBy.name}
-                              </span>
-                            )}
-                            {item.rejectedBy && (
-                              <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#FEE2E2", color: "#991B1B", padding: "1px 6px", borderRadius: "10px", fontSize: "10px", fontWeight: 500 }}>
-                                Declined: {item.rejectedBy.name}
-                              </span>
-                            )}
-                          </div>
                         </div>
                       </div>
                     </div>

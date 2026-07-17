@@ -12,7 +12,7 @@ import { useAutoRefresh } from "../utils/useAutoRefresh";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { GoDotFill } from "react-icons/go";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import { CheckCircle2, Play } from "lucide-react";
@@ -381,6 +381,11 @@ function GuestTasks() {
 
                   <div className="col-task-name">
                     <div className="task-title">{item.title}</div>
+                    {item.project && (
+                      <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
+                        {item.project.title}
+                      </Link>
+                    )}
                   </div>
 
                   <div className="col-status">
