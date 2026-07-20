@@ -33,26 +33,26 @@ const CARD_META = {
   total_assigned: {
     title: "Total Assigned",
     icon: "/Vector-5.svg",
-    valueColor: "#6366f1",
-    bgColor: "#EEF2FF",
+    valueColor: "var(--color-primary-light)",
+    bgColor: "var(--color-primary-bg)",
   },
   approved: {
     title: "Approved",
     icon: "/Vector-2.svg",
-    valueColor: "#22C55E",
-    bgColor: "#ECFDF5",
+    valueColor: "var(--color-success)",
+    bgColor: "var(--color-success-bg)",
   },
   pending: {
     title: "Pending",
     icon: "/Vector-1 (3).svg",
-    valueColor: "#F59E0B",
-    bgColor: "#FEF3C7",
+    valueColor: "var(--color-warning)",
+    bgColor: "var(--color-warning-bg)",
   },
   overdue: {
     title: "Overdue",
     icon: "/Vector-3.svg",
-    valueColor: "#EF4444",
-    bgColor: "#FEF2F2",
+    valueColor: "var(--color-danger)",
+    bgColor: "var(--color-danger-bg)",
   },
 };
 
@@ -78,35 +78,35 @@ const SummaryCard = memo(function SummaryCard({ card }) {
 const ROLE_LABEL = { admin: "Admin", manager: "Manager", team_lead: "Team Lead", member: "Member", guest: "Guest" };
 
 const STATUS_COLORS = {
-  pending: "#FEF3C7",
-  in_progress: "#DBEAFE",
-  paused: "#FEF3C7",
-  submitted: "#DBEAFE",
-  reopened: "#EDE9FE",
-  approved: "#DCFCE7",
-  rejected: "#FEE2E2",
+  pending: "var(--color-warning-bg)",
+  in_progress: "var(--color-blue-bg)",
+  paused: "var(--color-warning-bg)",
+  submitted: "var(--color-blue-bg)",
+  reopened: "var(--color-primary-bg)",
+  approved: "var(--color-success-bg)",
+  rejected: "var(--color-danger-bg)",
 };
 
 const STATUS_TEXT_COLORS = {
-  pending: "#92400E",
-  in_progress: "#1E40AF",
-  paused: "#92400E",
-  submitted: "#1E40AF",
-  reopened: "#5B21B6",
-  approved: "#166534",
-  rejected: "#991B1B",
+  pending: "var(--color-warning)",
+  in_progress: "var(--color-blue)",
+  paused: "var(--color-warning)",
+  submitted: "var(--color-blue)",
+  reopened: "var(--color-primary)",
+  approved: "var(--color-success)",
+  rejected: "var(--color-danger)",
 };
 
 const PRIORITY_COLORS = {
-  High: "#FEE2E2",
-  Medium: "#FEF3C7",
-  Low: "#DCFCE7",
+  High: "var(--color-danger-bg)",
+  Medium: "var(--color-warning-bg)",
+  Low: "var(--color-success-bg)",
 };
 
 const PRIORITY_TEXT_COLORS = {
-  High: "#991B1B",
-  Medium: "#92400E",
-  Low: "#166534",
+  High: "var(--color-danger)",
+  Medium: "var(--color-warning)",
+  Low: "var(--color-success)",
 };
 
 /**
@@ -154,10 +154,10 @@ function UserPerformance() {
   const breakdownItems = useMemo(() => {
     if (totalTasks === 0) return [];
     return [
-      { label: "Completed", count: statusBreakdown.completed || 0, color: "#10b981" },
-      { label: "Pending", count: statusBreakdown.pending || 0, color: "#f59e0b" },
-      { label: "In Review", count: statusBreakdown.in_review || 0, color: "#6366f1" },
-      { label: "Overdue", count: statusBreakdown.overdue || 0, color: "#ef4444" },
+      { label: "Completed", count: statusBreakdown.completed || 0, color: "var(--color-green-text)" },
+      { label: "Pending", count: statusBreakdown.pending || 0, color: "var(--color-orange-text)" },
+      { label: "In Review", count: statusBreakdown.in_review || 0, color: "var(--color-blue-text)" },
+      { label: "Overdue", count: statusBreakdown.overdue || 0, color: "var(--color-danger)" },
     ].map((item) => ({
       ...item,
       percent: totalTasks > 0 ? Math.round((item.count / totalTasks) * 1000) / 10 : 0,
@@ -173,9 +173,9 @@ function UserPerformance() {
     const total = high + medium + low;
     return {
       bars: [
-        { label: "High", count: high, color: "#ef4444" },
-        { label: "Medium", count: medium, color: "#f59e0b" },
-        { label: "Low", count: low, color: "#10b981" },
+        { label: "High", count: high, color: "var(--color-danger)" },
+        { label: "Medium", count: medium, color: "var(--color-orange-text)" },
+        { label: "Low", count: low, color: "var(--color-green-text)" },
       ],
       total,
     };
@@ -281,8 +281,8 @@ function UserPerformance() {
             <div className="up-profile-info">
               <div className="up-avatar">
                 <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-                  <circle cx="24" cy="20" r="10" fill="#9ca3af" />
-                  <path d="M6 46c0-9.941 8.059-18 18-18s18 8.059 18 18" fill="#9ca3af" />
+                  <circle cx="24" cy="20" r="10" fill="var(--text-muted)" />
+                  <path d="M6 46c0-9.941 8.059-18 18-18s18 8.059 18 18" fill="var(--text-muted)" />
                 </svg>
               </div>
               <div>
@@ -362,10 +362,10 @@ function UserPerformance() {
               <p>All tasks assigned to {isOwnPage ? "me" : (userInfo.name || "this user")}</p>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "6px", flexWrap: "wrap", gap: "8px" }}>
                 <div className="task-count-badge" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                  <span style={{ background: "#dedfe0", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
+                  <span style={{ background: "var(--color-primary-bg)", color: "var(--color-primary)", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
                     Total: {totalCount} items
                   </span>
-                  <span style={{ background: "#d6d6d6", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
+                  <span style={{ background: "var(--color-success-bg)", color: "var(--color-success)", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
                     Tasks: {filteredItems.length}
                   </span>
                 </div>
@@ -407,7 +407,7 @@ function UserPerformance() {
             <IoSearchOutline fontSize={"20px"} />
             <input
               type="text"
-              placeholder="Search by task name"
+              placeholder="Search by task name, status, or priority..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -424,9 +424,9 @@ function UserPerformance() {
             </div>
 
             {tasksLoading ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
+              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-secondary)" }}>Loading...</div>
             ) : filteredItems.length === 0 ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
+              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-secondary)" }}>No items found</div>
             ) : (
               <div className="sortable-table-container">
                 {filteredItems.map((item, idx) => {
@@ -439,27 +439,27 @@ function UserPerformance() {
                       </div>
 
                       <div className="col-status">
-                        <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
-                          <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                        <span className="badge" style={{ background: STATUS_COLORS[item.status] || "var(--bg-hover)", color: STATUS_TEXT_COLORS[item.status] || "var(--text-dark)" }}>
+                          <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "var(--text-dark)" }}></span>
                           {formatStatus(item.status)}
                         </span>
                       </div>
 
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-                        <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-dark)" }}>
                           {item.deliverables_progress || 0}%
                         </div>
                         <div className="progress-bar-track">
                           <div className="progress-bar-fill" style={{ width: `${item.deliverables_progress || 0}%` }}></div>
                         </div>
-                        <div style={{ fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <div style={{ fontSize: "12px", color: "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {item.approved_deliverables || 0}/{item.total_deliverables || 0} subtasks
                         </div>
                       </div>
 
                       <div className="col-priority">
-                        <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
-                          <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
+                        <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "var(--bg-hover)", color: PRIORITY_TEXT_COLORS[item.priority] || "var(--text-dark)" }}>
+                          <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "var(--text-dark)" }}></span>
                           {item.priority}
                         </span>
                       </div>
@@ -504,8 +504,8 @@ function UserPerformance() {
                       <div className="up-task-card-title">{item.title}</div>
                       <div className="up-task-card-type">
                         <span className="badge" style={{
-                          background: "#f0fdf4",
-                          color: "#16a34a"
+                           background: "var(--color-success-bg)",
+                           color: "var(--color-success)"
                         }}>
                           Task
                         </span>
@@ -516,8 +516,8 @@ function UserPerformance() {
                       <div className="up-task-card-detail">
                         <span className="up-task-card-detail-label">Status</span>
                         <span className="badge" style={{
-                          background: STATUS_COLORS[item.status] || "#F3F4F6",
-                          color: STATUS_TEXT_COLORS[item.status] || "#374151"
+                          background: STATUS_COLORS[item.status] || "var(--bg-hover)",
+                          color: STATUS_TEXT_COLORS[item.status] || "var(--text-dark)"
                         }}>
                           {formatStatus(item.status)}
                         </span>
@@ -525,8 +525,8 @@ function UserPerformance() {
                       <div className="up-task-card-detail">
                         <span className="up-task-card-detail-label">Priority</span>
                         <span className="badge" style={{
-                          background: PRIORITY_COLORS[item.priority] || "#F3F4F6",
-                          color: PRIORITY_TEXT_COLORS[item.priority] || "#374151"
+                          background: PRIORITY_COLORS[item.priority] || "var(--bg-hover)",
+                          color: PRIORITY_TEXT_COLORS[item.priority] || "var(--text-dark)"
                         }}>
                           {item.priority}
                         </span>

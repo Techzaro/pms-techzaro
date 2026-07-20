@@ -1463,13 +1463,13 @@
 
 .cp-goals-item-text {
   font-size: 14px;
-  color: #334155;
+  color: var(--text-dark);
 }
 
 .cp-goals-item-remove {
   background: none;
   border: none;
-  color: #dc2626;
+  color: var(--color-danger);
   font-size: 16px;
   cursor: pointer;
   padding: 0 4px;

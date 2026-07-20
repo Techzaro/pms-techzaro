@@ -104,7 +104,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
     <div className="modal-overlay" onClick={handleClose}>
       <div className="modal-box" style={{ maxWidth: "520px", width: "95%" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "#111827" }}>Add Files & Links</h3>
+          <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "var(--text-heading)" }}>Add Files & Links</h3>
           <button onClick={handleClose} style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", color: "#6b7280" }}>
             <X size={20} />
           </button>
@@ -112,7 +112,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
 
         {/* File Upload Section */}
         <div style={{ marginBottom: "20px" }}>
-          <label style={{ display: "block", fontSize: "14px", fontWeight: 600, color: "#374151", marginBottom: "8px" }}>
+          <label style={{ display: "block", fontSize: "14px", fontWeight: 600, color: "var(--text-dark)", marginBottom: "8px" }}>
             <Upload size={14} style={{ verticalAlign: "middle", marginRight: "6px" }} />
             Upload Files
           </label>
@@ -120,12 +120,12 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
             onClick={() => fileInputRef.current?.click()}
             style={{
               border: "2px dashed #d1d5db", borderRadius: "10px", padding: "24px", textAlign: "center",
-              cursor: "pointer", transition: "border-color 0.2s", background: "#f9fafb",
+              cursor: "pointer", transition: "border-color 0.2s", background: "var(--bg-hover)",
             }}
             onMouseEnter={(e) => e.currentTarget.style.borderColor = "#6366f1"}
             onMouseLeave={(e) => e.currentTarget.style.borderColor = "#d1d5db"}
           >
-            <FileUp size={28} style={{ color: "#9ca3af", marginBottom: "8px" }} />
+            <FileUp size={28} style={{ color: "var(--text-muted)", marginBottom: "8px" }} />
             <p style={{ margin: 0, fontSize: "13px", color: "#6b7280" }}>Click to browse files</p>
           </div>
           <input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={handleFileSelect} />
@@ -133,7 +133,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
           {files.length > 0 && (
             <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
               {files.map((item, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#f3f4f6", borderRadius: "8px", fontSize: "13px" }}>
+                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "var(--bg-hover)", borderRadius: "8px", fontSize: "13px" }}>
                   {item.renaming ? (
                     <>
                       <input
@@ -164,7 +164,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
                           updated[i] = { ...updated[i], renaming: false };
                           return updated;
                         });
-                      }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Save name">&#10003;</button>
+                      }} style={{ background: "var(--color-success)", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Save name">&#10003;</button>
                     </>
                   ) : (
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{item.customName || item.file.name}</span>
@@ -192,7 +192,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
 
         {/* Link Input Section */}
         <div style={{ marginBottom: "20px" }}>
-          <label style={{ display: "block", fontSize: "14px", fontWeight: 600, color: "#374151", marginBottom: "8px" }}>
+          <label style={{ display: "block", fontSize: "14px", fontWeight: 600, color: "var(--text-dark)", marginBottom: "8px" }}>
             <Link size={14} style={{ verticalAlign: "middle", marginRight: "6px" }} />
             Add Links
           </label>
@@ -202,7 +202,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
             value={linkTitleInput}
             onChange={(e) => setLinkTitleInput(e.target.value)}
             style={{
-              width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: "8px",
+              width: "100%", padding: "10px 12px", border: "var(--border-color)", borderRadius: "8px",
               fontSize: "13px", marginBottom: "8px", boxSizing: "border-box",
             }}
           />
@@ -214,7 +214,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
               onChange={(e) => setLinkInput(e.target.value)}
               onKeyDown={handleLinkKeyDown}
               style={{
-                flex: 1, padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: "8px", fontSize: "13px",
+                flex: 1, padding: "10px 12px", border: "var(--border-color)", borderRadius: "8px", fontSize: "13px",
               }}
             />
             <button
@@ -223,7 +223,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
               style={{
                 padding: "10px 16px", borderRadius: "8px", border: "none", fontWeight: 600, fontSize: "13px",
                 cursor: linkInput.trim() ? "pointer" : "not-allowed",
-                background: linkInput.trim() ? "#6366f1" : "#e5e7eb",
+                background: linkInput.trim() ? "#6366f1" : "var(--border-color)",
                 color: linkInput.trim() ? "#fff" : "#9ca3af",
               }}
             >
@@ -234,7 +234,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
           {links.length > 0 && (
             <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
               {links.map((l, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
+                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg-hover)", border: "1px solid var(--border-color)", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
                   <span style={{ color: "#6366f1", marginRight: 6, flexShrink: 0 }}>&#x1f517;</span>
                   {l.renaming ? (
                     <>
@@ -271,7 +271,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
                           updated[i] = { ...updated[i], renaming: false };
                           return updated;
                         });
-                      }} style={{ background: "#16a34a", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 6 }} title="Save name">&#10003;</button>
+                      }} style={{ background: "var(--color-success)", border: "none", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRadius: 4, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 6 }} title="Save name">&#10003;</button>
                     </>
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
@@ -303,12 +303,12 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
         </div>
 
         {/* Action Buttons */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", paddingTop: "16px", borderTop: "1px solid #e5e7eb" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", paddingTop: "16px", borderTop: "1px solid var(--border-color)" }}>
           <button
             onClick={handleClose}
             style={{
-              padding: "10px 20px", borderRadius: "8px", border: "1px solid #d1d5db", background: "#fff",
-              fontWeight: 600, fontSize: "13px", cursor: "pointer", color: "#374151",
+              padding: "10px 20px", borderRadius: "8px", border: "var(--border-color)", background: "var(--bg-card)",
+              fontWeight: 600, fontSize: "13px", cursor: "pointer", color: "var(--text-dark)",
             }}
           >
             Cancel
@@ -319,7 +319,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
             style={{
               padding: "10px 20px", borderRadius: "8px", border: "none", fontWeight: 600, fontSize: "13px",
               cursor: canSubmit && !uploading ? "pointer" : "not-allowed",
-              background: canSubmit && !uploading ? "#6366f1" : "#e5e7eb",
+              background: canSubmit && !uploading ? "#6366f1" : "var(--border-color)",
               color: canSubmit && !uploading ? "#fff" : "#9ca3af",
             }}
           >

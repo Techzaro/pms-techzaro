@@ -95,7 +95,7 @@
   align-items: center;
   gap: 10px;
   background: var(--bg-card);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 10px 16px;
   flex: 1;
@@ -105,11 +105,11 @@
 
 .mt-search-box:focus-within {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
 }
 
 .mt-search-icon {
-  color: #94a3b8;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -123,7 +123,7 @@
 }
 
 .mt-search-box input::placeholder {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .mt-sort-box {
@@ -131,11 +131,11 @@
   align-items: center;
   gap: 4px;
   background: var(--bg-card);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 10px 14px;
   font-size: 14px;
-  color: #475569;
+  color: var(--text-dark);
   font-weight: 500;
   position: relative;
   cursor: pointer;
@@ -161,7 +161,7 @@
 /* ===== Card ===== */
 .mt-card {
   background: var(--bg-card);
-  border: 1px solid #e9ecf0;
+  border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 28px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -354,7 +354,7 @@
 .mt-member-name {
   font-size: 14px;
   font-weight: 500;
-  color: #334155;
+  color: var(--text-dark);
 }
 
 .mt-crown-btn {
@@ -625,7 +625,7 @@
   display: block;
   font-size: 14px;
   font-weight: 600;
-  color: #334155;
+  color: var(--text-dark);
   margin-bottom: 8px;
 }
 
@@ -723,11 +723,11 @@
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .mt-dropdown-search svg {
-  color: #94a3b8;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -741,21 +741,21 @@
 }
 
 .mt-dropdown-search input::placeholder {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .mt-dropdown-search-clear {
   background: none;
   border: none;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 2px;
   line-height: 1;
 }
 
 .mt-dropdown-search-clear:hover {
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .mt-combo-input {

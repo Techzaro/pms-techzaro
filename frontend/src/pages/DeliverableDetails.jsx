@@ -43,10 +43,10 @@ function timeAgo(iso) {
 /** Returns background and text color pair based on subtask status */
 function statusStyle(status) {
   const s = (status || "").toLowerCase();
-  if (s === "approved") return { bg: "#DCFCE7", text: "#166534" };
-  if (s === "submitted") return { bg: "#DBEAFE", text: "#1E40AF" };
-  if (s === "rejected") return { bg: "#FEE2E2", text: "#991B1B" };
-  return { bg: "#FEF3C7", text: "#92400E" };
+  if (s === "approved") return { bg: "var(--color-success-bg, #DCFCE7)", text: "var(--color-success-text, #166534)" };
+  if (s === "submitted") return { bg: "var(--color-primary-bg, #DBEAFE)", text: "var(--color-primary-text, #1E40AF)" };
+  if (s === "rejected") return { bg: "var(--color-danger-bg, #FEE2E2)", text: "var(--color-danger-text, #991B1B)" };
+  return { bg: "var(--color-warning-bg, #FEF3C7)", text: "var(--color-warning-text, #92400E)" };
 }
 
 /**
@@ -465,7 +465,7 @@ function SubtaskDetails() {
             {/* Rejection info - shown when rejected */}
             {isRejected && subtask.rejection_comment && (
               <div style={{ marginTop: "20px", padding: "16px", background: "#FEE2E2", borderRadius: "8px", border: "1px solid #FECACA" }}>
-                <h3 className="td-card-title" style={{ color: "#991B1B" }}>Decline Reason</h3>
+                <h3 className="td-card-title" style={{ color: "var(--color-danger)" }}>Decline Reason</h3>
                 <p style={{ color: "#7F1D1D", marginTop: "6px" }}>{subtask.rejection_comment}</p>
                 {subtask.rejected_by && <p style={{ color: "#7F1D1D", fontSize: "12px", marginTop: "4px" }}>By: {subtask.rejected_by.name}</p>}
               </div>
@@ -474,7 +474,7 @@ function SubtaskDetails() {
             {/* Approved info */}
             {isApproved && (
               <div style={{ marginTop: "20px", padding: "16px", background: "#DCFCE7", borderRadius: "8px", border: "1px solid #BBF7D0" }}>
-                <h3 className="td-card-title" style={{ color: "#166534" }}>Approved</h3>
+                <h3 className="td-card-title" style={{ color: "var(--color-success)" }}>Approved</h3>
                 {subtask.approved_by && <p style={{ color: "#166534", marginTop: "4px", fontSize: "13px" }}>Approved by: {subtask.approved_by.name}</p>}
               </div>
             )}

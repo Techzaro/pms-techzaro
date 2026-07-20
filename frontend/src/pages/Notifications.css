@@ -129,7 +129,7 @@
 }
 
 .notif-search input:focus {
-  border-color: #6366f1;
+  border-color: var(--color-primary);
 }
 
 .notif-search-clear {
@@ -331,7 +331,7 @@
 }
 
 .notif-item:hover {
-  background: #fafbfc;
+  background: var(--bg-hover);
 }
 
 /* ── Unread notification styling ── */

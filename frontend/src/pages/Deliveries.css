@@ -47,7 +47,7 @@
 .filter-btn {
   background: var(--bg-hover);
   color: var(--text-dark);
-  border: 1px solid var(--border-color);
+  border: 1px solid #999;
 }
 
 .filter-btn:hover {
@@ -105,7 +105,7 @@
 }
 
 .task-progress p {
-  border: 1px solid #9CA3AF;
+  border: 1px solid #64748B;
   padding: 8px 14px;
   display: inline-flex;
   align-items: center;
@@ -122,7 +122,7 @@
 .task-progress p.active {
   background: var(--bg-card);
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
-  border-color: var(--text-tertiary);
+  border-color: #64748B;
   font-weight: 600;
 }
 
@@ -167,6 +167,12 @@
   outline: 0;
   border: none;
   background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.delivery-serach-bar input::placeholder {
+  color: var(--text-muted);
 }
 
 .Pending { color: #F59E0B; }
@@ -561,6 +567,23 @@
   background: #DCFCE7;
   color: #22C55E;
   cursor: default;
+}
+
+.action-icon-btn.action-note {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.action-icon-btn.action-note:hover {
+  background: #F59E0B;
+  color: white;
+}
+
+.action-icon-btn.action-trigger-lg {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  font-size: 18px;
 }
 
 .Subtask { color: #8B5CF6; }

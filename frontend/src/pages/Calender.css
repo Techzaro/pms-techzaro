@@ -141,10 +141,16 @@
 }
 
 .calendar-search input {
-    border: none;
-    outline: none;
-    font-size: 14px;
-    width: 100%;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  width: 100%;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.calendar-search input::placeholder {
+  color: var(--text-tertiary);
 }
 
 /* GRID */
@@ -180,7 +186,7 @@
 }
 
 .today-box {
-    background: #f0f0ff !important;
+  background: var(--color-today-bg) !important;
 }
 
 .today-number {
@@ -342,23 +348,23 @@
 }
 
 .purple-dot {
-    background: #6366f1;
+    background: var(--color-primary);
 }
 
 .red-dot {
-    background: #ef4444;
+    background: var(--color-danger);
 }
 
 .blue-dot {
-    background: #3b82f6;
+    background: var(--color-blue-text);
 }
 
 .green-dot {
-    background: #10b981;
+    background: var(--color-success);
 }
 
 .orange-dot {
-    background: #f59e0b;
+    background: var(--color-warning);
 }
 
 /* SIDEBAR CARDS */

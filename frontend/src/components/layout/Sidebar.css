@@ -1,10 +1,11 @@
 .sidebar {
   width: 220px;
   background: var(--bg-card);
-  height: calc(100vh - 90px);
+  height: 100%;
+  max-height: calc(100vh - 100px);
   margin-top: 0;
   position: sticky;
-  top: 90px;
+  top: 0;
   padding: 20px;
   border-radius: 0 22px 22px 0;
   display: flex;
@@ -264,10 +265,11 @@
 @media (max-width: 1023px) and (min-width: 769px) {
   .sidebar {
     position: sticky;
-    top: 75px;
+    top: 0;
     left: auto;
     width: 68px;
-    height: calc(100vh - 90px);
+    height: 100%;
+    max-height: calc(100vh - 100px);
     margin-top: 0px;
     border-radius: 0 16px 16px 0;
     transform: none;

@@ -16,15 +16,19 @@ import { IoIosArrowDown } from "react-icons/io";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
-import { Lock, Pencil } from "lucide-react";
+import { Lock, Pencil, StickyNote } from "lucide-react";
 import CreateTaskModal from "../components/CreateTaskModal";
 import EditTaskModal from "../components/EditTaskModal";
 import PauseReasonModal from "../components/PauseReasonModal";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
+import ActionPopover from "../components/ActionPopover";
+import TaskNotesPopover from "../components/TaskNotesPopover";
+import AddNoteModal from "../components/AddNoteModal";
 import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { formatDateTimeInline } from "../utils/formatDateTime";
+import "../components/ActionPopover.css";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
@@ -83,6 +87,7 @@ const Taskby = () => {
   const [resumingTaskId, setResumingTaskId] = useState(null);
   const [pauseModalOpen, setPauseModalOpen] = useState(false);
   const [pauseModalTaskId, setPauseModalTaskId] = useState(null);
+  const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
 
   const ITEMS_PER_PAGE = 10;
 
@@ -346,7 +351,7 @@ const Taskby = () => {
         <IoSearchOutline fontSize={"20px"} />
         <input
           type="text"
-          placeholder="Search by task name"
+          placeholder="Search by task name or user name"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -407,7 +412,10 @@ const Taskby = () => {
                     </div>
 
                     <div className="col-task-name">
-                      <div className="task-title">{item.title}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <div className="task-title">{item.title}</div>
+                        <TaskNotesPopover taskId={item.id} itemType="task" />
+                      </div>
                       {item.project && (
                         <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
                           {item.project.title}
@@ -462,14 +470,21 @@ const Taskby = () => {
                     </div>
 
                     <div className="col-action">
-                      <div className="action-btns">
+                      <ActionPopover
+                        trigger={
+                          <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                            <IoEyeOutline size={20} />
+                          </button>
+                        }
+                      >
                         <button
                           className="action-icon-btn action-view"
                           title="View"
                           onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
                         >
-                          <IoEyeOutline />
+                          <IoEyeOutline size={16} />
                         </button>
+                        <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                         {item.status?.toLowerCase() !== "approved" && (
                           <button
                             className="action-icon-btn action-edit"
@@ -491,7 +506,7 @@ const Taskby = () => {
                               }
                             }}
                           >
-                            <Pencil size={20} />
+                            <Pencil size={16} />
                           </button>
                         )}
                         {["pending", "in_progress", "reopened", "paused"].includes(item.status) && !item.assigner_paused && (
@@ -502,7 +517,7 @@ const Taskby = () => {
                             onClick={() => { setPauseModalTaskId(item.id); setPauseModalOpen(true); }}
                             style={{ color: "#7C3AED", cursor: holdingTaskId === item.id ? "not-allowed" : "pointer" }}
                           >
-                            <Lock size={18} />
+                            <Lock size={16} />
                           </button>
                         )}
                         {item.assigner_paused && (
@@ -513,10 +528,10 @@ const Taskby = () => {
                             onClick={() => handleAssignerResume(item.id)}
                             style={{ color: "#059669", cursor: resumingTaskId === item.id ? "not-allowed" : "pointer" }}
                           >
-                            <Lock size={18} />
+                            <Lock size={16} />
                           </button>
                         )}
-                      </div>
+                      </ActionPopover>
                     </div>
                   </div>
                 );
@@ -542,6 +557,14 @@ const Taskby = () => {
         onClose={() => { setPauseModalOpen(false); setPauseModalTaskId(null); }}
         onConfirm={async (data) => { await handleAssignerPause(pauseModalTaskId, data); setPauseModalOpen(false); setPauseModalTaskId(null); }}
         isAssigner
+      />
+
+      <AddNoteModal
+        isOpen={noteModal.open}
+        onClose={() => setNoteModal({ open: false, itemId: null })}
+        itemType="task"
+        itemId={noteModal.itemId}
+        onSaved={fetchTasks}
       />
 
     </DashboardLayout>

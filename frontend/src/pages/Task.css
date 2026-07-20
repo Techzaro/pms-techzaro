@@ -46,6 +46,12 @@
   flex: 1;
   border: none;
   background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.tasks-search-bar input::placeholder {
+  color: var(--text-muted);
 }
 
 .all-time {
@@ -68,6 +74,7 @@
   outline: none;
   cursor: pointer;
   font-size: 14px;
+  color: var(--text-primary);
 }
 
 .export {
@@ -106,7 +113,7 @@
 .Completed,
 .Failed,
 .Aban {
-  border: 1px solid #9CA3AF;
+  border: 1px solid #64748B;
   padding: 6px 12px;
   display: inline-flex;
   justify-content: center;
@@ -137,7 +144,7 @@
 .Aban.active {
   background: var(--bg-card);
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
-  border-color: #9CA3AF;
+  border-color: #64748B;
   font-weight: 600;
 }
 
@@ -627,6 +634,23 @@
   background: var(--color-success-bg);
   color: var(--color-success);
   cursor: default;
+}
+
+.action-icon-btn.action-note {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.action-icon-btn.action-note:hover {
+  background: #F59E0B;
+  color: white;
+}
+
+.action-icon-btn.action-trigger-lg {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  font-size: 18px;
 }
 
 /* ===== ALL TASKS 9-COLUMN TABLE ===== */

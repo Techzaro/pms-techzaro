@@ -103,13 +103,13 @@
 }
 
 .cd-doc-item:hover {
-  border-color: #d1d5db;
+  border-color: var(--border-color);
   background: var(--bg-card-alt);
 }
 
 .cd-doc-item--active {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
 }
 
 .cd-doc-icon {
@@ -126,7 +126,7 @@
 
 .cd-doc-item--active .cd-doc-icon {
   background: var(--color-success-bg);
-  color: #16a34a;
+  color: var(--color-success);
 }
 
 .cd-doc-info {
@@ -151,7 +151,7 @@
 }
 
 .cd-doc-status--ok {
-  color: #16a34a;
+  color: var(--color-success);
 }
 
 .cd-doc-actions {
@@ -172,8 +172,8 @@
   cursor: pointer;
   transition: all 0.15s;
   background: var(--color-blue-light);
-  color: #2563eb;
-  border: 1px solid #bfdbfe;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary-light);
 }
 
 .cd-upload-btn:hover {
@@ -200,7 +200,7 @@
 }
 
 .cd-view-btn:hover {
-  background: #e5e7eb;
+  background: var(--bg-hover);
 }
 
 .cd-delete-btn {
@@ -212,8 +212,8 @@
   font-weight: 600;
   cursor: pointer;
   background: var(--color-danger-bg);
-  color: #dc2626;
-  border: 1px solid #fecaca;
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-bg);
   transition: all 0.15s;
 }
 
@@ -261,7 +261,7 @@
 
 .cd-other-file-name {
   font-size: 13px;
-  color: #2563eb;
+  color: var(--color-primary);
   font-weight: 500;
   text-decoration: none;
   word-break: break-all;

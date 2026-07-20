@@ -16,7 +16,7 @@
   margin: 0 0 8px;
   font-size: 32px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--text-heading);
 }
 
 .projects-header p {
@@ -43,6 +43,12 @@
   flex: 1;
   border: none;
   background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.projects-search-bar input::placeholder {
+  color: var(--text-muted);
 }
 
 .projects-toolbar {
@@ -117,7 +123,7 @@
 .filter-btn {
   background: var(--bg-hover);
   color: var(--text-dark);
-  border: 1px solid var(--border-color);
+  border: 1px solid #999;
 }
 
 .filter-btn:hover {
@@ -163,13 +169,22 @@
   font-size: 20px;
   font-weight: 700;
   line-height: 1.25;
-  color: var(--text-primary);
+  color: var(--text-heading);
+}
+
+.project-card-header h3 {
+  margin: 0 0 12px;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text-heading);
+  word-break: break-word;
 }
 
 .card-subtitle {
   font-size: 15px;
   line-height: 1.7;
-  color: var(--text-secondary);
+  color: var(--text-dark);
   overflow: hidden;
 }
 
@@ -187,7 +202,7 @@
 .read-more-btn {
   background: var(--bg-card);
   border: none;
-  color: #3b82f6;
+  color: var(--color-primary);
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
@@ -206,7 +221,7 @@
 .show-less-btn {
   background: none;
   border: none;
-  color: #3b82f6;
+  color: var(--color-primary);
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
@@ -229,7 +244,7 @@
   margin-bottom: 10px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-dark);
 }
 
 .progress-bar {
@@ -254,7 +269,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--text-secondary);
+  color: var(--text-dark);
   font-size: 13px;
 }
 .date-icon {
@@ -539,7 +554,7 @@
 }
 
 .project-card-actions-right .action-icon-btn.action-view:hover {
-  background: #2563eb;
+  background: var(--color-primary);
   color: #ffffff;
 }
 

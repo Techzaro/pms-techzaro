@@ -55,11 +55,11 @@
   font-weight: 600;
 }
 
-.avm-status-pending { background: #FEF3C7; color: #92400E; }
-.avm-status-submitted { background: #DBEAFE; color: #1E40AF; }
-.avm-status-approved { background: #DCFCE7; color: #166534; }
-.avm-status-rejected { background: #FEE2E2; color: #991B1B; }
-.avm-status-reopened { background: #FEF3C7; color: #92400E; }
+.avm-status-pending { background: var(--color-warning-bg); color: var(--color-warning); }
+.avm-status-submitted { background: var(--color-blue-light); color: var(--color-blue-text); }
+.avm-status-approved { background: var(--color-success-bg); color: var(--color-success); }
+.avm-status-rejected { background: var(--color-danger-bg); color: var(--color-danger); }
+.avm-status-reopened { background: var(--color-warning-bg); color: var(--color-warning); }
 
 .avm-due {
   margin-top: 6px;
@@ -166,7 +166,7 @@
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  color: #6366F1;
+  color: var(--color-primary);
   text-decoration: none;
   font-size: 14px;
   font-weight: 500;
@@ -174,11 +174,11 @@
 }
 
 .avm-file-link:hover {
-  background: #F5F3FF;
+  background: var(--color-primary-bg);
 }
 
 .avm-reopen-section {
-  background: #FFFBEB;
+  background: var(--color-warning-bg);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 24px;
@@ -229,7 +229,7 @@
 }
 
 .avm-approve-btn {
-  background: #16A34A;
+  background: var(--color-success);
   color: white;
 }
 
@@ -238,7 +238,7 @@
 }
 
 .avm-reject-btn {
-  background: #DC2626;
+  background: var(--color-danger);
   color: white;
 }
 
@@ -247,7 +247,7 @@
 }
 
 .avm-reopen-btn {
-  background: #D97706;
+  background: var(--color-warning);
   color: white;
 }
 
@@ -293,12 +293,12 @@
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  border: 2px solid #E5E7EB;
+  border: 2px solid var(--border-color);
   transition: border-color 0.2s;
 }
 
 .avm-image-thumb:hover {
-  border-color: #6366F1;
+  border-color: var(--color-primary);
 }
 
 .avm-image-thumb img {

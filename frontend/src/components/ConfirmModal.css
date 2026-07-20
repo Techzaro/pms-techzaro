@@ -71,7 +71,7 @@
 
 .cm-cancel-btn:hover {
   background: var(--bg-card-alt);
-  border-color: #d1d5db;
+  border-color: var(--border-color);
 }
 
 .cm-confirm-btn {
@@ -100,7 +100,7 @@
 }
 
 .cm-confirm-btn--danger:hover {
-  background: #dc2626 !important;
+  background: var(--color-danger) !important;
 }
 
 @media (max-width: 480px) {

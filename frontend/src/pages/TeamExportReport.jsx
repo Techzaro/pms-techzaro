@@ -382,7 +382,7 @@ function TeamExportReport({ isOpen, onClose, team }) {
   if (!isOpen) return null;
 
   const cardMeta = [
-    { key: "assigned", label: "Total Assigned", value: totalAssigned, color: "#6366f1", bg: "#EEF2FF" },
+    { key: "assigned", label: "Total Assigned", value: totalAssigned, color: "var(--color-primary)", bg: "#EEF2FF" },
     { key: "completed", label: "Completed", value: totalCompleted, color: "#22C55E", bg: "#ECFDF5" },
     { key: "pending", label: "Pending", value: totalPending, color: "#F59E0B", bg: "#FEF3C7" },
     { key: "overdue", label: "Overdue", value: totalOverdue, color: "#EF4444", bg: "#FEF2F2" },
@@ -423,9 +423,9 @@ function TeamExportReport({ isOpen, onClose, team }) {
               {dateRange === "custom" && (
                 <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
                   <input type="date" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setConfigIsDirty(true); }}
-                    style={{ flex: 1, padding: "10px 14px", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 13, color: "#374151", outline: "none" }} />
+                    style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
                   <input type="date" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setConfigIsDirty(true); }}
-                    style={{ flex: 1, padding: "10px 14px", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 13, color: "#374151", outline: "none" }} />
+                    style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
                 </div>
               )}
             </div>
@@ -453,11 +453,11 @@ function TeamExportReport({ isOpen, onClose, team }) {
               </svg>
             </button>
 
-            <div style={{ padding: "0", background: "#fff" }}>
+            <div style={{ padding: "0", background: "var(--bg-card)" }}>
               {/* ═══ HEADER ═══ */}
               <div className="erm-header">
                 <div className="erm-header-left">
-                  <div style={{ width: 26, height: 26, borderRadius: 5, background: "#6366f1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 5, background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>TX</span>
                   </div>
                   <div>
@@ -473,15 +473,15 @@ function TeamExportReport({ isOpen, onClose, team }) {
               {/* ═══ PROFILE ═══ */}
               <div className="erm-profile">
                 <div className="erm-profile-left">
-                  <div style={{ width: 38, height: 38, borderRadius: "50%", background: "#e0e7ff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <div style={{ width: 38, height: 38, borderRadius: "50%", background: "var(--color-primary-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
                     </svg>
                   </div>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{team.name || "Unknown Team"}</div>
-                    <div style={{ fontSize: 9, color: "#6b7280" }}>{members.length} Members</div>
-                    <div style={{ fontSize: 9, fontWeight: 600, color: "#6366f1" }}>{team.leader ? `Lead: ${team.leader.name}` : ""}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-heading)" }}>{team.name || "Unknown Team"}</div>
+                    <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>{members.length} Members</div>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: "var(--color-primary)" }}>{team.leader ? `Lead: ${team.leader.name}` : ""}</div>
                   </div>
                 </div>
                 <div className="erm-profile-right">
@@ -492,8 +492,8 @@ function TeamExportReport({ isOpen, onClose, team }) {
                     { lbl: "Total Completed", val: String(totalCompleted), col: 1 }, { lbl: "Report Time", val: genTime, col: 2 },
                   ].map((r, i) => (
                     <div key={i} style={{ display: "flex", gap: 4 }}>
-                      <span style={{ color: "#6b7280", whiteSpace: "nowrap" }}>{r.lbl}:</span>
-                      <span style={{ fontWeight: 700, color: "#111827", overflow: "hidden", textOverflow: "ellipsis" }}>{r.val}</span>
+                      <span style={{ color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{r.lbl}:</span>
+                      <span style={{ fontWeight: 700, color: "var(--text-heading)", overflow: "hidden", textOverflow: "ellipsis" }}>{r.val}</span>
                     </div>
                   ))}
                 </div>
@@ -502,15 +502,15 @@ function TeamExportReport({ isOpen, onClose, team }) {
               {/* ═══ SUMMARY CARDS ═══ */}
               <div className="erm-summary-grid">
                 {cardMeta.map((c) => (
-                  <div key={c.key} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
+                  <div key={c.key} style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{ width: 28, height: 28, borderRadius: 8, background: c.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <div style={{ width: 14, height: 14, borderRadius: "50%", border: `2px solid ${c.color}` }}></div>
                       </div>
-                      <div style={{ fontSize: 10, color: "#6b7280" }}>{c.label}</div>
+                      <div style={{ fontSize: 10, color: "var(--text-secondary)" }}>{c.label}</div>
                     </div>
                     <div style={{ fontSize: 26, fontWeight: 700, color: c.color, marginTop: 4 }}>{c.value}</div>
-                    <div style={{ fontSize: 8, color: "#9ca3af", marginTop: 2 }}>
+                    <div style={{ fontSize: 8, color: "var(--text-muted)", marginTop: 2 }}>
                       {c.key === "assigned" ? "All tasks assigned" : c.key === "completed" ? "Tasks completed" : c.key === "pending" ? "Tasks in progress" : "Require attention"}
                     </div>
                   </div>
@@ -520,15 +520,15 @@ function TeamExportReport({ isOpen, onClose, team }) {
               {/* ═══ TWO COLUMNS: STATUS BREAKDOWN + PRIORITY DISTRIBUTION ═══ */}
               <div className="erm-two-col">
                 {/* Left: Status Breakdown */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 8 }}>TASK STATUS BREAKDOWN</div>
+                <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 8 }}>TASK STATUS BREAKDOWN</div>
                   {(() => {
                     const sb = team.status_breakdown || {};
                     const total = totalAssigned || 1;
                     const segments = [
                       { label: "Completed", count: sb.completed || 0, color: "#10b981" },
                       { label: "Pending", count: sb.pending || 0, color: "#f59e0b" },
-                      { label: "In Review", count: (sb.submitted || 0) + (sb.reopened || 0), color: "#6366f1" },
+                      { label: "In Review", count: (sb.submitted || 0) + (sb.reopened || 0), color: "var(--color-primary)" },
                       { label: "Overdue", count: sb.overdue || 0, color: "#ef4444" },
                     ];
                     return (
@@ -538,8 +538,8 @@ function TeamExportReport({ isOpen, onClose, team }) {
                 </div>
 
                 {/* Right: Priority Distribution */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 4 }}>PRIORITY DISTRIBUTION</div>
+                <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 4 }}>PRIORITY DISTRIBUTION</div>
                   {(() => {
                     const pd = team.priority_distribution || {};
                     const totalP = (pd.high || 0) + (pd.medium || 0) + (pd.low || 0);
@@ -554,11 +554,11 @@ function TeamExportReport({ isOpen, onClose, team }) {
                           const pct = totalP > 0 ? Math.round((p.count / totalP) * 1000) / 10 : 0;
                           return (
                             <div key={p.label} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0" }}>
-                              <span style={{ fontSize: 11, color: "#374151", fontWeight: 500, minWidth: 50 }}>{p.label}</span>
-                              <div style={{ flex: 1, height: 8, background: "#f3f4f6", borderRadius: 4, overflow: "hidden" }}>
+                              <span style={{ fontSize: 11, color: "var(--text-dark)", fontWeight: 500, minWidth: 50 }}>{p.label}</span>
+                              <div style={{ flex: 1, height: 8, background: "var(--border-light)", borderRadius: 4, overflow: "hidden" }}>
                                 <div style={{ width: `${pct}%`, height: "100%", borderRadius: 4, background: p.color, transition: "width 0.6s ease" }}></div>
                               </div>
-                              <span style={{ fontSize: 11, fontWeight: 600, color: "#111827", minWidth: 60, textAlign: "right" }}>{p.count} ({Math.round(pct)}%)</span>
+                              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-heading)", minWidth: 60, textAlign: "right" }}>{p.count} ({Math.round(pct)}%)</span>
                             </div>
                           );
                         })}
@@ -570,7 +570,7 @@ function TeamExportReport({ isOpen, onClose, team }) {
 
               {/* ═══ MEMBER PERFORMANCE TABLE ═══ */}
               <div className="erm-table-section">
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>MEMBER PERFORMANCE DETAILS</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>MEMBER PERFORMANCE DETAILS</div>
                 <div className="erm-table-wrapper">
                   <table className="erm-table">
                     <thead>
@@ -587,27 +587,27 @@ function TeamExportReport({ isOpen, onClose, team }) {
                     </thead>
                     <tbody>
                       {filteredMembers.length === 0 ? (
-                        <tr><td colSpan={8} style={{ textAlign: "center", padding: 20, color: "#9ca3af" }}>No members found</td></tr>
+                        <tr><td colSpan={8} style={{ textAlign: "center", padding: 20, color: "var(--text-muted)" }}>No members found</td></tr>
                       ) : filteredMembers.map((m, i) => {
                         const rate = m.assigned > 0 ? Math.round((m.completed / m.assigned) * 100) : 0;
                         const rs = rate >= 80 ? S.green : rate >= 50 ? S.amber : S.red;
                         return (
-                          <tr key={m.id || i} style={{ borderBottom: "1px solid #f3f4f6", background: i % 2 ? "#f9fafb" : "#fff" }}>
-                            <td data-label="#" style={{ textAlign: "center", color: "#6b7280" }}>{i + 1}</td>
-                            <td data-label="Member" style={{ fontWeight: 600, color: "#111827" }}>{m.name || "-"}</td>
+                          <tr key={m.id || i} style={{ borderBottom: "1px solid var(--border-light)", background: i % 2 ? "var(--bg-hover)" : "var(--bg-card)" }}>
+                            <td data-label="#" style={{ textAlign: "center", color: "var(--text-secondary)" }}>{i + 1}</td>
+                            <td data-label="Member" style={{ fontWeight: 600, color: "var(--text-heading)" }}>{m.name || "-"}</td>
                             <td data-label="Role" style={{ textAlign: "center" }}>
-                              <span style={{ fontWeight: 600, color: "#6366f1" }}>{ROLE_LABEL[m.role] || m.role || "-"}</span>
+                              <span style={{ fontWeight: 600, color: "var(--color-primary)" }}>{ROLE_LABEL[m.role] || m.role || "-"}</span>
                             </td>
-                            <td data-label="Assigned" style={{ textAlign: "center", fontWeight: 600, color: "#6366f1" }}>{m.assigned ?? 0}</td>
+                            <td data-label="Assigned" style={{ textAlign: "center", fontWeight: 600, color: "var(--color-primary)" }}>{m.assigned ?? 0}</td>
                             <td data-label="Completed" style={{ textAlign: "center", fontWeight: 600, color: "#22c55e" }}>{m.completed ?? 0}</td>
                             <td data-label="Pending" style={{ textAlign: "center", fontWeight: 600, color: "#f59e0b" }}>{m.pending ?? 0}</td>
                             <td data-label="Overdue" style={{ textAlign: "center", fontWeight: 600, color: "#ef4444" }}>{m.overdue ?? 0}</td>
                             <td data-label="Rate">
                               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "#e5e7eb", overflow: "hidden" }}>
+                                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "var(--border-color)", overflow: "hidden" }}>
                                   <div style={{ width: `${rate}%`, height: "100%", borderRadius: 2, background: rate >= 80 ? "#22c55e" : rate >= 50 ? "#f59e0b" : "#ef4444" }}></div>
                                 </div>
-                                <span style={{ fontWeight: 600, fontSize: 9, color: "#374151", minWidth: 28 }}>{rate}%</span>
+                                <span style={{ fontWeight: 600, fontSize: 9, color: "var(--text-dark)", minWidth: 28 }}>{rate}%</span>
                               </div>
                             </td>
                           </tr>
@@ -620,7 +620,7 @@ function TeamExportReport({ isOpen, onClose, team }) {
 
               {/* ═══ MANAGER REMARKS ═══ */}
               <div className="erm-remarks">
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>MANAGER REMARKS</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>MANAGER REMARKS</div>
                 <div style={{ display: "flex", gap: 16 }}>
                   <div style={{ flex: 1 }}>
                     {[1, 2, 3, 4].map(i => (
@@ -628,10 +628,10 @@ function TeamExportReport({ isOpen, onClose, team }) {
                     ))}
                   </div>
                   <div style={{ width: 120, textAlign: "center" }}>
-                    <div style={{ fontSize: 9, color: "#6b7280", marginBottom: 4 }}>Manager Signature</div>
-                    <div style={{ borderBottom: "1px solid #111827", height: 20, marginBottom: 8 }}></div>
-                    <div style={{ fontSize: 9, color: "#6b7280", marginBottom: 4 }}>Date</div>
-                    <div style={{ borderBottom: "1px solid #111827", height: 20 }}></div>
+                    <div style={{ fontSize: 9, color: "var(--text-secondary)", marginBottom: 4 }}>Manager Signature</div>
+                    <div style={{ borderBottom: "1px solid var(--text-heading)", height: 20, marginBottom: 8 }}></div>
+                    <div style={{ fontSize: 9, color: "var(--text-secondary)", marginBottom: 4 }}>Date</div>
+                    <div style={{ borderBottom: "1px solid var(--text-heading)", height: 20 }}></div>
                   </div>
                 </div>
               </div>
@@ -639,10 +639,10 @@ function TeamExportReport({ isOpen, onClose, team }) {
               {/* ═══ FOOTER ═══ */}
               <div className="erm-footer">
                 <div className="erm-footer-left">
-                  <div style={{ width: 16, height: 16, borderRadius: 3, background: "#6366f1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 16, height: 16, borderRadius: 3, background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <span style={{ fontSize: 7, fontWeight: 700, color: "#fff" }}>TX</span>
                   </div>
-                  <span style={{ fontWeight: 600, color: "#6b7280" }}>Techxaro</span>
+                  <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>Techxaro</span>
                   <span>PMS Portal</span>
                 </div>
                 <div>Generated Date:  {genDate} | Generated Time:  {genTime}</div>

@@ -15,13 +15,17 @@ import { Link, useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
+import { StickyNote } from "lucide-react";
 import { authToken, rolePath } from "../utils/auth";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
+import ActionPopover from "../components/ActionPopover";
+import AddNoteModal from "../components/AddNoteModal";
 import API_URL from "../config/api";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
 import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal";
 import { formatDateTimeInline } from "../utils/formatDateTime";
+import "../components/ActionPopover.css";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
 
@@ -54,6 +58,7 @@ function SelfDeliveries() {
   const [timeFilter, setTimeFilter] = useState("");
   const [submitModal, setSubmitModal] = useState({ open: false, subtask: null });
   const [viewModal, setViewModal] = useState({ open: false, subtask: null });
+  const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const ITEMS_PER_PAGE = 10;
@@ -278,14 +283,21 @@ function SelfDeliveries() {
                   <div className="date-box">
                     <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.start_date)}{"\n"}{formatDate(item.due_date)}</div>
                   </div>
-                    <div className="action-btns">
+                    <ActionPopover
+                      trigger={
+                        <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                          <IoEyeOutline size={20} />
+                        </button>
+                      }
+                    >
+                      <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                       {canSubmit ? (
                         <button
                           className="action-icon-btn action-submit"
                           title={item.status === "rework_required" ? "Resubmit Subtask" : "Submit Subtask"}
                           onClick={() => setSubmitModal({ open: true, subtask: item })}
                         >
-                          <LuSend />
+                          <LuSend size={16} />
                         </button>
                       ) : canView ? (
                         <button
@@ -293,10 +305,10 @@ function SelfDeliveries() {
                           title="View Subtask"
                           onClick={() => setViewModal({ open: true, subtask: item })}
                         >
-                          <IoEyeOutline />
+                          <IoEyeOutline size={16} />
                         </button>
                       ) : null}
-                    </div>
+                    </ActionPopover>
                   </div>
                 );
               }}
@@ -324,6 +336,14 @@ function SelfDeliveries() {
         deliverable={viewModal.subtask}
         onActionSuccess={handleSubtaskUpdate}
         onResubmit={(subtask) => setSubmitModal({ open: true, subtask })}
+      />
+
+      <AddNoteModal
+        isOpen={noteModal.open}
+        onClose={() => setNoteModal({ open: false, itemId: null })}
+        itemType="deliverable"
+        itemId={noteModal.itemId}
+        onSaved={fetchSubtasks}
       />
     </DashboardLayout>
   );

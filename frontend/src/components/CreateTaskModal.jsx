@@ -653,25 +653,25 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                     {templateErrors && <span className="field-error-text" style={{ marginBottom: 6, display: "block" }}>{formErrors.recurring_templates}</span>}
 
                     {showVariablesHint && (
-                      <div style={{ background: "#f0f4ff", border: "1px solid #c7d2fe", borderRadius: 6, padding: "8px 10px", marginBottom: 10, fontSize: 12, color: "#4338ca" }}>
+                      <div style={{ background: "var(--color-primary-bg)", border: "1px solid var(--color-primary-border)", borderRadius: 6, padding: "8px 10px", marginBottom: 10, fontSize: 12, color: "var(--color-primary)" }}>
                         <strong>Variables:</strong> Use these in titles/descriptions
                         <div style={{ marginTop: 4, display: "flex", flexWrap: "wrap", gap: "4px 12px" }}>
                           {VARIABLES.map((v) => (
                             <span key={v.token} style={{ cursor: "pointer" }} onClick={() => { setShowVariablesHint(false); }}
-                              title={v.desc}><code style={{ background: "#e0e7ff", padding: "1px 5px", borderRadius: 3 }}>{v.token}</code> — {v.desc}</span>
+                              title={v.desc}><code style={{ background: "var(--color-primary-bg)", padding: "1px 5px", borderRadius: 3 }}>{v.token}</code> — {v.desc}</span>
                           ))}
                         </div>
                       </div>
                     )}
 
                     {recurringTemplates.map((tmpl, index) => (
-                      <div key={index} className="task-template-item" style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 10, marginBottom: 8, background: "#fafafa" }}>
+                      <div key={index} className="task-template-item" style={{ border: "var(--border-color)", borderRadius: 8, padding: 10, marginBottom: 8, background: "var(--bg-hover)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                           <span style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", minWidth: 40 }}>#{index + 1}</span>
                           <input type="text" placeholder="Template title (use {{day}}, {{date}}...)" value={tmpl.title}
                             onChange={(e) => handleTemplateChange(index, "title", e.target.value)}
-                            style={{ flex: 1, fontSize: 13, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 4 }} />
-                          <div style={{ display: "flex", alignItems: "center", gap: 4, border: "1px solid #d1d5db", borderRadius: 4, padding: "2px 6px", background: "#fff" }}>
+                            style={{ flex: 1, fontSize: 13, padding: "6px 8px", border: "var(--border-color)", borderRadius: 4 }} />
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, border: "var(--border-color)", borderRadius: 4, padding: "2px 6px", background: "var(--bg-card)" }}>
                             <span style={{ fontSize: 11, color: "#6b7280" }}>Qty:</span>
                             <input type="number" min="1" max="100" value={tmpl.quantity}
                               onChange={(e) => handleTemplateChange(index, "quantity", Math.max(1, parseInt(e.target.value) || 1))}
@@ -682,7 +682,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                           <input type="text" placeholder="Description (optional)" value={tmpl.description}
                             onChange={(e) => handleTemplateChange(index, "description", e.target.value)}
-                            style={{ flex: 1, fontSize: 12, padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 4, color: "#6b7280" }} />
+                            style={{ flex: 1, fontSize: 12, padding: "5px 8px", border: "var(--border-color)", borderRadius: 4, color: "#6b7280" }} />
                           <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 11, color: "#6b7280", whiteSpace: "nowrap" }}>
                             <input type="checkbox" checked={tmpl.combined}
                               onChange={(e) => handleTemplateChange(index, "combined", e.target.checked)}
@@ -694,35 +694,35 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                     ))}
 
                     {recurringTemplates.length === 0 && (
-                      <p style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", padding: 16 }}>
+                      <p style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", padding: 16 }}>
                         No templates yet. Click + Add to create your first subtask template.
                       </p>
                     )}
                   </div>
 
                   {preview && (
-                    <div className="task-card" style={{ border: "1px solid #c7d2fe", background: "#f8faff" }}>
+                    <div className="task-card" style={{ border: "1px solid var(--color-primary-border)", background: "var(--bg-hover)" }}>
                       <div className="task-card-top">
                         <span>Recurring Preview</span>
                         <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 600 }}>{preview.totalSubtasks} Total</span>
                       </div>
                       <div style={{ maxHeight: 220, overflowY: "auto" }}>
                         {preview.previewPeriods.map((pd) => (
-                          <div key={pd.period} style={{ marginBottom: 8, padding: "6px 0", borderBottom: "1px solid #eef2ff" }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: "#4338ca", marginBottom: 4 }}>{pd.label} — {pd.date}</div>
+                          <div key={pd.period} style={{ marginBottom: 8, padding: "6px 0", borderBottom: "1px solid var(--color-primary-border)" }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--color-primary)", marginBottom: 4 }}>{pd.label} — {pd.date}</div>
                             {pd.items.map((item, i) => (
-                              <div key={i} style={{ fontSize: 12, color: "#374151", paddingLeft: 16, display: "flex", alignItems: "center", gap: 6 }}>
-                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#6366f1", display: "inline-block", flexShrink: 0 }}></span>
+                              <div key={i} style={{ fontSize: 12, color: "var(--text-dark)", paddingLeft: 16, display: "flex", alignItems: "center", gap: 6 }}>
+                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--color-primary)", display: "inline-block", flexShrink: 0 }}></span>
                                 #{item.number} {item.title}
                                 {item.count > 1 && <span style={{ color: "#6366f1", fontWeight: 600, fontSize: 11 }}>(qty {item.count})</span>}
-                                {item.description && <span style={{ color: "#9ca3af" }}>— {item.description}</span>}
+                                {item.description && <span style={{ color: "var(--text-muted)" }}>— {item.description}</span>}
                               </div>
                             ))}
                           </div>
                         ))}
                       </div>
                       {preview.hasMore && (
-                        <p style={{ fontSize: 11, color: "#9ca3af", textAlign: "center", marginTop: 4 }}>
+                        <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 4 }}>
                           ... and {preview.remainingPeriods} more days · {preview.totalPeriods} days total
                         </p>
                       )}
@@ -746,7 +746,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                       onChange={(e) => { setIsDirty(true); setForm((prev) => ({ ...prev, end_date: e.target.value })); }}
                       min={getNowDatetimeLocal()}
                       max={projectEndDate ? toDatetimeLocal(projectEndDate) : undefined} />
-                    {projectEndDate && <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(projectEndDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
+                    {projectEndDate && <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, display: "block" }}>Max: {new Date(projectEndDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
                   </div>
                 </div>
               </div>
@@ -788,7 +788,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                         }
                       }} />
                     {form.end_date && (
-                      <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(form.end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, display: "block" }}>Max: {new Date(form.end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                     )}
                   </div>
                 </div>
@@ -805,8 +805,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                       const isDropdownOpen = openSubtaskDropdown === index;
                       return (
                         <div key={index} className="task-phase-item" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #f3f4f6", position: "relative" }}>
-                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7c3aed", display: "inline-block", flexShrink: 0 }}></span>
-                          <span style={{ flex: 1, fontSize: 13, color: "#374151" }}>{d.title}</span>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--color-primary)", display: "inline-block", flexShrink: 0 }}></span>
+                          <span style={{ flex: 1, fontSize: 13, color: "var(--text-dark)" }}>{d.title}</span>
                           <span style={{ fontSize: 11, color: "#6b7280", whiteSpace: "pre-line" }}>
                             {d.start_date ? new Date(d.start_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
                             {d.start_date && d.due_date ? "\n" : ""}
@@ -817,8 +817,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                               type="button"
                               onClick={(e) => { e.stopPropagation(); setOpenSubtaskDropdown(isDropdownOpen ? null : index); }}
                               style={{
-                                fontSize: 11, cursor: "pointer", padding: "3px 8px", borderRadius: 4, border: "1px solid #e5e7eb",
-                                background: assignedUser ? "#eef2ff" : "#f9fafb", color: assignedUser ? "#6366f1" : "#6b7280",
+                                fontSize: 11, cursor: "pointer", padding: "3px 8px", borderRadius: 4, border: "var(--border-color)",
+                                background: assignedUser ? "#eef2ff" : "var(--bg-hover)", color: assignedUser ? "#6366f1" : "#6b7280",
                                 fontWeight: 500, whiteSpace: "nowrap",
                               }}
                             >
@@ -827,7 +827,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                             {isDropdownOpen && (
                               <div onClick={(e) => e.stopPropagation()} style={{
                                 position: "absolute", bottom: "100%", right: 0, zIndex: 100,
-                                background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
+                                background: "var(--bg-card)", border: "var(--border-color)", borderRadius: 8,
                                 boxShadow: "0 4px 12px rgba(0,0,0,0.1)", minWidth: 150, padding: "4px 0", marginBottom: 4,
                               }}>
                                 <button
@@ -836,7 +836,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                                   style={{
                                     display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
                                     fontSize: 12, cursor: "pointer", background: !assignedUser ? "#f3f4f6" : "transparent",
-                                    border: "none", color: "#374151",
+                                    border: "none", color: "var(--text-dark)",
                                   }}
                                 >
                                   All assignees
@@ -850,12 +850,12 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                                       display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
                                       fontSize: 12, cursor: "pointer",
                                       background: String(d.assigned_to) === String(u.id) ? "#f3f4f6" : "transparent",
-                                      border: "none", color: "#374151",
+                                      border: "none", color: "var(--text-dark)",
                                     }}
                                   >
                                     <span>{u.name}</span>
                                     {u.role && <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 6 }}>({u.role.replace("_", " ")})</span>}
-                                    {u.department && <span style={{ fontSize: 10, fontWeight: 500, color: "#4f46e5", background: "#eef2ff", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>{u.department}</span>}
+                                    {u.department &&                                   <span style={{ fontSize: 10, fontWeight: 500, color: "var(--color-primary)", background: "var(--color-primary-bg)", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>{u.department}</span>}
                                   </button>
                                 ))}
                               </div>
@@ -880,29 +880,29 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
       {/* Edit Link Modal */}
       {editingLink && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => setEditingLink(null)}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 400, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>Edit File / Link</h3>
+          <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 400, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>Edit File / Link</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or update the URL below.</p>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Title</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>Title</label>
               <input
                 type="text"
                 value={editLinkForm.title}
                 onChange={(e) => setEditLinkForm((p) => ({ ...p, title: e.target.value }))}
-                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
+                style={{ width: "100%", padding: "10px 12px", border: "var(--border-color)", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }}
               />
             </div>
             <div style={{ marginBottom: 24 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>URL</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>URL</label>
               <input
                 type="url"
                 value={editLinkForm.url}
                 onChange={(e) => setEditLinkForm((p) => ({ ...p, url: e.target.value }))}
-                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
+                style={{ width: "100%", padding: "10px 12px", border: "var(--border-color)", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }}
               />
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button type="button" onClick={() => setEditingLink(null)} style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#f9fafb"} onMouseLeave={(e) => e.target.style.background = "#fff"}>Cancel</button>
+              <button type="button" onClick={() => setEditingLink(null)} style={{ padding: "9px 20px", borderRadius: 8, border: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-dark)", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--bg-hover)"} onMouseLeave={(e) => e.target.style.background = "var(--bg-card)"}>Cancel</button>
               <button type="button" onClick={() => {
                 if (editingLink.type === "pending") {
                   setLinks((p) => {
@@ -912,7 +912,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                   });
                 }
                 setEditingLink(null);
-              }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "#6366f1", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#4f46e5"} onMouseLeave={(e) => e.target.style.background = "#6366f1"}>Save</button>
+              }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "var(--color-primary)", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--color-primary)"} onMouseLeave={(e) => e.target.style.background = "var(--color-primary)"}>Save</button>
             </div>
           </div>
         </div>,
@@ -922,38 +922,38 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
       {/* Edit File Modal */}
       {editingFile && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditingFile(null); setEditFileNewFile(null); setEditFileDeleted(false); setEditFileDeleteConfirm(false); }}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>Edit File</h3>
+          <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>Edit File</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or replace this file.</p>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Title</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>Title</label>
               <input
                 type="text"
                 value={editFileForm.title}
                 onChange={(e) => setEditFileForm({ title: e.target.value })}
                 autoFocus
-                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
+                style={{ width: "100%", padding: "10px 12px", border: "var(--border-color)", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }}
               />
             </div>
             <div style={{ marginBottom: 24 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>File</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>File</label>
               {!editFileDeleted && !editFileNewFile ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--bg-hover)", border: "var(--border-color)", borderRadius: 8 }}>
                   <span style={{ fontSize: 14 }}>📄</span>
-                  <span style={{ flex: 1, fontSize: 13, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editingFile.currentName || "Current file"}</span>
-                  <button type="button" onClick={() => setEditFileDeleteConfirm(true)} style={{ width: 28, height: 28, borderRadius: "50%", border: "none", background: "#ef4444", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Delete file">
+                  <span style={{ flex: 1, fontSize: 13, color: "var(--text-dark)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editingFile.currentName || "Current file"}</span>
+                  <button type="button" onClick={() => setEditFileDeleteConfirm(true)} style={{ width: 28, height: 28, borderRadius: "50%", border: "none", background: "var(--color-danger)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Delete file">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                   </button>
                 </div>
               ) : editFileNewFile ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--color-success-bg)", border: "1px solid var(--color-success-border)", borderRadius: 8 }}>
                   <span style={{ fontSize: 14 }}>📄</span>
                   <span style={{ flex: 1, fontSize: 13, color: "#166534", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editFileNewFile.name}</span>
                   <span style={{ fontSize: 11, color: "#6b7280" }}>{(editFileNewFile.size / 1024).toFixed(1)} KB</span>
                   <button type="button" onClick={() => { setEditFileNewFile(null); setEditFileDeleted(false); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: 0 }}>✕</button>
                 </div>
               ) : (
-                <label style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "10px 12px", border: "1px dashed #d1d5db", borderRadius: 8, background: "#f9fafb", color: "#6b7280", fontSize: 13, cursor: "pointer", textAlign: "center" }}>
+                <label style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "10px 12px", border: "1px dashed #d1d5db", borderRadius: 8, background: "var(--bg-hover)", color: "#6b7280", fontSize: 13, cursor: "pointer", textAlign: "center" }}>
                   Click to select a file
                   <input
                     type="file"
@@ -964,7 +964,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
               )}
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button type="button" onClick={() => { setEditingFile(null); setEditFileNewFile(null); setEditFileDeleted(false); setEditFileDeleteConfirm(false); }} style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#f9fafb"} onMouseLeave={(e) => e.target.style.background = "#fff"}>Cancel</button>
+              <button type="button" onClick={() => { setEditingFile(null); setEditFileNewFile(null); setEditFileDeleted(false); setEditFileDeleteConfirm(false); }} style={{ padding: "9px 20px", borderRadius: 8, border: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-dark)", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--bg-hover)"} onMouseLeave={(e) => e.target.style.background = "var(--bg-card)"}>Cancel</button>
               <button type="button" onClick={() => {
                 if (editFileDeleted && !editFileNewFile) {
                   setPendingFiles((p) => p.filter((_, i) => i !== editingFile.index));
@@ -979,7 +979,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 setEditFileNewFile(null);
                 setEditFileDeleted(false);
                 setEditFileDeleteConfirm(false);
-              }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "#6366f1", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#4f46e5"} onMouseLeave={(e) => e.target.style.background = "#6366f1"}>Save</button>
+              }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "var(--color-primary)", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--color-primary)"} onMouseLeave={(e) => e.target.style.background = "var(--color-primary)"}>Save</button>
             </div>
           </div>
         </div>,
@@ -989,12 +989,12 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
       {/* Edit File Delete Confirm */}
       {editFileDeleteConfirm && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 10004, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => setEditFileDeleteConfirm(false)}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 380, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 700, color: "#111827" }}>Delete File</h3>
+          <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 380, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 700, color: "var(--text-heading)" }}>Delete File</h3>
             <p style={{ margin: "0 0 20px", fontSize: 14, color: "#6b7280" }}>Are you sure you want to delete this file? You can upload a new file after.</p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button type="button" onClick={() => setEditFileDeleteConfirm(false)} style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#f9fafb"} onMouseLeave={(e) => e.target.style.background = "#fff"}>Cancel</button>
-              <button type="button" onClick={() => { setEditFileDeleted(true); setEditFileDeleteConfirm(false); }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#dc2626"} onMouseLeave={(e) => e.target.style.background = "#ef4444"}>Delete</button>
+              <button type="button" onClick={() => setEditFileDeleteConfirm(false)} style={{ padding: "9px 20px", borderRadius: 8, border: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-dark)", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--bg-hover)"} onMouseLeave={(e) => e.target.style.background = "var(--bg-card)"}>Cancel</button>
+              <button type="button" onClick={() => { setEditFileDeleted(true); setEditFileDeleteConfirm(false); }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "var(--color-danger)", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#dc2626"} onMouseLeave={(e) => e.target.style.background = "var(--color-danger)"}>Delete</button>
             </div>
           </div>
         </div>,

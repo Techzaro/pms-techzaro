@@ -49,7 +49,7 @@ const DonutChart = memo(function DonutChart({ segments, size = 140, strokeWidth 
           transform: "translate(-50%, -50%)",
           textAlign: "center",
         }}>
-          <div style={{ fontSize: "24px", fontWeight: "700", color: "#111827" }}>{total}</div>
+          <div style={{ fontSize: "24px", fontWeight: "700", color: "var(--text-heading)" }}>{total}</div>
           <div style={{ fontSize: "11px", color: "#9ca3af" }}>{totalLabel}</div>
         </div>
       </div>

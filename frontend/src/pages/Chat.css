@@ -192,7 +192,29 @@
 .message-body {
   font-size: 14px;
   line-height: 1.4;
-  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.message-body p {
+  margin: 0 0 4px;
+}
+
+.message-body p:last-child {
+  margin-bottom: 0;
+}
+
+.message-body strong {
+  font-weight: 600;
+}
+
+.message-body em {
+  font-style: italic;
+}
+
+.message-body ul,
+.message-body ol {
+  padding-left: 18px;
+  margin: 4px 0;
 }
 
 .message-file {
@@ -211,25 +233,130 @@
 
 .message-input-area {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 0;
   padding: 12px 20px;
   border-top: 1px solid var(--border-color);
   background: var(--bg-card);
 }
 
-.message-input-area textarea {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid var(--border-medium);
-  border-radius: 8px;
-  resize: none;
-  font-size: 14px;
-  font-family: inherit;
-  outline: none;
+.chat-editor-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
 }
 
-.message-input-area textarea:focus {
-  border-color: #3b82f6;
+.chat-editor-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-editor-wrapper .rte-wrapper .ql-toolbar {
+  border-radius: 8px 8px 0 0;
+  border-color: var(--border-medium);
+  background: var(--bg-hover);
+  padding: 4px 8px;
+  min-height: auto;
+}
+
+.chat-editor-wrapper .rte-wrapper .ql-container {
+  border-radius: 0 0 8px 8px;
+  border-color: var(--border-medium);
+  font-size: 14px;
+  min-height: 40px;
+}
+
+.chat-editor-wrapper .rte-wrapper .ql-editor {
+  min-height: 40px;
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 6px 10px;
+  line-height: 1.4;
+}
+
+.chat-editor-wrapper .rte-wrapper .ql-toolbar .ql-formats {
+  margin-right: 4px;
+}
+
+.chat-editor-wrapper .rte-wrapper .ql-toolbar button {
+  width: 28px;
+  height: 28px;
+  padding: 2px;
+}
+
+.chat-attach-btn {
+  width: 36px;
+  height: 36px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-medium);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.chat-attach-btn:hover {
+  background: #e5e7eb;
+  color: var(--text-dark-alt);
+}
+
+.file-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-medium);
+  border-radius: 8px;
+}
+
+.file-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.file-name-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-remove-btn {
+  width: 20px;
+  height: 20px;
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.file-remove-btn:hover {
+  background: #dc2626;
+}
+
+.message-image-preview {
+  max-width: 220px;
+  max-height: 160px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: block;
 }
 
 .send-btn {
@@ -241,7 +368,8 @@
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  align-self: flex-end;
+  flex-shrink: 0;
+  height: 36px;
 }
 
 .send-btn:hover:not(:disabled) {
@@ -317,6 +445,22 @@
   padding: 8px;
 }
 
+.participant-search {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-medium);
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 8px;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.participant-search:focus {
+  border-color: #3b82f6;
+}
+
 .checkbox-label {
   display: flex;
   align-items: center;
@@ -347,6 +491,41 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
+}
+
+.link-to-row .cs-wrap {
+  max-width: 220px;
+}
+
+.link-to-row .cs-trigger {
+  height: 34px;
+  padding: 0 8px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.link-to-row .cs-combo-input {
+  font-size: 12px;
+}
+
+.link-to-row .cs-selected-text,
+.link-to-row .cs-placeholder-text {
+  font-size: 12px;
+}
+
+.link-to-row .cs-arrow {
+  width: 14px;
+  height: 14px;
+}
+
+.link-to-row .cs-dropdown {
+  max-height: 150px;
+  border-radius: 6px;
+}
+
+.link-to-row .cs-option {
+  padding: 6px 10px;
+  font-size: 12px;
 }
 
 .link-toggle {

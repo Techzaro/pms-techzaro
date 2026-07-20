@@ -14,12 +14,16 @@ import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { Link, useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
+import { StickyNote } from "lucide-react";
 import { authToken, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import AssignerViewModal from "../components/AssignerViewModal";
+import ActionPopover from "../components/ActionPopover";
+import AddNoteModal from "../components/AddNoteModal";
 import { formatDateTimeInline } from "../utils/formatDateTime";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
+import "../components/ActionPopover.css";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
 
@@ -58,6 +62,7 @@ function DeliveriesByYou() {
   });
   const [timeFilter, setTimeFilter] = useState("");
   const [viewModal, setViewModal] = useState({ open: false, subtask: null });
+  const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const ITEMS_PER_PAGE = 10;
@@ -329,15 +334,22 @@ function DeliveriesByYou() {
                       </div>
                     </div>
                     <div>
-                      <div className="action-btns">
+                      <ActionPopover
+                        trigger={
+                          <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                            <IoEyeOutline size={20} />
+                          </button>
+                        }
+                      >
                         <button
                           className="action-icon-btn action-view"
                           title="View"
                           onClick={() => setViewModal({ open: true, subtask: item })}
                         >
-                          <IoEyeOutline />
+                          <IoEyeOutline size={16} />
                         </button>
-                      </div>
+                        <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
+                      </ActionPopover>
                     </div>
                   </div>
                 );
@@ -358,6 +370,14 @@ function DeliveriesByYou() {
         onClose={() => setViewModal({ open: false, subtask: null })}
         deliverable={viewModal.subtask}
         onActionSuccess={handleActionSuccess}
+      />
+
+      <AddNoteModal
+        isOpen={noteModal.open}
+        onClose={() => setNoteModal({ open: false, itemId: null })}
+        itemType="deliverable"
+        itemId={noteModal.itemId}
+        onSaved={fetchSubtasks}
       />
     </DashboardLayout>
   );

@@ -494,7 +494,7 @@ function ManageTeam() {
             <MdSearch size={20} className="mt-search-icon" />
             <input
               type="text"
-              placeholder="Search teams.."
+              placeholder="Search by team name..."
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
             />
@@ -505,15 +505,15 @@ function ManageTeam() {
                 onClick={() => { setSelectedTeamFilter(""); setSearchParams({}); setPage(1); }}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: "6px",
-                  padding: "6px 14px", borderRadius: "8px", border: "1px solid #e5e7eb",
-                  background: "#f9fafb", color: "#374151", fontSize: "13px", fontWeight: 500,
+                  padding: "6px 14px", borderRadius: "8px", border: "1px solid var(--border-color)",
+                  background: "var(--bg-hover)", color: "var(--text-dark)", fontSize: "13px", fontWeight: 500,
                   cursor: "pointer",
                 }}
               >
                 All Teams
               </button>
-              <span style={{ fontSize: "13px", color: "#6b7280" }}>
-                Filtered: <strong style={{ color: "#111827" }}>{selectedTeamName}</strong>
+              <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
+                Filtered: <strong style={{ color: "var(--text-heading)" }}>{selectedTeamName}</strong>
               </span>
             </div>
           )}
@@ -690,11 +690,11 @@ function ManageTeam() {
                         alignItems: "center",
                         width: "100%",
                         height: "52px",
-                        border: "1px solid #d1d5db",
+                        border: "1px solid var(--border-color)",
                         borderRadius: "12px",
                         padding: "0 14px",
                         fontSize: "14px",
-                        background: "#f9fafb",
+                        background: "var(--bg-hover)",
                         cursor: "pointer",
                         boxSizing: "border-box",
                       }}
@@ -710,7 +710,7 @@ function ManageTeam() {
                         <input
                           type="text"
                           className="mt-combo-input"
-                          placeholder="Search users..."
+                          placeholder="Search by user name, role, or department..."
                           value={mtUserSearch}
                           onChange={(e) => { setMtUserSearch(e.target.value); }}
                           onFocus={() => setIsUserDropdownOpen(true)}
@@ -723,7 +723,7 @@ function ManageTeam() {
                         style={{
                           transform: isUserDropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
                           transition: "0.2s",
-                          color: "#6b7280",
+                          color: "var(--text-secondary)",
                         }}
                       />
                     </div>
@@ -793,11 +793,11 @@ function ManageTeam() {
                       style={{
                         width: "100%",
                         height: "52px",
-                        border: "1px solid #d1d5db",
+                        border: "1px solid var(--border-color)",
                         borderRadius: "12px",
                         padding: "0 14px",
                         fontSize: "14px",
-                        background: "#f9fafb",
+                        background: "var(--bg-hover)",
                         outline: "none",
                         boxSizing: "border-box",
                       }}
@@ -830,7 +830,7 @@ function ManageTeam() {
                         borderRadius: "10px",
                         padding: "0 12px",
                         fontSize: "14px",
-                        background: "#fff",
+                        background: "var(--bg-card)",
                         cursor: "pointer",
                         boxSizing: "border-box",
                         gap: "8px",
@@ -849,7 +849,7 @@ function ManageTeam() {
                         <input
                           type="text"
                           className="mt-combo-input"
-                          placeholder="Search members..."
+                          placeholder="Search by member name, role, or department..."
                           value={mtMemberSearch}
                           onChange={(e) => { setMtMemberSearch(e.target.value); }}
                           onFocus={() => setIsMemberDropdownOpen(true)}
@@ -862,7 +862,7 @@ function ManageTeam() {
                         style={{
                           transform: isMemberDropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
                           transition: "0.2s",
-                          color: "#6b7280",
+                          color: "var(--text-secondary)",
                           cursor: "pointer",
                         }}
                         onClick={(e) => { e.stopPropagation(); if (isMemberDropdownOpen) { setIsMemberDropdownOpen(false); setMtMemberSearch(""); } else { setIsMemberDropdownOpen(true); setMtMemberSearch(""); } }}
@@ -922,11 +922,11 @@ function ManageTeam() {
                         style={{
                           width: "100%",
                           height: "52px",
-                          border: "1px solid #d1d5db",
+                          border: "1px solid var(--border-color)",
                           borderRadius: "12px",
                           padding: "0 14px",
                           fontSize: "14px",
-                          background: "#f9fafb",
+                          background: "var(--bg-hover)",
                           outline: "none",
                           boxSizing: "border-box",
                           cursor: "pointer",

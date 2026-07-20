@@ -113,7 +113,7 @@
 
   .donut-legend-item {
     padding: 8px 0;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--border-light);
   }
 
   .donut-legend-item:last-child {

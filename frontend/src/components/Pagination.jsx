@@ -59,10 +59,10 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
         onClick={() => onPageChange(currentPage - 1)}
         style={{
           padding: "6px 14px",
-          border: "1px solid #d1d5db",
+          border: "var(--border-color)",
           borderRadius: "6px",
-          background: currentPage <= 1 ? "#f9fafb" : "#fff",
-          color: currentPage <= 1 ? "#9ca3af" : "#374151",
+          background: currentPage <= 1 ? "var(--bg-hover)" : "var(--bg-card)",
+          color: currentPage <= 1 ? "var(--text-muted)" : "var(--text-primary)",
           cursor: currentPage <= 1 ? "not-allowed" : "pointer",
           fontSize: "13px",
           fontWeight: 500,
@@ -74,7 +74,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
       {getVisiblePages().map((page, idx) =>
         page === "..." ? (
           /* Ellipsis marker for skipped page ranges */
-          <span key={`dots-${idx}`} style={{ padding: "0 4px", color: "#9ca3af", fontSize: "13px" }}>
+          <span key={`dots-${idx}`} style={{ padding: "0 4px", color: "var(--text-muted)", fontSize: "13px" }}>
             ...
           </span>
         ) : (
@@ -84,10 +84,10 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
             style={{
               padding: "6px 12px",
               border: "1px solid",
-              borderColor: page === currentPage ? "#4f46e5" : "#d1d5db",
+              borderColor: page === currentPage ? "var(--color-primary)" : "var(--border-color)",
               borderRadius: "6px",
-              background: page === currentPage ? "#4f46e5" : "#fff",
-              color: page === currentPage ? "#fff" : "#374151",
+              background: page === currentPage ? "var(--color-primary)" : "var(--bg-card)",
+              color: page === currentPage ? "#fff" : "var(--text-primary)",
               cursor: "pointer",
               fontSize: "13px",
               fontWeight: page === currentPage ? 600 : 500,
@@ -104,10 +104,10 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
         onClick={() => onPageChange(currentPage + 1)}
         style={{
           padding: "6px 14px",
-          border: "1px solid #d1d5db",
+          border: "var(--border-color)",
           borderRadius: "6px",
-          background: currentPage >= totalPages ? "#f9fafb" : "#fff",
-          color: currentPage >= totalPages ? "#9ca3af" : "#374151",
+          background: currentPage >= totalPages ? "var(--bg-hover)" : "var(--bg-card)",
+          color: currentPage >= totalPages ? "var(--text-muted)" : "var(--text-primary)",
           cursor: currentPage >= totalPages ? "not-allowed" : "pointer",
           fontSize: "13px",
           fontWeight: 500,

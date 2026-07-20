@@ -15,6 +15,10 @@
   border: 1px solid var(--border-color);
 
   box-shadow: var(--shadow-md);
+
+  position: sticky;
+  top: 0;
+  z-index: 1000;
 }
 
 /* LEFT */
@@ -49,7 +53,7 @@
 
   border-radius: 14px;
 
-  background: #111827;
+  background: var(--text-heading);
   color: white;
 
   display: flex;
@@ -110,17 +114,20 @@
 
   font-size: 14px;
 
+  color: var(--text-primary);
+
   transition: 0.2s;
+}
+
+.header-search input::placeholder {
+  color: var(--text-muted);
 }
 
 .header-search input:focus {
   outline: none;
-
-  border-color: #635bff;
-
+  border-color: var(--color-primary);
   background: var(--bg-input-focus);
-
-  box-shadow: 0 0 0 4px rgba(99, 91, 255, 0.12);
+  box-shadow: 0 0 0 4px var(--color-primary-ring);
 }
 
 /* SEARCH DROPDOWN */
@@ -204,7 +211,7 @@
 
   text-decoration: none;
 
-  background: #2563eb;
+  background: var(--color-primary);
   color:white;
 
   padding: 10px 18px;
@@ -238,7 +245,7 @@
 
 .task-btn:hover,
 .project-btn:hover {
-  background: #635bff;
+  background: var(--color-primary-dark);
   color: white;
 }
 
@@ -292,7 +299,7 @@
 
   border-radius: 50%;
 
-  background: #635bff;
+  background: var(--color-primary);
   color: white;
 
   display: flex;
@@ -493,19 +500,19 @@
   gap: 10px;
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid var(--border-color);
-  background: transparent;
+  border: 1px solid #fca5a5;
+  background: #fef2f2;
   border-radius: 10px;
   cursor: pointer;
   font-size: 14px;
-  color: var(--text-dark);
+  color: #dc2626;
   transition: all 0.15s;
   text-align: left;
 }
 
 .hmc-logout-btn:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-medium);
+  background: #fee2e2;
+  border-color: #f87171;
 }
 
 /* NOTIFICATION BELL */
@@ -560,7 +567,7 @@
   height: 18px;
   padding: 0 5px;
   border-radius: 9px;
-  background: #ef4444;
+  background: var(--color-danger);
   color: #fff;
   font-size: 11px;
   font-weight: 700;
@@ -723,8 +730,8 @@
 }
 
 .notif-panel-dot--unread {
-  background: #ef4444;
-  box-shadow: 0 0 0 2px #fecaca;
+  background: var(--color-danger);
+  box-shadow: 0 0 0 2px var(--color-danger-bg);
 }
 
 .notif-panel-content {
@@ -761,7 +768,7 @@
 
   border: none;
 
-  background: #d1d5db;
+  background: var(--border-color);
 
   margin: 0 10px;
 }

@@ -15,15 +15,20 @@ import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
+import { StickyNote } from "lucide-react";
 import CreateTaskModal from "../components/CreateTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal"; // Added missing import
 import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal"; // Added missing import
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
+import ActionPopover from "../components/ActionPopover";
+import TaskNotesPopover from "../components/TaskNotesPopover";
+import AddNoteModal from "../components/AddNoteModal";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { formatDateTimeInline } from "../utils/formatDateTime";
+import "../components/ActionPopover.css";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
@@ -68,6 +73,7 @@ const SelfTasks = () => {
   const [showSubtaskSubmitModal, setShowSubtaskSubmitModal] = useState({ open: false, subtask: null }); // Added missing state
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [viewModal, setViewModal] = useState({ open: false, subtask: null }); // Added missing state
+  const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -274,7 +280,7 @@ const SelfTasks = () => {
         <IoSearchOutline fontSize={"20px"} />
         <input
           type="text"
-          placeholder="Search by task name"
+          placeholder="Search by task name or user name"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -308,7 +314,10 @@ const SelfTasks = () => {
                 <div className="taskby-row-compact" key={item.sortableId}>
                   <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
                   <div>
-                    <div className="task-title">{item.title}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <div className="task-title">{item.title}</div>
+                      <TaskNotesPopover taskId={item.id} itemType="task" />
+                    </div>
                     {item.project && (
                       <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
                         {item.project.title}
@@ -348,8 +357,15 @@ const SelfTasks = () => {
                   <div className="date-box">
                     <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.start_date)}{"\n"}{formatDate(item.end_date)}</div>
                   </div>
-                  <div className="action-btns">
-                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}><IoEyeOutline /></button>
+                  <ActionPopover
+                    trigger={
+                      <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                        <IoEyeOutline size={20} />
+                      </button>
+                    }
+                  >
+                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}><IoEyeOutline size={16} /></button>
+                    <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                     {(() => {
                       const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
                       const canSubmit = (item.status === "in_progress" || item.status === "reopened" || item.status === "paused") && myPivotStatus !== "submitted";
@@ -362,12 +378,12 @@ const SelfTasks = () => {
                           onClick={() => !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item })} 
                           style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
                         >
-                          <LuSend />
+                          <LuSend size={16} />
                         </button>
                       </div>
                       );
                     })()}
-                  </div>
+                  </ActionPopover>
                 </div>
               );
             }}
@@ -420,6 +436,14 @@ const SelfTasks = () => {
           onResubmit={(subtask) => setShowSubtaskSubmitModal({ open: true, subtask })}
         />
       )}
+
+      <AddNoteModal
+        isOpen={noteModal.open}
+        onClose={() => setNoteModal({ open: false, itemId: null })}
+        itemType="task"
+        itemId={noteModal.itemId}
+        onSaved={fetchTasks}
+      />
     </DashboardLayout>
   );
 };

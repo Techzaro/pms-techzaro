@@ -10,7 +10,7 @@
   justify-content: space-between;
   gap: 8px;
   padding: 10px 14px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   background: var(--bg-card);
   font-size: 14px;
@@ -24,8 +24,8 @@
 
 .cdt-trigger:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
 }
 
 .cdt-placeholder {
@@ -85,7 +85,7 @@
 .cdt-col select {
   width: 100%;
   padding: 8px 6px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
@@ -99,7 +99,7 @@
 
 .cdt-col select:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: var(--color-primary);
 }
 
 .cdt-actions {

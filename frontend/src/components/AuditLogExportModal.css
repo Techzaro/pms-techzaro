@@ -76,7 +76,7 @@
 }
 
 .ael-close-btn:hover {
-  background: #e5e7eb;
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
@@ -103,8 +103,8 @@
 }
 
 .ael-radio-label:hover {
-  border-color: #d1d5db;
-  background: #fafbfc;
+  border-color: var(--border-medium);
+  background: var(--bg-hover);
 }
 
 .ael-radio-label input[type="radio"] {
@@ -115,7 +115,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  border: 2px solid #d1d5db;
+  border: 2px solid var(--border-color);
   flex-shrink: 0;
   margin-top: 1px;
   position: relative;
@@ -123,8 +123,8 @@
 }
 
 .ael-radio-label input[type="radio"]:checked + .ael-radio-mark {
-  border-color: #6366f1;
-  background: #6366f1;
+  border-color: var(--color-primary);
+  background: var(--color-primary);
 }
 
 .ael-radio-label input[type="radio"]:checked + .ael-radio-mark::after {
@@ -193,7 +193,7 @@
 
 .ael-cancel-btn:hover {
   background: var(--bg-hover);
-  border-color: #d1d5db;
+  border-color: var(--border-color);
 }
 
 .ael-export-btn {
@@ -203,7 +203,7 @@
   padding: 9px 20px;
   border: none;
   border-radius: 10px;
-  background: #6366f1;
+  background: var(--color-primary);
   color: #fff;
   font-size: 13px;
   font-weight: 600;

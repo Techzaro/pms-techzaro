@@ -215,7 +215,7 @@
 }
 
 .table-row:hover {
-  background: #fafbff;
+  background: var(--bg-hover);
 }
 
 /* MEMBER */
@@ -961,8 +961,8 @@
 }
 
 .reports-section-search:focus-within {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
 }
 
 .reports-table-section-header {

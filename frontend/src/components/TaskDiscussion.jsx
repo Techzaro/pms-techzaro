@@ -10,10 +10,15 @@ import {
   X,
   Bold,
   Italic,
+  Underline,
+  Strikethrough,
   List,
   ListOrdered,
   AtSign,
   FileText,
+  Palette,
+  Highlighter,
+  RemoveFormatting,
 } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
@@ -81,6 +86,8 @@ function renderCommentBody(text) {
 
   html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
+  html = html.replace(/__(.+?)__/g, "<u>$1</u>");
+  html = html.replace(/~~(.+?)~~/g, "<s>$1</s>");
   html = html.replace(/\n/g, "<br/>");
   html = html.replace(
     /@(\w+(?:\s\w+)?)/g,
@@ -392,10 +399,26 @@ export default function TaskDiscussion({ taskId, readOnly }) {
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [collapsed, setCollapsed] = useState(false);
+  const [fontFamily, setFontFamily] = useState("Sans Serif");
+  const [fontSize, setFontSize] = useState("Normal");
+  const [textColor, setTextColor] = useState("#000000");
+  const [highlightColor, setHighlightColor] = useState("#FFFF00");
+  const [showFontMenu, setShowFontMenu] = useState(false);
+  const [showSizeMenu, setShowSizeMenu] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showHighlightPicker, setShowHighlightPicker] = useState(false);
   const commentsEndRef = useRef(null);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
+  const fontMenuRef = useRef(null);
+  const sizeMenuRef = useRef(null);
+  const colorPickerRef = useRef(null);
+  const highlightPickerRef = useRef(null);
+  const cursorPosRef = useRef({ start: 0, end: 0 });
+  const commentTextRef = useRef("");
   const currentUser = getUser();
+
+  commentTextRef.current = newComment;
 
   const fetchComments = useCallback(
     async (pageNum = 1, append = false) => {
@@ -444,6 +467,17 @@ export default function TaskDiscussion({ taskId, readOnly }) {
       fetchParticipants();
     }
   }, [taskId, fetchComments, fetchParticipants]);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (fontMenuRef.current && !fontMenuRef.current.contains(e.target)) setShowFontMenu(false);
+      if (sizeMenuRef.current && !sizeMenuRef.current.contains(e.target)) setShowSizeMenu(false);
+      if (colorPickerRef.current && !colorPickerRef.current.contains(e.target)) setShowColorPicker(false);
+      if (highlightPickerRef.current && !highlightPickerRef.current.contains(e.target)) setShowHighlightPicker(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (comments.length > 0 && page === 1) {
@@ -522,13 +556,14 @@ export default function TaskDiscussion({ taskId, readOnly }) {
   };
 
   const insertMention = (participant) => {
-    const cursorPos = textareaRef.current?.selectionStart || newComment.length;
-    const textBeforeCursor = newComment.substring(0, cursorPos);
-    const textAfterCursor = newComment.substring(cursorPos);
+    const currentText = commentTextRef.current;
+    const cursorPos = textareaRef.current?.selectionStart || currentText.length;
+    const textBeforeCursor = currentText.substring(0, cursorPos);
+    const textAfterCursor = currentText.substring(cursorPos);
     const mentionText = textBeforeCursor.replace(/@\w*$/, `@${participant.name} `);
     setNewComment(mentionText + textAfterCursor);
     setShowMentions(false);
-    textareaRef.current?.focus();
+    requestAnimationFrame(() => { textareaRef.current?.focus(); });
   };
 
   const filteredParticipants = participants.filter(
@@ -536,6 +571,49 @@ export default function TaskDiscussion({ taskId, readOnly }) {
       p.id !== currentUser?.id &&
       (p.name || "").toLowerCase().includes(mentionQuery)
   );
+
+  const trackCursor = () => {
+    const ta = textareaRef.current;
+    if (ta) {
+      cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd };
+    }
+  };
+
+  const insertFormatting = (before, after) => {
+    const { start, end } = cursorPosRef.current;
+    const currentText = commentTextRef.current;
+    const selected = currentText.substring(start, end);
+    const insertText = selected || "text";
+    const text = currentText.substring(0, start) + before + insertText + after + currentText.substring(end);
+    const newCursorPos = start + before.length + insertText.length + after.length;
+    setNewComment(text);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const ta = textareaRef.current;
+        if (ta) {
+          ta.focus();
+          ta.setSelectionRange(newCursorPos, newCursorPos);
+        }
+      });
+    });
+  };
+
+  const insertAtCursor = (text) => {
+    const { start } = cursorPosRef.current;
+    const currentText = commentTextRef.current;
+    const newText = currentText.substring(0, start) + text + currentText.substring(start);
+    const newPos = start + text.length;
+    setNewComment(newText);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const ta = textareaRef.current;
+        if (ta) {
+          ta.focus();
+          ta.setSelectionRange(newPos, newPos);
+        }
+      });
+    });
+  };
 
   const handleFileSelect = (e) => {
     const selected = e.target.files?.[0];
@@ -646,86 +724,168 @@ export default function TaskDiscussion({ taskId, readOnly }) {
               )}
 
               <div className="td-discussion-input-wrapper">
-                <textarea
-                  ref={textareaRef}
-                  className="td-discussion-textarea"
-                  placeholder="Write a comment... (Use @ to mention, Ctrl+Enter to send)"
-                  value={newComment}
-                  onChange={handleMentionInput}
-                  onKeyDown={handleKeyDown}
-                  rows={3}
-                  disabled={sending}
-                />
                 <div className="td-discussion-toolbar">
                   <div className="td-discussion-formatting">
+                    {/* Font Family Dropdown */}
+                    <div className="td-toolbar-dropdown" ref={fontMenuRef}>
+                      <button
+                        className="td-toolbar-dropdown-btn"
+                        title="Font family"
+                        onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
+                        onClick={() => { setShowFontMenu(!showFontMenu); setShowSizeMenu(false); setShowColorPicker(false); setShowHighlightPicker(false); }}
+                      >
+                        {fontFamily} <ChevronDown size={12} />
+                      </button>
+                      {showFontMenu && (
+                        <div className="td-toolbar-dropdown-menu">
+                          {["Sans Serif", "Serif", "Monospace", "Cursive"].map((f) => (
+                            <button key={f} className={`td-toolbar-dropdown-item ${fontFamily === f ? "active" : ""}`} onClick={() => { setFontFamily(f); setShowFontMenu(false); }}>
+                              {f}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Font Size Dropdown */}
+                    <div className="td-toolbar-dropdown" ref={sizeMenuRef}>
+                      <button
+                        className="td-toolbar-dropdown-btn"
+                        title="Font size"
+                        onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
+                        onClick={() => { setShowSizeMenu(!showSizeMenu); setShowFontMenu(false); setShowColorPicker(false); setShowHighlightPicker(false); }}
+                      >
+                        {fontSize} <ChevronDown size={12} />
+                      </button>
+                      {showSizeMenu && (
+                        <div className="td-toolbar-dropdown-menu">
+                          {["Small", "Normal", "Medium", "Large"].map((s) => (
+                            <button key={s} className={`td-toolbar-dropdown-item ${fontSize === s ? "active" : ""}`} onClick={() => { setFontSize(s); setShowSizeMenu(false); }}>
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="td-toolbar-separator" />
+
                     <button
                       title="Bold"
-                      onClick={() => {
-                        const ta = textareaRef.current;
-                        if (!ta) return;
-                        const start = ta.selectionStart;
-                        const end = ta.selectionEnd;
-                        const selected = newComment.substring(start, end);
-                        const before = newComment.substring(0, start);
-                        const after = newComment.substring(end);
-                        setNewComment(before + `**${selected || "text"}**` + after);
-                      }}
+                      onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
+                      onClick={() => insertFormatting("**", "**")}
                     >
                       <Bold size={14} />
                     </button>
                     <button
                       title="Italic"
-                      onClick={() => {
-                        const ta = textareaRef.current;
-                        if (!ta) return;
-                        const start = ta.selectionStart;
-                        const end = ta.selectionEnd;
-                        const selected = newComment.substring(start, end);
-                        const before = newComment.substring(0, start);
-                        const after = newComment.substring(end);
-                        setNewComment(before + `*${selected || "text"}*` + after);
-                      }}
+                      onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
+                      onClick={() => insertFormatting("*", "*")}
                     >
                       <Italic size={14} />
                     </button>
                     <button
+                      title="Underline"
+                      onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
+                      onClick={() => insertFormatting("__", "__")}
+                    >
+                      <Underline size={14} />
+                    </button>
+                    <button
+                      title="Strikethrough"
+                      onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
+                      onClick={() => insertFormatting("~~", "~~")}
+                    >
+                      <Strikethrough size={14} />
+                    </button>
+
+                    <div className="td-toolbar-separator" />
+
+                    {/* Text Color */}
+                    <div className="td-toolbar-dropdown" ref={colorPickerRef}>
+                      <button
+                        className="td-toolbar-color-btn"
+                        title="Text color"
+                        onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
+                        onClick={() => { setShowColorPicker(!showColorPicker); setShowFontMenu(false); setShowSizeMenu(false); setShowHighlightPicker(false); }}
+                      >
+                        <span className="td-toolbar-color-label">A</span>
+                        <span className="td-toolbar-color-bar" style={{ backgroundColor: textColor }} />
+                      </button>
+                      {showColorPicker && (
+                        <div className="td-toolbar-color-picker">
+                          {["#000000", "#434343", "#666666", "#999999", "#B7B7B7", "#CCCCCC", "#D9D9D9", "#EFEFEF", "#F3F3F3", "#FFFFFF",
+                            "#980000", "#FF0000", "#FF9900", "#FFFF00", "#00FF00", "#00FFFF", "#4A86E8", "#0000FF", "#9900FF", "#FF00FF",
+                            "#E6B8AF", "#F4CCCC", "#FCE5CD", "#FFF2CC", "#D9EAD3", "#D0E0E3", "#C9DAF8", "#CFE2F3", "#D9D2E9", "#EAD1DC"].map((c) => (
+                            <button key={c} className="td-toolbar-color-swatch" style={{ backgroundColor: c }} onClick={() => { setTextColor(c); setShowColorPicker(false); }} title={c} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Highlight Color */}
+                    <div className="td-toolbar-dropdown" ref={highlightPickerRef}>
+                      <button
+                        className="td-toolbar-color-btn"
+                        title="Highlight color"
+                        onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
+                        onClick={() => { setShowHighlightPicker(!showHighlightPicker); setShowFontMenu(false); setShowSizeMenu(false); setShowColorPicker(false); }}
+                      >
+                        <span className="td-toolbar-color-label" style={{ backgroundColor: highlightColor, padding: "0 3px", borderRadius: "2px" }}>A</span>
+                      </button>
+                      {showHighlightPicker && (
+                        <div className="td-toolbar-color-picker">
+                          {["#FFFF00", "#00FF00", "#00FFFF", "#FF00FF", "#FF0000", "#0000FF", "#FFFFFF", "#F4CCCC", "#FCE5CD", "#FFF2CC",
+                            "#D9EAD3", "#D0E0E3", "#CFE2F3", "#D9D2E9", "#EAD1DC", "#FFFFFF"].map((c) => (
+                            <button key={c} className="td-toolbar-color-swatch" style={{ backgroundColor: c }} onClick={() => { setHighlightColor(c); setShowHighlightPicker(false); }} title={c} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="td-toolbar-separator" />
+
+                    <button
                       title="Bullet list"
-                      onClick={() => {
-                        const ta = textareaRef.current;
-                        if (!ta) return;
-                        const start = ta.selectionStart;
-                        const before = newComment.substring(0, start);
-                        const after = newComment.substring(start);
-                        setNewComment(before + "\n- " + after);
-                      }}
+                      onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
+                      onClick={() => insertAtCursor("\n- ")}
                     >
                       <List size={14} />
                     </button>
                     <button
                       title="Numbered list"
-                      onClick={() => {
-                        const ta = textareaRef.current;
-                        if (!ta) return;
-                        const start = ta.selectionStart;
-                        const before = newComment.substring(0, start);
-                        const after = newComment.substring(start);
-                        setNewComment(before + "\n1. " + after);
-                      }}
+                      onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
+                      onClick={() => insertAtCursor("\n1. ")}
                     >
                       <ListOrdered size={14} />
                     </button>
+
+                    <div className="td-toolbar-separator" />
+
+                    <button
+                      title="Clear formatting"
+                      onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
+                      onClick={() => {
+                        const currentText = commentTextRef.current;
+                        const cleaned = currentText
+                          .replace(/\*\*(.+?)\*\*/g, "$1")
+                          .replace(/\*(.+?)\*/g, "$1")
+                          .replace(/__(.+?)__/g, "$1")
+                          .replace(/~~(.+?)~~/g, "$1")
+                          .replace(/<mark>(.+?)<\/mark>/g, "$1");
+                        setNewComment(cleaned);
+                        requestAnimationFrame(() => { textareaRef.current?.focus(); });
+                      }}
+                    >
+                      <RemoveFormatting size={14} />
+                    </button>
                     <button
                       title="Mention someone"
+                      onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
                       onClick={() => {
-                        const ta = textareaRef.current;
-                        if (!ta) return;
-                        const start = ta.selectionStart;
-                        const before = newComment.substring(0, start);
-                        const after = newComment.substring(start);
-                        setNewComment(before + "@" + after);
+                        insertAtCursor("@");
                         setShowMentions(true);
                         setMentionQuery("");
-                        setTimeout(() => ta.focus(), 50);
                       }}
                     >
                       <AtSign size={14} />
@@ -741,6 +901,7 @@ export default function TaskDiscussion({ taskId, readOnly }) {
                     />
                     <button
                       className="td-discussion-attach-btn"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => fileInputRef.current?.click()}
                       title="Attach file"
                     >
@@ -761,6 +922,19 @@ export default function TaskDiscussion({ taskId, readOnly }) {
                     </button>
                   </div>
                 </div>
+                <textarea
+                  ref={textareaRef}
+                  className="td-discussion-textarea"
+                  placeholder="Write a comment... (Use @ to mention, Ctrl+Enter to send)"
+                  value={newComment}
+                  onChange={handleMentionInput}
+                  onKeyDown={handleKeyDown}
+                  onSelect={trackCursor}
+                  onClick={trackCursor}
+                  onKeyUp={trackCursor}
+                  rows={3}
+                  disabled={sending}
+                />
               </div>
             </div>
           )}

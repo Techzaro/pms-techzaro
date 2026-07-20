@@ -48,7 +48,7 @@
   outline: none !important;
   box-shadow: none !important;
   font-size: 14px;
-  color: #1e293b;
+  color: var(--text-primary);
   background: transparent !important;
   min-width: 0;
   cursor: text;
@@ -61,7 +61,7 @@
 }
 
 .usd-combo-input::placeholder {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 /* Count badge when input is not focused */
@@ -217,14 +217,14 @@
 .usd-name {
   font-size: 14px;
   font-weight: 500;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .usd-role {
   font-size: 11px;
   font-weight: 500;
   color: var(--text-secondary);
-  background: #f1f5f9;
+  background: var(--bg-hover);
   padding: 1px 6px;
   border-radius: 4px;
   text-transform: capitalize;

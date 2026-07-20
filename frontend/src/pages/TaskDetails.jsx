@@ -97,45 +97,45 @@ function statusLabel(status) {
 /** Return text colour for a given task status. */
 function statusColor(status) {
   const s = (status || "").toLowerCase();
-  if (s === "approved") return "#166534";
-  if (s === "pending") return "#92400E";
-  if (s === "in_progress" || s === "acknowledged") return "#1E40AF";
-  if (s === "paused") return "#B45309";
-  if (s === "reopened") return "#92400E";
-  if (s === "submitted") return "#1E40AF";
-  if (s === "rejected") return "#991B1B";
-  return "#374151";
+  if (s === "approved") return "var(--color-success)";
+  if (s === "pending") return "var(--color-warning)";
+  if (s === "in_progress" || s === "acknowledged") return "var(--color-blue)";
+  if (s === "paused") return "var(--color-warning)";
+  if (s === "reopened") return "var(--color-warning)";
+  if (s === "submitted") return "var(--color-blue)";
+  if (s === "rejected") return "var(--color-danger)";
+  return "var(--text-dark)";
 }
 
 /** Return background colour for a given task status badge. */
 function statusBgColor(status) {
   const s = (status || "").toLowerCase();
-  if (s === "approved") return "#DCFCE7";
-  if (s === "pending") return "#FEF3C7";
-  if (s === "in_progress" || s === "acknowledged") return "#DBEAFE";
-  if (s === "paused") return "#FEF3C7";
-  if (s === "reopened") return "#FEF3C7";
-  if (s === "submitted") return "#DBEAFE";
-  if (s === "rejected") return "#FEE2E2";
-  return "#F3F4F6";
+  if (s === "approved") return "var(--color-success-bg)";
+  if (s === "pending") return "var(--color-warning-bg)";
+  if (s === "in_progress" || s === "acknowledged") return "var(--color-blue-bg)";
+  if (s === "paused") return "var(--color-warning-bg)";
+  if (s === "reopened") return "var(--color-warning-bg)";
+  if (s === "submitted") return "var(--color-blue-bg)";
+  if (s === "rejected") return "var(--color-danger-bg)";
+  return "var(--bg-hover)";
 }
 
 /** Return text colour for a priority level. */
 function priorityColor(priority) {
   const p = (priority || "").toLowerCase();
-  if (p === "high") return "#991B1B";
-  if (p === "medium") return "#92400E";
-  if (p === "low") return "#166534";
-  return "#374151";
+  if (p === "high") return "var(--color-danger)";
+  if (p === "medium") return "var(--color-warning)";
+  if (p === "low") return "var(--color-success)";
+  return "var(--text-dark)";
 }
 
 /** Return background colour for a priority badge. */
 function priorityBgColor(priority) {
   const p = (priority || "").toLowerCase();
-  if (p === "high") return "#FEE2E2";
-  if (p === "medium") return "#FEF3C7";
-  if (p === "low") return "#DCFCE7";
-  return "#F3F4F6";
+  if (p === "high") return "var(--color-danger-bg)";
+  if (p === "medium") return "var(--color-warning-bg)";
+  if (p === "low") return "var(--color-success-bg)";
+  return "var(--bg-hover)";
 }
 
 /** Extract up to 2 uppercase initials from a name for avatar display. */
@@ -802,7 +802,7 @@ function TaskDetails() {
                     </button>
                   )}
                   {canPause && (
-                    <button className="td-btn-primary" onClick={() => setPauseModalOpen(true)} disabled={pausing} style={{ backgroundColor: pausing ? "#9CA3AF" : "#D97706", borderColor: pausing ? "#9CA3AF" : "#D97706", opacity: pausing ? 0.7 : 1, cursor: pausing ? "not-allowed" : "pointer" }}>
+                    <button className="td-btn-primary" onClick={() => setPauseModalOpen(true)} disabled={pausing} style={{ backgroundColor: pausing ? "var(--text-muted)" : "var(--color-warning)", borderColor: pausing ? "var(--text-muted)" : "var(--color-warning)", opacity: pausing ? 0.7 : 1, cursor: pausing ? "not-allowed" : "pointer" }}>
                       <Pause size={15} />
                       {pausing ? "Pausing..." : "Pause"}
                     </button>
@@ -814,19 +814,19 @@ function TaskDetails() {
                     </button>
                   )}
                   {canAssignerPause && (
-                    <button className="td-btn-primary" onClick={() => setAssignerPauseModalOpen(true)} disabled={assignerPausing} style={{ backgroundColor: assignerPausing ? "#9CA3AF" : "#7C3AED", borderColor: assignerPausing ? "#9CA3AF" : "#7C3AED", opacity: assignerPausing ? 0.7 : 1, cursor: assignerPausing ? "not-allowed" : "pointer" }}>
+                    <button className="td-btn-primary" onClick={() => setAssignerPauseModalOpen(true)} disabled={assignerPausing} style={{ backgroundColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", borderColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", opacity: assignerPausing ? 0.7 : 1, cursor: assignerPausing ? "not-allowed" : "pointer" }}>
                       <Lock size={15} />
                       {assignerPausing ? "Pausing..." : "Put On Hold"}
                     </button>
                   )}
                   {canAssignerResume && (
-                    <button className="td-btn-primary" onClick={handleAssignerResume} disabled={assignerResuming} style={{ backgroundColor: assignerResuming ? "#9CA3AF" : "#059669", borderColor: assignerResuming ? "#9CA3AF" : "#059669", opacity: assignerResuming ? 0.7 : 1, cursor: assignerResuming ? "not-allowed" : "pointer" }}>
+                    <button className="td-btn-primary" onClick={handleAssignerResume} disabled={assignerResuming} style={{ backgroundColor: assignerResuming ? "var(--text-muted)" : "var(--color-success)", borderColor: assignerResuming ? "var(--text-muted)" : "var(--color-success)", opacity: assignerResuming ? 0.7 : 1, cursor: assignerResuming ? "not-allowed" : "pointer" }}>
                       <Play size={15} />
                       {assignerResuming ? "Resuming..." : "Resume"}
                     </button>
                   )}
                   {isAssignerLocked && !isCreator && (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "13px", fontWeight: 600, border: "1px solid #F59E0B" }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "var(--color-warning-bg)", color: "var(--color-warning)", fontSize: "13px", fontWeight: 600, border: "1px solid var(--color-warning)" }}>
                       <Lock size={14} />
                       On Hold by Assigner
                     </span>
@@ -856,7 +856,7 @@ function TaskDetails() {
                   {task.priority} Priority
                 </span>
                 {task?.assigner_paused && (
-                  <span className="td-badge" style={{ background: "#FEF3C7", color: "#92400E" }}>
+                  <span className="td-badge" style={{ background: "var(--color-warning-bg)", color: "var(--color-warning)" }}>
                     <Lock size={12} />
                     On Hold by Assigner
                   </span>
@@ -902,6 +902,7 @@ function TaskDetails() {
                   setReopenDialog={setTaskReopenDialog}
                   acting={taskActing}
                   setActing={setTaskActing}
+                  hideTimeline
                 />
               )}
 
@@ -909,7 +910,7 @@ function TaskDetails() {
               <div className="td-content">
                 {/* Heading based on source page */}
                 <div style={{ marginBottom: "16px", marginTop: "4px", paddingLeft: "4px" }}>
-                  <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#111827", margin: 0 }}>
+                  <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-heading)", margin: 0 }}>
                     {location.state?.from === "taskby" && "Assigned by You"}
                     {location.state?.from === "tasks" && "Assigned to You"}
                     {location.state?.from === "self-tasks" && "Self Tasks"}
@@ -939,7 +940,7 @@ function TaskDetails() {
                         {Array.isArray(task.requirements) && task.requirements.length > 0 && (
                           <div className="pd-files-search" >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                            <input type="text" placeholder="Search requirements..." value={overviewSearch} onChange={(e) => setOverviewSearch(e.target.value)} />
+                            <input type="text" placeholder="Search by requirement text..." value={overviewSearch} onChange={(e) => setOverviewSearch(e.target.value)} />
                           </div>
                         )}
                       </div>
@@ -963,12 +964,15 @@ function TaskDetails() {
                                   ))}
                                 </ul>
                               ) : (
-                                <p style={{ color: "#6b7280", fontSize: "14px" }}>{overviewSearch ? "No requirements match your search." : "No requirements added."}</p>
+                                <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>{overviewSearch ? "No requirements match your search." : "No requirements added."}</p>
                               );
                             })()}
                           </div>
                         </div>
                       </div>
+
+                      {/* TASK DISCUSSION - inside overview */}
+                      <TaskDiscussion taskId={task.id} readOnly={readOnly} />
                     </div>
                   )}
 
@@ -978,7 +982,7 @@ function TaskDetails() {
                         <h2 className="td-section-title">Subtasks</h2>
                         <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                          <input type="text" placeholder="Search subtasks..." value={subtaskSearch} onChange={(e) => setSubtaskSearch(e.target.value)} />
+                          <input type="text" placeholder="Search by subtask name or description..." value={subtaskSearch} onChange={(e) => setSubtaskSearch(e.target.value)} />
                         </div>
                         <span className="td-section-count">{task.completed_deliverables || 0}/{task.total_deliverables || 0} Completed</span>
                       </div>
@@ -1063,7 +1067,7 @@ function TaskDetails() {
                         <h2 className="td-section-title">Task Access Credentials</h2>
                         <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                          <input type="text" placeholder="Search access..." value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
+                          <input type="text" placeholder="Search by credential name, URL, or username..." value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
                         </div>
                         {!readOnly && isCreator && (
                           <button className="td-access-add-btn" onClick={() => setShowAddAccessModal(true)}>
@@ -1105,9 +1109,6 @@ function TaskDetails() {
               </div>
             </div>
           </div>
-
-          {/* TASK DISCUSSION */}
-          <TaskDiscussion taskId={task.id} readOnly={readOnly} />
         </div>
 
         {/* ===== RIGHT SIDEBAR - UPDATED WITH START DATE AND DUE DATE WITH TIME ===== */}
@@ -1116,7 +1117,7 @@ function TaskDetails() {
               <h3 className="td-card-title">Task Information</h3>
               <ul className="td-info">
                 <li>
-                  <span className="td-dot" style={{ background: "#3b82f6" }} />
+                  <span className="td-dot" style={{ background: "var(--color-blue-text)" }} />
                   <div>
                     <span className="td-info-label">Project</span>
                     <span className="td-info-val">
@@ -1129,14 +1130,14 @@ function TaskDetails() {
                   </div>
                 </li>
                 <li>
-                  <span className="td-dot" style={{ background: "#f59e0b" }} />
+                  <span className="td-dot" style={{ background: "var(--color-orange-text)" }} />
                   <div>
                     <span className="td-info-label">Created By</span>
                     <span className="td-info-val">{assigner?.name || "—"}</span>
                   </div>
                 </li>
                 <li>
-                  <span className="td-dot" style={{ background: "#8b5cf6" }} />
+                  <span className="td-dot" style={{ background: "var(--color-primary)" }} />
                   <div>
                     <span className="td-info-label">Assigned To</span>
                     <span className="td-info-val" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -1144,7 +1145,7 @@ function TaskDetails() {
                         <span key={a.id} style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
                           <span>{a.name}</span>
                           {a.pivot?.due_date && (
-                            <span style={{ fontSize: "11px", color: "#ef4444", whiteSpace: "nowrap" }}>
+                            <span style={{ fontSize: "11px", color: "var(--color-danger)", whiteSpace: "nowrap" }}>
                               {formatDateTime(a.pivot.due_date)}
                             </span>
                           )}
@@ -1154,21 +1155,21 @@ function TaskDetails() {
                   </div>
                 </li>
                 <li>
-                  <span className="td-dot" style={{ background: "#22c55e" }} />
+                  <span className="td-dot" style={{ background: "var(--color-success)" }} />
                   <div>
                     <span className="td-info-label">Last Updated</span>
                     <span className="td-info-val">{task.updated_at ? timeAgo(task.updated_at) : "—"}</span>
                   </div>
                 </li>
                 <li>
-                  <span className="td-dot" style={{ background: "#3b82f6" }} />
+                  <span className="td-dot" style={{ background: "var(--color-blue-text)" }} />
                   <div>
                     <span className="td-info-label">Start Date</span>
                     <span className="td-info-val">{task.start_date ? formatDateTime(task.start_date) : "—"}</span>
                   </div>
                 </li>
                 <li>
-                  <span className="td-dot" style={{ background: "#ef4444" }} />
+                  <span className="td-dot" style={{ background: "var(--color-danger)" }} />
                   <div>
                     <span className="td-info-label">Due Date</span>
                     <span className="td-info-val">{task.end_date ? formatDateTime(task.end_date) : "—"}</span>
@@ -1176,6 +1177,55 @@ function TaskDetails() {
                 </li>
               </ul>
             </div>
+
+            {/* TIMELINE HISTORY */}
+            {(() => {
+              const workflowEvents = task?.workflow_events || task?.workflowEvents || [];
+              const historyItems = workflowEvents
+                .filter((e) => e.action !== 'field_changed')
+                .map((e) => ({
+                  id: `evt-${e.id}`,
+                  action: e.action,
+                  user: e.user,
+                  date: e.created_at,
+                  comment: e.comment,
+                }))
+                .reverse();
+              const actionLabel = (action) => {
+                const map = {
+                  submitted: "Submitted",
+                  resubmitted: "Resubmitted",
+                  acknowledged: "Acknowledged",
+                  paused: "Paused",
+                  continued: "Continued",
+                  approved: "Approved",
+                  rejected: "Declined",
+                  reopened: "Reopened",
+                  created: "Created",
+                };
+                return map[action] || action;
+              };
+              if (historyItems.length === 0) return null;
+              return (
+                <div className="td-card">
+                  <h3 className="td-card-title">Timeline History</h3>
+                  <ul className="td-history-list">
+                    {historyItems.map((item) => (
+                      <li key={item.id} className="td-history-item">
+                        <div className="td-history-header">
+                          <span className={`td-history-badge td-history-badge--${item.action}`}>{actionLabel(item.action)}</span>
+                          <span className="td-history-date">{formatDateTime(item.date)}</span>
+                        </div>
+                        <div className="td-history-meta">
+                          by {item.user?.name || "Unknown"}
+                        </div>
+                        {item.comment && <p className="td-submission-text">{item.comment}</p>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
 
             {/* WORK DURATION */}
             {(timerState !== 'idle' || task?.timer?.work_started_at) && (
@@ -1248,7 +1298,7 @@ function TaskDetails() {
                   {task.approved_at && task.end_date && (
                     <div className="td-timer-metric">
                       <span className="td-timer-metric-label">Result</span>
-                      <span className="td-timer-metric-value" style={{ color: new Date(task.approved_at) <= new Date(task.end_date) ? "#059669" : "#ef4444" }}>
+                      <span className="td-timer-metric-value" style={{                         color: new Date(task.approved_at) <= new Date(task.end_date) ? "var(--color-success)" : "var(--color-danger)" }}>
                         {new Date(task.approved_at) <= new Date(task.end_date) ? "On Time" : "Late"}
                       </span>
                     </div>
@@ -1469,8 +1519,8 @@ function TaskDetails() {
       {idleModalOpen && (
         <div className="cm-overlay" onClick={handleIdleResume}>
           <div className="cm-modal" role="dialog" onClick={e => e.stopPropagation()}>
-            <div className="cm-icon" style={{ background: "#f59e0b15" }}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <div className="cm-icon" style={{ background: "rgba(245, 158, 11, 0.08)" }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10"/>
                 <line x1="12" y1="8" x2="12" y2="12"/>
                 <line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -1480,7 +1530,7 @@ function TaskDetails() {
             <p style={{ marginBottom: "16px" }}>Are you still working on this task?</p>
             <div className="cm-actions">
               <button className="cm-cancel-btn" onClick={handleAutoPause}>Pause Task</button>
-              <button className="cm-confirm-btn" style={{ background: "#059669" }} onClick={handleIdleResume}>Continue Working</button>
+              <button className="cm-confirm-btn" style={{ background: "var(--color-success)" }} onClick={handleIdleResume}>Continue Working</button>
             </div>
           </div>
         </div>
@@ -1580,7 +1630,7 @@ function FileUploadSection({ taskId, files, onReorder, onFilesChange, readOnly }
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             <input
               type="text"
-              placeholder="Search files & links..."
+              placeholder="Search by file name or URL..."
               value={fileSearch}
               onChange={(e) => setFileSearch(e.target.value)}
             />
@@ -1615,7 +1665,7 @@ function FileUploadSection({ taskId, files, onReorder, onFilesChange, readOnly }
                       target="_blank"
                       rel="noopener noreferrer"
                       className="pd-file-box__link"
-                      style={{ color: "#6366f1" }}
+                      style={{ color: "var(--color-primary)" }}
                     >
                       {f.url}
                     </a>

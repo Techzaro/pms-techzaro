@@ -58,7 +58,7 @@ export default function DayPopup({ date, events, onClose, onEdit, onDelete, canM
         <div className="event-step">
           {events.length === 0 ? (
             <div style={{ textAlign: "center", padding: "20px 0" }}>
-              <p style={{ color: "#9ca3af", marginBottom: 16 }}>No events for this day</p>
+              <p style={{ color: "var(--text-muted)", marginBottom: 16 }}>No events for this day</p>
             </div>
           ) : (
             <>
@@ -96,7 +96,7 @@ export default function DayPopup({ date, events, onClose, onEdit, onDelete, canM
                           <button
                             onClick={() => onEdit?.(ev)}
                             style={{
-                              border: "none", background: "white", borderRadius: 8,
+                              border: "none", background: "var(--bg-card)", borderRadius: 8,
                               padding: "6px 8px", cursor: "pointer", color: colors.text,
                               display: "flex", alignItems: "center",
                             }}
@@ -110,7 +110,7 @@ export default function DayPopup({ date, events, onClose, onEdit, onDelete, canM
                             onClick={() => onDelete?.(ev.id)}
                             disabled={deleteLoading === ev.id}
                             style={{
-                              border: "none", background: "white", borderRadius: 8,
+                              border: "none", background: "var(--bg-card)", borderRadius: 8,
                               padding: "6px 8px", cursor: "pointer", color: "#ef4444",
                               display: "flex", alignItems: "center", opacity: deleteLoading === ev.id ? 0.5 : 1,
                             }}

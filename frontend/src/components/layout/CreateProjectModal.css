@@ -481,7 +481,7 @@
 }
 
 .cp-dropdown-search svg {
-  color: #94a3b8;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -490,26 +490,26 @@
   border: none;
   outline: none;
   font-size: 13px;
-  color: #1e293b;
+  color: var(--text-primary);
   background: transparent;
 }
 
 .cp-dropdown-search input::placeholder {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .cp-dropdown-search-clear {
   background: none;
   border: none;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 2px;
   line-height: 1;
 }
 
 .cp-dropdown-search-clear:hover {
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .cp-dropdown-item {
@@ -1369,7 +1369,7 @@
   outline: none !important;
   box-shadow: none !important;
   font-size: 14px;
-  color: #1e293b;
+  color: var(--text-primary);
   background: transparent !important;
   min-width: 0;
   cursor: text;

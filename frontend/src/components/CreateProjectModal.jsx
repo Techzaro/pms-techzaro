@@ -535,7 +535,7 @@ const CreateProjectModal = ({ onClose }) => {
                         </div>
                       ))}
                       {savedMilestones.filter((p) => !phaseSearch.trim() || p.toLowerCase().includes(phaseSearch.toLowerCase())).length === 0 && phaseSearch.trim() && (
-                        <div className="cp-dropdown-item" style={{ color: "#9ca3af", fontStyle: "italic" }}>
+                        <div className="cp-dropdown-item" style={{ color: "var(--text-muted)", fontStyle: "italic" }}>
                           Type and press Enter to add "{phaseSearch}"
                         </div>
                       )}
@@ -782,7 +782,7 @@ const CreateProjectModal = ({ onClose }) => {
                       <input
                         type="text"
                         className="cp-combo-input"
-                        placeholder="Search categories..."
+                        placeholder="Search by category name..."
                         value={catSearch}
                         onChange={(e) => { setCatSearch(e.target.value); }}
                         onFocus={() => setCategoryDropdownOpen(true)}
@@ -864,7 +864,7 @@ const CreateProjectModal = ({ onClose }) => {
                   <input
                     type="text"
                     className="cp-combo-input"
-                    placeholder="Search teams..."
+                    placeholder="Search by team name..."
                     value={teamRolesSearch}
                     onChange={(e) => setTeamRolesSearch(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Escape") { setTeamRolesSearch(""); setTeamRolesOpen(false); } }}
@@ -959,29 +959,29 @@ const CreateProjectModal = ({ onClose }) => {
       {/* Edit Link Modal */}
       {editingLink && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => setEditingLink(null)}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 400, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>Edit File / Link</h3>
+          <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 400, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>Edit File / Link</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or update the URL below.</p>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Title</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>Title</label>
               <input
                 type="text"
                 value={editLinkForm.title}
                 onChange={(e) => setEditLinkForm((p) => ({ ...p, title: e.target.value }))}
-                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
+                style={{ width: "100%", padding: "10px 12px", border: "var(--border-color)", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }}
               />
             </div>
             <div style={{ marginBottom: 24 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>URL</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>URL</label>
               <input
                 type="url"
                 value={editLinkForm.url}
                 onChange={(e) => setEditLinkForm((p) => ({ ...p, url: e.target.value }))}
-                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
+                style={{ width: "100%", padding: "10px 12px", border: "var(--border-color)", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }}
               />
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button type="button" onClick={() => setEditingLink(null)} style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#f9fafb"} onMouseLeave={(e) => e.target.style.background = "#fff"}>Cancel</button>
+              <button type="button" onClick={() => setEditingLink(null)} style={{ padding: "9px 20px", borderRadius: 8, border: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-dark)", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--bg-hover)"} onMouseLeave={(e) => e.target.style.background = "var(--bg-card)"}>Cancel</button>
               <button type="button" onClick={() => {
                 if (editingLink.type === "pending") {
                   setLinks((p) => {
@@ -991,7 +991,7 @@ const CreateProjectModal = ({ onClose }) => {
                   });
                 }
                 setEditingLink(null);
-              }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "#6366f1", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#4f46e5"} onMouseLeave={(e) => e.target.style.background = "#6366f1"}>Save</button>
+              }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "var(--color-primary)", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--color-primary)"} onMouseLeave={(e) => e.target.style.background = "var(--color-primary)"}>Save</button>
             </div>
           </div>
         </div>,
@@ -1001,30 +1001,30 @@ const CreateProjectModal = ({ onClose }) => {
       {/* Edit File Modal */}
       {editingFile && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditingFile(null); setEditFileNewFile(null); }}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>Edit File</h3>
+          <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>Edit File</h3>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or replace this file.</p>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Title</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>Title</label>
               <input
                 type="text"
                 value={editFileForm.title}
                 onChange={(e) => setEditFileForm({ title: e.target.value })}
                 autoFocus
-                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }}
+                style={{ width: "100%", padding: "10px 12px", border: "var(--border-color)", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }}
               />
             </div>
             <div style={{ marginBottom: 24 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>File</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>File</label>
               {editFileNewFile ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--color-success-bg)", border: "1px solid var(--color-success-border)", borderRadius: 8 }}>
                   <span style={{ fontSize: 14 }}>📄</span>
                   <span style={{ flex: 1, fontSize: 13, color: "#166534", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editFileNewFile.name}</span>
                   <span style={{ fontSize: 11, color: "#6b7280" }}>{(editFileNewFile.size / 1024).toFixed(1)} KB</span>
                   <button type="button" onClick={() => setEditFileNewFile(null)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: 0 }}>✕</button>
                 </div>
               ) : (
-                <label style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "10px 12px", border: "1px dashed #d1d5db", borderRadius: 8, background: "#f9fafb", color: "#6b7280", fontSize: 13, cursor: "pointer", textAlign: "center" }}>
+                <label style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "10px 12px", border: "1px dashed var(--border-color)", borderRadius: 8, background: "var(--bg-hover)", color: "#6b7280", fontSize: 13, cursor: "pointer", textAlign: "center" }}>
                   Click to select a file
                   <input
                     type="file"
@@ -1035,7 +1035,7 @@ const CreateProjectModal = ({ onClose }) => {
               )}
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button type="button" onClick={() => { setEditingFile(null); setEditFileNewFile(null); }} style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#f9fafb"} onMouseLeave={(e) => e.target.style.background = "#fff"}>Cancel</button>
+              <button type="button" onClick={() => { setEditingFile(null); setEditFileNewFile(null); }} style={{ padding: "9px 20px", borderRadius: 8, border: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-dark)", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--bg-hover)"} onMouseLeave={(e) => e.target.style.background = "var(--bg-card)"}>Cancel</button>
               <button type="button" onClick={() => {
                 setPendingFiles((p) => {
                   const updated = [...p];
@@ -1044,7 +1044,7 @@ const CreateProjectModal = ({ onClose }) => {
                 });
                 setEditingFile(null);
                 setEditFileNewFile(null);
-              }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "#6366f1", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "#4f46e5"} onMouseLeave={(e) => e.target.style.background = "#6366f1"}>Save</button>
+              }} style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "var(--color-primary)", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => e.target.style.background = "var(--color-primary)"} onMouseLeave={(e) => e.target.style.background = "var(--color-primary)"}>Save</button>
             </div>
           </div>
         </div>,

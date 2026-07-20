@@ -1,0 +1,33 @@
+/* ActionPopover.css */
+
+.ap-wrap {
+  display: inline-flex;
+}
+
+.ap-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ap-popover {
+  min-width: max-content;
+}
+
+.ap-popover-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 4px 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.ap-popover-content .action-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  font-size: 14px;
+}

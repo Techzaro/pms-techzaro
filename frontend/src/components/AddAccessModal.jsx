@@ -213,7 +213,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
                   <input
                     type="text"
                     className="aam-combo-input"
-                    placeholder="Search users..."
+                    placeholder="Search by user name..."
                     value={aamSearch}
                     onChange={(e) => { setAamSearch(e.target.value); }}
                     onFocus={() => setDropdownOpen(true)}

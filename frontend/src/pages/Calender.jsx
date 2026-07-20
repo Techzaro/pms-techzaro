@@ -299,11 +299,11 @@ function Calender() {
             <div className="calendar-topbar">
               <div className="calendar-month">
                 <button onClick={handlePrev} style={{ border: "none", background: "none", cursor: "pointer", padding: 4 }}>
-                  <ChevronLeft size={20} color="#6B7280" />
+                  <ChevronLeft size={20} color="var(--text-secondary)" />
                 </button>
                 <h2>{getHeaderTitle()}</h2>
                 <button onClick={handleNext} style={{ border: "none", background: "none", cursor: "pointer", padding: 4 }}>
-                  <ChevronRight size={20} color="#6B7280" />
+                  <ChevronRight size={20} color="var(--text-secondary)" />
                 </button>
               </div>
               <div className="calendar-top-actions">
@@ -319,10 +319,10 @@ function Calender() {
                   ))}
                 </div>
                 <div className="calendar-search">
-                  <Search size={18} color="#9CA3AF" />
+                  <Search size={18} color="var(--text-muted)" />
                   <input
                     type="text"
-                    placeholder="Search events..."
+                    placeholder="Search by event title or description..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
@@ -379,7 +379,7 @@ function Calender() {
                         );
                       })}
                       {dayEvents.length > 2 && (
-                        <p style={{ margin: 0, fontSize: 11, color: "#6B7280" }}>
+                        <p style={{ margin: 0, fontSize: 11, color: "var(--text-secondary)" }}>
                           +{dayEvents.length - 2} more
                         </p>
                       )}
@@ -392,7 +392,7 @@ function Calender() {
             <div className="calendar-footer">
               {Object.entries(TYPE_LABELS).map(([key, label]) => (
                 <div key={key}>
-                  <span className="dot" style={{ background: TYPE_COLORS[key]?.dot || "#9ca3af" }} />
+                  <span className="dot" style={{ background: TYPE_COLORS[key]?.dot || "var(--text-muted)" }} />
                   {label}
                 </div>
               ))}
@@ -408,7 +408,7 @@ function Calender() {
             </h3>
              <div className="agenda-list">
               {todayEvents.length === 0 ? (
-                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
+                <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
                   No events scheduled for today.
                 </p>
               ) : (
@@ -420,13 +420,13 @@ function Calender() {
                       <div className="agenda-content">
                         <p
                           onClick={() => setSelectedEvent(ev)}
-                          style={{ margin: 0, fontWeight: 600, fontSize: "14px", color: "#111827", cursor: "pointer" }}
-                          onMouseEnter={(e) => { e.target.style.color = "#6366f1"; }}
-                          onMouseLeave={(e) => { e.target.style.color = "#111827"; }}
+                          style={{ margin: 0, fontWeight: 600, fontSize: "14px", color: "var(--text-heading)", cursor: "pointer" }}
+                          onMouseEnter={(e) => { e.target.style.color = "var(--color-primary)"; }}
+                          onMouseLeave={(e) => { e.target.style.color = "var(--text-heading)"; }}
                         >
                           {ev.title}
                         </p>
-                        <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#6b7280" }}>
+                        <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--text-secondary)" }}>
                           {formatEventDateTime(ev)}
                         </p>
                         <span style={{ fontSize: "11px", color: colors.text, fontWeight: 600 }}>
@@ -446,7 +446,7 @@ function Calender() {
             <p style={{ fontWeight: "bold", fontSize: "20px", margin: 0 }}>Upcoming Events</p>
             <div className="deadline-list">
               {upcomingEvents.length === 0 ? (
-                <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
+                <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
                   No upcoming events found.
                 </p>
               ) : (
@@ -457,15 +457,15 @@ function Calender() {
                       <div style={{ flex: 1 }}>
                         <p
                           onClick={() => setSelectedEvent(ev)}
-                          style={{ margin: 0, fontWeight: 600, fontSize: "14px", color: "#111827", cursor: "pointer" }}
-                          onMouseEnter={(e) => { e.target.style.color = "#6366f1"; }}
-                          onMouseLeave={(e) => { e.target.style.color = "#111827"; }}
+                          style={{ margin: 0, fontWeight: 600, fontSize: "14px", color: "var(--text-heading)", cursor: "pointer" }}
+                          onMouseEnter={(e) => { e.target.style.color = "var(--color-primary)"; }}
+                          onMouseLeave={(e) => { e.target.style.color = "var(--text-heading)"; }}
                         >
                           {ev.title}
                         </p>
                         <div className="dealine-date" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                           <span className="deadline-date" style={{ color: colors.dot, fontSize: "13px" }}>{formatEventDateTime(ev)}</span>
-                          <span style={{ fontSize: "12px", color: "#9ca3af" }}>{TYPE_LABELS[ev.type] || ev.type}</span>
+                          <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{TYPE_LABELS[ev.type] || ev.type}</span>
                         </div>
                       </div>
                     </div>

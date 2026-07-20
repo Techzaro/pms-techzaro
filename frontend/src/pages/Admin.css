@@ -1,3 +1,12 @@
+/* ── Active Projects + Today's Activity Section Highlights ── */
+
+.active-projects-section,
+.today-activity-section,
+.past-activity-section {
+  border: 1px solid var(--color-section-border);
+  transition: border-color 0.3s ease;
+}
+
 /* ── Workload Card (redesigned, compact) ── */
 
 .workload-card {
@@ -25,7 +34,7 @@
 .workload-view-btn {
   background: transparent;
   border: none;
-  color: #6366F1;
+  color: var(--color-primary);
   font-weight: 600;
   cursor: pointer;
   font-size: 13px;
@@ -111,7 +120,7 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #1a1a1a;
+  background: var(--text-heading);
   color: #fff;
   display: flex;
   align-items: center;
@@ -194,13 +203,13 @@
 }
 
 .workload-priority[data-priority="High Priority"] {
-  background: #FEE2E2;
-  color: #EF4444;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
 }
 
 .workload-priority[data-priority="Medium Priority"] {
-  background: #FEF3C7;
-  color: #D97706;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .workload-priority[data-priority="Low Priority"] {
@@ -233,7 +242,7 @@
   font-size: 20px;
   font-weight: 700;
   line-height: 1.25;
-  color: var(--text-primary);
+  color: var(--text-heading);
   word-break: break-word;
 }
 
@@ -379,7 +388,7 @@
 
 .dashboard-toggle-btn.active {
   background: var(--bg-card);
-  color: #1e293b;
+  color: var(--text-heading);
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
 
@@ -639,7 +648,7 @@
 }
 .project-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg,#34D399,#6366F1);
+  background: linear-gradient(90deg, #34D399, var(--color-primary));
 }
 
 /* Completed Today list */
@@ -693,7 +702,7 @@
 }
 
 .activity-item--unread .activity-icon-circle {
-  box-shadow: 0 0 0 2px #fecaca;
+  box-shadow: 0 0 0 2px var(--color-danger-bg);
 }
 
 /* Read/viewed activity */
@@ -712,7 +721,7 @@
 }
 
 .activity-item--read .activity-time {
-  color: #9CA3AF !important;
+  color: var(--text-muted) !important;
   font-weight: 400;
 }
 
