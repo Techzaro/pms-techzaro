@@ -3,15 +3,24 @@
  * Composes Header, Sidebar, and an optional RightSidebar around main content.
  * Listens for custom "modal-state" events so the right-sidebar toggle is
  * hidden while any modal is open.
+ *
+ * Runs a SINGLE global lightweight poll (unread-count) every 20s.
+ * When count changes → publishes data:changed event → all pages refresh.
+ * This replaces 20+ independent page polls with ONE app-level poll.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import RightSidebar from "./RightSidebar";
 import ChatWidget from "./ChatWidget";
+import { authToken } from "../../utils/auth";
+import { publish } from "../../utils/eventBus";
+import API_URL from "../../config/api";
 
 import "./DashboardLayout.css";
+
+const POLL_INTERVAL = 20000; // 20 seconds
 
 /**
  * @param {{ children: React.ReactNode, hideRightSidebar?: boolean }} props
@@ -19,12 +28,43 @@ import "./DashboardLayout.css";
 function DashboardLayout({ children, hideRightSidebar = false }) {
   const [rightOpen, setRightOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const prevCountRef = useRef(null);
 
   // Sync modal-open state from child modals (e.g., CreateSubtaskTask)
   useEffect(() => {
     const handler = (e) => setModalOpen(e.detail.open);
     window.addEventListener("modal-state", handler);
     return () => window.removeEventListener("modal-state", handler);
+  }, []);
+
+  // Single global lightweight poll: check unread-count every 20s
+  useEffect(() => {
+    let stopped = false;
+
+    const poll = async () => {
+      if (document.hidden || stopped) return;
+      try {
+        const token = authToken();
+        if (!token) return;
+        const res = await fetch(`${API_URL}/notifications/unread-count`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          _notifHandled: true,
+        });
+        if (!res.ok || stopped) return;
+        const data = await res.json();
+        const count = data.unread_count ?? 0;
+        if (prevCountRef.current !== null && count !== prevCountRef.current) {
+          publish("data:changed", { source: "global-poll", unreadCount: count });
+        }
+        prevCountRef.current = count;
+      } catch (_) { /* ignore network errors */ }
+    };
+
+    // Initial check
+    poll();
+
+    const id = setInterval(poll, POLL_INTERVAL);
+    return () => { stopped = true; clearInterval(id); };
   }, []);
 
   return (

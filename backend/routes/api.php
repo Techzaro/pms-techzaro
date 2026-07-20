@@ -21,6 +21,7 @@ use App\Http\Controllers\EventController;
 use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\TaskCommentController;
 
 /*
 | Public Routes
@@ -245,7 +246,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/acknowledge', [TaskController::class, 'acknowledge']); // Acknowledge task assignment
     Route::post('/tasks/{task}/pause', [TaskController::class, 'pause']); // Pause an in-progress task
     Route::post('/tasks/{task}/continue', [TaskController::class, 'continueTask']); // Continue a paused task
+    Route::post('/tasks/{task}/assigner-pause', [TaskController::class, 'assignerPause']); // Assigner pauses task (locks assignee)
+    Route::post('/tasks/{task}/assigner-resume', [TaskController::class, 'assignerResume']); // Assigner resumes task (unlocks assignee)
     Route::post('/tasks/{task}/submit', [TaskController::class, 'submit']); // Submit task for review
+    Route::get('/tasks/{task}/timer', [TaskController::class, 'timer']); // Get live timer state
+    Route::get('/tasks/{task}/timer-sessions', [TaskController::class, 'timerSessions']); // Get pause session history
     Route::get('/tasks/{task}/latest-submission', [TaskController::class, 'latestSubmission']); // Get latest submission
     Route::get('/tasks/submission-file/{submission}', [TaskController::class, 'downloadSubmissionFile']); // Download submission file
     Route::post('/tasks/{task}/approve', [TaskController::class, 'approve'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Approve submitted task
@@ -274,6 +279,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/tasks/{task}/access-credentials/{credential}', [TaskController::class, 'updateAccessCredential']);
     Route::delete('/tasks/{task}/access-credentials/{credential}', [TaskController::class, 'deleteAccessCredential']);
 
+    // Task discussion / comments
+    Route::get('/tasks/{task}/comments', [TaskCommentController::class, 'index']); // List comments
+    Route::post('/tasks/{task}/comments', [TaskCommentController::class, 'store']); // Post a comment
+    Route::put('/tasks/{task}/comments/{comment}', [TaskCommentController::class, 'update']); // Edit a comment
+    Route::delete('/tasks/{task}/comments/{comment}', [TaskCommentController::class, 'destroy']); // Delete a comment
+    Route::get('/tasks/{task}/comments-count', [TaskCommentController::class, 'count']); // Get comment count
+    Route::get('/tasks/{task}/comments-participants', [TaskCommentController::class, 'participants']); // Get mentionable participants
+    Route::get('/comments/{comment}/file', [TaskCommentController::class, 'downloadFile']); // Download attachment
+
     // Personal user notes on tasks (private per user)
     Route::get('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'show']); // View own note
     Route::post('/tasks/{task}/my-note', [\App\Http\Controllers\TaskUserNoteController::class, 'store']); // Create/update own note
@@ -283,7 +297,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/my-tasks', [TaskController::class, 'myTasks']); // Tasks assigned to me
     Route::get('/assigned-tasks', [TaskController::class, 'assignedByMe']); // Tasks I assigned to others
     Route::get('/self-tasks', [TaskController::class, 'mySelfTasks']); // Tasks I created for myself
+    Route::get('/all-tasks', [TaskController::class, 'allTasks']); // All tasks (role-based visibility, read-only)
     Route::get('/user-tasks/{userId}', [TaskController::class, 'userTasks']); // Tasks assigned to specific user
+
+    // All deliverables (role-based visibility, read-only)
+    Route::get('/all-deliverables', [DeliverableController::class, 'allDeliverables']);
 
     /*
     | Deliverable Management Routes

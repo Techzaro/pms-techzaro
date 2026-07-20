@@ -29,6 +29,7 @@ class DeliverableResource extends JsonResource
             'description' => $this->description,
             'status' => $this->status,
             'priority' => $this->priority,
+            'start_date' => $this->start_date?->format('Y-m-d\TH:i:s'),
             'due_date' => $this->due_date?->format('Y-m-d\TH:i:s'),
             'assigned_to' => $this->assigned_to,
             'created_by' => $this->created_by,

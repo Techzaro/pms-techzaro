@@ -305,10 +305,9 @@ function Header() {
       .catch(() => {});
   }, []);
 
-  // Poll for unread notifications + subscribe to data-change events + window events
+  // Subscribe to data-change events + window events (NO local poll — DashboardLayout handles global poll)
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 15000);
     const unsub = subscribe('data:changed', fetchNotifications);
     const handleNotifRead = () => fetchNotifications();
     window.addEventListener('notification-read', handleNotifRead);
@@ -322,7 +321,6 @@ function Header() {
     window.addEventListener('user-updated', handleUserUpdate);
 
     return () => {
-      clearInterval(interval);
       unsub();
       window.removeEventListener('notification-read', handleNotifRead);
       window.removeEventListener('user-updated', handleUserUpdate);

@@ -7,6 +7,7 @@ use App\Models\DeliverableSubmission;
 use App\Models\DeliverableTemplate;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\TaskPauseSession;
 use App\Models\TaskChange;
 use App\Models\TaskFile;
 use App\Models\TaskSubmission;
@@ -52,9 +53,11 @@ class TaskController extends Controller
 
         $isDueTodayFilter = $request->input('status') === 'due_today';
         $isPendingFilter = $request->input('status') === 'pending';
+        $isInProgressFilter = $request->input('status') === 'in_progress';
+        $isPausedFilter = $request->input('status') === 'paused';
         $statusFilter = $request->input('status');
         $filters = $request->query();
-        if ($isDueTodayFilter || $isPendingFilter) {
+        if ($isDueTodayFilter || $isPendingFilter || $isInProgressFilter || $isPausedFilter) {
             unset($filters['status']);
         }
 
@@ -65,6 +68,8 @@ class TaskController extends Controller
             ->where('assigned_by', '!=', $user->id)
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
+            ->when($isInProgressFilter, fn ($q) => $q->whereIn('status', $this->inProgressTaskStatuses()))
+            ->when($isPausedFilter, fn ($q) => $q->whereIn('status', $this->pausedTaskStatuses()))
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role'])
             ->orderBy('sort_order')->latest('updated_at')
             ->filter($filters);
@@ -121,8 +126,10 @@ class TaskController extends Controller
 
         $isDueTodayFilter = $request->input('status') === 'due_today';
         $isPendingFilter = $request->input('status') === 'pending';
+        $isInProgressFilter = $request->input('status') === 'in_progress';
+        $isPausedFilter = $request->input('status') === 'paused';
         $filters = $request->query();
-        if ($isPendingFilter || $isDueTodayFilter) {
+        if ($isPendingFilter || $isDueTodayFilter || $isInProgressFilter || $isPausedFilter) {
             unset($filters['status']);
         }
 
@@ -133,6 +140,8 @@ class TaskController extends Controller
             })
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
+            ->when($isInProgressFilter, fn ($q) => $q->whereIn('status', $this->inProgressTaskStatuses()))
+            ->when($isPausedFilter, fn ($q) => $q->whereIn('status', $this->pausedTaskStatuses()))
             ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role'])
             ->orderBy('sort_order')->latest('updated_at')
             ->filter($filters)
@@ -286,6 +295,8 @@ class TaskController extends Controller
         $userId = $user->id;
         $isDueTodayFilter = $request->input('status') === 'due_today';
         $isPendingFilter = $request->input('status') === 'pending';
+        $isInProgressFilter = $request->input('status') === 'in_progress';
+        $isPausedFilter = $request->input('status') === 'paused';
 
         $tasksQuery = Task::with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role']);
 
@@ -305,7 +316,9 @@ class TaskController extends Controller
                     ->orWhereHas('assignees', fn ($aq) => $aq->whereDate('task_user.due_date', today()));
             })->whereNotIn('tasks.status', $this->incompleteDueTodayStatuses()))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
-            ->when($request->filled('status') && ! $isDueTodayFilter && ! $isPendingFilter, fn ($q) => $q->where('status', $request->input('status')))
+            ->when($isInProgressFilter, fn ($q) => $q->whereIn('status', $this->inProgressTaskStatuses()))
+            ->when($isPausedFilter, fn ($q) => $q->whereIn('status', $this->pausedTaskStatuses()))
+            ->when($request->filled('status') && ! $isDueTodayFilter && ! $isPendingFilter && ! $isInProgressFilter && ! $isPausedFilter, fn ($q) => $q->where('status', $request->input('status')))
             ->limit(100)->get();
 
         // Bulk load deliverable counts
@@ -390,6 +403,7 @@ class TaskController extends Controller
             'reopenedBy:id,name',
             'acknowledgedBy:id,name',
             'pausedBy:id,name',
+            'assignerPausedBy:id,name',
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'changes' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'deliverableTemplates',
@@ -454,6 +468,8 @@ class TaskController extends Controller
         $payload['unviewed_changes_count'] = $task->unviewedChanges->count();
         $payload['is_creator'] = $isCreator;
         $payload['is_assignee'] = $isAssignee;
+        $payload['assigner_paused'] = (bool) $task->assigner_paused;
+        $payload['assigner_paused_at'] = $task->assigner_paused_at;
         $payload['can_edit'] = $isCreator && ! $isApproved;
         $userPivot = $isAssignee ? $task->assignees()->where('users.id', $user->id)->first()?->pivot : null;
         $payload['my_status'] = $userPivot?->status ?? 'pending';
@@ -464,6 +480,21 @@ class TaskController extends Controller
         $taskChangeMax = (int) TaskChange::where('task_id', $task->id)->max('id');
         $taskEventMax = (int) TaskWorkflowEvent::where('task_id', $task->id)->max('id');
         $payload['activity_max_id'] = max($taskChangeMax, $taskEventMax);
+
+        $payload['timer'] = [
+            'state' => $task->timer_state,
+            'work_seconds' => $task->getCurrentWorkSeconds(),
+            'work_formatted' => Task::formatDuration($task->getCurrentWorkSeconds()),
+            'elapsed_seconds' => $task->getCurrentElapsedSeconds(),
+            'elapsed_formatted' => Task::formatDuration($task->getCurrentElapsedSeconds()),
+            'pause_count' => (int) ($task->pause_count ?? 0),
+            'total_pause_seconds' => (int) ($task->total_pause_seconds ?? 0),
+            'total_pause_formatted' => Task::formatDuration((int) ($task->total_pause_seconds ?? 0)),
+            'resume_count' => (int) ($task->resume_count ?? 0),
+            'work_started_at' => $task->work_started_at?->format('Y-m-d\TH:i:s'),
+            'work_completed_at' => $task->work_completed_at?->format('Y-m-d\TH:i:s'),
+            'last_timer_event_at' => $task->last_timer_event_at?->format('Y-m-d\TH:i:s'),
+        ];
 
         return response()->json(['success' => true, 'task' => $payload]);
     }
@@ -495,6 +526,7 @@ class TaskController extends Controller
             'deliverables' => 'nullable|array',
             'deliverables.*.title' => 'required_with:deliverables|string|max:255',
             'deliverables.*.description' => 'nullable|string|max:2000',
+            'deliverables.*.start_date' => 'nullable|date',
             'deliverables.*.due_date' => 'nullable|date',
             'deliverables.*.assigned_to' => 'nullable|exists:users,id',
             'due_dates' => 'nullable|array',
@@ -584,6 +616,7 @@ class TaskController extends Controller
                         'description' => $del['description'] ?? null,
                         'status' => 'pending',
                         'priority' => $validated['priority'],
+                        'start_date' => $del['start_date'] ?? null,
                         'due_date' => $del['due_date'] ?? $validated['end_date'] ?? null,
                         'assigned_to' => $userId,
                         'created_by' => $user->id,
@@ -808,6 +841,7 @@ class TaskController extends Controller
             'deliverables' => 'nullable|array',
             'deliverables.*.title' => 'required_with:deliverables|string|max:255',
             'deliverables.*.description' => 'nullable|string|max:2000',
+            'deliverables.*.start_date' => 'nullable|date',
             'deliverables.*.due_date' => 'nullable|date',
             'deliverables.*.assigned_to' => 'nullable|exists:users,id',
             'due_dates' => 'nullable|array',
@@ -878,6 +912,7 @@ class TaskController extends Controller
                     ->map(fn ($del) => [
                     'title' => $del['title'], 'description' => $del['description'] ?? null,
                     'status' => 'pending', 'priority' => $validated['priority'],
+                    'start_date' => $del['start_date'] ?? null,
                     'due_date' => $del['due_date'] ?? $validated['end_date'] ?? null,
                     'assigned_to' => $userId, 'created_by' => $user->id,
                     'created_at' => now(), 'updated_at' => now(),
@@ -1059,6 +1094,7 @@ class TaskController extends Controller
             'deliverables.*.id' => 'nullable|integer|exists:deliverables,id',
             'deliverables.*.title' => 'required_with:deliverables|string|max:255',
             'deliverables.*.description' => 'nullable|string|max:2000',
+            'deliverables.*.start_date' => 'sometimes|nullable|date',
             'deliverables.*.due_date' => 'nullable|date',
             'deliverables.*.assigned_to' => 'nullable|exists:users,id',
             'existing_file_names' => 'nullable|array',
@@ -1180,6 +1216,7 @@ class TaskController extends Controller
                 if (! empty($del['id'])) {
                     $task->deliverables()->where('id', $del['id'])->update([
                         'title' => $del['title'],
+                        'start_date' => $del['start_date'] ?? null,
                         'due_date' => $del['due_date'] ?? null,
                         'assigned_to' => $del['assigned_to'] ?? $task->assigned_to,
                     ]);
@@ -1191,6 +1228,7 @@ class TaskController extends Controller
             if ($newDeliverables->isNotEmpty()) {
                 $delData = $newDeliverables->map(fn ($del) => [
                     'title' => $del['title'], 'description' => $del['description'] ?? null,
+                    'start_date' => $del['start_date'] ?? null,
                     'due_date' => $del['due_date'] ?? null, 'assigned_to' => $del['assigned_to'] ?? $task->assigned_to,
                     'created_by' => $user->id,
                 ])->toArray();
@@ -1522,6 +1560,65 @@ class TaskController extends Controller
      * @param  Task  $task  The task to acknowledge.
      * @return JsonResponse JSON response with the updated task.
      */
+    public function timer(Request $request, Task $task)
+    {
+        $user = $request->user();
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+
+        if (! $isCreator && ! $isAssignee) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        return response()->json([
+            'success' => true,
+            'timer' => [
+                'state' => $task->timer_state,
+                'work_seconds' => $task->getCurrentWorkSeconds(),
+                'work_formatted' => Task::formatDuration($task->getCurrentWorkSeconds()),
+                'elapsed_seconds' => $task->getCurrentElapsedSeconds(),
+                'elapsed_formatted' => Task::formatDuration($task->getCurrentElapsedSeconds()),
+                'pause_count' => (int) ($task->pause_count ?? 0),
+                'total_pause_seconds' => (int) ($task->total_pause_seconds ?? 0),
+                'total_pause_formatted' => Task::formatDuration((int) ($task->total_pause_seconds ?? 0)),
+                'resume_count' => (int) ($task->resume_count ?? 0),
+                'work_started_at' => $task->work_started_at?->format('Y-m-d\TH:i:s'),
+                'work_completed_at' => $task->work_completed_at?->format('Y-m-d\TH:i:s'),
+                'last_timer_event_at' => $task->last_timer_event_at?->format('Y-m-d\TH:i:s'),
+            ],
+        ]);
+    }
+
+    public function timerSessions(Request $request, Task $task)
+    {
+        $user = $request->user();
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+
+        if (! $isCreator && ! $isAssignee) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $sessions = TaskPauseSession::where('task_id', $task->id)
+            ->with('user:id,name')
+            ->orderByDesc('paused_at')
+            ->get()
+            ->map(fn ($s) => [
+                'id' => $s->id,
+                'user' => $s->user?->name,
+                'reason' => $s->reason,
+                'reason_detail' => $s->reason_detail,
+                'reason_label' => $s->reason_label,
+                'paused_at' => $s->paused_at?->format('Y-m-d\TH:i:s'),
+                'resumed_at' => $s->resumed_at?->format('Y-m-d\TH:i:s'),
+                'duration_seconds' => $s->duration_seconds ?? 0,
+                'duration_formatted' => $s->formatted_duration,
+                'is_auto_paused' => (bool) $s->is_auto_paused,
+            ]);
+
+        return response()->json(['success' => true, 'sessions' => $sessions]);
+    }
+
     public function acknowledge(Request $request, Task $task)
     {
         $user = $request->user();
@@ -1529,6 +1626,10 @@ class TaskController extends Controller
 
         if (! $isAssignee) {
             return response()->json(['success' => false, 'message' => 'Only assignees can acknowledge this task'], 403);
+        }
+
+        if ($task->assigner_paused) {
+            return response()->json(['success' => false, 'message' => 'This task is paused by the assigner and cannot be acknowledged'], 422);
         }
 
         if (strtolower((string) $task->status) !== 'pending') {
@@ -1541,7 +1642,8 @@ class TaskController extends Controller
             'acknowledged_by' => $user->id,
         ]);
 
-        // Update the assignee's pivot status
+        $task->startTimer();
+
         $task->assignees()->updateExistingPivot($user->id, [
             'status' => 'in_progress',
         ]);
@@ -1551,6 +1653,13 @@ class TaskController extends Controller
             'user_id' => $user->id,
             'action' => 'acknowledged',
             'comment' => $user->name.' acknowledged this task',
+        ]);
+
+        TaskWorkflowEvent::create([
+            'task_id' => $task->id,
+            'user_id' => $user->id,
+            'action' => 'timer_started',
+            'comment' => 'Work timer started',
         ]);
 
         $task->load('project:id,title');
@@ -1563,8 +1672,8 @@ class TaskController extends Controller
                 'task_acknowledged',
                 'task',
                 $task->id,
-                'Task Acknowledged',
-                $user->name.' acknowledged task "'.$task->title.'".',
+                'Task Acknowledged & Work Started',
+                $user->name.' acknowledged task "'.$task->title.'" and started working.',
                 '/tasks/task-details/'.$task->id.'?from=taskby'
             );
         }
@@ -1579,7 +1688,7 @@ class TaskController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Task acknowledged successfully',
-            'task' => $task->fresh()->load(['assignees:id,name,email,role', 'acknowledgedBy:id,name']),
+            'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'acknowledgedBy:id,name'])->toArray()),
         ]);
     }
 
@@ -1598,9 +1707,18 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Only assignees can pause this task'], 403);
         }
 
+        if ($task->assigner_paused) {
+            return response()->json(['success' => false, 'message' => 'This task is paused by the assigner and cannot be paused'], 422);
+        }
+
         if (strtolower((string) $task->status) !== 'in_progress') {
             return response()->json(['success' => false, 'message' => 'This task cannot be paused in its current status'], 422);
         }
+
+        $validated = $request->validate([
+            'reason' => 'required|string|max:64',
+            'reason_detail' => 'nullable|string|max:500',
+        ]);
 
         $task->update([
             'status' => 'paused',
@@ -1608,20 +1726,23 @@ class TaskController extends Controller
             'paused_by' => $user->id,
         ]);
 
+        $task->pauseTimer($validated['reason'], $validated['reason_detail'] ?? null, false, $user->id);
+
         $task->assignees()->updateExistingPivot($user->id, [
             'status' => 'paused',
         ]);
+
+        $reasonLabel = Task::pauseReasons()[$validated['reason']] ?? $validated['reason'];
 
         TaskWorkflowEvent::create([
             'task_id' => $task->id,
             'user_id' => $user->id,
             'action' => 'paused',
-            'comment' => $user->name.' paused this task',
+            'comment' => $user->name.' paused this task — Reason: '.$reasonLabel.($validated['reason_detail'] ? ' ('.$validated['reason_detail'].')' : ''),
         ]);
 
         $task->load('project:id,title');
 
-        // Notify the task creator
         if ($task->assigned_by && $task->assigned_by !== $user->id) {
             $this->notificationService->notify(
                 $task->assigned_by,
@@ -1630,7 +1751,7 @@ class TaskController extends Controller
                 'task',
                 $task->id,
                 'Task Paused',
-                $user->name.' paused task "'.$task->title.'".',
+                $user->name.' paused task "'.$task->title.'" — Reason: '.$reasonLabel,
                 '/tasks/task-details/'.$task->id.'?from=taskby'
             );
         }
@@ -1645,7 +1766,7 @@ class TaskController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Task paused successfully',
-            'task' => $task->fresh()->load(['assignees:id,name,email,role', 'pausedBy:id,name']),
+            'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'pausedBy:id,name'])->toArray()),
         ]);
     }
 
@@ -1664,6 +1785,10 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Only assignees can continue this task'], 403);
         }
 
+        if ($task->assigner_paused) {
+            return response()->json(['success' => false, 'message' => 'This task is paused by the assigner and cannot be continued'], 422);
+        }
+
         if (strtolower((string) $task->status) !== 'paused') {
             return response()->json(['success' => false, 'message' => 'This task is not paused'], 422);
         }
@@ -1674,6 +1799,8 @@ class TaskController extends Controller
             'paused_by' => null,
         ]);
 
+        $task->resumeTimer($user->id);
+
         $task->assignees()->updateExistingPivot($user->id, [
             'status' => 'in_progress',
         ]);
@@ -1682,7 +1809,7 @@ class TaskController extends Controller
             'task_id' => $task->id,
             'user_id' => $user->id,
             'action' => 'continued',
-            'comment' => $user->name.' continued this task',
+            'comment' => $user->name.' resumed this task',
         ]);
 
         $task->load('project:id,title');
@@ -1711,7 +1838,211 @@ class TaskController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Task resumed successfully',
-            'task' => $task->fresh()->load(['assignees:id,name,email,role']),
+            'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role'])->toArray()),
+        ]);
+    }
+
+    /**
+     * Pause a task as the assigner (task creator).
+     *
+     * Puts the task on hold so the assignee cannot perform any workflow actions.
+     * Only the task creator can use this. The task status is NOT changed;
+     * an assigner_paused flag is set instead.
+     */
+    public function assignerPause(Request $request, Task $task)
+    {
+        $user = $request->user();
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
+
+        if (! $isCreator) {
+            return response()->json(['success' => false, 'message' => 'Only the task creator can pause this task'], 403);
+        }
+
+        if ($task->assigner_paused) {
+            return response()->json(['success' => false, 'message' => 'This task is already paused by the assigner'], 422);
+        }
+
+        $activeStatuses = ['pending', 'in_progress', 'reopened', 'paused'];
+        if (! in_array(strtolower((string) $task->status), $activeStatuses)) {
+            return response()->json(['success' => false, 'message' => 'This task cannot be paused in its current status'], 422);
+        }
+
+        $previousStatus = $task->status;
+
+        $validated = $request->validate([
+            'reason' => 'required|string|max:500',
+        ]);
+
+        $task->update([
+            'assigner_paused' => true,
+            'assigner_paused_at' => now(),
+            'assigner_paused_by' => $user->id,
+        ]);
+
+        if ($task->timer_state === 'running') {
+            $task->pauseTimer('other', $validated['reason'], false, $user->id);
+        } elseif ($task->timer_state === 'paused') {
+            $task->update([
+                'pause_count' => ($task->pause_count ?? 0) + 1,
+            ]);
+
+            TaskPauseSession::create([
+                'task_id' => $task->id,
+                'user_id' => $user->id,
+                'reason' => 'other',
+                'reason_detail' => 'On Hold: '.$validated['reason'],
+                'paused_at' => now(),
+                'is_auto_paused' => false,
+            ]);
+        }
+
+        TaskWorkflowEvent::create([
+            'task_id' => $task->id,
+            'user_id' => $user->id,
+            'action' => 'assigner_paused',
+            'comment' => $user->name.' placed this task on hold — Reason: '.$validated['reason'],
+        ]);
+
+        $task->load('project:id,title');
+
+        // Notify all assignees
+        $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+        $this->notificationService->notifyMultiple(
+            array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $user->id),
+            $user->id,
+            'task_assigner_paused',
+            'task',
+            $task->id,
+            'Task Paused by Assigner',
+            $user->name.' paused task "'.$task->title.'" — you cannot perform any actions until it is resumed.',
+            '/tasks/task-details/'.$task->id.'?from=tasks'
+        );
+
+        $this->notificationService->confirmAction($user, 'Paused', 'task', $task->title);
+
+        $this->activityService->log($user->id, 'task_assigner_paused', 'You paused task "'.$task->title.'"', 'task', $task->id);
+
+        try {
+            $this->auditService->log(
+                module: 'task_management',
+                action: 'assigner_pause',
+                description: 'Assigner paused task '.$task->title,
+                user: $user,
+                entityType: 'Task',
+                entityId: $task->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
+        $this->clearDashboardCache($user->id);
+
+        foreach ($assigneeIds as $assigneeId) {
+            $this->clearDashboardCache((int) $assigneeId);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task paused by assigner',
+            'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'assignerPausedBy:id,name'])->toArray()),
+        ]);
+    }
+
+    /**
+     * Resume a task paused by the assigner (task creator).
+     *
+     * Resumes the task so the assignee can continue workflow actions.
+     * Only the task creator can use this.
+     */
+    public function assignerResume(Request $request, Task $task)
+    {
+        $user = $request->user();
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
+
+        if (! $isCreator) {
+            return response()->json(['success' => false, 'message' => 'Only the task creator can resume this task'], 403);
+        }
+
+        if (! $task->assigner_paused) {
+            return response()->json(['success' => false, 'message' => 'This task is not paused by the assigner'], 422);
+        }
+
+        $task->update([
+            'assigner_paused' => false,
+            'assigner_paused_at' => null,
+            'assigner_paused_by' => null,
+        ]);
+
+        $timerResumed = false;
+        if ($task->timer_state === 'paused' && strtolower((string) $task->status) === 'in_progress') {
+            $task->resumeTimer($user->id);
+            $timerResumed = true;
+        } elseif ($task->timer_state === 'paused') {
+            $openSession = $task->pauseSessions()->whereNull('resumed_at')->latest()->first();
+            if ($openSession && $openSession->is_auto_paused === false) {
+                $duration = max(0, abs((int) now()->diffInSeconds($openSession->paused_at)));
+                $openSession->update([
+                    'resumed_at' => now(),
+                    'duration_seconds' => $duration,
+                    'resumed_by' => $user->id,
+                ]);
+                $task->update([
+                    'total_pause_seconds' => ($task->total_pause_seconds ?? 0) + $duration,
+                ]);
+            }
+        }
+
+        TaskWorkflowEvent::create([
+            'task_id' => $task->id,
+            'user_id' => $user->id,
+            'action' => 'assigner_resumed',
+            'comment' => $user->name.' resumed this task from hold'.($timerResumed ? ' — timer resumed' : ' — task remains paused'),
+        ]);
+
+        $task->load('project:id,title');
+
+        // Notify all assignees
+        $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+        $this->notificationService->notifyMultiple(
+            array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $user->id),
+            $user->id,
+            'task_assigner_resumed',
+            'task',
+            $task->id,
+            'Task Resumed by Assigner',
+            $user->name.' resumed task "'.$task->title.'" — you can continue working on it.',
+            '/tasks/task-details/'.$task->id.'?from=tasks'
+        );
+
+        $this->notificationService->confirmAction($user, 'Resumed', 'task', $task->title);
+
+        $this->activityService->log($user->id, 'task_assigner_resumed', 'You resumed task "'.$task->title.'"', 'task', $task->id);
+
+        try {
+            $this->auditService->log(
+                module: 'task_management',
+                action: 'assigner_resume',
+                description: 'Assigner resumed task '.$task->title,
+                user: $user,
+                entityType: 'Task',
+                entityId: $task->id,
+                status: 'success'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
+        }
+
+        $this->clearDashboardCache($user->id);
+
+        foreach ($assigneeIds as $assigneeId) {
+            $this->clearDashboardCache((int) $assigneeId);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task resumed by assigner',
+            'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'assignerPausedBy:id,name'])->toArray()),
         ]);
     }
 
@@ -1733,6 +2064,11 @@ class TaskController extends Controller
         if (! $isAssignee) {
             return response()->json(['success' => false, 'message' => 'Only the assignee can submit this task'], 403);
         }
+
+        if ($task->assigner_paused) {
+            return response()->json(['success' => false, 'message' => 'This task is paused by the assigner and cannot be submitted'], 422);
+        }
+
         if (! in_array($task->status, ['pending', 'in_progress', 'reopened', 'paused'])) {
             return response()->json(['success' => false, 'message' => 'This task cannot be submitted in its current status'], 422);
         }
@@ -1801,6 +2137,17 @@ class TaskController extends Controller
 
         $task->update($updateData);
 
+        $task->stopTimer();
+
+        $finalWorkSeconds = $task->fresh()->total_work_seconds;
+        $formattedDuration = Task::formatDuration($finalWorkSeconds);
+
+        TaskWorkflowEvent::create([
+            'task_id' => $task->id, 'user_id' => $user->id,
+            'action' => 'timer_stopped',
+            'comment' => 'Final work duration: '.$formattedDuration,
+        ]);
+
         // Update the submitting user's pivot status for per-user tracking
         $task->assignees()->updateExistingPivot($user->id, [
             'status' => 'submitted',
@@ -1850,13 +2197,13 @@ class TaskController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Task submitted successfully',
-            'task' => $task->fresh()->load([
+            'task' => $this->taskWithTimer($task->fresh()->load([
                 'assignees:id,name,email,role', 'assigner:id,name',
                 'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
                 'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
                 'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
                 'approvedBy:id,name', 'rejectedBy:id,name', 'reopenedBy:id,name',
-            ]),
+            ])->toArray()),
         ]);
     }
 
@@ -1922,10 +2269,10 @@ class TaskController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Task approved successfully',
-            'task' => $task->fresh()->load(['assignees:id,name,email,role', 'assigner:id,name', 'approvedBy:id,name',
+            'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'assigner:id,name', 'approvedBy:id,name',
                 'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
                 'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
-            ]),
+            ])->toArray()),
         ]);
     }
 
@@ -2000,10 +2347,10 @@ class TaskController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Task rejected',
-            'task' => $task->fresh()->load(['assignees:id,name,email,role', 'assigner:id,name', 'rejectedBy:id,name',
+            'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'assigner:id,name', 'rejectedBy:id,name',
                 'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
                 'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
-            ]),
+            ])->toArray()),
         ]);
     }
 
@@ -2110,10 +2457,10 @@ class TaskController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Task reopened successfully',
-            'task' => $task->fresh()->load(['assignees:id,name,email,role', 'assigner:id,name', 'reopenedBy:id,name',
+            'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'assigner:id,name', 'reopenedBy:id,name',
                 'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
                 'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
-            ]),
+            ])->toArray()),
         ]);
     }
 
@@ -2621,13 +2968,202 @@ class TaskController extends Controller
     }
 
     /**
-     * Get the list of statuses considered as pending/in-progress for filtering.
+     * Get all tasks visible to the authenticated user based on role-based visibility.
+     *
+     * Admin: Sees all tasks in the company.
+     * Manager: Sees tasks within their team scope (teams they are member of or lead).
+     * Team Lead: Sees tasks within their team scope (teams they lead or are member of).
+     * Member: Sees tasks they are directly involved in (assigned to, assigned by, or as assignee).
+     *
+     * This is a read-only endpoint — no actions are permitted.
+     *
+     * @param  Request  $request  Query parameters: status, search, time_filter.
+     * @return JsonResponse JSON response with filtered tasks.
+     */
+    public function allTasks(Request $request)
+    {
+        $user = $request->user();
+        $role = $user->role;
+
+        $isDueTodayFilter = $request->input('status') === 'due_today';
+        $isPendingFilter = $request->input('status') === 'pending';
+        $isInProgressFilter = $request->input('status') === 'in_progress';
+        $isPausedFilter = $request->input('status') === 'paused';
+        $statusFilter = $request->input('status');
+        $search = $request->input('search');
+        $timeFilter = $request->input('time_filter');
+
+        $tasksQuery = Task::query();
+
+        // ── Role-based visibility ──
+        switch ($role) {
+            case 'admin':
+                // Admin sees everything — no scope filter
+                break;
+
+            case 'manager':
+                // Manager sees tasks where any participant (creator or assignee) is in the same team(s)
+                $teamIds = $user->teams()->pluck('teams.id');
+                $ledTeamIds = $user->ledTeams()->pluck('teams.id');
+                $allTeamIds = $teamIds->merge($ledTeamIds)->unique();
+
+                if ($allTeamIds->isNotEmpty()) {
+                    $scopeUserIds = DB::table('team_user')
+                        ->whereIn('team_id', $allTeamIds)
+                        ->pluck('user_id')
+                        ->push($user->id)
+                        ->unique();
+
+                    $tasksQuery->where(function ($q) use ($scopeUserIds) {
+                        $q->whereIn('assigned_by', $scopeUserIds)
+                            ->orWhereIn('assigned_to', $scopeUserIds)
+                            ->orWhereHas('assignees', fn ($aq) => $aq->whereIn('users.id', $scopeUserIds));
+                    });
+                } else {
+                    // No teams — only own tasks
+                    $tasksQuery->where(function ($q) use ($user) {
+                        $q->where('assigned_by', $user->id)
+                            ->orWhere('assigned_to', $user->id)
+                            ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
+                    });
+                }
+                break;
+
+            case 'team_lead':
+            case 'teamlead':
+                // Team Lead sees tasks within their team scope
+                $ledTeamIds = $user->ledTeams()->pluck('teams.id');
+                $memberTeamIds = $user->teams()->pluck('teams.id');
+                $allTeamIds = $ledTeamIds->merge($memberTeamIds)->unique();
+
+                if ($allTeamIds->isNotEmpty()) {
+                    $scopeUserIds = DB::table('team_user')
+                        ->whereIn('team_id', $allTeamIds)
+                        ->pluck('user_id')
+                        ->push($user->id)
+                        ->unique();
+
+                    $tasksQuery->where(function ($q) use ($scopeUserIds) {
+                        $q->whereIn('assigned_by', $scopeUserIds)
+                            ->orWhereIn('assigned_to', $scopeUserIds)
+                            ->orWhereHas('assignees', fn ($aq) => $aq->whereIn('users.id', $scopeUserIds));
+                    });
+                } else {
+                    // No teams — only own tasks
+                    $tasksQuery->where(function ($q) use ($user) {
+                        $q->where('assigned_by', $user->id)
+                            ->orWhere('assigned_to', $user->id)
+                            ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
+                    });
+                }
+                break;
+
+            case 'guest':
+                // Guests cannot access All Tasks
+                return response()->json(['data' => collect(), 'total' => 0]);
+
+            default:
+                // Member: only tasks directly assigned to or created by the member
+                // 1. Tasks where assigned_by = member (member created/assigned the task)
+                // 2. Tasks where assigned_to = member (task directly assigned to member)
+                // 3. Tasks where member is in the assignees pivot (many-to-many assignment)
+                $tasksQuery->where(function ($q) use ($user) {
+                    $q->where('assigned_by', $user->id)
+                        ->orWhere('assigned_to', $user->id)
+                        ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
+                });
+                break;
+        }
+
+        // ── Apply filters ──
+        $tasksQuery->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
+            ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
+            ->when($isInProgressFilter, fn ($q) => $q->whereIn('status', $this->inProgressTaskStatuses()))
+            ->when($isPausedFilter, fn ($q) => $q->whereIn('status', $this->pausedTaskStatuses()))
+            ->when($search, fn ($q) => $q->where(function ($sq) use ($search) {
+                $sq->where('title', 'like', '%'.$search.'%')
+                    ->orWhereHas('assignees', fn ($aq) => $aq->where('users.name', 'like', '%'.$search.'%'))
+                    ->orWhereHas('assigner', fn ($aq) => $aq->where('users.name', 'like', '%'.$search.'%'))
+                    ->orWhereHas('project', fn ($pq) => $pq->where('title', 'like', '%'.$search.'%'));
+            }))
+            ->when($statusFilter && ! $isDueTodayFilter && ! $isPendingFilter && ! $isInProgressFilter && ! $isPausedFilter, fn ($q) => $q->where('status', $statusFilter))
+            ->when($timeFilter, fn ($q) => $q->where('updated_at', '>=', now()->subDays((int) $timeFilter)));
+
+        $tasks = $tasksQuery
+            ->with([
+                'project:id,title,team_id',
+                'assignees:id,name,email,role',
+                'assigner:id,name,email,role',
+                'approvedBy:id,name,role',
+                'rejectedBy:id,name,role',
+                'reopenedBy:id,name,role',
+                'updatedBy:id,name,role',
+            ])
+            ->orderBy('sort_order')
+            ->latest('updated_at')
+            ->limit(200)
+            ->get();
+
+        // ── Bulk load deliverable counts ──
+        $taskIds = $tasks->pluck('id');
+        $dlvStats = collect();
+        if ($taskIds->isNotEmpty()) {
+            $dlvStats = Deliverable::selectRaw('task_id, COUNT(*) as total, SUM(CASE WHEN status = "approved" THEN 1 ELSE 0 END) as completed, SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending')
+                ->whereIn('task_id', $taskIds)
+                ->groupBy('task_id')
+                ->get()->keyBy('task_id');
+        }
+
+        $tasks->transform(function ($task) use ($dlvStats) {
+            $task->item_type = 'task';
+            $stats = $dlvStats->get($task->id);
+            $total = $stats ? (int) $stats->total : 0;
+            $completed = $stats ? (int) $stats->completed : 0;
+            $pending = $stats ? (int) $stats->pending : 0;
+            $task->total_deliverables = $total;
+            $task->completed_deliverables = $completed;
+            $task->pending_deliverables_count = $pending;
+            $task->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
+
+            return $task;
+        });
+
+        $allItems = $tasks->sortBy('sort_order')->values();
+
+        return response()->json([
+            'data' => $allItems,
+            'total' => $allItems->count(),
+        ]);
+    }
+
+    /**
+     * Get the list of statuses considered as pending (not yet acknowledged).
      *
      * @return array Array of status strings.
      */
     private function pendingTaskStatuses(): array
     {
-        return ['pending', 'in_progress', 'In Progress', 'In-progress', 'planned', 'Planning', 'Planned', 'submitted', 'reopened', 'rejected'];
+        return ['pending', 'planned', 'Planning', 'Planned'];
+    }
+
+    /**
+     * Get the list of statuses considered as in-progress (acknowledged, being worked on).
+     *
+     * @return array Array of status strings.
+     */
+    private function inProgressTaskStatuses(): array
+    {
+        return ['in_progress', 'In Progress', 'In-progress'];
+    }
+
+    /**
+     * Get the list of statuses considered as paused.
+     *
+     * @return array Array of status strings.
+     */
+    private function pausedTaskStatuses(): array
+    {
+        return ['paused'];
     }
 
     /**
@@ -2655,5 +3191,40 @@ class TaskController extends Controller
                 $q->whereDate('end_date', today());
             }
         })->whereNotIn('status', $this->incompleteDueTodayStatuses());
+    }
+
+    /**
+     * Attach computed timer data to a task payload array.
+     */
+    private function taskWithTimer(array $payload): array
+    {
+        if (isset($payload['timer'])) {
+            return $payload;
+        }
+
+        $task = \App\Models\Task::with([])->find($payload['id'] ?? 0);
+        if (! $task) {
+            return $payload;
+        }
+
+        $workSeconds = $task->getCurrentWorkSeconds();
+        $elapsedSeconds = $task->getCurrentElapsedSeconds();
+
+        $payload['timer'] = [
+            'state' => $task->timer_state,
+            'work_seconds' => $workSeconds,
+            'work_formatted' => Task::formatDuration($workSeconds),
+            'elapsed_seconds' => $elapsedSeconds,
+            'elapsed_formatted' => Task::formatDuration($elapsedSeconds),
+            'pause_count' => (int) ($task->pause_count ?? 0),
+            'total_pause_seconds' => (int) ($task->total_pause_seconds ?? 0),
+            'total_pause_formatted' => Task::formatDuration((int) ($task->total_pause_seconds ?? 0)),
+            'resume_count' => (int) ($task->resume_count ?? 0),
+            'work_started_at' => $task->work_started_at?->format('Y-m-d\TH:i:s'),
+            'work_completed_at' => $task->work_completed_at?->format('Y-m-d\TH:i:s'),
+            'last_timer_event_at' => $task->last_timer_event_at?->format('Y-m-d\TH:i:s'),
+        ];
+
+        return $payload;
     }
 }

@@ -68,7 +68,7 @@ function MemberTeam() {
   };
 
   useEffect(() => { fetchTeams(); }, []);
-  useAutoRefresh(fetchTeams, { events: ["team_created", "team_updated", "team_deleted", "team_leader_changed", "team_member_added", "team_member_removed", "data:changed"], pollInterval: 30000 });
+  useAutoRefresh(fetchTeams, { events: ["team_created", "team_updated", "team_deleted", "team_leader_changed", "team_member_added", "team_member_removed", "data:changed"] });
 
   const breadcrumbs = [
     { label: "Dashboard", path: rolePath("dashboard") },
@@ -175,7 +175,7 @@ function TeamCard({ team, search }) {
       {team.description && (
         <div className="mt-section">
           <span className="mt-section-label">Description</span>
-          <p className="mt-team-desc">{team.description}</p>
+          <div className="mt-team-desc rte-display" dangerouslySetInnerHTML={{ __html: team.description }} />
         </div>
       )}
 

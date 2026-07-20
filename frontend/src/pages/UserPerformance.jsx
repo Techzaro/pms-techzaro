@@ -223,7 +223,7 @@ function UserPerformance() {
     fetchTasks();
   }, [fetchTasks]);
 
-  useAutoRefresh(fetchTasks, { events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'], pollInterval: 30000 });
+  useAutoRefresh(fetchTasks, { events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'] });
 
   useEffect(() => {
     setOrderedItems(items);

@@ -20,6 +20,7 @@ import { formatDateTime, toUTCIso, getNowDatetimeLocal } from "../utils/formatDa
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
+import RichTextEditor from "./RichTextEditor";
 import "./layout/CreateProjectModal.css";
 
 const CreateProjectModal = ({ onClose }) => {
@@ -487,12 +488,11 @@ const CreateProjectModal = ({ onClose }) => {
 
             <div className="cp-field">
               <label>Description</label>
-              <textarea
-                name="description"
-                placeholder="Enter project description..."
+              <RichTextEditor
                 value={form.description}
-                onChange={handleChange}
-              ></textarea>
+                onChange={(val) => { setIsDirty(true); setForm((prev) => ({ ...prev, description: val })); }}
+                placeholder="Enter project description..."
+              />
             </div>
 
             {/* PROJECT MILESTONES */}

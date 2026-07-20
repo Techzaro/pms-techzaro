@@ -88,7 +88,7 @@ function DeliveriesByYou() {
     fetchSubtasks();
   }, [search, statusFilter, timeFilter]);
 
-  useAutoRefresh(fetchSubtasks, { events: ['deliverable:updated', 'deliverable:created', 'deliverable:deleted', 'data:changed'], pollInterval: 30000 });
+  useAutoRefresh(fetchSubtasks, { events: ['deliverable:updated', 'deliverable:created', 'deliverable:deleted', 'data:changed'] });
 
   useEffect(() => {
     const selectedId = searchParams.get("selectedDeliverable");
@@ -123,13 +123,17 @@ function DeliveriesByYou() {
   }, [subtasks]);
 
   const selectStatusFilter = (filter) => {
-    setStatusFilter(filter);
-    setShowAll(!filter);
-    setPage(1);
-    if (filter) {
-      setSearchParams({ status: filter });
+    if (filter === statusFilter && filter === "") {
+      setShowAll(!showAll);
     } else {
-      setSearchParams({});
+      setStatusFilter(filter);
+      setShowAll(false);
+      setPage(1);
+      if (filter) {
+        setSearchParams({ status: filter });
+      } else {
+        setSearchParams({});
+      }
     }
   };
 
@@ -186,6 +190,14 @@ function DeliveriesByYou() {
 
   const displayItems = orderedSubtasks.length ? orderedSubtasks : subtasks;
 
+  const allCount = displayItems.length;
+  const dueTodayCount = displayItems.filter((i) => { const d = i.due_date ? new Date(i.due_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length;
+  const pendingCount = displayItems.filter((i) => i.status === "pending").length;
+  const submittedCount = displayItems.filter((i) => i.status === "submitted").length;
+  const reopenedCount = displayItems.filter((i) => i.status === "reopened").length;
+  const approvedCount = displayItems.filter((i) => i.status === "approved").length;
+  const rejectedCount = displayItems.filter((i) => i.status === "rejected").length;
+
   const totalPages = showAll ? 1 : Math.ceil(displayItems.length / ITEMS_PER_PAGE);
   const paginatedItems = showAll ? displayItems : displayItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
@@ -214,24 +226,24 @@ function DeliveriesByYou() {
         </div>
 
         <div className="task-progress">
-          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
+          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
           <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#EF4444" /> Due Today
+            <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
           </p>
           <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Pending
+            <GoDotFill /> Pending ({pendingCount})
           </p>
           <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Submitted
+            <GoDotFill /> Submitted ({submittedCount})
           </p>
           <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Reopened
+            <GoDotFill /> Reopened ({reopenedCount})
           </p>
           <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Approved
+            <GoDotFill /> Approved ({approvedCount})
           </p>
           <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Declined
+            <GoDotFill /> Declined ({rejectedCount})
           </p>
         </div>
 

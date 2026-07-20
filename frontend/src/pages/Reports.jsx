@@ -212,7 +212,7 @@ function Reports() {
     queryClient.invalidateQueries({ queryKey: ["report-user-table"] });
   }, [queryClient]);
 
-  useAutoRefresh(refetchSummary, { events: ["task:created", "task:updated", "task:deleted", "task:approved", "task:rejected", "task:reopened", "data:changed"], pollInterval: 30000 });
+  useAutoRefresh(refetchSummary, { events: ["task:created", "task:updated", "task:deleted", "task:approved", "task:rejected", "task:reopened", "data:changed"] });
 
   const navigate = useNavigate();
 

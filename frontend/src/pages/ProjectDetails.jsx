@@ -558,7 +558,6 @@ function ProjectDetails() {
 
   useAutoRefresh(handleRefresh, {
     events: ['task:created', 'task:updated', 'task:deleted', 'project:updated', 'project:deleted', 'deliverable:updated', 'data:changed'],
-    pollInterval: 30000,
   });
 
   useEffect(() => {

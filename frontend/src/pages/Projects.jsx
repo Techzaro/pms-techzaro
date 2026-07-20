@@ -167,7 +167,6 @@ function Projects() {
 
   useAutoRefresh(fetchProjects, {
     events: ['project:created', 'project:updated', 'project:deleted', 'data:changed'],
-    pollInterval: 30000,
   });
 
   useEffect(() => {
@@ -181,13 +180,17 @@ function Projects() {
   }, [searchParams]);
 
   const selectStatusFilter = (filter) => {
-    setStatusFilter(filter);
-    setShowAll(!filter);
-    setPage(1);
-    if (filter === "active") {
-      setSearchParams({ filter: "active" });
+    if (filter === statusFilter && filter === "") {
+      setShowAll(!showAll);
     } else {
-      setSearchParams({});
+      setStatusFilter(filter);
+      setShowAll(false);
+      setPage(1);
+      if (filter === "active") {
+        setSearchParams({ filter: "active" });
+      } else {
+        setSearchParams({});
+      }
     }
   };
 
@@ -286,6 +289,15 @@ function Projects() {
     return true;
   });
 
+  const allCount = orderedProjects.length;
+  const dueTodayCount = orderedProjects.filter((p) => { if (!p.active_deadline) return false; const d = new Date(p.active_deadline); const t = new Date(); return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate(); }).length;
+  const activeCount = orderedProjects.filter((p) => p.status === "In-progress" || p.status === "in_progress" || p.status === "Planning" || p.status === "planned").length;
+  const pendingCount = orderedProjects.filter((p) => p.status === "pending" || p.status === "submitted").length;
+  const submittedCount = orderedProjects.filter((p) => p.status === "submitted").length;
+  const reopenedCount = orderedProjects.filter((p) => p.status === "reopened").length;
+  const approvedCount = orderedProjects.filter((p) => p.status === "Completed" || p.status === "approved").length;
+  const rejectedCount = orderedProjects.filter((p) => p.status === "rejected" || p.status === "Pause").length;
+
   const totalPages = showAll ? 1 : Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
   const paginatedProjects = showAll ? filteredProjects : filteredProjects.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
@@ -303,24 +315,7 @@ function Projects() {
           <div>
             <h1>Projects</h1>
             <p>Manage and track your projects</p>
-            <div className="task-count-badge" style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
-              <span style={{ background: "var(--border-medium)", color: "var(--color-primary)", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-                Total: {filteredProjects.length} projects
-              </span>
-              <span style={{ background: "var(--color-blue-light)", color: "var(--color-warning)", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-                Active: {filteredProjects.filter(p => p.status === "In-progress" || p.status === "in_progress" || p.status === "Planning" || p.status === "planned").length}
-              </span>
-              <span style={{ background: "var(--color-success-bg)", color: "var(--color-success)", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-                Completed: {filteredProjects.filter(p => p.status === "Completed" || p.status === "approved").length}
-              </span>
-              <span style={{ background: "var(--bg-badge)", color: "var(--color-blue)", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-                Pending: {filteredProjects.filter(p => p.status === "pending" || p.status === "submitted").length}
-              </span>
-              <span style={{ background: "#dcdcdc", color: "#991B1B", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-                Declined: {filteredProjects.filter(p => p.status === "rejected" || p.status === "Pause").length}
-              </span>
-            </div>
-          </div>
+        </div>
 
           <div className="header-actions">
             <div className="all-time">
@@ -368,27 +363,27 @@ function Projects() {
 
         {/* STATUS FILTERS */}
         <div className="task-progress">
-          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
+          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
           <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#EF4444" /> Due Today
+            <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
           </p>
           <p className={`Active ${statusFilter === "active" ? "active" : ""}`} onClick={() => selectStatusFilter("active")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Active Projects
+            <GoDotFill /> Active Projects ({activeCount})
           </p>
           <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Pending
+            <GoDotFill /> Pending ({pendingCount})
           </p>
           <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Submitted
+            <GoDotFill /> Submitted ({submittedCount})
           </p>
           <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Reopened
+            <GoDotFill /> Reopened ({reopenedCount})
           </p>
           <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Approved
+            <GoDotFill /> Approved ({approvedCount})
           </p>
           <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Declined
+            <GoDotFill /> Declined ({rejectedCount})
           </p>
         </div>
 

@@ -88,9 +88,7 @@ export default function DayPopup({ date, events, onClose, onEdit, onDelete, canM
                           {time} • {TYPE_LABELS[ev.type] || ev.type}
                         </p>
                         {ev.description && (
-                          <p style={{ margin: "8px 0 0", fontSize: 13, color: "#4b5563", lineHeight: 1.5 }}>
-                            {ev.description}
-                          </p>
+                          <div style={{ margin: "8px 0 0", fontSize: 13, color: "#4b5563", lineHeight: 1.5 }} className="rte-display" dangerouslySetInnerHTML={{ __html: ev.description }} />
                         )}
                       </div>
                       <div style={{ display: "flex", gap: 6, flexShrink: 0, marginLeft: 8 }} onClick={(e) => e.stopPropagation()}>

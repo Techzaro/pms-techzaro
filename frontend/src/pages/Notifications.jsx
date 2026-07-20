@@ -279,7 +279,6 @@ function Notifications() {
 
   useAutoRefresh(() => fetchNotifications(1, activeTab, search), {
     events: ["data:changed", "task:created", "task:updated", "task:deleted"],
-    pollInterval: 20000,
   });
 
   const handleSearch = (q) => {

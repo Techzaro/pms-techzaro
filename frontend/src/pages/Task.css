@@ -96,6 +96,8 @@
 .Active,
 .DueToday,
 .Pending,
+.InProgress,
+.Paused,
 .Progress,
 .Submitted,
 .Reopened,
@@ -123,6 +125,8 @@
 .Active.active,
 .DueToday.active,
 .Pending.active,
+.InProgress.active,
+.Paused.active,
 .Progress.active,
 .Submitted.active,
 .Reopened.active,
@@ -147,6 +151,14 @@
 
 .Pending {
   color: #F59E0B;
+}
+
+.InProgress {
+  color: #3B82F6;
+}
+
+.Paused {
+  color: #F97316;
 }
 
 .Progress {
@@ -617,12 +629,88 @@
   cursor: default;
 }
 
+/* ===== ALL TASKS 9-COLUMN TABLE ===== */
+.all-tasks-header {
+  display: grid !important;
+  grid-template-columns: 32px minmax(130px, 1.3fr) minmax(130px, 1.3fr) minmax(150px, 1.8fr) minmax(80px, 0.6fr) minmax(90px, 0.7fr) minmax(75px, 0.5fr) minmax(120px, 0.8fr) minmax(65px, 0.5fr) !important;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: var(--color-table-header);
+  border-bottom: 2px solid var(--border-color);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-dark-alt);
+  gap: 6px;
+  min-width: 0;
+}
+
+.all-tasks-header > div {
+  padding: 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.all-tasks-header > div:nth-child(1) { text-align: left; }  /* Drag handle */
+.all-tasks-header > div:nth-child(2) { text-align: left; }  /* Assigned To */
+.all-tasks-header > div:nth-child(3) { text-align: left; }  /* Assigned By */
+.all-tasks-header > div:nth-child(4) { text-align: left; }  /* Task Name */
+.all-tasks-header > div:nth-child(5) { text-align: left; }  /* Status */
+.all-tasks-header > div:nth-child(6) { text-align: left; }  /* Progress */
+.all-tasks-header > div:nth-child(7) { text-align: left; }  /* Priority */
+.all-tasks-header > div:nth-child(8) { text-align: left; }  /* Start & Due Date */
+.all-tasks-header > div:nth-child(9) {
+  text-align: center;
+  overflow: visible !important;
+  text-overflow: unset !important;
+} /* Action - never truncate */
+
+.all-tasks-row {
+  display: grid !important;
+  grid-template-columns: 32px minmax(130px, 1.3fr) minmax(130px, 1.3fr) minmax(150px, 1.8fr) minmax(80px, 0.6fr) minmax(90px, 0.7fr) minmax(75px, 0.5fr) minmax(120px, 0.8fr) minmax(65px, 0.5fr) !important;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-table-row-border);
+  gap: 6px;
+  transition: background-color 0.2s;
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 0;
+}
+
+.all-tasks-row > div {
+  padding: 0 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.all-tasks-row:hover {
+  background: var(--color-table-row-hover);
+}
+
+.all-tasks-row > .col-drag { }
+.all-tasks-row > .col-assigned-to { overflow: hidden; }
+.all-tasks-row > .col-assigned-by { overflow: hidden; }
+.all-tasks-row > .col-task-name { overflow: hidden; }
+.all-tasks-row > .col-status { white-space: nowrap; }
+.all-tasks-row > .col-progress { overflow: hidden; }
+.all-tasks-row > .col-priority { white-space: nowrap; }
+.all-tasks-row > .col-due-date { overflow: hidden; }
+.all-tasks-row > .col-action {
+  display: flex;
+  justify-content: center;
+  white-space: nowrap;
+  overflow: visible;
+}
+
 /* ===== RESPONSIVE - UPDATED ===== */
 @media (max-width: 1200px) {
   .table-header1,
   .taskby-row,
   .table-header-compact,
-  .taskby-row-compact {
+  .taskby-row-compact,
+  .all-tasks-header,
+  .all-tasks-row {
     min-width: 900px;
   }
 }
@@ -643,7 +731,9 @@
   .table-header1,
   .taskby-row,
   .table-header-compact,
-  .taskby-row-compact {
+  .taskby-row-compact,
+  .all-tasks-header,
+  .all-tasks-row {
     min-width: 1000px;
   }
 }
@@ -658,8 +748,10 @@
   .table-header1,
   .taskby-row,
   .table-header-compact,
-  .taskby-row-compact {
-    min-width: 900px;
+  .taskby-row-compact,
+  .all-tasks-header,
+  .all-tasks-row {
+    min-width: 1000px;
   }
 
   .progress-bar-track {
@@ -736,7 +828,9 @@
   .table-header1,
   .taskby-row,
   .table-header-compact,
-  .taskby-row-compact {
+  .taskby-row-compact,
+  .all-tasks-header,
+  .all-tasks-row {
     min-width: 900px;
   }
 
@@ -773,7 +867,9 @@
   .table-header1,
   .taskby-row,
   .table-header-compact,
-  .taskby-row-compact {
+  .taskby-row-compact,
+  .all-tasks-header,
+  .all-tasks-row {
     min-width: 900px;
   }
 }

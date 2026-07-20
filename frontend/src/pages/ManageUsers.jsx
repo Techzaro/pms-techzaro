@@ -290,7 +290,7 @@ function ManageUsers() {
     fetchUsers();
   }, [navigate]);
 
-  useAutoRefresh(fetchUsers, { events: ["data:changed"], pollInterval: 60000 });
+  useAutoRefresh(fetchUsers, { events: ["data:changed"] });
 
   useEffect(() => {
     setLocalUsers(users);

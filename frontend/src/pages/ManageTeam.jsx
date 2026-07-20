@@ -42,6 +42,7 @@ import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "../components/LoadingButton";
+import RichTextEditor from "../components/RichTextEditor";
 import "./ManageTeam.css";
 
 /** Color palette for user avatar backgrounds */
@@ -175,7 +176,7 @@ function ManageTeam() {
   }, []);
 
   // Auto-refresh teams when data changes elsewhere in the app
-  useAutoRefresh(fetchTeams, { events: ["data:changed"], pollInterval: 60000 });
+  useAutoRefresh(fetchTeams, { events: ["data:changed"] });
 
   // Sync selectedTeam from URL search params
   useEffect(() => {
@@ -587,7 +588,7 @@ function ManageTeam() {
                     {team.description && (
                       <div className="mt-section" >
                         <span className="mt-section-label">DESCRIPTION</span>
-                        <p className="mt-team-desc">{team.description}</p>
+                        <div className="mt-team-desc rte-display" dangerouslySetInnerHTML={{ __html: team.description }} />
                       </div>
                     )}
                   </div>
@@ -810,22 +811,9 @@ function ManageTeam() {
 
                   <div style={{ width: "100%", marginBottom: "20px" }}>
                     <label className="mt-field-label">Description</label>
-                    <textarea
-                      style={{
-                        width: "100%",
-                        minHeight: "80px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "12px",
-                        padding: "12px 14px",
-                        fontSize: "14px",
-                        background: "#f9fafb",
-                        outline: "none",
-                        boxSizing: "border-box",
-                        resize: "vertical",
-                        fontFamily: "inherit",
-                      }}
+                    <RichTextEditor
                       value={teamDescription}
-                      onChange={(e) => { setTeamIsDirty(true); setTeamDescription(e.target.value); }}
+                      onChange={(val) => { setTeamIsDirty(true); setTeamDescription(val); }}
                       placeholder="Enter team description (optional)"
                     />
                   </div>

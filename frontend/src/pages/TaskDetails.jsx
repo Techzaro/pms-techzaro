@@ -8,23 +8,27 @@
  * previous/next buttons and tracks which tasks have been viewed.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import {
+  BarChart3,
   Calendar,
+  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Copy,
   FolderOpen,
   Globe,
+  Lock,
   Pause,
   Pencil,
   Play,
   Plus,
   Shield,
+  Timer,
   Trash2,
   Users,
   X,
@@ -36,12 +40,14 @@ import Breadcrumb from "../components/Breadcrumb";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import EditTaskModal from "../components/EditTaskModal";
 import ConfirmModal from "../components/ConfirmModal";
+import PauseReasonModal from "../components/PauseReasonModal";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
 import ViewDeliverableModal from "../components/ViewDeliverableModal";
 import AssignerViewModal from "../components/AssignerViewModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import TaskSubmissionPanel from "../components/TaskSubmissionPanel";
 import AddAccessModal from "../components/AddAccessModal";
+import TaskDiscussion from "../components/TaskDiscussion";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 
@@ -58,6 +64,8 @@ import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { useSubmit } from "../hooks/useSubmit";
 import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
 import { useActivityHighlight } from "../hooks/useActivityHighlight";
+import { useWorkTimer } from "../hooks/useWorkTimer";
+import { useIdleDetection } from "../hooks/useIdleDetection";
 import "../components/layout/ActivityHighlight.css";
 import "./TaskDetails.css";
 import "./Deliveries.css";
@@ -256,6 +264,7 @@ function TaskDetails() {
     tasks: { label: "My Tasks", path: rolePath("tasks") },
     taskby: { label: "Tasks Assigned By You", path: rolePath("taskby") },
     "self-tasks": { label: "Self Tasks", path: rolePath("self-tasks") },
+    "all-tasks": { label: "All Tasks", path: rolePath("all-tasks") },
   };
 
   const [task, setTask] = useState(null);
@@ -293,6 +302,7 @@ function TaskDetails() {
   } = useActivityHighlight("task", task?.id, task?.activity_max_id || 0, taskChangesForHighlight);
 
   const source = sourcePages[location.state?.from] || null;
+  const readOnly = location.state?.readOnly === true;
 
   const fetchTask = useCallback(async (refresh = false) => {
     if (!taskId) return;
@@ -327,7 +337,6 @@ function TaskDetails() {
 
   useAutoRefresh(() => fetchTask(false), {
     events: ["task:updated", "task:deleted", "deliverable:created", "deliverable:updated", "deliverable:deleted", "data:changed"],
-    pollInterval: 30000,
   });
 
   const currentIdx = taskIds.findIndex(
@@ -360,17 +369,68 @@ function TaskDetails() {
   const currentUser = getUser();
   const isCreator = task?.is_creator ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10));
   const isAssignee = task?.is_assignee ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)));
-  const canEdit = task?.can_edit ?? (task && currentUser && isCreator && task?.status?.toLowerCase() !== "approved");
-  const canSubmitTask = task?.can_submit ?? (task && currentUser && isAssignee && ["pending", "in_progress", "reopened", "paused"].includes(task?.status));
-  const canAcknowledge = task && currentUser && isAssignee && task?.status === "pending";
-  const canPause = task && currentUser && isAssignee && task?.status === "in_progress";
-  const canContinue = task && currentUser && isAssignee && task?.status === "paused";
+  const canEdit = readOnly ? false : (task?.can_edit ?? (task && currentUser && isCreator && task?.status?.toLowerCase() !== "approved"));
+  const canSubmitTask = readOnly ? false : (task?.can_submit ?? (task && currentUser && isAssignee && ["pending", "in_progress", "reopened", "paused"].includes(task?.status)));
+  const canAcknowledge = readOnly ? false : (task && currentUser && isAssignee && task?.status === "pending");
+  const canPause = readOnly ? false : (task && currentUser && isAssignee && task?.status === "in_progress" && !task?.assigner_paused);
+  const canContinue = readOnly ? false : (task && currentUser && isAssignee && task?.status === "paused" && !task?.assigner_paused);
+  const isAssignerLocked = !!task?.assigner_paused;
+  const canAssignerPause = readOnly ? false : (task && currentUser && isCreator && !task?.assigner_paused && ["pending", "in_progress", "reopened", "paused"].includes(task?.status));
+  const canAssignerResume = readOnly ? false : (task && currentUser && isCreator && task?.assigner_paused);
   const isApproved = task?.status?.toLowerCase() === "approved";
 
   const { submitting: acknowledging, run: runAcknowledge } = useSubmit();
   const { submitting: pausing, run: runPause } = useSubmit();
   const { submitting: continuing, run: runContinue } = useSubmit();
   const { submitting: deleting, run: runDelete } = useSubmit();
+  const [pauseModalOpen, setPauseModalOpen] = useState(false);
+  const [assignerPauseModalOpen, setAssignerPauseModalOpen] = useState(false);
+  const { submitting: assignerPausing, run: runAssignerPause } = useSubmit();
+  const { submitting: assignerResuming, run: runAssignerResume } = useSubmit();
+
+  const { workDisplay, workSeconds, elapsedDisplay, elapsedSeconds, pauseDisplay, pauseSeconds, pauseCount, state: timerState } = useWorkTimer(task?.timer);
+
+  const handleAutoPause = useCallback(async () => {
+    if (timerState !== 'running') return;
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason: "auto_paused", reason_detail: "Auto paused due to inactivity" }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTask(data.task);
+        publish('task:updated', { id: taskId, status: 'paused' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+      }
+    } catch {}
+  }, [timerState, taskId]);
+
+  const [idleModalOpen, setIdleModalOpen] = useState(false);
+  const idleTimerRef = useRef(null);
+
+  const handleIdle = useCallback(() => {
+    if (timerState !== 'running') return;
+    setIdleModalOpen(true);
+    idleTimerRef.current = setTimeout(() => {
+      setIdleModalOpen(false);
+      handleAutoPause();
+    }, 60000);
+  }, [timerState, handleAutoPause]);
+
+  const handleIdleResume = useCallback(() => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    setIdleModalOpen(false);
+  }, []);
+
+  useIdleDetection({
+    timeout: 600000,
+    onIdle: handleIdle,
+    onActivity: handleIdleResume,
+  });
 
   const fetchAccessCredentials = useCallback(async () => {
     if (!task) return;
@@ -587,13 +647,14 @@ function TaskDetails() {
     });
   };
 
-  const handlePause = async () => {
+  const handlePause = async ({ reason, reason_detail }) => {
     await runPause(async () => {
       try {
         const token = authToken();
         const res = await fetch(`${API_URL}/tasks/${taskId}/pause`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ reason, reason_detail }),
           _notifHandled: true,
         });
         const data = await res.json();
@@ -631,6 +692,55 @@ function TaskDetails() {
         }
       } catch {
         notify.error("Failed to continue task.");
+      }
+    });
+  };
+
+  const handleAssignerPause = async ({ reason, reason_detail }) => {
+    await runAssignerPause(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/tasks/${taskId}/assigner-pause`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ reason: reason_detail || reason }),
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setTask(data.task);
+          publish('task:updated', { id: taskId });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage("Task", "placed on hold");
+        } else {
+          notify.error(data.message || "Failed to place task on hold.");
+        }
+      } catch {
+        notify.error("Failed to place task on hold.");
+      }
+    });
+  };
+
+  const handleAssignerResume = async () => {
+    await runAssignerResume(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/tasks/${taskId}/assigner-resume`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setTask(data.task);
+          publish('task:updated', { id: taskId });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage("Task", "resumed by assigner");
+        } else {
+          notify.error(data.message || "Failed to resume task.");
+        }
+      } catch {
+        notify.error("Failed to resume task.");
       }
     });
   };
@@ -686,13 +796,13 @@ function TaskDetails() {
                     </>
                   )}
                   {canAcknowledge && (
-                    <button className="td-btn-primary" onClick={handleAcknowledge} disabled={acknowledging} style={acknowledging ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
+                    <button className="td-btn-primary" onClick={handleAcknowledge} disabled={acknowledging || isAssignerLocked} style={acknowledging || isAssignerLocked ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
                       <CheckCircle2 size={15} />
                       {acknowledging ? "Acknowledging..." : "Acknowledge"}
                     </button>
                   )}
                   {canPause && (
-                    <button className="td-btn-primary" onClick={handlePause} disabled={pausing} style={{ backgroundColor: pausing ? "#9CA3AF" : "#D97706", borderColor: pausing ? "#9CA3AF" : "#D97706", opacity: pausing ? 0.7 : 1, cursor: pausing ? "not-allowed" : "pointer" }}>
+                    <button className="td-btn-primary" onClick={() => setPauseModalOpen(true)} disabled={pausing} style={{ backgroundColor: pausing ? "#9CA3AF" : "#D97706", borderColor: pausing ? "#9CA3AF" : "#D97706", opacity: pausing ? 0.7 : 1, cursor: pausing ? "not-allowed" : "pointer" }}>
                       <Pause size={15} />
                       {pausing ? "Pausing..." : "Pause"}
                     </button>
@@ -700,16 +810,34 @@ function TaskDetails() {
                   {canContinue && (
                     <button className="td-btn-primary" onClick={handleContinue} disabled={continuing} style={continuing ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
                       <Play size={15} />
-                      {continuing ? "Resuming..." : "Continue"}
+                      {continuing ? "Resuming..." : "Resume"}
                     </button>
                   )}
-                  {isAssignee && ["in_progress", "reopened", "paused"].includes(task?.status) && (
+                  {canAssignerPause && (
+                    <button className="td-btn-primary" onClick={() => setAssignerPauseModalOpen(true)} disabled={assignerPausing} style={{ backgroundColor: assignerPausing ? "#9CA3AF" : "#7C3AED", borderColor: assignerPausing ? "#9CA3AF" : "#7C3AED", opacity: assignerPausing ? 0.7 : 1, cursor: assignerPausing ? "not-allowed" : "pointer" }}>
+                      <Lock size={15} />
+                      {assignerPausing ? "Pausing..." : "Put On Hold"}
+                    </button>
+                  )}
+                  {canAssignerResume && (
+                    <button className="td-btn-primary" onClick={handleAssignerResume} disabled={assignerResuming} style={{ backgroundColor: assignerResuming ? "#9CA3AF" : "#059669", borderColor: assignerResuming ? "#9CA3AF" : "#059669", opacity: assignerResuming ? 0.7 : 1, cursor: assignerResuming ? "not-allowed" : "pointer" }}>
+                      <Play size={15} />
+                      {assignerResuming ? "Resuming..." : "Resume"}
+                    </button>
+                  )}
+                  {isAssignerLocked && !isCreator && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "13px", fontWeight: 600, border: "1px solid #F59E0B" }}>
+                      <Lock size={14} />
+                      On Hold by Assigner
+                    </span>
+                  )}
+                  {!readOnly && isAssignee && ["in_progress", "reopened", "paused"].includes(task?.status) && (
                     <button
                       className="td-btn-primary"
-                      disabled={task?.status === "paused"}
-                      title={task?.status === "paused" ? "Continue the task first to submit" : ""}
-                      onClick={() => setTaskSubmitModalOpen(true)}
-                      style={task?.status === "paused" ? { opacity: 0.5, cursor: "not-allowed" } : {}}
+                      disabled={task?.status === "paused" || isAssignerLocked}
+                      title={isAssignerLocked ? "Task is on hold by the assigner" : task?.status === "paused" ? "Continue the task first to submit" : ""}
+                      onClick={() => !isAssignerLocked && setTaskSubmitModalOpen(true)}
+                      style={task?.status === "paused" || isAssignerLocked ? { opacity: 0.5, cursor: "not-allowed" } : {}}
                     >
                       <LuSend size={15} />
                       {task.status === "reopened" ? "Resubmit Task" : "Submit Task"}
@@ -727,6 +855,12 @@ function TaskDetails() {
                   <span className="td-badge-dot" style={{ background: priorityColor(task.priority) }} />
                   {task.priority} Priority
                 </span>
+                {task?.assigner_paused && (
+                  <span className="td-badge" style={{ background: "#FEF3C7", color: "#92400E" }}>
+                    <Lock size={12} />
+                    On Hold by Assigner
+                  </span>
+                )}
               </div>
 
               {/* STATS */}
@@ -755,7 +889,7 @@ function TaskDetails() {
               </div>
 
               {/* Task Submission Workflow */}
-              {(isAssignee || isCreator) && (
+              {!readOnly && (isAssignee || isCreator) && (
                 <TaskSubmissionPanel
                   task={task}
                   isCreator={isCreator}
@@ -779,6 +913,7 @@ function TaskDetails() {
                     {location.state?.from === "taskby" && "Assigned by You"}
                     {location.state?.from === "tasks" && "Assigned to You"}
                     {location.state?.from === "self-tasks" && "Self Tasks"}
+                    {location.state?.from === "all-tasks" && "All Tasks"}
                   </h2>
                 </div>
                 {/* TABS */}
@@ -810,7 +945,12 @@ function TaskDetails() {
                       </div>
                       <div className="td-overview-grid">
                         <div className="td-overview-left">
-                          <p>{task.description || "No description provided for this task."}</p>
+                          <div
+                            className="rte-display"
+                            dangerouslySetInnerHTML={{
+                              __html: task.description || "No description provided for this task.",
+                            }}
+                          />
                           <div className="td-reqs">
                             <h3>Requirements</h3>
                             {(() => {
@@ -890,7 +1030,7 @@ function TaskDetails() {
                                 </div>
                                 <div className="date-box" style={{ whiteSpace: "pre-line" }}>{formatDateTimeShort(d.start_date)}{"\n"}{formatDateTimeShort(d.due_date)}</div>
                                 <div className="action-btns">
-                                  {(d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
+                                  {!readOnly && (d.status === "pending" || d.status === "rejected" || d.status === "reopened") ? (
                                     <button className="action-icon-btn action-submit" title="Submit" onClick={() => setSubmitModal({ open: true, subtask: d })}>
                                       <LuSend size={16} />
                                     </button>
@@ -915,7 +1055,7 @@ function TaskDetails() {
                     </div>
                   )}
 
-                  {tab === "files" && <FileUploadSection taskId={task.id} files={files} onReorder={handleFileReorder} onFilesChange={() => fetchTask(true)} />}
+                  {tab === "files" && <FileUploadSection taskId={task.id} files={files} onReorder={handleFileReorder} onFilesChange={() => fetchTask(true)} readOnly={readOnly} />}
 
                   {tab === "access" && (
                     <div className="td-access-section">
@@ -925,7 +1065,7 @@ function TaskDetails() {
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                           <input type="text" placeholder="Search access..." value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
                         </div>
-                        {isCreator && (
+                        {!readOnly && isCreator && (
                           <button className="td-access-add-btn" onClick={() => setShowAddAccessModal(true)}>
                             <Plus size={16} /> Add Access
                           </button>
@@ -945,7 +1085,7 @@ function TaskDetails() {
                             <CredentialRow
                               key={cred.id}
                               credential={cred}
-                              onDelete={isCreator ? () => {
+                              onDelete={!readOnly && isCreator ? () => {
                                 setPendingDeleteCredential(cred.id);
                                 setDeleteCredentialConfirmOpen(true);
                               } : undefined}
@@ -962,12 +1102,15 @@ function TaskDetails() {
                     </div>
                   )}
 
-                </div>
               </div>
             </div>
           </div>
 
-          {/* ===== RIGHT SIDEBAR - UPDATED WITH START DATE AND DUE DATE WITH TIME ===== */}
+          {/* TASK DISCUSSION */}
+          <TaskDiscussion taskId={task.id} readOnly={readOnly} />
+        </div>
+
+        {/* ===== RIGHT SIDEBAR - UPDATED WITH START DATE AND DUE DATE WITH TIME ===== */}
           <aside className="td-sidebar">
             <div className="td-card">
               <h3 className="td-card-title">Task Information</h3>
@@ -1034,6 +1177,104 @@ function TaskDetails() {
               </ul>
             </div>
 
+            {/* WORK DURATION */}
+            {(timerState !== 'idle' || task?.timer?.work_started_at) && (
+              <div className="td-card">
+                <h3 className="td-card-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Timer size={16} />
+                  {timerState === 'completed' ? 'Time Summary' : 'Work Duration'}
+                </h3>
+                <div className="td-timer-display">
+                  <span className={`td-timer-value ${timerState === 'running' ? 'td-timer-running' : ''} ${timerState === 'completed' ? 'td-timer-completed' : ''}`}>
+                    {workDisplay}
+                  </span>
+                  {timerState === 'running' && (
+                    <span className="td-timer-pulse" />
+                  )}
+                </div>
+
+                <div className="td-timer-metrics">
+                  <div className="td-timer-metric">
+                    <span className="td-timer-metric-label">Elapsed</span>
+                    <span className="td-timer-metric-value">{elapsedDisplay}</span>
+                  </div>
+                  <div className="td-timer-metric">
+                    <span className="td-timer-metric-label">Pauses</span>
+                    <span className="td-timer-metric-value">{pauseCount} ({pauseDisplay})</span>
+                  </div>
+                  <div className="td-timer-metric">
+                    <span className="td-timer-metric-label">Resumes</span>
+                    <span className="td-timer-metric-value">{task?.timer?.resume_count || 0}</span>
+                  </div>
+                </div>
+
+                {task?.timer?.work_started_at && (
+                  <div className="td-timer-meta">
+                    <span>Started: {formatDateTime(task.timer.work_started_at)}</span>
+                    {task?.timer?.work_completed_at && (
+                      <span>Finished: {formatDateTime(task.timer.work_completed_at)}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* PERFORMANCE DASHBOARD */}
+            {task?.status === 'approved' && (
+              <div className="td-card">
+                <h3 className="td-card-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <BarChart3 size={16} />
+                  Performance
+                </h3>
+                <div className="td-timer-metrics">
+                  {task.submitted_at && (
+                    <div className="td-timer-metric">
+                      <span className="td-timer-metric-label">Submitted</span>
+                      <span className="td-timer-metric-value">{formatDateTime(task.submitted_at)}</span>
+                    </div>
+                  )}
+                  {task.approved_at && (
+                    <div className="td-timer-metric">
+                      <span className="td-timer-metric-label">Approved</span>
+                      <span className="td-timer-metric-value">{formatDateTime(task.approved_at)}</span>
+                    </div>
+                  )}
+                  {task.end_date && (
+                    <div className="td-timer-metric">
+                      <span className="td-timer-metric-label">Deadline</span>
+                      <span className="td-timer-metric-value">{formatDateTime(task.end_date)}</span>
+                    </div>
+                  )}
+                  {task.approved_at && task.end_date && (
+                    <div className="td-timer-metric">
+                      <span className="td-timer-metric-label">Result</span>
+                      <span className="td-timer-metric-value" style={{ color: new Date(task.approved_at) <= new Date(task.end_date) ? "#059669" : "#ef4444" }}>
+                        {new Date(task.approved_at) <= new Date(task.end_date) ? "On Time" : "Late"}
+                      </span>
+                    </div>
+                  )}
+                  {(() => {
+                    const reworkCount = (task?.workflowEvents || []).filter(e => e.action === 'reopened').length;
+                    return reworkCount > 0 ? (
+                      <div className="td-timer-metric">
+                        <span className="td-timer-metric-label">Reworks</span>
+                        <span className="td-timer-metric-value">{reworkCount}</span>
+                      </div>
+                    ) : null;
+                  })()}
+                  {(() => {
+                    const approvalAttempts = (task?.workflowEvents || []).filter(e => e.action === 'submitted').length;
+                    return (
+                      <div className="td-timer-metric">
+                        <span className="td-timer-metric-label">Attempts</span>
+                        <span className="td-timer-metric-value">{approvalAttempts}</span>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
             {/* ACTIVITY LOG */}
             <div className={`td-card${taskHasUnread ? " activity-panel--unread" : ""}`}>
               <h3 className="td-card-title">Activity</h3>
@@ -1042,6 +1283,7 @@ function TaskDetails() {
                   id: e.id,
                   type: 'event',
                   action: e.action,
+                  comment: e.comment,
                   created_at: e.created_at,
                   sort: new Date(e.created_at).getTime(),
                 }));
@@ -1070,7 +1312,15 @@ function TaskDetails() {
                               {item.action === 'rejected' && '❌'}
                               {item.action === 'reopened' && '🔄'}
                               {item.action === 'field_changed' && '✏️'}
-                              {!['created','submitted','acknowledged','paused','continued','approved','rejected','reopened','field_changed'].includes(item.action) && '📌'}
+                              {item.action === 'timer_started' && '⏱️'}
+                              {item.action === 'timer_paused' && '⏸️'}
+                              {item.action === 'timer_resumed' && '▶️'}
+                              {item.action === 'timer_paused_by_assigner' && '🔒'}
+                              {item.action === 'timer_resumed_by_assigner' && '🔓'}
+                              {item.action === 'timer_stopped' && '⏹️'}
+                              {item.action === 'assigner_paused' && '🔒'}
+                              {item.action === 'assigner_resumed' && '🔓'}
+                              {!['created','submitted','acknowledged','paused','continued','approved','rejected','reopened','field_changed','timer_started','timer_paused','timer_resumed','timer_paused_by_assigner','timer_resumed_by_assigner','timer_stopped','assigner_paused','assigner_resumed'].includes(item.action) && '📌'}
                             </>
                           )}
                           {item.type === 'change' && '✏️'}
@@ -1078,7 +1328,7 @@ function TaskDetails() {
                         <div className="td-activity-body">
                           <span className="td-activity-text">
                             {item.type === 'event'
-                              ? item.action.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                              ? (item.comment || item.action.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()))
                               : item.field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + ' changed'
                             }
                           </span>
@@ -1160,6 +1410,18 @@ function TaskDetails() {
         onSubmitSuccess={handleTaskActionSuccess}
       />
 
+      <PauseReasonModal
+        isOpen={pauseModalOpen}
+        onClose={() => setPauseModalOpen(false)}
+        onConfirm={async (data) => { await handlePause(data); setPauseModalOpen(false); }}
+      />
+      <PauseReasonModal
+        isOpen={assignerPauseModalOpen}
+        onClose={() => setAssignerPauseModalOpen(false)}
+        onConfirm={async (data) => { await handleAssignerPause(data); setAssignerPauseModalOpen(false); }}
+        isAssigner
+      />
+
       <ConfirmModal
         isOpen={deleteTaskConfirmOpen}
         onClose={() => setDeleteTaskConfirmOpen(false)}
@@ -1203,13 +1465,33 @@ function TaskDetails() {
         confirmText="Delete"
         danger
       />
+
+      {idleModalOpen && (
+        <div className="cm-overlay" onClick={handleIdleResume}>
+          <div className="cm-modal" role="dialog" onClick={e => e.stopPropagation()}>
+            <div className="cm-icon" style={{ background: "#f59e0b15" }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
+            <h3>No Activity Detected</h3>
+            <p style={{ marginBottom: "16px" }}>Are you still working on this task?</p>
+            <div className="cm-actions">
+              <button className="cm-cancel-btn" onClick={handleAutoPause}>Pause Task</button>
+              <button className="cm-confirm-btn" style={{ background: "#059669" }} onClick={handleIdleResume}>Continue Working</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
 
 /* ── File Upload Section Component ── */
 /** Renders the list of files attached to a task, with download links, edit/delete actions, and drag-drop reorder. */
-function FileUploadSection({ taskId, files, onReorder, onFilesChange }) {
+function FileUploadSection({ taskId, files, onReorder, onFilesChange, readOnly }) {
   const [fileSearch, setFileSearch] = useState("");
   const [editItem, setEditItem] = useState(null);
   const [editName, setEditName] = useState("");
@@ -1392,6 +1674,7 @@ function FileUploadSection({ taskId, files, onReorder, onFilesChange }) {
         cancelText="Cancel"
         danger
       />
+
     </div>
   );
 }

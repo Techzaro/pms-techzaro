@@ -200,7 +200,7 @@ function SelfDeliverableViewModal({ isOpen, onClose, subtask: initialSubtask, on
                 {deliverable?.description && (
                   <div className="sdvm-description">
                     <span className="sdvm-detail-label">Description</span>
-                    <p className="sdvm-description-text">{deliverable.description}</p>
+                    <div className="rte-display sdvm-description-text" dangerouslySetInnerHTML={{ __html: deliverable.description }} />
                   </div>
                 )}
               </div>

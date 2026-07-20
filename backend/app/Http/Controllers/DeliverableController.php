@@ -1142,6 +1142,146 @@ class DeliverableController extends Controller
     }
 
     /**
+     * List all deliverables with role-based visibility (read-only).
+     *
+     * Similar to allTasks() but scoped to deliverables.
+     * - Admin: All deliverables globally
+     * - Manager: All deliverables where any participant (assignee/creator) is in the same team(s)
+     * - Team Lead: All deliverables where assigned_to/created_by is in the team(s) they lead or are member of
+     * - Member: All deliverables where assigned_to = user OR created_by = user
+     * - Guest: Empty
+     *
+     * @param  Request  $request  Query parameters: search, status, time_filter, due_today.
+     * @return JsonResponse JSON response with deliverable list.
+     */
+    public function allDeliverables(Request $request)
+    {
+        $user = $request->user();
+        $role = $user->role;
+
+        $isDueTodayFilter = $request->input('status') === 'due_today';
+        $isPendingFilter = $request->input('status') === 'pending';
+        $statusFilter = $request->input('status');
+        $search = $request->input('search');
+        $timeFilter = $request->input('time_filter');
+
+        $query = Deliverable::query();
+
+        // ── Role-based visibility ──
+        switch ($role) {
+            case 'admin':
+                // Admin sees everything — no scope filter
+                break;
+
+            case 'manager':
+                // Manager sees deliverables where any participant (assignee/creator) is in the same team(s)
+                $teamIds = $user->teams()->pluck('teams.id');
+                $ledTeamIds = $user->ledTeams()->pluck('teams.id');
+                $allTeamIds = $teamIds->merge($ledTeamIds)->unique();
+
+                if ($allTeamIds->isNotEmpty()) {
+                    $scopeUserIds = DB::table('team_user')
+                        ->whereIn('team_id', $allTeamIds)
+                        ->pluck('user_id')
+                        ->push($user->id)
+                        ->unique();
+
+                    $query->where(function ($q) use ($scopeUserIds) {
+                        $q->whereIn('assigned_to', $scopeUserIds)
+                            ->orWhereIn('created_by', $scopeUserIds);
+                    });
+                } else {
+                    // No teams — only own deliverables
+                    $query->where(function ($q) use ($user) {
+                        $q->where('assigned_to', $user->id)
+                            ->orWhere('created_by', $user->id);
+                    });
+                }
+                break;
+
+            case 'team_lead':
+            case 'teamlead':
+                // Team Lead sees deliverables within their team scope
+                $ledTeamIds = $user->ledTeams()->pluck('teams.id');
+                $memberTeamIds = $user->teams()->pluck('teams.id');
+                $allTeamIds = $ledTeamIds->merge($memberTeamIds)->unique();
+
+                if ($allTeamIds->isNotEmpty()) {
+                    $scopeUserIds = DB::table('team_user')
+                        ->whereIn('team_id', $allTeamIds)
+                        ->pluck('user_id')
+                        ->push($user->id)
+                        ->unique();
+
+                    $query->where(function ($q) use ($scopeUserIds) {
+                        $q->whereIn('assigned_to', $scopeUserIds)
+                            ->orWhereIn('created_by', $scopeUserIds);
+                    });
+                } else {
+                    // No teams — only own deliverables
+                    $query->where(function ($q) use ($user) {
+                        $q->where('assigned_to', $user->id)
+                            ->orWhere('created_by', $user->id);
+                    });
+                }
+                break;
+
+            case 'guest':
+                // Guests cannot access All Sub-Tasks
+                return response()->json(['data' => collect(), 'total' => 0]);
+
+            default:
+                // Member: only deliverables directly assigned to or created by the member
+                $query->where(function ($q) use ($user) {
+                    $q->where('assigned_to', $user->id)
+                        ->orWhere('created_by', $user->id);
+                });
+                break;
+        }
+
+        // ── Apply filters ──
+        $query->when($isDueTodayFilter, fn ($q) => $q->whereDate('due_date', today())->whereNotIn('status', $this->dueTodayExcludedStatuses()))
+            ->when($isPendingFilter, fn ($q) => $q->whereIn('status', ['pending']))
+            ->when($search, fn ($q) => $q->where(function ($sq) use ($search) {
+                $sq->where('title', 'like', '%'.$search.'%')
+                    ->orWhereHas('assignee', fn ($aq) => $aq->where('name', 'like', '%'.$search.'%'))
+                    ->orWhereHas('creator', fn ($cq) => $cq->where('name', 'like', '%'.$search.'%'))
+                    ->orWhereHas('task', fn ($tq) => $tq->where('title', 'like', '%'.$search.'%'));
+            }))
+            ->when($statusFilter && ! $isDueTodayFilter && ! $isPendingFilter, fn ($q) => $q->where('status', $statusFilter))
+            ->when($timeFilter, fn ($q) => $q->where('updated_at', '>=', now()->subDays((int) $timeFilter)));
+
+        $deliverables = $query
+            ->with([
+                'project:id,title',
+                'assignee:id,name,email,role',
+                'creator:id,name,role',
+                'task:id,title,project_id',
+                'task.project:id,title',
+                'latestSubmission',
+                'approvedBy:id,name,role',
+                'rejectedBy:id,name,role',
+                'reopenedBy:id,name,role',
+                'updatedBy:id,name,role',
+            ])
+            ->orderBy('sort_order')
+            ->latest('updated_at')
+            ->limit(200)
+            ->get();
+
+        // Transform to add submission_status field for frontend Progress column
+        $deliverables->transform(function ($deliverable) {
+            $deliverable->submission_status = $deliverable->status;
+            return $deliverable;
+        });
+
+        return response()->json([
+            'data' => $deliverables,
+            'total' => $deliverables->count(),
+        ]);
+    }
+
+    /**
      * Get the list of statuses to exclude when filtering deliverables due today.
      *
      * @return array Array of status strings to exclude.

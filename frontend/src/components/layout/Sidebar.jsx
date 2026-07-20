@@ -144,6 +144,7 @@ function Sidebar() {
       isActive("tasks") ||
       isActive("taskby") ||
       isActive("self-tasks") ||
+      isActive("all-tasks") ||
       location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`);
 
     if (isTasksRoute) {
@@ -158,6 +159,7 @@ function Sidebar() {
       isActive("deliveries") ||
       isActive("deliveries-by-you") ||
       isActive("self-deliveries") ||
+      isActive("all-deliverables") ||
       location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`);
 
     if (isSubtasksRoute) {
@@ -274,9 +276,9 @@ function Sidebar() {
           </Link>
           )}
 
-          {/* Tasks dropdown – sub-links for assigned/by-you/self; hidden for guest */}
+          {/* Tasks dropdown – sub-links for assigned/by-you/self/all; hidden for guest */}
           {user.role !== "guest" && (
-          <div className={`sidebar-link ${isActive("tasks") || isActive("taskby") || isActive("self-tasks") || location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+          <div className={`sidebar-link ${isActive("tasks") || isActive("taskby") || isActive("self-tasks") || isActive("all-tasks") || location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
             <div
               onClick={toggleTasks}
               style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
@@ -316,6 +318,13 @@ function Sidebar() {
                 >
                   Self Tasks
                 </Link>
+                <Link
+                  to={rolePath("all-tasks")}
+                  className={`sidebar-sub-link ${isActive("all-tasks") || (isTaskDetailPage && getTaskFrom() === "all-tasks") ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  All Tasks
+                </Link>
                 </>
                 )}
               </div>
@@ -325,7 +334,7 @@ function Sidebar() {
 
           {/* Subtasks dropdown – sub-links for assigned/by-you/self; hidden for guest */}
           {user.role !== "guest" && (
-          <div className={`sidebar-link ${isActive("deliveries") || isActive("deliveries-by-you") || isActive("self-deliveries") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+          <div className={`sidebar-link ${isActive("deliveries") || isActive("deliveries-by-you") || isActive("self-deliveries") || isActive("all-deliverables") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
             <div
               onClick={toggleSubtasks}
               style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
@@ -364,6 +373,13 @@ function Sidebar() {
                   onClick={(e) => e.stopPropagation()}
                 >
                   Self Subtasks
+                </Link>
+                <Link
+                  to={rolePath("all-deliverables")}
+                  className={`sidebar-sub-link ${isActive("all-deliverables") || (isSubtaskDetailPage && getSubtaskFrom() === "all-deliverables") ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  All Sub-Tasks
                 </Link>
                 </>
                 )}

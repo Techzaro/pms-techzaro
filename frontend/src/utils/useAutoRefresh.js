@@ -1,25 +1,28 @@
 /**
  * @file useAutoRefresh.js
- * @description Hook for automatic data refresh like WhatsApp/Facebook.
- * Combines: Visibility API (refetch on tab focus) + light polling + event bus.
+ * @description Event-driven auto-refresh hook (WhatsApp/Facebook style).
+ * NO polling — refreshes only when:
+ * 1. An event bus event fires (same tab or cross-tab)
+ * 2. User switches back to the tab (visibility change)
+ *
+ * Polling is handled by a SINGLE global poll in DashboardLayout
+ * that only checks unread-count, not by individual pages.
  */
 
 import { useEffect, useRef, useCallback } from 'react';
 import { subscribe } from './eventBus';
 
 /**
- * Auto-refresh hook that keeps data up to date without manual refresh.
+ * Auto-refresh hook — event-driven only (no polling).
  *
  * @param {Function} refreshFn - The function to call to refetch data
  * @param {Object} options - Configuration options
  * @param {string[]} options.events - Event bus events to listen for
- * @param {number} options.pollInterval - Polling interval in ms (0 = disabled). Default: 30000 (30s)
  * @param {boolean} options.enableVisibility - Refetch on tab focus. Default: true
  */
 export function useAutoRefresh(refreshFn, options = {}) {
   const {
     events = [],
-    pollInterval = 30000,
     enableVisibility = true,
   } = options;
 
@@ -30,8 +33,7 @@ export function useAutoRefresh(refreshFn, options = {}) {
 
   const safeRefresh = useCallback(() => {
     const now = Date.now();
-    // Debounce: don't refresh more than once per 3 seconds
-    if (now - lastRefreshRef.current < 3000) return;
+    if (now - lastRefreshRef.current < 2000) return;
     lastRefreshRef.current = now;
     try { refreshRef.current(); } catch (_) { /* ignore */ }
   }, []);
@@ -52,13 +54,4 @@ export function useAutoRefresh(refreshFn, options = {}) {
     document.addEventListener('visibilitychange', handler);
     return () => document.removeEventListener('visibilitychange', handler);
   }, [enableVisibility, safeRefresh]);
-
-  // 3. Light polling: refetch at interval (only when tab is visible)
-  useEffect(() => {
-    if (!pollInterval || pollInterval <= 0) return;
-    const id = setInterval(() => {
-      if (!document.hidden) safeRefresh();
-    }, pollInterval);
-    return () => clearInterval(id);
-  }, [pollInterval, safeRefresh]);
 }

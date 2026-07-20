@@ -56,6 +56,13 @@ class TaskResource extends JsonResource
             'reopened_by' => UserMinResource::make($this->whenLoaded('reopenedBy')),
             'unviewed_changes' => $this->whenLoaded('unviewedChanges'),
             'deliverables' => DeliverableResource::collection($this->whenLoaded('deliverables')),
+            'timer' => [
+                'state' => $this->timer_state ?? 'idle',
+                'total_work_seconds' => $this->total_work_seconds ?? 0,
+                'formatted' => \App\Models\Task::formatDuration($this->total_work_seconds ?? 0),
+                'work_started_at' => $this->work_started_at?->format('Y-m-d\TH:i:s'),
+                'work_completed_at' => $this->work_completed_at?->format('Y-m-d\TH:i:s'),
+            ],
         ];
     }
 }

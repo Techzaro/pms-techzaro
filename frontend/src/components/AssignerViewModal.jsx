@@ -193,7 +193,10 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
             {subtask.description && (
               <div className="avm-description">
                 <span className="avm-detail-label">Description</span>
-                <p className="avm-description-text">{subtask.description}</p>
+                <div
+                  className="avm-description-text rte-display"
+                  dangerouslySetInnerHTML={{ __html: subtask.description }}
+                />
               </div>
             )}
             <div className="avm-detail-item">

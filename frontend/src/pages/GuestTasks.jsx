@@ -15,7 +15,7 @@ import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { CheckCircle2, Play } from "lucide-react";
+import { CheckCircle2, Lock, Play } from "lucide-react";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { publish } from "../utils/eventBus";
@@ -115,7 +115,6 @@ function GuestTasks() {
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
-    pollInterval: 30000,
   });
 
   useEffect(() => {
@@ -147,13 +146,17 @@ function GuestTasks() {
   }, [searchParams]);
 
   const selectStatusFilter = (filter) => {
-    setStatusFilter(filter);
-    setShowAll(!filter);
-    setPage(1);
-    if (filter) {
-      setSearchParams({ status: filter });
+    if (filter === statusFilter && filter === "") {
+      setShowAll(!showAll);
     } else {
-      setSearchParams({});
+      setStatusFilter(filter);
+      setShowAll(false);
+      setPage(1);
+      if (filter) {
+        setSearchParams({ status: filter });
+      } else {
+        setSearchParams({});
+      }
     }
   };
 
@@ -254,7 +257,18 @@ function GuestTasks() {
   };
 
   const baseItems = orderedItems.length ? orderedItems : items;
-  const pendingStatuses = ["pending", "in_progress", "paused", "In Progress", "In-progress", "planned", "Planning", "Planned", "submitted", "reopened", "rejected"];
+  const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
+  const inProgressStatuses = ["in_progress", "In Progress", "In-progress"];
+
+  const allCount = baseItems.length;
+  const dueTodayCount = baseItems.filter((i) => { const d = i.end_date ? new Date(i.end_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length;
+  const pendingCount = baseItems.filter((i) => pendingStatuses.includes(i.status)).length;
+  const inProgressCount = baseItems.filter((i) => inProgressStatuses.includes(i.status)).length;
+  const pausedCount = baseItems.filter((i) => i.status === "paused").length;
+  const submittedCount = baseItems.filter((i) => i.status === "submitted").length;
+  const reopenedCount = baseItems.filter((i) => i.status === "reopened").length;
+  const approvedCount = baseItems.filter((i) => i.status === "approved").length;
+  const rejectedCount = baseItems.filter((i) => i.status === "rejected").length;
   const filteredItems = statusFilter && statusFilter !== "due_today"
     ? items.filter((item) => {
         if (statusFilter === "pending") {
@@ -281,14 +295,6 @@ function GuestTasks() {
         <div className="task-text">
           <h3>Tasks Assigned To You</h3>
           <p>View and manage tasks assigned to you</p>
-          <div className="task-count-badge" style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
-            <span style={{ background: "#dedfe0", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-              Total: {totalCount} items
-            </span>
-            <span style={{ background: "#d6d6d6", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-              Tasks: {filteredItems.length}
-            </span>
-          </div>
         </div>
 
         <div className="task-btns">
@@ -305,24 +311,30 @@ function GuestTasks() {
 
       {/* STATUS FILTERS */}
       <div className="task-progress">
-        <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
+        <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
         <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
-          <GoDotFill color="#EF4444" /> Due Today
+          <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
         </p>
         <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Pending
+          <GoDotFill /> Pending ({pendingCount})
+        </p>
+        <p className={`InProgress ${statusFilter === "in_progress" ? "active" : ""}`} onClick={() => selectStatusFilter("in_progress")} style={{ cursor: "pointer" }}>
+          <GoDotFill /> In Progress ({inProgressCount})
+        </p>
+        <p className={`Paused ${statusFilter === "paused" ? "active" : ""}`} onClick={() => selectStatusFilter("paused")} style={{ cursor: "pointer" }}>
+          <GoDotFill /> Paused ({pausedCount})
         </p>
         <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Submitted
+          <GoDotFill /> Submitted ({submittedCount})
         </p>
         <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Reopened
+          <GoDotFill /> Reopened ({reopenedCount})
         </p>
         <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Approved
+          <GoDotFill /> Approved ({approvedCount})
         </p>
         <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Declined
+          <GoDotFill /> Declined ({rejectedCount})
         </p>
       </div>
 
@@ -444,6 +456,14 @@ function GuestTasks() {
                       <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}><IoEyeOutline /></button>
                       {(() => {
                         const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
+                        if (item.assigner_paused) {
+                          return (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "12px", fontWeight: 600, border: "1px solid #F59E0B" }}>
+                              <Lock size={13} />
+                              On Hold
+                            </span>
+                          );
+                        }
                         if (item.status === "pending") {
                           return (
                             <button className="action-icon-btn action-submit" title="Acknowledge Task" onClick={() => handleAcknowledge(item.id)}>

@@ -155,7 +155,7 @@ function Calender() {
     setShowDayPopup(true);
   }, [searchParams]);
   // Re-fetch events when events are created, updated, or deleted
-  useAutoRefresh(fetchEvents, { events: ['event:created', 'event:updated', 'event:deleted', 'data:changed'], pollInterval: 60000 });
+  useAutoRefresh(fetchEvents, { events: ['event:created', 'event:updated', 'event:deleted', 'data:changed'] });
 
   // Navigate to previous month/week/day
   const handlePrev = () => {

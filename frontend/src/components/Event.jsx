@@ -16,6 +16,7 @@ import LoadingButton from "./LoadingButton";
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import RichTextEditor from "./RichTextEditor";
 import "./Event.css";
 
 const TYPE_MAP = {
@@ -277,12 +278,10 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
             />
 
             <label className="event-label">Description</label>
-            <textarea
-              className="event-textarea"
-              placeholder="Add event description..."
-              rows={4}
+            <RichTextEditor
               value={formData.description}
-              onChange={(e) => handleChange("description", e.target.value)}
+              onChange={(val) => handleChange("description", val)}
+              placeholder="Add event description..."
             />
 
             <div className="event-dots">

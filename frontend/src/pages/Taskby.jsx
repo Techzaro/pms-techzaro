@@ -16,9 +16,10 @@ import { IoIosArrowDown } from "react-icons/io";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
-import { Pencil } from "lucide-react";
+import { Lock, Pencil } from "lucide-react";
 import CreateTaskModal from "../components/CreateTaskModal";
 import EditTaskModal from "../components/EditTaskModal";
+import PauseReasonModal from "../components/PauseReasonModal";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
@@ -78,6 +79,10 @@ const Taskby = () => {
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [holdingTaskId, setHoldingTaskId] = useState(null);
+  const [resumingTaskId, setResumingTaskId] = useState(null);
+  const [pauseModalOpen, setPauseModalOpen] = useState(false);
+  const [pauseModalTaskId, setPauseModalTaskId] = useState(null);
 
   const ITEMS_PER_PAGE = 10;
 
@@ -114,7 +119,6 @@ const Taskby = () => {
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
-    pollInterval: 30000,
   });
 
   useEffect(() => {
@@ -141,19 +145,68 @@ const Taskby = () => {
   }, []);
 
   const selectStatusFilter = (filter) => {
-    setStatusFilter(filter);
-    setShowAll(!filter);
-    setPage(1);
-    if (filter) {
-      setSearchParams({ status: filter });
+    if (filter === statusFilter && filter === "") {
+      setShowAll(!showAll);
     } else {
-      setSearchParams({});
+      setStatusFilter(filter);
+      setShowAll(false);
+      setPage(1);
+      if (filter) {
+        setSearchParams({ status: filter });
+      } else {
+        setSearchParams({});
+      }
     }
   };
 
   const handleModalClose = (refresh) => {
     setShowTaskModal(false);
     if (refresh) fetchTasks();
+  };
+
+  const handleAssignerPause = async (taskId, { reason, reason_detail } = {}) => {
+    setHoldingTaskId(taskId);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/assigner-pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason: reason_detail || reason }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: true, ...data.task } : item));
+        showSuccessMessage("Task", "placed on hold");
+      } else {
+        alert(data.message || "Failed to place task on hold.");
+      }
+    } catch {
+      alert("Failed to place task on hold.");
+    }
+    setHoldingTaskId(null);
+  };
+
+  const handleAssignerResume = async (taskId) => {
+    setResumingTaskId(taskId);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/assigner-resume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, assigner_paused: false, ...data.task } : item));
+        showSuccessMessage("Task", "resumed by assigner");
+      } else {
+        alert(data.message || "Failed to resume task.");
+      }
+    } catch {
+      alert("Failed to resume task.");
+    }
+    setResumingTaskId(null);
   };
 
   const getInitials = (name) => {
@@ -191,7 +244,18 @@ const Taskby = () => {
   };
 
   const baseItems = orderedItems.length ? orderedItems : items;
-  const pendingStatuses = ["pending", "in_progress", "paused", "In Progress", "In-progress", "planned", "Planning", "Planned", "submitted", "reopened", "rejected"];
+  const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
+  const inProgressStatuses = ["in_progress", "In Progress", "In-progress"];
+
+  const allCount = baseItems.length;
+  const dueTodayCount = baseItems.filter((i) => { const d = i.end_date ? new Date(i.end_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length;
+  const pendingCount = baseItems.filter((i) => pendingStatuses.includes(i.status)).length;
+  const inProgressCount = baseItems.filter((i) => inProgressStatuses.includes(i.status)).length;
+  const pausedCount = baseItems.filter((i) => i.status === "paused").length;
+  const submittedCount = baseItems.filter((i) => i.status === "submitted").length;
+  const reopenedCount = baseItems.filter((i) => i.status === "reopened").length;
+  const approvedCount = baseItems.filter((i) => i.status === "approved").length;
+  const rejectedCount = baseItems.filter((i) => i.status === "rejected").length;
 
   const filteredItems = baseItems.filter((item) => {
     if (statusFilter === "due_today") {
@@ -224,14 +288,6 @@ const Taskby = () => {
         <div className="task-text">
           <h3>Tasks Assigned By You</h3>
           <p>Manage and track tasks you assigned</p>
-          <div className="task-count-badge" style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
-            <span style={{ background: "#dedfe0", color: "#4338CA", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-              Total: {totalCount}
-            </span>
-            <span style={{ background: "#d6d6d6", color: "#166534", padding: "4px 12px", borderRadius: "20px", fontSize: "15px", fontWeight: 600 }}>
-              Tasks: {filteredItems.length}
-            </span>
-          </div>
         </div>
 
         <div className="task-btns">
@@ -259,24 +315,30 @@ const Taskby = () => {
       )}
 
       <div className="task-progress">
-        <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
+        <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
         <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
-          <GoDotFill color="#EF4444" /> Due Today
+          <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
         </p>
         <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Pending
+          <GoDotFill /> Pending ({pendingCount})
+        </p>
+        <p className={`InProgress ${statusFilter === "in_progress" ? "active" : ""}`} onClick={() => selectStatusFilter("in_progress")} style={{ cursor: "pointer" }}>
+          <GoDotFill /> In Progress ({inProgressCount})
+        </p>
+        <p className={`Paused ${statusFilter === "paused" ? "active" : ""}`} onClick={() => selectStatusFilter("paused")} style={{ cursor: "pointer" }}>
+          <GoDotFill /> Paused ({pausedCount})
         </p>
         <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Submitted
+          <GoDotFill /> Submitted ({submittedCount})
         </p>
         <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Reopened
+          <GoDotFill /> Reopened ({reopenedCount})
         </p>
         <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Approved
+          <GoDotFill /> Approved ({approvedCount})
         </p>
         <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-          <GoDotFill /> Declined
+          <GoDotFill /> Declined ({rejectedCount})
         </p>
       </div>
 
@@ -358,6 +420,12 @@ const Taskby = () => {
                         <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
                         {formatStatus(item.status)}
                       </span>
+                      {item.assigner_paused && (
+                        <span className="badge" style={{ background: "#FEF3C7", color: "#92400E", marginTop: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                          <Lock size={11} />
+                          On Hold
+                        </span>
+                      )}
                     </div>
 
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
@@ -426,6 +494,28 @@ const Taskby = () => {
                             <Pencil size={20} />
                           </button>
                         )}
+                        {["pending", "in_progress", "reopened", "paused"].includes(item.status) && !item.assigner_paused && (
+                          <button
+                            className="action-icon-btn"
+                            title="Put On Hold"
+                            disabled={holdingTaskId === item.id}
+                            onClick={() => { setPauseModalTaskId(item.id); setPauseModalOpen(true); }}
+                            style={{ color: "#7C3AED", cursor: holdingTaskId === item.id ? "not-allowed" : "pointer" }}
+                          >
+                            <Lock size={18} />
+                          </button>
+                        )}
+                        {item.assigner_paused && (
+                          <button
+                            className="action-icon-btn"
+                            title="Resume"
+                            disabled={resumingTaskId === item.id}
+                            onClick={() => handleAssignerResume(item.id)}
+                            style={{ color: "#059669", cursor: resumingTaskId === item.id ? "not-allowed" : "pointer" }}
+                          >
+                            <Lock size={18} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -446,6 +536,13 @@ const Taskby = () => {
           onClose={(refresh) => { setEditingTask(null); if (refresh) fetchTasks(); }}
         />
       )}
+
+      <PauseReasonModal
+        isOpen={pauseModalOpen}
+        onClose={() => { setPauseModalOpen(false); setPauseModalTaskId(null); }}
+        onConfirm={async (data) => { await handleAssignerPause(pauseModalTaskId, data); setPauseModalOpen(false); setPauseModalTaskId(null); }}
+        isAssigner
+      />
 
     </DashboardLayout>
   );

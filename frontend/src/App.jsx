@@ -20,6 +20,7 @@ const Tasks = lazy(() => import("./pages/Tasks"));
 const GuestTasks = lazy(() => import("./pages/GuestTasks"));
 const Taskby = lazy(() => import("./pages/Taskby"));
 const SelfTasks = lazy(() => import("./pages/SelfTasks"));
+const AllTasks = lazy(() => import("./pages/AllTasks"));
 const Projects = lazy(() => import("./pages/Projects"));
 const CreateProject = lazy(() => import("./pages/CreateProject"));
 const ProjectDetails = lazy(() => import("./pages/ProjectDetails"));
@@ -28,6 +29,7 @@ const UserProfile = lazy(() => import("./pages/UserProfile"));
 const MyProfile = lazy(() => import("./pages/MyProfile"));
 const Deliveries = lazy(() => import("./pages/Deliveries"));
 const DeliveriesByYou = lazy(() => import("./pages/DeliveriesByYou"));
+const AllDeliveries = lazy(() => import("./pages/AllDeliveries"));
 const History = lazy(() => import("./pages/History"));
 const Reports = lazy(() => import("./pages/Reports"));
 const ManageTeam = lazy(() => import("./pages/ManageTeam"));
@@ -96,6 +98,7 @@ function App() {
             <Route path="/:role/guest-tasks" element={<ProtectedRoute><GuestTasks /></ProtectedRoute>} />
             <Route path="/:role/taskby" element={<ProtectedRoute><Taskby /></ProtectedRoute>} />
             <Route path="/:role/self-tasks" element={<ProtectedRoute><SelfTasks /></ProtectedRoute>} />
+            <Route path="/:role/all-tasks" element={<ProtectedRoute><AllTasks /></ProtectedRoute>} />
             <Route path="/:role/tasks/task-details/:taskId" element={<ProtectedRoute><TaskDetails /></ProtectedRoute>} />
 
             {/* Project routes */}
@@ -107,6 +110,7 @@ function App() {
             <Route path="/:role/deliveries" element={<ProtectedRoute><Deliveries /></ProtectedRoute>} />
             <Route path="/:role/deliveries-by-you" element={<ProtectedRoute><DeliveriesByYou /></ProtectedRoute>} />
             <Route path="/:role/self-deliveries" element={<ProtectedRoute><SelfDeliveries /></ProtectedRoute>} />
+            <Route path="/:role/all-deliverables" element={<ProtectedRoute><AllDeliveries /></ProtectedRoute>} />
             <Route path="/:role/deliveries/deliverable-details/:deliverable" element={<ProtectedRoute><SubtaskDetails /></ProtectedRoute>} />
 
             {/* Admin/Manager only routes */}

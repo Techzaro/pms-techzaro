@@ -19,6 +19,7 @@ import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import RichTextEditor from "./RichTextEditor";
 import "./layout/CreateTaskModal.css";
 
 const REPEAT_OPTIONS = [
@@ -173,7 +174,7 @@ export default function EditTaskModal({ task, onClose }) {
   const [requirementsList, setRequirementsList] = useState(task.requirements || []);
   const [reqInput, setReqInput] = useState("");
   const [subtasks, setSubtasks] = useState(task.deliverables || []);
-  const [subtaskInput, setSubtaskInput] = useState({ title: "", due_datetime: "" });
+  const [subtaskInput, setSubtaskInput] = useState({ title: "", start_datetime: "", due_datetime: "" });
   const [openSubtaskDropdown, setOpenSubtaskDropdown] = useState(null);
   const [pendingFiles, setPendingFiles] = useState([]);
   const [existingFiles, setExistingFiles] = useState(task.files || []);
@@ -270,11 +271,11 @@ export default function EditTaskModal({ task, onClose }) {
 
   const handleAddSubtask = () => {
     if (!subtaskInput.title.trim()) return;
-    const dt = subtaskInput.due_datetime;
-    const dueDate = toUTCIso(dt);
+    const startDate = subtaskInput.start_datetime ? toUTCIso(subtaskInput.start_datetime) : null;
+    const dueDate = subtaskInput.due_datetime ? toUTCIso(subtaskInput.due_datetime) : null;
     setIsDirty(true);
-    setSubtasks((prev) => [...prev, { title: subtaskInput.title.trim(), due_date: dueDate, assigned_to: null }]);
-    setSubtaskInput({ title: "", due_datetime: "" });
+    setSubtasks((prev) => [...prev, { title: subtaskInput.title.trim(), start_date: startDate, due_date: dueDate, assigned_to: null }]);
+    setSubtaskInput({ title: "", start_datetime: "", due_datetime: "" });
   };
 
   const handleRemoveSubtask = (index) => {
@@ -489,7 +490,7 @@ export default function EditTaskModal({ task, onClose }) {
             }, []),
           };
           if (subtasks.length > 0) {
-            body.deliverables = subtasks.map((d) => ({ id: d.id || null, title: d.title, due_date: d.due_date || null, assigned_to: d.assigned_to || null }));
+            body.deliverables = subtasks.map((d) => ({ id: d.id || null, title: d.title, start_date: d.start_date || null, due_date: d.due_date || null, assigned_to: d.assigned_to || null }));
           }
           url = `${API_URL}/tasks/${task.id}`;
         }
@@ -587,11 +588,10 @@ export default function EditTaskModal({ task, onClose }) {
 
             <div className="task-field">
               <label>Description</label>
-              <textarea
-                name="description"
-                placeholder="Enter task description"
+              <RichTextEditor
                 value={form.description}
-                onChange={handleChange}
+                onChange={(val) => { setIsDirty(true); setForm((prev) => ({ ...prev, description: val })); }}
+                placeholder="Enter task description..."
               />
             </div>
 
@@ -814,32 +814,6 @@ export default function EditTaskModal({ task, onClose }) {
               />
             </div>
 
-            <div className="task-card">
-              <div className="task-card-top"><span>Dates</span></div>
-              <div className="task-deadline-grid">
-                <div>
-                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
-                  <input
-                    type="datetime-local"
-                    value={form.start_date}
-                    onChange={(e) => { setIsDirty(true); setForm((prev) => ({ ...prev, start_date: e.target.value })); }}
-                    min={getNowDatetimeLocal()}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
-                  <input
-                    type="datetime-local"
-                    value={form.end_date}
-                    onChange={(e) => { setIsDirty(true); setForm((prev) => ({ ...prev, end_date: e.target.value })); }}
-                    min={getNowDatetimeLocal()}
-                    max={task.project?.end_date ? toDatetimeLocal(task.project.end_date) : undefined}
-                  />
-                  {task.project?.end_date && <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(task.project.end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
-                </div>
-              </div>
-            </div>
-
             <div className="task-field">
               <label>Requirements</label>
               <div className="cp-goals-input-row">
@@ -1000,12 +974,33 @@ export default function EditTaskModal({ task, onClose }) {
               </>
             )}
 
+            {/* DATES */}
+            <div className="task-card">
+              <div className="task-card-top"><span>Dates</span></div>
+              <div className="task-deadline-grid">
+                <div>
+                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
+                  <input type="datetime-local" value={form.start_date}
+                    onChange={(e) => { setIsDirty(true); setForm((prev) => ({ ...prev, start_date: e.target.value })); }}
+                    min={getNowDatetimeLocal()} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
+                  <input type="datetime-local" value={form.end_date}
+                    onChange={(e) => { setIsDirty(true); setForm((prev) => ({ ...prev, end_date: e.target.value })); }}
+                    min={getNowDatetimeLocal()}
+                    max={task.project?.end_date ? toDatetimeLocal(task.project.end_date) : undefined} />
+                  {task.project?.end_date && <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(task.project.end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
+                </div>
+              </div>
+            </div>
+
             {/* SUBTASKS */}
             <div className="task-card">
               <div className="task-card-top">
                 <span>Subtasks</span>
               </div>
-              <div className="task-deadline-grid">
+              <div className="task-deadline-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
                 <div className="task-field">
                   <label style={{ fontSize: "13px" }}>Subtask Name</label>
                   <input
@@ -1017,16 +1012,32 @@ export default function EditTaskModal({ task, onClose }) {
                   />
                 </div>
                 <div className="task-field">
-                  <label style={{ fontSize: "13px" }}>Due Date & Time</label>
+                  <label style={{ fontSize: "13px" }}>Start Date & Time</label>
                   <input
                     type="datetime-local"
-                    value={subtaskInput.due_datetime}
-                    min={getNowDatetimeLocal()}
+                    value={subtaskInput.start_datetime}
+                    min={form.start_date || getNowDatetimeLocal()}
                     max={form.end_date || undefined}
                     onChange={(e) => {
                       setIsDirty(true);
                       const val = e.target.value;
-                      if (form.end_date && val && val > form.end_date) {
+                      setSubtaskInput((prev) => ({ ...prev, start_datetime: val }));
+                    }}
+                  />
+                </div>
+                <div className="task-field">
+                  <label style={{ fontSize: "13px" }}>Due Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    value={subtaskInput.due_datetime}
+                    min={subtaskInput.start_datetime || getNowDatetimeLocal()}
+                    max={form.end_date || undefined}
+                    onChange={(e) => {
+                      setIsDirty(true);
+                      const val = e.target.value;
+                      if (subtaskInput.start_datetime && val && val < subtaskInput.start_datetime) {
+                        setSubtaskInput((prev) => ({ ...prev, due_datetime: subtaskInput.start_datetime }));
+                      } else if (form.end_date && val && val > form.end_date) {
                         setSubtaskInput((prev) => ({ ...prev, due_datetime: form.end_date }));
                       } else {
                         setSubtaskInput((prev) => ({ ...prev, due_datetime: val }));
@@ -1038,11 +1049,14 @@ export default function EditTaskModal({ task, onClose }) {
                   )}
                 </div>
               </div>
+              {subtaskInput.start_datetime && subtaskInput.due_datetime && subtaskInput.due_datetime < subtaskInput.start_datetime && (
+                <span style={{ fontSize: 12, color: "#dc2626", marginTop: 4, display: "block" }}>Due Date cannot be earlier than Start Date</span>
+              )}
               <button
                 type="button"
                 className="task-add-phase-btn"
                 onClick={handleAddSubtask}
-                disabled={!subtaskInput.title.trim()}
+                disabled={!subtaskInput.title.trim() || !subtaskInput.start_datetime || !subtaskInput.due_datetime || (subtaskInput.start_datetime && subtaskInput.due_datetime && subtaskInput.due_datetime < subtaskInput.start_datetime)}
               >
                 + Add Subtask
               </button>
@@ -1055,7 +1069,11 @@ export default function EditTaskModal({ task, onClose }) {
                     <div key={index} className="task-phase-item" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #f3f4f6", position: "relative" }}>
                       <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#8b5cf6", display: "inline-block", flexShrink: 0 }}></span>
                       <span style={{ flex: 1, fontSize: 13, color: "#374151" }}>{d.title}</span>
-                      <span style={{ fontSize: 11, color: "#6b7280" }}>{d.due_date ? formatDateTime(d.due_date).replace("\n", " ") : "No due date"}</span>
+                      <span style={{ fontSize: 11, color: "#6b7280", whiteSpace: "pre-line" }}>
+                        {d.start_date ? formatDateTime(d.start_date).replace("\n", " ") : ""}
+                        {d.start_date && d.due_date ? "\n" : ""}
+                        {d.due_date ? formatDateTime(d.due_date).replace("\n", " ") : "No due date"}
+                      </span>
                       <div style={{ position: "relative" }}>
                         <button
                           type="button"

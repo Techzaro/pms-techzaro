@@ -63,8 +63,10 @@ function SubtaskDetails() {
     deliveries: { label: "Subtasks Assigned To You", path: rolePath("deliveries") },
     "deliveries-by-you": { label: "Subtasks Assigned By You", path: rolePath("deliveries-by-you") },
     "self-deliveries": { label: "Self Subtasks", path: rolePath("self-deliveries") },
+    "all-deliverables": { label: "All Sub-Tasks", path: rolePath("all-deliverables") },
   };
   const subtaskSource = subtaskSourcePages[location.state?.from] || null;
+  const readOnly = location.state?.readOnly === true;
 
   const [subtask, setSubtask] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -105,7 +107,7 @@ function SubtaskDetails() {
 
   useEffect(() => { fetchSubtask(); }, [fetchSubtask]);
 
-  useAutoRefresh(fetchSubtask, { events: ["deliverable:updated", "task:updated", "data:changed"], pollInterval: 30000 });
+  useAutoRefresh(fetchSubtask, { events: ["deliverable:updated", "task:updated", "data:changed"] });
 
   // Auto-mark subtask changes as read
   useEffect(() => {
@@ -318,12 +320,16 @@ function SubtaskDetails() {
             {subtask.description && (
               <div style={{ marginTop: "20px" }}>
                 <h2 className="td-section-title">Description</h2>
-                <p style={{ color: "#6b7280", lineHeight: 1.6 }}>{subtask.description}</p>
+                <div
+                  className="rte-display"
+                  dangerouslySetInnerHTML={{ __html: subtask.description }}
+                  style={{ color: "#6b7280", lineHeight: 1.6 }}
+                />
               </div>
             )}
 
             {/* Submit Form - Assignee: show Submit button for pending, Resubmit button for rejected */}
-            {canSubmit && (
+            {!readOnly && canSubmit && (
               <div style={{ marginTop: "24px" }}>
                 {!showSubmitForm && (
                   <button className="td-btn-primary" onClick={() => setShowSubmitForm(true)}>
@@ -426,7 +432,7 @@ function SubtaskDetails() {
             )}
 
             {/* Review Subtask - Assigner: show Approve/Reject buttons when submitted */}
-            {isSubmitted && canApproveReject && (
+            {!readOnly && isSubmitted && canApproveReject && (
               <div style={{ marginTop: "24px", display: "flex", gap: "10px", alignItems: "flex-start", flexDirection: "column" }}>
                 <div style={{ display: "flex", gap: "10px" }}>
                   <button className="td-btn-primary" onClick={handleApprove} disabled={approving} style={approving ? { background: "#9CA3AF", opacity: 0.7, cursor: "not-allowed" } : { background: "#166534" }}>

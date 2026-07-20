@@ -28,18 +28,13 @@ class ChatController extends Controller
             ->with(['project:id,title', 'task:id,title', 'deliverable:id,title', 'creator:id,name,role', 'latestMessage' => function ($q) {
                 $q->with('user:id,name,role');
             }])
-            ->withCount(['messages', 'messages as unread_messages_count' => function ($q) use ($user) {
-                $q->where('user_id', '!=', $user->id)
-                    ->where('created_at', '>', function ($sq) use ($user) {
-                        $sq->select('last_read_at')
-                            ->from('conversation_participants')
-                            ->where('conversation_id', DB::raw('messages.conversation_id'))
-                            ->where('user_id', $user->id)
-                            ->limit(1);
-                    });
-            }])
+            ->withCount('messages')
             ->latest('updated_at')
             ->get();
+
+        foreach ($conversations as $conversation) {
+            $conversation->unread_messages_count = $conversation->unreadCountForUser($user->id);
+        }
 
         return response()->json(['success' => true, 'conversations' => $conversations]);
     }
@@ -253,18 +248,12 @@ class ChatController extends Controller
     {
         $user = $request->user();
 
-        $count = Conversation::whereHas('participants', fn ($q) => $q->where('user_id', $user->id))
-            ->whereHas('messages', function ($q) use ($user) {
-                $q->where('user_id', '!=', $user->id)
-                    ->where('created_at', '>', function ($sq) use ($user) {
-                        $sq->select('last_read_at')
-                            ->from('conversation_participants')
-                            ->whereColumn('conversation_participants.conversation_id', 'messages.conversation_id')
-                            ->where('user_id', $user->id)
-                            ->limit(1);
-                    });
-            })
-            ->count();
+        $conversations = Conversation::whereHas('participants', fn ($q) => $q->where('user_id', $user->id))->get();
+
+        $count = 0;
+        foreach ($conversations as $conversation) {
+            $count += $conversation->unreadCountForUser($user->id);
+        }
 
         return response()->json(['unread_count' => $count]);
     }

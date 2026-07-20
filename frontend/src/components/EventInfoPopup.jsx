@@ -65,9 +65,7 @@ function EventInfoPopup({ event, onClose }) {
         </div>
 
         {event.description && (
-          <p style={{ margin: "12px 24px 0", fontSize: 14, color: "#6b7280", lineHeight: 1.6 }}>
-            {event.description}
-          </p>
+          <div style={{ margin: "12px 24px 0", fontSize: 14, color: "#6b7280", lineHeight: 1.6 }} className="rte-display" dangerouslySetInnerHTML={{ __html: event.description }} />
         )}
 
         <div style={{ padding: "20px 24px 24px", display: "flex", flexDirection: "column", gap: 14 }}>

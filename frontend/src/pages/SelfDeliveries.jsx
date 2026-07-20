@@ -93,16 +93,20 @@ function SelfDeliveries() {
     fetchSubtasks();
   }, [search, statusFilter, timeFilter]);
 
-  useAutoRefresh(fetchSubtasks, { events: ['deliverable:updated', 'deliverable:created', 'deliverable:deleted', 'data:changed'], pollInterval: 30000 });
+  useAutoRefresh(fetchSubtasks, { events: ['deliverable:updated', 'deliverable:created', 'deliverable:deleted', 'data:changed'] });
 
   const selectStatusFilter = (filter) => {
-    setStatusFilter(filter);
-    setShowAll(!filter);
-    setPage(1);
-    if (filter) {
-      setSearchParams({ status: filter });
+    if (filter === statusFilter && filter === "") {
+      setShowAll(!showAll);
     } else {
-      setSearchParams({});
+      setStatusFilter(filter);
+      setShowAll(false);
+      setPage(1);
+      if (filter) {
+        setSearchParams({ status: filter });
+      } else {
+        setSearchParams({});
+      }
     }
   };
 
@@ -159,6 +163,13 @@ function SelfDeliveries() {
 
   const displayItems = orderedSubtasks.length ? orderedSubtasks : subtasks;
 
+  const allCount = displayItems.length;
+  const dueTodayCount = displayItems.filter((i) => { const d = i.due_date ? new Date(i.due_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length;
+  const pendingCount = displayItems.filter((i) => i.status === "pending").length;
+  const submittedCount = displayItems.filter((i) => i.status === "submitted").length;
+  const reworkRequiredCount = displayItems.filter((i) => i.status === "rework_required").length;
+  const approvedCount = displayItems.filter((i) => i.status === "approved").length;
+
   const totalPages = showAll ? 1 : Math.ceil(displayItems.length / ITEMS_PER_PAGE);
   const paginatedItems = showAll ? displayItems : displayItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
@@ -187,21 +198,21 @@ function SelfDeliveries() {
         </div>
 
         <div className="task-progress">
-          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All</p>
+          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
           <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
-            <GoDotFill color="#EF4444" /> Due Today
+            <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
           </p>
           <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Draft
+            <GoDotFill /> Draft ({pendingCount})
           </p>
           <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Submitted
+            <GoDotFill /> Submitted ({submittedCount})
           </p>
           <p className={`Reopened ${statusFilter === "rework_required" ? "active" : ""}`} onClick={() => selectStatusFilter("rework_required")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Rework Required
+            <GoDotFill /> Rework Required ({reworkRequiredCount})
           </p>
           <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Approved
+            <GoDotFill /> Approved ({approvedCount})
           </p>
         </div>
 

@@ -1,0 +1,401 @@
+/**
+ * AllDeliveries.jsx — All Sub-Tasks Page
+ *
+ * Read-only view of all deliverables within the user's visibility scope.
+ * Mirrors the AllTasks page pattern exactly.
+ *
+ * Displays deliverables based on role-based visibility:
+ * - Admin: All deliverables in the company
+ * - Manager: Deliverables within managed teams
+ * - Team Lead: Deliverables within their team
+ * - Member: Deliverables they are directly involved in
+ *
+ * This page is strictly read-only — no edit, submit, or workflow actions.
+ */
+import { useState, useEffect } from "react";
+import { useAutoRefresh } from "../utils/useAutoRefresh";
+import DashboardLayout from "../components/layout/DashboardLayout";
+import Breadcrumb from "../components/Breadcrumb";
+import { GoDotFill } from "react-icons/go";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
+import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
+import Pagination from "../components/Pagination";
+import API_URL from "../config/api";
+import { authToken, getUser, rolePath } from "../utils/auth";
+import { formatDateOnly } from "../utils/formatDateTime";
+import "../pages/Deliveries.css";
+
+const STATUS_COLORS = {
+  pending: "#FEF3C7",
+  submitted: "#DBEAFE",
+  approved: "#DCFCE7",
+  rejected: "#FEE2E2",
+  reopened: "#FEF3C7",
+};
+
+const STATUS_TEXT_COLORS = {
+  pending: "#92400E",
+  submitted: "#1E40AF",
+  approved: "#166534",
+  rejected: "#991B1B",
+  reopened: "#92400E",
+};
+
+const PRIORITY_COLORS = {
+  High: "#FEE2E2",
+  Medium: "#FEF3C7",
+  Low: "#DCFCE7",
+};
+
+const PRIORITY_TEXT_COLORS = {
+  High: "#991B1B",
+  Medium: "#92400E",
+  Low: "#166534",
+};
+
+/** Main AllDeliveries page — read-only view of deliverables within the user's scope. */
+function AllDeliveries() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [totalCount, setTotalCount] = useState(0);
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const status = searchParams.get("status");
+    if (status) return status;
+    return "";
+  });
+  const [timeFilter, setTimeFilter] = useState("");
+  const [orderedItems, setOrderedItems] = useState([]);
+
+  const [page, setPage] = useState(1);
+  const [showAll, setShowAll] = useState(false);
+  const ITEMS_PER_PAGE = 10;
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  /** Fetch all deliverables from the API with role-based visibility. */
+  const fetchDeliverables = () => {
+    setLoading(true);
+    const token = authToken();
+    const params = new URLSearchParams();
+    if (debouncedSearch) params.append("search", debouncedSearch);
+    if (statusFilter) params.append("status", statusFilter);
+    if (timeFilter) params.append("time_filter", timeFilter);
+
+    fetch(`${API_URL}/all-deliverables?${params.toString()}`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
+    })
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((data) => {
+        setItems(data?.data || []);
+        setTotalCount(data?.total ?? 0);
+      })
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchDeliverables();
+  }, [debouncedSearch, statusFilter, timeFilter]);
+
+  useAutoRefresh(fetchDeliverables, {
+    events: ['deliverable:created', 'deliverable:updated', 'deliverable:deleted', 'data:changed'],
+  });
+
+  useEffect(() => {
+    setOrderedItems(items);
+  }, [items]);
+
+  useEffect(() => {
+    const status = searchParams.get("status") || "";
+    setStatusFilter(status);
+  }, [searchParams]);
+
+  const selectStatusFilter = (filter) => {
+    if (filter === statusFilter && filter === "") {
+      setShowAll(!showAll);
+    } else {
+      setStatusFilter(filter);
+      setShowAll(false);
+      setPage(1);
+      if (filter) {
+        setSearchParams({ status: filter });
+      } else {
+        setSearchParams({});
+      }
+    }
+  };
+
+  const getInitials = (name) => {
+    if (!name) return "??";
+    return name.split(" ").map((w) => w[0]).join("").substring(0, 2).toUpperCase();
+  };
+
+  const getRandomColors = (id) => {
+    const colors = [
+      { bg: "#E0E7FF", text: "#4338CA" },
+      { bg: "#FEE2E2", text: "#B91C1C" },
+      { bg: "#DCFCE7", text: "#22C55E" },
+      { bg: "#FEF3C7", text: "#D97706" },
+      { bg: "#EDE9FE", text: "#7C3AED" },
+      { bg: "#FCE7F3", text: "#DB2777" },
+    ];
+    return colors[id % colors.length];
+  };
+
+  const formatStatus = (status) => {
+    const map = {
+      pending: "Pending",
+      submitted: "Submitted",
+      approved: "Approved",
+      rejected: "Declined",
+      reopened: "Reopened",
+    };
+    return map[status] || status;
+  };
+
+  const baseItems = orderedItems.length ? orderedItems : items;
+
+  const allCount = baseItems.length;
+  const dueTodayCount = baseItems.filter((i) => { const d = i.due_date ? new Date(i.due_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length;
+  const pendingCount = baseItems.filter((i) => i.status === "pending").length;
+  const submittedCount = baseItems.filter((i) => i.status === "submitted").length;
+  const reopenedCount = baseItems.filter((i) => i.status === "reopened").length;
+  const approvedCount = baseItems.filter((i) => i.status === "approved").length;
+  const rejectedCount = baseItems.filter((i) => i.status === "rejected").length;
+
+  const filteredItems = baseItems.filter((item) => {
+    if (statusFilter === "due_today") {
+      return true;
+    }
+    if (statusFilter) {
+      return item.status === statusFilter;
+    }
+    return true;
+  });
+
+  const deliverableIdList = filteredItems.map((i) => i.id);
+
+  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
+  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
+  const breadcrumbs = [
+    { label: "Subtasks", path: rolePath("deliveries") },
+    { label: "All Sub-Tasks" },
+  ];
+
+  return (
+    <DashboardLayout>
+      <Breadcrumb items={breadcrumbs} />
+      <div className="projects-page">
+        <div className="projects-header">
+          <div>
+            <h1>All Sub-Tasks</h1>
+            <p>Monitor and track subtasks across your scope</p>
+          </div>
+          <div className="header-actions">
+            <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="reports-filter">
+              <option value="">All Time</option>
+              <option value="7">Last 7 Days</option>
+              <option value="30">Last 30 Days</option>
+              <option value="180">Last 6 Months</option>
+            </select>
+          </div>
+        </div>
+
+        {/* STATUS FILTERS */}
+        <div className="task-progress">
+          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
+          <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
+            <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
+          </p>
+          <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Pending ({pendingCount})
+          </p>
+          <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Submitted ({submittedCount})
+          </p>
+          <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Reopened ({reopenedCount})
+          </p>
+          <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Approved ({approvedCount})
+          </p>
+          <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Declined ({rejectedCount})
+          </p>
+        </div>
+
+        {/* SEARCH BAR */}
+        <div className="delivery-serach-bar">
+          <IoSearchOutline fontSize={"20px"} />
+          <input
+            type="text"
+            placeholder="Search by subtask name, assigned to, assigned by, parent task, or project"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        {/* TABLE */}
+        <div className="container">
+          <div className="all-subtasks-header">
+            <div></div>
+            <div>Assigned To</div>
+            <div>Assigned By</div>
+            <div>Sub-Task Name</div>
+            <div>Parent Task</div>
+            <div>Priority</div>
+            <div>Status</div>
+            <div>Due Date</div>
+            <div>Progress</div>
+            <div style={{ textAlign: "center" }}>Action</div>
+          </div>
+
+          {loading ? (
+            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
+          ) : filteredItems.length === 0 ? (
+            <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No items found</div>
+          ) : (
+            <SortableTableWrapper
+              items={paginatedItems.map((i, index) => ({
+                ...i,
+                sortableId: `${i.id}-${index}`
+              }))}
+              onReorder={() => {}}
+              idKey="sortableId"
+              as="div"
+              handleOnly
+            >
+              {(item, idx, dndProps) => {
+                const assigneeColors = getRandomColors(item.assignee?.id || item.id);
+                const creatorColors = getRandomColors((item.creator?.id || 0) + 100);
+                const uniqueKey = `all-subtask-${item.id}-${idx}`;
+
+                return (
+                  <div className="all-subtasks-row" key={uniqueKey}>
+                    <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+
+                    {/* Assigned To */}
+                    <div className="col-assigned-to">
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <div className="avatar" style={{ background: assigneeColors.bg, color: assigneeColors.text }}>
+                          {getInitials(item.assignee?.name)}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="user-name">{item.assignee?.name || "Unassigned"}</div>
+                          <div className="user-role">{item.assignee?.role || ""}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Assigned By (Creator) */}
+                    <div className="col-assigned-by">
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <div className="avatar" style={{ background: creatorColors.bg, color: creatorColors.text }}>
+                          {getInitials(item.creator?.name)}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="user-name">{item.creator?.name || "System"}</div>
+                          <div className="user-role">{item.creator?.role || ""}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sub-Task Name */}
+                    <div className="col-subtask-name">
+                      <div className="task-title">{item.title}</div>
+                    </div>
+
+                    {/* Parent Task */}
+                    <div className="col-parent-task">
+                      <div>
+                        <div className="task-title">{item.task?.title || "-"}</div>
+                        {item.project && (
+                          <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
+                            {item.project.title}
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Priority */}
+                    <div className="col-priority">
+                      <span className="badge" style={{ background: PRIORITY_COLORS[item.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}>
+                        <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[item.priority] || "#374151" }}></span>
+                        {item.priority}
+                      </span>
+                    </div>
+
+                    {/* Status */}
+                    <div className="col-status">
+                      <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151" }}>
+                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.status] || "#374151" }}></span>
+                        {formatStatus(item.status)}
+                      </span>
+                      {item.status === "approved" && item.approvedBy && (
+                        <div style={{ fontSize: "10px", color: "#166534", marginTop: "2px" }}>by {item.approvedBy.name}</div>
+                      )}
+                      {item.status === "rejected" && item.rejectedBy && (
+                        <div style={{ fontSize: "10px", color: "#991B1B", marginTop: "2px" }}>by {item.rejectedBy.name}</div>
+                      )}
+                      {item.status === "reopened" && item.reopenedBy && (
+                        <div style={{ fontSize: "10px", color: "#92400E", marginTop: "2px" }}>by {item.reopenedBy.name}</div>
+                      )}
+                    </div>
+
+                    {/* Due Date */}
+                    <div className="col-due-date">
+                      <div className="date-box">
+                        {formatDateOnly(item.due_date)}
+                      </div>
+                    </div>
+
+                    {/* Progress (Submission Status) */}
+                    <div className="col-progress">
+                      <span className="badge" style={{
+                        background: STATUS_COLORS[item.submission_status] || "#F3F4F6",
+                        color: STATUS_TEXT_COLORS[item.submission_status] || "#374151",
+                        fontSize: "11px",
+                      }}>
+                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[item.submission_status] || "#374151" }}></span>
+                        {formatStatus(item.submission_status)}
+                      </span>
+                    </div>
+
+                    {/* Action — View only */}
+                    <div className="col-action">
+                      <div className="action-btns">
+                        <button
+                          className="action-icon-btn action-view"
+                          title="View"
+                          onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { deliverableIds: deliverableIdList, from: 'all-deliverables', readOnly: true } })}
+                        >
+                          <IoEyeOutline />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }}
+            </SortableTableWrapper>
+          )}
+        </div>
+      </div>
+
+      {!showAll && totalPages > 1 && (
+        <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+      )}
+    </DashboardLayout>
+  );
+}
+
+export default AllDeliveries;

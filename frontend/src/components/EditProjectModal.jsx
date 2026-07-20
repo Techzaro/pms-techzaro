@@ -19,6 +19,7 @@ import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import RichTextEditor from "./RichTextEditor";
 import "./layout/CreateProjectModal.css";
 
 const EditProjectModal = ({ project, onClose }) => {
@@ -527,12 +528,11 @@ const EditProjectModal = ({ project, onClose }) => {
 
             <div className="cp-field">
               <label>Description</label>
-              <textarea
-                name="description"
-                placeholder="Enter project description..."
+              <RichTextEditor
                 value={form.description}
-                onChange={handleChange}
-              ></textarea>
+                onChange={(val) => { setIsDirty(true); setForm((prev) => ({ ...prev, description: val })); }}
+                placeholder="Enter project description..."
+              />
             </div>
 
             {/* PROJECT MILESTONES */}

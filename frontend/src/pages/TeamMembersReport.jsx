@@ -119,9 +119,7 @@ function TeamMembersReport() {
             </div>
             <p className="up-role" style={{ margin: 0, paddingLeft: 80,fontSize: 16, fontWeight: 800 }}>{`${members.length} members`}{team?.leader ? ` \u2022 Lead: ${team.leader.name}` : ""}</p>
             {team?.description && (
-              <p style={{ color: "#6b7280", fontSize: 14, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", margin: 0, paddingLeft: 80 }}>
-                {team.description}
-              </p>
+              <div style={{ color: "#6b7280", fontSize: 14, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", margin: 0, paddingLeft: 80 }} className="rte-display" dangerouslySetInnerHTML={{ __html: team.description }} />
             )}
           </div>
 

@@ -363,7 +363,6 @@ function Admin() {
   // Auto-refresh dashboard when tasks, projects, or subtasks change
   useAutoRefresh(() => refetchDashboard(), {
     events: ["task:created", "task:updated", "task:deleted", "project:created", "project:updated", "project:deleted", "deliverable:updated", "data:changed"],
-    pollInterval: 45000,
   });
 
   // Listen for modal open/close events from child components
