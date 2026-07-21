@@ -94,6 +94,7 @@ function Projects() {
   const [viewMode, setViewMode] = useState("card");
   const [orderedProjects, setOrderedProjects] = useState([]);
   const [restoreDraftId, setRestoreDraftId] = useState(null);
+  const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {

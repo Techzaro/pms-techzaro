@@ -86,6 +86,7 @@ function Tasks() {
   const [timeFilter, setTimeFilter] = useState("");
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [restoreDraftId, setRestoreDraftId] = useState(null);
+  const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
 
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);

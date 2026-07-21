@@ -691,25 +691,8 @@ function SubtaskDetails() {
                     </div>
                   )}
                 </div>
-                {showRejectForm && (
-                  <div className="td-card" style={{ padding: "16px", width: "100%", maxWidth: "400px" }}>
-                    <label style={{ display: "block", marginBottom: "6px", fontSize: "13px", fontWeight: 500, color: "#374151" }}>Decline Comment (optional)</label>
-                    <textarea
-                      style={{ width: "100%", minHeight: "60px", padding: "8px", border: "1px solid #e5e7eb", borderRadius: "8px", fontSize: "14px" }}
-                      placeholder="Reason for decline..."
-                      value={rejectComment}
-                      onChange={(e) => setRejectComment(e.target.value)}
-                    />
-                    <div style={{ marginTop: "10px", display: "flex", gap: "8px" }}>
-                      <button className="td-btn-danger" onClick={handleReject} disabled={declining} style={declining ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
-                        {declining ? "Declining..." : "Confirm Decline"}
-                      </button>
-                      <button className="td-btn-outline" onClick={() => { setShowRejectForm(false); setRejectComment(""); }}>Cancel</button>
-                    </div>
-                  </div>
-                )}
+
               </div>
-            )}
 
             {/* Rejection info - shown when rejected */}
             {isRejected && subtask.rejection_comment && (
@@ -718,11 +701,11 @@ function SubtaskDetails() {
                 <p style={{ color: "#7F1D1D", marginTop: "6px" }}>{subtask.rejection_comment}</p>
                 {subtask.rejected_by && <p style={{ color: "#7F1D1D", fontSize: "12px", marginTop: "4px" }}>By: {subtask.rejected_by.name}</p>}
               </div>
+            )}
 
-              {/* TASK DISCUSSION — inside td-main, same as TaskDetails */}
-              <TaskDiscussion taskId={subtask.task_id} deliverableId={subtask.id} entityType="deliverable" />
+            {/* TASK DISCUSSION — inside td-main, same as TaskDetails */}
+            <TaskDiscussion taskId={subtask.task_id} deliverableId={subtask.id} entityType="deliverable" />
             </div>
-          </div>
 
             {/* ===== RIGHT SIDEBAR — matches TaskDetails exactly ===== */}
             <aside className="td-sidebar">
@@ -967,6 +950,7 @@ function SubtaskDetails() {
                 )}
               </div>
             </aside>
+          </div>
         </div>
       </DashboardLayout>
 

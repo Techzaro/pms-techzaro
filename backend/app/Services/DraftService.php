@@ -467,7 +467,7 @@ class DraftService
             'creator:id,name,email,role,avatar',
             'lastEditor:id,name,email,role,avatar',
             'project:id,title,project_code',
-            'parentTask:id,title,task_code',
+            'parentTask:id,title,business_id',
         ]);
 
         // Permission filtering
