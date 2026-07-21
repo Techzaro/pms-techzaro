@@ -190,7 +190,7 @@
 .deliveries-table-header,
 .deliveries-table-row {
   display: grid;
-  grid-template-columns: 32px minmax(130px, 2.5fr) minmax(130px, 1.8fr) minmax(130px, 1.6fr) minmax(90px, 0.8fr) minmax(170px, 1.2fr) minmax(70px, 0.4fr);
+  grid-template-columns: 80px minmax(130px, 2.5fr) minmax(130px, 1.8fr) minmax(130px, 1.6fr) minmax(90px, 0.8fr) minmax(170px, 1.2fr) minmax(70px, 0.4fr);
   gap: 12px;
 }
 
@@ -315,13 +315,13 @@
 }
 
 .self-deliveries-grid {
-  grid-template-columns: 32px minmax(130px, 2.2fr) minmax(130px, 2fr) minmax(90px, 0.9fr) minmax(170px, 1.2fr) minmax(70px, 0.4fr);
+  grid-template-columns: 80px minmax(130px, 2.2fr) minmax(130px, 2fr) minmax(90px, 0.9fr) minmax(170px, 1.2fr) minmax(70px, 0.4fr);
 }
 
 /* ===== All Sub-Tasks Table Grid ===== */
 .all-subtasks-header {
   display: grid !important;
-  grid-template-columns: 32px minmax(130px, 1.2fr) minmax(130px, 1.2fr) minmax(150px, 1.6fr) minmax(130px, 1.2fr) minmax(75px, 0.5fr) minmax(80px, 0.6fr) minmax(120px, 0.8fr) minmax(90px, 0.7fr) minmax(65px, 0.5fr) !important;
+  grid-template-columns: 80px minmax(130px, 1.2fr) minmax(130px, 1.2fr) minmax(150px, 1.6fr) minmax(130px, 1.2fr) minmax(75px, 0.5fr) minmax(80px, 0.6fr) minmax(120px, 0.8fr) minmax(90px, 0.7fr) minmax(65px, 0.5fr) !important;
   align-items: center;
   padding: 12px 16px;
   background-color: var(--color-table-header);
@@ -357,7 +357,7 @@
 
 .all-subtasks-row {
   display: grid !important;
-  grid-template-columns: 32px minmax(130px, 1.2fr) minmax(130px, 1.2fr) minmax(150px, 1.6fr) minmax(130px, 1.2fr) minmax(75px, 0.5fr) minmax(80px, 0.6fr) minmax(120px, 0.8fr) minmax(90px, 0.7fr) minmax(65px, 0.5fr) !important;
+  grid-template-columns: 80px minmax(130px, 1.2fr) minmax(130px, 1.2fr) minmax(150px, 1.6fr) minmax(130px, 1.2fr) minmax(75px, 0.5fr) minmax(80px, 0.6fr) minmax(120px, 0.8fr) minmax(90px, 0.7fr) minmax(65px, 0.5fr) !important;
   align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid var(--color-table-row-border);
@@ -371,7 +371,10 @@
 .all-subtasks-row > div {
   padding: 0 4px;
   min-width: 0;
-  overflow: hidden;
+}
+
+.all-subtasks-row > div:first-child {
+  padding-left: 0;
 }
 
 .all-subtasks-row:hover {

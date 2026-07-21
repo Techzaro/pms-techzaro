@@ -3,109 +3,223 @@
  * @description Role-based authentication helper for multi-role session management.
  *
  * Storage strategy:
- * - Per-tab identity (sessionStorage): currentRole - which role THIS tab is logged in as
- * - Per-role data (localStorage): token_{role} and user_{role} - shared across tabs
+ * - Per-tab identity (sessionStorage): currentRole + sessionId
+ * - Per-role sessions (localStorage): sessions_{role} = { sessionId: {token, user}, ... }
  *
- * This allows 4 tabs (admin, manager, team_lead, member) to coexist.
- * A second login with the SAME role kicks out the old tab for that role.
+ * This allows up to 3 tabs per access role simultaneously.
+ * Each tab claims a unique sessionId within its role's session pool.
+ *
+ * Migration: old tabs that have currentRole but no sessionId are automatically
+ * migrated into the session pool on first use.
  */
 
 const ROLES = ["admin", "manager", "team_lead", "member", "guest"];
+const MAX_SESSIONS_PER_ROLE = 3;
+
+/* ───── session ID generation ───── */
+
+function _generateSessionId() {
+  return "sess_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+}
+
+/* ───── raw sessions object access ───── */
+
+function _getSessions(role) {
+  try {
+    return JSON.parse(localStorage.getItem(`sessions_${role}`)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function _setSessions(role, sessions) {
+  localStorage.setItem(`sessions_${role}`, JSON.stringify(sessions));
+}
+
+/* ───── migration: old tabs → session pool ───── */
+
+/**
+ * Attempts to migrate a legacy tab (has currentRole but no sessionId)
+ * into the session pool. Returns true if migration succeeded or wasn't needed.
+ * Returns false if max tabs reached and migration failed.
+ */
+function _migrateIfNeeded() {
+  const role = getCurrentRole();
+  const sid = getSessionId();
+  if (!role) return true;
+  if (sid) return true;
+
+  // Has role but no sessionId — try to migrate from legacy storage
+  const legacyToken = localStorage.getItem(`token_${role}`);
+  let legacyUser = null;
+  try {
+    legacyUser = JSON.parse(localStorage.getItem(`user_${role}`)) || null;
+  } catch {}
+
+  if (!legacyToken) return true;
+
+  // Check if this exact token is already in the pool (another tab for same user)
+  const sessions = _getSessions(role);
+  const existingEntry = Object.values(sessions).find(s => s.token === legacyToken);
+  if (existingEntry) {
+    // Token already tracked — find its sessionId and claim it
+    const existingSid = Object.keys(sessions).find(k => sessions[k].token === legacyToken);
+    setSessionId(existingSid);
+    return true;
+  }
+
+  // Try to claim a new slot
+  const activeCount = Object.keys(sessions).length;
+  if (activeCount >= MAX_SESSIONS_PER_ROLE) {
+    // Max reached — force re-login
+    return false;
+  }
+
+  // Create new session entry
+  const newSid = _generateSessionId();
+  sessions[newSid] = { token: legacyToken, user: legacyUser };
+  _setSessions(role, sessions);
+  setSessionId(newSid);
+  return true;
+}
+
+/* ───── cleanup: evict oldest sessions when over limit ───── */
+
+function _cleanupExcessSessions(role) {
+  const sessions = _getSessions(role);
+  const keys = Object.keys(sessions);
+  if (keys.length <= MAX_SESSIONS_PER_ROLE) return;
+
+  // Sort by sessionId timestamp (older = smaller timestamp in sess_XXXX)
+  keys.sort((a, b) => {
+    const timeA = parseInt(a.split("_")[1], 36) || 0;
+    const timeB = parseInt(b.split("_")[1], 36) || 0;
+    return timeA - timeB;
+  });
+
+  // Remove oldest entries until we're at the limit
+  const toRemove = keys.slice(0, keys.length - MAX_SESSIONS_PER_ROLE);
+  toRemove.forEach(k => delete sessions[k]);
+  _setSessions(role, sessions);
+}
 
 /* ───── current role (tab-scoped) ───── */
 
-/**
- * Gets the current role for this browser tab.
- * @returns {string} Current role (admin, manager, team_lead, member) or empty string
- */
 export function getCurrentRole() {
   return sessionStorage.getItem("currentRole") || "";
 }
 
-/**
- * Sets the current role for this browser tab.
- * @param {string} role - Role to set as current
- */
 export function setCurrentRole(role) {
   sessionStorage.setItem("currentRole", role);
 }
 
-/* ───── token (per-role, shared) ───── */
+/* ───── session ID (tab-scoped) ───── */
 
-/**
- * Gets the authentication token for a specific role.
- * @param {string} [role] - Role to get token for (defaults to current role)
- * @returns {string} Bearer token or empty string
- */
+export function getSessionId() {
+  return sessionStorage.getItem("sessionId") || "";
+}
+
+export function setSessionId(id) {
+  sessionStorage.setItem("sessionId", id);
+}
+
+/* ───── token ───── */
+
 export function getToken(role) {
   const r = role || getCurrentRole();
-  return localStorage.getItem(`token_${r}`) || "";
+  const sid = getSessionId();
+
+  // Try to migrate old tabs on first access
+  if (!sid && r) {
+    const migrated = _migrateIfNeeded();
+    if (!migrated) return "";
+  }
+
+  const finalSid = getSessionId();
+  if (!finalSid) return "";
+
+  const sessions = _getSessions(r);
+  return sessions[finalSid]?.token || "";
 }
 
-/**
- * Stores the authentication token for a specific role.
- * @param {string} role - Role to store token for
- * @param {string} token - Bearer token to store
- */
 export function setToken(role, token) {
-  localStorage.setItem(`token_${role}`, token);
-}
-
-/**
- * Removes the authentication token for a specific role.
- * @param {string} role - Role to remove token for
- */
-export function removeToken(role) {
-  localStorage.removeItem(`token_${role}`);
-}
-
-/* ───── user object (per-role, shared) ───── */
-
-/**
- * Gets the user object for a specific role.
- * @param {string} [role] - Role to get user for (defaults to current role)
- * @returns {Object|null} Parsed user object or null if not found
- */
-export function getUser(role) {
   const r = role || getCurrentRole();
-  try {
-    return JSON.parse(localStorage.getItem(`user_${r}`)) || null;
-  } catch {
-    return null;
+  const sid = getSessionId();
+
+  if (sid) {
+    const sessions = _getSessions(r);
+    if (sessions[sid]) {
+      sessions[sid].token = token;
+      _setSessions(r, sessions);
+    }
   }
 }
 
-/**
- * Stores the user object for a specific role.
- * @param {string} role - Role to store user for
- * @param {Object} user - User object to store (will be JSON stringified)
- */
-export function setUser(role, user) {
-  localStorage.setItem(`user_${role}`, JSON.stringify(user));
+export function removeToken(role) {
+  const r = role || getCurrentRole();
+  const sid = getSessionId();
+
+  if (sid) {
+    const sessions = _getSessions(r);
+    if (sessions[sid]) {
+      delete sessions[sid];
+      _setSessions(r, sessions);
+    }
+    sessionStorage.removeItem("sessionId");
+  }
 }
 
-/**
- * Removes the user object for a specific role.
- * @param {string} role - Role to remove user for
- */
+/* ───── user object ───── */
+
+export function getUser(role) {
+  const r = role || getCurrentRole();
+  const sid = getSessionId();
+
+  // Try to migrate old tabs on first access
+  if (!sid && r) {
+    const migrated = _migrateIfNeeded();
+    if (!migrated) return null;
+  }
+
+  const finalSid = getSessionId();
+  if (!finalSid) return null;
+
+  const sessions = _getSessions(r);
+  return sessions[finalSid]?.user || null;
+}
+
+export function setUser(role, user) {
+  const r = role || getCurrentRole();
+  const sid = getSessionId();
+
+  if (sid) {
+    const sessions = _getSessions(r);
+    if (sessions[sid]) {
+      sessions[sid].user = user;
+      _setSessions(r, sessions);
+    }
+  }
+}
+
 export function removeUser(role) {
-  localStorage.removeItem(`user_${role}`);
+  const r = role || getCurrentRole();
+  const sid = getSessionId();
+
+  if (sid) {
+    const sessions = _getSessions(r);
+    if (sessions[sid]) {
+      sessions[sid].user = null;
+      _setSessions(r, sessions);
+    }
+  }
 }
 
 /* ───── convenience shortcuts ───── */
 
-/**
- * Gets the authentication token for the current role.
- * @returns {string} Bearer token for current role
- */
 export function authToken() {
   return getToken();
 }
 
-/**
- * Returns headers object with Authorization and Content-Type for API requests.
- * @returns {Object} Headers object with Bearer token
- */
 export function authHeaders() {
   const t = authToken();
   if (!t) return { "Content-Type": "application/json" };
@@ -118,39 +232,68 @@ export function authHeaders() {
 /* ───── session management ───── */
 
 /**
- * Saves a complete session (role, token, user) for a specific role.
- * @param {string} role - Role to save session for
- * @param {string} token - Bearer token
- * @param {Object} user - User object
+ * Saves a complete session (role, token, user) for this tab.
+ * Claims a slot in the role's session pool (max 3 per role).
+ * Evicts oldest sessions if over limit.
+ * @returns {boolean} true if session was saved, false if max tabs reached
  */
 export function saveSession(role, token, user) {
+  // Cleanup excess first (in case stale entries exist)
+  _cleanupExcessSessions(role);
+
+  const sessions = _getSessions(role);
+  const activeCount = Object.keys(sessions).length;
+
+  if (activeCount >= MAX_SESSIONS_PER_ROLE) {
+    return false;
+  }
+
+  const sid = _generateSessionId();
+  sessions[sid] = { token, user };
+  _setSessions(role, sessions);
+
   setCurrentRole(role);
-  setToken(role, token);
-  setUser(role, user);
+  setSessionId(sid);
+
+  return true;
 }
 
 /**
- * Clears the session for a specific role.
- * @param {string} role - Role to clear session for
+ * Clears the session for this tab only.
+ * Other tabs with the same role remain unaffected.
  */
 export function clearSession(role) {
-  removeToken(role);
-  removeUser(role);
-  if (getCurrentRole() === role) {
+  const r = role || getCurrentRole();
+  const sid = getSessionId();
+
+  if (sid) {
+    const sessions = _getSessions(r);
+    if (sessions[sid]) {
+      delete sessions[sid];
+      _setSessions(r, sessions);
+    }
+    sessionStorage.removeItem("sessionId");
+  }
+
+  localStorage.removeItem(`token_${r}`);
+  localStorage.removeItem(`user_${r}`);
+
+  if (getCurrentRole() === r) {
     sessionStorage.removeItem("currentRole");
   }
 }
 
 /**
- * Clears all sessions for all roles and removes legacy storage keys.
+ * Clears all sessions for all roles.
  */
 export function clearAllSessions() {
   ROLES.forEach((r) => {
+    localStorage.removeItem(`sessions_${r}`);
     localStorage.removeItem(`token_${r}`);
     localStorage.removeItem(`user_${r}`);
   });
   sessionStorage.removeItem("currentRole");
-  // Clean up legacy keys from older versions
+  sessionStorage.removeItem("sessionId");
   localStorage.removeItem("token");
   localStorage.removeItem("role");
   localStorage.removeItem("userId");
@@ -158,19 +301,31 @@ export function clearAllSessions() {
   localStorage.removeItem("email");
 }
 
+/* ───── multi-tab helpers ───── */
+
+/**
+ * Checks if a new session can be added for the given role (max 3 tabs).
+ */
+export function canAddSession(role) {
+  const sessions = _getSessions(role);
+  return Object.keys(sessions).length < MAX_SESSIONS_PER_ROLE;
+}
+
+/**
+ * Returns the number of active sessions for a role.
+ */
+export function getActiveSessionCount(role) {
+  const sessions = _getSessions(role);
+  return Object.keys(sessions).length;
+}
+
 /**
  * Checks if a session exists for a specific role.
- * @param {string} role - Role to check
- * @returns {boolean} True if token exists for the role
  */
 export function hasSession(role) {
   return !!getToken(role);
 }
 
-/**
- * Gets the display user information for the current role.
- * @returns {Object|null} Object with name, email, role or null if not logged in
- */
 export function getDisplayUser() {
   const role = getCurrentRole();
   const user = getUser(role);
@@ -185,7 +340,6 @@ export function getDisplayUser() {
 
 /* ───── role-prefixed path helper ───── */
 
-/** Maps role names to URL-friendly role slugs */
 const ROLE_URL_MAP = {
   admin: "admin",
   manager: "manager",
@@ -195,32 +349,18 @@ const ROLE_URL_MAP = {
   guest: "guest",
 };
 
-/**
- * Generates a role-prefixed path for navigation.
- * @param {string} [page=""] - Page name (e.g., "tasks", "projects")
- * @returns {string} Role-prefixed path (e.g., "/admin/tasks")
- */
 export function rolePath(page = "") {
   const role = getCurrentRole() || "member";
   const urlRole = ROLE_URL_MAP[role] || "member";
   return page ? `/${urlRole}/${page}` : `/${urlRole}/dashboard`;
 }
 
-/**
- * Gets the URL-friendly role slug for the current role.
- * @returns {string} URL role slug (admin, manager, teamlead, member)
- */
 export function getUrlRole() {
   return ROLE_URL_MAP[getCurrentRole()] || "member";
 }
 
 /* ───── role display normalization ───── */
 
-/**
- * Normalizes a role string for display purposes.
- * @param {string} role - Role to normalize
- * @returns {string} Normalized role (e.g., "team_lead" → "Team Lead")
- */
 export function normalizeRole(role) {
   if (!role) return "";
   if (role === "team_lead" || role === "teamlead") return "Team Lead";

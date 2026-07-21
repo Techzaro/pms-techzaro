@@ -10,13 +10,14 @@ import "./UserSelectDropdown.css";
 
 const UserSelectDropdown = ({
   users = [],
-  selectedIds = [],
+  selectedIds: rawSelectedIds = [],
   onChange,
   placeholder = "Click to select members",
   disabled = false,
   viewOnly = false,
   error = false,
 }) => {
+  const selectedIds = Array.isArray(rawSelectedIds) ? rawSelectedIds : [];
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const ref = useRef(null);

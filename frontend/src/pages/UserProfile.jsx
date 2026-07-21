@@ -16,6 +16,7 @@ import { Pencil, Trash2, Eye } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
+import ResignationConfirmModal from "../components/ResignationConfirmModal";
 import { publish } from "../utils/eventBus";
 import API_URL from "../config/api";
 import { useEscapeKey } from "../hooks/useEscapeKey";
@@ -29,6 +30,7 @@ import "../components/layout/ActivityHighlight.css";
 import "./UserProfile.css";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "../components/LoadingButton";
+import AdminChangePasswordModal from "../components/AdminChangePasswordModal";
 import "./ManageUsers.css";
 import "./TaskDetails.css";
 
@@ -132,6 +134,8 @@ function UserProfile() {
   const [changes, setChanges] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [resignConfirmOpen, setResignConfirmOpen] = useState(false);
+  const [resignImpact, setResignImpact] = useState(null);
+  const [resignImpactLoading, setResignImpactLoading] = useState(false);
   const [removeDocConfirmOpen, setRemoveDocConfirmOpen] = useState(false);
   const [pendingRemoveDoc, setPendingRemoveDoc] = useState({ source: "", index: -1 });
   const [existingOtherDocs, setExistingOtherDocs] = useState([]);
@@ -143,6 +147,10 @@ function UserProfile() {
   const [editDocDeleteConfirm, setEditDocDeleteConfirm] = useState(false);
   const [deleteDocConfirmOpen, setDeleteDocConfirmOpen] = useState(false);
   const [pendingDeleteDoc, setPendingDeleteDoc] = useState(null);
+
+  // Credential management state
+  const [showAdminPasswordModal, setShowAdminPasswordModal] = useState(false);
+  const [unlockRecoveryLoading, setUnlockRecoveryLoading] = useState(false);
 
   // Guest management state
   const [guestActionModal, setGuestActionModal] = useState({ open: false, type: "" });
@@ -218,27 +226,63 @@ function UserProfile() {
   );
 
   /** Handle resign button click */
-  const handleResignUser = () => {
+  const handleResignUser = async () => {
+    setResignImpact(null);
+    setResignImpactLoading(true);
     setResignConfirmOpen(true);
+    try {
+      const res = await fetch(`${API_URL}/users/${userId}/resignation-impact`, {
+        headers: { Accept: "application/json", ...authHeaders() },
+      });
+      const data = await res.json();
+      if (data.success) setResignImpact(data.impact);
+    } catch (err) {
+      notify.error("Failed to load impact analysis");
+      setResignConfirmOpen(false);
+    } finally {
+      setResignImpactLoading(false);
+    }
   };
 
   /** Confirm and execute user resignation via API */
-  const confirmResignUser = async () => {
+  const confirmResignUser = async (data) => {
     setResignConfirmOpen(false);
-    await run(async () => {
-      const res = await fetch(`${API_URL}/users/${userId}/resign`, {
-        method: "PUT",
-        headers: { Accept: "application/json", ...authHeaders() },
+    setResignImpact(null);
+    if (data?.user) {
+      setProfileData((prev) => ({ ...prev, active: false }));
+    }
+    showSuccessMessage("User", "resigned");
+    publish('data:changed', { type: 'user', action: 'resigned' });
+  };
+
+  /** Unlock password recovery for the user (admin only) */
+  const handleUnlockRecovery = async () => {
+    setUnlockRecoveryLoading(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/users/${userId}/unlock-password-recovery`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Unable to resign user");
-      }
-      setProfileData((prev) => ({ ...prev, active: false }));
-      showSuccessMessage("User", "resigned");
-      publish('data:changed', { type: 'user', action: 'resigned' });
-    });
+      if (!res.ok) throw new Error(data.message || "Failed to unlock password recovery");
+
+      setProfileData((prev) => ({
+        ...prev,
+        user: {
+          ...prev.user,
+          password_reset_locked: false,
+          credentials_managed_by_admin: false,
+        },
+      }));
+      showSuccessMessage("Password recovery", "unlocked");
+      publish("data:changed", { type: "user", action: "updated" });
+    } catch (err) {
+      notify.error(err.message);
+    } finally {
+      setUnlockRecoveryLoading(false);
+    }
   };
 
   /** Handle guest-specific actions (resign, resend invitation, reset password) */
@@ -1254,6 +1298,107 @@ function UserProfile() {
               </div>
               )}
 
+              {/* Credential Management - Admin only, hidden for guests */}
+              {user.role !== "guest" && currentUserRole === "admin" && (
+              <div className="profile-info-card">
+                <div className="info-card-header">
+                  <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                    Credential Management
+                  </h3>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {user.password_reset_locked && (
+                      <button
+                        className="btn-edit"
+                        onClick={handleUnlockRecovery}
+                        disabled={unlockRecoveryLoading}
+                        style={{ background: "#16a34a" }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                          <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+                        </svg>
+                        {unlockRecoveryLoading ? "Unlocking..." : "Enable Password Recovery"}
+                      </button>
+                    )}
+                    {user.active !== false && (
+                      <button
+                        className="btn-edit"
+                        onClick={() => setShowAdminPasswordModal(true)}
+                        style={{ background: "#2563eb" }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                        Change Password
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="info-card-body">
+                  <div className="info-row">
+                    <span className="info-label">Password Status</span>
+                    <span className="info-value">
+                      {user.credentials_managed_by_admin ? (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "#dbeafe", color: "#1e40af" }}>
+                            Admin Managed
+                          </span>
+                        </span>
+                      ) : (
+                        <span style={{ padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "#dcfce7", color: "#166534" }}>
+                          Self-Managed
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Password Recovery</span>
+                    <span className="info-value">
+                      {user.password_reset_locked ? (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "#fee2e2", color: "#991b1b" }}>
+                            Locked
+                          </span>
+                        </span>
+                      ) : (
+                        <span style={{ padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "#dcfce7", color: "#166534" }}>
+                          Enabled
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Last Password Change</span>
+                    <span className="info-value">
+                      {user.password_changed_at
+                        ? new Date(user.password_changed_at).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                            hour12: true,
+                          })
+                        : "---"}
+                    </span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Changed By</span>
+                    <span className="info-value">{user.password_changed_by_name || "---"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Password Version</span>
+                    <span className="info-value">v{user.password_version || 1}</span>
+                  </div>
+                </div>
+              </div>
+              )}
+
               {/* Salary & Bank Details - hidden for guests */}
               {user.role !== "guest" && (
               <div className="profile-info-card">
@@ -1850,13 +1995,13 @@ function UserProfile() {
         </div>,
         document.body
       )}
-      <ConfirmModal
+      <ResignationConfirmModal
         isOpen={resignConfirmOpen}
-        onClose={() => setResignConfirmOpen(false)}
+        onClose={() => { setResignConfirmOpen(false); setResignImpact(null); }}
         onConfirm={confirmResignUser}
-        title="Confirm Resignation"
-        message="Are you sure you want to resign this user? This action may affect their access and assigned responsibilities."
-        confirmText="Confirm Resignation"
+        user={profileData?.user || user}
+        impact={resignImpact}
+        loading={resignImpactLoading}
       />
       <ConfirmModal
         isOpen={confirmDeleteOpen}
@@ -2074,6 +2219,26 @@ function UserProfile() {
         document.body
       )}
       {GuestEditConfirmDialog}
+
+      {/* Admin Change Password Modal */}
+      {showAdminPasswordModal && (
+        <AdminChangePasswordModal
+          user={user}
+          onClose={() => setShowAdminPasswordModal(false)}
+          onSuccess={(data) => {
+            setProfileData((prev) => ({
+              ...prev,
+              user: {
+                ...prev.user,
+                credentials_managed_by_admin: true,
+                password_reset_locked: true,
+                password_changed_at: new Date().toISOString(),
+                password_version: data.password_version || (prev.user.password_version || 1) + 1,
+              },
+            }));
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }

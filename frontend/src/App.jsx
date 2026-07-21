@@ -46,6 +46,7 @@ const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const LoggedOut = lazy(() => import("./pages/LoggedOut"));
 const Chat = lazy(() => import("./pages/Chat"));
+const DraftCenter = lazy(() => import("./pages/DraftCenter"));
 
 // Route protection components
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -127,6 +128,7 @@ function App() {
             <Route path="/:role/team-members-report" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/:role/my-profile" element={<ProtectedRoute><MyProfile /></ProtectedRoute>} />
             <Route path="/:role/calender" element={<ProtectedRoute><Calender /></ProtectedRoute>} />
+            <Route path="/:role/drafts" element={<ProtectedRoute><DraftCenter /></ProtectedRoute>} />
             <Route path="/:role/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
             <Route path="/:role/audit-logs" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><AuditLogs /></RoleProtectedRoute>} />
             <Route path="/:role/reports/user-performance/:userId" element={<ProtectedRoute><UserPerformance /></ProtectedRoute>} />

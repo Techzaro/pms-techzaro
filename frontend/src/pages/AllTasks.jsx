@@ -17,7 +17,8 @@ import Breadcrumb from "../components/Breadcrumb";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
+import SortableTableWrapper from "../components/SortableTableWrapper";
+import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
@@ -272,7 +273,7 @@ function AllTasks() {
       {/* TABLE */}
       <div className="container">
         <div className="all-tasks-header">
-          <div></div>
+          <div style={{ fontSize: 12, fontWeight: 600 }}>ID</div>
           <div>Assigned To</div>
           <div>Assigned By</div>
           <div>Task Name</div>
@@ -308,7 +309,7 @@ function AllTasks() {
 
               return (
                 <div className="all-tasks-row" key={uniqueKey}>
-                  <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                  <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={item.business_id} />
 
                   {/* Assigned To */}
                   <div className="col-assigned-to">

@@ -48,6 +48,7 @@ import SubmitTaskModal from "../components/SubmitTaskModal";
 import TaskSubmissionPanel from "../components/TaskSubmissionPanel";
 import AddAccessModal from "../components/AddAccessModal";
 import TaskDiscussion from "../components/TaskDiscussion";
+import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 
@@ -66,6 +67,7 @@ import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
 import { useActivityHighlight } from "../hooks/useActivityHighlight";
 import { useWorkTimer } from "../hooks/useWorkTimer";
 import { useIdleDetection } from "../hooks/useIdleDetection";
+import FileUploadSection from "../components/FileUploadSection";
 import "../components/layout/ActivityHighlight.css";
 import "./TaskDetails.css";
 import "./Deliveries.css";
@@ -272,6 +274,7 @@ function TaskDetails() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [deleteTaskConfirmOpen, setDeleteTaskConfirmOpen] = useState(false);
   const [tab, setTab] = useState("overview");
+  const [showCreateSubtaskModal, setShowCreateSubtaskModal] = useState(false);
   const [submitModal, setSubmitModal] = useState({ open: false, subtask: null });
   const [viewModal, setViewModal] = useState({ open: false, subtask: null });
   const [assignerModal, setAssignerModal] = useState({ open: false, subtask: null });
@@ -778,9 +781,23 @@ function TaskDetails() {
 
 
               <div className="td-title-row">
-                <h1 className="td-title">
-                  {task.title}
-                </h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                  <h1 className="td-title">
+                    {task.title}
+                  </h1>
+                  {task.business_id && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, background: '#eff6ff', color: '#2563eb', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {task.business_id}
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(task.business_id); notify.success("Task ID copied!"); }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+                        title="Copy Task ID"
+                      >
+                        <Copy size={13} color="#2563eb" />
+                      </button>
+                    </span>
+                  )}
+                </div>
                 <div className="td-title-actions">
                   <button className="td-nav-btn" onClick={() => goToTask(prevTaskId)} disabled={!prevTaskId}><ChevronLeft size={18} /></button>
                   <button className="td-nav-btn" onClick={() => goToTask(nextTaskId)} disabled={!nextTaskId}><ChevronRight size={18} /></button>
@@ -976,6 +993,14 @@ function TaskDetails() {
                     <div>
                       <div className="td-section-header">
                         <h2 className="td-section-title">Subtasks</h2>
+                        {!readOnly && isCreator && (
+                          <button
+                            onClick={() => setShowCreateSubtaskModal(true)}
+                            style={{ marginLeft: "auto", marginRight: 12, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "var(--color-primary)", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}
+                          >
+                            <Plus size={15} /> Create Subtask
+                          </button>
+                        )}
                         <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                           <input type="text" placeholder="Search subtasks..." value={subtaskSearch} onChange={(e) => setSubtaskSearch(e.target.value)} />
@@ -1008,7 +1033,7 @@ function TaskDetails() {
                           >
                             {(d, idx, dndProps) => (
                               <div className="deliveries-table-row" style={{ gridTemplateColumns: "32px minmax(150px, 1.6fr) minmax(160px, 1.8fr) minmax(110px, 1.1fr) minmax(90px, 0.9fr) minmax(70px, 0.5fr)" }}>
-                                <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                                <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={d.business_id} color="#16a34a" />
                                 <div className="user-box">
                                   <div className="avatar" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), width: '42px', height: '42px', fontSize: '14px' }}>
                                     {initials(d.title)}
@@ -1055,7 +1080,7 @@ function TaskDetails() {
                     </div>
                   )}
 
-                  {tab === "files" && <FileUploadSection taskId={task.id} files={files} onReorder={handleFileReorder} onFilesChange={() => fetchTask(true)} readOnly={readOnly} />}
+                  {tab === "files" && <FileUploadSection entityType="task" entityId={task.id} files={files} onReorder={handleFileReorder} onFilesChange={() => fetchTask(true)} readOnly={readOnly} />}
 
                   {tab === "access" && (
                     <div className="td-access-section">
@@ -1466,6 +1491,18 @@ function TaskDetails() {
         danger
       />
 
+      {showCreateSubtaskModal && (
+        <CreateDeliverableModel
+          projectId={task?.project_id || null}
+          taskId={task?.id || null}
+          taskTitle={task?.title || null}
+          onClose={(refresh) => {
+            setShowCreateSubtaskModal(false);
+            if (refresh) fetchTask(false);
+          }}
+        />
+      )}
+
       {idleModalOpen && (
         <div className="cm-overlay" onClick={handleIdleResume}>
           <div className="cm-modal" role="dialog" onClick={e => e.stopPropagation()}>
@@ -1486,196 +1523,6 @@ function TaskDetails() {
         </div>
       )}
     </>
-  );
-}
-
-/* ── File Upload Section Component ── */
-/** Renders the list of files attached to a task, with download links, edit/delete actions, and drag-drop reorder. */
-function FileUploadSection({ taskId, files, onReorder, onFilesChange, readOnly }) {
-  const [fileSearch, setFileSearch] = useState("");
-  const [editItem, setEditItem] = useState(null);
-  const [editName, setEditName] = useState("");
-  const [editUrl, setEditUrl] = useState("");
-  const [editSaving, setEditSaving] = useState(false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState(null);
-  const boxColors = [
-    "#eef2ff", "#f0fdf4", "#fefce8", "#fef2f2",
-    "#f5f3ff", "#ecfeff", "#fff7ed", "#fce7f3",
-  ];
-  const filteredFiles = files.filter((f) => {
-    if (!fileSearch) return true;
-    const q = fileSearch.toLowerCase();
-    return (f.name || "").toLowerCase().includes(q) || (f.url || "").toLowerCase().includes(q);
-  });
-
-  const openEdit = (item) => {
-    setEditItem(item);
-    setEditName(item.name || "");
-    setEditUrl(item.url || "");
-  };
-
-  const handleRename = async () => {
-    if (!editItem || !editName.trim()) return;
-    setEditSaving(true);
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/files/${editItem.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ name: editName.trim(), url: editUrl.trim() || null }),
-      });
-      if (res.ok) {
-        showSuccessMessage("File renamed successfully");
-        setEditItem(null);
-        if (onFilesChange) onFilesChange();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        alert(data.message || "Failed to rename file");
-      }
-    } catch {
-      alert("Failed to rename file");
-    }
-    setEditSaving(false);
-  };
-
-  const openDelete = (item) => {
-    setPendingDelete(item);
-    setDeleteConfirmOpen(true);
-  };
-
-  const handleDelete = async (done) => {
-    if (!pendingDelete) { done?.(); return; }
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/files/${pendingDelete.id}`, {
-        method: "DELETE",
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        showSuccessMessage("File deleted successfully");
-        setDeleteConfirmOpen(false);
-        setPendingDelete(null);
-        if (onFilesChange) onFilesChange();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        alert(data.message || "Failed to delete file");
-      }
-    } catch {
-      alert("Failed to delete file");
-    }
-    done?.();
-  };
-
-  return (
-    <div>
-      <div className="td-section-header">
-        <h2 className="td-section-title">Platform files & links</h2>
-        {files.length > 0 && (
-          <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <input
-              type="text"
-              placeholder="Search files & links..."
-              value={fileSearch}
-              onChange={(e) => setFileSearch(e.target.value)}
-            />
-          </div>
-        )}
-      </div>
-      {files.length === 0 ? (
-        <p className="td-empty">No files attached to this task.</p>
-      ) : filteredFiles.length === 0 ? (
-        <p className="td-empty">No files match your search.</p>
-      ) : (
-        <SortableTableWrapper
-          items={filteredFiles}
-          onReorder={onReorder}
-          as="div"
-        >
-          {(f, idx, dndProps) => {
-            const bg = boxColors[idx % boxColors.length];
-            return (
-              <div key={f.id} className="pd-file-box" style={{ background: bg }}>
-                <div className="pd-file-box__drag-handle">
-                  <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
-                </div>
-                <div className="pd-file-box__content">
-                  <div className="pd-file-box__name">
-                    <FolderOpen size={18} />
-                    <span>{f.name}</span>
-                  </div>
-                  {f.url && (
-                    <a
-                      href={fileUrl(f.url)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="pd-file-box__link"
-                      style={{ color: "#6366f1" }}
-                    >
-                      {f.url}
-                    </a>
-                  )}
-                </div>
-              </div>
-            );
-          }}
-        </SortableTableWrapper>
-      )}
-      {/* Edit/Rename Popup */}
-      {editItem && (
-        <div className="pd-edit-overlay" onClick={() => setEditItem(null)}>
-          <div className="pd-edit-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="pd-edit-modal__title">Rename File</h3>
-            <div className="pd-edit-modal__field">
-              <label className="pd-edit-modal__label">Name</label>
-              <input
-                className="pd-edit-modal__input"
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                autoFocus
-                onKeyDown={(e) => { if (e.key === "Enter") handleRename(); }}
-              />
-            </div>
-            {editItem.url && (
-              <div className="pd-edit-modal__field">
-                <label className="pd-edit-modal__label">URL</label>
-                <input
-                  className="pd-edit-modal__input"
-                  type="text"
-                  value={editUrl}
-                  onChange={(e) => setEditUrl(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleRename(); }}
-                />
-              </div>
-            )}
-            <div className="pd-edit-modal__actions">
-              <button className="pd-edit-modal__cancel" onClick={() => setEditItem(null)} disabled={editSaving}>Cancel</button>
-              <button className="pd-edit-modal__save" onClick={handleRename} disabled={editSaving || !editName.trim()}>
-                {editSaving ? "Saving..." : "Save"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Delete Confirmation */}
-      <ConfirmModal
-        isOpen={deleteConfirmOpen}
-        onClose={() => { setDeleteConfirmOpen(false); setPendingDelete(null); }}
-        onConfirm={handleDelete}
-        title="Delete File"
-        message={`Are you sure you want to delete "${pendingDelete?.name || ""}"? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        danger
-      />
-
-    </div>
   );
 }
 

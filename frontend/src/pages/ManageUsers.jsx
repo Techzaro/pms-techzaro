@@ -27,9 +27,13 @@ import { CSS } from '@dnd-kit/utilities';
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
+import ResignationConfirmModal from "../components/ResignationConfirmModal";
 import API_URL from "../config/api";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useDraftGuard from "../hooks/useDraftGuard";
+import useAutoSave from "../hooks/useAutoSave";
+import AutoSaveIndicator from "../components/AutoSaveIndicator";
 import { authToken, getCurrentRole, getUser, setUser, rolePath, normalizeRole } from "../utils/auth";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { publish } from "../utils/eventBus";
@@ -121,6 +125,9 @@ function ManageUsers() {
   const [timeFilter, setTimeFilter] = useState("");
   const [resignConfirmOpen, setResignConfirmOpen] = useState(false);
   const [resignUserId, setResignUserId] = useState(null);
+  const [resignUser, setResignUser] = useState(null);
+  const [resignImpact, setResignImpact] = useState(null);
+  const [resignImpactLoading, setResignImpactLoading] = useState(false);
   const [removeDocConfirmOpen, setRemoveDocConfirmOpen] = useState(false);
   const [pendingRemoveDoc, setPendingRemoveDoc] = useState({ source: "", index: -1, type: "", api: "", label: "" });
   const [existingOtherDocs, setExistingOtherDocs] = useState([]);
@@ -505,7 +512,49 @@ function ManageUsers() {
     });
   };
 
-  const { isDirty: addIsDirty, setIsDirty: setAddIsDirty, handleClose: handleAddClose, ConfirmDialog: AddConfirmDialog } = useConfirmOnClose(closeModal);
+  const draftSaveRef = useRef(null);
+  const { isDirty: addIsDirty, setIsDirty: setAddIsDirty, handleClose: handleAddClose, ConfirmDialog: AddConfirmDialog } = useDraftGuard(closeModal, {
+    draftSaveHandler: () => draftSaveRef.current?.(),
+    hasDraftFeature: true,
+  });
+
+  const userInteractedRef = useRef(false);
+  useEffect(() => {
+    const markInteracted = () => { userInteractedRef.current = true; };
+    window.addEventListener("keydown", markInteracted, { once: true, capture: true });
+    window.addEventListener("mousedown", markInteracted, { once: true, capture: true });
+    return () => {
+      window.removeEventListener("keydown", markInteracted, { capture: true });
+      window.removeEventListener("mousedown", markInteracted, { capture: true });
+    };
+  }, []);
+  const markDirty = useCallback(() => { if (userInteractedRef.current) setAddIsDirty(true); }, [setAddIsDirty]);
+
+  const buildDraftBody = useCallback(() => ({
+    full_name: newUser.fullName,
+    father_name: newUser.fatherName,
+    email: newUser.email,
+    phone_number: newUser.phoneNumber,
+    role: newUser.role,
+    designation: newUser.designation === "__custom__" ? newUser.designationCustom : newUser.designation,
+    department: newUser.department === "__custom__" ? newUser.departmentCustom : newUser.department,
+    id_card_number: newUser.idCardNumber,
+    gender: newUser.gender,
+    date_of_birth: newUser.dateOfBirth,
+    address: newUser.address,
+  }), [newUser]);
+
+  const { lastSaved: userLastSaved, isSaving: userSaving, saveNow: userSaveNow } = useAutoSave({
+    draftId: null,
+    formData: buildDraftBody(),
+    moduleType: "user",
+    enabled: addIsDirty,
+  });
+
+  const handleSaveDraft = useCallback(async () => {
+    draftSaveRef.current = userSaveNow;
+    await userSaveNow();
+  }, [userSaveNow]);
 
   // ── Guest Management Functions ──
   const openGuestModal = (guest = null) => {
@@ -747,7 +796,7 @@ function ManageUsers() {
     if (name === "idCardNumber") formattedValue = formatCNIC(value);
     if (name === "phoneNumber" || name === "emergencyContactPhone") formattedValue = formatPhone(value);
     setNewUser((prev) => ({ ...prev, [name]: formattedValue }));
-    setAddIsDirty(true);
+    markDirty();
     if (addErrors[name]) {
       setAddErrors((prev) => {
         const next = { ...prev };
@@ -831,37 +880,42 @@ function ManageUsers() {
 
   // Mark a user as resigned (inactive) after confirmation
   const handleResignUser = async (userId) => {
+    const user = users.find(u => u.id === userId);
+    setResignUser(user);
     setResignUserId(userId);
+    setResignImpact(null);
+    setResignImpactLoading(true);
     setResignConfirmOpen(true);
+    try {
+      const res = await fetch(`${API_URL}/users/${userId}/resignation-impact`, {
+        headers: { Accept: "application/json", ...authHeaders() },
+      });
+      const data = await res.json();
+      if (data.success) setResignImpact(data.impact);
+    } catch (err) {
+      notify.error("Failed to load impact analysis");
+      setResignConfirmOpen(false);
+    } finally {
+      setResignImpactLoading(false);
+    }
   };
 
   // Confirm and execute user resignation via API
-  const confirmResignUser = async () => {
-    const userId = resignUserId;
+  const confirmResignUser = async (data) => {
     setResignConfirmOpen(false);
     setResignUserId(null);
+    setResignUser(null);
+    setResignImpact(null);
 
-    await run(async () => {
-      const res = await fetch(`${API_URL}/users/${userId}/resign`, {
-        method: "PUT",
-        headers: { Accept: "application/json", ...authHeaders() },
-        _notifHandled: true,
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || "Unable to resign user");
-      }
-
+    if (data?.user) {
       setUsers((prev) =>
         prev.map((item) =>
-          item.id === userId ? { ...item, active: false } : item
+          item.id === data.user.id ? { ...item, active: false } : item
         )
       );
-      showSuccessMessage("User", "resigned");
-      publish('data:changed', { type: 'user', action: 'resigned' });
-    });
+    }
+    showSuccessMessage("User", "resigned");
+    publish('data:changed', { type: 'user', action: 'resigned' });
   };
 
   const getInitials = (name) => {
@@ -1589,8 +1643,12 @@ function ManageUsers() {
                       {editingUser ? "Update user information and documents." : "Register a new user and automatically send login credentials via email."}
                     </p>
                   </div>
+                  <AutoSaveIndicator isSaving={userSaving} lastSaved={userLastSaved} />
                 </div>
                 <div className="user-header-actions">
+                  <button type="button" className="task-save-draft-btn" onClick={handleSaveDraft} disabled={!newUser.fullName.trim() && !newUser.email.trim()}>
+                    Save Draft
+                  </button>
                   <LoadingButton type="button" className="primary-button" loading={submitting} onClick={handleSubmit}>
                     {submitting ? (editingUser ? "Updating User..." : "Creating User...") : (editingUser ? "Update User" : "Create User")}
                   </LoadingButton>
@@ -1648,7 +1706,7 @@ function ManageUsers() {
                           </>
                         )}
                       </div>
-                      <input id="avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) { setNewUser((prev) => ({ ...prev, avatar: file })); setAddIsDirty(true); } }} />
+                      <input id="avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) { setNewUser((prev) => ({ ...prev, avatar: file })); markDirty(); } }} />
                       {(newUser.avatar || newUser._existingAvatar) && (
                         <button type="button" className="avatar-remove-btn" onClick={() => setAvatarRemoveConfirmOpen(true)}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -1907,7 +1965,7 @@ function ManageUsers() {
                               return;
                             }
                             setNewUser((p) => ({ ...p, [key]: f || null }));
-                            setAddIsDirty(true);
+                            markDirty();
                           }}
                         />
                       </div>
@@ -1939,8 +1997,8 @@ function ManageUsers() {
                               ...p.otherDocument,
                               ...valid.map((f) => ({ file: f, customName: f.name.replace(/\.[^.]+$/, ""), renaming: false })),
                             ],
-                          }));
-                          setAddIsDirty(true);
+                           }));
+                          markDirty();
                         }
                         e.target.value = "";
                       }}
@@ -2006,15 +2064,13 @@ function ManageUsers() {
       </div>
     </DashboardLayout>
 
-    <ConfirmModal
+    <ResignationConfirmModal
       isOpen={resignConfirmOpen}
-      onClose={() => { setResignConfirmOpen(false); setResignUserId(null); }}
+      onClose={() => { setResignConfirmOpen(false); setResignUserId(null); setResignUser(null); setResignImpact(null); }}
       onConfirm={confirmResignUser}
-      title="Confirm Resignation"
-      message="Are you sure you want to resign? This action may affect your access and assigned responsibilities."
-      confirmText="Confirm Resignation"
-      cancelText="Cancel"
-      danger
+      user={resignUser}
+      impact={resignImpact}
+      loading={resignImpactLoading}
     />
 
     <ConfirmModal

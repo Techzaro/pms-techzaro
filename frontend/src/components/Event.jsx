@@ -5,7 +5,7 @@
  * Supports both single-date and multi-day events, all-day mode, and global assignment.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
@@ -15,7 +15,10 @@ import UserSelectDropdown from "./UserSelectDropdown";
 import LoadingButton from "./LoadingButton";
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import draftService from "../services/draftService";
+import useDraftGuard from "../hooks/useDraftGuard";
+import useAutoSave from "../hooks/useAutoSave";
+import AutoSaveIndicator from "./AutoSaveIndicator";
 import RichTextEditor from "./RichTextEditor";
 import "./Event.css";
 
@@ -65,8 +68,12 @@ const COLOR_MAP = {
  * @param {Function} [onEventCreated] - Callback when an event is created or updated
  * @param {Object|null} [editEvent=null] - Event object to edit (null for creation mode)
  */
-function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraftId = null }) {
+  const draftSaveRef = useRef(null);
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
+    draftSaveHandler: () => draftSaveRef.current?.(),
+    hasDraftFeature: true,
+  });
   useEscapeKey(isOpen, handleClose);
 
   const [step, setStep] = useState(1);
@@ -74,6 +81,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
   const [users, setUsers] = useState([]);
   const [assignedUserIds, setAssignedUserIds] = useState([]);
   const [isGlobal, setIsGlobal] = useState(false);
+  const [draftId, setDraftId] = useState(null);
   const getLocalDateStr = (d) => {
     const pad = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -90,6 +98,57 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
     eventType: "Meeting",
     eventTypeCustom: "",
     allDay: false,
+  });
+
+  const { lastSaved, isSaving, draftId: autoSaveDraftId } = useAutoSave({
+    draftId,
+    formData,
+    moduleType: "event",
+    enabled: isDirty,
+  });
+
+  useEffect(() => {
+    if (autoSaveDraftId && autoSaveDraftId !== draftId) {
+      setDraftId(autoSaveDraftId);
+    }
+  }, [autoSaveDraftId]);
+
+  const handleSaveDraft = async () => {
+    try {
+      const finalType = formData.eventType === "__custom__" ? formData.eventTypeCustom.trim() : (TYPE_MAP[formData.eventType] || "Meeting");
+      const draftData = {
+        title: formData.title,
+        description: formData.description,
+        start_date: formData.startDate,
+        start_time: formData.startTime,
+        end_date: formData.endDate,
+        end_time: formData.endTime,
+        has_end_date: formData.hasEndDate,
+        event_type: finalType || "Meeting",
+        event_type_custom: formData.eventTypeCustom,
+        all_day: formData.allDay,
+        assigned_user_ids: assignedUserIds,
+        is_global: isGlobal,
+      };
+      const payload = {
+        module_type: "event",
+        title: formData.title || "Untitled Event Draft",
+        draft_data: draftData,
+      };
+      if (draftId) {
+        await draftService.update(draftId, { title: payload.title, draft_data: payload.draft_data }, { skipNotify: true });
+      } else {
+        const data = await draftService.create(payload, { skipNotify: true });
+        if (data?.data?.id) setDraftId(data.data.id);
+      }
+      setIsDirty(false);
+    } catch (err) {
+      notify.error(err.message || "Save draft failed");
+    }
+  };
+
+  useEffect(() => {
+    draftSaveRef.current = handleSaveDraft;
   });
 
   const isEditing = !!editEvent;
@@ -146,6 +205,40 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
       .then((data) => setUsers(Array.isArray(data) ? data : (data.users || [])))
       .catch(() => setUsers([]));
   }, [isOpen]);
+
+  // Restore draft data when opened from DraftCenter
+  useEffect(() => {
+    if (!isOpen || !restoreDraftId) return;
+
+    const loadDraft = async () => {
+      try {
+        const data = await draftService.get(restoreDraftId);
+        const draft = data?.data;
+        if (!draft?.draft_data) return;
+
+        const d = draft.draft_data;
+        setFormData({
+          title: d.title || "",
+          description: d.description || "",
+          startDate: d.start_date || getLocalDateStr(new Date()),
+          startTime: d.start_time || "10:00",
+          endDate: d.end_date || getLocalDateStr(new Date()),
+          endTime: d.end_time || "11:00",
+          hasEndDate: d.has_end_date || false,
+          eventType: d.event_type ? (TYPE_MAP_REVERSE[d.event_type] || "__custom__") : "Meeting",
+          eventTypeCustom: d.event_type_custom || "",
+          allDay: d.all_day || false,
+        });
+        setAssignedUserIds(d.assigned_user_ids || []);
+        setIsGlobal(Boolean(d.is_global));
+        setDraftId(restoreDraftId);
+      } catch (err) {
+        console.error("Failed to restore draft:", err);
+      }
+    };
+
+    loadDraft();
+  }, [isOpen, restoreDraftId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -262,8 +355,16 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null }) {
       <div className="event-modal" onClick={(e) => e.stopPropagation()}>
 
         <div className="event-header">
-          <h2>{isEditing ? "Edit Event" : "Add New Event"}</h2>
-          <button className="event-close" onClick={handleClose}>×</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+            <h2 style={{ margin: 0 }}>{isEditing ? "Edit Event" : "Add New Event"}</h2>
+            <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
+          </div>
+          <div className="event-header-actions" style={{ display: "flex", gap: 8 }}>
+            <button className="event-save-draft-btn" onClick={handleSaveDraft} type="button">
+              Save Draft
+            </button>
+            <button className="event-close" onClick={handleClose}>×</button>
+          </div>
         </div>
 
         {step === 1 && (

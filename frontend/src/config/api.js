@@ -5,7 +5,7 @@
  * and cross-tab session synchronization.
  */
 
-import { getCurrentRole, getToken, clearSession } from "../utils/auth";
+import { getCurrentRole, getToken, clearSession, getSessionId } from "../utils/auth";
 import { notify } from "../utils/notify";
 
 /** @type {string} API base URL without trailing slashes */
@@ -25,18 +25,23 @@ window.fetch = async function (...args) {
     // Handle session expiration (401 Unauthorized)
     if (res.status === 401) {
       const tokenNow = getToken(role);
-      if (tokenNow && tokenNow === tokenAtRequest) {
+      const isTokenExpired = tokenNow && tokenNow === tokenAtRequest;
+      const isZombieTab = !tokenAtRequest && !tokenNow && role;
+      if (isTokenExpired || isZombieTab) {
         clearSession(role);
+        const reason = isZombieTab
+          ? "Your session is no longer valid. Please login again."
+          : "Your session has expired. Please login again.";
         try {
           const clone = res.clone();
           const data = await clone.json();
           if (data?.message === "resigned") {
             window.location.href = "/?message=" + encodeURIComponent("Your account has been resigned. You no longer have access.");
           } else {
-            window.location.href = "/?message=" + encodeURIComponent("Your session has expired. Please login again.");
+            window.location.href = "/?message=" + encodeURIComponent(reason);
           }
         } catch {
-          window.location.href = "/?message=" + encodeURIComponent("Your session has expired. Please login again.");
+          window.location.href = "/?message=" + encodeURIComponent(reason);
         }
       }
     }
@@ -75,16 +80,31 @@ export function invalidateCache() {}
 export function onMutation() {}
 
 // Cross-tab session synchronization
-// Detects when token changes in another tab and logs out this tab
+// Detects when our session is removed by another tab (e.g. logout, max tabs exceeded)
 let _sessionConflictHandled = false;
 window.addEventListener("storage", (e) => {
   if (!e.key || _sessionConflictHandled) return;
   const role = getCurrentRole();
   if (!role) return;
-  if (e.key === `token_${role}` && e.oldValue && e.newValue && e.oldValue !== e.newValue) {
-    _sessionConflictHandled = true;
-    clearSession(role);
-    window.location.href = "/?message=" + encodeURIComponent("You have been logged in from another tab.");
+  const sid = getSessionId();
+  if (!sid) return;
+
+  // Check if sessions_{role} was modified
+  if (e.key === `sessions_${role}` && e.newValue !== e.oldValue) {
+    try {
+      const sessions = JSON.parse(e.newValue || "{}");
+      if (!sessions[sid]) {
+        // Our session was removed by another tab
+        _sessionConflictHandled = true;
+        clearSession(role);
+        window.location.href = "/?message=" + encodeURIComponent("You have been logged in from another tab.");
+      }
+    } catch {
+      // Parse error — treat as session lost
+      _sessionConflictHandled = true;
+      clearSession(role);
+      window.location.href = "/?message=" + encodeURIComponent("Your session has been interrupted. Please login again.");
+    }
   }
 });
 

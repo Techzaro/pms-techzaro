@@ -236,22 +236,32 @@ class NotificationService
      */
     public function notifyDeliverableAdded($deliverable, $adder, array $recipientIds, string $contextType = 'task'): void
     {
-        $deliverable->loadMissing(['project:id,title', 'task:id,title']);
+        $deliverable->loadMissing(['project:id,title,business_id', 'task:id,title,business_id']);
 
         $projectName = $deliverable->project->title ?? '';
+        $projectCode = $deliverable->project->business_id ?? '';
         $taskName = $deliverable->task->title ?? '';
+        $taskCode = $deliverable->task->business_id ?? '';
         $deliverableName = $deliverable->title;
+        $subtaskCode = $deliverable->business_id ?? '';
 
         $contextLabel = $contextType === 'project' ? 'project' : 'task';
-        $message = 'A new deliverable "' . $deliverableName . '" has been added';
-        if ($taskName) $message .= ' under Task "' . $taskName . '"';
-        if ($projectName) $message .= ' in Project "' . $projectName . '"';
-        $message .= ' by ' . $adder->name . '.';
+        $message = 'A new deliverable "'.$deliverableName.'"';
+        if ($subtaskCode) $message .= ' ('.$subtaskCode.')';
+        $message .= ' has been added';
+        if ($taskName) $message .= ' under Task "'.$taskName.'"';
+        if ($taskCode) $message .= ' ('.$taskCode.')';
+        if ($projectName) $message .= ' in Project "'.$projectName.'"';
+        if ($projectCode) $message .= ' ('.$projectCode.')';
+        $message .= ' by '.$adder->name.'.';
 
         $changes = [
             'project_name' => $projectName,
+            'business_id' => $projectCode,
             'task_name' => $taskName,
+            'business_id' => $taskCode,
             'deliverable_name' => $deliverableName,
+            'business_id' => $subtaskCode,
             'deliverable_description' => $deliverable->description ?? '',
             'added_by_name' => $adder->name,
             'context_type' => $contextType,

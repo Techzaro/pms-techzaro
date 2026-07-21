@@ -27,6 +27,7 @@ import {
   MdKeyboardArrowDown,
   MdHistory,
   MdSettings,
+  MdEditNote,
 } from "react-icons/md";
 
 import "./Sidebar.css";
@@ -395,6 +396,16 @@ function Sidebar() {
           >
             <MdCalendarToday />
             Calendar
+          </Link>
+
+          {/* Drafts link */}
+          <Link
+            to={rolePath("drafts")}
+            className={`sidebar-link ${isActiveOrStart("drafts") ? "active" : ""}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MdEditNote />
+            <span>Drafts</span>
           </Link>
 
           <hr />

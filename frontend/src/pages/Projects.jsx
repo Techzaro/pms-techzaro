@@ -11,13 +11,14 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CreateProjectModal from "../components/CreateProjectModal";
 import EditProjectModal from "../components/EditProjectModal";
 
-import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
+import SortableTableWrapper from "../components/SortableTableWrapper";
+import SmartDragHandle from "../components/SmartDragHandle";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 
 import { GoDotFill } from "react-icons/go";
@@ -71,6 +72,7 @@ const STATUS_TEXT_COLORS = {
 /** Main Projects page — renders project cards with search, filters and pagination. */
 function Projects() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -87,6 +89,7 @@ function Projects() {
   const [showAll, setShowAll] = useState(false);
   const [viewMode, setViewMode] = useState("card");
   const [orderedProjects, setOrderedProjects] = useState([]);
+  const [restoreDraftId, setRestoreDraftId] = useState(null);
   const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
@@ -164,6 +167,15 @@ function Projects() {
   useEffect(() => {
     fetchProjects();
   }, [statusFilter]);
+
+  // Handle draft restoration from DraftCenter
+  useEffect(() => {
+    const draftId = location.state?.openDraft;
+    if (!draftId) return;
+    window.history.replaceState({}, document.title);
+    setRestoreDraftId(draftId);
+    setShowModal(true);
+  }, [location.state]);
 
   useAutoRefresh(fetchProjects, {
     events: ['project:created', 'project:updated', 'project:deleted', 'data:changed'],
@@ -408,7 +420,7 @@ function Projects() {
                     <div className="projects-card" key={project.id}>
                       {/* DRAG HANDLE */}
                       <div className="project-card-drag-handle">
-                        <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                          <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={project.business_id} />
                       </div>
                       {/* HEADER */}
                       <div className="project-card-header">
@@ -590,7 +602,7 @@ function Projects() {
                     <div className="project-list-row" key={project.id}>
                       <div className="col-project-name">
                         <div className="project-name-drag-handle">
-                          <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                        <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={project.business_id} />
                         </div>
                         <div className="project-name-text">{project.title}</div>
                       </div>
@@ -677,8 +689,10 @@ function Projects() {
       {showModal && (
         <div className="modal-overlay">
           <CreateProjectModal
+            restoreDraftId={restoreDraftId}
             onClose={(created) => {
               setShowModal(false);
+              setRestoreDraftId(null);
               if (created) fetchProjects();
             }}
           />

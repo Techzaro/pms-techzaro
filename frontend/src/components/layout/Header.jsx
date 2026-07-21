@@ -151,7 +151,8 @@ function Header() {
 
   /**
    * Performs a combined search across local page links and remote APIs
-   * (projects, tasks, users). Results are limited to 5 per category.
+   * (projects, tasks, users, deliverables via new search endpoint).
+   * Results are limited to 5 per category.
    */
   const handleSearch = async (query) => {
 
@@ -165,34 +166,29 @@ function Header() {
     let matchedProjects = [];
     let matchedTasks = [];
     let matchedUsers = [];
+    let matchedDeliverables = [];
 
-    // 2. Fetch and filter remote data in parallel
+    // 2. Use the dedicated search endpoint for entities
     try {
       const token = authToken();
       const headers = { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" };
 
-      const [projRes, taskRes, userRes] = await Promise.allSettled([
-        fetch(`${API_URL}/projects`, { headers, skipLoader: true }),
-        fetch(`${API_URL}/my-tasks`, { headers, skipLoader: true }),
+      const [searchRes, userRes] = await Promise.allSettled([
+        fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`, { headers, skipLoader: true }),
         fetch(`${API_URL}/users`, { headers, skipLoader: true }),
       ]);
 
-      if (projRes.status === "fulfilled" && projRes.value.ok) {
-        const projData = await projRes.value.json();
-        const projList = projData.projects ?? projData ?? [];
-        matchedProjects = projList
-          .filter((p) => p.title?.toLowerCase().includes(q))
+      if (searchRes.status === "fulfilled" && searchRes.value.ok) {
+        const data = await searchRes.value.json();
+        matchedProjects = (data.projects || [])
           .slice(0, 5)
-          .map((p) => ({ id: p.id, name: p.title, path: rolePath(`projects/project-details/${p.id}`) }));
-      }
-
-      if (taskRes.status === "fulfilled" && taskRes.value.ok) {
-        const taskData = await taskRes.value.json();
-        const taskList = taskData.tasks ?? taskData ?? [];
-        matchedTasks = taskList
-          .filter((t) => t.name?.toLowerCase().includes(q) || t.title?.toLowerCase().includes(q))
+          .map((p) => ({ id: p.id, name: p.title, code: p.business_id, path: rolePath(`projects/project-details/${p.id}`) }));
+        matchedTasks = (data.tasks || [])
           .slice(0, 5)
-          .map((t) => ({ id: t.id, name: t.name || t.title, path: rolePath(`tasks/task-details/${t.id}`) }));
+          .map((t) => ({ id: t.id, name: t.title, code: t.business_id, path: rolePath(`tasks/task-details/${t.id}`) }));
+        matchedDeliverables = (data.deliverables || [])
+          .slice(0, 5)
+          .map((d) => ({ id: d.id, name: d.title, code: d.business_id, path: rolePath(`deliveries/deliverable-details/${d.id}`) }));
       }
 
       if (userRes.status === "fulfilled" && userRes.value.ok) {
@@ -207,7 +203,7 @@ function Header() {
       // API not available, show only page results
     }
 
-    setSearchResults({ pages: matchedPages, projects: matchedProjects, tasks: matchedTasks, users: matchedUsers });
+    setSearchResults({ pages: matchedPages, projects: matchedProjects, tasks: matchedTasks, deliverables: matchedDeliverables, users: matchedUsers });
     setShowSearchDropdown(true);
   };
 
@@ -435,7 +431,7 @@ function Header() {
 
           {showSearchDropdown && (
             <div className="search-dropdown">
-              {searchResults.pages.length === 0 && searchResults.projects.length === 0 && searchResults.tasks.length === 0 && searchResults.users.length === 0 ? (
+              {searchResults.pages.length === 0 && searchResults.projects.length === 0 && searchResults.tasks.length === 0 && searchResults.deliverables.length === 0 && searchResults.users.length === 0 ? (
                 <div className="search-dropdown-empty">No results found</div>
               ) : (
                 <>
@@ -456,7 +452,10 @@ function Header() {
                       {searchResults.projects.map((item) => (
                         <div key={item.id} className="search-dropdown-item" onClick={() => handleSearchSelect(item.path)}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-                          <span>{item.name}</span>
+                          <div>
+                            <span>{item.name}</span>
+                            {item.code && <span style={{ fontSize: 11, color: "#10b981", fontWeight: 700, marginLeft: 6 }}>{item.code}</span>}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -467,7 +466,24 @@ function Header() {
                       {searchResults.tasks.map((item) => (
                         <div key={item.id} className="search-dropdown-item" onClick={() => handleSearchSelect(item.path)}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-                          <span>{item.name}</span>
+                          <div>
+                            <span>{item.name}</span>
+                            {item.code && <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700, marginLeft: 6 }}>{item.code}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {searchResults.deliverables.length > 0 && (
+                    <div className="search-dropdown-section">
+                      <div className="search-dropdown-label">Subtasks</div>
+                      {searchResults.deliverables.map((item) => (
+                        <div key={item.id} className="search-dropdown-item" onClick={() => handleSearchSelect(item.path)}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                          <div>
+                            <span>{item.name}</span>
+                            {item.code && <span style={{ fontSize: 11, color: "#8b5cf6", fontWeight: 700, marginLeft: 6 }}>{item.code}</span>}
+                          </div>
                         </div>
                       ))}
                     </div>

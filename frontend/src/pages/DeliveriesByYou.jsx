@@ -7,18 +7,19 @@
  * - View modal to review submissions (approve/reject actions)
  * - Deep-linking support via ?selectedDeliverable= param
  */
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import { authToken, rolePath } from "../utils/auth";
+import { authToken, getUser, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
-import AssignerViewModal from "../components/AssignerViewModal";
+import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import { formatDateTimeInline } from "../utils/formatDateTime";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
+import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
@@ -26,19 +27,23 @@ import "../pages/Task.css";
 /** Background colors for status badges */
 const STATUS_COLORS = {
   pending: "#FEF3C7",
+  in_progress: "#DBEAFE",
+  paused: "#FEF3C7",
   submitted: "#DBEAFE",
+  reopened: "#EDE9FE",
   approved: "#DCFCE7",
   rejected: "#FEE2E2",
-  reopened: "#FEF3C7",
 };
 
 /** Text colors for status badges */
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
+  in_progress: "#1E40AF",
+  paused: "#92400E",
   submitted: "#1E40AF",
+  reopened: "#5B21B6",
   approved: "#166534",
   rejected: "#991B1B",
-  reopened: "#92400E",
 };
 
 /**
@@ -47,27 +52,35 @@ const STATUS_TEXT_COLORS = {
  */
 function DeliveriesByYou() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [subtasks, setSubtasks] = useState([]);
   const [orderedSubtasks, setOrderedSubtasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(() => {
     const status = searchParams.get("status");
     if (status) return status;
     return "";
   });
   const [timeFilter, setTimeFilter] = useState("");
-  const [viewModal, setViewModal] = useState({ open: false, subtask: null });
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const ITEMS_PER_PAGE = 10;
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Fetch subtasks assigned by the current user from API
   const fetchSubtasks = () => {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
-    if (search) params.append("search", search);
+    if (debouncedSearch) params.append("search", debouncedSearch);
     if (statusFilter) params.append("status", statusFilter);
     if (timeFilter) params.append("time_filter", timeFilter);
 
@@ -86,7 +99,7 @@ function DeliveriesByYou() {
 
   useEffect(() => {
     fetchSubtasks();
-  }, [search, statusFilter, timeFilter]);
+  }, [debouncedSearch, statusFilter, timeFilter]);
 
   useAutoRefresh(fetchSubtasks, { events: ['deliverable:updated', 'deliverable:created', 'deliverable:deleted', 'data:changed'] });
 
@@ -107,7 +120,7 @@ function DeliveriesByYou() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.deliverable) {
-          setViewModal({ open: true, subtask: data.deliverable });
+          navigate(rolePath(`deliveries/deliverable-details/${data.deliverable.id}`), { state: { from: "deliveries-by-you" } });
         }
       })
       .catch(() => { });
@@ -173,33 +186,44 @@ function DeliveriesByYou() {
   const formatStatus = (status) => {
     const map = {
       pending: "Pending",
+      in_progress: "In Progress",
+      paused: "Paused",
       submitted: "Submitted",
+      reopened: "Reopened",
       approved: "Approved",
       rejected: "Declined",
-      reopened: "Reopened",
     };
     return map[status] || status;
   };
 
-  // Update local state after approve/reject action from the AssignerViewModal
-  const handleActionSuccess = (updatedSubtask) => {
-    setSubtasks((prev) =>
-      prev.map((d) => (d.id === updatedSubtask.id ? { ...d, ...updatedSubtask } : d))
-    );
-  };
-
   const displayItems = orderedSubtasks.length ? orderedSubtasks : subtasks;
+  const currentUser = getUser();
+  const canCreateSubtask = currentUser && ["admin", "manager", "team_lead"].includes(currentUser.role);
+
+  const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
+  const inProgressStatuses = ["in_progress", "In Progress", "In-progress"];
 
   const allCount = displayItems.length;
   const dueTodayCount = displayItems.filter((i) => { const d = i.due_date ? new Date(i.due_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length;
-  const pendingCount = displayItems.filter((i) => i.status === "pending").length;
+  const pendingCount = displayItems.filter((i) => pendingStatuses.includes(i.status)).length;
+  const inProgressCount = displayItems.filter((i) => inProgressStatuses.includes(i.status)).length;
+  const pausedCount = displayItems.filter((i) => i.status === "paused").length;
   const submittedCount = displayItems.filter((i) => i.status === "submitted").length;
   const reopenedCount = displayItems.filter((i) => i.status === "reopened").length;
   const approvedCount = displayItems.filter((i) => i.status === "approved").length;
   const rejectedCount = displayItems.filter((i) => i.status === "rejected").length;
 
-  const totalPages = showAll ? 1 : Math.ceil(displayItems.length / ITEMS_PER_PAGE);
-  const paginatedItems = showAll ? displayItems : displayItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const filteredItems = statusFilter && statusFilter !== "due_today"
+    ? displayItems.filter((item) => {
+        if (statusFilter === "pending") {
+          return pendingStatuses.includes(item.status);
+        }
+        return item.status === statusFilter;
+      })
+    : displayItems;
+
+  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
+  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   const breadcrumbs = [
     { label: "Subtasks", path: rolePath("deliveries") },
@@ -216,6 +240,11 @@ function DeliveriesByYou() {
             <p>Subtasks assigned to others from tasks and projects you created</p>
           </div>
           <div className="header-actions">
+            {canCreateSubtask && (
+              <button className="add-btn" onClick={() => setShowCreateModal(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "var(--color-primary)", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+                + Create Subtask
+              </button>
+            )}
             <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="reports-filter">
               <option value="">All Time</option>
               <option value="7">Last 7 Days</option>
@@ -232,6 +261,12 @@ function DeliveriesByYou() {
           </p>
           <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Pending ({pendingCount})
+          </p>
+          <p className={`InProgress ${statusFilter === "in_progress" ? "active" : ""}`} onClick={() => selectStatusFilter("in_progress")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> In Progress ({inProgressCount})
+          </p>
+          <p className={`Paused ${statusFilter === "paused" ? "active" : ""}`} onClick={() => selectStatusFilter("paused")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Paused ({pausedCount})
           </p>
           <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Submitted ({submittedCount})
@@ -255,7 +290,7 @@ function DeliveriesByYou() {
         <div className="container">
           {/* Header - Div based */}
           <div className="deliveries-table-header">
-            <div></div>
+            <div>ID</div>
             <div>Assigned To</div>
             <div>Subtask</div>
             <div>Task</div>
@@ -266,7 +301,7 @@ function DeliveriesByYou() {
 
           {loading ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
-          ) : displayItems.length === 0 ? (
+          ) : filteredItems.length === 0 ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No subtasks found</div>
           ) : (
             <div className="sortable-table-container">
@@ -275,7 +310,7 @@ function DeliveriesByYou() {
                 const colors = getRandomColors(item.id);
                 return (
                   <div className="deliveries-table-row" key={`subtask-${item.id}-${index}`}>
-                    <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                    <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={item.business_id} color="#16a34a" />
                     <div>
                       <div className="user-box">
                         <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
@@ -333,7 +368,7 @@ function DeliveriesByYou() {
                         <button
                           className="action-icon-btn action-view"
                           title="View"
-                          onClick={() => setViewModal({ open: true, subtask: item })}
+                          onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "deliveries-by-you" } })}
                         >
                           <IoEyeOutline />
                         </button>
@@ -352,13 +387,13 @@ function DeliveriesByYou() {
         <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
       )}
 
-      <AssignerViewModal
-        key={`avm-${viewModal.subtask?.id || "none"}`}
-        isOpen={viewModal.open}
-        onClose={() => setViewModal({ open: false, subtask: null })}
-        deliverable={viewModal.subtask}
-        onActionSuccess={handleActionSuccess}
-      />
+      {showCreateModal && (
+        <CreateDeliverableModel
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onCreated={() => { setShowCreateModal(false); fetchSubtasks(); }}
+        />
+      )}
     </DashboardLayout>
   );
 }

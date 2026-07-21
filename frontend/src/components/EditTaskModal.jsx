@@ -5,11 +5,12 @@
  * Includes special handling for self-assigned tasks.
  */
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import draftService from "../services/draftService";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
 import LoadingButton from "./LoadingButton";
@@ -18,8 +19,11 @@ import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useDraftGuard from "../hooks/useDraftGuard";
+import useAutoSave from "../hooks/useAutoSave";
+import AutoSaveIndicator from "./AutoSaveIndicator";
 import RichTextEditor from "./RichTextEditor";
+import CreateSubtaskModal from "./layout/CreateDeliverableModel";
 import "./layout/CreateTaskModal.css";
 
 const REPEAT_OPTIONS = [
@@ -128,9 +132,26 @@ function generatePreview(templates, settings, startDate, endDate) {
  * @param {Function} onClose - Callback to close modal; receives boolean (true if saved)
  */
 export default function EditTaskModal({ task, onClose }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  const draftSaveRef = useRef(null);
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
+    draftSaveHandler: () => draftSaveRef.current?.(),
+    hasDraftFeature: true,
+  });
   useEscapeKey(true, handleClose);
+
+  const userInteractedRef = useRef(false);
+  useEffect(() => {
+    const markInteracted = () => { userInteractedRef.current = true; };
+    window.addEventListener("keydown", markInteracted, { once: true, capture: true });
+    window.addEventListener("mousedown", markInteracted, { once: true, capture: true });
+    return () => {
+      window.removeEventListener("keydown", markInteracted, { capture: true });
+      window.removeEventListener("mousedown", markInteracted, { capture: true });
+    };
+  }, []);
+  const markDirty = useCallback(() => { if (userInteractedRef.current) setIsDirty(true); }, [setIsDirty]);
   const [container, setContainer] = useState(null);
+  const [draftId, setDraftId] = useState(null);
 
   useEffect(() => {
     setContainer(document.body);
@@ -193,6 +214,46 @@ export default function EditTaskModal({ task, onClose }) {
   const [editFileNewFile, setEditFileNewFile] = useState(null);
   const [editFileDeleted, setEditFileDeleted] = useState(false);
   const [editFileDeleteConfirm, setEditFileDeleteConfirm] = useState(false);
+  const [openSubtaskCreator, setOpenSubtaskCreator] = useState(false);
+
+  const { lastSaved, isSaving, draftId: autoSaveDraftId } = useAutoSave({
+    draftId,
+    formData: form,
+    moduleType: "task",
+    enabled: isDirty,
+    project_id: form.project_id || task?.project_id,
+  });
+
+  useEffect(() => {
+    if (autoSaveDraftId && autoSaveDraftId !== draftId) {
+      setDraftId(autoSaveDraftId);
+    }
+  }, [autoSaveDraftId]);
+
+  const handleSaveDraft = async () => {
+    try {
+      const payload = {
+        module_type: "task",
+        original_record_id: task?.id,
+        title: form.title || "Untitled Task Draft",
+        draft_data: { ...form, subtasks: subtasks },
+        project_id: form.project_id || task?.project_id,
+      };
+      if (draftId) {
+        await draftService.update(draftId, { title: payload.title, draft_data: payload.draft_data }, { skipNotify: true });
+      } else {
+        const data = await draftService.create(payload, { skipNotify: true });
+        if (data?.data?.id) setDraftId(data.data.id);
+      }
+      setIsDirty(false);
+    } catch (err) {
+      console.error("Save draft failed:", err);
+    }
+  };
+
+  useEffect(() => {
+    draftSaveRef.current = handleSaveDraft;
+  });
 
   // Determine if this is a self-assigned task (created by current user and assigned only to themselves)
   const isSelfTask = currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10) && selectedAssigneeIds.length === 1 && selectedAssigneeIds[0] === parseInt(currentUser.id, 10);
@@ -227,6 +288,28 @@ export default function EditTaskModal({ task, onClose }) {
   }, []);
 
   useEffect(() => {
+    const token = authToken();
+    if (!form.project_id) {
+      if (allUsers.length) setDisplayUsers(allUsers);
+      return;
+    }
+    const currentUser = getUser();
+    fetch(`${API_URL}/projects/${form.project_id}/members`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((d) => {
+        let members = Array.isArray(d) ? d : [];
+        if (currentUser && !members.some((u) => u.id === currentUser.id)) {
+          members = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department }, ...members];
+        }
+        setDisplayUsers(members.length ? members : allUsers);
+      })
+      .catch(() => { if (allUsers.length) setDisplayUsers(allUsers); });
+  }, [form.project_id, allUsers]);
+
+  useEffect(() => {
     if (openSubtaskDropdown === null) return;
     const handleClick = () => setOpenSubtaskDropdown(null);
     document.addEventListener("click", handleClick);
@@ -234,34 +317,33 @@ export default function EditTaskModal({ task, onClose }) {
   }, [openSubtaskDropdown]);
 
   const handleChange = (e) => {
-    setIsDirty(true);
+    markDirty();
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleRecurringSettingChange = (field, value) => { setIsDirty(true); setRecurrenceSettings((prev) => ({ ...prev, [field]: value })); };
+  const handleRecurringSettingChange = (field, value) => { markDirty(); setRecurrenceSettings((prev) => ({ ...prev, [field]: value })); };
 
-  const handleAddTemplate = () => { setIsDirty(true); setRecurringTemplates((prev) => [...prev, { title: "", description: "", quantity: 1, combined: false }]); };
-  const handleRemoveTemplate = (index) => { setIsDirty(true); setRecurringTemplates((prev) => prev.filter((_, i) => i !== index)); };
-  const handleTemplateChange = (index, field, value) => { setIsDirty(true); setRecurringTemplates((prev) => {
+  const handleAddTemplate = () => { markDirty(); setRecurringTemplates((prev) => [...prev, { title: "", description: "", quantity: 1, combined: false }]); };
+  const handleRemoveTemplate = (index) => { markDirty(); setRecurringTemplates((prev) => prev.filter((_, i) => i !== index)); };
+  const handleTemplateChange = (index, field, value) => { markDirty(); setRecurringTemplates((prev) => {
     const next = [...prev];
     next[index] = { ...next[index], [field]: value };
     return next;
   }); };
 
   const handleAssignedToChange = (ids) => {
-    setIsDirty(true);
-    setSelectedAssigneeIds(ids);
+    setSelectedAssigneeIds((prev) => { if (JSON.stringify(prev) !== JSON.stringify(ids)) markDirty(); return ids; });
   };
 
   const handleAddRequirement = () => {
     if (!reqInput.trim()) return;
-    setIsDirty(true);
+    markDirty();
     setRequirementsList((prev) => [...prev, reqInput.trim()]);
     setReqInput("");
   };
 
   const handleRemoveRequirement = (index) => {
-    setIsDirty(true);
+    markDirty();
     setRequirementsList((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -273,13 +355,13 @@ export default function EditTaskModal({ task, onClose }) {
     if (!subtaskInput.title.trim()) return;
     const startDate = subtaskInput.start_datetime ? toUTCIso(subtaskInput.start_datetime) : null;
     const dueDate = subtaskInput.due_datetime ? toUTCIso(subtaskInput.due_datetime) : null;
-    setIsDirty(true);
+    markDirty();
     setSubtasks((prev) => [...prev, { title: subtaskInput.title.trim(), start_date: startDate, due_date: dueDate, assigned_to: null }]);
     setSubtaskInput({ title: "", start_datetime: "", due_datetime: "" });
   };
 
   const handleRemoveSubtask = (index) => {
-    setIsDirty(true);
+    markDirty();
     setSubtasks((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -315,7 +397,7 @@ export default function EditTaskModal({ task, onClose }) {
     console.log("[EditTaskModal] handleFiles called with", fileList.length, "files");
     const arr = Array.from(fileList);
     console.log("[EditTaskModal] file names:", arr.map(f => f.name));
-    setIsDirty(true);
+    markDirty();
     setPendingFiles((prev) => {
       const next = [...prev, ...arr.map((f) => ({ file: f, name: f.name, size: f.size, renaming: false }))];
       console.log("[EditTaskModal] pendingFiles updated, new length:", next.length);
@@ -343,7 +425,7 @@ export default function EditTaskModal({ task, onClose }) {
   };
 
   const handleRemoveFile = (index) => {
-    setIsDirty(true);
+    markDirty();
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -364,14 +446,14 @@ export default function EditTaskModal({ task, onClose }) {
     let url = linkInput.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     const name = linkTitleInput.trim() || url;
-    setIsDirty(true);
+    markDirty();
     setLinks((prev) => [...prev, { url, name, renaming: false }]);
     setLinkInput("");
     setLinkTitleInput("");
   };
 
   const handleRemoveLink = (index) => {
-    setIsDirty(true);
+    markDirty();
     setLinks((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -532,8 +614,13 @@ export default function EditTaskModal({ task, onClose }) {
               <h2>{isSelfTask ? "Edit Self Task" : "Edit Task"}</h2>
               <p>Update task details</p>
             </div>
+            <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
           </div>
           <div className="task-header-actions">
+            <button className="task-save-draft-btn" onClick={handleSaveDraft} type="button">
+              Save Draft
+            </button>
+            <LoadingButton className="task-create-btn" onClick={() => setOpenSubtaskCreator(true)}>⊕ Create Subtask</LoadingButton>
             <LoadingButton className="task-create-btn" onClick={handleSubmit} loading={submitting}>
               Save Changes
             </LoadingButton>
@@ -553,7 +640,7 @@ export default function EditTaskModal({ task, onClose }) {
                 <CustomSelect
                   name="project_id"
                   value={form.project_id}
-                  onChange={(val) => { setIsDirty(true); setForm((prev) => ({ ...prev, project_id: val })); }}
+                  onChange={(val) => { setForm((prev) => ({ ...prev, project_id: val })); setSelectedAssigneeIds([]); markDirty(); }}
                   placeholder="Select project"
                   options={[{ value: "", label: "No Project" }, ...projects.map((p) => ({ value: p.id, label: p.title }))]}
                 />
@@ -590,7 +677,7 @@ export default function EditTaskModal({ task, onClose }) {
               <label>Description</label>
               <RichTextEditor
                 value={form.description}
-                onChange={(val) => { setIsDirty(true); setForm((prev) => ({ ...prev, description: val })); }}
+                onChange={(val) => { const clean = (s) => (s || "").replace(/<[^>]*>/g, "").trim(); setForm((prev) => ({ ...prev, description: val })); markDirty(); }}
                 placeholder="Enter task description..."
               />
             </div>
@@ -707,14 +794,14 @@ export default function EditTaskModal({ task, onClose }) {
                   type="text"
                   placeholder="Link title (e.g. Figma Design, Drive Folder)"
                   value={linkTitleInput}
-                  onChange={(e) => { setIsDirty(true); setLinkTitleInput(e.target.value); }}
+                  onChange={(e) => { setLinkTitleInput(e.target.value); markDirty(); }}
                 />
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
                     type="text"
                     placeholder="Paste link (Drive, Figma, Website, etc.)"
                     value={linkInput}
-                    onChange={(e) => { setIsDirty(true); setLinkInput(e.target.value); }}
+                    onChange={(e) => { setLinkInput(e.target.value); markDirty(); }}
                     onKeyDown={handleLinkKeyDown}
                     style={{ flex: 1 }}
                   />
@@ -800,12 +887,12 @@ export default function EditTaskModal({ task, onClose }) {
           {/* RIGHT SIDE */}
           <div className="task-right">
 
-            <div className="task-card">
+            <div className="task-field">
               <label>Priority <span style={{ color: "#ef4444" }}>*</span></label>
               <CustomSelect
                 name="priority"
                 value={form.priority}
-                onChange={(val) => { setIsDirty(true); setForm((prev) => ({ ...prev, priority: val })); }}
+                onChange={(val) => { setForm((prev) => ({ ...prev, priority: val })); markDirty(); }}
                 options={[
                   { value: "Medium", label: "Medium" },
                   { value: "Low", label: "Low" },
@@ -821,7 +908,7 @@ export default function EditTaskModal({ task, onClose }) {
                   type="text"
                   placeholder="Enter a requirement"
                   value={reqInput}
-                  onChange={(e) => { setIsDirty(true); setReqInput(e.target.value); }}
+                  onChange={(e) => { setReqInput(e.target.value); markDirty(); }}
                   onKeyDown={handleReqKeyDown}
                 />
                 <button
@@ -851,13 +938,34 @@ export default function EditTaskModal({ task, onClose }) {
                 </div>
               )}
             </div>
+
+            {/* DATES */}
+            <div className="task-card">
+              <div className="task-card-top"><span>Dates</span></div>
+              <div className="task-deadline-grid">
+                <div>
+                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
+                    <input type="datetime-local" value={form.start_date}
+                      onChange={(e) => { setForm((prev) => ({ ...prev, start_date: e.target.value })); markDirty(); }}
+                    min={getNowDatetimeLocal()} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
+                    <input type="datetime-local" value={form.end_date}
+                      onChange={(e) => { setForm((prev) => ({ ...prev, end_date: e.target.value })); markDirty(); }}
+                    min={getNowDatetimeLocal()}
+                    max={task.project?.end_date ? toDatetimeLocal(task.project.end_date) : undefined} />
+                  {task.project?.end_date && <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(task.project.end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
+                </div>
+              </div>
+            </div>
+
             {/* TASK TYPE */}
             <div className="task-card">
               <label>Task Type</label>
               <CustomSelect name="task_type" value={form.task_type}
                 onChange={(val) => {
-                  setIsDirty(true);
-                  setForm((prev) => ({ ...prev, task_type: val }));
+                  setForm((prev) => ({ ...prev, task_type: val })); markDirty();
                   if (val === "recurring" && recurringTemplates.length === 0) {
                     setRecurringTemplates([{ title: "", description: "", quantity: 1, combined: false }]);
                   }
@@ -973,163 +1081,6 @@ export default function EditTaskModal({ task, onClose }) {
                 )}
               </>
             )}
-
-            {/* DATES */}
-            <div className="task-card">
-              <div className="task-card-top"><span>Dates</span></div>
-              <div className="task-deadline-grid">
-                <div>
-                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
-                  <input type="datetime-local" value={form.start_date}
-                    onChange={(e) => { setIsDirty(true); setForm((prev) => ({ ...prev, start_date: e.target.value })); }}
-                    min={getNowDatetimeLocal()} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
-                  <input type="datetime-local" value={form.end_date}
-                    onChange={(e) => { setIsDirty(true); setForm((prev) => ({ ...prev, end_date: e.target.value })); }}
-                    min={getNowDatetimeLocal()}
-                    max={task.project?.end_date ? toDatetimeLocal(task.project.end_date) : undefined} />
-                  {task.project?.end_date && <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(task.project.end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
-                </div>
-              </div>
-            </div>
-
-            {/* SUBTASKS */}
-            <div className="task-card">
-              <div className="task-card-top">
-                <span>Subtasks</span>
-              </div>
-              <div className="task-deadline-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-                <div className="task-field">
-                  <label style={{ fontSize: "13px" }}>Subtask Name</label>
-                  <input
-                    type="text"
-                    placeholder="Enter subtask name"
-                    value={subtaskInput.title}
-                    onChange={(e) => { setIsDirty(true); setSubtaskInput((prev) => ({ ...prev, title: e.target.value })); }}
-                    onKeyDown={handleSubtaskKeyDown}
-                  />
-                </div>
-                <div className="task-field">
-                  <label style={{ fontSize: "13px" }}>Start Date & Time</label>
-                  <input
-                    type="datetime-local"
-                    value={subtaskInput.start_datetime}
-                    min={form.start_date || getNowDatetimeLocal()}
-                    max={form.end_date || undefined}
-                    onChange={(e) => {
-                      setIsDirty(true);
-                      const val = e.target.value;
-                      setSubtaskInput((prev) => ({ ...prev, start_datetime: val }));
-                    }}
-                  />
-                </div>
-                <div className="task-field">
-                  <label style={{ fontSize: "13px" }}>Due Date & Time</label>
-                  <input
-                    type="datetime-local"
-                    value={subtaskInput.due_datetime}
-                    min={subtaskInput.start_datetime || getNowDatetimeLocal()}
-                    max={form.end_date || undefined}
-                    onChange={(e) => {
-                      setIsDirty(true);
-                      const val = e.target.value;
-                      if (subtaskInput.start_datetime && val && val < subtaskInput.start_datetime) {
-                        setSubtaskInput((prev) => ({ ...prev, due_datetime: subtaskInput.start_datetime }));
-                      } else if (form.end_date && val && val > form.end_date) {
-                        setSubtaskInput((prev) => ({ ...prev, due_datetime: form.end_date }));
-                      } else {
-                        setSubtaskInput((prev) => ({ ...prev, due_datetime: val }));
-                      }
-                    }}
-                  />
-                  {form.end_date && (
-                    <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(form.end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                  )}
-                </div>
-              </div>
-              {subtaskInput.start_datetime && subtaskInput.due_datetime && subtaskInput.due_datetime < subtaskInput.start_datetime && (
-                <span style={{ fontSize: 12, color: "#dc2626", marginTop: 4, display: "block" }}>Due Date cannot be earlier than Start Date</span>
-              )}
-              <button
-                type="button"
-                className="task-add-phase-btn"
-                onClick={handleAddSubtask}
-                disabled={!subtaskInput.title.trim() || !subtaskInput.start_datetime || !subtaskInput.due_datetime || (subtaskInput.start_datetime && subtaskInput.due_datetime && subtaskInput.due_datetime < subtaskInput.start_datetime)}
-              >
-                + Add Subtask
-              </button>
-              {subtasks.length > 0 && (
-                <div className="task-phase-list">
-                  {subtasks.map((d, index) => {
-                    const assignedUser = d.assigned_to ? displayUsers.find(u => String(u.id) === String(d.assigned_to)) : null;
-                    const isDropdownOpen = openSubtaskDropdown === index;
-                    return (
-                    <div key={index} className="task-phase-item" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #f3f4f6", position: "relative" }}>
-                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#8b5cf6", display: "inline-block", flexShrink: 0 }}></span>
-                      <span style={{ flex: 1, fontSize: 13, color: "#374151" }}>{d.title}</span>
-                      <span style={{ fontSize: 11, color: "#6b7280", whiteSpace: "pre-line" }}>
-                        {d.start_date ? formatDateTime(d.start_date).replace("\n", " ") : ""}
-                        {d.start_date && d.due_date ? "\n" : ""}
-                        {d.due_date ? formatDateTime(d.due_date).replace("\n", " ") : "No due date"}
-                      </span>
-                      <div style={{ position: "relative" }}>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setOpenSubtaskDropdown(isDropdownOpen ? null : index); }}
-                          style={{
-                            fontSize: 11, cursor: "pointer", padding: "3px 8px", borderRadius: 4, border: "1px solid #e5e7eb",
-                            background: assignedUser ? "#eef2ff" : "#f9fafb", color: assignedUser ? "#6366f1" : "#6b7280",
-                            fontWeight: 500, whiteSpace: "nowrap",
-                          }}
-                        >
-                          {assignedUser ? assignedUser.name : "Assign"}
-                        </button>
-                        {isDropdownOpen && (
-                          <div onClick={(e) => e.stopPropagation()} style={{
-                            position: "absolute", bottom: "100%", right: 0, zIndex: 100,
-                            background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
-                            boxShadow: "0 4px 12px rgba(0,0,0,0.1)", minWidth: 150, padding: "4px 0", marginBottom: 4,
-                          }}>
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); handleSubtaskAssignee(index, null); }}
-                              style={{
-                                display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
-                                fontSize: 12, cursor: "pointer", background: !assignedUser ? "#f3f4f6" : "transparent",
-                                border: "none", color: "#374151",
-                              }}
-                            >
-                              All assignees
-                            </button>
-                            {displayUsers.filter(u => selectedAssigneeIds.includes(u.id)).map((u) => (
-                              <button
-                                key={u.id}
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); handleSubtaskAssignee(index, u.id); }}
-                                style={{
-                                  display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
-                                  fontSize: 12, cursor: "pointer",
-                                  background: String(d.assigned_to) === String(u.id) ? "#f3f4f6" : "transparent",
-                                  border: "none", color: "#374151",
-                                }}
-                              >
-                                <span>{u.name}</span>
-                                {u.role && <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 6 }}>({u.role.replace("_", " ")})</span>}
-                                {u.department && <span style={{ fontSize: 10, fontWeight: 500, color: "#4f46e5", background: "#eef2ff", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>{u.department}</span>}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "subtask", index, id: "" }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
-                    </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
 
           </div>
 
@@ -1328,6 +1279,15 @@ export default function EditTaskModal({ task, onClose }) {
         danger
       />
       {ConfirmDialog}
+      {openSubtaskCreator && (
+        <CreateSubtaskModal
+          onClose={() => setOpenSubtaskCreator(false)}
+          projectId={task.project_id || null}
+          taskId={task.id || null}
+          taskTitle={task.title || null}
+          onCreated={() => setOpenSubtaskCreator(false)}
+        />
+      )}
     </>
   );
 }

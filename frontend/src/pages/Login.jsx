@@ -13,7 +13,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import API_URL from "../config/api";
-import { saveSession, clearAllSessions, authToken } from "../utils/auth";
+import { saveSession, clearAllSessions, authToken, canAddSession } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { PasswordInput, isPasswordValid } from "../components/PasswordInput";
@@ -113,6 +113,11 @@ function Login() {
       }
 
       if (data.success) {
+        if (!canAddSession(data.role)) {
+          setFieldErrors({ email: "", password: "", form: "Maximum 3 tabs allowed per role. Please close one tab and try again." });
+          return;
+        }
+
         saveSession(data.role, data.token, data.user || {});
 
         if (data.must_change_password) {

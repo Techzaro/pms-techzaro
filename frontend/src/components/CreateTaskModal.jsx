@@ -3,7 +3,10 @@ import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useDraftGuard from "../hooks/useDraftGuard";
+import useAutoSave from "../hooks/useAutoSave";
+import AutoSaveIndicator from "./AutoSaveIndicator";
+import draftService from "../services/draftService";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
 import LoadingButton from "./LoadingButton";
@@ -14,6 +17,7 @@ import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import RichTextEditor from "./RichTextEditor";
+import CreateSubtaskModal from "./layout/CreateDeliverableModel";
 import "./layout/CreateTaskModal.css";
 
 const REPEAT_OPTIONS = [
@@ -135,8 +139,12 @@ function generatePreview(templates, settings, startDate, endDate) {
   };
 }
 
-const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreDraftId = null }) => {
+  const draftSaveRef = useRef(null);
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
+    draftSaveHandler: () => draftSaveRef.current?.(),
+    hasDraftFeature: true,
+  });
   useEscapeKey(true, handleClose);
 
   const { submitting, run } = useSubmit();
@@ -145,6 +153,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   const [allUsers, setAllUsers] = useState([]);
   const [displayUsers, setDisplayUsers] = useState([]);
   const [projectEndDate, setProjectEndDate] = useState(null);
+  const [draftId, setDraftId] = useState(null);
 
   const [form, setForm] = useState({
     project_id: projectId || "",
@@ -186,8 +195,78 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
   const [editFileForm, setEditFileForm] = useState({ title: "" });
   const [editFileNewFile, setEditFileNewFile] = useState(null);
   const [editFileDeleted, setEditFileDeleted] = useState(false);
+  const [openSubtaskCreator, setOpenSubtaskCreator] = useState(false);
   const [editFileDeleteConfirm, setEditFileDeleteConfirm] = useState(false);
   const [showVariablesHint, setShowVariablesHint] = useState(false);
+
+  const { lastSaved, isSaving, draftId: autoSaveDraftId } = useAutoSave({
+    draftId,
+    formData: form,
+    moduleType: "task",
+    enabled: isDirty,
+    project_id: form.project_id || projectId,
+  });
+
+  useEffect(() => {
+    if (autoSaveDraftId && autoSaveDraftId !== draftId) {
+      setDraftId(autoSaveDraftId);
+    }
+  }, [autoSaveDraftId]);
+
+  // Restore draft data when opened from DraftCenter
+  useEffect(() => {
+    if (!restoreDraftId) return;
+
+    const loadDraft = async () => {
+      try {
+        const data = await draftService.get(restoreDraftId);
+        const draft = data?.data;
+        if (!draft?.draft_data) return;
+
+        const d = draft.draft_data;
+        setForm({
+          project_id: d.project_id || projectId || "",
+          assigned_to: d.assigned_to || [],
+          title: d.title || "",
+          description: d.description || "",
+          priority: d.priority || "Medium",
+          task_type: d.task_type || "standard",
+          start_date: d.start_date || "",
+          end_date: d.end_date || "",
+        });
+        if (d.requirementsList) setRequirementsList(d.requirementsList);
+        setDraftId(restoreDraftId);
+      } catch (err) {
+        console.error("Failed to restore draft:", err);
+      }
+    };
+
+    loadDraft();
+  }, [restoreDraftId]);
+
+  const handleSaveDraft = async () => {
+    try {
+      const payload = {
+        module_type: "task",
+        title: form.title || "Untitled Task Draft",
+        draft_data: { ...form, deliverables: subtasks, recurringTemplates: recurringTemplates },
+        project_id: form.project_id || projectId,
+      };
+      if (draftId) {
+        await draftService.update(draftId, { title: payload.title, draft_data: payload.draft_data }, { skipNotify: true });
+      } else {
+        const data = await draftService.create(payload, { skipNotify: true });
+        if (data?.data?.id) setDraftId(data.data.id);
+      }
+      setIsDirty(false);
+    } catch (err) {
+      console.error("Save draft failed:", err);
+    }
+  };
+
+  useEffect(() => {
+    draftSaveRef.current = handleSaveDraft;
+  });
 
   const preview = useMemo(() => {
     if (form.task_type !== "recurring") return null;
@@ -215,57 +294,77 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
       if (!currentUser) return users;
       return users.some((u) => u.id === currentUser.id) ? users : [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department }, ...users];
     };
+
     if (projectId) {
-      fetch(`${API_URL}/projects/${projectId}`, {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-        skipLoader: true,
-      }).then((res) => (res.ok ? res.json() : null)).then((data) => {
-        const project = data?.project;
-        if (project?.team?.members?.length) setDisplayUsers(ensureCurrentUser(project.team.members));
-        else if (project?.members?.length) setDisplayUsers(ensureCurrentUser(project.members));
-        else fetch(`${API_URL}/team-users`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
-          .then((r) => (r.ok ? r.json() : { users: [] })).then((d) => { const u = ensureCurrentUser(Array.isArray(d) ? d : (d.users || [])); setAllUsers(u); setDisplayUsers(u); }).catch(() => {});
-        if (project?.end_date) setProjectEndDate(project.end_date);
-      }).catch(() => {});
+      // Fetch project members from lightweight endpoint + project end_date
+      Promise.all([
+        fetch(`${API_URL}/projects/${projectId}/members`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : [])).then((d) => { setDisplayUsers(ensureCurrentUser(Array.isArray(d) ? d : [])); }).catch(() => {}),
+        fetch(`${API_URL}/projects/${projectId}`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : null)).then((data) => { if (data?.project?.end_date) setProjectEndDate(data.project.end_date); }).catch(() => {}),
+      ]);
     } else {
       Promise.all([
         fetch(`${API_URL}/projects`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
           .then((r) => (r.ok ? r.json() : [])).then((d) => { const l = d?.data || d; setProjects(Array.isArray(l) ? l : []); }).catch(() => {}),
         fetch(`${API_URL}/team-users`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
-          .then((r) => (r.ok ? r.json() : { users: [] })).then((d) => { const u = Array.isArray(d) ? d : (d.users || []); setAllUsers(u); setDisplayUsers(u); }).catch(() => {}),
+          .then((r) => (r.ok ? r.json() : { users: [] })).then((d) => { const u = ensureCurrentUser(Array.isArray(d) ? d : (d.users || [])); setAllUsers(u); setDisplayUsers(u); }).catch(() => {}),
       ]);
     }
   }, [projectId]);
 
+  const userInteractedRef = useRef(false);
+  useEffect(() => {
+    const markInteracted = () => { userInteractedRef.current = true; };
+    window.addEventListener("keydown", markInteracted, { once: true, capture: true });
+    window.addEventListener("mousedown", markInteracted, { once: true, capture: true });
+    return () => {
+      window.removeEventListener("keydown", markInteracted, { capture: true });
+      window.removeEventListener("mousedown", markInteracted, { capture: true });
+    };
+  }, []);
+  const markDirty = useCallback(() => { if (userInteractedRef.current) setIsDirty(true); }, []);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setIsDirty(true);
     if (name === "project_id") {
       setForm((prev) => ({ ...prev, project_id: value, assigned_to: [] }));
       if (value) {
         const token = authToken();
-        fetch(`${API_URL}/projects/${value}`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
-          .then((r) => (r.ok ? r.json() : null)).then((d) => { setDisplayUsers(d?.project?.team?.members?.length ? d.project.team.members : allUsers); }).catch(() => setDisplayUsers(allUsers));
-      } else setDisplayUsers(allUsers);
-    } else setForm((prev) => ({ ...prev, [name]: value }));
+        const currentUser = getUser();
+        fetch(`${API_URL}/projects/${value}/members`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : [])).then((d) => {
+            let members = Array.isArray(d) ? d : [];
+            if (currentUser && !members.some((u) => u.id === currentUser.id)) {
+              members = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department }, ...members];
+            }
+            setDisplayUsers(members);
+          }).catch(() => setDisplayUsers(allUsers));
+      } else {
+        setDisplayUsers(allUsers);
+      }
+    } else {
+      setForm((prev) => ({ ...prev, [name]: value }));
+    }
+    markDirty();
     if (formErrors[name]) setFormErrors((prev) => { const n = { ...prev }; delete n[name]; return n; });
   };
 
   const handleAssignedToChange = (ids) => {
-    setIsDirty(true);
     setForm((prev) => ({ ...prev, assigned_to: ids }));
+    markDirty();
     if (formErrors.assigned_to) setFormErrors((prev) => { const n = { ...prev }; delete n.assigned_to; return n; });
   };
 
-  const handleAddRequirement = () => { if (!reqInput.trim()) return; setIsDirty(true); setRequirementsList((prev) => [...prev, reqInput.trim()]); setReqInput(""); };
-  const handleRemoveRequirement = (index) => { setIsDirty(true); setRequirementsList((prev) => prev.filter((_, i) => i !== index)); };
+  const handleAddRequirement = () => { if (!reqInput.trim()) return; markDirty(); setRequirementsList((prev) => [...prev, reqInput.trim()]); setReqInput(""); };
+  const handleRemoveRequirement = (index) => { markDirty(); setRequirementsList((prev) => prev.filter((_, i) => i !== index)); };
   const handleReqKeyDown = (e) => { if (e.key === "Enter") { e.preventDefault(); handleAddRequirement(); } };
 
-  const handleRecurringSettingChange = (field, value) => { setIsDirty(true); setRecurrenceSettings((prev) => ({ ...prev, [field]: value })); };
+  const handleRecurringSettingChange = (field, value) => { markDirty(); setRecurrenceSettings((prev) => ({ ...prev, [field]: value })); };
 
-  const handleAddTemplate = () => { setIsDirty(true); setRecurringTemplates((prev) => [...prev, { title: "", description: "", quantity: 1, combined: false }]); };
-  const handleRemoveTemplate = (index) => { setIsDirty(true); setRecurringTemplates((prev) => prev.filter((_, i) => i !== index)); };
-  const handleTemplateChange = (index, field, value) => { setIsDirty(true); setRecurringTemplates((prev) => {
+  const handleAddTemplate = () => { markDirty(); setRecurringTemplates((prev) => [...prev, { title: "", description: "", quantity: 1, combined: false }]); };
+  const handleRemoveTemplate = (index) => { markDirty(); setRecurringTemplates((prev) => prev.filter((_, i) => i !== index)); };
+  const handleTemplateChange = (index, field, value) => { markDirty(); setRecurringTemplates((prev) => {
     const next = [...prev];
     next[index] = { ...next[index], [field]: value };
     return next;
@@ -284,11 +383,11 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
     if (!subtaskInput.title.trim()) return;
     const startDate = subtaskInput.start_datetime ? toUTCIso(subtaskInput.start_datetime) : null;
     const dueDate = subtaskInput.due_datetime ? toUTCIso(subtaskInput.due_datetime) : null;
-    setIsDirty(true);
+    markDirty();
     setSubtasks((prev) => [...prev, { title: subtaskInput.title.trim(), start_date: startDate, due_date: dueDate, assigned_to: null }]);
     setSubtaskInput({ title: "", start_datetime: "", due_datetime: "" });
   };
-  const handleRemoveSubtask = (index) => { setIsDirty(true); setSubtasks((prev) => prev.filter((_, i) => i !== index)); };
+  const handleRemoveSubtask = (index) => { markDirty(); setSubtasks((prev) => prev.filter((_, i) => i !== index)); };
   const handleSubtaskKeyDown = (e) => { if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); } };
   const handleSubtaskAssignee = (index, userId) => {
     setSubtasks((prev) => prev.map((d, i) => i === index ? { ...d, assigned_to: userId || null } : d));
@@ -308,23 +407,23 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
 
   const handleFiles = (fileList) => {
     const newFiles = Array.from(fileList);
-    setIsDirty(true);
+    markDirty();
     setPendingFiles((prev) => [...prev, ...newFiles.map((f) => ({ file: f, name: f.name, size: f.size, renaming: false }))]);
   };
   const handleDrop = (e) => { e.preventDefault(); e.stopPropagation(); dropRef.current?.classList.remove("task-drop-active"); if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files); };
   const handleDragOver = (e) => { e.preventDefault(); e.stopPropagation(); dropRef.current?.classList.add("task-drop-active"); };
   const handleDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); dropRef.current?.classList.remove("task-drop-active"); };
-  const handleRemoveFile = (index) => { setIsDirty(true); setPendingFiles((prev) => prev.filter((_, i) => i !== index)); };
+  const handleRemoveFile = (index) => { markDirty(); setPendingFiles((prev) => prev.filter((_, i) => i !== index)); };
   const handleAddLink = () => {
     if (!linkInput.trim()) return;
     let url = linkInput.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     const name = linkTitleInput.trim() || url;
-    setIsDirty(true);
+    markDirty();
     setLinks((prev) => [...prev, { url, name, renaming: false }]);
     setLinkInput(""); setLinkTitleInput("");
   };
-  const handleRemoveLink = (index) => { setIsDirty(true); setLinks((prev) => prev.filter((_, i) => i !== index)); };
+  const handleRemoveLink = (index) => { markDirty(); setLinks((prev) => prev.filter((_, i) => i !== index)); };
   const handleLinkKeyDown = (e) => { if (e.key === "Enter") { e.preventDefault(); handleAddLink(); } };
 
   const uploadAttachments = async (taskId, token) => {
@@ -433,8 +532,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 <h2>Create New Task</h2>
                 <p>Add task details and assign it to team members.</p>
               </div>
+              <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
             </div>
             <div className="task-header-actions">
+              <button className="task-save-draft-btn" onClick={handleSaveDraft} type="button" disabled={!form.title.trim()}>
+                Save Draft
+              </button>
+              <LoadingButton className="task-create-btn" onClick={() => setOpenSubtaskCreator(true)} disabled={!form.title.trim()}>⊕ Create Subtask</LoadingButton>
               <LoadingButton className="task-create-btn" onClick={handleSubmit} loading={submitting}>+ Create Task</LoadingButton>
               <button className="task-close-btn" onClick={handleClose}>✕</button>
             </div>
@@ -474,7 +578,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 <label>Description</label>
                 <RichTextEditor
                   value={form.description}
-                  onChange={(val) => { setIsDirty(true); setForm((prev) => ({ ...prev, description: val })); }}
+                  onChange={(val) => { const clean = (s) => (s || "").replace(/<[^>]*>/g, "").trim(); setForm((prev) => ({ ...prev, description: val })); markDirty(); }}
                   placeholder="Enter task description..."
                 />
               </div>
@@ -527,9 +631,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                 <div className="task-or-divider"><span className="task-or-line"></span><span className="task-or-text">OR</span><span className="task-or-line"></span></div>
 
                 <div className="task-link-input-row" style={{ flexDirection: "column", gap: "8px" }}>
-                  <input type="text" placeholder="Link title (e.g. Figma Design, Drive Folder)" value={linkTitleInput} onChange={(e) => { setIsDirty(true); setLinkTitleInput(e.target.value); }} />
+                  <input type="text" placeholder="Link title (e.g. Figma Design, Drive Folder)" value={linkTitleInput} onChange={(e) => { setLinkTitleInput(e.target.value); markDirty(); }} />
                   <div style={{ display: "flex", gap: "8px" }}>
-                    <input type="text" placeholder="Paste link (Drive, Figma, Website, etc.)" value={linkInput} onChange={(e) => { setIsDirty(true); setLinkInput(e.target.value); }} onKeyDown={handleLinkKeyDown} style={{ flex: 1 }} />
+                    <input type="text" placeholder="Paste link (Drive, Figma, Website, etc.)" value={linkInput} onChange={(e) => { setLinkInput(e.target.value); markDirty(); }} onKeyDown={handleLinkKeyDown} style={{ flex: 1 }} />
                     <button type="button" className="task-link-add-btn" onClick={handleAddLink} disabled={!linkInput.trim()}>Add Link</button>
                   </div>
                 </div>
@@ -570,10 +674,10 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
             {/* RIGHT SIDE */}
             <div className="task-right">
 
-              <div className="task-card">
+              <div className="task-field">
                 <label>Priority <span style={{ color: "#ef4444" }}>*</span></label>
                 <CustomSelect name="priority" value={form.priority}
-                  onChange={(val) => { setIsDirty(true); setForm((prev) => ({ ...prev, priority: val })); }}
+                  onChange={(val) => { setForm((prev) => ({ ...prev, priority: val })); markDirty(); }}
                   options={[
                     { value: "Medium", label: "Medium" },
                     { value: "Low", label: "Low" },
@@ -584,7 +688,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
               <div className="task-field">
                 <label>Requirements</label>
                 <div className="cp-goals-input-row">
-                  <input type="text" placeholder="Enter a requirement" value={reqInput} onChange={(e) => { setIsDirty(true); setReqInput(e.target.value); }} onKeyDown={handleReqKeyDown} />
+                  <input type="text" placeholder="Enter a requirement" value={reqInput} onChange={(e) => { setReqInput(e.target.value); markDirty(); }} onKeyDown={handleReqKeyDown} />
                   <button type="button" className="cp-goals-add-btn" onClick={handleAddRequirement} disabled={!reqInput.trim()}>Add</button>
                 </div>
                 {requirementsList.length > 0 && (
@@ -600,11 +704,30 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
               </div>
 
               <div className="task-card">
+                <div className="task-card-top"><span>Dates</span></div>
+                <div className="task-deadline-grid">
+                  <div>
+                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
+                    <input type="datetime-local" value={form.start_date}
+                      onChange={(e) => { setForm((prev) => ({ ...prev, start_date: e.target.value })); markDirty(); }}
+                      min={getNowDatetimeLocal()} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
+                    <input type="datetime-local" value={form.end_date}
+                      onChange={(e) => { setForm((prev) => ({ ...prev, end_date: e.target.value })); markDirty(); }}
+                      min={getNowDatetimeLocal()}
+                      max={projectEndDate ? toDatetimeLocal(projectEndDate) : undefined} />
+                    {projectEndDate && <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(projectEndDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="task-card">
                 <label>Task Type</label>
                 <CustomSelect name="task_type" value={form.task_type}
                   onChange={(val) => {
-                    setIsDirty(true);
-                    setForm((prev) => ({ ...prev, task_type: val }));
+                    setForm((prev) => ({ ...prev, task_type: val })); markDirty();
                     if (val === "recurring" && recurringTemplates.length === 0) {
                       setRecurringTemplates([{ title: "", description: "", quantity: 1, combined: false }]);
                     }
@@ -730,144 +853,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
                   )}
                 </>
               )}
-
-              <div className="task-card">
-                <div className="task-card-top"><span>Dates</span></div>
-                <div className="task-deadline-grid">
-                  <div>
-                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
-                    <input type="datetime-local" value={form.start_date}
-                      onChange={(e) => { setIsDirty(true); setForm((prev) => ({ ...prev, start_date: e.target.value })); }}
-                      min={getNowDatetimeLocal()} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
-                    <input type="datetime-local" value={form.end_date}
-                      onChange={(e) => { setIsDirty(true); setForm((prev) => ({ ...prev, end_date: e.target.value })); }}
-                      min={getNowDatetimeLocal()}
-                      max={projectEndDate ? toDatetimeLocal(projectEndDate) : undefined} />
-                    {projectEndDate && <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(projectEndDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
-                  </div>
-                </div>
-              </div>
-
-              <div className="task-card">
-                <div className="task-card-top"><span>Subtasks</span></div>
-                <div className="task-deadline-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-                  <div>
-                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Subtask Name</label>
-                    <input type="text" placeholder="Enter subtask name" value={subtaskInput.title}
-                      onChange={(e) => { setIsDirty(true); setSubtaskInput((prev) => ({ ...prev, title: e.target.value })); }}
-                      onKeyDown={handleSubtaskKeyDown} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start Date & Time</label>
-                    <input type="datetime-local" value={subtaskInput.start_datetime}
-                      min={form.start_date || getNowDatetimeLocal()}
-                      max={form.end_date || undefined}
-                      onChange={(e) => {
-                        setIsDirty(true);
-                        const val = e.target.value;
-                        setSubtaskInput((prev) => ({ ...prev, start_datetime: val }));
-                      }} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Due Date & Time</label>
-                    <input type="datetime-local" value={subtaskInput.due_datetime}
-                      min={subtaskInput.start_datetime || getNowDatetimeLocal()}
-                      max={form.end_date || undefined}
-                      onChange={(e) => {
-                        setIsDirty(true);
-                        const val = e.target.value;
-                        if (subtaskInput.start_datetime && val && val < subtaskInput.start_datetime) {
-                          setSubtaskInput((prev) => ({ ...prev, due_datetime: subtaskInput.start_datetime }));
-                        } else if (form.end_date && val && val > form.end_date) {
-                          setSubtaskInput((prev) => ({ ...prev, due_datetime: form.end_date }));
-                        } else {
-                          setSubtaskInput((prev) => ({ ...prev, due_datetime: val }));
-                        }
-                      }} />
-                    {form.end_date && (
-                      <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(form.end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                    )}
-                  </div>
-                </div>
-                {subtaskInput.start_datetime && subtaskInput.due_datetime && subtaskInput.due_datetime < subtaskInput.start_datetime && (
-                  <span style={{ fontSize: 12, color: "#dc2626", marginTop: 4, display: "block" }}>Due Date cannot be earlier than Start Date</span>
-                )}
-                <button type="button" className="task-add-phase-btn" onClick={handleAddSubtask}
-                  disabled={!subtaskInput.title.trim() || !subtaskInput.start_datetime || !subtaskInput.due_datetime || (subtaskInput.start_datetime && subtaskInput.due_datetime && subtaskInput.due_datetime < subtaskInput.start_datetime)} style={{ marginTop: 8 }}>+ Add Subtask</button>
-
-                {subtasks.length > 0 && (
-                  <div className="task-phase-list" style={{ marginTop: 10 }}>
-                    {subtasks.map((d, index) => {
-                      const assignedUser = d.assigned_to ? displayUsers.find(u => String(u.id) === String(d.assigned_to)) : null;
-                      const isDropdownOpen = openSubtaskDropdown === index;
-                      return (
-                        <div key={index} className="task-phase-item" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #f3f4f6", position: "relative" }}>
-                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7c3aed", display: "inline-block", flexShrink: 0 }}></span>
-                          <span style={{ flex: 1, fontSize: 13, color: "#374151" }}>{d.title}</span>
-                          <span style={{ fontSize: 11, color: "#6b7280", whiteSpace: "pre-line" }}>
-                            {d.start_date ? new Date(d.start_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
-                            {d.start_date && d.due_date ? "\n" : ""}
-                            {d.due_date ? new Date(d.due_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "No due date"}
-                          </span>
-                          <div style={{ position: "relative" }}>
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); setOpenSubtaskDropdown(isDropdownOpen ? null : index); }}
-                              style={{
-                                fontSize: 11, cursor: "pointer", padding: "3px 8px", borderRadius: 4, border: "1px solid #e5e7eb",
-                                background: assignedUser ? "#eef2ff" : "#f9fafb", color: assignedUser ? "#6366f1" : "#6b7280",
-                                fontWeight: 500, whiteSpace: "nowrap",
-                              }}
-                            >
-                              {assignedUser ? assignedUser.name : "Assign"}
-                            </button>
-                            {isDropdownOpen && (
-                              <div onClick={(e) => e.stopPropagation()} style={{
-                                position: "absolute", bottom: "100%", right: 0, zIndex: 100,
-                                background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
-                                boxShadow: "0 4px 12px rgba(0,0,0,0.1)", minWidth: 150, padding: "4px 0", marginBottom: 4,
-                              }}>
-                                <button
-                                  type="button"
-                                   onClick={(e) => { e.stopPropagation(); handleSubtaskAssignee(index, null); }}
-                                  style={{
-                                    display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
-                                    fontSize: 12, cursor: "pointer", background: !assignedUser ? "#f3f4f6" : "transparent",
-                                    border: "none", color: "#374151",
-                                  }}
-                                >
-                                  All assignees
-                                </button>
-                                {displayUsers.filter(u => form.assigned_to.includes(u.id)).map((u) => (
-                                  <button
-                                    key={u.id}
-                                    type="button"
-                                     onClick={(e) => { e.stopPropagation(); handleSubtaskAssignee(index, u.id); }}
-                                    style={{
-                                      display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
-                                      fontSize: 12, cursor: "pointer",
-                                      background: String(d.assigned_to) === String(u.id) ? "#f3f4f6" : "transparent",
-                                      border: "none", color: "#374151",
-                                    }}
-                                  >
-                                    <span>{u.name}</span>
-                                    {u.role && <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 6 }}>({u.role.replace("_", " ")})</span>}
-                                    {u.department && <span style={{ fontSize: 10, fontWeight: 500, color: "#4f46e5", background: "#eef2ff", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>{u.department}</span>}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "subtask", index }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
 
             </div>
           </form>
@@ -1001,6 +986,13 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "" }) => {
         document.body
       )}
       {ConfirmDialog}
+      {openSubtaskCreator && (
+        <CreateSubtaskModal
+          onClose={() => setOpenSubtaskCreator(false)}
+          projectId={form.project_id || null}
+          onCreated={() => setOpenSubtaskCreator(false)}
+        />
+      )}
     </>,
     document.body
   );

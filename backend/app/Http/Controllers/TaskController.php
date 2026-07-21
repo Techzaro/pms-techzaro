@@ -568,6 +568,25 @@ class TaskController extends Controller
             }
         }
 
+        // Validate that all assignees are members of the project
+        $projectMemberIds = app(\App\Http\Controllers\ProjectController::class)
+            ->getMembers($project)
+            ->getData()
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->toArray();
+
+        $invalidAssignees = array_diff(
+            array_map('intval', $validated['assigned_to']),
+            $projectMemberIds
+        );
+
+        if (! empty($invalidAssignees)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'assigned_to' => 'One or more selected users are not members of this project. Please select only project members.',
+            ]);
+        }
+
         $createdTasks = [];
         $deliverablesToCreate = [];
         $deliverableNotifications = [];
@@ -730,7 +749,7 @@ class TaskController extends Controller
                     'user_id' => $assigneeId, 'sender_user_id' => $user->id,
                     'type' => 'task_assigned', 'related_module' => 'task',
                     'related_id' => $task->id, 'title' => 'Task Assigned',
-                    'message' => 'A new task "'.$task->title.'" has been assigned to you by '.$user->name.'.',
+                    'message' => 'Task '.$task->business_id.' ('.$task->title.') has been assigned to you by '.$user->name.'.',
                     'link' => '/tasks/task-details/'.$task->id.'?from=tasks',
                 ];
             }
@@ -742,6 +761,7 @@ class TaskController extends Controller
         $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
         $this->notificationService->confirmAction($user, 'Assigned', 'task', $createdTasks[0]->title, [
             'Project' => $project->title,
+            'Business ID' => $createdTasks[0]->business_id,
             'Assigned To' => $assigneeNames,
             'Tasks Created' => (string) $taskCount,
         ]);
@@ -1008,7 +1028,7 @@ class TaskController extends Controller
                     'user_id' => $assigneeId, 'sender_user_id' => $user->id,
                     'type' => 'task_assigned', 'related_module' => 'task',
                     'related_id' => $task->id, 'title' => 'Task Assigned',
-                    'message' => 'A new task "'.$task->title.'" has been assigned to you by '.$user->name.'.',
+                    'message' => 'Task '.$task->business_id.' ('.$task->title.') has been assigned to you by '.$user->name.'.',
                     'link' => '/tasks/task-details/'.$task->id.'?from=tasks',
                 ];
             }
@@ -1019,6 +1039,7 @@ class TaskController extends Controller
         $taskCount = count($createdTasks);
         $assigneeNames = User::whereIn('id', $validated['assigned_to'])->pluck('name')->implode(', ');
         $this->notificationService->confirmAction($user, 'Assigned', 'task', $createdTasks[0]->title, [
+            'Business ID' => $createdTasks[0]->business_id,
             'Assigned To' => $assigneeNames,
             'Tasks Created' => (string) $taskCount,
         ]);
@@ -1190,7 +1211,7 @@ class TaskController extends Controller
                         'user_id' => $newId, 'sender_user_id' => $user->id,
                         'type' => 'task_assigned', 'related_module' => 'task',
                         'related_id' => $task->id, 'title' => 'Task Assigned',
-                        'message' => 'A new task "'.$task->title.'" has been assigned to you by '.$user->name.'.',
+                        'message' => 'Task '.$task->business_id.' ('.$task->title.') has been assigned to you by '.$user->name.'.',
                         'link' => '/tasks/task-details/'.$task->id.'?from=tasks',
                     ];
                 }
@@ -1262,6 +1283,7 @@ class TaskController extends Controller
         if (count($changes) > 0) {
             $fieldNames = array_column($changes, 'label');
             $this->notificationService->confirmAction($user, 'Updated', 'task', $task->title, [
+                'Business ID' => $task->business_id,
                 'Project' => $task->project?->title ?? 'N/A',
                 'Changes Made' => implode(', ', array_slice($fieldNames, 0, 5)).(count($fieldNames) > 5 ? ' and more' : ''),
             ]);
@@ -2164,13 +2186,14 @@ class TaskController extends Controller
                 'task',
                 $task->id,
                 'Task Submitted',
-                $user->name.' has completed the task "'.$task->title.'" and submitted it for review.',
+                $user->name.' has completed task '.$task->business_id.' ("'.$task->title.'") and submitted it for review.',
                 '/tasks/task-details/'.$task->id.'?from=taskby'
             );
         }
 
         // Send confirmation email to performer
         $this->notificationService->confirmAction($user, $isResubmit ? 'Resubmitted' : 'Submitted', 'task', $task->title, [
+            'Business ID' => $task->business_id,
             'Project' => $task->project?->title ?? 'N/A',
             'Submitted To' => User::find($task->assigned_by)?->name ?? 'N/A',
         ]);
@@ -2238,12 +2261,13 @@ class TaskController extends Controller
             'task',
             $task->id,
             'Task Approved',
-            'Your task "'.$task->title.'" has been approved.',
+            'Your task '.$task->business_id.' ("'.$task->title.'") has been approved.',
             '/tasks/task-details/'.$task->id.'?from=tasks'
         );
 
         // Send confirmation email to performer
         $this->notificationService->confirmAction($user, 'Approved', 'task', $task->title, [
+            'Business ID' => $task->business_id,
             'Project' => $task->project?->title ?? 'N/A',
             'Assigned To' => $task->assignees->pluck('name')->implode(', '),
         ]);
@@ -2303,7 +2327,7 @@ class TaskController extends Controller
 
         $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
         $assigneeIds = array_values(array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $user->id));
-        $rejectMsg = 'Your task "'.$task->title.'" has been rejected. Please make the required changes.';
+        $rejectMsg = 'Your task '.$task->business_id.' ("'.$task->title.'") has been rejected. Please make the required changes.';
         if (! empty($validated['comment'])) {
             $rejectMsg .= ' Reason: '.$validated['comment'];
         }
@@ -2321,6 +2345,7 @@ class TaskController extends Controller
 
         // Send confirmation email to performer
         $this->notificationService->confirmAction($user, 'Rejected', 'task', $task->title, [
+            'Business ID' => $task->business_id,
             'Project' => $task->project?->title ?? 'N/A',
             'Assigned To' => $task->assignees->pluck('name')->implode(', '),
             'Reason' => $validated['comment'] ?? 'N/A',
@@ -2410,7 +2435,7 @@ class TaskController extends Controller
 
         $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
         $assigneeIds = array_values(array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $user->id));
-        $reopenMsg = 'Your task "'.$task->title.'" has been reopened for revision.';
+        $reopenMsg = 'Your task '.$task->business_id.' ("'.$task->title.'") has been reopened for revision.';
         if (! empty($validated['comment'])) {
             $reopenMsg .= ' Comment: '.$validated['comment'];
         }
@@ -2431,6 +2456,7 @@ class TaskController extends Controller
 
         // Send confirmation email to performer
         $this->notificationService->confirmAction($user, 'Reopened', 'task', $task->title, [
+            'Business ID' => $task->business_id,
             'Project' => $task->project?->title ?? 'N/A',
             'Assigned To' => $task->assignees->pluck('name')->implode(', '),
             'Instructions' => $validated['instructions'] ?? 'N/A',
