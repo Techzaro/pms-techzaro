@@ -102,7 +102,6 @@ const Taskby = () => {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
-    if (debouncedSearch) params.append("search", debouncedSearch);
     if (statusFilter) params.append("status", statusFilter);
     if (timeFilter) params.append("time_filter", timeFilter);
 
@@ -264,6 +263,13 @@ const Taskby = () => {
   const rejectedCount = baseItems.filter((i) => i.status === "rejected").length;
 
   const filteredItems = baseItems.filter((item) => {
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
+      const titleMatch = (item.title || "").toLowerCase().includes(q);
+      const assigneeMatch = (item.assignees || []).some(a => (a.name || "").toLowerCase().includes(q));
+      const assignerMatch = (item.assigner?.name || "").toLowerCase().includes(q);
+      if (!titleMatch && !assigneeMatch && !assignerMatch) return false;
+    }
     if (statusFilter === "due_today") {
       return true;
     }
@@ -321,7 +327,6 @@ const Taskby = () => {
       )}
 
       <div className="task-progress">
-        <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
         <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
           <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
         </p>
@@ -346,6 +351,7 @@ const Taskby = () => {
         <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Declined ({rejectedCount})
         </p>
+        <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
       </div>
 
       <div className="tasks-search-bar">

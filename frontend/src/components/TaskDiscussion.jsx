@@ -407,6 +407,8 @@ export default function TaskDiscussion({ taskId, readOnly }) {
   const [showSizeMenu, setShowSizeMenu] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showHighlightPicker, setShowHighlightPicker] = useState(false);
+  const [fontHighlightedIndex, setFontHighlightedIndex] = useState(0);
+  const [sizeHighlightedIndex, setSizeHighlightedIndex] = useState(0);
   const commentsEndRef = useRef(null);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -478,6 +480,23 @@ export default function TaskDiscussion({ taskId, readOnly }) {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => { setFontHighlightedIndex(0); }, [showFontMenu]);
+  useEffect(() => { setSizeHighlightedIndex(0); }, [showSizeMenu]);
+  const fontMenuListRef = useRef(null);
+  const sizeMenuListRef = useRef(null);
+  useEffect(() => {
+    if (showFontMenu && fontMenuListRef.current) {
+      const el = fontMenuListRef.current.children[fontHighlightedIndex];
+      if (el) el.scrollIntoView({ block: "nearest" });
+    }
+  }, [fontHighlightedIndex, showFontMenu]);
+  useEffect(() => {
+    if (showSizeMenu && sizeMenuListRef.current) {
+      const el = sizeMenuListRef.current.children[sizeHighlightedIndex];
+      if (el) el.scrollIntoView({ block: "nearest" });
+    }
+  }, [sizeHighlightedIndex, showSizeMenu]);
 
   useEffect(() => {
     if (comments.length > 0 && page === 1) {
@@ -733,13 +752,26 @@ export default function TaskDiscussion({ taskId, readOnly }) {
                         title="Font family"
                         onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
                         onClick={() => { setShowFontMenu(!showFontMenu); setShowSizeMenu(false); setShowColorPicker(false); setShowHighlightPicker(false); }}
+                        onKeyDown={(e) => {
+                          if (!showFontMenu && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+                            e.preventDefault();
+                            setShowFontMenu(true);
+                          } else if (showFontMenu) {
+                            if (e.key === "Escape") { setShowFontMenu(false); }
+                            else if (e.key === "ArrowDown") { e.preventDefault(); setFontHighlightedIndex((p) => (p < 3 ? p + 1 : 0)); }
+                            else if (e.key === "ArrowUp") { e.preventDefault(); setFontHighlightedIndex((p) => (p > 0 ? p - 1 : 3)); }
+                            else if (e.key === "Enter") { e.preventDefault(); const fonts = ["Sans Serif", "Serif", "Monospace", "Cursive"]; if (fonts[fontHighlightedIndex]) { setFontFamily(fonts[fontHighlightedIndex]); setShowFontMenu(false); } }
+                          }
+                        }}
                       >
                         {fontFamily} <ChevronDown size={12} />
                       </button>
                       {showFontMenu && (
-                        <div className="td-toolbar-dropdown-menu">
-                          {["Sans Serif", "Serif", "Monospace", "Cursive"].map((f) => (
-                            <button key={f} className={`td-toolbar-dropdown-item ${fontFamily === f ? "active" : ""}`} onClick={() => { setFontFamily(f); setShowFontMenu(false); }}>
+                        <div className="td-toolbar-dropdown-menu" ref={fontMenuListRef}>
+                          {["Sans Serif", "Serif", "Monospace", "Cursive"].map((f, idx) => (
+                            <button key={f} className={`td-toolbar-dropdown-item ${fontFamily === f ? "active" : ""} ${fontHighlightedIndex === idx ? "td-toolbar-dropdown-item--highlighted" : ""}`}
+                              onMouseEnter={() => setFontHighlightedIndex(idx)}
+                              onClick={() => { setFontFamily(f); setShowFontMenu(false); }}>
                               {f}
                             </button>
                           ))}
@@ -754,13 +786,26 @@ export default function TaskDiscussion({ taskId, readOnly }) {
                         title="Font size"
                         onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
                         onClick={() => { setShowSizeMenu(!showSizeMenu); setShowFontMenu(false); setShowColorPicker(false); setShowHighlightPicker(false); }}
+                        onKeyDown={(e) => {
+                          if (!showSizeMenu && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+                            e.preventDefault();
+                            setShowSizeMenu(true);
+                          } else if (showSizeMenu) {
+                            if (e.key === "Escape") { setShowSizeMenu(false); }
+                            else if (e.key === "ArrowDown") { e.preventDefault(); setSizeHighlightedIndex((p) => (p < 3 ? p + 1 : 0)); }
+                            else if (e.key === "ArrowUp") { e.preventDefault(); setSizeHighlightedIndex((p) => (p > 0 ? p - 1 : 3)); }
+                            else if (e.key === "Enter") { e.preventDefault(); const sizes = ["Small", "Normal", "Medium", "Large"]; if (sizes[sizeHighlightedIndex]) { setFontSize(sizes[sizeHighlightedIndex]); setShowSizeMenu(false); } }
+                          }
+                        }}
                       >
                         {fontSize} <ChevronDown size={12} />
                       </button>
                       {showSizeMenu && (
-                        <div className="td-toolbar-dropdown-menu">
-                          {["Small", "Normal", "Medium", "Large"].map((s) => (
-                            <button key={s} className={`td-toolbar-dropdown-item ${fontSize === s ? "active" : ""}`} onClick={() => { setFontSize(s); setShowSizeMenu(false); }}>
+                        <div className="td-toolbar-dropdown-menu" ref={sizeMenuListRef}>
+                          {["Small", "Normal", "Medium", "Large"].map((s, idx) => (
+                            <button key={s} className={`td-toolbar-dropdown-item ${fontSize === s ? "active" : ""} ${sizeHighlightedIndex === idx ? "td-toolbar-dropdown-item--highlighted" : ""}`}
+                              onMouseEnter={() => setSizeHighlightedIndex(idx)}
+                              onClick={() => { setFontSize(s); setShowSizeMenu(false); }}>
                               {s}
                             </button>
                           ))}

@@ -33,6 +33,7 @@ import {
   X,
 } from "lucide-react";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
+import SmartDragHandle from "../components/SmartDragHandle";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CreateTaskModal from "../components/CreateTaskModal";
@@ -343,6 +344,8 @@ function ProjectDetails() {
   const [showManagerModal, setShowManagerModal] = useState(false);
   const [mgrSearch, setMgrSearch] = useState("");
   const [savingManager, setSavingManager] = useState(false);
+  const [mgrHighlightedIndex, setMgrHighlightedIndex] = useState(0);
+  const mgrListRef = useRef(null);
 
   const memberCount = useMemo(() => {
     if (!project) return 0;
@@ -380,6 +383,17 @@ function ProjectDetails() {
     document.addEventListener("mousedown", handleClickOutsideManager);
     return () => document.removeEventListener("mousedown", handleClickOutsideManager);
   }, []);
+
+  useEffect(() => {
+    setMgrHighlightedIndex(0);
+  }, [mgrSearch, managerDropdownOpen]);
+
+  useEffect(() => {
+    if (mgrListRef.current) {
+      const item = mgrListRef.current.children[mgrHighlightedIndex];
+      if (item) item.scrollIntoView({ block: "nearest" });
+    }
+  }, [mgrHighlightedIndex]);
 
   const handleTaskReorder = useCallback((reordered) => {
     setOrderedTasks(reordered);
@@ -670,7 +684,12 @@ function ProjectDetails() {
   const milestones = project.milestones || [];
   const files = project.files || [];
   const tasks = orderedTasks.length ? orderedTasks : (project.tasks || []);
-  const filteredTasks = taskSearch ? tasks.filter((t) => (t.title || "").toLowerCase().includes(taskSearch.toLowerCase())) : tasks;
+  const filteredTasks = taskSearch ? tasks.filter((t) => {
+    const q = taskSearch.toLowerCase();
+    const titleMatch = (t.title || "").toLowerCase().includes(q);
+    const assigneeMatch = (t.assignees || []).some(a => (a.name || "").toLowerCase().includes(q));
+    return titleMatch || assigneeMatch;
+  }) : tasks;
   const progress = typeof project.progress_percent === "number" ? project.progress_percent : calculateProjectProgress(project.tasks || []);
 
   const subtasksList = orderedSubtasks.length ? orderedSubtasks : (project.deliverables || []);
@@ -965,7 +984,7 @@ function ProjectDetails() {
                       </span>
                     )}
                     <div>
-                      <div className="pd-milestones__title" style={{ textDecoration: m.status === "completed" ? "line-through" : "none", color: m.status === "completed" ? "var(--text-secondary)" : "var(--text-primary)" }}>{m.title}</div>
+                      <div className="pd-milestones__title" style={{ textDecoration: "none", color: m.status === "completed" ? "var(--text-secondary)" : "var(--text-primary)" }}>{m.title}</div>
                     </div>
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0, marginLeft: "12px" }}>
@@ -1207,7 +1226,7 @@ function ProjectDetails() {
                           <div className="pd-table-wrap">
                             <div className="project-task-table">
                               <div className="ptt-header">
-                                <div></div>
+                                <div>ID</div>
                                 <div>{isCreator || isAdminOrManager ? "Assigned To" : "Assigned By"}</div>
                                 <div className="ptt-col-name">Task Name</div>
                                 <div>Status</div>
@@ -1389,7 +1408,7 @@ function ProjectDetails() {
                       <div className="pd-tab-panel">
                         <section className="pd-card-flat">
                           <div className="pd-card-flat__head">
-                            <h2 className="pd-block-title pd-block-title--inline">Team members</h2>
+                            <h2 className="pd-block-title pd-block-title--inline">Members</h2>
                             <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                               <input type="text" placeholder="Search by member name or role..." value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} />
@@ -1435,37 +1454,44 @@ function ProjectDetails() {
                           </SortableTableWrapper>
                         </section>
 
-                        {(project.teams || []).length > 0 && (project.teams || []).map((team) => (
-                          <section key={team.id} className="pd-card-flat" style={{ marginTop: 16 }}>
+                        {(project.teams || []).length > 0 && (
+                          <section className="pd-card-flat" style={{ marginTop: 16 }}>
                             <div className="pd-card-flat__head">
-                              <h2 className="pd-block-title pd-block-title--inline">{team.name}</h2>
-                              <span className="pd-badge-member" style={{ marginLeft: 8 }}>Team</span>
+                              <h2 className="pd-block-title pd-block-title--inline" style={{ fontSize: 20 }}>Teams</h2>
                             </div>
-                            {team.leader && (
-                              <div className="pd-member">
-                                <div className="pd-avatar" aria-hidden style={{ background: "var(--color-primary)" }}>
-                                  {initials(team.leader.name)}
+                            {(project.teams || []).map((team) => (
+                              <div key={team.id} style={{ marginBottom: 16 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, paddingBottom: 6, borderBottom: "1px solid var(--border-color)" }}>
+                                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>{team.name}</h3>
+                                  <span className="pd-badge-member">Team</span>
                                 </div>
-                                <div>
-                                  <div className="pd-member-name">{team.leader.name}</div>
-                                  <div className="pd-member-role">Team Lead · {team.leader.role || "—"}</div>
-                                </div>
-                                <span className="pd-badge-owner">Lead</span>
-                              </div>
-                            )}
-                            {(team.members || []).filter((m) => m.id !== team.leader?.id && m.id !== project.creator?.id).map((m) => (
-                              <div key={m.id} className="pd-member">
-                                <div className="pd-avatar" aria-hidden>
-                                  {initials(m.name)}
-                                </div>
-                                <div>
-                                  <div className="pd-member-name">{m.name}</div>
-                                  <div className="pd-member-role">{m.role || "Member"}</div>
-                                </div>
+                                {team.leader && (
+                                  <div className="pd-member">
+                                    <div className="pd-avatar" aria-hidden style={{ background: "var(--color-primary)" }}>
+                                      {initials(team.leader.name)}
+                                    </div>
+                                    <div>
+                                      <div className="pd-member-name">{team.leader.name}</div>
+                                      <div className="pd-member-role">Team Lead · {team.leader.role || "—"}</div>
+                                    </div>
+                                    <span className="pd-badge-owner">Lead</span>
+                                  </div>
+                                )}
+                                {(team.members || []).filter((m) => m.id !== team.leader?.id && m.id !== project.creator?.id).map((m) => (
+                                  <div key={m.id} className="pd-member">
+                                    <div className="pd-avatar" aria-hidden>
+                                      {initials(m.name)}
+                                    </div>
+                                    <div>
+                                      <div className="pd-member-name">{m.name}</div>
+                                      <div className="pd-member-role">{m.role || "Member"}</div>
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
                             ))}
                           </section>
-                        ))}
+                        )}
 
                         {(project.view_only_users || []).length > 0 && (
                           <section className="pd-card-flat" style={{ marginTop: 16 }}>
@@ -1819,18 +1845,41 @@ function ProjectDetails() {
                           placeholder="Search by name, role, department..."
                           value={mgrSearch}
                           onChange={(e) => setMgrSearch(e.target.value)}
+                          onKeyDown={(e) => {
+                            const filteredUsers = managerUsers.filter((u) => {
+                              if (!mgrSearch.trim()) return true;
+                              const q = mgrSearch.toLowerCase();
+                              return u.name?.toLowerCase().includes(q) || u.role?.toLowerCase().includes(q) || u.department?.toLowerCase().includes(q);
+                            });
+                            if (e.key === "ArrowDown") {
+                              e.preventDefault();
+                              setMgrHighlightedIndex((prev) => (prev + 1) % filteredUsers.length);
+                            } else if (e.key === "ArrowUp") {
+                              e.preventDefault();
+                              setMgrHighlightedIndex((prev) => (prev - 1 + filteredUsers.length) % filteredUsers.length);
+                            } else if (e.key === "Enter") {
+                              e.preventDefault();
+                              if (filteredUsers[mgrHighlightedIndex]) {
+                                const u = filteredUsers[mgrHighlightedIndex];
+                                setSelectedManagerId(u.id);
+                                setMgrIsDirty(true);
+                                setManagerDropdownOpen(false);
+                              }
+                            }
+                          }}
                           autoFocus
                         />
                         {mgrSearch && <button type="button" className="aam-multiselect-search-clear" onClick={() => setMgrSearch("")}>✕</button>}
                       </div>
+                      <div ref={mgrListRef}>
                       {managerUsers
                         .filter((u) => {
                           if (!mgrSearch.trim()) return true;
                           const q = mgrSearch.toLowerCase();
                           return u.name?.toLowerCase().includes(q) || u.role?.toLowerCase().includes(q) || u.department?.toLowerCase().includes(q);
                         })
-                        .map((u) => (
-                        <label key={u.id} className="aam-multiselect-option" onClick={(e) => e.stopPropagation()}>
+                        .map((u, idx) => (
+                        <label key={u.id} className={`aam-multiselect-option${mgrHighlightedIndex === idx ? " aam-multiselect-option--highlighted" : ""}`} onClick={(e) => e.stopPropagation()} onMouseEnter={() => setMgrHighlightedIndex(idx)}>
                           <input
                             type="radio"
                             name="project_manager"
@@ -1850,6 +1899,7 @@ function ProjectDetails() {
                           </div>
                         </label>
                       ))}
+                      </div>
                     </div>
                   )}
                 </div>

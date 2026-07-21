@@ -189,6 +189,18 @@
   background: #f0f4ff;
 }
 
+.usd-item--highlighted {
+  background: #4a4a4a !important;
+  color: #fff !important;
+}
+.usd-item--highlighted * {
+  color: #fff !important;
+}
+.usd-item--highlighted .usd-role,
+.usd-item--highlighted .usd-dept {
+  background: rgba(255,255,255,0.2) !important;
+}
+
 .usd-item-left {
   display: flex;
   align-items: center;

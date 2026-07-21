@@ -92,7 +92,6 @@ function SelfDeliveries() {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
-    if (debouncedSearch) params.append("search", debouncedSearch);
     if (statusFilter) params.append("status", statusFilter);
     if (timeFilter) params.append("time_filter", timeFilter);
 
@@ -203,14 +202,22 @@ function SelfDeliveries() {
   const rejectedCount = displayItems.filter((i) => i.status === "rejected").length;
   const reworkRequiredCount = displayItems.filter((i) => i.status === "rework_required").length;
 
-  const filteredItems = statusFilter && statusFilter !== "due_today"
+  const searchFilteredItems = debouncedSearch
     ? displayItems.filter((item) => {
+        const q = debouncedSearch.toLowerCase();
+        const titleMatch = (item.title || "").toLowerCase().includes(q);
+        const assigneeMatch = (item.assignee?.name || "").toLowerCase().includes(q);
+        return titleMatch || assigneeMatch;
+      })
+    : displayItems;
+  const filteredItems = statusFilter && statusFilter !== "due_today"
+    ? searchFilteredItems.filter((item) => {
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
         return item.status === statusFilter;
       })
-    : displayItems;
+    : searchFilteredItems;
 
   const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
   const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
@@ -245,7 +252,6 @@ function SelfDeliveries() {
         </div>
 
         <div className="task-progress">
-          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
           <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
             <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
           </p>
@@ -273,11 +279,12 @@ function SelfDeliveries() {
           <p className={`Reopened ${statusFilter === "rework_required" ? "active" : ""}`} onClick={() => selectStatusFilter("rework_required")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Rework Required ({reworkRequiredCount})
           </p>
+          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
         </div>
 
         <div className="delivery-serach-bar">
           <IoSearchOutline fontSize={"20px"} />
-          <input type="text" placeholder="Search by subtask name" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input type="text" placeholder="Search by subtask name or assignee" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
 
         <div className="container">
@@ -309,15 +316,15 @@ function SelfDeliveries() {
                       </div>
                       <div>
                         <div className="user-name">{item.title}</div>
-                        {item.project && (
-                          <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
-                            {item.project.title}
-                          </Link>
-                        )}
                       </div>
                     </div>
                     <div>
-                      <div className="task-title">{item.task?.title || item.project?.title || "-"}</div>
+                      <div className="task-title">{item.task?.title || "-"}</div>
+                      {(item.project || item.task?.project) && item.task?.title && (
+                        <Link to={rolePath(`projects/project-details/${(item.project || item.task.project).id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
+                          {(item.project || item.task.project).title}
+                        </Link>
+                      )}
                     </div>
                     <div>
                       <span className="badge" style={{ background: STATUS_COLORS[item.status] || "#F3F4F6", color: STATUS_TEXT_COLORS[item.status] || "#374151", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600 }}>

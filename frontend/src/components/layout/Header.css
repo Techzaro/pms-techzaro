@@ -1001,3 +1001,9 @@
     height: 16px;
   }
 }
+
+.search-dropdown-item--highlighted { background: #4a4a4a !important; color: #fff !important; }
+.notif-panel-item--highlighted { background: #4a4a4a !important; color: #fff !important; }
+.hmc-menu-item--highlighted { background: #4a4a4a !important; color: #fff !important; }
+.search-dropdown-item--highlighted *, .notif-panel-item--highlighted *, .hmc-menu-item--highlighted * { color: #fff !important; }
+.search-dropdown-item--highlighted span[style] { background: rgba(255,255,255,0.2) !important; }

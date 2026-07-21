@@ -6,7 +6,7 @@
  * sidebar toggle) and real-time notification polling.
  */
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { MdKeyboardArrowDown, MdNotifications, MdPerson, MdHistory, MdLogout, MdLock, MdDarkMode, MdLightMode } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 
@@ -32,6 +32,9 @@ function Header() {
   const searchRef = useRef(null);
   const notifRef = useRef(null);
   const profileRef = useRef(null);
+  const searchDropdownRef = useRef(null);
+  const notifListRef = useRef(null);
+  const profileMenuRef = useRef(null);
   const { theme, toggleTheme } = useTheme();
 
   // ── State ──
@@ -57,6 +60,9 @@ function Header() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [searchResults, setSearchResults] = useState({ pages: [], projects: [], tasks: [], users: [] });
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [searchHighlightIndex, setSearchHighlightIndex] = useState(-1);
+  const [notifHighlightIndex, setNotifHighlightIndex] = useState(-1);
+  const [profileHighlightIndex, setProfileHighlightIndex] = useState(-1);
 
   /** Returns the list of navigable pages with keywords for local search. */
   const getPageLinks = () => [
@@ -219,6 +225,116 @@ function Header() {
     else if (path.includes("/manage-users/")) from = "manage-users";
     else if (path.includes("/manage-team/")) from = "manage-team";
     navigate(`${path}${from ? `?from=${from}` : ""}`, { state: { from } });
+  };
+
+  const flatSearchItems = useMemo(() => {
+    const items = [];
+    searchResults.pages.forEach(p => items.push({ type: 'page', ...p }));
+    searchResults.projects.forEach(p => items.push({ type: 'project', ...p }));
+    searchResults.tasks.forEach(t => items.push({ type: 'task', ...t }));
+    (searchResults.deliverables || []).forEach(d => items.push({ type: 'deliverable', ...d }));
+    searchResults.users.forEach(u => items.push({ type: 'user', ...u }));
+    return items;
+  }, [searchResults]);
+
+  const isSearchItemHighlighted = (item) => searchHighlightIndex >= 0 && flatSearchItems[searchHighlightIndex]?.path === item.path;
+  const setSearchItemHighlight = (item) => setSearchHighlightIndex(flatSearchItems.findIndex(si => si.path === item.path));
+
+  useEffect(() => {
+    setSearchHighlightIndex(-1);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (searchHighlightIndex >= 0 && searchDropdownRef.current) {
+      const items = searchDropdownRef.current.querySelectorAll('.search-dropdown-item');
+      items[searchHighlightIndex]?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [searchHighlightIndex]);
+
+  useEffect(() => {
+    setNotifHighlightIndex(-1);
+  }, [showNotifications]);
+
+  useEffect(() => {
+    if (notifHighlightIndex >= 0 && notifListRef.current) {
+      const items = notifListRef.current.querySelectorAll('.notif-panel-item');
+      items[notifHighlightIndex]?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [notifHighlightIndex]);
+
+  useEffect(() => {
+    setProfileHighlightIndex(-1);
+  }, [isProfileOpen]);
+
+  useEffect(() => {
+    if (profileHighlightIndex >= 0 && profileMenuRef.current) {
+      const items = profileMenuRef.current.querySelectorAll('.hmc-menu-item, .hmc-logout-btn');
+      items[profileHighlightIndex]?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [profileHighlightIndex]);
+
+  const handleSearchKeyDown = (e) => {
+    const items = flatSearchItems;
+    if (e.key === 'ArrowDown') {
+      if (items.length === 0) return;
+      e.preventDefault();
+      setSearchHighlightIndex(prev => (prev + 1) % items.length);
+    } else if (e.key === 'ArrowUp') {
+      if (items.length === 0) return;
+      e.preventDefault();
+      setSearchHighlightIndex(prev => (prev - 1 + items.length) % items.length);
+    } else if (e.key === 'Enter') {
+      if (searchHighlightIndex >= 0 && items[searchHighlightIndex]) {
+        e.preventDefault();
+        handleSearchSelect(items[searchHighlightIndex].path);
+      }
+    } else if (e.key === 'Escape') {
+      setShowSearchDropdown(false);
+      setSearchHighlightIndex(-1);
+    }
+  };
+
+  const handleNotifKeyDown = (e) => {
+    const items = notifications.slice(0, 7);
+    if (items.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setNotifHighlightIndex(prev => (prev + 1) % items.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setNotifHighlightIndex(prev => (prev - 1 + items.length) % items.length);
+    } else if (e.key === 'Enter' && notifHighlightIndex >= 0 && items[notifHighlightIndex]) {
+      e.preventDefault();
+      const n = items[notifHighlightIndex];
+      markAsRead(n.id);
+      setShowNotifications(false);
+      navigate(getNotificationDestination(n));
+    } else if (e.key === 'Escape') {
+      setShowNotifications(false);
+      setNotifHighlightIndex(-1);
+    }
+  };
+
+  const handleProfileKeyDown = (e) => {
+    const count = 4;
+    if (e.key === 'ArrowDown') {
+      if (!isProfileOpen) { setIsProfileOpen(true); return; }
+      e.preventDefault();
+      setProfileHighlightIndex(prev => (prev + 1) % count);
+    } else if (e.key === 'ArrowUp') {
+      if (!isProfileOpen) return;
+      e.preventDefault();
+      setProfileHighlightIndex(prev => (prev - 1 + count) % count);
+    } else if (e.key === 'Enter' && isProfileOpen && profileHighlightIndex >= 0) {
+      e.preventDefault();
+      if (profileMenuRef.current) {
+        const btns = profileMenuRef.current.querySelectorAll('.hmc-menu-item, .hmc-logout-btn');
+        btns[profileHighlightIndex]?.click();
+      }
+    } else if (e.key === 'Escape') {
+      setIsProfileOpen(false);
+      setProfileHighlightIndex(-1);
+    }
   };
 
   // Close search dropdown when clicking outside
@@ -439,10 +555,11 @@ function Header() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => searchQuery.length >= 2 && setShowSearchDropdown(true)}
+            onKeyDown={handleSearchKeyDown}
           />
 
           {showSearchDropdown && (
-            <div className="search-dropdown">
+            <div className="search-dropdown" ref={searchDropdownRef}>
               {searchResults.pages.length === 0 && searchResults.projects.length === 0 && searchResults.tasks.length === 0 && searchResults.deliverables.length === 0 && searchResults.users.length === 0 ? (
                 <div className="search-dropdown-empty">No results found</div>
               ) : (
@@ -451,7 +568,7 @@ function Header() {
                     <div className="search-dropdown-section">
                       <div className="search-dropdown-label">Pages</div>
                       {searchResults.pages.map((item) => (
-                        <div key={item.path} className="search-dropdown-item" onClick={() => handleSearchSelect(item.path)}>
+                        <div key={item.path} className={`search-dropdown-item${isSearchItemHighlighted(item) ? ' search-dropdown-item--highlighted' : ''}`} onClick={() => handleSearchSelect(item.path)} onMouseEnter={() => setSearchItemHighlight(item)}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
                           <span>{item.name}</span>
                         </div>
@@ -462,7 +579,7 @@ function Header() {
                     <div className="search-dropdown-section">
                       <div className="search-dropdown-label">Projects</div>
                       {searchResults.projects.map((item) => (
-                        <div key={item.id} className="search-dropdown-item" onClick={() => handleSearchSelect(item.path)}>
+                        <div key={item.id} className={`search-dropdown-item${isSearchItemHighlighted(item) ? ' search-dropdown-item--highlighted' : ''}`} onClick={() => handleSearchSelect(item.path)} onMouseEnter={() => setSearchItemHighlight(item)}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
                           <div>
                             <span>{item.name}</span>
@@ -476,7 +593,7 @@ function Header() {
                     <div className="search-dropdown-section">
                       <div className="search-dropdown-label">Tasks</div>
                       {searchResults.tasks.map((item) => (
-                        <div key={item.id} className="search-dropdown-item" onClick={() => handleSearchSelect(item.path)}>
+                        <div key={item.id} className={`search-dropdown-item${isSearchItemHighlighted(item) ? ' search-dropdown-item--highlighted' : ''}`} onClick={() => handleSearchSelect(item.path)} onMouseEnter={() => setSearchItemHighlight(item)}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
                           <div>
                             <span>{item.name}</span>
@@ -490,7 +607,7 @@ function Header() {
                     <div className="search-dropdown-section">
                       <div className="search-dropdown-label">Subtasks</div>
                       {searchResults.deliverables.map((item) => (
-                        <div key={item.id} className="search-dropdown-item" onClick={() => handleSearchSelect(item.path)}>
+                        <div key={item.id} className={`search-dropdown-item${isSearchItemHighlighted(item) ? ' search-dropdown-item--highlighted' : ''}`} onClick={() => handleSearchSelect(item.path)} onMouseEnter={() => setSearchItemHighlight(item)}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
                           <div>
                             <span>{item.name}</span>
@@ -504,7 +621,7 @@ function Header() {
                     <div className="search-dropdown-section">
                       <div className="search-dropdown-label">Users</div>
                       {searchResults.users.map((item) => (
-                        <div key={item.id} className="search-dropdown-item" onClick={() => handleSearchSelect(item.path)}>
+                        <div key={item.id} className={`search-dropdown-item${isSearchItemHighlighted(item) ? ' search-dropdown-item--highlighted' : ''}`} onClick={() => handleSearchSelect(item.path)} onMouseEnter={() => setSearchItemHighlight(item)}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                           <div>
                             <span>{item.name}</span>
@@ -581,7 +698,7 @@ function Header() {
 
           {/* Notification bell with unread badge */}
           <div className="header-notif" ref={notifRef}>
-            <button className="header-notif-link" onClick={openNotifications}>
+            <button className="header-notif-link" onClick={openNotifications} onKeyDown={handleNotifKeyDown}>
               <div className="header-notif-icon-wrap">
                 <MdNotifications fontSize={"22px"} color={unreadCount > 0 ? "#ef4444" : "#6b7280"} />
                 {unreadCount > 0 && (
@@ -601,15 +718,16 @@ function Header() {
                     <button className="notif-mark-all" onClick={markAllAsRead}>Mark all read</button>
                   )}
                 </div>
-                <div className="notif-panel-list">
+                <div className="notif-panel-list" ref={notifListRef}>
                   {notifications.length === 0 ? (
                     <div className="notif-panel-empty">No notifications</div>
                   ) : (
-                    notifications.slice(0, 7).map((n) => (
+                    notifications.slice(0, 7).map((n, idx) => (
                       <div
                         key={n.id}
-                        className={`notif-panel-item ${!n.is_read ? "notif-panel-item--unread" : "notif-panel-item--read"}`}
+                        className={`notif-panel-item ${!n.is_read ? "notif-panel-item--unread" : "notif-panel-item--read"}${notifHighlightIndex === idx ? ' notif-panel-item--highlighted' : ''}`}
                         onClick={() => { markAsRead(n.id); setShowNotifications(false); navigate(getNotificationDestination(n)); }}
+                        onMouseEnter={() => setNotifHighlightIndex(idx)}
                       >
                         <div className={`notif-panel-dot ${!n.is_read ? "notif-panel-dot--unread" : ""}`} />
                         <div className="notif-panel-content">
@@ -638,6 +756,7 @@ function Header() {
             className="user-info"
             ref={profileRef}
             onClick={toggleProfileModal}
+            onKeyDown={handleProfileKeyDown}
           >
 
             <div className="user-avatar">
@@ -667,6 +786,7 @@ function Header() {
 
               <div
                 className="header-modal-card"
+                ref={profileMenuRef}
               >
                 {/* Profile header: gradient with photo + name + role */}
                 <div className="hmc-header">
@@ -689,20 +809,20 @@ function Header() {
                 <div className="hmc-divider" />
 
                 {/* Menu items */}
-                <button className="hmc-menu-item" onClick={() => { setIsProfileOpen(false); navigate(rolePath("my-profile")); }}>
+                <button className={`hmc-menu-item${profileHighlightIndex === 0 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); navigate(rolePath("my-profile")); }} onMouseEnter={() => setProfileHighlightIndex(0)}>
                   <MdPerson size={20} />
                   <span>My Profile</span>
                 </button>
-                <button className="hmc-menu-item" onClick={() => { setIsProfileOpen(false); setShowProfileModal(true); }}>
+                <button className={`hmc-menu-item${profileHighlightIndex === 1 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); setShowProfileModal(true); }} onMouseEnter={() => setProfileHighlightIndex(1)}>
                   <MdLock size={20} />
                   <span>Change Password</span>
                 </button>
-                <button className="hmc-menu-item" onClick={() => { setIsProfileOpen(false); navigate(rolePath("history")); }}>
+                <button className={`hmc-menu-item${profileHighlightIndex === 2 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); navigate(rolePath("history")); }} onMouseEnter={() => setProfileHighlightIndex(2)}>
                   <MdHistory size={20} />
                   <span>My Activity</span>
                 </button>
                 <div className="hmc-logout-wrap">
-                  <button className="hmc-logout-btn" onClick={async () => {
+                  <button className={`hmc-logout-btn${profileHighlightIndex === 3 ? ' hmc-menu-item--highlighted' : ''}`} onMouseEnter={() => setProfileHighlightIndex(3)} onClick={async () => {
                     const role = getCurrentRole();
                     const token = getToken(role);
                     if (token) {

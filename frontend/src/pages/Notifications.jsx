@@ -156,7 +156,9 @@ function Notifications() {
   const [lastPage, setLastPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [typeFilterOpen, setTypeFilterOpen] = useState(false);
+  const [typeHighlightedIndex, setTypeHighlightedIndex] = useState(-1);
   const typeDropdownRef = useRef(null);
+  const typeListRef = useRef(null);
   const lastSeenIdRef = useRef(0);
 
   // Desktop notification polling - shows new notifications as desktop notifications
@@ -200,6 +202,22 @@ function Notifications() {
 
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (typeFilterOpen) {
+      const idx = NOTIFICATION_TYPES.findIndex((t) => t.value === typeFilter);
+      setTypeHighlightedIndex(idx >= 0 ? idx : 0);
+    } else {
+      setTypeHighlightedIndex(-1);
+    }
+  }, [typeFilterOpen]);
+
+  useEffect(() => {
+    if (typeHighlightedIndex >= 0 && typeListRef.current) {
+      const el = typeListRef.current.children[typeHighlightedIndex];
+      if (el) el.scrollIntoView({ block: "nearest" });
+    }
+  }, [typeHighlightedIndex]);
 
   const NOTIFICATION_TYPES = [
     { value: "", label: "All Types" },
@@ -411,7 +429,35 @@ function Notifications() {
             <div className="notif-type-dropdown" ref={typeDropdownRef}>
               <button
                 className="notif-type-btn"
-                onClick={() => setTypeFilterOpen((o) => !o)}
+                onClick={() => {
+                  const idx = NOTIFICATION_TYPES.findIndex((t) => t.value === typeFilter);
+                  setTypeHighlightedIndex(idx >= 0 ? idx : 0);
+                  setTypeFilterOpen((o) => !o);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                    e.preventDefault();
+                    if (!typeFilterOpen) {
+                      const idx = NOTIFICATION_TYPES.findIndex((t) => t.value === typeFilter);
+                      setTypeHighlightedIndex(idx >= 0 ? idx : 0);
+                      setTypeFilterOpen(true);
+                    } else {
+                      setTypeHighlightedIndex((prev) => {
+                        if (e.key === "ArrowDown") return Math.min(prev + 1, NOTIFICATION_TYPES.length - 1);
+                        return Math.max(prev - 1, 0);
+                      });
+                    }
+                  } else if (e.key === "Enter" && typeFilterOpen && typeHighlightedIndex >= 0) {
+                    e.preventDefault();
+                    const t = NOTIFICATION_TYPES[typeHighlightedIndex];
+                    setTypeFilter(t.value);
+                    fetchNotifications(1, activeTab, search, t.value);
+                    setTypeFilterOpen(false);
+                  } else if (e.key === "Escape" && typeFilterOpen) {
+                    e.preventDefault();
+                    setTypeFilterOpen(false);
+                  }
+                }}
               >
                 <span>{NOTIFICATION_TYPES.find((t) => t.value === typeFilter)?.label || "All Types"}</span>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -419,16 +465,17 @@ function Notifications() {
                 </svg>
               </button>
               {typeFilterOpen && (
-                <div className="notif-type-list">
-                  {NOTIFICATION_TYPES.map((t) => (
+                <div className="notif-type-list" ref={typeListRef}>
+                  {NOTIFICATION_TYPES.map((t, idx) => (
                     <button
                       key={t.value}
-                      className={`notif-type-item ${typeFilter === t.value ? "notif-type-item--active" : ""}`}
+                      className={`notif-type-item ${typeFilter === t.value ? "notif-type-item--active" : ""} ${typeHighlightedIndex === idx ? "notif-type-item--highlighted" : ""}`}
                       onClick={() => {
                         setTypeFilter(t.value);
                         fetchNotifications(1, activeTab, search, t.value);
                         setTypeFilterOpen(false);
                       }}
+                      onMouseEnter={() => setTypeHighlightedIndex(idx)}
                     >
                       {t.label}
                     </button>

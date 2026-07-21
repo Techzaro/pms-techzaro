@@ -31,3 +31,16 @@
   border-radius: 8px;
   font-size: 14px;
 }
+
+.ap-popover-item {
+  display: inline-flex;
+}
+
+.ap-popover-item--highlighted {
+  background: #4a4a4a !important;
+  color: #fff !important;
+  border-radius: 6px;
+}
+.ap-popover-item--highlighted * {
+  color: #fff !important;
+}

@@ -2726,8 +2726,17 @@
   transition: background 0.1s ease;
 }
 
-.aam-multiselect-option:hover {
-  background: var(--bg-hover);
+.aam-multiselect-option:hover,
+.aam-multiselect-option--highlighted {
+  background: #4a4a4a !important;
+  color: #fff !important;
+}
+.aam-multiselect-option--highlighted * {
+  color: #fff !important;
+}
+.aam-multiselect-option--highlighted .aam-multiselect-role,
+.aam-multiselect-option--highlighted .aam-multiselect-dept {
+  background: rgba(255,255,255,0.2) !important;
 }
 
 .aam-multiselect-option input[type="checkbox"] {
