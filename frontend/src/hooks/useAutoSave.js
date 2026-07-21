@@ -50,16 +50,7 @@ export default function useAutoSave({
         if (currentDraftId) {
           await draftService.autoSave(currentDraftId, payload);
         } else {
-          const result = await draftService.create({
-            module_type: moduleType,
-            draft_data: data,
-            title: data[titleField] || "Untitled Draft",
-            project_id,
-            parent_id,
-          });
-          if (result?.data?.id) {
-            setCurrentDraftId(result.data.id);
-          }
+          return;
         }
 
         setLastSaved(new Date());

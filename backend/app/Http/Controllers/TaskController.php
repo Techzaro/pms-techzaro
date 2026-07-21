@@ -569,9 +569,9 @@ class TaskController extends Controller
         }
 
         // Validate that all assignees are members of the project
-        $projectMemberIds = app(\App\Http\Controllers\ProjectController::class)
+        $projectMemberIds = collect(app(\App\Http\Controllers\ProjectController::class)
             ->getMembers($project)
-            ->getData()
+            ->getData())
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->toArray();

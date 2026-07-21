@@ -706,6 +706,7 @@ function SubtaskDetails() {
             {/* TASK DISCUSSION — inside td-main, same as TaskDetails */}
             <TaskDiscussion taskId={subtask.task_id} deliverableId={subtask.id} entityType="deliverable" />
             </div>
+          </div>
 
             {/* ===== RIGHT SIDEBAR — matches TaskDetails exactly ===== */}
             <aside className="td-sidebar">
@@ -950,7 +951,6 @@ function SubtaskDetails() {
                 )}
               </div>
             </aside>
-          </div>
         </div>
       </DashboardLayout>
 

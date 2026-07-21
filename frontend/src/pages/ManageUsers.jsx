@@ -1853,10 +1853,15 @@ function ManageUsers() {
                   <div className="form-row">
                     <label htmlFor="role">System Role</label>
                     <select id="role" name="role" value={newUser.role} onChange={handleChange}>
-                      <option value="admin">Admin</option>
-                      <option value="manager">Manager</option>
                       <option value="team_lead">Team Lead</option>
                       <option value="member">Member</option>
+                      <option value="guest">Guest</option>
+                      {getCurrentRole() === "admin" && (
+                        <>
+                          <option value="admin">Admin</option>
+                          <option value="manager">Manager</option>
+                        </>
+                      )}
                     </select>
                   </div>
                   <div className="form-row">
