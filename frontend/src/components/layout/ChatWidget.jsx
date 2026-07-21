@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import API_URL from "../../config/api";
 import { authToken, getCurrentRole, rolePath } from "../../utils/auth";
 import { useNotification } from "../../context/NotificationContext";
+import RichTextEditor from "../RichTextEditor";
+import CustomSelect from "../CustomSelect";
 import "./ChatWidget.css";
 
 function ChatWidget() {
@@ -26,7 +28,11 @@ function ChatWidget() {
   const [linkSubtask, setLinkSubtask] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [chatSubject, setChatSubject] = useState("");
+  const [participantSearch, setParticipantSearch] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [filePreview, setFilePreview] = useState(null);
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
   const user = JSON.parse(localStorage.getItem(`user_${getCurrentRole()}`) || "{}");
 
   useEffect(() => {
@@ -87,23 +93,30 @@ function ChatWidget() {
   };
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !activeConversation) return;
+    const cleanBody = newMessage.replace(/<[^>]*>/g, "").trim();
+    if ((!cleanBody && !selectedFile) || !activeConversation) return;
     setSending(true);
     try {
       const token = authToken();
+      const formData = new FormData();
+      formData.append("body", newMessage || "<p></p>");
+      if (selectedFile) {
+        formData.append("file", selectedFile);
+      }
       const res = await fetch(`${API_URL}/conversations/${activeConversation.id}/messages`, {
         method: "POST",
         headers: {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ body: newMessage }),
+        body: formData,
       });
       const data = await res.json();
       if (data.success) {
         setMessages((prev) => [...prev, data.message]);
         setNewMessage("");
+        setSelectedFile(null);
+        setFilePreview(null);
         fetchConversations();
       }
     } catch (err) {
@@ -118,6 +131,26 @@ function ChatWidget() {
       e.preventDefault();
       handleSendMessage();
     }
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSelectedFile(file);
+      if (file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = (ev) => setFilePreview(ev.target.result);
+        reader.readAsDataURL(file);
+      } else {
+        setFilePreview(null);
+      }
+    }
+  };
+
+  const removeSelectedFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const openNewChat = async () => {
@@ -288,12 +321,12 @@ function ChatWidget() {
                         <span>Project</span>
                       </label>
                       {linkProject && (
-                        <select className="cw-link-select" value={selectedProject} onChange={(e) => setSelectedProject(e.target.value)}>
-                          <option value="">Select project</option>
-                          {projects.map((p) => (
-                            <option key={p.id} value={p.id}>{p.title}</option>
-                          ))}
-                        </select>
+                        <CustomSelect
+                          value={selectedProject}
+                          onChange={(val) => setSelectedProject(val)}
+                          options={projects.map((p) => ({ value: p.id, label: p.title }))}
+                          placeholder="Select project"
+                        />
                       )}
                     </div>
                     <div className="cw-link-to-row">
@@ -302,12 +335,12 @@ function ChatWidget() {
                         <span>Task</span>
                       </label>
                       {linkTask && (
-                        <select className="cw-link-select" value={selectedTask} onChange={(e) => setSelectedTask(e.target.value)}>
-                          <option value="">Select task</option>
-                          {tasks.map((t) => (
-                            <option key={t.id} value={t.id}>{t.title}</option>
-                          ))}
-                        </select>
+                        <CustomSelect
+                          value={selectedTask}
+                          onChange={(val) => setSelectedTask(val)}
+                          options={tasks.map((t) => ({ value: t.id, label: t.title }))}
+                          placeholder="Select task"
+                        />
                       )}
                     </div>
                     <div className="cw-link-to-row">
@@ -316,19 +349,28 @@ function ChatWidget() {
                         <span>Subtask</span>
                       </label>
                       {linkSubtask && (
-                        <select className="cw-link-select" value={selectedSubtask} onChange={(e) => setSelectedSubtask(e.target.value)}>
-                          <option value="">Select subtask</option>
-                          {subtasks.map((d) => (
-                            <option key={d.id} value={d.id}>{d.title}</option>
-                          ))}
-                        </select>
+                        <CustomSelect
+                          value={selectedSubtask}
+                          onChange={(val) => setSelectedSubtask(val)}
+                          options={subtasks.map((d) => ({ value: d.id, label: d.title }))}
+                          placeholder="Select subtask"
+                        />
                       )}
                     </div>
                   </div>
                   <div className="cw-form-group">
                     <label>Participants *</label>
+                    <input
+                      type="text"
+                      className="cw-participant-search"
+                      placeholder="Search participants..."
+                      value={participantSearch}
+                      onChange={(e) => setParticipantSearch(e.target.value)}
+                    />
                     <div className="cw-user-checkboxes">
-                      {users.map((u) => (
+                      {users
+                        .filter((u) => u.name.toLowerCase().includes(participantSearch.toLowerCase()))
+                        .map((u) => (
                         <label key={u.id} className="cw-checkbox-label">
                           <input
                             type="checkbox"
@@ -348,12 +390,7 @@ function ChatWidget() {
                   </div>
                   <div className="cw-form-group">
                     <label>First Message *</label>
-                    <textarea
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      placeholder="Type your first message..."
-                      rows={2}
-                    />
+                    <RichTextEditor value={newMessage} onChange={setNewMessage} placeholder="Type your first message..." />
                   </div>
                   <div className="cw-form-actions">
                     <button className="cw-btn-cancel" onClick={() => setShowNewChat(false)}>Cancel</button>
@@ -384,12 +421,18 @@ function ChatWidget() {
                             <span className="cw-msg-sender">{msg.user?.name}</span>
                             <span className="cw-msg-time">{formatTime(msg.created_at)}</span>
                           </div>
-                          <div className="cw-msg-body">{msg.body}</div>
+                          <div className="cw-msg-body rte-display" dangerouslySetInnerHTML={{ __html: msg.body }} />
                           {msg.file_name && (
                             <div className="cw-msg-file">
-                              <a href={`${API_URL}/messages/${msg.id}/file?token=${authToken()}`} target="_blank" rel="noopener noreferrer">
-                                📎 {msg.file_name}
-                              </a>
+                              {msg.file_name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ? (
+                                <a href={`${API_URL}/messages/${msg.id}/file?token=${authToken()}`} target="_blank" rel="noopener noreferrer">
+                                  <img src={`${API_URL}/messages/${msg.id}/file?token=${authToken()}`} alt={msg.file_name} className="cw-message-image-preview" />
+                                </a>
+                              ) : (
+                                <a href={`${API_URL}/messages/${msg.id}/file?token=${authToken()}`} target="_blank" rel="noopener noreferrer">
+                                  📎 {msg.file_name}
+                                </a>
+                              )}
                             </div>
                           )}
                         </div>
@@ -398,20 +441,33 @@ function ChatWidget() {
                     <div ref={messagesEndRef} />
                   </div>
                   <div className="cw-input-area">
-                    <textarea
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder="Type a message..."
-                      rows={1}
-                      disabled={sending}
-                    />
-                    <button onClick={handleSendMessage} disabled={sending || !newMessage.trim()} className="cw-send-btn">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="22" y1="2" x2="11" y2="13" />
-                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                      </svg>
-                    </button>
+                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ display: "none" }} />
+                    {selectedFile && (
+                      <div className="cw-file-preview-bar">
+                        {filePreview ? (
+                          <img src={filePreview} alt="Preview" className="cw-file-thumb" />
+                        ) : (
+                          <span className="cw-file-name-label">📎 {selectedFile.name}</span>
+                        )}
+                        <button className="cw-file-remove-btn" onClick={removeSelectedFile}>✕</button>
+                      </div>
+                    )}
+                    <div className="cw-editor-row">
+                      <button className="cw-attach-btn" onClick={() => fileInputRef.current?.click()} title="Attach file">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                        </svg>
+                      </button>
+                      <div className="cw-editor-wrapper">
+                        <RichTextEditor value={newMessage} onChange={setNewMessage} placeholder="Type a message..." />
+                      </div>
+                      <button onClick={handleSendMessage} disabled={sending || (!newMessage.replace(/<[^>]*>/g, "").trim() && !selectedFile)} className="cw-send-btn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="22" y1="2" x2="11" y2="13" />
+                          <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </>
               ) : (

@@ -69,35 +69,35 @@ function fileUrl(url) {
 }
 
 const STATUS_COLORS = {
-  pending: "#FEF3C7",
-  in_progress: "#DBEAFE",
-  paused: "#FEF3C7",
-  submitted: "#DBEAFE",
-  reopened: "#EDE9FE",
-  approved: "#DCFCE7",
-  rejected: "#FEE2E2",
+  pending: "var(--color-warning-bg)",
+  in_progress: "var(--color-blue-bg)",
+  paused: "var(--color-warning-bg)",
+  submitted: "var(--color-blue-bg)",
+  reopened: "var(--color-primary-bg)",
+  approved: "var(--color-success-bg)",
+  rejected: "var(--color-danger-bg)",
 };
 
 const STATUS_TEXT_COLORS = {
-  pending: "#92400E",
-  in_progress: "#1E40AF",
-  paused: "#92400E",
-  submitted: "#1E40AF",
-  reopened: "#5B21B6",
-  approved: "#166534",
-  rejected: "#991B1B",
+  pending: "var(--color-warning)",
+  in_progress: "var(--color-blue)",
+  paused: "var(--color-warning)",
+  submitted: "var(--color-blue)",
+  reopened: "var(--color-primary)",
+  approved: "var(--color-success)",
+  rejected: "var(--color-danger)",
 };
 
 const PRIORITY_COLORS = {
-  High: "#FEE2E2",
-  Medium: "#FEF3C7",
-  Low: "#DCFCE7",
+  High: "var(--color-danger-bg)",
+  Medium: "var(--color-warning-bg)",
+  Low: "var(--color-success-bg)",
 };
 
 const PRIORITY_TEXT_COLORS = {
-  High: "#991B1B",
-  Medium: "#92400E",
-  Low: "#166534",
+  High: "var(--color-danger)",
+  Medium: "var(--color-warning)",
+  Low: "var(--color-success)",
 };
 
 function formatStatus(status) {
@@ -937,8 +937,8 @@ function ProjectDetails() {
                         onClick={() => handleMilestoneToggle(m)}
                         disabled={milestoneToggling}
                         style={{
-                          width: "22px", height: "22px", borderRadius: "50%", border: m.status === "completed" ? "2px solid #16a34a" : "2px solid #d1d5db",
-                          background: m.status === "completed" ? "#16a34a" : "transparent", cursor: "pointer", display: "flex",
+                          width: "22px", height: "22px", borderRadius: "50%", border: m.status === "completed" ? "2px solid var(--color-success)" : "2px solid var(--border-color)",
+                          background: m.status === "completed" ? "var(--color-success)" : "transparent", cursor: "pointer", display: "flex",
                           alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s",
                         }}
                         title={m.status === "completed" ? "Click to unachieve" : "Click to achieve"}
@@ -952,8 +952,8 @@ function ProjectDetails() {
                     ) : (
                       <span
                         style={{
-                          width: "22px", height: "22px", borderRadius: "50%", border: m.status === "completed" ? "2px solid #16a34a" : "2px solid #d1d5db",
-                          background: m.status === "completed" ? "#16a34a" : "transparent", display: "flex",
+                          width: "22px", height: "22px", borderRadius: "50%", border: m.status === "completed" ? "2px solid var(--color-success)" : "2px solid var(--border-color)",
+                          background: m.status === "completed" ? "var(--color-success)" : "transparent", display: "flex",
                           alignItems: "center", justifyContent: "center", flexShrink: 0,
                         }}
                       >
@@ -965,15 +965,15 @@ function ProjectDetails() {
                       </span>
                     )}
                     <div>
-                      <div className="pd-milestones__title" style={{ textDecoration: m.status === "completed" ? "line-through" : "none", color: m.status === "completed" ? "#6b7280" : "#111827" }}>{m.title}</div>
+                      <div className="pd-milestones__title" style={{ textDecoration: m.status === "completed" ? "line-through" : "none", color: m.status === "completed" ? "var(--text-secondary)" : "var(--text-primary)" }}>{m.title}</div>
                     </div>
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0, marginLeft: "12px" }}>
-                    <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                    <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
                       Due: {formatDateTimeShort(m.due_date)}
                     </div>
                     {m.status === "completed" && m.completed_at && (
-                      <div style={{ fontSize: "12px", color: "#16a34a", marginTop: "2px" }}>
+                      <div style={{ fontSize: "12px", color: "var(--color-success)", marginTop: "2px" }}>
                         Achieved: {formatDateTimeShort(m.completed_at)}
                       </div>
                     )}
@@ -999,7 +999,7 @@ function ProjectDetails() {
                 <h2 className="pd-block-title pd-block-title--gap">Category</h2>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {cats.map((cat, i) => (
-                    <span key={i} style={{ display: "inline-block", padding: "4px 12px", borderRadius: 20, fontSize: 13, fontWeight: 500, background: "#ede9fe", color: "#6d28d9" }}>{cat}</span>
+                    <span key={i} style={{ display: "inline-block", padding: "4px 12px", borderRadius: 20, fontSize: 13, fontWeight: 500, background: "var(--color-primary-bg)", color: "var(--color-primary)" }}>{cat}</span>
                   ))}
                 </div>
               </div>
@@ -1196,7 +1196,7 @@ function ProjectDetails() {
                             <h2 className="pd-block-title pd-block-title--inline">Tasks ({tasks.length})</h2>
                             <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                              <input type="text" placeholder="Search tasks..." value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} />
+                              <input type="text" placeholder="Search by task name..." value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} />
                             </div>
                             {currentUser?.role !== "guest" && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowTaskModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -1232,27 +1232,27 @@ function ProjectDetails() {
                                           </Link>
                                         </div>
                                         <div>
-                                          <span className="badge" style={{ background: STATUS_COLORS[statusKey] || "#F3F4F6", color: STATUS_TEXT_COLORS[statusKey] || "#374151" }}>
-                                            <span className="dot" style={{ background: STATUS_TEXT_COLORS[statusKey] || "#374151" }}></span>
+                                          <span className="badge" style={{ background: STATUS_COLORS[statusKey] || "var(--bg-hover)", color: STATUS_TEXT_COLORS[statusKey] || "var(--text-dark)" }}>
+                                            <span className="dot" style={{ background: STATUS_TEXT_COLORS[statusKey] || "var(--text-dark)" }}></span>
                                             {formatStatus(t.status)}
                                           </span>
                                         </div>
                                         <div>
                                           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: "4px" }}>
-                                            <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                                            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-dark)" }}>
                                               {t.deliverables_progress || 0}%
                                             </span>
                                           </div>
                                           <div className="progress-bar-track">
                                             <div className="progress-bar-fill" style={{ width: `${t.deliverables_progress || 0}%` }}></div>
                                           </div>
-                                          <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
+                                          <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>
                                             {t.approved_deliverables || 0}/{t.total_deliverables || 0} Del. Approved
                                           </div>
                                         </div>
                                         <div>
-                                          <span className="badge" style={{ background: PRIORITY_COLORS[t.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[t.priority] || "#374151" }}>
-                                            <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[t.priority] || "#374151" }}></span>
+                                          <span className="badge" style={{ background: PRIORITY_COLORS[t.priority] || "var(--bg-hover)", color: PRIORITY_TEXT_COLORS[t.priority] || "var(--text-dark)" }}>
+                                            <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[t.priority] || "var(--text-dark)" }}></span>
                                             {t.priority}
                                           </span>
                                         </div>
@@ -1317,7 +1317,7 @@ function ProjectDetails() {
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                                 <input
                                   type="text"
-                                  placeholder="Search files & links..."
+                                  placeholder="Search by file name or URL..."
                                   value={fileSearch}
                                   onChange={(e) => setFileSearch(e.target.value)}
                                 />
@@ -1368,7 +1368,7 @@ function ProjectDetails() {
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="pd-file-box__link"
-                                            style={{ color: "#6366f1" }}
+                                            style={{ color: "var(--color-primary)" }}
                                           >
                                             {f.url}
                                           </a>
@@ -1392,7 +1392,7 @@ function ProjectDetails() {
                             <h2 className="pd-block-title pd-block-title--inline">Team members</h2>
                             <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                              <input type="text" placeholder="Search members..." value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} />
+                              <input type="text" placeholder="Search by member name or role..." value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} />
                             </div>
                             {currentUser?.role !== "guest" && (
                               <Link to={rolePath("manage-team")} className="pd-link-manage">
@@ -1443,7 +1443,7 @@ function ProjectDetails() {
                             </div>
                             {team.leader && (
                               <div className="pd-member">
-                                <div className="pd-avatar" aria-hidden style={{ background: "#7c3aed" }}>
+                                <div className="pd-avatar" aria-hidden style={{ background: "var(--color-primary)" }}>
                                   {initials(team.leader.name)}
                                 </div>
                                 <div>
@@ -1473,7 +1473,7 @@ function ProjectDetails() {
                               <h2 className="pd-block-title pd-block-title--inline">View Access</h2>
                               <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                                <input type="text" placeholder="Search view access users..." value={viewAccessSearch} onChange={(e) => setViewAccessSearch(e.target.value)} />
+                                <input type="text" placeholder="Search by user name..." value={viewAccessSearch} onChange={(e) => setViewAccessSearch(e.target.value)} />
                               </div>
                             </div>
                             <p className="pd-muted" style={{ margin: "0 0 12px", fontSize: 13 }}>
@@ -1489,7 +1489,7 @@ function ProjectDetails() {
                               ) : (
                                 filtered.map((u) => (
                                   <div key={u.id} className="pd-member">
-                                    <div className="pd-avatar" aria-hidden style={{ background: "#fbbf24" }}>
+                                    <div className="pd-avatar" aria-hidden style={{ background: "var(--color-warning)" }}>
                                       {initials(u.name)}
                                     </div>
                                     <div>
@@ -1512,7 +1512,7 @@ function ProjectDetails() {
                             <h2 className="pd-block-title pd-block-title--inline">Project Access Credentials</h2>
                             <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                              <input type="text" placeholder="Search access..." value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
+                              <input type="text" placeholder="Search by title, username, or URL..." value={accessSearch} onChange={(e) => setAccessSearch(e.target.value)} />
                             </div>
                             {isAdminOrManager && (
                               <button type="button" className="pd-btn-tx pd-btn-tx--primary" onClick={() => setShowAddAccessModal(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -1684,7 +1684,7 @@ function ProjectDetails() {
                     <span className="sv-user-name">{u.name}</span>
                     <span className="sv-user-role">({u.role.replace("_", " ")})</span>
                     {!u.is_member && (
-                      <span style={{ marginLeft: "auto", fontSize: 11, color: "#92400e", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 6, padding: "1px 8px", fontWeight: 500 }}>View Only</span>
+                      <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--color-warning)", background: "var(--color-warning-bg)", border: "1px solid var(--color-warning)", borderRadius: 6, padding: "1px 8px", fontWeight: 500 }}>View Only</span>
                     )}
                   </label>
                 ))
@@ -1706,35 +1706,35 @@ function ProjectDetails() {
       {editFileItem && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={() => setEditFileItem(null)}>
           <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 460, maxWidth: "90vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#1e293b" }}>Edit File / Link</h3>
-            <p style={{ margin: "6px 0 0", fontSize: 13, color: "#64748b" }}>Rename or update the URL below.</p>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-heading)" }}>Edit File / Link</h3>
+            <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-muted)" }}>Rename or update the URL below.</p>
             <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
-                <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>Title</label>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dark)", display: "block", marginBottom: 4 }}>Title</label>
                 <input
                   autoFocus
                   type="text"
                   value={editFileName}
                   onChange={(e) => setEditFileName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") handleRenameFile(); }}
-                  style={{ width: "100%", padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                  style={{ width: "100%", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }}
                 />
               </div>
               {editFileItem.url && (
                 <div>
-                  <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>URL</label>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dark)", display: "block", marginBottom: 4 }}>URL</label>
                   <input
                     type="text"
                     value={editFileUrl}
                     onChange={(e) => setEditFileUrl(e.target.value)}
-                    style={{ width: "100%", padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                    style={{ width: "100%", padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }}
                   />
                 </div>
               )}
             </div>
             <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <button type="button" onClick={() => setEditFileItem(null)} style={{ padding: "8px 18px", borderRadius: 8, border: "1px solid var(--border-medium)", background: "var(--bg-card)", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--text-dark)" }}>Cancel</button>
-              <button type="button" onClick={handleRenameFile} disabled={!editFileName.trim()} style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: editFileName.trim() ? "#6366f1" : "#e5e7eb", color: editFileName.trim() ? "#fff" : "#9ca3af", fontSize: 13, fontWeight: 600, cursor: editFileName.trim() ? "pointer" : "not-allowed" }}>Save</button>
+              <button type="button" onClick={handleRenameFile} disabled={!editFileName.trim()} style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: editFileName.trim() ? "var(--color-primary)" : "var(--bg-hover)", color: editFileName.trim() ? "#fff" : "var(--text-muted)", fontSize: 13, fontWeight: 600, cursor: editFileName.trim() ? "pointer" : "not-allowed" }}>Save</button>
             </div>
           </div>
         </div>

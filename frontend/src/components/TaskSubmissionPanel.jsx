@@ -80,6 +80,7 @@ function TaskSubmissionPanel({
   setReopenDialog,
   acting,
   setActing,
+  hideTimeline,
 }) {
   const latestSubmission = task.latest_submission || task.latestSubmission;
   const workflowEvents = task.workflow_events || task.workflowEvents || [];
@@ -296,7 +297,7 @@ function TaskSubmissionPanel({
       )}
 
       {/* Submission history */}
-      {historyItems.length > 0 && (
+      {!hideTimeline && historyItems.length > 0 && (
         <div className="td-card td-submission-card">
           <h3 className="td-card-title">Timeline History</h3>
           <ul className="td-history-list">

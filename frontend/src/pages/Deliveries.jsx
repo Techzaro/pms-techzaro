@@ -18,11 +18,19 @@ import { useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
+import { StickyNote } from "lucide-react";
+import { authToken, rolePath } from "../utils/auth";
+import API_URL from "../config/api";
+import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
+import ViewDeliverableModal from "../components/ViewDeliverableModal";
+import ActionPopover from "../components/ActionPopover";
+import AddNoteModal from "../components/AddNoteModal";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
 import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import { formatDateTimeInline } from "../utils/formatDateTime";
+import "../components/ActionPopover.css";
 import "../pages/Deliveries.css";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
@@ -70,6 +78,8 @@ function Deliveries() {
   });
   const [timeFilter, setTimeFilter] = useState("");
   const [submitModal, setSubmitModal] = useState({ open: false, subtask: null });
+  const [viewModal, setViewModal] = useState({ open: false, subtask: null });
+  const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [restoreDraftId, setRestoreDraftId] = useState(null);
   const [page, setPage] = useState(1);
@@ -387,17 +397,24 @@ function Deliveries() {
                     <div className="date-box">
                       <div style={{ whiteSpace: "pre-line" }}>{formatDateTimeInline(item.start_date)}{"\n"}{formatDateTimeInline(item.due_date)}</div>
                     </div>
-                    <div className="action-btns">
+                    <ActionPopover
+                      trigger={
+                        <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                          <IoEyeOutline size={20} />
+                        </button>
+                      }
+                    >
+                      <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                       {(item.status === "pending" || item.status === "rejected" || item.status === "reopened") ? (
                         <button className="action-icon-btn action-submit" title="Submit Subtask" onClick={() => setSubmitModal({ open: true, subtask: item })}>
-                          <LuSend />
+                          <LuSend size={16} />
                         </button>
                       ) : (
                         <button className="action-icon-btn action-view" title="View Submission" onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "deliveries" } })}>
                           <IoEyeOutline />
                         </button>
                       )}
-                    </div>
+                    </ActionPopover>
                   </div>
                 );
               }}

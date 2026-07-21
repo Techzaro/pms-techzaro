@@ -14,7 +14,7 @@ import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { CheckCircle2, Lock, Play } from "lucide-react";
+import { CheckCircle2, Lock, Play, StickyNote } from "lucide-react";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { publish } from "../utils/eventBus";
@@ -23,9 +23,13 @@ import SubmitTaskModal from "../components/SubmitTaskModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
+import ActionPopover from "../components/ActionPopover";
+import TaskNotesPopover from "../components/TaskNotesPopover";
+import AddNoteModal from "../components/AddNoteModal";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { formatDateTimeInline } from "../utils/formatDateTime";
+import "../components/ActionPopover.css";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
@@ -372,7 +376,7 @@ function Tasks() {
         <IoSearchOutline fontSize={"20px"} />
         <input
           type="text"
-          placeholder="Search by task name"
+          placeholder="Search by task name or user name"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -421,7 +425,10 @@ function Tasks() {
                   </div>
                   
                   <div className="col-task-name">
-                    <div className="task-title">{item.title}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <div className="task-title">{item.title}</div>
+                      <TaskNotesPopover taskId={item.id} itemType="task" />
+                    </div>
                     {item.project && (
                       <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#6B7280", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
                         {item.project.title}
@@ -481,14 +488,21 @@ function Tasks() {
                   </div>
                   
                   <div className="col-action">
-                    <div className="action-btns">
-                      <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}><IoEyeOutline /></button>
+                    <ActionPopover
+                      trigger={
+                        <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                          <IoEyeOutline size={20} />
+                        </button>
+                      }
+                    >
+                      <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}><IoEyeOutline size={16} /></button>
+                      <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                       {(() => {
                         const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
                         if (item.assigner_paused) {
                           return (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "12px", fontWeight: 600, border: "1px solid #F59E0B" }}>
-                              <Lock size={13} />
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
+                              <Lock size={12} />
                               On Hold
                             </span>
                           );
@@ -496,14 +510,14 @@ function Tasks() {
                         if (item.status === "pending") {
                           return (
                             <button className="action-icon-btn action-submit" title="Acknowledge Task" onClick={() => handleAcknowledge(item.id)}>
-                              <CheckCircle2 size={18} />
+                              <CheckCircle2 size={16} />
                             </button>
                           );
                         }
                         if (item.status === "paused") {
                           return (
                             <button className="action-icon-btn action-submit" title="Continue Task" onClick={() => handleContinue(item.id)}>
-                              <Play size={18} />
+                              <Play size={16} />
                             </button>
                           );
                         }
@@ -517,14 +531,14 @@ function Tasks() {
                                 onClick={() => !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item })}
                                 style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
                               >
-                                <LuSend />
+                                <LuSend size={16} />
                               </button>
                             </div>
                           );
                         }
                         return null;
                       })()}
-                    </div>
+                    </ActionPopover>
                   </div>
                 </div>
               );
@@ -543,6 +557,14 @@ function Tasks() {
         onClose={() => setSubmitTaskModal({ open: false, task: null })}
         task={submitTaskModal.task}
         onSubmitSuccess={handleTaskSubmitSuccess}
+      />
+
+      <AddNoteModal
+        isOpen={noteModal.open}
+        onClose={() => setNoteModal({ open: false, itemId: null })}
+        itemType="task"
+        itemId={noteModal.itemId}
+        onSaved={fetchTasks}
       />
 
     </DashboardLayout>

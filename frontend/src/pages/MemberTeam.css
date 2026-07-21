@@ -39,7 +39,7 @@
 /* Card */
 .mt-card {
   background: var(--bg-card);
-  border: 1px solid #e9ecf0;
+  border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 28px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -70,7 +70,7 @@
   align-items: center;
   gap: 6px;
   background: var(--bg-card);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 6px 12px;
   width: 240px;
@@ -78,12 +78,12 @@
 }
 
 .mt-search-bar:focus-within {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
 }
 
 .mt-search-icon {
-  color: #94a3b8;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -98,7 +98,7 @@
 }
 
 .mt-search-input::placeholder {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .mt-card-identity {
@@ -136,7 +136,7 @@
   gap: 8px;
   flex-wrap: wrap;
   font-size: 14px;
-  color: #334155;
+  color: var(--text-dark);
 }
 
 .mt-info-label {
@@ -165,12 +165,12 @@
   align-items: center;
   gap: 8px;
   background: var(--bg-page);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 8px 14px;
   font-size: 14px;
   font-weight: 500;
-  color: #475569;
+  color: var(--text-dark);
 }
 
 /* Members Grid */
@@ -182,7 +182,7 @@
 
 .mt-member-card {
   background: var(--bg-page);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 16px;
   transition: border-color 0.2s, box-shadow 0.2s;

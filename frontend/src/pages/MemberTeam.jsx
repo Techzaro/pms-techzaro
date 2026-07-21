@@ -91,7 +91,7 @@ function MemberTeam() {
               <input
                 type="text"
                 className="mt-search-input"
-                placeholder="Search members..."
+                placeholder="Search by member name or email..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />

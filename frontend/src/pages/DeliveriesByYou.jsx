@@ -21,6 +21,7 @@ import { formatDateTimeInline } from "../utils/formatDateTime";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
+import "../components/ActionPopover.css";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
 
@@ -364,15 +365,22 @@ function DeliveriesByYou() {
                       </div>
                     </div>
                     <div>
-                      <div className="action-btns">
+                      <ActionPopover
+                        trigger={
+                          <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                            <IoEyeOutline size={20} />
+                          </button>
+                        }
+                      >
                         <button
                           className="action-icon-btn action-view"
                           title="View"
                           onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "deliveries-by-you" } })}
                         >
-                          <IoEyeOutline />
+                          <IoEyeOutline size={16} />
                         </button>
-                      </div>
+                        <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
+                      </ActionPopover>
                     </div>
                   </div>
                 );

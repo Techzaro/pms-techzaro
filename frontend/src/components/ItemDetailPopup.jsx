@@ -150,7 +150,7 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
     >
       <div
         style={{
-          background: "#fff", borderRadius: 20, width: "100%",
+          background: "var(--bg-card)", borderRadius: 20, width: "100%",
           maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
           overflow: "hidden",
         }}
@@ -175,7 +175,7 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
             </div>
             <h2 style={{
               margin: "4px 0 0", fontSize: 20, fontWeight: 700,
-              color: "#111827", wordBreak: "break-word",
+              color: "var(--text-heading)", wordBreak: "break-word",
             }}>
               {item.title}
             </h2>
@@ -183,7 +183,7 @@ function ItemDetailPopup({ item, role, onClose, onEdit }) {
           <button
             onClick={onClose}
             style={{
-              background: "none", border: "none", fontSize: 24, color: "#9ca3af",
+              background: "none", border: "none", fontSize: 24, color: "var(--text-muted)",
               cursor: "pointer", lineHeight: 1, padding: "0 0 0 12px", flexShrink: 0,
             }}
           >
@@ -244,12 +244,12 @@ function MetaRow({ label, value, valueStyle }) {
   return (
     <div>
       <span style={{
-        fontSize: 12, fontWeight: 600, color: "#9ca3af",
+        fontSize: 12, fontWeight: 600, color: "var(--text-muted)",
         textTransform: "uppercase", letterSpacing: "0.5px",
       }}>
         {label}
       </span>
-      <p style={{ margin: "4px 0 0", fontSize: 14, color: "#374151", whiteSpace: "pre-wrap", ...valueStyle }}>
+      <p style={{ margin: "4px 0 0", fontSize: 14, color: "var(--text-dark)", whiteSpace: "pre-wrap", ...valueStyle }}>
         {value}
       </p>
     </div>

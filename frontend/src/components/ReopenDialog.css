@@ -59,10 +59,10 @@
   width: 100%;
   min-height: 80px;
   padding: 10px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   font-size: 14px;
-  color: #1e293b;
+  color: var(--text-primary);
   background: var(--bg-card);
   resize: vertical;
   font-family: inherit;
@@ -72,17 +72,17 @@
 
 .rd-textarea:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
 }
 
 .rd-input {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   font-size: 14px;
-  color: #1e293b;
+  color: var(--text-primary);
   background: var(--bg-card);
   box-sizing: border-box;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -90,8 +90,8 @@
 
 .rd-input:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
 }
 
 .rd-dropzone {

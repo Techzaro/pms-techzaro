@@ -1439,7 +1439,7 @@ function ManageUsers() {
           </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             {activeTab === "employees" && (
-              <button className="primary-button add-user-button" onClick={() => setCompanyDocsOpen(true)} style={{ background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }}>
+              <button className="primary-button add-user-button" onClick={() => setCompanyDocsOpen(true)} style={{ background: "var(--color-success-bg)", color: "var(--color-success)", border: "1px solid var(--color-success)" }}>
                 Company Documents
               </button>
             )}
@@ -1473,7 +1473,7 @@ function ManageUsers() {
         <div className="bar">
           <div className="search-bar">
             <IoSearchOutline fontSize={"25px"} />
-            <input type="text" placeholder="Search users by name or email....." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }} />
+            <input type="text" placeholder="Search by employee name or email..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }} />
           </div>
           <select className="reports-filter" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
             <option value="">All Time</option>
@@ -1562,7 +1562,7 @@ function ManageUsers() {
         <div className="bar">
           <div className="search-bar">
             <IoSearchOutline fontSize={"25px"} />
-            <input type="text" placeholder="Search guests by name, email or company....." value={guestSearch} onChange={(e) => { setGuestSearch(e.target.value); setGuestPage(1); }} />
+            <input type="text" placeholder="Search by guest name, email, or company..." value={guestSearch} onChange={(e) => { setGuestSearch(e.target.value); setGuestPage(1); }} />
           </div>
         </div>
 
@@ -1596,7 +1596,7 @@ function ManageUsers() {
                           </div>
                         </div>
                       </td>
-                      <td><span style={{ fontSize: 14, color: "#374151" }}>{g.company_name || "—"}</span></td>
+                      <td><span style={{ fontSize: 14, color: "var(--text-dark)" }}>{g.company_name || "—"}</span></td>
                       <td><span className={`status-badge ${st.className}`}>{st.label}</span></td>
                       <td>
                         <div className="action-buttons">
@@ -1698,7 +1698,7 @@ function ManageUsers() {
                           <img src={`${API_URL.replace('/api', '')}/storage/${newUser._existingAvatar}`} alt="Avatar preview" />
                         ) : (
                           <>
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                               <circle cx="12" cy="7" r="4" />
                             </svg>
@@ -1767,7 +1767,7 @@ function ManageUsers() {
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                       <input type={showProfPassword ? "text" : "password"} id="professionalEmailPassword" name="professionalEmailPassword" value={newUser.professionalEmailPassword} onChange={handleChange} placeholder={editingUser ? "Leave blank to keep current" : "Enter professional email password"} className={addErrors.professionalEmailPassword ? "field-error" : ""} style={{ flex: 1 }} />
                       {editingUser && newUser.professionalEmailPassword && (
-                        <button type="button" onClick={() => setShowProfPassword(!showProfPassword)} style={{ background: "none", border: "1px solid #d1d5db", borderRadius: "6px", padding: "6px 10px", cursor: "pointer", fontSize: 12, color: "#6b7280", whiteSpace: "nowrap" }}>
+                        <button type="button" onClick={() => setShowProfPassword(!showProfPassword)} style={{ background: "none", border: "1px solid var(--border-color)", borderRadius: "6px", padding: "6px 10px", cursor: "pointer", fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
                           {showProfPassword ? "Hide" : "Show"}
                         </button>
                       )}
@@ -1788,16 +1788,16 @@ function ManageUsers() {
                       </div>
                     ) : (
                       <div className="category-dropdown-container" ref={desgDropdownRef}>
-                        <button type="button" className="category-dropdown-trigger" onClick={() => setDesgDropdownOpen((o) => !o)} style={addErrors.designation ? { border: "1px solid #ef4444" } : {}}>
+                        <button type="button" className="category-dropdown-trigger" onClick={() => setDesgDropdownOpen((o) => !o)} style={addErrors.designation ? { border: "1px solid var(--color-danger)" } : {}}>
                           {newUser.designation || "Select Designation"} <span className={`category-dropdown-arrow ${desgDropdownOpen ? "open" : ""}`}>&#9662;</span>
                         </button>
                         {desgDropdownOpen && (
                           <div className="category-dropdown-options">
-                            <div className="category-dropdown-option" onClick={() => { setNewUser((prev) => ({ ...prev, designation: "" })); setDesgDropdownOpen(false); }} style={{ fontWeight: !newUser.designation ? "600" : "400", background: !newUser.designation ? "#f0f9ff" : "transparent" }}>
+                            <div className="category-dropdown-option" onClick={() => { setNewUser((prev) => ({ ...prev, designation: "" })); setDesgDropdownOpen(false); }} style={{ fontWeight: !newUser.designation ? "600" : "400", background: !newUser.designation ? "var(--color-primary-bg)" : "transparent" }}>
                               Select Designation
                             </div>
                             {designations.map((d) => (
-                              <div key={d} className="category-dropdown-option" onClick={() => { setNewUser((prev) => ({ ...prev, designation: d })); setDesgDropdownOpen(false); }} style={{ fontWeight: newUser.designation === d ? "600" : "400", background: newUser.designation === d ? "#f0f9ff" : "transparent" }}>
+                              <div key={d} className="category-dropdown-option" onClick={() => { setNewUser((prev) => ({ ...prev, designation: d })); setDesgDropdownOpen(false); }} style={{ fontWeight: newUser.designation === d ? "600" : "400", background: newUser.designation === d ? "var(--color-primary-bg)" : "transparent" }}>
                                 {d}
                                 <span className="category-option-delete" onClick={(e) => { e.stopPropagation(); deleteDesignation(d); }} title="Delete">&times;</span>
                               </div>
@@ -1819,16 +1819,16 @@ function ManageUsers() {
                       </div>
                     ) : (
                       <div className="category-dropdown-container" ref={deptDropdownRef}>
-                        <button type="button" className="category-dropdown-trigger" onClick={() => setDeptDropdownOpen((o) => !o)} style={addErrors.department ? { border: "1px solid #ef4444" } : {}}>
+                        <button type="button" className="category-dropdown-trigger" onClick={() => setDeptDropdownOpen((o) => !o)} style={addErrors.department ? { border: "1px solid var(--color-danger)" } : {}}>
                           {newUser.department || "Select Department"} <span className={`category-dropdown-arrow ${deptDropdownOpen ? "open" : ""}`}>&#9662;</span>
                         </button>
                         {deptDropdownOpen && (
                           <div className="category-dropdown-options">
-                            <div className="category-dropdown-option" onClick={() => { setNewUser((prev) => ({ ...prev, department: "" })); setDeptDropdownOpen(false); }} style={{ fontWeight: !newUser.department ? "600" : "400", background: !newUser.department ? "#f0f9ff" : "transparent" }}>
+                            <div className="category-dropdown-option" onClick={() => { setNewUser((prev) => ({ ...prev, department: "" })); setDeptDropdownOpen(false); }} style={{ fontWeight: !newUser.department ? "600" : "400", background: !newUser.department ? "var(--color-primary-bg)" : "transparent" }}>
                               Select Department
                             </div>
                             {departments.map((d) => (
-                              <div key={d} className="category-dropdown-option" onClick={() => { setNewUser((prev) => ({ ...prev, department: d })); setDeptDropdownOpen(false); }} style={{ fontWeight: newUser.department === d ? "600" : "400", background: newUser.department === d ? "#f0f9ff" : "transparent" }}>
+                              <div key={d} className="category-dropdown-option" onClick={() => { setNewUser((prev) => ({ ...prev, department: d })); setDeptDropdownOpen(false); }} style={{ fontWeight: newUser.department === d ? "600" : "400", background: newUser.department === d ? "var(--color-primary-bg)" : "transparent" }}>
                                 {d}
                                 <span className="category-option-delete" onClick={(e) => { e.stopPropagation(); deleteDepartment(d); }} title="Delete">&times;</span>
                               </div>
@@ -2045,7 +2045,7 @@ function ManageUsers() {
                       </div>
                     )}
                     {editingUser && existingOtherDocs.length === 0 && newUser.otherDocument.length === 0 && (
-                      <div style={{ marginTop: 4, fontSize: 13, color: "#64748b" }}>
+                      <div style={{ marginTop: 4, fontSize: 13, color: "var(--text-muted)" }}>
                         No documents uploaded
                       </div>
                     )}
@@ -2154,34 +2154,34 @@ function ManageUsers() {
     {editDocItem && (
       <div style={{ position: "fixed", inset: 0, zIndex: 10003, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }} onClick={() => { setEditDocItem(null); setEditDocNewFile(null); setEditDocDeleted(false); setEditDocDeleteConfirm(false); }}>
         <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", width: 420, maxWidth: "90vw", boxShadow: "var(--shadow-xl)" }} onClick={(e) => e.stopPropagation()}>
-          <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "#111827" }}>Edit File</h3>
-          <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Rename or replace this file.</p>
+          <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>Edit File</h3>
+          <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--text-secondary)" }}>Rename or replace this file.</p>
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Title</label>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>Title</label>
             <input type="text" value={editDocForm.title}
               onChange={(e) => setEditDocForm({ title: e.target.value })} autoFocus
               onKeyDown={(e) => { if (e.key === "Enter") handleSaveEditDoc(); }}
-              style={{ width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "#111827" }} />
+              style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--border-color)", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }} />
           </div>
           <div style={{ marginBottom: 24 }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>File</label>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dark)", marginBottom: 6 }}>File</label>
             {editDocItem.existingFileName && !editDocDeleted && !editDocNewFile ? (
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--bg-card-alt)", border: "1px solid var(--border-color)", borderRadius: 8 }}>
                 <span style={{ fontSize: 14 }}>📄</span>
-                <span style={{ flex: 1, fontSize: 13, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editDocItem.existingFileName}</span>
+                <span style={{ flex: 1, fontSize: 13, color: "var(--text-dark)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editDocItem.existingFileName}</span>
                 <button type="button" onClick={() => setEditDocDeleteConfirm(true)} className="mu-action-btn mu-action-btn-delete" title="Delete current file" style={{ width: 24, height: 24 }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                 </button>
               </div>
             ) : editDocNewFile ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--color-success-bg)", border: "1px solid #bbf7d0", borderRadius: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--color-success-bg)", border: "1px solid var(--color-success)", borderRadius: 8 }}>
                 <span style={{ fontSize: 14 }}>📄</span>
-                <span style={{ flex: 1, fontSize: 13, color: "#166534", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editDocNewFile.name}</span>
-                <span style={{ fontSize: 11, color: "#6b7280" }}>{(editDocNewFile.size / 1024).toFixed(1)} KB</span>
-                <button type="button" onClick={() => { setEditDocNewFile(null); setEditDocDeleted(false); }} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: 0 }}>✕</button>
+                <span style={{ flex: 1, fontSize: 13, color: "var(--color-success)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editDocNewFile.name}</span>
+                <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{(editDocNewFile.size / 1024).toFixed(1)} KB</span>
+                <button type="button" onClick={() => { setEditDocNewFile(null); setEditDocDeleted(false); }} style={{ background: "none", border: "none", color: "var(--color-danger)", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: 0 }}>✕</button>
               </div>
             ) : (
-              <label style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "10px 12px", border: "1px dashed #d1d5db", borderRadius: 8, background: "var(--bg-card-alt)", color: "var(--text-secondary)", fontSize: 13, cursor: "pointer", textAlign: "center" }}>
+              <label style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "10px 12px", border: "1px dashed var(--border-color)", borderRadius: 8, background: "var(--bg-card-alt)", color: "var(--text-secondary)", fontSize: 13, cursor: "pointer", textAlign: "center" }}>
                 Click to select a file
                 <input type="file" style={{ display: "none" }}
                   accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.bmp,.svg,.tiff,.tif"
@@ -2194,8 +2194,8 @@ function ManageUsers() {
               style={{ padding: "9px 20px", borderRadius: 8, border: "1px solid var(--border-medium)", background: "var(--bg-card)", color: "var(--text-dark)", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }}
               onMouseEnter={(e) => e.target.style.background = "var(--bg-card-alt)"} onMouseLeave={(e) => e.target.style.background = "var(--bg-card)"}>Cancel</button>
             <button type="button" onClick={handleSaveEditDoc}
-              style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "#6366f1", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }}
-              onMouseEnter={(e) => e.target.style.background = "#4f46e5"} onMouseLeave={(e) => e.target.style.background = "#6366f1"}>Save</button>
+              style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "var(--color-primary)", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.15s" }}
+              onMouseEnter={(e) => e.target.style.background = "var(--color-primary-dark)"} onMouseLeave={(e) => e.target.style.background = "var(--color-primary)"}>Save</button>
           </div>
         </div>
       </div>
@@ -2248,7 +2248,7 @@ function ManageUsers() {
                     <img src={`${API_URL.replace('/api', '')}/storage/${newGuest._existingAvatar}`} alt="Avatar preview" />
                   ) : (
                     <>
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                         <circle cx="12" cy="7" r="4" />
                       </svg>

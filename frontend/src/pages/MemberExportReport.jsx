@@ -474,7 +474,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
 
   // ── REVIEW MODAL ──
   const cardMeta = [
-    { key: "total_assigned", label: "Total Assigned", value: totalAssigned, color: "#6366f1", bg: "#EEF2FF" },
+    { key: "total_assigned", label: "Total Assigned", value: totalAssigned, color: "var(--color-primary)", bg: "#EEF2FF" },
     { key: "approved", label: "Approved", value: approvedCount, color: "#22C55E", bg: "#ECFDF5" },
     { key: "pending", label: "Pending", value: pendingCount, color: "#F59E0B", bg: "#FEF3C7" },
     { key: "overdue", label: "Overdue", value: overdueCount, color: "#EF4444", bg: "#FEF2F2" },
@@ -515,9 +515,9 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               {dateRange === "custom" && (
                 <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
                   <input type="date" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setIsDirty(true); }}
-                    style={{ flex: 1, padding: "10px 14px", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 13, color: "#374151", outline: "none" }} />
+                    style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
                   <input type="date" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setIsDirty(true); }}
-                    style={{ flex: 1, padding: "10px 14px", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 13, color: "#374151", outline: "none" }} />
+                    style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
                 </div>
               )}
             </div>
@@ -545,11 +545,11 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               </svg>
             </button>
 
-            <div style={{ padding: "0", background: "#fff" }}>
+            <div style={{ padding: "0", background: "var(--bg-card)" }}>
               {/* ═══ HEADER ═══ */}
               <div className="erm-header">
                 <div className="erm-header-left">
-                  <div style={{ width: 26, height: 26, borderRadius: 5, background: "#6366f1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 5, background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>TX</span>
                   </div>
                   <div>
@@ -565,13 +565,13 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               {/* ═══ PROFILE ═══ */}
               <div className="erm-profile">
                 <div className="erm-profile-left">
-                  <div style={{ width: 38, height: 38, borderRadius: "50%", background: "#d1d5db", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 38, height: 38, borderRadius: "50%", background: "var(--border-color)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <svg width="20" height="20" viewBox="0 0 48 48" fill="#9ca3af"><circle cx="24" cy="18" r="8" /><path d="M5 46c0-11 9-20 20-20s20 9 20 20" /></svg>
                   </div>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{user.name || "Unknown User"}</div>
-                    <div style={{ fontSize: 9, color: "#6b7280" }}>{roleDisplay}</div>
-                    <div style={{ fontSize: 9, fontWeight: 600, color: "#6366f1" }}>{user.team || ""}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-heading)" }}>{user.name || "Unknown User"}</div>
+                    <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>{roleDisplay}</div>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: "var(--color-primary)" }}>{user.team || ""}</div>
                   </div>
                 </div>
                 <div className="erm-profile-right">
@@ -582,8 +582,8 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                     { lbl: "Team", val: user.team || "-", col: 1 }, { lbl: "Report Time", val: genTime, col: 2 },
                   ].map((r, i) => (
                     <div key={i} style={{ display: "flex", gap: 4 }}>
-                      <span style={{ color: "#6b7280", whiteSpace: "nowrap" }}>{r.lbl}:</span>
-                      <span style={{ fontWeight: 700, color: "#111827", overflow: "hidden", textOverflow: "ellipsis" }}>{r.val}</span>
+                      <span style={{ color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{r.lbl}:</span>
+                      <span style={{ fontWeight: 700, color: "var(--text-heading)", overflow: "hidden", textOverflow: "ellipsis" }}>{r.val}</span>
                     </div>
                   ))}
                 </div>
@@ -592,15 +592,15 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               {/* ═══ SUMMARY CARDS ═══ */}
               <div className="erm-summary-grid">
                 {cardMeta.map((c) => (
-                  <div key={c.key} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
+                  <div key={c.key} style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{ width: 28, height: 28, borderRadius: 8, background: c.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <div style={{ width: 14, height: 14, borderRadius: "50%", border: `2px solid ${c.color}` }}></div>
                       </div>
-                      <div style={{ fontSize: 10, color: "#6b7280" }}>{c.label}</div>
+                      <div style={{ fontSize: 10, color: "var(--text-secondary)" }}>{c.label}</div>
                     </div>
                     <div style={{ fontSize: 26, fontWeight: 700, color: c.color, marginTop: 4 }}>{c.value}</div>
-                    <div style={{ fontSize: 8, color: "#9ca3af", marginTop: 2 }}>
+                    <div style={{ fontSize: 8, color: "var(--text-muted)", marginTop: 2 }}>
                       {c.key === "total_assigned" ? "All tasks" : c.key === "approved" ? "Tasks completed" : c.key === "pending" ? "Tasks in progress" : "Require attention"}
                     </div>
                   </div>
@@ -610,13 +610,13 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               {/* ═══ TWO COLUMNS ═══ */}
               <div className="erm-two-col">
                 {/* Left: Status Breakdown */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 8 }}>TASK STATUS BREAKDOWN</div>
+                <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 8 }}>TASK STATUS BREAKDOWN</div>
                   <DonutChart
                     segments={[
                       { label: "Approved", count: sc.approved, color: "#10b981" },
                       { label: "Pending", count: sc.pending, color: "#f59e0b" },
-                      { label: "In Review", count: sc.submitted + sc.reopened, color: "#6366f1" },
+                      { label: "In Review", count: sc.submitted + sc.reopened, color: "var(--color-primary)" },
                       { label: "Overdue", count: sc.overdue, color: "#ef4444" },
                     ]}
                     size={140}
@@ -626,8 +626,8 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                 </div>
 
                 {/* Right: Priority Distribution */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 4 }}>PRIORITY DISTRIBUTION</div>
+                <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 4 }}>PRIORITY DISTRIBUTION</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
                     {(() => {
                       const totalP = (priorityDistribution.high ?? 0) + (priorityDistribution.medium ?? 0) + (priorityDistribution.low ?? 0);
@@ -639,17 +639,17 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                         const pct = totalP > 0 ? Math.round((p.count / totalP) * 1000) / 10 : 0;
                         return (
                           <div key={p.label} style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 0" }}>
-                            <span style={{ fontSize: 14, color: "#374151", fontWeight: 500, minWidth: 60 }}>{p.label}</span>
-                            <div style={{ flex: 1, height: 10, background: "#f3f4f6", borderRadius: 5, overflow: "hidden" }}>
+                            <span style={{ fontSize: 14, color: "var(--text-dark)", fontWeight: 500, minWidth: 60 }}>{p.label}</span>
+                            <div style={{ flex: 1, height: 10, background: "var(--border-light)", borderRadius: 5, overflow: "hidden" }}>
                               <div style={{ width: `${pct}%`, height: "100%", borderRadius: 5, background: p.color, transition: "width 0.6s ease" }}></div>
                             </div>
-                            <span style={{ fontSize: 14, fontWeight: 600, color: "#111827", minWidth: 80, textAlign: "right" }}>{p.count} ({Math.round(pct)}%)</span>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-heading)", minWidth: 80, textAlign: "right" }}>{p.count} ({Math.round(pct)}%)</span>
                           </div>
                         );
                       });
                     })()}
                   </div>
-                  <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 8 }}>
+                  <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 8 }}>
                     {(priorityDistribution.high ?? 0) + (priorityDistribution.medium ?? 0) + (priorityDistribution.low ?? 0)} Total Tasks
                   </div>
                 </div>
@@ -657,7 +657,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
 
               {/* ═══ TASKS TABLE ═══ */}
               <div className="erm-table-section">
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>TASKS DETAILS</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>TASKS DETAILS</div>
                 <div className="erm-table-wrapper">
                   <table className="erm-table">
                     <thead>
@@ -690,16 +690,16 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                             </td>
                             <td data-label="Progress" style={{ textAlign: "center" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "#e5e7eb", overflow: "hidden" }}>
+                                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "var(--border-color)", overflow: "hidden" }}>
                                   <div style={{ width: `${progress}%`, height: "100%", borderRadius: 2, background: progress >= 80 ? "#22c55e" : progress >= 50 ? "#f59e0b" : "#ef4444" }}></div>
                                 </div>
-                                <span style={{ fontWeight: 600, fontSize: 9, color: "#374151" }}>{progress}%</span>
+                                <span style={{ fontWeight: 600, fontSize: 9, color: "var(--text-dark)" }}>{progress}%</span>
                               </div>
                             </td>
                             <td data-label="Priority" style={{ textAlign: "center" }}>
                               <span style={{ fontWeight: 600, fontSize: 9, color: ps.text }}>&#9679; {item.priority || "Medium"}</span>
                             </td>
-                            <td data-label="Due Date" style={{ textAlign: "center", color: "#6b7280", fontSize: 9 }}>{due}</td>
+                            <td data-label="Due Date" style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: 9 }}>{due}</td>
                           </tr>
                         );
                       })}
@@ -711,36 +711,36 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               {/* ═══ SUBTASKS ═══ */}
               <div className="erm-subtasks-grid">
                 {/* Left */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>SUBTASKS SUMMARY</div>
+                <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>SUBTASKS SUMMARY</div>
                   {[
-                    { label: "Total Subtasks", count: delivSummary.total ?? 0, color: "#6366f1" },
+                    { label: "Total Subtasks", count: delivSummary.total ?? 0, color: "var(--color-primary)" },
                     { label: "Submitted", count: delivSummary.submitted ?? 0, color: "#f59e0b" },
                     { label: "Approved", count: delivSummary.approved ?? 0, color: "#22c55e" },
                     { label: "Pending Review", count: delivSummary.pending_review ?? 0, color: "#f59e0b" },
                     { label: "Declined", count: delivSummary.rejected ?? 0, color: "#ef4444" },
-                    { label: "Reopened", count: delivSummary.reopened ?? 0, color: "#6366f1" },
+                    { label: "Reopened", count: delivSummary.reopened ?? 0, color: "var(--color-primary)" },
                   ].map((d) => (
                     <div key={d.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "2px 0", fontSize: 10 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                         <div style={{ width: 6, height: 6, borderRadius: "50%", background: d.color }}></div>
-                        <span style={{ color: "#374151" }}>{d.label}</span>
+                        <span style={{ color: "var(--text-dark)" }}>{d.label}</span>
                       </div>
-                      <span style={{ fontWeight: 700, color: "#111827" }}>{d.count}</span>
+                      <span style={{ fontWeight: 700, color: "var(--text-heading)" }}>{d.count}</span>
                     </div>
                   ))}
                 </div>
 
                 {/* Right */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>SUBTASKS DETAILS</div>
+                <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>SUBTASKS DETAILS</div>
                   {subtasks.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: 20, color: "#9ca3af", fontSize: 10 }}>No subtasks found.</div>
+                    <div style={{ textAlign: "center", padding: 20, color: "var(--text-muted)", fontSize: 10 }}>No subtasks found.</div>
                   ) : (
                     <div className="erm-table-wrapper">
                       <table className="erm-table" style={{ tableLayout: "auto", minWidth: 0 }}>
                         <thead>
-                          <tr style={{ background: "#f9fafb", color: "#6b7280", fontWeight: 600 }}>
+                          <tr style={{ background: "var(--bg-hover)", color: "var(--text-secondary)", fontWeight: 600 }}>
                             <th style={{ width: "8%", padding: "4px 6px", textAlign: "center" }}>#</th>
                             <th style={{ width: "40%", padding: "4px 6px", textAlign: "left" }}>Name</th>
                             <th style={{ width: "17%", padding: "4px 6px", textAlign: "center" }}>Status</th>
@@ -752,12 +752,12 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                           {subtasks.slice(0, 6).map((d, i) => {
                             const ss = getStatusStyle(d.status);
                             return (
-                              <tr key={i} style={{ borderBottom: "1px solid #f3f4f6", background: i % 2 ? "#f9fafb" : "#fff" }}>
-                                <td data-label="#" style={{ padding: "4px 6px", textAlign: "center", color: "#6b7280" }}>{i + 1}</td>
-                                <td data-label="Name" style={{ padding: "4px 6px", fontWeight: 600, color: "#111827" }}>{(d.title || "-").substring(0, 24)}</td>
+                              <tr key={i} style={{ borderBottom: "1px solid var(--border-light)", background: i % 2 ? "var(--bg-hover)" : "var(--bg-card)" }}>
+                                <td data-label="#" style={{ padding: "4px 6px", textAlign: "center", color: "var(--text-secondary)" }}>{i + 1}</td>
+                                <td data-label="Name" style={{ padding: "4px 6px", fontWeight: 600, color: "var(--text-heading)" }}>{(d.title || "-").substring(0, 24)}</td>
                                 <td data-label="Status" style={{ padding: "4px 6px", textAlign: "center", fontWeight: 600, color: ss.text }}>&#9679; {formatStatus(d.status)}</td>
-                                <td data-label="Submitted" style={{ padding: "4px 6px", textAlign: "center", color: "#6b7280" }}>{d.submitted_at ? formatDateShort(d.submitted_at) : "-"}</td>
-                                <td data-label="Approved" style={{ padding: "4px 6px", textAlign: "center", color: "#6b7280" }}>{d.approved_at ? formatDateShort(d.approved_at) : "-"}</td>
+                                <td data-label="Submitted" style={{ padding: "4px 6px", textAlign: "center", color: "var(--text-secondary)" }}>{d.submitted_at ? formatDateShort(d.submitted_at) : "-"}</td>
+                                <td data-label="Approved" style={{ padding: "4px 6px", textAlign: "center", color: "var(--text-secondary)" }}>{d.approved_at ? formatDateShort(d.approved_at) : "-"}</td>
                               </tr>
                             );
                           })}
@@ -770,7 +770,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
 
               {/* ═══ MANAGER REMARKS ═══ */}
               <div className="erm-remarks">
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>MANAGER REMARKS</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>MANAGER REMARKS</div>
                 <div style={{ display: "flex", gap: 16 }}>
                   <div style={{ flex: 1 }}>
                     {[1, 2, 3, 4].map(i => (
@@ -778,10 +778,10 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                     ))}
                   </div>
                   <div style={{ width: 120, textAlign: "center" }}>
-                    <div style={{ fontSize: 9, color: "#6b7280", marginBottom: 4 }}>Manager Signature</div>
-                    <div style={{ borderBottom: "1px solid #111827", height: 20, marginBottom: 8 }}></div>
-                    <div style={{ fontSize: 9, color: "#6b7280", marginBottom: 4 }}>Date</div>
-                    <div style={{ borderBottom: "1px solid #111827", height: 20 }}></div>
+                    <div style={{ fontSize: 9, color: "var(--text-secondary)", marginBottom: 4 }}>Manager Signature</div>
+                    <div style={{ borderBottom: "1px solid var(--text-heading)", height: 20, marginBottom: 8 }}></div>
+                    <div style={{ fontSize: 9, color: "var(--text-secondary)", marginBottom: 4 }}>Date</div>
+                    <div style={{ borderBottom: "1px solid var(--text-heading)", height: 20 }}></div>
                   </div>
                 </div>
               </div>
@@ -789,10 +789,10 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
               {/* ═══ FOOTER ═══ */}
               <div className="erm-footer">
                 <div className="erm-footer-left">
-                  <div style={{ width: 16, height: 16, borderRadius: 3, background: "#6366f1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 16, height: 16, borderRadius: 3, background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <span style={{ fontSize: 7, fontWeight: 700, color: "#fff" }}>TX</span>
                   </div>
-                  <span style={{ fontWeight: 600, color: "#6b7280" }}>Techxaro</span>
+                  <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>Techxaro</span>
                   <span>PMS Portal</span>
                 </div>
                 <div>Generated Date:  {genDate} | Generated Time:  {genTime}</div>

@@ -1214,7 +1214,7 @@ background: var(--color-success-bg);
   font-family: 'SF Mono', 'Cascadia Code', 'Consolas', 'Fira Code', monospace;
   font-size: 28px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-heading);
   letter-spacing: 1px;
   line-height: 1;
 }
@@ -1702,6 +1702,137 @@ background: var(--color-success-bg);
 .td-discussion-formatting button:hover {
   background: var(--bg-hover);
   color: var(--text-dark);
+}
+
+/* Toolbar Separator */
+.td-toolbar-separator {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* Toolbar Dropdown */
+.td-toolbar-dropdown {
+  position: relative;
+}
+.td-toolbar-dropdown-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  height: 30px;
+  transition: all 0.15s;
+}
+.td-toolbar-dropdown-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-dark);
+  border-color: var(--text-tertiary);
+}
+.td-toolbar-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  min-width: 140px;
+  padding: 4px;
+}
+.td-toolbar-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text-dark);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.td-toolbar-dropdown-item:hover {
+  background: var(--bg-hover);
+}
+.td-toolbar-dropdown-item.active {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* Toolbar Color Button */
+.td-toolbar-color-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 2px;
+  transition: all 0.15s;
+}
+.td-toolbar-color-btn:hover {
+  background: var(--bg-hover);
+}
+.td-toolbar-color-label {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-dark);
+}
+.td-toolbar-color-bar {
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+  margin-top: 1px;
+}
+
+/* Color Picker Grid */
+.td-toolbar-color-picker {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 3px;
+}
+.td-toolbar-color-swatch {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+.td-toolbar-color-swatch:hover {
+  transform: scale(1.2);
+  border-color: var(--text-dark);
+  z-index: 1;
 }
 .td-discussion-send-row {
   display: flex;

@@ -108,7 +108,7 @@
 }
 
 .audit-search input:focus {
-  border-color: #6366f1;
+  border-color: var(--color-primary);
 }
 
 .audit-search-clear {
@@ -149,7 +149,7 @@
 }
 
 .audit-date-range input[type="date"]:focus {
-  border-color: #6366f1;
+  border-color: var(--color-primary);
 }
 
 .audit-date-sep {
@@ -172,7 +172,7 @@
 }
 
 .audit-filter-row select:focus {
-  border-color: #6366f1;
+  border-color: var(--color-primary);
 }
 
 .audit-export-btn {
@@ -187,7 +187,7 @@
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
-  background: rgb(117, 117, 247);
+  background: var(--color-primary);
   color: white;
 }
 
@@ -205,7 +205,7 @@
   padding: 8px 20px;
   border: none;
   border-radius: 10px;
-  background: #6366f1;
+  background: var(--color-primary);
   color: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -284,7 +284,7 @@
 }
 
 .audit-table tbody tr:hover {
-  background: #fafbfc;
+  background: var(--bg-hover);
 }
 
 .audit-table tbody td {
@@ -339,18 +339,18 @@
 
 .audit-role-admin {
   background: var(--color-warning-bg);
-  color: #d97706;
+  color: var(--color-warning);
 }
 
 .audit-role-manager {
   background: var(--bg-hover);
-  color: #2563eb;
+  color: var(--color-primary);
 }
 
 .audit-role-team_lead,
 .audit-role-teamlead {
-  background: #ede9fe;
-  color: #7c3aed;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 
 .audit-role-member {
@@ -371,13 +371,13 @@
 }
 
 .audit-status-success {
-  background: #d1fae5;
-  color: #059669;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .audit-status-failed {
   background: var(--color-danger-bg-hover);
-  color: #dc2626;
+  color: var(--color-danger);
 }
 
 /* ── Action Button ── */
@@ -385,10 +385,10 @@
 .audit-action-btn {
   width: 32px;
   height: 32px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--color-primary-light);
   background: var(--color-blue-light);
   border-radius: 8px;
-  color: #3b82f6;
+  color: var(--color-primary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -397,9 +397,9 @@
 }
 
 .audit-action-btn:hover {
-  background: #3b82f6;
+  background: var(--color-primary);
   color: #fff;
-  border-color: #3b82f6;
+  border-color: var(--color-primary);
 }
 
 /* ── Empty / Loading ── */
@@ -423,7 +423,7 @@
   width: 32px;
   height: 32px;
   border: 3px solid var(--border-color);
-  border-top-color: #6366f1;
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: audit-spin 0.7s linear infinite;
   margin: 0 auto;

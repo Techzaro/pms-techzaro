@@ -31,6 +31,7 @@ function Header() {
   const navigate = useNavigate();
   const searchRef = useRef(null);
   const notifRef = useRef(null);
+  const profileRef = useRef(null);
   const { theme, toggleTheme } = useTheme();
 
   // ── State ──
@@ -383,6 +384,17 @@ function Header() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Close profile dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setIsProfileOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
     <>
 
@@ -497,7 +509,7 @@ function Header() {
                           <div>
                             <span>{item.name}</span>
                             {item.role && <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 6 }}>({item.role.replace("_", " ")})</span>}
-                            {item.department && <span style={{ fontSize: 10, fontWeight: 500, color: "#4f46e5", background: "#eef2ff", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>{item.department}</span>}
+                            {item.department && <span style={{ fontSize: 10, fontWeight: 500, color: "var(--color-primary)", background: "var(--color-primary-bg)", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>{item.department}</span>}
                             <br />
                             <small style={{ color: "#9ca3af", fontSize: 11 }}>{item.email}</small>
                           </div>
@@ -624,6 +636,7 @@ function Header() {
 
           <div
             className="user-info"
+            ref={profileRef}
             onClick={toggleProfileModal}
           >
 
@@ -640,7 +653,7 @@ function Header() {
               <h6>{user.name}</h6>
 
               <span>{normalizeRole(user.role)}</span>
-              {user.department && <span style={{ fontSize: 11, fontWeight: 500, color: "#4f46e5", background: "#eef2ff", padding: "1px 6px", borderRadius: 4, marginLeft: 6 }}>{user.department}</span>}
+              {user.department && <span style={{ fontSize: 11, fontWeight: 500, color: "var(--color-primary)", background: "var(--color-primary-bg)", padding: "1px 6px", borderRadius: 4, marginLeft: 6 }}>{user.department}</span>}
 
             </div>
 
@@ -654,9 +667,6 @@ function Header() {
 
               <div
                 className="header-modal-card"
-                onClick={(e) =>
-                  e.stopPropagation()
-                }
               >
                 {/* Profile header: gradient with photo + name + role */}
                 <div className="hmc-header">
@@ -671,7 +681,7 @@ function Header() {
                     <h4 className="hmc-name">{user.name}</h4>
                     <span className="hmc-email">{user.professional_email || ""}</span>
                     <span className="hmc-role-text">{normalizeRole(user.role)}</span>
-                    {user.department && <span style={{ fontSize: 11, fontWeight: 500, color: "#4f46e5", background: "#eef2ff", padding: "1px 6px", borderRadius: 4, marginLeft: 6 }}>{user.department}</span>}
+                    {user.department && <span style={{ fontSize: 11, fontWeight: 500, color: "var(--color-primary)", background: "var(--color-primary-bg)", padding: "1px 6px", borderRadius: 4, marginLeft: 6 }}>{user.department}</span>}
                   </div>
                 </div>
 

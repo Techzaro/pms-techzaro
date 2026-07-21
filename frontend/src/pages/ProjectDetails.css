@@ -147,7 +147,7 @@
 .pd-rich {
   font-size: 14px;
   line-height: 1.6;
-  color: #334155;
+  color: var(--text-dark);
 }
 
 .pd-rich p {
@@ -1236,7 +1236,7 @@
 .pd-team-members {
   margin: 8px 0 0;
   padding-left: 18px;
-  color: #334155;
+  color: var(--text-dark);
   font-size: 14px;
 }
 
@@ -1921,14 +1921,14 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   margin-bottom: 12px;
   background: var(--bg-page);
 }
 
 .sv-search-wrap svg {
-  color: #94a3b8;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -1942,21 +1942,21 @@
 }
 
 .sv-search-input::placeholder {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .sv-search-clear {
   background: none;
   border: none;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 2px;
   line-height: 1;
 }
 
 .sv-search-clear:hover {
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .sv-user-row {
@@ -2613,7 +2613,7 @@
 }
 
 .aam-combo-input::placeholder {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .aam-combo-count {
@@ -2628,7 +2628,7 @@
 }
 
 .aam-combo-placeholder {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 14px;
   flex: 1;
   white-space: nowrap;
@@ -2680,12 +2680,12 @@
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border-color);
   margin-bottom: 4px;
 }
 
 .aam-multiselect-search svg {
-  color: #94a3b8;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -2699,21 +2699,21 @@
 }
 
 .aam-multiselect-search input::placeholder {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .aam-multiselect-search-clear {
   background: none;
   border: none;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 2px;
   line-height: 1;
 }
 
 .aam-multiselect-search-clear:hover {
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .aam-multiselect-option {

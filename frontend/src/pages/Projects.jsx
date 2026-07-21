@@ -20,53 +20,57 @@ import EditProjectModal from "../components/EditProjectModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
+import { StickyNote } from "lucide-react";
+import ActionPopover from "../components/ActionPopover";
+import AddNoteModal from "../components/AddNoteModal";
 
 import { GoDotFill } from "react-icons/go";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath, getUser } from "../utils/auth";
 import "./Projects.css";
+import "../components/ActionPopover.css";
 import { formatDateTime, formatDateTimeInline } from "../utils/formatDateTime";
 import Pagination from "../components/Pagination";
 import "../pages/Task.css";
 
 const PRIORITY_COLORS = {
-  High: "#FEE2E2",
-  Medium: "#FEF3C7",
-  Low: "#DCFCE7",
+  High: "var(--color-danger-bg)",
+  Medium: "var(--color-warning-bg)",
+  Low: "var(--color-success-bg)",
 };
 
 const PRIORITY_TEXT_COLORS = {
-  High: "#991B1B",
-  Medium: "#92400E",
-  Low: "#166534",
+  High: "var(--color-danger)",
+  Medium: "var(--color-warning)",
+  Low: "var(--color-success)",
 };
 
 const STATUS_COLORS = {
-  pending: "#FEF3C7",
-  in_progress: "#DBEAFE",
-  paused: "#FEF3C7",
-  submitted: "#DBEAFE",
-  reopened: "#EDE9FE",
-  approved: "#DCFCE7",
-  rejected: "#FEE2E2",
-  Planning: "#DBEAFE",
-  "In-progress": "#FEF3C7",
-  Pause: "#FEE2E2",
-  Completed: "#DCFCE7",
+  pending: "var(--color-warning-bg)",
+  in_progress: "var(--color-blue-bg)",
+  paused: "var(--color-warning-bg)",
+  submitted: "var(--color-blue-bg)",
+  reopened: "var(--color-primary-bg)",
+  approved: "var(--color-success-bg)",
+  rejected: "var(--color-danger-bg)",
+  Planning: "var(--color-blue-bg)",
+  "In-progress": "var(--color-warning-bg)",
+  Pause: "var(--color-danger-bg)",
+  Completed: "var(--color-success-bg)",
 };
 
 const STATUS_TEXT_COLORS = {
-  pending: "#92400E",
-  in_progress: "#1E40AF",
-  paused: "#92400E",
-  submitted: "#1E40AF",
-  reopened: "#5B21B6",
-  approved: "#166534",
-  rejected: "#991B1B",
-  Planning: "#1E40AF",
-  "In-progress": "#92400E",
-  Pause: "#991B1B",
-  Completed: "#166534",
+  pending: "var(--color-warning)",
+  in_progress: "var(--color-blue)",
+  paused: "var(--color-warning)",
+  submitted: "var(--color-blue)",
+  reopened: "var(--color-primary)",
+  approved: "var(--color-success)",
+  rejected: "var(--color-danger)",
+  Planning: "var(--color-blue)",
+  "In-progress": "var(--color-warning)",
+  Pause: "var(--color-danger)",
+  Completed: "var(--color-success)",
 };
 
 /** Main Projects page — renders project cards with search, filters and pagination. */
@@ -240,17 +244,17 @@ function Projects() {
   const getStatusBadgeColor = (status) => {
     switch (status?.toLowerCase()) {
       case "completed":
-        return "#d1fae5";
+        return "var(--color-success-bg)";
       case "in_progress":
       case "in progress":
-        return "#ddd6fe";
+        return "var(--color-primary-bg)";
       case "failed":
-        return "#fee2e2";
+        return "var(--color-danger-bg)";
       case "on_hold":
       case "on hold":
-        return "#fee2e2";
+        return "var(--color-danger-bg)";
       default:
-        return "#e0e7ff";
+        return "var(--color-primary-bg-hover)";
     }
   };
 
@@ -434,7 +438,7 @@ function Projects() {
                                 {project.creator.name?.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
                               </span>
                               Created: {project.creator.name}
-                              <span style={{ background: project.creator.role === "admin" ? "#4F46E5" : "#059669", color: "#fff", padding: "0 4px", borderRadius: "4px", fontSize: "9px", marginLeft: "2px" }}>
+                              <span style={{ background: project.creator.role === "admin" ? "var(--color-primary-dark)" : "var(--color-success)", color: "#fff", padding: "0 4px", borderRadius: "4px", fontSize: "9px", marginLeft: "2px" }}>
                                 {project.creator.role === "admin" ? "Admin" : "Manager"}
                               </span>
                             </span>
@@ -445,7 +449,7 @@ function Projects() {
                                 {project.updatedBy.name?.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
                               </span>
                               Updated: {project.updatedBy.name}
-                              <span style={{ background: project.updatedBy.role === "admin" ? "#4F46E5" : "#059669", color: "#fff", padding: "0 4px", borderRadius: "4px", fontSize: "9px", marginLeft: "2px" }}>
+                              <span style={{ background: project.updatedBy.role === "admin" ? "var(--color-primary-dark)" : "var(--color-success)", color: "#fff", padding: "0 4px", borderRadius: "4px", fontSize: "9px", marginLeft: "2px" }}>
                                 {project.updatedBy.role === "admin" ? "Admin" : "Manager"}
                               </span>
                             </span>
@@ -459,8 +463,8 @@ function Projects() {
                             </span>
                           )}
                           {project.rejectedBy && (
-                            <span className="ownership-badge" style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#FEE2E2", color: "#991B1B", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 500 }}>
-                              <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "#DC2626", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
+                            <span className="ownership-badge" style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "var(--color-danger-bg)", color: "var(--color-danger)", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 500 }}>
+                              <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "var(--color-danger)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
                                 {project.rejectedBy.name?.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
                               </span>
                               Declined: {project.rejectedBy.name}
@@ -501,7 +505,7 @@ function Projects() {
                           style={{
                             width: `${progress}%`,
                             minWidth: progress === 0 ? "100%" : "0",
-                            background: progress === 0 ? "#d1d5db" : getProgressColor(progress),
+                            background: progress === 0 ? "var(--bg-hover)" : getProgressColor(progress),
                           }}
                         ></div>
                       </div>
@@ -513,17 +517,17 @@ function Projects() {
                         <span
                           className="status-badge"
                           style={{
-                            backgroundColor: STATUS_COLORS[project.status] || "#e0e7ff",
-                            color: STATUS_TEXT_COLORS[project.status] || "#374151",
+                            backgroundColor: STATUS_COLORS[project.status] || "var(--color-primary-bg-hover)",
+                            color: STATUS_TEXT_COLORS[project.status] || "var(--text-dark)",
                           }}
                         >
                           {project.status || "Planning"}
                         </span>
                         <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                          <span style={{ fontSize: "13px", color: "#6B7280", fontWeight: 500 }}>
+                          <span style={{ fontSize: "13px", color: "var(--text-dark)", fontWeight: 500 }}>
                             📅 {project.start_date ? formatDateTime(project.start_date).replace("\n", " ") : "-"}
                           </span>
-                          <span style={{ fontSize: "13px", color: "#6B7280", fontWeight: 500 }}>
+                          <span style={{ fontSize: "13px", color: "var(--text-dark)", fontWeight: 500 }}>
                             📅 {project.end_date ? formatDateTime(project.end_date).replace("\n", " ") : "No deadline"}
                           </span>
                         </div>
@@ -584,9 +588,9 @@ function Projects() {
             </div>
 
             {loading ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>Loading...</div>
+                <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>
             ) : filteredProjects.length === 0 ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>No projects found</div>
+                <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>No projects found</div>
             ) : (
               <SortableTableWrapper
                 items={paginatedProjects.map((p, i) => ({ ...p, sortableId: `project-${p.id}-${i}` }))}
@@ -608,15 +612,15 @@ function Projects() {
                       </div>
 
                     <div className="col-status">
-                      <span className="badge" style={{ background: STATUS_COLORS[projectStatus] || "#F3F4F6", color: STATUS_TEXT_COLORS[projectStatus] || "#374151" }}>
-                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[projectStatus] || "#374151" }}></span>
+                      <span className="badge" style={{ background: STATUS_COLORS[projectStatus] || "var(--bg-hover)", color: STATUS_TEXT_COLORS[projectStatus] || "var(--text-dark)" }}>
+                        <span className="dot" style={{ background: STATUS_TEXT_COLORS[projectStatus] || "var(--text-dark)" }}></span>
                         {projectStatus}
                       </span>
                     </div>
 
                     <div className="col-progress">
                       <div style={{ display: "flex", justifyContent: "flex-start", alignItems: "center", marginBottom: "4px" }}>
-                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-dark)" }}>
                           {progress}%
                         </span>
                       </div>
@@ -629,8 +633,8 @@ function Projects() {
                     </div>
 
                     <div className="col-priority">
-                      <span className="badge" style={{ background: PRIORITY_COLORS[project.priority] || "#F3F4F6", color: PRIORITY_TEXT_COLORS[project.priority] || "#374151" }}>
-                        <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[project.priority] || "#374151" }}></span>
+                      <span className="badge" style={{ background: PRIORITY_COLORS[project.priority] || "var(--bg-hover)", color: PRIORITY_TEXT_COLORS[project.priority] || "var(--text-dark)" }}>
+                        <span className="dot" style={{ background: PRIORITY_TEXT_COLORS[project.priority] || "var(--text-dark)" }}></span>
                         {project.priority || "Medium"}
                       </span>
                     </div>
@@ -646,12 +650,18 @@ function Projects() {
                     </div>
 
                     <div className="col-action">
-                      <div className="action-btns">
-                        <button className="action-icon-btn action-view" title="View" onClick={() => { sessionStorage.setItem('projectIds', JSON.stringify(filteredProjects.map(p => p.id))); navigate(rolePath(`projects/project-details/${project.id}`)); }}>
-                          <IoEyeOutline />
+                      <ActionPopover
+                        trigger={
+                          <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                            <IoEyeOutline size={20} />
+                          </button>
+                        }
+                      >
+                        <button className="action-icon-btn action-view" title="View Project" onClick={() => { sessionStorage.setItem('projectIds', JSON.stringify(filteredProjects.map(p => p.id))); navigate(rolePath(`projects/project-details/${project.id}`)); }}>
+                          <IoEyeOutline size={16} />
                         </button>
                         {isAdminOrManager && (
-                          <button className="action-icon-btn action-view" title="Edit Project" onClick={async () => {
+                          <button className="action-icon-btn action-edit" title="Edit Project" onClick={async () => {
                             try {
                               const token = authToken();
                               const res = await fetch(`${API_URL}/projects/${project.id}`, {
@@ -671,7 +681,10 @@ function Projects() {
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                           </button>
                         )}
-                      </div>
+                        <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: project.id })}>
+                          <StickyNote size={16} />
+                        </button>
+                      </ActionPopover>
                     </div>
                   </div>
                 );
@@ -709,6 +722,14 @@ function Projects() {
           }}
         />
       )}
+
+      <AddNoteModal
+        isOpen={noteModal.open}
+        onClose={() => setNoteModal({ open: false, itemId: null })}
+        itemType="task"
+        itemId={noteModal.itemId}
+        onSaved={fetchProjects}
+      />
     </DashboardLayout>
   );
 }

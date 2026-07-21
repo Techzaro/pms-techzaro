@@ -326,7 +326,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                             onChange={(e) => { setIsDirty(true); setLinks(links.map((l, j) => (j === i ? e.target.value : l))); }}
                           />
                           {i === links.length - 1 && (
-                            <button type="button" style={{ padding: "4px 10px", background: "#DCFCE7", border: "1px solid #16A34A", borderRadius: "6px", color: "#16A34A", cursor: "pointer" }} onClick={() => { setIsDirty(true); setLinks([...links, ""]); }}>+</button>
+                            <button type="button" style={{ padding: "4px 10px", background: "var(--color-success-bg)", border: "1px solid var(--color-success)", borderRadius: "6px", color: "var(--color-success)", cursor: "pointer" }} onClick={() => { setIsDirty(true); setLinks([...links, ""]); }}>+</button>
                           )}
                         </div>
                       ))}

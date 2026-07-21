@@ -58,8 +58,8 @@ function PauseReasonModal({ isOpen, onClose, onConfirm, isAssigner = false }) {
   return createPortal(
     <div className="cm-overlay" onClick={handleClose}>
       <div className="cm-modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
-        <div className="cm-icon" style={{ background: "#f59e0b15" }}>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="cm-icon" style={{ background: "var(--color-warning-bg, #f59e0b15)" }}>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10"/>
             <line x1="12" y1="8" x2="12" y2="12"/>
             <line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -72,7 +72,7 @@ function PauseReasonModal({ isOpen, onClose, onConfirm, isAssigner = false }) {
 
         <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px" }}>
           {PAUSE_REASONS.map(r => (
-            <label key={r.value} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", padding: "6px 8px", borderRadius: "6px", background: reason === r.value ? "#f59e0b12" : "transparent", border: `1px solid ${reason === r.value ? "#f59e0b" : "#e5e7eb"}`, transition: "all 0.15s" }}>
+            <label key={r.value} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", padding: "6px 8px", borderRadius: "6px", background: reason === r.value ? "var(--color-warning-bg, #f59e0b12)" : "transparent", border: `1px solid ${reason === r.value ? "var(--color-warning)" : "var(--border-color)"}`, transition: "all 0.15s" }}>
               <input
                 type="radio"
                 name="pause-reason"
@@ -80,9 +80,9 @@ function PauseReasonModal({ isOpen, onClose, onConfirm, isAssigner = false }) {
                 checked={reason === r.value}
                 onChange={() => setReason(r.value)}
                 disabled={processing}
-                style={{ accentColor: "#f59e0b" }}
+                style={{ accentColor: "var(--color-warning)" }}
               />
-              <span style={{ fontSize: "13px", color: "#374151" }}>{r.label}</span>
+              <span style={{ fontSize: "13px", color: "var(--text-dark)" }}>{r.label}</span>
             </label>
           ))}
         </div>
@@ -100,7 +100,7 @@ function PauseReasonModal({ isOpen, onClose, onConfirm, isAssigner = false }) {
           <button className="cm-cancel-btn" onClick={handleClose} disabled={processing}>Cancel</button>
           <button
             className="cm-confirm-btn"
-            style={{ background: "#f59e0b" }}
+            style={{ background: "var(--color-warning)" }}
             onClick={handleConfirm}
             disabled={!reason || processing || (reason === "other" && !reasonDetail.trim())}
           >

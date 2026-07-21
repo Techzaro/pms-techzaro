@@ -17,12 +17,18 @@ import Breadcrumb from "../components/Breadcrumb";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
+import { StickyNote } from "lucide-react";
+import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
+import ActionPopover from "../components/ActionPopover";
+import TaskNotesPopover from "../components/TaskNotesPopover";
+import AddNoteModal from "../components/AddNoteModal";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { formatDateTimeInline, formatDateOnly } from "../utils/formatDateTime";
+import "../components/ActionPopover.css";
 import "../pages/Task.css";
 
 const STATUS_COLORS = {
@@ -74,6 +80,7 @@ function AllTasks() {
   });
   const [timeFilter, setTimeFilter] = useState("");
   const [orderedItems, setOrderedItems] = useState([]);
+  const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
 
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
@@ -339,7 +346,10 @@ function AllTasks() {
 
                   {/* Task Name */}
                   <div className="col-task-name">
-                    <div className="task-title">{item.title}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <div className="task-title">{item.title}</div>
+                      <TaskNotesPopover taskId={item.id} itemType="task" />
+                    </div>
                     {item.project && (
                       <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
                         {item.project.title}
@@ -401,15 +411,28 @@ function AllTasks() {
 
                   {/* Action — View only */}
                   <div className="col-action">
-                    <div className="action-btns">
+                    <ActionPopover
+                      trigger={
+                        <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                          <IoEyeOutline size={20} />
+                        </button>
+                      }
+                    >
                       <button
                         className="action-icon-btn action-view"
-                        title="View"
+                        title="View Task"
                         onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'all-tasks', readOnly: true } })}
                       >
-                        <IoEyeOutline />
+                        <IoEyeOutline size={16} />
                       </button>
-                    </div>
+                      <button
+                        className="action-icon-btn action-note"
+                        title="Add Note"
+                        onClick={() => setNoteModal({ open: true, itemId: item.id })}
+                      >
+                        <StickyNote size={16} />
+                      </button>
+                    </ActionPopover>
                   </div>
                 </div>
               );
@@ -421,6 +444,14 @@ function AllTasks() {
       {!showAll && totalPages > 1 && (
         <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
       )}
+
+      <AddNoteModal
+        isOpen={noteModal.open}
+        onClose={() => setNoteModal({ open: false, itemId: null })}
+        itemType="task"
+        itemId={noteModal.itemId}
+        onSaved={fetchTasks}
+      />
     </DashboardLayout>
   );
 }

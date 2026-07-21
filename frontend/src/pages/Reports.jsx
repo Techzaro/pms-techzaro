@@ -57,29 +57,29 @@ const CARD_META = {
     total_assigned: {
     title: "Total Assigned",
     icon: "/Vector-5.svg",
-    valueColor: "#6366f1",
-    bgColor: "#EEF2FF",
+    valueColor: "var(--color-primary-light)",
+    bgColor: "var(--color-primary-bg)",
     filter: "all",
   },
   approved: {
     title: "Approved",
     icon: "/Vector-2.svg",
-    valueColor: "#22C55E",
-    bgColor: "#ECFDF5",
+    valueColor: "var(--color-success)",
+    bgColor: "var(--color-success-bg)",
     filter: "approved",
   },
   pending: {
     title: "Pending",
     icon: "/Vector-1 (3).svg",
-    valueColor: "#F59E0B",
-    bgColor: "#FEF3C7",
+    valueColor: "var(--color-warning)",
+    bgColor: "var(--color-warning-bg)",
     filter: "pending",
   },
   overdue: {
     title: "Overdue",
     icon: "/Vector-3.svg",
-    valueColor: "#EF4444",
-    bgColor: "#FEF2F2",
+    valueColor: "var(--color-danger)",
+    bgColor: "var(--color-danger-bg)",
     filter: "overdue",
   },
 };
@@ -108,7 +108,7 @@ const SummaryCard = memo(function SummaryCard({ card, onClick }) {
         </div>
         <div>
           <h4 className="summary-title" style={{
-            color: card.filter ? "#2563EB" : "#6b7280",
+            color: card.filter ? "var(--color-primary)" : "var(--text-muted)",
           }}>
             {card.title}
           </h4>
@@ -191,19 +191,19 @@ function Reports() {
 
   const statusItems = useMemo(() => {
     return [
-      { label: "Completed", count: summary?.approved || 0, color: "#10b981" },
-      { label: "Pending", count: summary?.pending || 0, color: "#f59e0b" },
-      { label: "In Review", count: summary?.in_review || 0, color: "#6366f1" },
-      { label: "Overdue", count: summary?.overdue || 0, color: "#ef4444" },
+      { label: "Completed", count: summary?.approved || 0, color: "var(--color-green-text)" },
+      { label: "Pending", count: summary?.pending || 0, color: "var(--color-orange-text)" },
+      { label: "In Review", count: summary?.in_review || 0, color: "var(--color-blue-text)" },
+      { label: "Overdue", count: summary?.overdue || 0, color: "var(--color-danger)" },
     ];
   }, [summary?.approved, summary?.pending, summary?.in_review, summary?.overdue]);
 
   // Priority breakdown for bar chart — API returns flat summary fields
   const priorityItems = useMemo(() => {
     return [
-      { label: "High", count: summary?.high_priority || 0, color: "#ef4444" },
-      { label: "Medium", count: summary?.medium_priority || 0, color: "#f59e0b" },
-      { label: "Low", count: summary?.low_priority || 0, color: "#10b981" },
+      { label: "High", count: summary?.high_priority || 0, color: "var(--color-danger)" },
+      { label: "Medium", count: summary?.medium_priority || 0, color: "var(--color-orange-text)" },
+      { label: "Low", count: summary?.low_priority || 0, color: "var(--color-green-text)" },
     ];
   }, [summary?.high_priority, summary?.medium_priority, summary?.low_priority]);
 
@@ -362,7 +362,7 @@ function Reports() {
                 <IoSearchOutline size={16} />
                 <input
                   type="text"
-                  placeholder="Search teams..."
+                  placeholder="Search by team name or leader..."
                   value={teamSearch}
                   onChange={(e) => { setTeamSearch(e.target.value); setTeamSlide(0); }}
                 />
@@ -415,15 +415,15 @@ function Reports() {
                             <span className="team-card-stat-label">Members</span>
                           </div>
                           <div className="team-card-stat">
-                            <span className="team-card-stat-value" style={{ color: "#6366f1" }}>{team.assigned}</span>
+                            <span className="team-card-stat-value" style={{ color: "var(--color-primary-light)" }}>{team.assigned}</span>
                             <span className="team-card-stat-label">Tasks</span>
                           </div>
                           <div className="team-card-stat">
-                            <span className="team-card-stat-value" style={{ color: "#22C55E" }}>{team.completed}</span>
+                            <span className="team-card-stat-value" style={{ color: "var(--color-success)" }}>{team.completed}</span>
                             <span className="team-card-stat-label">Done</span>
                           </div>
                           <div className="team-card-stat">
-                            <span className="team-card-stat-value" style={{ color: "#ef4444" }}>{team.overdue}</span>
+                            <span className="team-card-stat-value" style={{ color: "var(--color-danger)" }}>{team.overdue}</span>
                             <span className="team-card-stat-label">Overdue</span>
                           </div>
                         </div>
@@ -460,7 +460,7 @@ function Reports() {
                       onClick={() => setTeamSlide((s) => Math.max(0, s - 1))}
                       disabled={teamSlide === 0}
                       className="carousel-nav-btn"
-                      style={{ color: teamSlide === 0 ? "#CBD5E1" : "#1E293B", cursor: teamSlide === 0 ? "default" : "pointer" }}
+                      style={{ color: teamSlide === 0 ? "var(--border-medium)" : "var(--text-dark)", cursor: teamSlide === 0 ? "default" : "pointer" }}
                     >
                       &lt;
                     </button>
@@ -472,7 +472,7 @@ function Reports() {
                           className="carousel-dot"
                           style={{
                             width: i === teamSlide ? "28px" : "10px",
-                            background: i === teamSlide ? "#1E293B" : "#CBD5E1",
+                            background: i === teamSlide ? "var(--text-dark)" : "var(--border-medium)",
                           }}
                         />
                       ))}
@@ -481,7 +481,7 @@ function Reports() {
                       onClick={() => setTeamSlide((s) => Math.min(totalTeamSlides, s + 1))}
                       disabled={teamSlide >= totalTeamSlides}
                       className="carousel-nav-btn"
-                      style={{ color: teamSlide >= totalTeamSlides ? "#CBD5E1" : "#1E293B", cursor: teamSlide >= totalTeamSlides ? "default" : "pointer" }}
+                      style={{ color: teamSlide >= totalTeamSlides ? "var(--border-medium)" : "var(--text-dark)", cursor: teamSlide >= totalTeamSlides ? "default" : "pointer" }}
                     >
                       &gt;
                     </button>
@@ -501,7 +501,7 @@ function Reports() {
                 <IoSearchOutline size={16} />
                 <input
                   type="text"
-                  placeholder="Search by name or role..."
+                  placeholder="Search by user name or role..."
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
                 />

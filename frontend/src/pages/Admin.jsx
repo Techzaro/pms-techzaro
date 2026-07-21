@@ -93,7 +93,7 @@ const SummaryCard = memo(function SummaryCard({ card, onClick }) {
               }
             }}
             style={{
-              margin: 0, fontSize: "15px",               color: card.filter ? "#2563EB" : "var(--text-secondary)",
+              margin: 0, fontSize: "15px",               color: card.filter ? "var(--color-blue)" : "var(--text-secondary)",
               cursor: card.filter ? "pointer" : "default", textUnderlineOffset: "2px",
             }}
           >
@@ -114,12 +114,12 @@ const SummaryCard = memo(function SummaryCard({ card, onClick }) {
  * Clicking an avatar navigates to the task or project details page.
  */
 const AVATAR_COLORS = [
-  { bg: "#E0E7FF", text: "#4338CA" },
-  { bg: "#FEE2E2", text: "#B91C1C" },
-  { bg: "#DCFCE7", text: "#22C55E" },
-  { bg: "#FEF3C7", text: "#D97706" },
-  { bg: "#EDE9FE", text: "#7C3AED" },
-  { bg: "#FCE7F3", text: "#DB2777" },
+  { bg: "var(--color-primary-bg)", text: "var(--color-primary)" },
+  { bg: "var(--color-danger-bg)", text: "var(--color-danger)" },
+  { bg: "var(--color-success-bg)", text: "var(--color-success)" },
+  { bg: "var(--color-warning-bg)", text: "var(--color-warning)" },
+  { bg: "var(--color-primary-bg)", text: "var(--color-primary)" },
+  { bg: "var(--color-danger-bg)", text: "var(--color-danger)" },
 ];
 
 const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, rolePath, cardWidth, getProgressColor, PROJECTS_PER_VIEW, GAP, currentRole, dashboardMode }) {
@@ -175,7 +175,7 @@ const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, r
             style={{
               width: "0%",
               minWidth: "100%",
-              background: "#d1d5db",
+              background: "var(--bg-hover)",
             }}
           ></div>
         </div>
@@ -201,13 +201,13 @@ const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, r
                     background: colors.bg, color: colors.text,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: "10px", fontWeight: 700, cursor: isMyDashboard ? "default" : "pointer",
-                    border: "2px solid #fff", flexShrink: 0,
+                    border: "2px solid var(--bg-card)", flexShrink: 0,
                   }}
                 >
                   {getInitials(u.name)}
                 </div>
                 {dueTime && (
-                  <span style={{ fontSize: "11px", color: "#6b7280", whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: "11px", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
                     {dueTime}
                   </span>
                 )}
@@ -223,33 +223,33 @@ const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, r
 
 /** Status badge colors matching the Projects list page */
 const STATUS_COLORS = {
-  pending: "#FEF3C7",
-  in_progress: "#DBEAFE",
-  paused: "#FEF3C7",
-  submitted: "#DBEAFE",
-  reopened: "#EDE9FE",
-  approved: "#DCFCE7",
-  rejected: "#FEE2E2",
-  Planning: "#DBEAFE",
-  "In-progress": "#FEF3C7",
-  In_progress: "#FEF3C7",
-  Pause: "#FEE2E2",
-  Completed: "#DCFCE7",
+  pending: "var(--color-warning-bg)",
+  in_progress: "var(--color-blue-bg)",
+  paused: "var(--color-warning-bg)",
+  submitted: "var(--color-blue-bg)",
+  reopened: "var(--color-primary-bg)",
+  approved: "var(--color-success-bg)",
+  rejected: "var(--color-danger-bg)",
+  Planning: "var(--color-blue-bg)",
+  "In-progress": "var(--color-warning-bg)",
+  In_progress: "var(--color-warning-bg)",
+  Pause: "var(--color-danger-bg)",
+  Completed: "var(--color-success-bg)",
 };
 
 const STATUS_TEXT_COLORS = {
-  pending: "#92400E",
-  in_progress: "#1E40AF",
-  paused: "#92400E",
-  submitted: "#1E40AF",
-  reopened: "#5B21B6",
-  approved: "#166534",
-  rejected: "#991B1B",
-  Planning: "#1E40AF",
-  "In-progress": "#92400E",
-  In_progress: "#92400E",
-  Pause: "#991B1B",
-  Completed: "#166534",
+  pending: "var(--color-warning)",
+  in_progress: "var(--color-blue)",
+  paused: "var(--color-warning)",
+  submitted: "var(--color-blue)",
+  reopened: "var(--color-primary)",
+  approved: "var(--color-success)",
+  rejected: "var(--color-danger)",
+  Planning: "var(--color-blue)",
+  "In-progress": "var(--color-warning)",
+  In_progress: "var(--color-warning)",
+  Pause: "var(--color-danger)",
+  Completed: "var(--color-success)",
 };
 
 /**
@@ -283,7 +283,7 @@ const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, ge
             style={{
               width: `${project.progress}%`,
               minWidth: project.progress === 0 ? "100%" : "0",
-              background: project.progress === 0 ? "#d1d5db" : getProgressColor(project.progress),
+              background: project.progress === 0 ? "var(--bg-hover)" : getProgressColor(project.progress),
             }}
           ></div>
         </div>
@@ -295,17 +295,17 @@ const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, ge
           <span
             className="status-badge"
             style={{
-              backgroundColor: STATUS_COLORS[project.status] || "#e0e7ff",
-              color: STATUS_TEXT_COLORS[project.status] || "#374151",
+              backgroundColor: STATUS_COLORS[project.status] || "var(--color-primary-bg-hover)",
+              color: STATUS_TEXT_COLORS[project.status] || "var(--text-dark)",
             }}
           >
             {project.status || "Planning"}
           </span>
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            <span style={{ fontSize: "13px", color: "#6B7280", fontWeight: 500 }}>
+            <span style={{ fontSize: "13px", color: "var(--text-secondary)", fontWeight: 500 }}>
               📅 {project.start_date ? new Date(project.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "-"}
             </span>
-            <span style={{ fontSize: "13px", color: "#6B7280", fontWeight: 500 }}>
+            <span style={{ fontSize: "13px", color: "var(--text-secondary)", fontWeight: 500 }}>
               📅 {project.end_date ? new Date(project.end_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "No deadline"}
             </span>
           </div>
@@ -384,10 +384,10 @@ function Admin() {
 
   // Build summary card configs from API data
   const summaryCards = useMemo(() => [
-    { title: "Active Projects", value: String(summaryData.active_projects ?? 0), icon: "/Vector-5.svg", valueColor: "#2563EB", bgColor: "#EEF2FF", filter: "active-projects" },
-    { title: "Tasks Due Today", value: String(summaryData.tasks_due_today ?? 0), icon: "/Vector-1%20(3).svg", valueColor: "#EF4444", bgColor: "#FEF2F2", filter: "tasks-due-today" },
-    { title: "Approved Tasks", value: String(summaryData.approved_tasks ?? 0), icon: "/Vector-2.svg", valueColor: "#22C55E", bgColor: "#ECFDF5", filter: "approved-tasks" },
-    { title: "Pending Tasks", value: String(summaryData.pending_tasks ?? 0), icon: "/Vector-3.svg", valueColor: "#F59E0B", bgColor: "#FEF3C7", filter: "pending-tasks" },
+    { title: "Active Projects", value: String(summaryData.active_projects ?? 0), icon: "/Vector-5.svg", valueColor: "var(--color-blue)", bgColor: "var(--color-blue-bg)", filter: "active-projects" },
+    { title: "Tasks Due Today", value: String(summaryData.tasks_due_today ?? 0), icon: "/Vector-1%20(3).svg", valueColor: "var(--color-danger)", bgColor: "var(--color-danger-bg)", filter: "tasks-due-today" },
+    { title: "Approved Tasks", value: String(summaryData.approved_tasks ?? 0), icon: "/Vector-2.svg", valueColor: "var(--color-success)", bgColor: "var(--color-success-bg)", filter: "approved-tasks" },
+    { title: "Pending Tasks", value: String(summaryData.pending_tasks ?? 0), icon: "/Vector-3.svg", valueColor: "var(--color-warning)", bgColor: "var(--color-warning-bg)", filter: "pending-tasks" },
   ], [summaryData.active_projects, summaryData.tasks_due_today, summaryData.approved_tasks, summaryData.pending_tasks]);
 
   // Navigate to filtered list when a summary card is clicked
@@ -488,23 +488,23 @@ function Admin() {
 
   // Icon/color config for each activity action type (created, assigned, submitted, etc.)
   const activityActionConfig = {
-    created:      { icon: "★", color: "#3B82F6", bg: "#EFF6FF" },
-    assigned:     { icon: "→", color: "#8B5CF6", bg: "#F5F3FF" },
-    submitted:   { icon: "✓", color: "#22C55E", bg: "#ECFDF5" },
-    resubmitted: { icon: "↻", color: "#3B82F6", bg: "#EFF6FF" },
-    approved:    { icon: "✓", color: "#22C55E", bg: "#ECFDF5" },
-    rejected:    { icon: "✕", color: "#EF4444", bg: "#FEF2F2" },
-    reopened:    { icon: "↻", color: "#F59E0B", bg: "#FFFBEB" },
-    rework:      { icon: "↻", color: "#F59E0B", bg: "#FFFBEB" },
-    completed:       { icon: "✓", color: "#22C55E", bg: "#ECFDF5" },
-    status_updated:  { icon: "⚡", color: "#8B5CF6", bg: "#F5F3FF" },
-    field_changed:   { icon: "✎", color: "#6B7280", bg: "#F3F4F6" },
-    deleted:         { icon: "✕", color: "#EF4444", bg: "#FEF2F2" },
-    leader_changed:  { icon: "★", color: "#F59E0B", bg: "#FFFBEB" },
-    member_added:    { icon: "+", color: "#22C55E", bg: "#ECFDF5" },
-    member_removed:  { icon: "−", color: "#EF4444", bg: "#FEF2F2" },
-    access_granted:  { icon: "🔓", color: "#22C55E", bg: "#ECFDF5" },
-    access_removed:  { icon: "🔒", color: "#EF4444", bg: "#FEF2F2" },
+    created:      { icon: "★", color: "var(--color-blue-text)", bg: "var(--color-blue-light)" },
+    assigned:     { icon: "→", color: "var(--color-primary-light)", bg: "var(--color-primary-bg)" },
+    submitted:   { icon: "✓", color: "var(--color-success)", bg: "var(--color-success-bg)" },
+    resubmitted: { icon: "↻", color: "var(--color-blue-text)", bg: "var(--color-blue-light)" },
+    approved:    { icon: "✓", color: "var(--color-success)", bg: "var(--color-success-bg)" },
+    rejected:    { icon: "✕", color: "var(--color-danger)", bg: "var(--color-danger-bg)" },
+    reopened:    { icon: "↻", color: "var(--color-warning)", bg: "var(--color-warning-bg)" },
+    rework:      { icon: "↻", color: "var(--color-warning)", bg: "var(--color-warning-bg)" },
+    completed:       { icon: "✓", color: "var(--color-success)", bg: "var(--color-success-bg)" },
+    status_updated:  { icon: "⚡", color: "var(--color-primary-light)", bg: "var(--color-primary-bg)" },
+    field_changed:   { icon: "✎", color: "var(--text-secondary)", bg: "var(--bg-hover)" },
+    deleted:         { icon: "✕", color: "var(--color-danger)", bg: "var(--color-danger-bg)" },
+    leader_changed:  { icon: "★", color: "var(--color-warning)", bg: "var(--color-warning-bg)" },
+    member_added:    { icon: "+", color: "var(--color-success)", bg: "var(--color-success-bg)" },
+    member_removed:  { icon: "−", color: "var(--color-danger)", bg: "var(--color-danger-bg)" },
+    access_granted:  { icon: "🔓", color: "var(--color-success)", bg: "var(--color-success-bg)" },
+    access_removed:  { icon: "🔒", color: "var(--color-danger)", bg: "var(--color-danger-bg)" },
   };
 
   /** Returns a human-readable label for the activity module (task, project, subtask) */
@@ -673,14 +673,14 @@ function Admin() {
           <br />
           <div className="workload-card">
             <div className="workload-card-header">
-              <h3 style={{fontSize: "22px", fontWeight: "700"}}>Today's Tasks</h3>
+              <h3 style={{fontSize: "22px", fontWeight: "700", color: "var(--text-heading)"}}>Today's Tasks</h3>
               <button className="workload-view-btn" onClick={() => {
                 const isOutgoing = dashboardMode === "user";
                 navigate(rolePath(isOutgoing ? "taskby" : "tasks"));
               }}>View All Tasks</button>
             </div>
             {todayWorkload.length === 0 ? (
-              <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No tasks due today</p>
+              <p style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: "16px 0" }}>No tasks due today</p>
             ) : (
               <>
                 <div ref={taskSliderRef} style={{ overflow: "hidden" }}>
@@ -712,7 +712,7 @@ function Admin() {
                       disabled={taskSlide === 0}
                       style={{
                         background: "transparent", border: "none",
-                        color: taskSlide === 0 ? "#CBD5E1" : "#1E293B",
+                        color: taskSlide === 0 ? "var(--border-medium)" : "var(--text-dark)",
                         cursor: taskSlide === 0 ? "default" : "pointer",
                         fontSize: "24px", fontWeight: 700, padding: "4px 8px", lineHeight: 1,
                       }}
@@ -727,7 +727,7 @@ function Admin() {
                           style={{
                             width: i === taskSlide ? "28px" : "10px", height: "10px",
                             borderRadius: "5px", border: "none",
-                            background: i === taskSlide ? "#1E293B" : "#CBD5E1",
+                            background: i === taskSlide ? "var(--text-dark)" : "var(--border-medium)",
                             cursor: "pointer", transition: "all 0.2s", padding: 0,
                           }}
                         />
@@ -738,7 +738,7 @@ function Admin() {
                       disabled={taskSlide >= totalTaskSlides}
                       style={{
                         background: "transparent", border: "none",
-                        color: taskSlide >= totalTaskSlides ? "#CBD5E1" : "#1E293B",
+                        color: taskSlide >= totalTaskSlides ? "var(--border-medium)" : "var(--text-dark)",
                         cursor: taskSlide >= totalTaskSlides ? "default" : "pointer",
                         fontSize: "24px", fontWeight: 700, padding: "4px 8px", lineHeight: 1,
                       }}
@@ -758,7 +758,7 @@ function Admin() {
             boxShadow: "var(--shadow-sm)", marginBottom: "30px", overflow: "hidden",
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-              <h3 style={{ margin: 0, fontSize: "22px", fontWeight: "700" }}>Active Projects</h3>
+              <h3 style={{ margin: 0, fontSize: "22px", fontWeight: "700", color: "var(--text-heading)" }}>Active Projects</h3>
               <button
                 className="workload-view-btn"
                 onClick={() => navigate(`${rolePath("projects")}?filter=active`)}
@@ -796,7 +796,7 @@ function Admin() {
                       disabled={projectSlide === 0}
                       style={{
                         background: "transparent", border: "none",
-                        color: projectSlide === 0 ? "#CBD5E1" : "#1E293B",
+                        color: projectSlide === 0 ? "var(--border-medium)" : "var(--text-dark)",
                         cursor: projectSlide === 0 ? "default" : "pointer",
                         fontSize: "24px", fontWeight: 700, padding: "4px 8px", lineHeight: 1,
                       }}
@@ -811,7 +811,7 @@ function Admin() {
                           style={{
                             width: i === projectSlide ? "28px" : "10px", height: "10px",
                             borderRadius: "5px", border: "none",
-                            background: i === projectSlide ? "#1E293B" : "#CBD5E1",
+                            background: i === projectSlide ? "var(--text-dark)" : "var(--border-medium)",
                             cursor: "pointer", transition: "all 0.2s", padding: 0,
                           }}
                         />
@@ -822,7 +822,7 @@ function Admin() {
                       disabled={projectSlide >= totalProjectSlides}
                       style={{
                         background: "transparent", border: "none",
-                        color: projectSlide >= totalProjectSlides ? "#CBD5E1" : "#1E293B",
+                        color: projectSlide >= totalProjectSlides ? "var(--border-medium)" : "var(--text-dark)",
                         cursor: projectSlide >= totalProjectSlides ? "default" : "pointer",
                         fontSize: "24px", fontWeight: 700, padding: "4px 8px", lineHeight: 1,
                       }}
@@ -840,10 +840,10 @@ function Admin() {
           {(isAdminManager ? dashboardMode === "user" : dashboardMode === "my") && (<>
           <div className="today-activity-section" style={{ background: "var(--bg-card)", borderRadius: "20px", padding: "24px", boxShadow: "var(--shadow-sm)", marginBottom: "30px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h3 style={{ margin: 0,fontSize: "22px", fontWeight: "700"}}>Today's Activity</h3>
+              <h3 style={{ margin: 0,fontSize: "22px", fontWeight: "700", color: "var(--text-heading)"}}>Today's Activity</h3>
               <button
                 onClick={() => setPastActivityOpen(!pastActivityOpen)}
-                style={{ background: "transparent", border: "none", color: "#6366F1", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}
+                style={{ background: "transparent", border: "none", color: "var(--color-primary)", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}
               >
                 {pastActivityOpen ? "Hide Past" : "Past Activities"}
               </button>
@@ -891,7 +891,7 @@ function Admin() {
                           width: "28px",
                           height: "28px",
                           borderRadius: "50%",
-                          background: "#1a1a1a",
+                          background: "var(--text-primary)",
                           color: "#fff",
                           display: "flex",
                           alignItems: "center",
@@ -899,7 +899,7 @@ function Admin() {
                           fontSize: "10px",
                           fontWeight: 600,
                           cursor: "pointer",
-                          border: "2px solid #fff",
+                          border: "2px solid var(--bg-card)",
                         }}
                       >
                         {getInitials(item.actor_name)}
@@ -918,10 +918,10 @@ function Admin() {
           {pastActivityOpen && (
             <div className="past-activity-section" style={{ background: "var(--bg-card)", borderRadius: "20px", padding: "24px", boxShadow: "var(--shadow-sm)", marginBottom: "30px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "600" }}>Past Activity</h3>
+                <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "600", color: "var(--text-heading)" }}>Past Activity</h3>
                 <button
                   onClick={() => setPastActivityOpen(false)}
-                  style={{ background: "transparent", border: "none", color: "#6366F1", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}
+                  style={{ background: "transparent", border: "none", color: "var(--color-primary)", fontWeight: "600", cursor: "pointer", fontSize: "14px" }}
                 >
                   Collapse
                 </button>

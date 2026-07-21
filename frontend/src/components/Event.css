@@ -147,7 +147,7 @@
 
 .event-label.required::after {
   content: " *";
-  color: #ef4444;
+  color: var(--color-danger);
 }
 
 .event-input {
@@ -164,8 +164,8 @@
 }
 
 .event-input:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
 }
 
 .event-input::placeholder {
@@ -187,8 +187,8 @@
 }
 
 .event-textarea:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
 }
 
 .event-textarea::placeholder {
@@ -225,56 +225,56 @@
 
 .type-blue {
   background: var(--color-primary-bg);
-  color: #6366f1;
+  color: var(--color-primary);
 }
 
 .type-blue.active,
 .type-blue:hover {
-  background: #6366f1;
+  background: var(--color-primary);
   color: #fff;
 }
 
 .type-light-blue {
   background: var(--color-blue-light);
-  color: #3b82f6;
+  color: var(--color-blue-text);
 }
 
 .type-light-blue.active,
 .type-light-blue:hover {
-  background: #3b82f6;
+  background: var(--color-blue-text);
   color: #fff;
 }
 
 .type-green {
   background: var(--color-success-bg);
-  color: #10b981;
+  color: var(--color-success);
 }
 
 .type-green.active,
 .type-green:hover {
-  background: #10b981;
+  background: var(--color-success);
   color: #fff;
 }
 
 .type-red {
   background: var(--color-danger-bg);
-  color: #ef4444;
+  color: var(--color-danger);
 }
 
 .type-red.active,
 .type-red:hover {
-  background: #ef4444;
+  background: var(--color-danger);
   color: #fff;
 }
 
 .type-orange {
   background: var(--color-orange-light);
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .type-orange.active,
 .type-orange:hover {
-  background: #f59e0b;
+  background: var(--color-warning);
   color: #fff;
 }
 
@@ -290,13 +290,13 @@
 }
 
 .type-amber {
-  background: #fffbeb;
-  color: #f59e0b;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .type-amber.active,
 .type-amber:hover {
-  background: #f59e0b;
+  background: var(--color-warning);
   color: #fff;
 }
 
@@ -355,11 +355,11 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #d1d5db;
+  background: var(--border-color);
 }
 
 .event-dots .dot.active {
-  background: #6366f1;
+  background: var(--color-primary);
 }
 
 .event-footer {
@@ -389,7 +389,7 @@
   padding: 12px;
   border: none;
   border-radius: 12px;
-  background: #6366f1;
+  background: var(--color-primary);
   font-size: 15px;
   font-weight: 600;
   color: #fff;

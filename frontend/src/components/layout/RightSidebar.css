@@ -2,16 +2,25 @@
     width: 100%;
     max-width: 300px;
     min-width: 260px;
+    height: 100%;
+    max-height: calc(100vh - 100px);
     background: var(--bg-card);
     border-radius: 20px 0 0 20px;
     margin-top: 0;
     padding: 20px;
     border: 1px solid var(--border-color);
     box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
-    position: relative;
+    position: sticky;
+    top: 0;
     align-self: flex-start;
     box-sizing: border-box;
-    overflow: visible;
+    overflow-y: auto;
+    scrollbar-width: none;
+    z-index: 100;
+}
+
+.right-sidebar::-webkit-scrollbar {
+    display: none;
 }
 
 .right-card {

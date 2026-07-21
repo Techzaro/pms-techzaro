@@ -19,10 +19,13 @@ import { authToken, getUser, rolePath } from "../utils/auth";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
+import ActionPopover from "../components/ActionPopover";
+import AddNoteModal from "../components/AddNoteModal";
 import API_URL from "../config/api";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
 import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import { formatDateTimeInline } from "../utils/formatDateTime";
+import "../components/ActionPopover.css";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
 
@@ -334,14 +337,21 @@ function SelfDeliveries() {
                   <div className="date-box">
                     <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.start_date)}{"\n"}{formatDate(item.due_date)}</div>
                   </div>
-                    <div className="action-btns">
+                    <ActionPopover
+                      trigger={
+                        <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                          <IoEyeOutline size={20} />
+                        </button>
+                      }
+                    >
+                      <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                       {canSubmit ? (
                         <button
                           className="action-icon-btn action-submit"
                           title={item.status === "rework_required" ? "Resubmit Subtask" : "Submit Subtask"}
                           onClick={() => setSubmitModal({ open: true, subtask: item })}
                         >
-                          <LuSend />
+                          <LuSend size={16} />
                         </button>
                       ) : canView ? (
                         <button
@@ -349,10 +359,10 @@ function SelfDeliveries() {
                           title="View Subtask"
                           onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "self-deliveries" } })}
                         >
-                          <IoEyeOutline />
+                          <IoEyeOutline size={16} />
                         </button>
                       ) : null}
-                    </div>
+                    </ActionPopover>
                   </div>
                 );
               }}

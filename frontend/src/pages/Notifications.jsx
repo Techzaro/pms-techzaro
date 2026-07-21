@@ -22,35 +22,35 @@ import "./Notifications.css";
 
 /** Map of notification type keys to their display icon, background and colour. */
 const TYPE_ICONS = {
-  project_updated: { icon: "edit", bg: "#dbeafe", color: "#2563eb" },
-  project_reopened: { icon: "refresh", bg: "#fef3c7", color: "#d97706" },
-  project_access_granted: { icon: "check", bg: "#d1fae5", color: "#059669" },
-  project_access_removed: { icon: "x", bg: "#fee2e2", color: "#dc2626" },
-  user_updated: { icon: "edit", bg: "#dbeafe", color: "#2563eb" },
-  task_assigned: { icon: "task", bg: "#ede9fe", color: "#7c3aed" },
-  task_updated: { icon: "edit", bg: "#dbeafe", color: "#2563eb" },
-  task_submitted: { icon: "upload", bg: "#dbeafe", color: "#2563eb" },
-  task_completed: { icon: "done", bg: "#d1fae5", color: "#059669" },
-  task_approved: { icon: "check", bg: "#d1fae5", color: "#059669" },
-  task_rejected: { icon: "x", bg: "#fee2e2", color: "#dc2626" },
-  task_reopened: { icon: "refresh", bg: "#fef3c7", color: "#d97706" },
-  deliverable_assigned: { icon: "deliverable", bg: "#ede9fe", color: "#7c3aed" },
-  deliverable_updated: { icon: "edit", bg: "#dbeafe", color: "#2563eb" },
-  deliverable_submitted: { icon: "upload", bg: "#dbeafe", color: "#2563eb" },
-  deliverable_approved: { icon: "check", bg: "#d1fae5", color: "#059669" },
-  deliverable_rejected: { icon: "x", bg: "#fee2e2", color: "#dc2626" },
-  deliverable_reopened: { icon: "refresh", bg: "#fef3c7", color: "#d97706" },
-  deliverable_added: { icon: "deliverable", bg: "#ede9fe", color: "#7c3aed" },
-  event_created: { icon: "calendar", bg: "#ede9fe", color: "#7c3aed" },
-  event_updated: { icon: "calendar", bg: "#dbeafe", color: "#2563eb" },
-  event_cancelled: { icon: "calendar", bg: "#fee2e2", color: "#dc2626" },
-  event_reminder: { icon: "alarm", bg: "#fef3c7", color: "#d97706" },
-  chat_message: { icon: "chat", bg: "#d1fae5", color: "#059669" },
+  project_updated: { icon: "edit", bg: "var(--color-blue-bg)", color: "var(--color-primary)" },
+  project_reopened: { icon: "refresh", bg: "var(--color-warning-bg)", color: "var(--color-warning)" },
+  project_access_granted: { icon: "check", bg: "var(--color-success-bg)", color: "var(--color-success)" },
+  project_access_removed: { icon: "x", bg: "var(--color-danger-bg)", color: "var(--color-danger)" },
+  user_updated: { icon: "edit", bg: "var(--color-blue-bg)", color: "var(--color-primary)" },
+  task_assigned: { icon: "task", bg: "var(--color-primary-bg)", color: "var(--color-primary)" },
+  task_updated: { icon: "edit", bg: "var(--color-blue-bg)", color: "var(--color-primary)" },
+  task_submitted: { icon: "upload", bg: "var(--color-blue-bg)", color: "var(--color-primary)" },
+  task_completed: { icon: "done", bg: "var(--color-success-bg)", color: "var(--color-success)" },
+  task_approved: { icon: "check", bg: "var(--color-success-bg)", color: "var(--color-success)" },
+  task_rejected: { icon: "x", bg: "var(--color-danger-bg)", color: "var(--color-danger)" },
+  task_reopened: { icon: "refresh", bg: "var(--color-warning-bg)", color: "var(--color-warning)" },
+  deliverable_assigned: { icon: "deliverable", bg: "var(--color-primary-bg)", color: "var(--color-primary)" },
+  deliverable_updated: { icon: "edit", bg: "var(--color-blue-bg)", color: "var(--color-primary)" },
+  deliverable_submitted: { icon: "upload", bg: "var(--color-blue-bg)", color: "var(--color-primary)" },
+  deliverable_approved: { icon: "check", bg: "var(--color-success-bg)", color: "var(--color-success)" },
+  deliverable_rejected: { icon: "x", bg: "var(--color-danger-bg)", color: "var(--color-danger)" },
+  deliverable_reopened: { icon: "refresh", bg: "var(--color-warning-bg)", color: "var(--color-warning)" },
+  deliverable_added: { icon: "deliverable", bg: "var(--color-primary-bg)", color: "var(--color-primary)" },
+  event_created: { icon: "calendar", bg: "var(--color-primary-bg)", color: "var(--color-primary)" },
+  event_updated: { icon: "calendar", bg: "var(--color-blue-bg)", color: "var(--color-primary)" },
+  event_cancelled: { icon: "calendar", bg: "var(--color-danger-bg)", color: "var(--color-danger)" },
+  event_reminder: { icon: "alarm", bg: "var(--color-warning-bg)", color: "var(--color-warning)" },
+  chat_message: { icon: "chat", bg: "var(--color-success-bg)", color: "var(--color-success)" },
 };
 
 /** Renders the appropriate SVG icon for a given notification type. */
 function TypeIcon({ type }) {
-  const cfg = TYPE_ICONS[type] || { icon: "bell", bg: "#f3f4f6", color: "#6b7280" };
+  const cfg = TYPE_ICONS[type] || { icon: "bell", bg: "var(--bg-hover)", color: "var(--text-secondary)" };
 
   return (
     <div className="notif-icon" style={{ background: cfg.bg, color: cfg.color }}>
@@ -374,7 +374,7 @@ function Notifications() {
               <div className="notif-header">
           <div className="notif-header-left">
             <div className="notif-header-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                 <path d="M13.73 21a2 2 0 0 1-3.46 0" />
               </svg>
@@ -389,13 +389,13 @@ function Notifications() {
           {/* Search + Type Filter */}
           <div className="notif-search-wrap">
             <div className="notif-search">
-              <svg className="notif-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg className="notif-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="11" cy="11" r="8" />
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
               <input
                 type="text"
-                placeholder="Search notifications..."
+                placeholder="Search by notification title or message..."
                 value={search}
                 onChange={(e) => handleSearch(e.target.value)}
               />
@@ -473,12 +473,12 @@ function Notifications() {
               </div>
             ) : error ? (
               <div className="notif-empty">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--color-danger)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10" />
                   <line x1="12" y1="8" x2="12" y2="12" />
                   <line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
-                <p style={{ color: "#ef4444" }}>{error}</p>
+                <p style={{ color: "var(--color-danger)" }}>{error}</p>
                 <button
                   onClick={() => fetchNotifications(1, activeTab, search)}
                   style={{ marginTop: 8, padding: "6px 16px", border: "1px solid var(--border-color)", borderRadius: 8, background: "var(--bg-card)", cursor: "pointer", fontSize: 13 }}
@@ -488,7 +488,7 @@ function Notifications() {
               </div>
             ) : filtered.length === 0 ? (
               <div className="notif-empty">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--border-medium)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                   <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                 </svg>
@@ -574,7 +574,7 @@ function Notifications() {
             </div>
             <div className="notif-sidebar-info">
               <div className="notif-sidebar-row">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                   <circle cx="12" cy="7" r="4" />
                 </svg>
@@ -584,7 +584,7 @@ function Notifications() {
                 </div>
               </div>
               <div className="notif-sidebar-row">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10" />
                   <polyline points="12 6 12 12 16 14" />
                 </svg>

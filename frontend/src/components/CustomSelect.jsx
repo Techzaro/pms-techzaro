@@ -3,14 +3,16 @@
  * Combobox-style custom dropdown. Click input → search mode. Click arrow → toggle dropdown.
  */
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import "./CustomSelect.css";
 
 const CustomSelect = ({ value, onChange, options, placeholder = "Select...", name }) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
   const ref = useRef(null);
   const inputRef = useRef(null);
+  const listRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -26,9 +28,29 @@ const CustomSelect = ({ value, onChange, options, placeholder = "Select...", nam
   const selected = options.find((o) => String(o.value) === String(value));
 
   const q = search.toLowerCase().trim();
-  const filtered = q
-    ? options.filter((o) => o.label?.toLowerCase().includes(q))
-    : options;
+  const filtered = useMemo(() => {
+    const result = q
+      ? options.filter((o) => o.label?.toLowerCase().includes(q))
+      : options;
+    if (!q && selected) {
+      const selectedIdx = result.findIndex((o) => String(o.value) === String(selected.value));
+      if (selectedIdx > 0) {
+        return [result[selectedIdx], ...result.filter((_, i) => i !== selectedIdx)];
+      }
+    }
+    return result;
+  }, [options, q, selected]);
+
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [search, open]);
+
+  useEffect(() => {
+    if (open && listRef.current) {
+      const el = listRef.current.children[highlightedIndex];
+      if (el) el.scrollIntoView({ block: "nearest" });
+    }
+  }, [highlightedIndex, open]);
 
   const handleInputChange = (e) => {
     setSearch(e.target.value);
@@ -41,11 +63,10 @@ const CustomSelect = ({ value, onChange, options, placeholder = "Select...", nam
 
   const handleTriggerClick = () => {
     if (!open) {
-      setSearch(selected ? selected.label : "");
+      setSearch("");
       setOpen(true);
       setTimeout(() => {
         inputRef.current?.focus();
-        if (selected) inputRef.current?.select();
       }, 0);
     }
   };
@@ -56,11 +77,10 @@ const CustomSelect = ({ value, onChange, options, placeholder = "Select...", nam
       setOpen(false);
       setSearch("");
     } else {
-      setSearch(selected ? selected.label : "");
+      setSearch("");
       setOpen(true);
       setTimeout(() => {
         inputRef.current?.focus();
-        if (selected) inputRef.current?.select();
       }, 0);
     }
   };
@@ -70,6 +90,17 @@ const CustomSelect = ({ value, onChange, options, placeholder = "Select...", nam
       setSearch("");
       setOpen(false);
       inputRef.current?.blur();
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev < filtered.length - 1 ? prev + 1 : 0));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : filtered.length - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (filtered[highlightedIndex]) {
+        handleSelect(filtered[highlightedIndex].value);
+      }
     }
   };
 
@@ -112,15 +143,16 @@ const CustomSelect = ({ value, onChange, options, placeholder = "Select...", nam
         </svg>
       </div>
       {open && (
-        <div className="cs-dropdown">
+        <div className="cs-dropdown" ref={listRef}>
           {filtered.length === 0 ? (
             <div className="cs-empty">No matches found</div>
           ) : (
-            filtered.map((opt) => (
+            filtered.map((opt, idx) => (
               <div
                 key={opt.value}
-                className={`cs-option ${String(opt.value) === String(value) ? "cs-selected" : ""}`}
+                className={`cs-option ${String(opt.value) === String(value) ? "cs-selected" : ""} ${idx === highlightedIndex ? "cs-highlighted" : ""}`}
                 onClick={() => handleSelect(opt.value)}
+                onMouseEnter={() => setHighlightedIndex(idx)}
               >
                 {opt.label}
               </div>

@@ -23,7 +23,7 @@
 }
 
 .breadcrumb-link {
-  color: #6366f1;
+  color: var(--color-primary);
   text-decoration: none;
   font-weight: 500;
   transition: color 0.2s ease;

@@ -68,7 +68,7 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
   const genTime = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
 
   const cardData = [
-    { key: "total_assigned", label: "Total Assigned", value: summary?.total_assigned ?? 0, color: "#6366f1", bg: "#EEF2FF" },
+    { key: "total_assigned", label: "Total Assigned", value: summary?.total_assigned ?? 0, color: "var(--color-primary)", bg: "#EEF2FF" },
     { key: "approved", label: "Approved", value: summary?.approved ?? 0, color: "#22C55E", bg: "#ECFDF5" },
     { key: "pending", label: "Pending", value: summary?.pending ?? 0, color: "#F59E0B", bg: "#FEF3C7" },
     { key: "overdue", label: "Overdue", value: summary?.overdue ?? 0, color: "#EF4444", bg: "#FEF2F2" },
@@ -226,9 +226,9 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
               {timeRange === "custom" && (
                 <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
                   <input type="date" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setIsDirty(true); }}
-                    style={{ flex: 1, padding: "10px 14px", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 13, color: "#374151", outline: "none" }} />
+                    style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
                   <input type="date" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setIsDirty(true); }}
-                    style={{ flex: 1, padding: "10px 14px", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 13, color: "#374151", outline: "none" }} />
+                    style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
                 </div>
               )}
             </div>
@@ -259,7 +259,7 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
               {/* HEADER */}
               <div className="erm-header">
                 <div className="erm-header-left">
-                  <div style={{ width: 26, height: 26, borderRadius: 5, background: "#6366f1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 5, background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>TX</span>
                   </div>
                   <div>
@@ -275,15 +275,15 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
               {/* SUMMARY CARDS */}
               <div className="erm-summary-grid">
                 {cardData.map((c) => (
-                  <div key={c.key} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
+                  <div key={c.key} style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{ width: 28, height: 28, borderRadius: 8, background: c.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <div style={{ width: 14, height: 14, borderRadius: "50%", background: c.color }}></div>
                       </div>
-                      <div style={{ fontSize: 10, color: "#6b7280" }}>{c.label}</div>
+                      <div style={{ fontSize: 10, color: "var(--text-secondary)" }}>{c.label}</div>
                     </div>
                     <div style={{ fontSize: 26, fontWeight: 700, color: c.color, marginTop: 4 }}>{c.value}</div>
-                    <div style={{ fontSize: 8, color: "#9ca3af", marginTop: 2 }}>
+                    <div style={{ fontSize: 8, color: "var(--text-muted)", marginTop: 2 }}>
                       {c.key === "total_assigned" ? "All tasks assigned" : c.key === "approved" ? "Tasks completed" : c.key === "pending" ? "Tasks in progress" : "Require attention"}
                     </div>
                   </div>
@@ -292,7 +292,7 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
 
               {/* USER PERFORMANCE TABLE */}
               <div className="erm-table-section">
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>USER PERFORMANCE</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>USER PERFORMANCE</div>
                 <div className="erm-table-wrapper">
                   <table className="erm-table">
                     <thead>
@@ -304,13 +304,13 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
                     </thead>
                     <tbody>
                       {(users || []).length === 0 ? (
-                        <tr><td colSpan={7} style={{ textAlign: "center", padding: 20, color: "#9ca3af" }}>No data</td></tr>
+                        <tr><td colSpan={7} style={{ textAlign: "center", padding: 20, color: "var(--text-muted)" }}>No data</td></tr>
                       ) : users.map((u, i) => (
-                        <tr key={u.id} style={{ borderBottom: "1px solid #f3f4f6", background: i % 2 ? "#f9fafb" : "#fff" }}>
-                          <td data-label="#" style={{ textAlign: "center", color: "#6b7280" }}>{i + 1}</td>
-                          <td data-label="User" style={{ fontWeight: 600, color: "#111827" }}>{u.name || "-"}</td>
-                          <td data-label="Role" style={{ color: "#374151" }}>{ROLE_LABEL[u.role] || u.role || "-"}</td>
-                          <td data-label="Assigned" style={{ fontWeight: 600, color: "#6366f1" }}>{u.assigned ?? 0}</td>
+                        <tr key={u.id} style={{ borderBottom: "1px solid var(--border-light)", background: i % 2 ? "var(--bg-hover)" : "var(--bg-card)" }}>
+                          <td data-label="#" style={{ textAlign: "center", color: "var(--text-secondary)" }}>{i + 1}</td>
+                          <td data-label="User" style={{ fontWeight: 600, color: "var(--text-heading)" }}>{u.name || "-"}</td>
+                          <td data-label="Role" style={{ color: "var(--text-dark)" }}>{ROLE_LABEL[u.role] || u.role || "-"}</td>
+                          <td data-label="Assigned" style={{ fontWeight: 600, color: "var(--color-primary)" }}>{u.assigned ?? 0}</td>
                           <td data-label="Completed" style={{ fontWeight: 600, color: "#22c55e" }}>{u.completed ?? 0}</td>
                           <td data-label="Pending" style={{ fontWeight: 600, color: "#f59e0b" }}>{u.pending ?? 0}</td>
                           <td data-label="Overdue" style={{ fontWeight: 600, color: "#ef4444" }}>{u.overdue ?? 0}</td>
@@ -324,10 +324,10 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
               {/* FOOTER */}
               <div className="erm-footer">
                 <div className="erm-footer-left">
-                  <div style={{ width: 16, height: 16, borderRadius: 3, background: "#6366f1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 16, height: 16, borderRadius: 3, background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <span style={{ fontSize: 7, fontWeight: 700, color: "#fff" }}>TX</span>
                   </div>
-                  <span style={{ fontWeight: 600, color: "#6b7280" }}>Techxaro</span>
+                  <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>Techxaro</span>
                   <span>PMS Portal</span>
                 </div>
                 <div>Generated Date:  {genDate} | Generated Time:  {genTime}</div>

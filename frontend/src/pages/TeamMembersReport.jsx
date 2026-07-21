@@ -58,7 +58,7 @@ function TeamMembersReport() {
     return [
       { label: "Completed", count: statusBreakdown.completed || 0, color: "#10b981" },
       { label: "Pending", count: statusBreakdown.pending || 0, color: "#f59e0b" },
-      { label: "In Review", count: (statusBreakdown.submitted || 0) + (statusBreakdown.reopened || 0), color: "#6366f1" },
+      { label: "In Review", count: (statusBreakdown.submitted || 0) + (statusBreakdown.reopened || 0), color: "var(--color-primary)" },
       { label: "Overdue", count: statusBreakdown.overdue || totalOverdue, color: "#ef4444" },
     ].map((item) => ({
       ...item,
@@ -102,12 +102,12 @@ function TeamMembersReport() {
           {/* TEAM PROFILE HEADER */}
           <div className="up-profile-header" style={{ flexDirection: "column", alignItems: "stretch", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <div className="up-avatar" style={{ background: "#e0e7ff", flexShrink: 0 }}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <div className="up-avatar" style={{ background: "var(--color-primary-bg)", flexShrink: 0 }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
               </div>
-              <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "#111827", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{isLoading ? "Loading..." : team?.name || "Team"}</h1>
+              <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "var(--text-heading)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{isLoading ? "Loading..." : team?.name || "Team"}</h1>
               {canExport && (
                 <button className="up-export-btn" style={{ flexShrink: 0 }} onClick={() => setShowExportModal(true)}>
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -119,7 +119,7 @@ function TeamMembersReport() {
             </div>
             <p className="up-role" style={{ margin: 0, paddingLeft: 80,fontSize: 16, fontWeight: 800 }}>{`${members.length} members`}{team?.leader ? ` \u2022 Lead: ${team.leader.name}` : ""}</p>
             {team?.description && (
-              <div style={{ color: "#6b7280", fontSize: 14, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", margin: 0, paddingLeft: 80 }} className="rte-display" dangerouslySetInnerHTML={{ __html: team.description }} />
+              <div style={{ color: "var(--text-secondary)", fontSize: 14, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", margin: 0, paddingLeft: 80 }} className="rte-display" dangerouslySetInnerHTML={{ __html: team.description }} />
             )}
           </div>
 
@@ -148,7 +148,7 @@ function TeamMembersReport() {
             {/* Task Status Breakdown - Donut Chart */}
             <div className="up-chart-card">
               <div className="up-chart-header">
-                <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#111827" }}>Task Status Breakdown</h3>
+                <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>Task Status Breakdown</h3>
               </div>
               <div className="up-donut-section">
                 <DonutChart
@@ -163,7 +163,7 @@ function TeamMembersReport() {
             {/* Priority Distribution - Horizontal Bar Chart */}
             <div className="up-chart-card">
               <div className="up-chart-header">
-                <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#111827" }}>Priority Distribution</h3>
+                <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>Priority Distribution</h3>
               </div>
               <div className="up-priority-section">
                 <PriorityBarChart
@@ -177,12 +177,12 @@ function TeamMembersReport() {
           {/* MEMBERS TABLE */}
           <div className="up-chart-card" style={{ marginTop: 0 }}>
             <div className="up-chart-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#111827" }}>Member Performance</h3>
+              <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>Member Performance</h3>
               <div className="reports-section-search">
                 <IoSearchOutline size={16} />
                 <input
                   type="text"
-                  placeholder="Search members..."
+                  placeholder="Search by member name or role..."
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
                 />
@@ -190,23 +190,23 @@ function TeamMembersReport() {
             </div>
 
             {isLoading ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "#9ca3af" }}>Loading...</div>
+              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>
             ) : filteredMembers.length === 0 ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "#9ca3af" }}>{memberSearch ? "No matching members found." : "No members in this team."}</div>
+              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>{memberSearch ? "No matching members found." : "No members in this team."}</div>
             ) : (
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead>
-                    <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
-                      <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "#6b7280", fontSize: 13 }}>#</th>
-                      <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "#6b7280", fontSize: 13 }}>Member</th>
-                      <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "#6b7280", fontSize: 13 }}>Role</th>
-                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "#6b7280", fontSize: 13 }}>Assigned</th>
-                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "#6b7280", fontSize: 13 }}>Completed</th>
-                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "#6b7280", fontSize: 13 }}>Pending</th>
-                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "#6b7280", fontSize: 13 }}>Overdue</th>
-                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "#6b7280", fontSize: 13 }}>Rate</th>
-                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "#6b7280", fontSize: 13 }}>Action</th>
+                    <tr style={{ borderBottom: "2px solid var(--border-color)" }}>
+                      <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>#</th>
+                      <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>Member</th>
+                      <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>Role</th>
+                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>Assigned</th>
+                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>Completed</th>
+                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>Pending</th>
+                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>Overdue</th>
+                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>Rate</th>
+                      <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, color: "var(--text-secondary)", fontSize: 13 }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -214,8 +214,8 @@ function TeamMembersReport() {
                       const rate = member.assigned > 0 ? Math.round((member.completed / member.assigned) * 100) : 0;
                       const rateColor = rate >= 80 ? "#22c55e" : rate >= 50 ? "#f59e0b" : "#ef4444";
                       return (
-                        <tr key={member.id} style={{ borderBottom: "1px solid #f3f4f6", background: idx % 2 ? "#f9fafb" : "#fff" }}>
-                          <td style={{ padding: "14px 16px", color: "#6b7280" }}>{idx + 1}</td>
+                        <tr key={member.id} style={{ borderBottom: "1px solid var(--border-light)", background: idx % 2 ? "var(--bg-hover)" : "var(--bg-card)" }}>
+                          <td style={{ padding: "14px 16px", color: "var(--text-secondary)" }}>{idx + 1}</td>
                           <td style={{ padding: "14px 16px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                               <div style={{
@@ -226,17 +226,17 @@ function TeamMembersReport() {
                               }}>
                                 {member.name ? member.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) : "?"}
                               </div>
-                              <span style={{ fontWeight: 600, color: "#111827" }}>{member.name}</span>
+                              <span style={{ fontWeight: 600, color: "var(--text-heading)" }}>{member.name}</span>
                             </div>
                           </td>
-                          <td style={{ padding: "14px 16px", color: "#6b7280" }}>{ROLE_LABEL[member.role] || member.role}</td>
-                          <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: 600, color: "#6366f1" }}>{member.assigned ?? 0}</td>
+                          <td style={{ padding: "14px 16px", color: "var(--text-secondary)" }}>{ROLE_LABEL[member.role] || member.role}</td>
+                          <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: 600, color: "var(--color-primary)" }}>{member.assigned ?? 0}</td>
                           <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: 600, color: "#22c55e" }}>{member.completed ?? 0}</td>
                           <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: 600, color: "#f59e0b" }}>{member.pending ?? 0}</td>
                           <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: 600, color: "#ef4444" }}>{member.overdue ?? 0}</td>
                           <td style={{ padding: "14px 16px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
-                              <div style={{ width: 60, height: 6, borderRadius: 3, background: "#e5e7eb", overflow: "hidden" }}>
+                              <div style={{ width: 60, height: 6, borderRadius: 3, background: "var(--border-color)", overflow: "hidden" }}>
                                 <div style={{ width: `${rate}%`, height: "100%", borderRadius: 3, background: rateColor }}></div>
                               </div>
                               <span style={{ fontWeight: 600, fontSize: 13, color: rateColor, minWidth: 32 }}>{rate}%</span>
@@ -245,8 +245,8 @@ function TeamMembersReport() {
                           <td style={{ padding: "14px 16px", textAlign: "center" }}>
                             <button
                               style={{
-                                padding: "6px 14px", border: "1px solid #e5e7eb", borderRadius: 8,
-                                background: "#fff", color: "#6366f1", fontWeight: 600, fontSize: 13,
+                                padding: "6px 14px", border: "1px solid var(--border-color)", borderRadius: 8,
+                                background: "var(--bg-card)", color: "var(--color-primary)", fontWeight: 600, fontSize: 13,
                                 cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4
                               }}
                               onClick={() => navigate(rolePath(`reports/user-performance/${member.id}`), {

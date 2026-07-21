@@ -488,7 +488,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
                   className="custom-input-revert"
                   onClick={() => handleChange("eventType", "Meeting")}
                   title="Back to list"
-                  style={{ flexShrink: 0, width: 36, height: 36, border: "1px solid #d1d5db", borderRadius: 10, background: "#f3f4f6", color: "#6b7280", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  style={{ flexShrink: 0, width: 36, height: 36, border: "1px solid var(--border-color)", borderRadius: 10, background: "var(--bg-hover)", color: "var(--text-secondary)", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
                   &times;
                 </button>

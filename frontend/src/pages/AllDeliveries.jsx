@@ -19,12 +19,16 @@ import Breadcrumb from "../components/Breadcrumb";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
+import { StickyNote } from "lucide-react";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
+import ActionPopover from "../components/ActionPopover";
+import AddNoteModal from "../components/AddNoteModal";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { formatDateOnly } from "../utils/formatDateTime";
+import "../components/ActionPopover.css";
 import "../pages/Deliveries.css";
 
 const STATUS_COLORS = {
@@ -75,6 +79,7 @@ function AllDeliveries() {
   });
   const [timeFilter, setTimeFilter] = useState("");
   const [orderedItems, setOrderedItems] = useState([]);
+  const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
 
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
@@ -390,15 +395,28 @@ function AllDeliveries() {
 
                     {/* Action — View only */}
                     <div className="col-action">
-                      <div className="action-btns">
+                      <ActionPopover
+                        trigger={
+                          <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                            <IoEyeOutline size={20} />
+                          </button>
+                        }
+                      >
                         <button
                           className="action-icon-btn action-view"
-                          title="View"
+                          title="View Subtask"
                           onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { deliverableIds: deliverableIdList, from: 'all-deliverables', readOnly: true } })}
                         >
-                          <IoEyeOutline />
+                          <IoEyeOutline size={16} />
                         </button>
-                      </div>
+                        <button
+                          className="action-icon-btn action-note"
+                          title="Add Note"
+                          onClick={() => setNoteModal({ open: true, itemId: item.id })}
+                        >
+                          <StickyNote size={16} />
+                        </button>
+                      </ActionPopover>
                     </div>
                   </div>
                 );
@@ -411,6 +429,14 @@ function AllDeliveries() {
       {!showAll && totalPages > 1 && (
         <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
       )}
+
+      <AddNoteModal
+        isOpen={noteModal.open}
+        onClose={() => setNoteModal({ open: false, itemId: null })}
+        itemType="deliverable"
+        itemId={noteModal.itemId}
+        onSaved={fetchDeliverables}
+      />
     </DashboardLayout>
   );
 }

@@ -79,4 +79,32 @@ class TaskUserNoteController extends Controller
 
         return response()->json(['notes' => $notes]);
     }
+
+    /**
+     * Update a personal note. Users can only update their own notes.
+     *
+     * @param  Request  $request  Input: note (required, max 5000 chars).
+     * @param  Task  $task  The task the note belongs to.
+     * @param  TaskUserNote  $note  The note to update.
+     * @return JsonResponse JSON response with the updated notes list.
+     */
+    public function update(Request $request, Task $task, TaskUserNote $note)
+    {
+        if ((int) $note->user_id !== (int) auth()->id()) {
+            return response()->json(['success' => false, 'message' => 'Forbidden.'], 403);
+        }
+
+        $validated = $request->validate([
+            'note' => 'required|string|max:5000',
+        ]);
+
+        $note->update(['note' => $validated['note']]);
+
+        $notes = TaskUserNote::where('task_id', $task->id)
+            ->where('user_id', auth()->id())
+            ->orderBy('created_at', 'desc')
+            ->get(['id', 'note', 'created_at']);
+
+        return response()->json(['notes' => $notes]);
+    }
 }

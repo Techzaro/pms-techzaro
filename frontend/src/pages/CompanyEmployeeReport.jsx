@@ -95,7 +95,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
   const totalOverdue = summary.overdue ?? 0;
 
   const cardMeta = [
-    { key: "total_assigned", label: "Total Assigned", value: totalAssigned, color: "#6366f1", bg: "#EEF2FF", sub: "All tasks assigned" },
+    { key: "total_assigned", label: "Total Assigned", value: totalAssigned, color: "var(--color-primary)", bg: "#EEF2FF", sub: "All tasks assigned" },
     { key: "completed", label: "Completed", value: totalCompleted, color: "#22C55E", bg: "#ECFDF5", sub: "Tasks completed" },
     { key: "pending", label: "Pending", value: totalPending, color: "#F59E0B", bg: "#FEF3C7", sub: "Tasks in progress" },
     { key: "overdue", label: "Overdue", value: totalOverdue, color: "#EF4444", bg: "#FEF2F2", sub: "Require attention" },
@@ -453,9 +453,9 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
               {dateRange === "custom" && (
                 <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
                   <input type="date" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setIsDirty(true); }}
-                    style={{ flex: 1, padding: "10px 14px", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 13, color: "#374151", outline: "none" }} />
+                    style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
                   <input type="date" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setIsDirty(true); }}
-                    style={{ flex: 1, padding: "10px 14px", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 13, color: "#374151", outline: "none" }} />
+                    style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
                 </div>
               )}
             </div>
@@ -486,7 +486,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
               {/* ═══ HEADER ═══ */}
               <div className="erm-header">
                 <div className="erm-header-left">
-                  <div style={{ width: 26, height: 26, borderRadius: 5, background: "#6366f1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 5, background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>TX</span>
                   </div>
                   <div>
@@ -503,36 +503,36 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
               {/* ═══ COMPANY OVERVIEW + SUMMARY CARDS ═══ */}
               <div style={{ margin: "14px 28px", display: "grid", gridTemplateColumns: "200px 1fr", gap: 10 }} className="erm-company-overview-grid">
                 {/* Company Overview */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#d1d5db", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--border-color)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M3 21h18M5 21V7l8-4v18M13 21V3l6 3v15" /><path d="M9 9h1M9 13h1M9 17h1M17 9h1M17 13h1M17 17h1" />
                       </svg>
                     </div>
                     <div>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: "#6b7280" }}>Company Overview</div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: "#6366f1" }}>{overview.company_name || "Techxaro Solutions"}</div>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: "var(--text-secondary)" }}>Company Overview</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-primary)" }}>{overview.company_name || "Techxaro Solutions"}</div>
                     </div>
                   </div>
-                  <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: 4 }}>
-                    <div style={{ fontSize: 8, color: "#6b7280" }}>Total Employees</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>{overview.total_employees ?? employees.length}</div>
+                  <div style={{ borderTop: "1px solid var(--border-light)", paddingTop: 4 }}>
+                    <div style={{ fontSize: 8, color: "var(--text-secondary)" }}>Total Employees</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>{overview.total_employees ?? employees.length}</div>
                   </div>
                 </div>
 
                 {/* Summary Cards */}
                 <div className="erm-summary-grid" style={{ margin: 0 }}>
                   {cardMeta.map((c) => (
-                    <div key={c.key} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
+                    <div key={c.key} style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <div style={{ width: 28, height: 28, borderRadius: 8, background: c.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
                           <div style={{ width: 14, height: 14, borderRadius: "50%", background: c.color }}></div>
                         </div>
-                        <div style={{ fontSize: 10, color: "#6b7280" }}>{c.label}</div>
+                        <div style={{ fontSize: 10, color: "var(--text-secondary)" }}>{c.label}</div>
                       </div>
                       <div style={{ fontSize: 26, fontWeight: 700, color: c.color, marginTop: 4 }}>{c.value}</div>
-                      <div style={{ fontSize: 8, color: "#9ca3af", marginTop: 2 }}>{c.sub}</div>
+                      <div style={{ fontSize: 8, color: "var(--text-muted)", marginTop: 2 }}>{c.sub}</div>
                     </div>
                   ))}
                 </div>
@@ -541,13 +541,13 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
               {/* ═══ TWO COLUMNS ═══ */}
               <div className="erm-two-col">
                 {/* Left: Status Breakdown */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 8 }}>TASK STATUS BREAKDOWN (Overall)</div>
+                <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 8 }}>TASK STATUS BREAKDOWN (Overall)</div>
                   <DonutChart
                     segments={[
                       { label: "Completed", count: statusDist.completed ?? 0, color: "#10b981" },
                       { label: "Pending", count: statusDist.pending ?? 0, color: "#f59e0b" },
-                      { label: "In Review", count: statusDist.in_review ?? 0, color: "#6366f1" },
+                      { label: "In Review", count: statusDist.in_review ?? 0, color: "var(--color-primary)" },
                       { label: "Overdue", count: statusDist.overdue ?? 0, color: "#ef4444" },
                     ]}
                     size={140}
@@ -557,8 +557,8 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                 </div>
 
                 {/* Right: Priority Distribution */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 4 }}>PRIORITY DISTRIBUTION</div>
+                <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 4 }}>PRIORITY DISTRIBUTION</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
                     {(() => {
                       const totalPriority = (priorityDist.high ?? 0) + (priorityDist.medium ?? 0) + (priorityDist.low ?? 0);
@@ -570,17 +570,17 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                         const pct = totalPriority > 0 ? Math.round((p.count / totalPriority) * 1000) / 10 : 0;
                         return (
                           <div key={p.label} style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 0" }}>
-                            <span style={{ fontSize: 14, color: "#374151", fontWeight: 500, minWidth: 60 }}>{p.label}</span>
+                            <span style={{ fontSize: 14, color: "var(--text-dark)", fontWeight: 500, minWidth: 60 }}>{p.label}</span>
                             <div style={{ flex: 1, height: 10, background: "var(--border-light)", borderRadius: 5, overflow: "hidden" }}>
                               <div style={{ width: `${pct}%`, height: "100%", borderRadius: 5, background: p.color, transition: "width 0.6s ease" }}></div>
                             </div>
-                            <span style={{ fontSize: 14, fontWeight: 600, color: "#111827", minWidth: 80, textAlign: "right" }}>{p.count} ({Math.round(pct)}%)</span>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-heading)", minWidth: 80, textAlign: "right" }}>{p.count} ({Math.round(pct)}%)</span>
                           </div>
                         );
                       });
                     })()}
                   </div>
-                  <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 8 }}>
+                  <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 8 }}>
                     {(priorityDist.high ?? 0) + (priorityDist.medium ?? 0) + (priorityDist.low ?? 0)} Total Tasks
                   </div>
                 </div>
@@ -588,7 +588,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
 
               {/* ═══ EMPLOYEE PERFORMANCE TABLE ═══ */}
               <div className="erm-table-section">
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>EMPLOYEE PERFORMANCE SUMMARY</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>EMPLOYEE PERFORMANCE SUMMARY</div>
                 <div className="erm-table-wrapper">
                   <table className="erm-table">
                     <thead>
@@ -600,20 +600,20 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                     </thead>
                     <tbody>
                       {employees.length === 0 ? (
-                        <tr><td colSpan={8} style={{ textAlign: "center", padding: 20, color: "#9ca3af" }}>No data</td></tr>
+                        <tr><td colSpan={8} style={{ textAlign: "center", padding: 20, color: "var(--text-muted)" }}>No data</td></tr>
                       ) : employees.map((e, i) => {
                         const rate = e.completion_rate ?? (e.assigned > 0 ? Math.round((e.completed / e.assigned) * 100) : 0);
                         return (
                           <tr key={e.id} style={{ borderBottom: "1px solid var(--border-light)", background: i % 2 ? "var(--bg-card-alt)" : "var(--bg-card)" }}>
-                            <td data-label="#" style={{ textAlign: "center", color: "#6b7280" }}>{i + 1}</td>
+                            <td data-label="#" style={{ textAlign: "center", color: "var(--text-secondary)" }}>{i + 1}</td>
                             <td data-label="Employee" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <div style={{ width: 26, height: 26, borderRadius: "50%", background: getAvatarColor(e.name), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
                                 {getInitials(e.name)}
                               </div>
-                              <span style={{ fontWeight: 600, color: "#111827" }}>{e.name}</span>
+                              <span style={{ fontWeight: 600, color: "var(--text-heading)" }}>{e.name}</span>
                             </td>
-                            <td data-label="Role" style={{ color: "#374151" }}>{ROLE_LABEL[e.role] || e.role}</td>
-                            <td data-label="Assigned" style={{ textAlign: "center", fontWeight: 600, color: "#6366f1" }}>{e.assigned ?? 0}</td>
+                            <td data-label="Role" style={{ color: "var(--text-dark)" }}>{ROLE_LABEL[e.role] || e.role}</td>
+                            <td data-label="Assigned" style={{ textAlign: "center", fontWeight: 600, color: "var(--color-primary)" }}>{e.assigned ?? 0}</td>
                             <td data-label="Completed" style={{ textAlign: "center", fontWeight: 600, color: "#22c55e" }}>{e.completed ?? 0}</td>
                             <td data-label="Pending" style={{ textAlign: "center", fontWeight: 600, color: "#f59e0b" }}>{e.pending ?? 0}</td>
                             <td data-label="Overdue" style={{ textAlign: "center", fontWeight: 600, color: "#ef4444" }}>{e.overdue ?? 0}</td>
@@ -622,7 +622,7 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                                 <div style={{ flex: 1, height: 4, borderRadius: 2, background: "var(--border-color)", overflow: "hidden" }}>
                                   <div style={{ width: `${rate}%`, height: "100%", borderRadius: 2, background: rate >= 80 ? "#22c55e" : rate >= 50 ? "#f59e0b" : "#ef4444" }}></div>
                                 </div>
-                                <span style={{ fontWeight: 600, fontSize: 9, color: "#374151", minWidth: 28 }}>{rate}%</span>
+                                <span style={{ fontWeight: 600, fontSize: 9, color: "var(--text-dark)", minWidth: 28 }}>{rate}%</span>
                               </div>
                             </td>
                           </tr>
@@ -636,8 +636,8 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
               {/* ═══ TEAM WISE + STATUS DISTRIBUTION ═══ */}
               <div className="erm-two-col">
                 {/* Team Wise Summary */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>TEAM WISE SUMMARY</div>
+                <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>TEAM WISE SUMMARY</div>
                   <div className="erm-table-wrapper" style={{ border: "none", borderRadius: 0 }}>
                     <table className="erm-table" style={{ tableLayout: "auto", minWidth: 0 }}>
                       <thead>
@@ -652,8 +652,8 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                       <tbody>
                         {teams.map((t, i) => (
                           <tr key={i} style={{ borderBottom: "1px solid var(--border-light)", background: i % 2 ? "var(--bg-card-alt)" : "var(--bg-card)" }}>
-                            <td data-label="Team" style={{ fontWeight: 600, color: "#111827" }}>{t.name}</td>
-                            <td data-label="Assigned" style={{ textAlign: "center", color: "#374151" }}>{t.assigned ?? 0}</td>
+                            <td data-label="Team" style={{ fontWeight: 600, color: "var(--text-heading)" }}>{t.name}</td>
+                            <td data-label="Assigned" style={{ textAlign: "center", color: "var(--text-dark)" }}>{t.assigned ?? 0}</td>
                             <td data-label="Completed" style={{ textAlign: "center", color: "#22c55e", fontWeight: 600 }}>{t.completed ?? 0}</td>
                             <td data-label="Pending" style={{ textAlign: "center", color: "#f59e0b", fontWeight: 600 }}>{t.pending ?? 0}</td>
                             <td data-label="Rate" style={{ textAlign: "center", fontWeight: 700, color: (t.completion_rate ?? 0) >= 80 ? "#22c55e" : (t.completion_rate ?? 0) >= 50 ? "#f59e0b" : "#ef4444" }}>
@@ -667,29 +667,29 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
                 </div>
 
                 {/* Status Distribution */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>STATUS DISTRIBUTION (Overall)</div>
+                <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>STATUS DISTRIBUTION (Overall)</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {[
                       { label: "Completed", count: statusDist.completed ?? 0, color: "#22c55e" },
                       { label: "Pending", count: statusDist.pending ?? 0, color: "#f59e0b" },
-                      { label: "In Review", count: statusDist.in_review ?? 0, color: "#6366f1" },
+                      { label: "In Review", count: statusDist.in_review ?? 0, color: "var(--color-primary)" },
                       { label: "Overdue", count: statusDist.overdue ?? 0, color: "#ef4444" },
                     ].map((s) => {
                       const pct = totalStatusItems > 0 ? Math.round((s.count / totalStatusItems) * 100) : 0;
                       return (
                         <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 10 }}>
                           <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.color }}></div>
-                          <span style={{ flex: 1, color: "#374151" }}>{s.label}</span>
-                          <span style={{ fontWeight: 700, color: "#111827", minWidth: 20, textAlign: "right" }}>{s.count}</span>
-                          <span style={{ color: "#9ca3af", minWidth: 40, textAlign: "right" }}>{pct}%</span>
+                          <span style={{ flex: 1, color: "var(--text-dark)" }}>{s.label}</span>
+                          <span style={{ fontWeight: 700, color: "var(--text-heading)", minWidth: 20, textAlign: "right" }}>{s.count}</span>
+                          <span style={{ color: "var(--text-muted)", minWidth: 40, textAlign: "right" }}>{pct}%</span>
                         </div>
                       );
                     })}
                     <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 6, display: "flex", alignItems: "center", gap: 8, fontSize: 10, fontWeight: 700 }}>
-                      <span style={{ flex: 1, color: "#111827" }}>Total</span>
-                      <span style={{ color: "#111827", minWidth: 20, textAlign: "right" }}>{totalStatusItems}</span>
-                      <span style={{ color: "#111827", minWidth: 40, textAlign: "right" }}>100%</span>
+                      <span style={{ flex: 1, color: "var(--text-heading)" }}>Total</span>
+                      <span style={{ color: "var(--text-heading)", minWidth: 20, textAlign: "right" }}>{totalStatusItems}</span>
+                      <span style={{ color: "var(--text-heading)", minWidth: 40, textAlign: "right" }}>100%</span>
                     </div>
                   </div>
                 </div>
@@ -697,21 +697,21 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
 
               {/* ═══ REPORT NOTES + AUTHORIZED BY ═══ */}
               <div className="erm-two-col">
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>REPORT NOTES</div>
+                <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>REPORT NOTES</div>
                   {[1, 2, 3, 4].map(i => (
                     <div key={i} style={{ borderBottom: "1px solid #e5e7eb", height: 20, marginBottom: 4 }}></div>
                   ))}
                 </div>
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 6 }}>AUTHORIZED BY</div>
+                <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-heading)", marginBottom: 6 }}>AUTHORIZED BY</div>
                   <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 9, color: "#6b7280", marginBottom: 4 }}>Name</div>
-                    <div style={{ borderBottom: "1px solid #111827", height: 20 }}></div>
+                    <div style={{ fontSize: 9, color: "var(--text-secondary)", marginBottom: 4 }}>Name</div>
+                    <div style={{ borderBottom: "1px solid var(--text-heading)", height: 20 }}></div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: "#6b7280", marginBottom: 4 }}>Date: {genDate}</div>
-                    <div style={{ borderBottom: "1px solid #111827", height: 20 }}></div>
+                    <div style={{ fontSize: 9, color: "var(--text-secondary)", marginBottom: 4 }}>Date: {genDate}</div>
+                    <div style={{ borderBottom: "1px solid var(--text-heading)", height: 20 }}></div>
                   </div>
                 </div>
               </div>
@@ -719,10 +719,10 @@ function CompanyEmployeeReport({ isOpen, onClose }) {
               {/* ═══ FOOTER ═══ */}
               <div className="erm-footer">
                 <div className="erm-footer-left">
-                  <div style={{ width: 16, height: 16, borderRadius: 3, background: "#6366f1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 16, height: 16, borderRadius: 3, background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <span style={{ fontSize: 7, fontWeight: 700, color: "#fff" }}>TX</span>
                   </div>
-                  <span style={{ fontWeight: 600, color: "#6b7280" }}>Techxaro</span>
+                  <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>Techxaro</span>
                   <span>PMS Portal</span>
                 </div>
                 <div>This is a system generated report.</div>

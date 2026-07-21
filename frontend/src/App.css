@@ -35,7 +35,7 @@
 }
 
 .row-drag-handle:hover {
-  color: #6366f1;
+  color: var(--color-primary);
 }
 
 .row-drag-handle:active {

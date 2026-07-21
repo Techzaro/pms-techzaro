@@ -1,0 +1,174 @@
+/* TaskNotesPopover.css */
+
+.tnp-wrap {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.tnp-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+
+.tnp-icon:hover,
+.tnp-has-notes {
+  color: #F59E0B;
+}
+
+.tnp-popover {
+  min-width: 240px;
+  max-width: 300px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.tnp-popover-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tnp-popover-body {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.tnp-popover-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.tnp-popover-body::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.tnp-loading,
+.tnp-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tnp-note {
+  position: relative;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.4;
+  transition: background 0.1s;
+}
+
+.tnp-note:hover {
+  background: var(--bg-hover);
+}
+
+.tnp-note:hover .tnp-edit-icon {
+  opacity: 1;
+}
+
+.tnp-note-text {
+  margin: 0;
+  padding-right: 20px;
+  word-break: break-word;
+}
+
+.tnp-edit-icon {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.tnp-edit-icon:hover {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+.tnp-note-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tnp-edit-input {
+  width: 100%;
+  border: 1px solid var(--color-primary);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  resize: none;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-sizing: border-box;
+}
+
+.tnp-edit-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-primary-ring);
+}
+
+.tnp-edit-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.tnp-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+}
+
+.tnp-edit-save {
+  background: var(--color-primary);
+  color: white;
+}
+
+.tnp-edit-save:hover {
+  opacity: 0.9;
+}
+
+.tnp-edit-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tnp-edit-cancel {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+}
+
+.tnp-edit-cancel:hover {
+  background: var(--border-color);
+}
