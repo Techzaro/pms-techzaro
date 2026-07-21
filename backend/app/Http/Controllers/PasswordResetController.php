@@ -48,6 +48,17 @@ class PasswordResetController extends Controller
                 ]);
             }
 
+            // Check if password recovery is locked by admin
+            if ($user->password_reset_locked) {
+                \Log::info('Password reset: recovery locked by admin', ['user_id' => $user->id]);
+
+                return response()->json([
+                    'success' => false,
+                    'code' => 'PASSWORD_RESET_DISABLED',
+                    'message' => 'Your password has been changed by your administrator. Password recovery has been disabled for your account. Please contact your administrator to regain access.',
+                ], 403);
+            }
+
             if (empty($user->professional_email)) {
                 \Log::error('Password reset: user has no professional_email', ['user_id' => $user->id]);
 
@@ -174,8 +185,19 @@ class PasswordResetController extends Controller
                 ], 422);
             }
 
+            // Check if password recovery is locked by admin
+            if ($user->password_reset_locked) {
+                return response()->json([
+                    'success' => false,
+                    'code' => 'PASSWORD_RESET_DISABLED',
+                    'message' => 'Your password has been changed by your administrator. Password recovery has been disabled for your account. Please contact your administrator to regain access.',
+                ], 403);
+            }
+
             $user->password = bcrypt($password);
             $user->must_change_password = false;
+            $user->password_changed_at = now();
+            $user->password_version = ($user->password_version ?? 1) + 1;
             $user->save();
 
             event(new PasswordReset($user));

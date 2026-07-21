@@ -20,6 +20,7 @@ use App\Mail\UserResigned;
 use App\Mail\UserProfileUpdated;
 use App\Services\AuditService;
 use App\Services\NotificationService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -61,7 +62,7 @@ class UserController extends Controller
     public function index()
     {
         $users = Cache::remember('all_users_list', 10, fn () =>
-            User::select('id', 'name', 'avatar', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password', 'personal_email', 'professional_email', 'company_name', 'phone_number', 'last_login_at', 'created_at')
+            User::select('id', 'name', 'avatar', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password', 'personal_email', 'professional_email', 'company_name', 'phone_number', 'last_login_at', 'created_at', 'credentials_managed_by_admin', 'password_reset_locked')
                 ->orderBy('sort_order')->latest('updated_at')
                 ->get()
                 ->toArray()
@@ -636,14 +637,38 @@ class UserController extends Controller
     }
 
     /**
+     * Get the impact analysis for resigning a user (pre-resignation preview).
+     *
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @param  \App\Models\User  $user  The user to analyze.
+     * @return \Illuminate\Http\JsonResponse  JSON response with impact analysis.
+     */
+    public function resignationImpact(Request $request, User $user): JsonResponse
+    {
+        try {
+            $service = app(\App\Services\ResignationWorkflowService::class);
+            $impact = $service->analyzeImpact($user);
+            return response()->json(['success' => true, 'impact' => $impact]);
+        } catch (\Throwable $e) {
+            \Log::error('Resignation impact analysis failed: ' . $e->getMessage(), [
+                'user_id' => $user->id,
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Failed to analyze resignation impact: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Resign a user by setting their active status to false.
      *
-     * Revokes all API tokens and sends a resignation notification email.
+     * Revokes all API tokens, returns unfinished work to original assigners as drafts,
+     * sends resignation notification email, and creates comprehensive audit logs.
      * Managers cannot resign admin/manager accounts. Users cannot resign themselves.
      *
      * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
      * @param  \App\Models\User  $user  The user to resign.
-     * @return \Illuminate\Http\JsonResponse  JSON response with resignation status and email status.
+     * @return \Illuminate\Http\JsonResponse  JSON response with resignation status.
      */
     public function resign(Request $request, User $user)
     {
@@ -671,72 +696,18 @@ class UserController extends Controller
                 ], 403);
             }
 
-            $user->active = false;
-            $user->must_change_password = false;
-            $user->save();
-
-            Cache::forget('all_users_list');
-            if (in_array($user->role, ['admin', 'manager'])) {
-                Cache::forget('admin_manager_ids');
-            }
-
-            Log::info("User {$user->id} ({$user->email}) resigned by {$authUser->id} ({$authUser->email})");
-
-            $this->activityService->log(
-                $authUser->id,
-                'user_resigned',
-                "You resigned user {$user->name}",
-                'user',
-                $user->id,
-                'resigned',
-                $user->name,
-                $user->id,
+            $service = app(\App\Services\ResignationWorkflowService::class);
+            $resignationLog = $service->executeResignation(
+                user: $user,
+                admin: $authUser,
+                notes: $request->input('notes')
             );
-
-            try {
-                $this->auditService->log(
-                    module: 'user_management',
-                    action: 'resign',
-                    description: "Resigned user {$user->name}",
-                    user: $authUser,
-                    entityType: 'User',
-                    entityId: $user->id,
-                    status: 'success'
-                );
-            } catch (\Throwable $e) {
-                \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
-            }
-
-            $emailSent = false;
-            $emailError = null;
-
-            try {
-                Mail::to($user->professional_email)->send(new UserResigned($user, $authUser->name, $authUser->professional_email, $authUser->name));
-                $emailSent = true;
-                Log::info("Resignation email sent to {$user->professional_email}");
-            } catch (\Throwable $e) {
-                $emailError = $e->getMessage();
-                Log::error("Failed to send resignation email to {$user->email}: " . $e->getMessage(), [
-                    'user_id' => $user->id,
-                    'exception' => $e->getMessage(),
-                ]);
-            }
-
-            $message = 'User resigned successfully.';
-            if (!$emailSent) {
-                $message .= ' Email notification failed: ' . $emailError;
-            }
-
-            $this->notificationService->confirmAction($authUser, 'Resigned', 'user', $user->name, [
-                'User Email' => $user->professional_email ?? $user->email,
-                'Role' => ucfirst($user->role),
-            ]);
 
             return response()->json([
                 'success' => true,
-                'message' => $message,
-                'user' => $user,
-                'email_sent' => $emailSent,
+                'message' => 'User resigned successfully. All unfinished work has been returned to original assigners as drafts.',
+                'user' => $user->fresh(),
+                'resignation_log' => $resignationLog,
             ]);
 
         } catch (\Throwable $e) {
@@ -856,7 +827,13 @@ class UserController extends Controller
                     'employment_contract', 'offer_letter', 'techxaro_regulations',
                     'other_document',
                     'last_login_at', 'created_at', 'updated_at', 'must_change_password',
-                ]),
+                    'credentials_managed_by_admin', 'password_reset_locked',
+                    'password_changed_by', 'password_changed_at', 'password_version',
+                ]) + [
+                    'password_changed_by_name' => $user->password_changed_by
+                        ? ($user->passwordChangedByUser?->name ?? 'Unknown')
+                        : null,
+                ],
                 'stats' => [
                     'total_assigned_tasks' => (int) $taskStats->total_assigned,
                     'completed_tasks' => (int) $taskStats->completed,
@@ -945,8 +922,8 @@ class UserController extends Controller
         if (!Storage::disk('public')->exists($path)) {
             \Log::error('File not found on disk', [
                 'path' => $path,
-                'disk_root' => public_path('storage'),
-                'full_path' => public_path('storage') . '/' . $path,
+                'disk_root' => storage_path('app/public'),
+                'full_path' => storage_path('app/public') . '/' . $path,
                 'user_id' => $user->id,
                 'document' => $document,
             ]);
@@ -1243,8 +1220,8 @@ class UserController extends Controller
         if (!Storage::disk('public')->exists($path)) {
             \Log::error('File not found on disk (my-documents)', [
                 'path' => $path,
-                'disk_root' => public_path('storage'),
-                'full_path' => public_path('storage') . '/' . $path,
+                'disk_root' => storage_path('app/public'),
+                'full_path' => storage_path('app/public') . '/' . $path,
                 'user_id' => $user->id ?? null,
                 'document' => $document,
             ]);

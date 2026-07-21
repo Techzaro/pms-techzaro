@@ -1097,6 +1097,18 @@ function ProjectDetails() {
                     <Monitor size={28} strokeWidth={1.75} />
                   </div>
                   <h1 className="pd-title-tx">{project.title}</h1>
+                  {project.business_id && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, background: '#fefce8', color: '#ca8a04', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {project.business_id}
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(project.business_id); showSuccessMessage("Project ID copied!"); }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+                        title="Copy Project ID"
+                      >
+                        <Copy size={13} color="#ca8a04" />
+                      </button>
+                    </span>
+                  )}
                   <div className="pd-hero-actions">
                     <button className="td-nav-btn" onClick={() => goToProject(prevProjectId)} disabled={!prevProjectId} title="Previous project"><ChevronLeft size={18} /></button>
                     <button className="td-nav-btn" onClick={() => goToProject(nextProjectId)} disabled={!nextProjectId} title="Next project"><ChevronRight size={18} /></button>
@@ -1212,7 +1224,7 @@ function ProjectDetails() {
                                     const statusKey = (t.status || "").toLowerCase();
                                       return (
                                         <div className="ptt-row" key={t.id}>
-                                          <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                                          <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={t.business_id} />
                                           <div>{isCreator || isAdminOrManager ? ((t.assignees || []).map((a) => a.name).join(", ") || "—") : (t.assigner?.name || "—")}</div>
                                         <div className="ptt-col-name">
                                           <Link to={rolePath(`tasks/task-details/${t.id}`)} state={{ from: getTaskFrom(t) }} className="ptt-task-link">
@@ -1343,7 +1355,7 @@ function ProjectDetails() {
                                   return (
                                     <div key={f.id} className="pd-file-box" style={{ background: bg }}>
                                       <div className="pd-file-box__drag-handle">
-                                        <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                                        <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={f.business_id} color="#16a34a" />
                                       </div>
                                       <div className="pd-file-box__content">
                                         <div className="pd-file-box__name">

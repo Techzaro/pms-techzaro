@@ -479,7 +479,7 @@
 .td-error { color: #ef4444; }
 
 /* TOAST */
-.td-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 10000; padding: 12px 24px; border-radius: 10px; font-size: 13px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.td-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 10050; padding: 12px 24px; border-radius: 10px; font-size: 13px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 .td-toast--success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
 .td-toast--error { background: var(--color-danger-bg); color: #dc2626; border: 1px solid var(--color-danger-bg-hover); }
 

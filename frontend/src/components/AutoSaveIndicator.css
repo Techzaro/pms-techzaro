@@ -1,0 +1,36 @@
+/* AutoSaveIndicator.css */
+
+.auto-save-indicator {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  margin-left: auto;
+  padding-right: 4px;
+}
+
+.asi-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.asi-saving {
+  color: #6b7280;
+}
+
+.asi-saved {
+  color: #10b981;
+}
+
+.asi-error {
+  color: #ef4444;
+}
+
+@keyframes asi-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.asi-spin {
+  animation: asi-spin 1s linear infinite;
+}

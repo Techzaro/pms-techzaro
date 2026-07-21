@@ -10,6 +10,7 @@ function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [fieldError, setFieldError] = useState("");
+  const [isLocked, setIsLocked] = useState(false);
   const { submitting, run } = useSubmit();
 
   const handleSubmit = async (e) => {
@@ -39,6 +40,12 @@ function ForgotPassword() {
       });
 
       const data = await res.json();
+
+      if (res.status === 403 && data.code === "PASSWORD_RESET_DISABLED") {
+        setIsLocked(true);
+        setFieldError(data.message || "Your password has been changed by your administrator. Please contact your administrator.");
+        return;
+      }
 
       if (!res.ok) {
         setFieldError(data.message || "Something went wrong. Please try again.");
@@ -129,7 +136,33 @@ function ForgotPassword() {
             No worries! Enter your email address and we will send you a link to reset your password.
           </p>
 
-          {fieldError && <div className="forgot-error-box">{fieldError}</div>}
+          {isLocked && (
+            <div style={{
+              padding: "16px",
+              borderRadius: 12,
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              marginBottom: 20,
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 12,
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <div>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#991b1b" }}>
+                  Password Recovery Disabled
+                </p>
+                <p style={{ margin: "6px 0 0", fontSize: 13, color: "#b91c1c", lineHeight: 1.5 }}>
+                  Your password has been changed by your administrator. Password recovery has been disabled for your account. Please contact your administrator to regain access.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {fieldError && !isLocked && <div className="forgot-error-box">{fieldError}</div>}
 
           <form onSubmit={handleSubmit}>
             <label className="forgot-label">Professional Email Address</label>

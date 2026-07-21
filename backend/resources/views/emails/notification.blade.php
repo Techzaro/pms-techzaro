@@ -165,6 +165,32 @@
                                                     <td style="padding:5px 0;color:#111827;font-size:13px;font-weight:600;">{{ $entity->title ?? $entity->name ?? '' }}</td>
                                                 </tr>
 
+                                                {{-- Business Code --}}
+                                                @if ($module === 'task' && $entity->business_id)
+                                                    <tr>
+                                                        <td style="padding:5px 0;color:#6b7280;font-size:12px;font-weight:600;">Task ID</td>
+                                                        <td style="padding:5px 0;">
+                                                            <span style="display:inline-block;background-color:#eff6ff;color:#2563eb;font-size:12px;font-weight:700;padding:3px 10px;border-radius:6px;">{{ $entity->business_id }}</span>
+                                                        </td>
+                                                    </tr>
+                                                @endif
+                                                @if ($module === 'project' && $entity->business_id)
+                                                    <tr>
+                                                        <td style="padding:5px 0;color:#6b7280;font-size:12px;font-weight:600;">Project ID</td>
+                                                        <td style="padding:5px 0;">
+                                                            <span style="display:inline-block;background-color:#fefce8;color:#ca8a04;font-size:12px;font-weight:700;padding:3px 10px;border-radius:6px;">{{ $entity->business_id }}</span>
+                                                        </td>
+                                                    </tr>
+                                                @endif
+                                                @if ($module === 'deliverable' && $entity->business_id)
+                                                    <tr>
+                                                        <td style="padding:5px 0;color:#6b7280;font-size:12px;font-weight:600;">Subtask ID</td>
+                                                        <td style="padding:5px 0;">
+                                                            <span style="display:inline-block;background-color:#f0fdf4;color:#16a34a;font-size:12px;font-weight:700;padding:3px 10px;border-radius:6px;">{{ $entity->business_id }}</span>
+                                                        </td>
+                                                    </tr>
+                                                @endif
+
                                                 {{-- Description --}}
                                                 @if ($entity->description)
                                                     <tr>

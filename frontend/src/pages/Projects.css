@@ -395,6 +395,10 @@
   padding: 0 4px;
 }
 
+.project-list-row > div:first-child {
+  padding-left: 0;
+}
+
 .project-list-row > .col-project-name {
   text-align: left;
   overflow: hidden;

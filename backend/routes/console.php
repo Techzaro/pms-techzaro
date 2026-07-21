@@ -20,6 +20,9 @@ Schedule::command('events:send-reminders')->everyMinute();
 // Generate daily deliverables for recurring tasks at midnight
 Schedule::command('deliverables:generate-daily')->dailyAt('00:01');
 
+// Cleanup and archive old drafts daily at 3:00 AM
+Schedule::job(new \App\Jobs\CleanupDraftsJob)->dailyAt('03:00');
+
 /*
 | Artisan Commands
 | Custom Artisan commands for the application.

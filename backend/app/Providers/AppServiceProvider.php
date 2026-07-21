@@ -16,6 +16,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(\App\Services\AuditService::class);
         $this->app->singleton(\App\Services\AuditExportService::class);
+        $this->app->singleton(\App\Services\DraftService::class);
     }
 
     public function boot(): void

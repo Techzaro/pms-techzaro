@@ -8,6 +8,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Services\BusinessIdService;
 
 /**
  * Core project model that ties together all project-related entities.
@@ -18,6 +19,9 @@ class Project extends Model
     use HasFactory;
 
     protected $fillable = [
+        'project_code',
+        'project_number',
+        'business_id',
         'title',
         'description',
         'sheets_documents',
@@ -38,6 +42,18 @@ class Project extends Model
         'updated_by',
         'sort_order',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Project $project) {
+            if (empty($project->business_id)) {
+                $ids = app(BusinessIdService::class)->generateProjectBusinessId($project);
+                $project->project_code = $ids['code'];
+                $project->project_number = $ids['number'];
+                $project->business_id = $ids['business_id'];
+            }
+        });
+    }
 
     protected $casts = [
         'assigned_users' => 'array',
@@ -206,5 +222,43 @@ class Project extends Model
             'start_date' => $earliest,
             'end_date' => $latest,
         ]);
+    }
+
+    /**
+     * Get all active members of this project (assigned_users + team members).
+     * Returns a Collection of User models.
+     */
+    public function getMembers()
+    {
+        $memberIds = collect($this->assigned_users ?? []);
+
+        $teamIds = array_merge(
+            $this->team_id ? [$this->team_id] : [],
+            $this->team_ids ?? []
+        );
+        $teamIds = array_unique(array_filter($teamIds));
+
+        if (! empty($teamIds)) {
+            $teamMemberIds = \App\Models\Team::whereIn('id', $teamIds)
+                ->with('members:id')
+                ->get()
+                ->flatMap(fn ($team) => $team->members->pluck('id'))
+                ->unique()
+                ->values();
+
+            $memberIds = $memberIds->merge($teamMemberIds);
+        }
+
+        $memberIds = $memberIds->unique()->values()->all();
+
+        if (empty($memberIds)) {
+            return collect();
+        }
+
+        return User::whereIn('id', $memberIds)
+            ->where('active', true)
+            ->select('id', 'name', 'email', 'role', 'department')
+            ->orderBy('name')
+            ->get();
     }
 }

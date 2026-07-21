@@ -11,7 +11,7 @@
  * - Auto-refreshes on event CRUD via event bus
  */
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useLocation } from "react-router-dom";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { useUnifiedSummary } from "../hooks/useUnifiedSummary";
 import "../pages/Calender.css";
@@ -89,9 +89,11 @@ function Calender() {
   const [deleteLoading, setDeleteLoading] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [restoreDraftId, setRestoreDraftId] = useState(null);
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const currentRole = getCurrentRole();
   const currentUser = getUser(currentRole);
   // Only admins and managers can create/edit/delete events
@@ -156,6 +158,19 @@ function Calender() {
   }, [searchParams]);
   // Re-fetch events when events are created, updated, or deleted
   useAutoRefresh(fetchEvents, { events: ['event:created', 'event:updated', 'event:deleted', 'data:changed'] });
+
+  // Handle draft restoration from DraftCenter
+  useEffect(() => {
+    const draftId = location.state?.openDraft;
+    if (!draftId) return;
+
+    // Clear the state to prevent re-triggering
+    window.history.replaceState({}, document.title);
+
+    setRestoreDraftId(draftId);
+    setEditEvent(null);
+    setShowEventModal(true);
+  }, [location.state]);
 
   // Navigate to previous month/week/day
   const handlePrev = () => {
@@ -491,9 +506,10 @@ function Calender() {
 
       <Event
         isOpen={showEventModal}
-        onClose={() => { setShowEventModal(false); setEditEvent(null); }}
+        onClose={() => { setShowEventModal(false); setEditEvent(null); setRestoreDraftId(null); }}
         onEventCreated={handleEventCreated}
         editEvent={editEvent}
+        restoreDraftId={restoreDraftId}
       />
 
       <EventInfoPopup event={selectedEvent} onClose={() => setSelectedEvent(null)} />

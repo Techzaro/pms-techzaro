@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Deliverable;
+use App\Models\DeliverableFile;
+use App\Models\DeliverablePauseSession;
 use App\Models\DeliverableSubmission;
+use App\Models\DeliverableUserNote;
 use App\Models\DeliverableWorkflowEvent;
 use App\Models\Notification;
 use App\Models\Project;
@@ -221,8 +224,16 @@ class DeliverableController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255', 'description' => 'nullable|string',
             'status' => 'nullable|string|max:64', 'priority' => 'nullable|string|max:32',
-            'due_date' => 'nullable|date', 'assigned_to' => 'nullable|exists:users,id|required_without:task_id',
+            'start_date' => 'nullable|date', 'due_date' => 'nullable|date',
+            'assigned_to' => 'nullable|exists:users,id|required_without:task_id',
             'task_id' => 'nullable|exists:tasks,id',
+            'estimated_hours' => 'nullable|integer|min:0',
+            'estimated_minutes' => 'nullable|integer|min:0|max:59',
+            'labels' => 'nullable|array', 'labels.*' => 'string|max:100',
+            'tags' => 'nullable|array', 'tags.*' => 'string|max:100',
+            'followers' => 'nullable|array', 'followers.*' => 'exists:users,id',
+            'dependencies' => 'nullable|array', 'dependencies.*' => 'exists:deliverables,id',
+            'assignees' => 'nullable|array', 'assignees.*' => 'exists:users,id',
         ]);
 
         // Validate deliverable due_date does not exceed parent task end_date
@@ -239,15 +250,56 @@ class DeliverableController extends Controller
             }
         }
 
+        // Validate parent task belongs to the selected project
+        if (! empty($validated['task_id'])) {
+            $task = Task::find($validated['task_id']);
+            if (! $task || (int) $task->project_id !== (int) $project->id) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'task_id' => 'The selected parent task does not belong to this project.',
+                ]);
+            }
+        }
+
+        // Validate assignee(s) are project members
+        $allAssigneeIds = array_filter(array_unique(array_merge(
+            $validated['assignees'] ?? [],
+            $validated['assigned_to'] ? [$validated['assigned_to']] : [],
+        )));
+        if (! empty($allAssigneeIds)) {
+            $projectMemberIds = $project->getMembers()->pluck('id')->map(fn ($id) => (int) $id)->toArray();
+            $invalidIds = array_diff(array_map('intval', $allAssigneeIds), $projectMemberIds);
+            if (! empty($invalidIds)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'assigned_to' => 'One or more selected users are not members of this project. Please select only project members.',
+                ]);
+            }
+        }
+
         $user = $request->user();
+
+        // Extract assignees before creating deliverable
+        $assigneeIds = $validated['assignees'] ?? ($validated['assigned_to'] ? [$validated['assigned_to']] : []);
+        unset($validated['assignees'], $validated['dependencies'], $validated['followers']);
 
         $deliverable = $project->deliverables()->create([
             'title' => $validated['title'], 'description' => $validated['description'] ?? null,
             'status' => $validated['status'] ?? 'pending', 'priority' => $validated['priority'] ?? 'Medium',
+            'start_date' => $validated['start_date'] ?? null,
             'due_date' => $validated['due_date'] ?? null, 'assigned_to' => $validated['assigned_to'] ?? null,
             'task_id' => $validated['task_id'] ?? null, 'created_by' => $user->id,
             'updated_by' => $user->id,
+            'estimated_hours' => $validated['estimated_hours'] ?? null,
+            'estimated_minutes' => $validated['estimated_minutes'] ?? null,
+            'labels' => $validated['labels'] ?? null,
+            'tags' => $validated['tags'] ?? null,
+            'followers' => $request->input('followers') ?? null,
+            'dependencies' => $request->input('dependencies') ?? null,
         ]);
+
+        // Sync multi-assignees
+        if (! empty($assigneeIds)) {
+            $deliverable->assignees()->sync($assigneeIds);
+        }
 
         // Create workflow event for deliverable creation
         $assigneeName = $deliverable->assigned_to ? (User::find($deliverable->assigned_to)?->name ?? '') : '';
@@ -289,12 +341,13 @@ class DeliverableController extends Controller
             }
         }
 
-        $deliverable->load('task:id,title');
+        $deliverable->load('task:id,title,business_id');
 
         // Send confirmation email to performer
         $this->notificationService->confirmAction($user, 'Created', 'deliverable', $deliverable->title, [
             'Project' => $project->title,
             'Task' => $deliverable->task_id ? ($deliverable->task->title ?? 'N/A') : 'N/A',
+            'Task ID' => $deliverable->task?->business_id ?? 'N/A',
             'Assigned To' => $deliverable->assignee?->name ?? 'N/A',
         ]);
 
@@ -311,6 +364,117 @@ class DeliverableController extends Controller
         } catch (\Throwable $e) {
             \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
         }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Deliverable created successfully',
+            'deliverable' => $deliverable->load(['assignee:id,name,email,role', 'creator:id,name']),
+        ], 201);
+    }
+
+    /**
+     * Store a deliverable without a project in the URL (task_id required).
+     * Infers project_id from the parent task.
+     */
+    public function storeStandalone(Request $request)
+    {
+        $validated = $request->validate([
+            'title' => 'required|string|max:255', 'description' => 'nullable|string',
+            'status' => 'nullable|string|max:64', 'priority' => 'nullable|string|max:32',
+            'start_date' => 'nullable|date', 'due_date' => 'nullable|date',
+            'assigned_to' => 'nullable|exists:users,id',
+            'task_id' => 'nullable|exists:tasks,id',
+            'project_id' => 'nullable|exists:projects,id',
+            'estimated_hours' => 'nullable|integer|min:0',
+            'estimated_minutes' => 'nullable|integer|min:0|max:59',
+            'labels' => 'nullable|array', 'labels.*' => 'string|max:100',
+            'tags' => 'nullable|array', 'tags.*' => 'string|max:100',
+            'followers' => 'nullable|array', 'followers.*' => 'exists:users,id',
+            'dependencies' => 'nullable|array', 'dependencies.*' => 'exists:deliverables,id',
+            'assignees' => 'nullable|array', 'assignees.*' => 'exists:users,id',
+        ]);
+
+        // Resolve project: from task, from body, or null
+        $project = null;
+        $task = null;
+        if (! empty($validated['task_id'])) {
+            $task = Task::find($validated['task_id']);
+            $project = $task?->project;
+        } elseif (! empty($validated['project_id'])) {
+            $project = \App\Models\Project::find($validated['project_id']);
+        }
+
+        // Validate due_date against task if present
+        if (! empty($validated['due_date']) && $task && $task->end_date) {
+            $deliverableDate = \Carbon\Carbon::parse($validated['due_date']);
+            $taskEnd = \Carbon\Carbon::parse($task->end_date);
+            if ($deliverableDate->gt($taskEnd)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'due_date' => 'Subtask deadline cannot exceed the task deadline ('.$taskEnd->format('d M Y h:i A').').',
+                ]);
+            }
+        }
+
+        // Validate assignee membership if project exists
+        $allAssigneeIds = array_filter(array_unique(array_merge(
+            $validated['assignees'] ?? [],
+            $validated['assigned_to'] ? [$validated['assigned_to']] : [],
+        )));
+        if (! empty($allAssigneeIds) && $project) {
+            $projectMemberIds = $project->getMembers()->pluck('id')->map(fn ($id) => (int) $id)->toArray();
+            $invalidIds = array_diff(array_map('intval', $allAssigneeIds), $projectMemberIds);
+            if (! empty($invalidIds)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'assigned_to' => 'One or more selected users are not members of this project.',
+                ]);
+            }
+        }
+
+        $user = $request->user();
+        $assigneeIds = $validated['assignees'] ?? ($validated['assigned_to'] ? [$validated['assigned_to']] : []);
+        unset($validated['assignees'], $validated['dependencies'], $validated['followers']);
+
+        $data = [
+            'title' => $validated['title'], 'description' => $validated['description'] ?? null,
+            'status' => $validated['status'] ?? 'pending', 'priority' => $validated['priority'] ?? 'Medium',
+            'start_date' => $validated['start_date'] ?? null,
+            'due_date' => $validated['due_date'] ?? null, 'assigned_to' => $validated['assigned_to'] ?? null,
+            'project_id' => $project?->id, 'task_id' => $validated['task_id'] ?? null,
+            'created_by' => $user->id, 'updated_by' => $user->id,
+            'estimated_hours' => $validated['estimated_hours'] ?? null,
+            'estimated_minutes' => $validated['estimated_minutes'] ?? null,
+            'labels' => $validated['labels'] ?? null,
+            'tags' => $validated['tags'] ?? null,
+            'followers' => $request->input('followers') ?? null,
+            'dependencies' => $request->input('dependencies') ?? null,
+        ];
+
+        $deliverable = $project
+            ? $project->deliverables()->create($data)
+            : \App\Models\Deliverable::create($data);
+
+        if (! empty($assigneeIds)) {
+            $deliverable->assignees()->sync($assigneeIds);
+        }
+
+        DeliverableWorkflowEvent::create([
+            'deliverable_id' => $deliverable->id,
+            'user_id' => $user->id,
+            'event_type' => 'created',
+        ]);
+
+        if ($deliverable->assigned_to && (int) $deliverable->assigned_to !== (int) $user->id) {
+            $this->sendDeliverableNotification($deliverable, $user, 'deliverable_assigned', 'Deliverable Assigned');
+        }
+
+        if ($deliverable->task_id && $task) {
+            $taskAssigneeIds = $task->assignees()->pluck('users.id')->toArray();
+            if (! empty($taskAssigneeIds)) {
+                $this->notificationService->notifyDeliverableAdded($deliverable, $user, $taskAssigneeIds, 'task');
+            }
+        }
+
+        $deliverable->load('task:id,title,business_id');
 
         return response()->json([
             'success' => true,
@@ -342,7 +506,15 @@ class DeliverableController extends Controller
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255', 'description' => 'sometimes|nullable|string',
             'status' => 'sometimes|string|max:64', 'priority' => 'sometimes|string|max:32',
+            'start_date' => 'sometimes|nullable|date',
             'due_date' => 'sometimes|nullable|date', 'assigned_to' => 'sometimes|nullable|exists:users,id',
+            'estimated_hours' => 'sometimes|nullable|integer|min:0',
+            'estimated_minutes' => 'sometimes|nullable|integer|min:0|max:59',
+            'labels' => 'sometimes|nullable|array', 'labels.*' => 'string|max:100',
+            'tags' => 'sometimes|nullable|array', 'tags.*' => 'string|max:100',
+            'followers' => 'sometimes|nullable|array', 'followers.*' => 'exists:users,id',
+            'dependencies' => 'sometimes|nullable|array', 'dependencies.*' => 'exists:deliverables,id',
+            'assignees' => 'sometimes|nullable|array', 'assignees.*' => 'exists:users,id',
         ]);
 
         // Validate deliverable due_date does not exceed parent task end_date
@@ -360,14 +532,38 @@ class DeliverableController extends Controller
         }
 
         $oldValues = [];
-        foreach (['title', 'description', 'priority', 'due_date', 'status'] as $f) {
+        foreach (['title', 'description', 'priority', 'due_date', 'start_date', 'status', 'estimated_hours', 'estimated_minutes'] as $f) {
             if (array_key_exists($f, $validated)) {
                 $oldValues[$f] = $deliverable->{$f};
             }
         }
         $oldAssignedTo = $deliverable->assigned_to;
+
+        // Extract assignees and dependencies before update
+        $assigneeIds = $validated['assignees'] ?? null;
+        unset($validated['assignees'], $validated['dependencies'], $validated['followers']);
+
         $validated['updated_by'] = $user->id;
         $deliverable->update($validated);
+
+        // Sync multi-assignees if provided
+        if ($assigneeIds !== null) {
+            $deliverable->assignees()->sync($assigneeIds);
+        }
+
+        // Update labels, tags, followers, dependencies if provided
+        if ($request->has('labels')) {
+            $deliverable->update(['labels' => $request->input('labels')]);
+        }
+        if ($request->has('tags')) {
+            $deliverable->update(['tags' => $request->input('tags')]);
+        }
+        if ($request->has('followers')) {
+            $deliverable->update(['followers' => $request->input('followers')]);
+        }
+        if ($request->has('dependencies')) {
+            $deliverable->update(['dependencies' => $request->input('dependencies')]);
+        }
 
         $changes = [];
         foreach ($oldValues as $f => $oldVal) {
@@ -570,6 +766,7 @@ class DeliverableController extends Controller
         $this->notificationService->confirmAction($user, $isResubmit ? 'Resubmitted' : 'Submitted', 'deliverable', $deliverable->title, [
             'Project' => $deliverable->project?->title ?? 'N/A',
             'Task' => $deliverable->task?->title ?? 'N/A',
+            'Subtask ID' => $deliverable->business_id,
             'Submitted To' => User::find($deliverable->created_by)?->name ?? 'N/A',
         ]);
 
@@ -642,6 +839,7 @@ class DeliverableController extends Controller
         $this->notificationService->confirmAction($user, 'Approved', 'deliverable', $deliverable->title, [
             'Project' => $deliverable->project?->title ?? 'N/A',
             'Task' => $deliverable->task?->title ?? 'N/A',
+            'Subtask ID' => $deliverable->business_id,
             'Assigned To' => $deliverable->assignee?->name ?? 'N/A',
         ]);
 
@@ -719,6 +917,7 @@ class DeliverableController extends Controller
         $this->notificationService->confirmAction($user, 'Rejected', 'deliverable', $deliverable->title, [
             'Project' => $deliverable->project?->title ?? 'N/A',
             'Task' => $deliverable->task?->title ?? 'N/A',
+            'Subtask ID' => $deliverable->business_id,
             'Assigned To' => $deliverable->assignee?->name ?? 'N/A',
             'Reason' => $validated['comment'] ?? 'N/A',
         ]);
@@ -826,6 +1025,7 @@ class DeliverableController extends Controller
         $this->notificationService->confirmAction($user, 'Reopened', 'deliverable', $deliverable->title, [
             'Project' => $deliverable->project?->title ?? 'N/A',
             'Task' => $deliverable->task?->title ?? 'N/A',
+            'Subtask ID' => $deliverable->business_id,
             'Assigned To' => $deliverable->assignee?->name ?? 'N/A',
             'Instructions' => $validated['instructions'] ?? 'N/A',
         ]);
@@ -1026,8 +1226,8 @@ class DeliverableController extends Controller
         if (! Storage::disk('public')->exists($attachment->file_path)) {
             \Log::error('Attachment file not found on disk', [
                 'file_path' => $attachment->file_path,
-                'disk_root' => public_path('storage'),
-                'full_path' => public_path('storage') . '/' . $attachment->file_path,
+                'disk_root' => storage_path('app/public'),
+                'full_path' => storage_path('app/public') . '/' . $attachment->file_path,
                 'attachment_id' => $attachment->id,
             ]);
             return response()->json(['success' => false, 'message' => 'File not found on disk'], 404);
@@ -1068,6 +1268,329 @@ class DeliverableController extends Controller
         return response()->json(['success' => true, 'message' => 'Deliverables reordered successfully']);
     }
 
+    // ─── Acknowledge ───────────────────────────────────────────
+
+    /**
+     * Acknowledge a deliverable assignment (pending → in_progress).
+     */
+    public function acknowledge(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+        $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
+        $isAuthorizedRole = in_array($user->role, ['admin', 'manager', 'team_lead']);
+        if (! $isAssignee && ! $isAuthorizedRole) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        if ($deliverable->status !== 'pending') {
+            return response()->json(['success' => false, 'message' => 'Can only acknowledge pending deliverables'], 422);
+        }
+
+        $deliverable->update([
+            'status' => 'in_progress',
+            'acknowledged_at' => now(),
+            'acknowledged_by' => $user->id,
+            'updated_by' => $user->id,
+        ]);
+
+        $deliverable->startTimer();
+
+        DeliverableWorkflowEvent::create([
+            'deliverable_id' => $deliverable->id,
+            'event_type' => 'acknowledged',
+            'user_id' => $user->id,
+            'comment' => 'Acknowledged and started working',
+        ]);
+
+        $this->activityService->log($user->id, 'deliverable_acknowledged', 'You acknowledged deliverable "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Deliverable acknowledged',
+            'deliverable' => $deliverable->fresh()->load(['assignee:id,name,email,role', 'creator:id,name']),
+        ]);
+    }
+
+    // ─── Timer ─────────────────────────────────────────────────
+
+    /**
+     * Pause the deliverable timer.
+     */
+    public function pause(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+        $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
+        if (! $isAssignee && ! in_array($user->role, ['admin', 'manager', 'team_lead'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        if ($deliverable->timer_state !== 'running') {
+            return response()->json(['success' => false, 'message' => 'Timer is not running'], 422);
+        }
+
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:64',
+            'reason_detail' => 'nullable|string|max:500',
+        ]);
+
+        $deliverable->pauseTimer($validated['reason'] ?? null, $validated['reason_detail'] ?? null, false, $user->id);
+        $deliverable->update(['paused_by' => $user->id, 'paused_at' => now(), 'updated_by' => $user->id]);
+
+        DeliverableWorkflowEvent::create([
+            'deliverable_id' => $deliverable->id,
+            'event_type' => 'paused',
+            'user_id' => $user->id,
+            'comment' => 'Timer paused' . ($validated['reason'] ? ' — '.$validated['reason'] : ''),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Timer paused',
+            'deliverable' => $deliverable->fresh(),
+        ]);
+    }
+
+    /**
+     * Resume the deliverable timer.
+     */
+    public function continueTimer(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+        $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
+        if (! $isAssignee && ! in_array($user->role, ['admin', 'manager', 'team_lead'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        if ($deliverable->timer_state !== 'paused') {
+            return response()->json(['success' => false, 'message' => 'Timer is not paused'], 422);
+        }
+
+        $deliverable->resumeTimer($user->id);
+        $deliverable->update(['updated_by' => $user->id]);
+
+        DeliverableWorkflowEvent::create([
+            'deliverable_id' => $deliverable->id,
+            'event_type' => 'resumed',
+            'user_id' => $user->id,
+            'comment' => 'Timer resumed',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Timer resumed',
+            'deliverable' => $deliverable->fresh(),
+        ]);
+    }
+
+    /**
+     * Get live timer state for a deliverable.
+     */
+    public function timer(Request $request, Deliverable $deliverable)
+    {
+        return response()->json([
+            'success' => true,
+            'timer' => [
+                'state' => $deliverable->timer_state,
+                'work_started_at' => $deliverable->work_started_at?->format('Y-m-d\TH:i:s'),
+                'total_work_seconds' => $deliverable->getCurrentWorkSeconds(),
+                'elapsed_seconds' => $deliverable->getCurrentElapsedSeconds(),
+                'pause_count' => $deliverable->pause_count ?? 0,
+                'total_pause_seconds' => $deliverable->total_pause_seconds ?? 0,
+                'resume_count' => $deliverable->resume_count ?? 0,
+            ],
+        ]);
+    }
+
+    /**
+     * Get pause session history for a deliverable.
+     */
+    public function timerSessions(Request $request, Deliverable $deliverable)
+    {
+        $sessions = $deliverable->pauseSessions()
+            ->with(['user:id,name', 'resumedByUser:id,name'])
+            ->get()
+            ->map(fn ($s) => [
+                'id' => $s->id,
+                'reason' => $s->reason,
+                'reason_label' => $s->reason_label,
+                'reason_detail' => $s->reason_detail,
+                'paused_at' => $s->paused_at?->format('Y-m-d\TH:i:s'),
+                'resumed_at' => $s->resumed_at?->format('Y-m-d\TH:i:s'),
+                'duration_seconds' => $s->duration_seconds,
+                'formatted_duration' => $s->formatted_duration,
+                'user' => $s->user ? ['id' => $s->user->id, 'name' => $s->user->name] : null,
+                'resumed_by_user' => $s->resumedByUser ? ['id' => $s->resumedByUser->id, 'name' => $s->resumedByUser->name] : null,
+                'is_auto_paused' => $s->is_auto_paused,
+            ]);
+
+        return response()->json(['success' => true, 'sessions' => $sessions]);
+    }
+
+    // ─── File Management ───────────────────────────────────────
+
+    /**
+     * Upload a file to a deliverable.
+     */
+    public function uploadFile(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+        $isCreator = (int) $deliverable->created_by === (int) $user->id;
+        $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
+        if (! $isCreator && ! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'file' => 'required|file|max:51200',
+            'name' => 'nullable|string|max:255',
+        ]);
+
+        $file = $request->file('file');
+        $path = $file->store('deliverable-files/'.$deliverable->id, 'public');
+        $name = $request->input('name', $file->getClientOriginalName());
+
+        $deliverableFile = $deliverable->files()->create([
+            'name' => $name,
+            'url' => '/storage/'.$path,
+        ]);
+
+        $deliverable->update(['updated_by' => $user->id]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'File uploaded successfully',
+            'file' => $deliverableFile,
+        ], 201);
+    }
+
+    /**
+     * Add a link to a deliverable.
+     */
+    public function addLink(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+        $isCreator = (int) $deliverable->created_by === (int) $user->id;
+        $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
+        if (! $isCreator && ! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate([
+            'url' => 'required|url|max:2048',
+            'name' => 'nullable|string|max:255',
+        ]);
+
+        $deliverableFile = $deliverable->files()->create([
+            'name' => $validated['name'] ?? $validated['url'],
+            'url' => $validated['url'],
+        ]);
+
+        $deliverable->update(['updated_by' => $user->id]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Link added successfully',
+            'file' => $deliverableFile,
+        ], 201);
+    }
+
+    /**
+     * Rename a deliverable file/link.
+     */
+    public function renameFile(Request $request, Deliverable $deliverable, DeliverableFile $file)
+    {
+        $user = $request->user();
+        $isCreator = (int) $deliverable->created_by === (int) $user->id;
+        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate(['name' => 'required|string|max:255']);
+        $file->update(['name' => $validated['name']]);
+
+        return response()->json(['success' => true, 'message' => 'File renamed', 'file' => $file->fresh()]);
+    }
+
+    /**
+     * Delete a deliverable file/link.
+     */
+    public function deleteFile(Request $request, Deliverable $deliverable, DeliverableFile $file)
+    {
+        $user = $request->user();
+        $isCreator = (int) $deliverable->created_by === (int) $user->id;
+        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        if ($file->url && str_starts_with($file->url, '/storage/') && Storage::disk('public')->exists(str_replace('/storage/', '', $file->url))) {
+            Storage::disk('public')->delete(str_replace('/storage/', '', $file->url));
+        }
+
+        $file->delete();
+        $deliverable->update(['updated_by' => $user->id]);
+
+        return response()->json(['success' => true, 'message' => 'File deleted']);
+    }
+
+    /**
+     * Reorder deliverable files.
+     */
+    public function reorderFiles(Request $request, Deliverable $deliverable)
+    {
+        $request->validate([
+            'items' => 'required|array',
+            'items.*.id' => 'required|integer|exists:deliverable_files,id',
+            'items.*.sort_order' => 'required|integer|min:0',
+        ]);
+
+        foreach ($request->items as $item) {
+            DeliverableFile::where('id', $item['id'])->where('deliverable_id', $deliverable->id)
+                ->update(['sort_order' => $item['sort_order']]);
+        }
+
+        return response()->json(['success' => true, 'message' => 'Files reordered']);
+    }
+
+    // ─── Notes ─────────────────────────────────────────────────
+
+    /**
+     * Get the current user's personal note on a deliverable.
+     */
+    public function myNote(Request $request, Deliverable $deliverable)
+    {
+        $note = DeliverableUserNote::where('deliverable_id', $deliverable->id)
+            ->where('user_id', $request->user()->id)
+            ->first();
+
+        return response()->json(['success' => true, 'note' => $note]);
+    }
+
+    /**
+     * Create or update the current user's personal note on a deliverable.
+     */
+    public function storeNote(Request $request, Deliverable $deliverable)
+    {
+        $validated = $request->validate(['note' => 'nullable|string|max:5000']);
+
+        $note = DeliverableUserNote::updateOrCreate(
+            ['deliverable_id' => $deliverable->id, 'user_id' => $request->user()->id],
+            ['note' => $validated['note'] ?? null]
+        );
+
+        return response()->json(['success' => true, 'message' => 'Note saved', 'note' => $note]);
+    }
+
+    /**
+     * Delete the current user's personal note on a deliverable.
+     */
+    public function destroyNote(Request $request, Deliverable $deliverable, DeliverableUserNote $note)
+    {
+        if ((int) $note->user_id !== (int) $request->user()->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $note->delete();
+
+        return response()->json(['success' => true, 'message' => 'Note deleted']);
+    }
+
     /**
      * Send a notification to the deliverable assignee about assignment.
      *
@@ -1078,16 +1601,20 @@ class DeliverableController extends Controller
      */
     private function sendDeliverableNotification(Deliverable $deliverable, User $sender, string $type, string $title): void
     {
-        $deliverable->loadMissing('task:id,title');
+        $deliverable->loadMissing('task:id,title,business_id');
         $taskTitle = $deliverable->task->title ?? '';
+        $taskCode = $deliverable->task->business_id ?? '';
         $dueDate = $deliverable->due_date ? $deliverable->due_date->format('d-M-Y') : '';
-        $message = 'A new deliverable "'.$deliverable->title.'" has been assigned to you';
+        $message = 'A new deliverable "'.$deliverable->title.'" ('.$deliverable->business_id.') has been assigned to you';
         if ($sender->name) {
             $message .= ' by '.$sender->name;
         }
         $message .= '.';
         if ($taskTitle) {
             $message .= ' Task: '.$taskTitle.'.';
+        }
+        if ($taskCode) {
+            $message .= ' Task ID: '.$taskCode.'.';
         }
         if ($dueDate) {
             $message .= ' Due Date: '.$dueDate.'.';

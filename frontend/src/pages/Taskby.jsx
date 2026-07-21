@@ -20,7 +20,8 @@ import { Lock, Pencil, StickyNote } from "lucide-react";
 import CreateTaskModal from "../components/CreateTaskModal";
 import EditTaskModal from "../components/EditTaskModal";
 import PauseReasonModal from "../components/PauseReasonModal";
-import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
+import SortableTableWrapper from "../components/SortableTableWrapper";
+import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
 import TaskNotesPopover from "../components/TaskNotesPopover";
@@ -362,7 +363,7 @@ const Taskby = () => {
 
 
         <div className="table-header1">
-          <div></div>
+          <div style={{ fontSize: 12, fontWeight: 600 }}>ID</div>
           <div>Assigned To</div>
           <div className="task-name-column">Task Name</div>
           <div className="status-column">Status</div>
@@ -398,7 +399,7 @@ const Taskby = () => {
                 const primaryAssignee = assignees[0];
                 return (
                   <div className="taskby-row" key={uniqueKey}>
-                    <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                    <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={item.business_id} />
                     <div className="col-assigned-to">
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <div className="avatar" style={{ background: colors.bg, color: colors.text }}>

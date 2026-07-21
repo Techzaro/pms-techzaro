@@ -11,7 +11,7 @@ import { useAutoRefresh } from "../utils/useAutoRefresh";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { GoDotFill } from "react-icons/go";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
 import { CheckCircle2, Lock, Play, StickyNote } from "lucide-react";
@@ -20,7 +20,8 @@ import { showSuccessMessage } from "../utils/notify";
 import { publish } from "../utils/eventBus";
 import CreateTaskModal from "../components/CreateTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
-import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
+import SortableTableWrapper from "../components/SortableTableWrapper";
+import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
 import TaskNotesPopover from "../components/TaskNotesPopover";
@@ -66,6 +67,7 @@ const PRIORITY_TEXT_COLORS = {
 /** Main Tasks page — renders tasks assigned to the current user by others. */
 function Tasks() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { notify } = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -83,7 +85,7 @@ function Tasks() {
   });
   const [timeFilter, setTimeFilter] = useState("");
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
-  const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
+  const [restoreDraftId, setRestoreDraftId] = useState(null);
 
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
@@ -122,6 +124,15 @@ function Tasks() {
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
   });
+
+  // Handle draft restoration from DraftCenter
+  useEffect(() => {
+    const draftId = location.state?.openDraft;
+    if (!draftId) return;
+    window.history.replaceState({}, document.title);
+    setRestoreDraftId(draftId);
+    setShowTaskModal(true);
+  }, [location.state]);
 
   useEffect(() => {
     setOrderedItems(items);
@@ -317,19 +328,18 @@ function Tasks() {
               <option value="180">Last 6 Months</option>
             </select>
           </div>
-
-          <button
-            className="export task-btn--mobile"
-            onClick={() => setShowTaskModal(true)}
-            style={{ whiteSpace: "nowrap" }}
-          >
-            + Task
-          </button>
         </div>
       </div>
 
       {showTaskModal && (
-        <CreateTaskModal onClose={handleModalClose} />
+        <CreateTaskModal
+          restoreDraftId={restoreDraftId}
+          onClose={(refresh) => {
+            setShowTaskModal(false);
+            setRestoreDraftId(null);
+            if (refresh) fetchTasks();
+          }}
+        />
       )}
 
       {/* STATUS FILTERS */}
@@ -375,7 +385,7 @@ function Tasks() {
       {/* TABLE */}
       <div className="container">
         <div className="table-header1">
-          <div></div>
+          <div style={{ fontSize: 12, fontWeight: 600 }}>ID</div>
           <div>Assigned by</div>
           <div className="task-name-column">Task Name</div>
           <div className="status-column">Status</div>
@@ -403,7 +413,7 @@ function Tasks() {
               const assigner = item.assigner;
               return (
                 <div className="taskby-row" key={item.sortableId}>
-                  <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                  <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={item.business_id} />
                   <div className="col-assigned-to">
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <div className="avatar" style={{ background: colors.bg, color: colors.text }}>{getInitials(assigner?.name)}</div>
@@ -420,7 +430,7 @@ function Tasks() {
                       <TaskNotesPopover taskId={item.id} itemType="task" />
                     </div>
                     {item.project && (
-                      <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
+                      <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#6B7280", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
                         {item.project.title}
                       </Link>
                     )}

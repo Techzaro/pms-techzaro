@@ -326,6 +326,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
         const due = item.end_date ? formatDateShort(item.end_date) : "-";
         return [
           String(idx + 1),
+          item.business_id || "",
           (item.title || item.name || "-").substring(0, 36),
           st,
           `${progress}%`,
@@ -337,7 +338,7 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
       autoTable(doc, {
         startY: y,
         margin: { left: M, right: M },
-        head: [["#", "Task Name", "Status", "Progress", "Priority", "Due Date"]],
+        head: [["#", "Task ID", "Task Name", "Status", "Progress", "Priority", "Due Date"]],
         body: taskTableData,
         theme: "plain",
         styles: { fontSize: 6, cellPadding: 3, textColor: [55, 65, 81], lineColor: [229, 231, 235], lineWidth: 0.1 },
@@ -345,20 +346,21 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
         alternateRowStyles: { fillColor: [249, 250, 251] },
         columnStyles: {
           0: { cellWidth: 8, halign: "center" },
-          1: { cellWidth: "auto" },
-          2: { cellWidth: 20, halign: "center" },
+          1: { cellWidth: 20 },
+          2: { cellWidth: "auto" },
           3: { cellWidth: 20, halign: "center" },
-          4: { cellWidth: 18, halign: "center" },
-          5: { cellWidth: 22, halign: "center" },
+          4: { cellWidth: 20, halign: "center" },
+          5: { cellWidth: 18, halign: "center" },
+          6: { cellWidth: 22, halign: "center" },
         },
         didParseCell(data) {
           if (data.section === "body") {
-            if (data.column.index === 1) data.cell.styles.fontStyle = "bold";
-            if (data.column.index === 2 || data.column.index === 4) data.cell.styles.fontStyle = "bold";
+            if (data.column.index === 2) data.cell.styles.fontStyle = "bold";
+            if (data.column.index === 3 || data.column.index === 5) data.cell.styles.fontStyle = "bold";
           }
         },
         didDrawCell(data) {
-          if (data.section === "body" && data.column.index === 4) {
+          if (data.section === "body" && data.column.index === 5) {
             const pctVal = parseInt(data.cell.raw) || 0;
             const { x: cx, y: cy, height: ch, width: cw } = data.cell;
             const barY = cy + ch - 3.5;
@@ -661,16 +663,17 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                     <thead>
                       <tr>
                         <th style={{ width: "5%", textAlign: "center" }}>#</th>
-                        <th style={{ width: "30%", textAlign: "left" }}>Task Name</th>
-                        <th style={{ width: "14%", textAlign: "center" }}>Status</th>
-                        <th style={{ width: "16%", textAlign: "center" }}>Progress</th>
+                        <th style={{ width: "12%", textAlign: "left" }}>Task ID</th>
+                        <th style={{ width: "25%", textAlign: "left" }}>Task Name</th>
+                        <th style={{ width: "12%", textAlign: "center" }}>Status</th>
+                        <th style={{ width: "14%", textAlign: "center" }}>Progress</th>
                         <th style={{ width: "10%", textAlign: "center" }}>Priority</th>
-                        <th style={{ width: "15%", textAlign: "center" }}>Due Date</th>
+                        <th style={{ width: "12%", textAlign: "center" }}>Due Date</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredItems.length === 0 ? (
-                        <tr><td colSpan={6} style={{ textAlign: "center", padding: 20, color: "var(--text-muted)" }}>No items found</td></tr>
+                        <tr><td colSpan={7} style={{ textAlign: "center", padding: 20, color: "#9ca3af" }}>No items found</td></tr>
                       ) : filteredItems.map((item, idx) => {
                         const progress = calculateProgress(item);
                         const st = formatStatus(item.status);
@@ -678,9 +681,10 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                         const ps = getPriStyle(item.priority || "Medium");
                         const due = item.end_date ? formatDateShort(item.end_date) : "-";
                         return (
-                          <tr key={idx} style={{ borderBottom: "1px solid var(--border-light)", background: idx % 2 ? "var(--bg-hover)" : "var(--bg-card)" }}>
-                            <td data-label="#" style={{ textAlign: "center", color: "var(--text-secondary)" }}>{idx + 1}</td>
-                            <td data-label="Name" style={{ fontWeight: 600, color: "var(--text-heading)", wordBreak: "break-word" }}>{item.title || item.name || "-"}</td>
+                          <tr key={idx} style={{ borderBottom: "1px solid #f3f4f6", background: idx % 2 ? "#f9fafb" : "#fff" }}>
+                            <td data-label="#" style={{ textAlign: "center", color: "#6b7280" }}>{idx + 1}</td>
+                            <td data-label="Task ID" style={{ fontWeight: 600, color: "#6366f1", fontSize: 9 }}>{item.business_id || "-"}</td>
+                            <td data-label="Name" style={{ fontWeight: 600, color: "#111827", wordBreak: "break-word" }}>{item.title || item.name || "-"}</td>
                             <td data-label="Status" style={{ textAlign: "center" }}>
                               <span style={{ fontWeight: 600, color: ss.text }}>&#9679; {st}</span>
                             </td>

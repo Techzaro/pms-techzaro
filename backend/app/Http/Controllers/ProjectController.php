@@ -121,6 +121,34 @@ class ProjectController extends Controller
     }
 
     /**
+     * Get the assignable members of a project.
+     *
+     * Returns the merged list of users from the project's assigned_users,
+     * team members (across all linked teams), and team leaders.
+     * Only active users are returned.
+     *
+     * @param  \App\Models\Project  $project
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getMembers(Project $project)
+    {
+        return response()->json($project->getMembers());
+    }
+
+    /**
+     * Get lightweight task list for a project (for dropdowns).
+     */
+    public function getTasks(Project $project)
+    {
+        $tasks = $project->tasks()
+            ->select('id', 'business_id', 'title', 'status', 'priority', 'end_date')
+            ->orderBy('sort_order')
+            ->get();
+
+        return response()->json($tasks);
+    }
+
+    /**
      * Create a new project with optional milestones and deliverables.
      *
      * Automatically assigns the team leader if a team is provided without explicit users.
@@ -239,6 +267,7 @@ class ProjectController extends Controller
 
         // Send confirmation email to performer
         $this->notificationService->confirmAction($request->user(), 'Created & Assigned', 'project', $project->title, [
+            'Project ID' => $project->business_id,
             'Assigned To' => $assigneeNames ?: 'N/A',
         ]);
 

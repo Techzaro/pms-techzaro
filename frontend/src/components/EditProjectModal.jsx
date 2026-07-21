@@ -5,11 +5,12 @@
  * milestones, subtasks, attachments, and team assignments.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import draftService from "../services/draftService";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
 import LoadingButton from "./LoadingButton";
@@ -18,12 +19,30 @@ import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useDraftGuard from "../hooks/useDraftGuard";
+import useAutoSave from "../hooks/useAutoSave";
+import AutoSaveIndicator from "./AutoSaveIndicator";
 import RichTextEditor from "./RichTextEditor";
 import "./layout/CreateProjectModal.css";
 
 const EditProjectModal = ({ project, onClose }) => {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  const draftSaveRef = useRef(null);
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
+    draftSaveHandler: () => draftSaveRef.current?.(),
+    hasDraftFeature: true,
+  });
+
+  const userInteractedRef = useRef(false);
+  useEffect(() => {
+    const markInteracted = () => { userInteractedRef.current = true; };
+    window.addEventListener("keydown", markInteracted, { once: true, capture: true });
+    window.addEventListener("mousedown", markInteracted, { once: true, capture: true });
+    return () => {
+      window.removeEventListener("keydown", markInteracted, { capture: true });
+      window.removeEventListener("mousedown", markInteracted, { capture: true });
+    };
+  }, []);
+  const markDirty = useCallback(() => { if (userInteractedRef.current) setIsDirty(true); }, [setIsDirty]);
   useEscapeKey(true, handleClose);
 
   const [loading, setLoading] = useState(false);
@@ -31,6 +50,7 @@ const EditProjectModal = ({ project, onClose }) => {
   const [formErrors, setFormErrors] = useState({});
   const [teams, setTeams] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
+  const [draftId, setDraftId] = useState(null);
 
   const [form, setForm] = useState({
     title: project?.title || "",
@@ -107,6 +127,45 @@ const EditProjectModal = ({ project, onClose }) => {
   const editFileInputRef = useRef(null);
   const fileInputRef = useRef(null);
   const dropRef = useRef(null);
+
+  const { lastSaved, isSaving, draftId: autoSaveDraftId } = useAutoSave({
+    draftId,
+    formData: form,
+    moduleType: "project",
+    enabled: isDirty,
+    project_id: project?.id,
+  });
+
+  useEffect(() => {
+    if (autoSaveDraftId && autoSaveDraftId !== draftId) {
+      setDraftId(autoSaveDraftId);
+    }
+  }, [autoSaveDraftId]);
+
+  const handleSaveDraft = async () => {
+    try {
+      const payload = {
+        module_type: "project",
+        original_record_id: project?.id,
+        title: form.title || "Untitled Project Draft",
+        draft_data: { ...form, categoriesList, milestones },
+        project_id: project?.id,
+      };
+      if (draftId) {
+        await draftService.update(draftId, { title: payload.title, draft_data: payload.draft_data }, { skipNotify: true });
+      } else {
+        const data = await draftService.create(payload, { skipNotify: true });
+        if (data?.data?.id) setDraftId(data.data.id);
+      }
+      setIsDirty(false);
+    } catch (err) {
+      console.error("Save draft failed:", err);
+    }
+  };
+
+  useEffect(() => {
+    draftSaveRef.current = handleSaveDraft;
+  });
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: true } }));
@@ -197,7 +256,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setIsDirty(true);
+    markDirty();
     setForm((prev) => {
       const next = { ...prev, [name]: value };
       if (name === "team_id") {
@@ -215,14 +274,14 @@ const EditProjectModal = ({ project, onClose }) => {
   };
 
   const handleAssignedUsersChange = (ids) => {
-    setIsDirty(true);
+    markDirty();
     setForm((prev) => ({ ...prev, assigned_users: ids }));
   };
 
   const handleAddPhase = () => {
     if (!phaseName.trim() || !phaseDate) return;
     const formattedDt = toUTCIso(phaseDate);
-    setIsDirty(true);
+    markDirty();
     setMilestones((prev) => [...prev, { title: phaseName.trim(), due_date: formattedDt, status: "planned" }]);
     const name = phaseName.trim();
     setPhaseName("");
@@ -237,7 +296,7 @@ const EditProjectModal = ({ project, onClose }) => {
   };
 
   const handleRemovePhase = (index) => {
-    setIsDirty(true);
+    markDirty();
     setMilestones((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -265,7 +324,7 @@ const EditProjectModal = ({ project, onClose }) => {
   const handleAddCategory = () => {
     if (!categoryInput.trim()) return;
     const newCat = categoryInput.trim();
-    setIsDirty(true);
+    markDirty();
     if (!categoriesList.includes(newCat)) {
       setCategoriesList((prev) => [...prev, newCat]);
     }
@@ -279,7 +338,7 @@ const EditProjectModal = ({ project, onClose }) => {
   };
 
   const handleRemoveCategory = (index) => {
-    setIsDirty(true);
+    markDirty();
     setCategoriesList((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -316,7 +375,7 @@ const EditProjectModal = ({ project, onClose }) => {
 
   const handleFiles = (fileList) => {
     const newFiles = Array.from(fileList);
-    setIsDirty(true);
+    markDirty();
     setPendingFiles((prev) => [...prev, ...newFiles.map((f) => ({ file: f, name: f.name, size: f.size, renaming: false }))]);
   };
 
@@ -342,7 +401,7 @@ const EditProjectModal = ({ project, onClose }) => {
   };
 
   const handleRemoveFile = (index) => {
-    setIsDirty(true);
+    markDirty();
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -363,14 +422,14 @@ const EditProjectModal = ({ project, onClose }) => {
     let url = linkInput.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     const name = linkTitleInput.trim() || url;
-    setIsDirty(true);
+    markDirty();
     setLinks((prev) => [...prev, { url, name, renaming: false }]);
     setLinkInput("");
     setLinkTitleInput("");
   };
 
   const handleRemoveLink = (index) => {
-    setIsDirty(true);
+    markDirty();
     setLinks((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -498,8 +557,12 @@ const EditProjectModal = ({ project, onClose }) => {
               <h2>Edit Project</h2>
               <p>Update project details and settings.</p>
             </div>
+            <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
           </div>
           <div className="cp-header-actions">
+            <button className="cp-save-draft-btn" onClick={handleSaveDraft} type="button">
+              Save Draft
+            </button>
             <LoadingButton className="cp-create-btn" onClick={handleSubmit} loading={submitting}>
               Save Changes
             </LoadingButton>
@@ -530,7 +593,7 @@ const EditProjectModal = ({ project, onClose }) => {
               <label>Description</label>
               <RichTextEditor
                 value={form.description}
-                onChange={(val) => { setIsDirty(true); setForm((prev) => ({ ...prev, description: val })); }}
+                onChange={(val) => { markDirty(); setForm((prev) => ({ ...prev, description: val })); }}
                 placeholder="Enter project description..."
               />
             </div>
@@ -743,14 +806,14 @@ const EditProjectModal = ({ project, onClose }) => {
                   type="text"
                   placeholder="Link title (e.g. Figma Design, Drive Folder)"
                   value={linkTitleInput}
-                  onChange={(e) => { setIsDirty(true); setLinkTitleInput(e.target.value); }}
+                  onChange={(e) => { markDirty(); setLinkTitleInput(e.target.value); }}
                 />
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
                     type="text"
                     placeholder="Paste link (Drive, Figma, Website, etc.)"
                     value={linkInput}
-                    onChange={(e) => { setIsDirty(true); setLinkInput(e.target.value); }}
+                    onChange={(e) => { markDirty(); setLinkInput(e.target.value); }}
                     onKeyDown={handleLinkKeyDown}
                     style={{ flex: 1 }}
                   />
@@ -875,7 +938,7 @@ const EditProjectModal = ({ project, onClose }) => {
                     type="text"
                     placeholder="Enter custom category"
                     value={categoryInput}
-                    onChange={(e) => { setIsDirty(true); setCategoryInput(e.target.value); }}
+                    onChange={(e) => { markDirty(); setCategoryInput(e.target.value); }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") { e.preventDefault(); handleAddCategory(); }
                       if (e.key === "Escape") { setCategoryCustomMode(false); setCategoryInput(""); }
@@ -920,7 +983,7 @@ const EditProjectModal = ({ project, onClose }) => {
                               checked={categoriesList.includes(cat)}
                               onChange={() => {
                                 if (!categoriesList.includes(cat)) {
-                                  setIsDirty(true);
+                                  markDirty();
                                   setCategoriesList((prev) => [...prev, cat]);
                                 }
                               }}
@@ -995,7 +1058,7 @@ const EditProjectModal = ({ project, onClose }) => {
                           type="checkbox"
                           checked={form.team_ids.includes(team.id)}
                           onChange={() => {
-                            setIsDirty(true);
+                            markDirty();
                             setForm((prev) => ({
                               ...prev,
                               team_ids: prev.team_ids.includes(team.id)

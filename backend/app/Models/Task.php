@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Services\BusinessIdService;
 
 /**
  * Represents a task within a project.
@@ -15,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Task extends Model
 {
     protected $fillable = [
+        'task_number',
+        'business_id',
         'project_id',
         'title',
         'description',
@@ -62,6 +65,29 @@ class Task extends Model
         'deliverables_generated',
     ];
 
+    protected static function booted(): void
+    {
+        static::creating(function (Task $task) {
+            if (empty($task->business_id)) {
+                if ($task->project_id && $task->project) {
+                    $task->business_id = app(BusinessIdService::class)->generateTaskBusinessId($task->project);
+                    $task->task_number = (int) substr(strrchr($task->business_id, '.'), 1);
+                } else {
+                    $task->business_id = 'TASK-' . $task->id;
+                    $task->task_number = $task->id;
+                }
+            }
+        });
+
+        static::created(function (Task $task) {
+            if (empty($task->business_id) || $task->business_id === 'TASK-') {
+                $task->business_id = 'TASK-' . $task->id;
+                $task->task_number = $task->id;
+                $task->saveQuietly();
+            }
+        });
+    }
+
     protected $casts = [
         'requirements' => 'array',
         'start_date' => 'datetime:Y-m-d\TH:i:s',
@@ -100,7 +126,10 @@ class Task extends Model
             $query->where('project_id', $filters['project_id']);
         }
         if (! empty($filters['search'])) {
-            $query->where('title', 'like', '%'.$filters['search'].'%');
+            $query->where(function ($q) use ($filters) {
+                $q->where('title', 'like', '%'.$filters['search'].'%')
+                    ->orWhere('business_id', 'like', '%'.$filters['search'].'%');
+            });
         }
         if (! empty($filters['start_date_from'])) {
             $query->where('start_date', '>=', $filters['start_date_from']);

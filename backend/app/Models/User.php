@@ -8,6 +8,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
@@ -26,6 +27,11 @@ class User extends Authenticatable
         'role',
         'active',
         'must_change_password',
+        'credentials_managed_by_admin',
+        'password_reset_locked',
+        'password_changed_by',
+        'password_changed_at',
+        'password_version',
 
         // Contact
         'contact_no',
@@ -74,6 +80,9 @@ class User extends Authenticatable
         'techxaro_regulations',
         'other_document',
         'sort_order',
+        'resigned_at',
+        'resigned_by',
+        'resignation_notes',
     ];
 
     protected $hidden = [
@@ -86,6 +95,9 @@ class User extends Authenticatable
         'password' => 'hashed',
         'active' => 'boolean',
         'must_change_password' => 'boolean',
+        'credentials_managed_by_admin' => 'boolean',
+        'password_reset_locked' => 'boolean',
+        'password_changed_at' => 'datetime',
         'last_login_at' => 'datetime',
     ];
 
@@ -167,5 +179,23 @@ class User extends Authenticatable
     public function auditLogs(): HasMany
     {
         return $this->hasMany(\App\Models\AuditLog::class);
+    }
+
+    /** The admin who last changed this user's password. */
+    public function passwordChangedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'password_changed_by');
+    }
+
+    /** The admin who resigned this user. */
+    public function resignedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'resigned_by');
+    }
+
+    /** The resignation log for this user. */
+    public function resignationLog(): HasOne
+    {
+        return $this->hasOne(\App\Models\ResignationLog::class);
     }
 }

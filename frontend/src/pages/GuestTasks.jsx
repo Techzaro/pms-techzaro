@@ -20,7 +20,8 @@ import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { publish } from "../utils/eventBus";
 import SubmitTaskModal from "../components/SubmitTaskModal";
-import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
+import SortableTableWrapper from "../components/SortableTableWrapper";
+import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
 import TaskNotesPopover from "../components/TaskNotesPopover";
@@ -357,7 +358,7 @@ function GuestTasks() {
       {/* TABLE */}
       <div className="container">
         <div className="table-header1">
-          <div></div>
+          <div style={{ fontSize: 12, fontWeight: 600 }}>ID</div>
           <div>Assigned by</div>
           <div className="task-name-column">Task Name</div>
           <div className="status-column">Status</div>
@@ -385,7 +386,7 @@ function GuestTasks() {
               const assigner = item.assigner;
               return (
                 <div className="taskby-row" key={item.sortableId}>
-                  <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                  <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={item.business_id} />
                   <div className="col-assigned-to">
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <div className="avatar" style={{ background: colors.bg, color: colors.text }}>{getInitials(assigner?.name)}</div>

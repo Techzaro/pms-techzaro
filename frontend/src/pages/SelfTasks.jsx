@@ -20,7 +20,8 @@ import CreateTaskModal from "../components/CreateTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal"; // Added missing import
 import SelfDeliverableViewModal from "../components/SelfDeliverableViewModal"; // Added missing import
-import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
+import SortableTableWrapper from "../components/SortableTableWrapper";
+import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
 import TaskNotesPopover from "../components/TaskNotesPopover";
@@ -288,7 +289,7 @@ const SelfTasks = () => {
 
       <div className="container">
         <div className="table-header-compact">
-          <div></div>
+          <div style={{ fontSize: 12, fontWeight: 600 }}>ID</div>
           <div>Task Name</div>
           <div>Status</div>
           <div>Progress</div>
@@ -312,7 +313,7 @@ const SelfTasks = () => {
             {(item, idx, dndProps) => {
               return (
                 <div className="taskby-row-compact" key={item.sortableId}>
-                  <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                  <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={item.business_id} />
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                       <div className="task-title">{item.title}</div>

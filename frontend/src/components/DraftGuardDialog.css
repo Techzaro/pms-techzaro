@@ -1,0 +1,123 @@
+/* DraftGuardDialog.css */
+
+.dgd-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10050;
+  animation: dgd-fadeIn 0.2s ease;
+}
+
+@keyframes dgd-fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.dgd-modal {
+  background: var(--card-bg, #fff);
+  border-radius: 12px;
+  padding: 28px 32px;
+  width: 90%;
+  max-width: 440px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  animation: dgd-slideIn 0.25s ease;
+}
+
+@keyframes dgd-slideIn {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.dgd-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #fef3c7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+
+.dgd-modal h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary, #1f2937);
+}
+
+.dgd-modal p {
+  margin: 0 0 24px;
+  font-size: 14px;
+  color: var(--text-secondary, #6b7280);
+  line-height: 1.5;
+}
+
+.dgd-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dgd-primary-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.dgd-primary-actions button {
+  flex: 1;
+}
+
+.dgd-continue-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--card-bg, #fff);
+  color: var(--text-primary, #374151);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dgd-continue-btn:hover {
+  background: var(--bg-secondary, #f9fafb);
+  border-color: var(--border-hover, #d1d5db);
+}
+
+.dgd-discard-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid #fca5a5;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dgd-discard-btn:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+}
+
+.dgd-save-draft-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  background: #4f46e5;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dgd-save-draft-btn:hover {
+  background: #4338ca;
+}

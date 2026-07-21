@@ -22,6 +22,8 @@ use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\TaskCommentController;
+use App\Http\Controllers\DraftController;
+use App\Http\Controllers\CredentialController;
 
 /*
 | Public Routes
@@ -79,6 +81,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/activity-views/mark-viewed', [\App\Http\Controllers\ActivityviewController::class, 'markViewed']);
 
     /*
+    | Global Search Routes
+    | Search across projects, tasks, and deliverables by business code or title.
+    */
+    Route::get('/search', [\App\Http\Controllers\SearchController::class, 'search']);
+
+    /*
     | Dashboard Routes
     | Main dashboard data for authenticated users.
     */
@@ -101,6 +109,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
         // Mark user as resigned
         Route::put('/users/{user}/resign', [UserController::class, 'resign']);
+        // Get resignation impact analysis (before confirming)
+        Route::get('/users/{user}/resignation-impact', [UserController::class, 'resignationImpact']);
         // View user profile
         Route::get('/users/{id}/profile', [UserController::class, 'profile']);
         Route::get('/users/{id}/changes', [UserController::class, 'changes']);
@@ -126,6 +136,16 @@ Route::middleware('auth:sanctum')->group(function () {
         // Company documents management (logo, QR code, contracts, etc.) - admin/manager only for write operations
         Route::post('/company-documents', [\App\Http\Controllers\CompanyDocumentController::class, 'store']);
         Route::delete('/company-documents/{type}', [\App\Http\Controllers\CompanyDocumentController::class, 'destroy']);
+    });
+
+    // Credential Management - Admin only
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin')->group(function () {
+        // Admin changes a user's password
+        Route::post('/users/{user}/admin-change-password', [CredentialController::class, 'changePassword']);
+        // Admin unlocks password recovery for a user
+        Route::post('/users/{user}/unlock-password-recovery', [CredentialController::class, 'unlockPasswordRecovery']);
+        // Get credential management status for a user
+        Route::get('/users/{user}/credential-status', [CredentialController::class, 'getCredentialStatus']);
     });
 
     // Company documents - view only for all authenticated users
@@ -166,6 +186,8 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::get('/projects', [ProjectController::class, 'index']);
     Route::get('/projects/{project}', [ProjectController::class, 'show']);
+    Route::get('/projects/{project}/members', [ProjectController::class, 'getMembers']);
+    Route::get('/projects/{project}/tasks', [ProjectController::class, 'getTasks']);
     Route::post('/projects/{project}/changes/mark-read', [ProjectController::class, 'markChangesRead']);
 
     /*
@@ -306,7 +328,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     | Deliverable Management Routes
-    | CRUD operations, submission workflows, and review actions for deliverables.
+    | CRUD operations, submission workflows, timer, files, comments, and review actions for deliverables.
     */
     // Read routes (all authenticated users)
     Route::get('/deliverables', [DeliverableController::class, 'index']); // List all deliverables
@@ -319,7 +341,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Write routes (admin, manager, team lead only)
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
-        Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']); // Create deliverable
+        Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']); // Create deliverable (project-scoped)
+        Route::post('/deliverables', [DeliverableController::class, 'storeStandalone']); // Create deliverable (no project, task_id required)
         Route::put('/deliverables/{deliverable}', [DeliverableController::class, 'update']); // Update deliverable
         Route::delete('/deliverables/{deliverable}', [DeliverableController::class, 'destroy']); // Delete deliverable
         Route::post('/deliverables/{deliverable}/approve', [DeliverableController::class, 'approve']); // Approve deliverable
@@ -334,6 +357,27 @@ Route::middleware('auth:sanctum')->group(function () {
     // Self-deliverable review actions (assignee reviews their own work)
     Route::post('/deliverables/{deliverable}/self-approve', [DeliverableController::class, 'selfApprove'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Self-approve deliverable
     Route::post('/deliverables/{deliverable}/self-rework', [DeliverableController::class, 'selfRework'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Mark for rework
+
+    // Deliverable acknowledge
+    Route::post('/deliverables/{deliverable}/acknowledge', [DeliverableController::class, 'acknowledge']); // Acknowledge deliverable assignment
+
+    // Deliverable timer
+    Route::post('/deliverables/{deliverable}/pause', [DeliverableController::class, 'pause']); // Pause deliverable timer
+    Route::post('/deliverables/{deliverable}/continue', [DeliverableController::class, 'continueTimer']); // Resume deliverable timer
+    Route::get('/deliverables/{deliverable}/timer', [DeliverableController::class, 'timer']); // Get live timer state
+    Route::get('/deliverables/{deliverable}/timer-sessions', [DeliverableController::class, 'timerSessions']); // Get pause session history
+
+    // Deliverable file attachments and links
+    Route::post('/deliverables/{deliverable}/files', [DeliverableController::class, 'uploadFile'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Upload file
+    Route::post('/deliverables/{deliverable}/links', [DeliverableController::class, 'addLink'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Add link
+    Route::put('/deliverables/{deliverable}/files/{file}', [DeliverableController::class, 'renameFile'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Rename file/link
+    Route::delete('/deliverables/{deliverable}/files/{file}', [DeliverableController::class, 'deleteFile'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete file/link
+    Route::post('/deliverables/{deliverable}/files/reorder', [DeliverableController::class, 'reorderFiles'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reorder files
+
+    // Personal user notes on deliverables (private per user)
+    Route::get('/deliverables/{deliverable}/my-note', [DeliverableController::class, 'myNote']); // View own note
+    Route::post('/deliverables/{deliverable}/my-note', [DeliverableController::class, 'storeNote']); // Create/update own note
+    Route::delete('/deliverables/{deliverable}/my-note/{note}', [DeliverableController::class, 'destroyNote']); // Delete own note
 
     /*
     | Notification Routes
@@ -405,6 +449,27 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::get('/unified-calendar', [EventController::class, 'unifiedCalendar']); // Get unified calendar data
     Route::get('/unified-summary', [EventController::class, 'unifiedSummary']); // Get unified summary
+
+    /*
+    | Draft Management Routes
+    | Centralized draft system for all modules.
+    */
+    Route::get('/drafts', [DraftController::class, 'index']); // List drafts (filtered by role)
+    Route::post('/drafts', [DraftController::class, 'store']); // Create new draft
+    Route::get('/drafts/{draft}', [DraftController::class, 'show']); // View draft details
+    Route::put('/drafts/{draft}', [DraftController::class, 'update']); // Update draft
+    Route::delete('/drafts/{draft}', [DraftController::class, 'destroy']); // Delete draft
+    Route::post('/drafts/{draft}/publish', [DraftController::class, 'publish']); // Publish draft to live record
+    Route::post('/drafts/{draft}/publish-returned', [DraftController::class, 'publishReturned']); // Publish returned-from-resignation draft
+    Route::post('/drafts/{draft}/duplicate', [DraftController::class, 'duplicate']); // Duplicate draft
+    Route::post('/drafts/{draft}/restore/{version}', [DraftController::class, 'restoreVersion']); // Restore draft version
+    Route::post('/drafts/{draft}/auto-save', [DraftController::class, 'autoSave']); // Auto-save draft
+
+    // Admin/manager only: draft cleanup
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
+        Route::post('/drafts/cleanup', [DraftController::class, 'cleanup']); // Cleanup old drafts
+        Route::post('/drafts/archive', [DraftController::class, 'archive']); // Archive old drafts
+    });
 
     /*
     | Report Routes

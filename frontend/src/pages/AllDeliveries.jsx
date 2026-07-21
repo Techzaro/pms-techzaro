@@ -21,6 +21,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { StickyNote } from "lucide-react";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
+import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
 import AddNoteModal from "../components/AddNoteModal";
@@ -32,18 +33,22 @@ import "../pages/Deliveries.css";
 
 const STATUS_COLORS = {
   pending: "#FEF3C7",
+  in_progress: "#DBEAFE",
+  paused: "#FEF3C7",
   submitted: "#DBEAFE",
+  reopened: "#EDE9FE",
   approved: "#DCFCE7",
   rejected: "#FEE2E2",
-  reopened: "#FEF3C7",
 };
 
 const STATUS_TEXT_COLORS = {
   pending: "#92400E",
+  in_progress: "#1E40AF",
+  paused: "#92400E",
   submitted: "#1E40AF",
+  reopened: "#5B21B6",
   approved: "#166534",
   rejected: "#991B1B",
-  reopened: "#92400E",
 };
 
 const PRIORITY_COLORS = {
@@ -159,33 +164,39 @@ function AllDeliveries() {
   const formatStatus = (status) => {
     const map = {
       pending: "Pending",
+      in_progress: "In Progress",
+      paused: "Paused",
       submitted: "Submitted",
+      reopened: "Reopened",
       approved: "Approved",
       rejected: "Declined",
-      reopened: "Reopened",
     };
     return map[status] || status;
   };
 
   const baseItems = orderedItems.length ? orderedItems : items;
 
+  const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
+  const inProgressStatuses = ["in_progress", "In Progress", "In-progress"];
+
   const allCount = baseItems.length;
   const dueTodayCount = baseItems.filter((i) => { const d = i.due_date ? new Date(i.due_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length;
-  const pendingCount = baseItems.filter((i) => i.status === "pending").length;
+  const pendingCount = baseItems.filter((i) => pendingStatuses.includes(i.status)).length;
+  const inProgressCount = baseItems.filter((i) => inProgressStatuses.includes(i.status)).length;
+  const pausedCount = baseItems.filter((i) => i.status === "paused").length;
   const submittedCount = baseItems.filter((i) => i.status === "submitted").length;
   const reopenedCount = baseItems.filter((i) => i.status === "reopened").length;
   const approvedCount = baseItems.filter((i) => i.status === "approved").length;
   const rejectedCount = baseItems.filter((i) => i.status === "rejected").length;
 
-  const filteredItems = baseItems.filter((item) => {
-    if (statusFilter === "due_today") {
-      return true;
-    }
-    if (statusFilter) {
-      return item.status === statusFilter;
-    }
-    return true;
-  });
+  const filteredItems = statusFilter && statusFilter !== "due_today"
+    ? baseItems.filter((item) => {
+        if (statusFilter === "pending") {
+          return pendingStatuses.includes(item.status);
+        }
+        return item.status === statusFilter;
+      })
+    : baseItems;
 
   const deliverableIdList = filteredItems.map((i) => i.id);
 
@@ -225,6 +236,12 @@ function AllDeliveries() {
           <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Pending ({pendingCount})
           </p>
+          <p className={`InProgress ${statusFilter === "in_progress" ? "active" : ""}`} onClick={() => selectStatusFilter("in_progress")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> In Progress ({inProgressCount})
+          </p>
+          <p className={`Paused ${statusFilter === "paused" ? "active" : ""}`} onClick={() => selectStatusFilter("paused")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Paused ({pausedCount})
+          </p>
           <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Submitted ({submittedCount})
           </p>
@@ -253,7 +270,7 @@ function AllDeliveries() {
         {/* TABLE */}
         <div className="container">
           <div className="all-subtasks-header">
-            <div></div>
+            <div>ID</div>
             <div>Assigned To</div>
             <div>Assigned By</div>
             <div>Sub-Task Name</div>
@@ -287,7 +304,7 @@ function AllDeliveries() {
 
                 return (
                   <div className="all-subtasks-row" key={uniqueKey}>
-                    <DragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} />
+                    <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={item.business_id} color="#16a34a" />
 
                     {/* Assigned To */}
                     <div className="col-assigned-to">
