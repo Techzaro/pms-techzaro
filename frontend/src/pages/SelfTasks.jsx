@@ -15,7 +15,10 @@ import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { StickyNote } from "lucide-react";
+import { CheckCircle2, Lock, Pause, Play, StickyNote } from "lucide-react";
+import { publish } from "../utils/eventBus";
+import { useNotification } from "../context/NotificationContext";
+import { showSuccessMessage } from "../utils/notify";
 import CreateTaskModal from "../components/CreateTaskModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal"; // Added missing import
@@ -68,6 +71,7 @@ const PRIORITY_TEXT_COLORS = {
 const SelfTasks = () => {
   const navigate = useNavigate();
   const currentUser = getUser();
+  const notify = useNotification();
   
   // State declarations
   const [showTaskModal, setShowTaskModal] = useState({ open: false, projectId: null, id: null }); // Fixed to object
@@ -169,6 +173,73 @@ const SelfTasks = () => {
 
   const handleSubtaskUpdate = () => {
     fetchTasks();
+  };
+
+  const handleAcknowledge = async (taskId) => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/acknowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, status: "in_progress", ...data.task } : item));
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage("Task", "acknowledged");
+      } else {
+        notify.error(data.message || "Failed to acknowledge task.");
+      }
+    } catch {
+      notify.error("Failed to acknowledge task.");
+    }
+  };
+
+  const handleContinue = async (taskId) => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/continue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, status: "in_progress", ...data.task } : item));
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage("Task", "resumed");
+      } else {
+        notify.error(data.message || "Failed to continue task.");
+      }
+    } catch {
+      notify.error("Failed to continue task.");
+    }
+  };
+
+  const handlePause = async (taskId) => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason: "other" }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setItems((prev) => prev.map((item) => item.id === taskId ? { ...item, status: "paused", ...data.task } : item));
+        publish('task:updated', { id: taskId, status: 'paused' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage("Task", "paused");
+      } else {
+        notify.error(data.message || "Failed to pause task.");
+      }
+    } catch {
+      notify.error("Failed to pause task.");
+    }
   };
 
   const formatDate = (dateStr) => {
@@ -364,18 +435,47 @@ const SelfTasks = () => {
                         <IoEyeOutline size={20} />
                       </button>
                     }
+                    onTriggerClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}
                   >
-                    <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}><IoEyeOutline size={16} /></button>
                     <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                     {(() => {
                       const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
-                      const canSubmit = (item.status === "in_progress" || item.status === "reopened" || item.status === "paused") && myPivotStatus !== "submitted";
-                      return canSubmit && (
-                      <div style={{ position: "relative", display: "inline-flex" }}>
-                        <button 
-                          className="action-icon-btn action-submit" 
-                          title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"} 
-                          disabled={item.pending_deliverables_count > 0} 
+                      if (item.assigner_paused) {
+                        return (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
+                            <Lock size={12} />
+                            On Hold
+                          </span>
+                        );
+                      }
+                      if (item.status === "pending") {
+                        return (
+                          <button className="action-icon-btn action-submit" title="Acknowledge Task" onClick={() => handleAcknowledge(item.id)}>
+                            <CheckCircle2 size={16} />
+                          </button>
+                        );
+                      }
+                      if (item.status === "paused") {
+                        return (
+                          <button className="action-icon-btn action-submit" title="Continue Task" onClick={() => handleContinue(item.id)}>
+                            <Play size={16} />
+                          </button>
+                        );
+                      }
+                      if (item.status === "in_progress" && !item.assigner_paused) {
+                        return (
+                          <button className="action-icon-btn action-submit" title="Pause Task" onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
+                            <Pause size={16} />
+                          </button>
+                        );
+                      }
+                      if ((item.status === "in_progress" || item.status === "reopened") && myPivotStatus !== "submitted") {
+                        return (
+                        <div style={{ position: "relative", display: "inline-flex" }}>
+                          <button 
+                            className="action-icon-btn action-submit" 
+                            title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"} 
+                            disabled={item.pending_deliverables_count > 0} 
                           onClick={() => !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item })} 
                           style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
                         >
@@ -383,6 +483,8 @@ const SelfTasks = () => {
                         </button>
                       </div>
                       );
+                      }
+                      return null;
                     })()}
                   </ActionPopover>
                 </div>

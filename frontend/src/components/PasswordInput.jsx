@@ -36,6 +36,7 @@ export function PasswordInput({
   name,
   value,
   onChange,
+  onKeyDown,
   placeholder,
   label,
   showToggle = true,
@@ -58,6 +59,7 @@ export function PasswordInput({
           name={name}
           value={value}
           onChange={onChange}
+          onKeyDown={onKeyDown}
           placeholder={placeholder}
           disabled={disabled}
           className={`pw-input ${error ? "pw-input-error" : ""}`}

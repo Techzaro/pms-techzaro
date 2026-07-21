@@ -18,6 +18,19 @@ class DeliverableSubmission extends Model
         'comment',
         'file_path',
         'file_name',
+        'version_number',
+        'status',
+        'approved_by',
+        'approved_at',
+        'reopened_by',
+        'reopened_at',
+        'reopen_reason',
+    ];
+
+    protected $casts = [
+        'approved_at' => 'datetime',
+        'reopened_at' => 'datetime',
+        'version_number' => 'integer',
     ];
 
     /** The deliverable this submission belongs to. */
@@ -37,5 +50,17 @@ class DeliverableSubmission extends Model
     {
         return $this->hasMany(SubmissionAttachment::class, 'submission_id')
             ->where('submission_type', 'deliverable');
+    }
+
+    /** The user who approved this submission. */
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /** The user who reopened this submission. */
+    public function reopenedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reopened_by');
     }
 }

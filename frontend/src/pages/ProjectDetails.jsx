@@ -13,6 +13,7 @@ import {
   Calendar,
   CalendarDays,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -22,17 +23,23 @@ import {
   FolderOpen,
   Globe,
   ListChecks,
+  Lock,
   Monitor,
+  Pause,
   Pencil,
+  Play,
   Plus,
   Shield,
+  StickyNote,
   Tag,
   Trash2,
   UserRound,
   Users,
   X,
+  XCircle,
 } from "lucide-react";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
+import SmartDragHandle from "../components/SmartDragHandle";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import CreateTaskModal from "../components/CreateTaskModal";
@@ -44,6 +51,11 @@ import AddProjectFileModal from "../components/AddProjectFileModal";
 import AddAccessModal from "../components/AddAccessModal";
 import ConfirmModal from "../components/ConfirmModal";
 import SubmitTaskModal from "../components/SubmitTaskModal";
+import AddNoteModal from "../components/AddNoteModal";
+import EditTaskModal from "../components/EditTaskModal";
+import PauseReasonModal from "../components/PauseReasonModal";
+import ActionPopover from "../components/ActionPopover";
+import "../components/ActionPopover.css";
 import { formatDateTimeShort, formatDateTime, formatDateTimeInline } from "../utils/formatDateTime";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { useSubmit } from "../hooks/useSubmit";
@@ -310,6 +322,12 @@ function ProjectDetails() {
   const [viewModal, setViewModal] = useState({ open: false, subtask: null });
   const [assignerModal, setAssignerModal] = useState({ open: false, subtask: null });
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
+  const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
+  const [editingTask, setEditingTask] = useState(null);
+  const [pauseModalOpen, setPauseModalOpen] = useState(false);
+  const [pauseModalTaskId, setPauseModalTaskId] = useState(null);
+  const [holdingTaskId, setHoldingTaskId] = useState(null);
+  const [resumingTaskId, setResumingTaskId] = useState(null);
   const [fileSearch, setFileSearch] = useState("");
   const [taskSearch, setTaskSearch] = useState("");
   const [subtaskSearch, setSubtaskSearch] = useState("");
@@ -602,6 +620,118 @@ function ProjectDetails() {
       console.error(err);
       notify.error("Failed to delete task.");
     }
+  };
+
+  const handleTaskAcknowledge = async (taskId) => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API}/tasks/${taskId}/acknowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...data.task } : t));
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage("Task", "acknowledged");
+      } else {
+        notify.error(data.message || "Failed to acknowledge task.");
+      }
+    } catch {
+      notify.error("Failed to acknowledge task.");
+    }
+  };
+
+  const handleTaskContinue = async (taskId) => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API}/tasks/${taskId}/continue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "in_progress", ...data.task } : t));
+        publish('task:updated', { id: taskId, status: 'in_progress' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage("Task", "resumed");
+      } else {
+        notify.error(data.message || "Failed to continue task.");
+      }
+    } catch {
+      notify.error("Failed to continue task.");
+    }
+  };
+
+  const handleTaskPause = async (taskId) => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API}/tasks/${taskId}/pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason: "other" }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "paused", ...data.task } : t));
+        publish('task:updated', { id: taskId, status: 'paused' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage("Task", "paused");
+      } else {
+        notify.error(data.message || "Failed to pause task.");
+      }
+    } catch {
+      notify.error("Failed to pause task.");
+    }
+  };
+
+  const handleTaskAssignerPause = async (taskId, { reason, reason_detail } = {}) => {
+    setHoldingTaskId(taskId);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API}/tasks/${taskId}/assigner-pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason: reason_detail || reason }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, assigner_paused: true, ...data.task } : t));
+        showSuccessMessage("Task", "placed on hold");
+      } else {
+        notify.error(data.message || "Failed to place task on hold.");
+      }
+    } catch {
+      notify.error("Failed to place task on hold.");
+    }
+    setHoldingTaskId(null);
+  };
+
+  const handleTaskAssignerResume = async (taskId) => {
+    setResumingTaskId(taskId);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API}/tasks/${taskId}/assigner-resume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setOrderedTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, assigner_paused: false, ...data.task } : t));
+        showSuccessMessage("Task", "resumed by assigner");
+      } else {
+        notify.error(data.message || "Failed to resume task.");
+      }
+    } catch {
+      notify.error("Failed to resume task.");
+    }
+    setResumingTaskId(null);
   };
 
   const handleDeleteProject = async () => {
@@ -1267,33 +1397,139 @@ function ProjectDetails() {
                                         </div>
                                         <div>
                                           <div className="action-btns">
-                                            <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${t.id}`), { state: { from: getTaskFrom(t) } })}><IoEyeOutline /></button>
-                                            {(() => {
-                                              const isAssigner = t.assigner?.id && t.assigner.id === currentUserId;
-                                              const isAssignee = (t.assignees || []).some((a) => a.id === currentUserId);
-                                              const showSubmit = (t.status === "pending" || t.status === "reopened") && isAssignee;
-                                              const showDelete = false;
-                                              return (
-                                                <>
-                                                  {showSubmit && (
-                                                    <button
-                                                      className="action-icon-btn action-submit"
-                                                      title={t.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"}
-                                                      disabled={t.pending_deliverables_count > 0}
-                                                      onClick={() => !t.pending_deliverables_count && setSubmitTaskModal({ open: true, task: t })}
-                                                      style={t.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
-                                                    >
-                                                      <LuSend size={14} />
-                                                    </button>
-                                                  )}
-                                                  {showDelete && (
-                                                    <button type="button" className="action-icon-btn action-delete" title="Delete" onClick={() => handleDeleteTask(t.id)}>
-                                                      <Trash2 size={14} />
-                                                    </button>
-                                                  )}
-                                                </>
-                                              );
-                                            })()}
+                                            <ActionPopover
+                                              trigger={
+                                                <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                                                  <IoEyeOutline size={20} />
+                                                </button>
+                                              }
+                                              onTriggerClick={() => navigate(rolePath(`tasks/task-details/${t.id}`), { state: { from: getTaskFrom(t) } })}
+                                            >
+                                              <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: t.id })}>
+                                                <StickyNote size={14} />
+                                              </button>
+                                              {(() => {
+                                                const isAssigner = t.assigner?.id && t.assigner.id === currentUserId;
+                                                const isAssignee = (t.assignees || []).some((a) => a.id === currentUserId);
+
+                                                if (isAssigner) {
+                                                  const buttons = [];
+                                                  if (t.status?.toLowerCase() !== "approved") {
+                                                    buttons.push(
+                                                      <button
+                                                        key="edit"
+                                                        className="action-icon-btn action-edit"
+                                                        title="Edit Task"
+                                                        onClick={async () => {
+                                                          try {
+                                                            const token = authToken();
+                                                            const res = await fetch(`${API}/tasks/${t.id}`, {
+                                                              headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+                                                            });
+                                                            if (res.ok) {
+                                                              const data = await res.json();
+                                                              setEditingTask(data.task || t);
+                                                            } else {
+                                                              setEditingTask(t);
+                                                            }
+                                                          } catch {
+                                                            setEditingTask(t);
+                                                          }
+                                                        }}
+                                                      >
+                                                        <Pencil size={16} />
+                                                      </button>
+                                                    );
+                                                    buttons.push(
+                                                      <button
+                                                        key="delete"
+                                                        className="action-icon-btn action-delete"
+                                                        title="Delete Task"
+                                                        onClick={() => handleDeleteTask(t.id)}
+                                                      >
+                                                        <Trash2 size={16} />
+                                                      </button>
+                                                    );
+                                                  }
+                                                  if (t.assigner_paused) {
+                                                    buttons.push(
+                                                      <button
+                                                        key="resume"
+                                                        className="action-icon-btn"
+                                                        title="Resume"
+                                                        disabled={resumingTaskId === t.id}
+                                                        onClick={() => handleTaskAssignerResume(t.id)}
+                                                        style={{ color: "#059669", cursor: resumingTaskId === t.id ? "not-allowed" : "pointer" }}
+                                                      >
+                                                        <Lock size={16} />
+                                                      </button>
+                                                    );
+                                                  } else if (["pending", "in_progress", "reopened", "paused"].includes(t.status)) {
+                                                    buttons.push(
+                                                      <button
+                                                        key="hold"
+                                                        className="action-icon-btn"
+                                                        title="Put On Hold"
+                                                        disabled={holdingTaskId === t.id}
+                                                        onClick={() => { setPauseModalTaskId(t.id); setPauseModalOpen(true); }}
+                                                        style={{ color: "#7C3AED", cursor: holdingTaskId === t.id ? "not-allowed" : "pointer" }}
+                                                      >
+                                                        <Lock size={16} />
+                                                      </button>
+                                                    );
+                                                  }
+                                                  return buttons;
+                                                }
+
+                                                if (isAssignee) {
+                                                  if (t.assigner_paused) {
+                                                    return (
+                                                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
+                                                        <Lock size={12} />
+                                                        On Hold
+                                                      </span>
+                                                    );
+                                                  }
+                                                  if (t.status === "pending") {
+                                                    return (
+                                                      <button className="action-icon-btn action-submit" title="Acknowledge" onClick={() => handleTaskAcknowledge(t.id)}>
+                                                        <CheckCircle2 size={16} />
+                                                      </button>
+                                                    );
+                                                  }
+                                                  if (t.status === "paused") {
+                                                    return (
+                                                      <button className="action-icon-btn action-submit" title="Continue" onClick={() => handleTaskContinue(t.id)} style={{ color: "#059669" }}>
+                                                        <Play size={16} />
+                                                      </button>
+                                                    );
+                                                  }
+                                                  if (t.status === "in_progress" && !t.assigner_paused) {
+                                                    return (
+                                                      <button className="action-icon-btn action-submit" title="Pause" onClick={() => handleTaskPause(t.id)} style={{ color: "#D97706" }}>
+                                                        <Pause size={16} />
+                                                      </button>
+                                                    );
+                                                  }
+                                                  if ((t.status === "in_progress" || t.status === "reopened") && t.assigner_paused === false) {
+                                                    return (
+                                                      <button
+                                                        className="action-icon-btn action-submit"
+                                                        title={t.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"}
+                                                        disabled={t.pending_deliverables_count > 0}
+                                                        onClick={() => !t.pending_deliverables_count && setSubmitTaskModal({ open: true, task: t })}
+                                                        style={t.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                                                      >
+                                                        <LuSend size={16} />
+                                                      </button>
+                                                    );
+                                                  }
+                                                  return null;
+                                                }
+
+                                                return null;
+                                              })()}
+                                            </ActionPopover>
                                           </div>
                                         </div>
                                       </div>
@@ -1640,6 +1876,27 @@ function ProjectDetails() {
         confirmText="Delete"
         cancelText="Cancel"
         danger
+      />
+
+      {editingTask && (
+        <EditTaskModal
+          task={editingTask}
+          onClose={(refresh) => { setEditingTask(null); if (refresh) loadProject(); }}
+        />
+      )}
+
+      <PauseReasonModal
+        isOpen={pauseModalOpen}
+        onClose={() => { setPauseModalOpen(false); setPauseModalTaskId(null); }}
+        onConfirm={async (data) => { await handleTaskAssignerPause(pauseModalTaskId, data); setPauseModalOpen(false); setPauseModalTaskId(null); }}
+      />
+
+      <AddNoteModal
+        isOpen={noteModal.open}
+        onClose={() => setNoteModal({ open: false, itemId: null })}
+        itemType="task"
+        itemId={noteModal.itemId}
+        onSaved={() => { setNoteModal({ open: false, itemId: null }); loadProject(); }}
       />
 
       {visibilityOpen && (

@@ -2,12 +2,17 @@
 
 .ap-wrap {
   display: inline-flex;
+  align-items: center;
+  position: relative;
+  width: fit-content;
+  justify-self: end;
 }
 
 .ap-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
 }
 
 .ap-popover {
@@ -17,7 +22,7 @@
 .ap-popover-content {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 8px;

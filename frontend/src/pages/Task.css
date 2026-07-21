@@ -614,6 +614,16 @@
   color: white;
 }
 
+.action-icon-btn.action-delete {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+
+.action-icon-btn.action-delete:hover {
+  background: #DC2626;
+  color: white;
+}
+
 .action-icon-btn.action-complete {
   background: var(--color-danger-bg);
   color: var(--color-danger);

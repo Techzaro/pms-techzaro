@@ -13,7 +13,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import API_URL from "../config/api";
-import { saveSession, clearAllSessions, authToken, canAddSession } from "../utils/auth";
+import { saveSession, clearAllSessions, authToken } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { PasswordInput, isPasswordValid } from "../components/PasswordInput";
@@ -113,11 +113,6 @@ function Login() {
       }
 
       if (data.success) {
-        if (!canAddSession(data.role)) {
-          setFieldErrors({ email: "", password: "", form: "Maximum 3 tabs allowed per role. Please close one tab and try again." });
-          return;
-        }
-
         saveSession(data.role, data.token, data.user || {});
 
         if (data.must_change_password) {
@@ -237,6 +232,7 @@ function Login() {
               name="newPassword"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); document.getElementById("fp-confirm-password")?.focus(); } }}
               placeholder="Enter New Password"
               label="New Password"
               showStrength={true}
@@ -248,6 +244,7 @@ function Login() {
               name="confirmPassword"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleFirstTimePasswordChange(); } }}
               placeholder="Confirm New Password"
               label="Confirm New Password"
               showStrength={false}
@@ -294,15 +291,18 @@ function Login() {
             placeholder="Enter Professional Email"
             value={email}
             onChange={(e) => { setEmail(e.target.value); setFieldErrors(prev => ({ ...prev, email: "", form: "" })); }}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); document.getElementById("login-password")?.focus(); } }}
             className={fieldErrors.email ? "field-error" : ""}
           />
           {fieldErrors.email && <span className="field-error-text">{fieldErrors.email}</span>}
 
           <input
+            id="login-password"
             type="password"
             placeholder="Enter Password"
             value={password}
             onChange={(e) => { setPassword(e.target.value); setFieldErrors(prev => ({ ...prev, password: "", form: "" })); }}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleLogin(); } }}
             className={fieldErrors.password ? "field-error" : ""}
           />
           {fieldErrors.password && <span className="field-error-text">{fieldErrors.password}</span>}

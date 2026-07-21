@@ -410,28 +410,22 @@ function AllTasks() {
 
                   {/* Action — View only */}
                   <div className="col-action">
-                    <ActionPopover
-                      trigger={
-                        <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
-                          <IoEyeOutline size={20} />
+                      <ActionPopover
+                        trigger={
+                          <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                            <IoEyeOutline size={20} />
+                          </button>
+                        }
+                        onTriggerClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'all-tasks', readOnly: true } })}
+                      >
+                        <button
+                          className="action-icon-btn action-note"
+                          title="Add Note"
+                          onClick={() => setNoteModal({ open: true, itemId: item.id })}
+                        >
+                          <StickyNote size={16} />
                         </button>
-                      }
-                    >
-                      <button
-                        className="action-icon-btn action-view"
-                        title="View Task"
-                        onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'all-tasks', readOnly: true } })}
-                      >
-                        <IoEyeOutline size={16} />
-                      </button>
-                      <button
-                        className="action-icon-btn action-note"
-                        title="Add Note"
-                        onClick={() => setNoteModal({ open: true, itemId: item.id })}
-                      >
-                        <StickyNote size={16} />
-                      </button>
-                    </ActionPopover>
+                      </ActionPopover>
                   </div>
                 </div>
               );

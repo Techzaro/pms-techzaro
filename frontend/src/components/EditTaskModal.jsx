@@ -620,7 +620,6 @@ export default function EditTaskModal({ task, onClose }) {
             <button className="task-save-draft-btn" onClick={handleSaveDraft} type="button">
               Save Draft
             </button>
-            <LoadingButton className="task-create-btn" onClick={() => setOpenSubtaskCreator(true)}>⊕ Create Subtask</LoadingButton>
             <LoadingButton className="task-create-btn" onClick={handleSubmit} loading={submitting}>
               Save Changes
             </LoadingButton>

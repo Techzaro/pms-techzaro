@@ -48,6 +48,9 @@ class Deliverable extends Model
         'reopen_new_deadline',
         'reopen_file_path',
         'reopen_file_name',
+        'reopen_count',
+        'reopen_reason',
+        'submission_count',
         'rework_comment',
         'rework_instructions',
         'rework_new_deadline',
@@ -70,6 +73,11 @@ class Deliverable extends Model
         'last_timer_event_at',
         'work_completed_at',
         'sort_order',
+        'current_owner',
+        'original_assigner',
+        'delegation_chain',
+        'approval_chain',
+        'delegation_count',
     ];
 
     protected static function booted(): void
@@ -117,6 +125,11 @@ class Deliverable extends Model
         'total_pause_seconds' => 'integer',
         'resume_count' => 'integer',
         'assigner_paused' => 'boolean',
+        'reopen_count' => 'integer',
+        'submission_count' => 'integer',
+        'delegation_chain' => 'array',
+        'approval_chain' => 'array',
+        'delegation_count' => 'integer',
     ];
 
     /** Apply filters for querying deliverables. */
@@ -278,6 +291,36 @@ class Deliverable extends Model
     public function pauseSessions(): HasMany
     {
         return $this->hasMany(DeliverablePauseSession::class)->orderBy('paused_at');
+    }
+
+    /** All delegations for this deliverable. */
+    public function delegations()
+    {
+        return $this->hasMany(TaskDelegation::class, 'deliverable_id')->latest();
+    }
+
+    /** The user who currently owns this deliverable. */
+    public function currentOwner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'current_owner');
+    }
+
+    /** The user who originally assigned this deliverable. */
+    public function originalAssigner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'original_assigner');
+    }
+
+    /** Get the pending delegations for this deliverable. */
+    public function pendingDelegations()
+    {
+        return $this->hasMany(TaskDelegation::class, 'deliverable_id')->where('status', 'pending')->latest();
+    }
+
+    /** Get the latest delegation for this deliverable. */
+    public function latestDelegation()
+    {
+        return $this->hasOne(TaskDelegation::class, 'deliverable_id')->latestOfMany();
     }
 
     /** Personal user notes on this deliverable. */

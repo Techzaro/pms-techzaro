@@ -1,0 +1,241 @@
+.tt-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-modal-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.tt-modal {
+  background: var(--bg-card);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.tt-header {
+  padding: 24px 24px 0;
+}
+
+.tt-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tt-title-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.tt-title-close:hover {
+  color: var(--text-primary);
+}
+
+.tt-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tt-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.tt-label span {
+  color: var(--color-danger);
+}
+
+.tt-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: inherit;
+}
+
+.tt-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+
+.tt-textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  resize: vertical;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.tt-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+
+.tt-info {
+  padding: 14px;
+  background: var(--color-info-bg, #f0f9ff);
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.tt-info strong {
+  color: var(--text-heading);
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.tt-info ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.tt-info li {
+  margin-bottom: 2px;
+}
+
+.tt-footer {
+  padding: 0 24px 24px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.tt-cancel-btn {
+  padding: 10px 20px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-card);
+  color: var(--text-dark);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.tt-cancel-btn:hover {
+  background: var(--bg-card-alt);
+}
+
+.tt-cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tt-submit-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 10px;
+  background: #6366f1;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.tt-submit-btn:hover {
+  background: var(--color-primary);
+}
+
+.tt-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tt-loading-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.tt-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tt-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.tt-radio:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg, #f5f3ff);
+}
+
+.tt-radio:has(input:checked) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg, #f5f3ff);
+}
+
+.tt-radio input[type="radio"] {
+  margin-top: 2px;
+  accent-color: var(--color-primary);
+}
+
+.tt-radio-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.tt-radio-label strong {
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.tt-radio-label small {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}

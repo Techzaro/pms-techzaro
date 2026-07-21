@@ -22,6 +22,7 @@ import "./Header.css";
 
 import CreateTaskModal from "../CreateTaskModal";
 import CreateProjectModal from "../CreateProjectModal";
+import CreateDeliverableModel from "./CreateDeliverableModel";
 import ChangePasswordModal from "../ChangePasswordModal";
 
 /**
@@ -38,6 +39,7 @@ function Header() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showProjectModal, setShowProjectModal] = useState(false);
+  const [showSubtaskModal, setShowSubtaskModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth <= 1200);
   const [notifications, setNotifications] = useState([]);
@@ -540,6 +542,18 @@ function Header() {
           </button>
           )}
 
+          {getCurrentRole() !== "guest" && (
+          <button
+            className="task-btn1"
+            style={{ background: "#7c3aed" }}
+            onClick={() =>
+              setShowSubtaskModal(true)
+            }
+          >
+            + Subtask
+          </button>
+          )}
+
           {/* Quick-create project button – visible to admin/manager only */}
 
           {["admin", "manager"].includes(getCurrentRole()) && (
@@ -759,6 +773,12 @@ function Header() {
 
       {showProfileModal && (
         <ChangePasswordModal onClose={() => setShowProfileModal(false)} />
+      )}
+
+      {showSubtaskModal && (
+        <CreateDeliverableModel
+          onClose={() => setShowSubtaskModal(false)}
+        />
       )}
 
     </>

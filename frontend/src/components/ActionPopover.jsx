@@ -1,14 +1,14 @@
 /**
  * ActionPopover.jsx
  * Hover-triggered popover menu for table row actions.
- * Uses fixed positioning to float above table overflow.
+ * Uses fixed positioning via portal to float above table overflow.
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import "./ActionPopover.css";
 
-const ActionPopover = ({ trigger, children }) => {
+const ActionPopover = ({ trigger, children, onTriggerClick }) => {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const wrapRef = useRef(null);
@@ -23,10 +23,10 @@ const ActionPopover = ({ trigger, children }) => {
     const popoverHeight = popoverEl ? popoverEl.offsetHeight : 40;
 
     let top = rect.top + rect.height / 2 - popoverHeight / 2;
-    let left = rect.right + 10;
+    let left = rect.right - 12;
 
     if (left + popoverWidth > window.innerWidth) {
-      left = rect.left - popoverWidth - 10;
+      left = rect.left - popoverWidth;
     }
     if (top < 0) top = 4;
     if (top + popoverHeight > window.innerHeight) {
@@ -82,7 +82,7 @@ const ActionPopover = ({ trigger, children }) => {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <div className="ap-trigger">{trigger}</div>
+      <div className="ap-trigger" onClick={onTriggerClick}>{trigger}</div>
       {open &&
         createPortal(
           <div

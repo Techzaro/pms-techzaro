@@ -38,6 +38,8 @@ const CreateSubtaskModal = ({
   taskId: initialTaskId = null,
   onCreated = null,
   restoreDraftId = null,
+  editMode = false,
+  editData = null,
 }) => {
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
@@ -66,14 +68,14 @@ const CreateSubtaskModal = ({
 
   const [formErrors, setFormErrors] = useState({});
   const [form, setForm] = useState({
-    title: "",
-    description: "",
-    project_id: initialProjectId || "",
-    task_id: initialTaskId || "",
-    assigned_to: [],
-    priority: "Medium",
-    start_date: "",
-    due_date: "",
+    title: editData?.title || "",
+    description: editData?.description || "",
+    project_id: editData?.project_id || initialProjectId || "",
+    task_id: editData?.task_id || initialTaskId || "",
+    assigned_to: editData?.assignees?.map(a => a.id || a) || (editData?.assigned_to ? [editData.assigned_to] : []),
+    priority: editData?.priority || "Medium",
+    start_date: editData?.start_date ? editData.start_date.slice(0, 16) : "",
+    due_date: editData?.due_date ? editData.due_date.slice(0, 16) : "",
   });
 
   const [pendingFiles, setPendingFiles] = useState([]);
@@ -261,31 +263,31 @@ const CreateSubtaskModal = ({
     clearTimer();
     setIsDirty(false);
     const body = buildBody();
-    const pid = form.project_id;
-    const url = pid ? `${API_URL}/projects/${pid}/deliverables` : `${API_URL}/deliverables`;
 
     try {
       await run(async () => {
+        const url = editMode
+          ? `${API_URL}/deliverables/${editData.id}`
+          : (form.project_id ? `${API_URL}/projects/${form.project_id}/deliverables` : `${API_URL}/deliverables`);
         const response = await fetch(url, {
-          method: "POST",
+          method: editMode ? "PUT" : "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify(body),
           _notifHandled: true,
         });
         const data = await response.json();
         if (!response.ok) {
-          const msg = data.message || "Failed to create subtask";
+          const msg = data.message || (editMode ? "Failed to update subtask" : "Failed to create subtask");
           const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
           throw new Error(errors || msg);
         }
         const subtask = data.deliverable;
-        if (subtask?.id) await uploadAttachments(subtask.id);
-        if (draftId) {
+        if (!editMode && subtask?.id) await uploadAttachments(subtask.id);
+        if (!editMode && draftId) {
           draftService.delete(draftId).catch(() => {});
         }
-        showSuccessMessage("Subtask", "created");
-        publish("task:created", subtask);
-        publish("data:changed", { type: "deliverable", action: "created" });
+        showSuccessMessage("Subtask", editMode ? "updated" : "created");
+        publish("data:changed", { type: "deliverable", action: editMode ? "updated" : "created" });
         if (onCreated) onCreated(subtask);
         onClose(true);
       });
@@ -294,7 +296,7 @@ const CreateSubtaskModal = ({
         notify.error(err.message);
       }
     }
-  }, [validateForm, buildBody, form.project_id, token, run, uploadAttachments, onCreated, onClose, draftId, clearTimer, setIsDirty]);
+  }, [validateForm, buildBody, form.project_id, token, run, uploadAttachments, onCreated, onClose, draftId, clearTimer, setIsDirty, editMode, editData]);
 
   const handleFiles = useCallback((fileList) => {
     const newFiles = Array.from(fileList).map((f) => ({ file: f, name: f.name, customName: f.name.replace(/\.[^.]+$/, ""), size: f.size }));
@@ -339,19 +341,19 @@ const CreateSubtaskModal = ({
         {/* Header */}
         <div className="task-header">
           <div className="task-header-left">
-            <div className="task-icon">⊕</div>
+            <div className="task-icon">{editMode ? "✏️" : "⊕"}</div>
             <div>
-              <h2>Create New Subtask</h2>
-              <p>Add subtask details below.</p>
+              <h2>{editMode ? "Edit Subtask" : "Create New Subtask"}</h2>
+              <p>{editMode ? "Update subtask details below." : "Add subtask details below."}</p>
             </div>
-            <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
+            {!editMode && <AutoSaveIndicator isSaving={isSaving} lastSaved={lastSaved} />}
           </div>
           <div className="task-header-actions">
             <button className="task-save-draft-btn" onClick={handleSaveDraft} type="button" disabled={!form.title.trim()}>
               Save Draft
             </button>
             <LoadingButton className="task-create-btn" onClick={() => doSubmit()} loading={submitting}>
-              ⊕ Create Subtask
+              {editMode ? "Update Subtask" : "⊕ Create Subtask"}
             </LoadingButton>
             <button className="task-close-btn" onClick={handleClose}>✕</button>
           </div>

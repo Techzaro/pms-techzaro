@@ -1,8 +1,8 @@
 /**
  * TaskReopenDialog.jsx
- * Modal dialog for rejecting and reopening a task submission.
- * Allows the reviewer to provide a comment, additional instructions,
- * set a new deadline, and optionally attach a file before reopening.
+ * Modal dialog for reopening a task (after submission or approval).
+ * Requires a reason for reopening with predefined options or custom text.
+ * Optionally includes instructions, new deadline, and file attachment.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -17,29 +17,34 @@ import LoadingButton from "./LoadingButton";
 import "./ReopenDialog.css";
 import { toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
 
-/**
- * Dialog for rejecting and reopening a task with feedback.
- * @param {boolean} isOpen - Whether the dialog is visible.
- * @param {Function} onClose - Callback to close the dialog.
- * @param {Object} task - The task being reopened.
- * @param {Function} onReopenSuccess - Callback after successful reopen, receives updated task.
- */
+const REOPEN_REASONS = [
+  "Missing functionality",
+  "Incorrect implementation",
+  "Design issue",
+  "Bug found",
+  "Client requested changes",
+  "Additional requirements",
+  "Quality improvement",
+  "Other",
+];
+
 function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(isOpen, handleClose);
 
-  const [comment, setComment] = useState("");
+  const [reopenReason, setReopenReason] = useState("");
+  const [reopenReasonDetail, setReopenReasonDetail] = useState("");
   const [instructions, setInstructions] = useState("");
   const [newDeadline, setNewDeadline] = useState("");
   const [file, setFile] = useState(null);
   const { submitting, run } = useSubmit();
   const fileInputRef = useRef(null);
 
-  // Lock body scroll when dialog is open and reset form state
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
-      setComment("");
+      setReopenReason("");
+      setReopenReasonDetail("");
       setInstructions("");
       setNewDeadline(task?.end_date ? toDatetimeLocal(task.end_date) : "");
       setFile(null);
@@ -49,17 +54,23 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
     return () => { document.body.style.overflow = ""; };
   }, [isOpen]);
 
-  /** Submits the reopen request with comment, instructions, new deadline, and file */
   const handleSubmit = async () => {
-    if (!comment.trim() && !instructions.trim()) {
-      notify.error("Please provide a comment or instructions.");
+    if (!reopenReason) {
+      notify.error("Please select a reason for reopening.");
+      return;
+    }
+    if (reopenReason === "Other" && !reopenReasonDetail.trim()) {
+      notify.error("Please provide details for the 'Other' reason.");
       return;
     }
     await run(async () => {
       try {
         const token = authToken();
         const formData = new FormData();
-        if (comment.trim()) formData.append("comment", comment.trim());
+        formData.append("reopen_reason", reopenReason);
+        if (reopenReason === "Other" || reopenReasonDetail.trim()) {
+          formData.append("reopen_reason_detail", reopenReasonDetail.trim());
+        }
         if (instructions.trim()) formData.append("instructions", instructions.trim());
         if (newDeadline) formData.append("new_deadline", toUTCIso(newDeadline));
         if (file) formData.append("file", file);
@@ -86,25 +97,45 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
 
   if (!isOpen || !task) return null;
 
+  const isApproved = task.status === "approved";
+
   return createPortal(
     <div className="rd-overlay">
       <div className="rd-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="rd-header">
-          <h2 className="rd-title">Decline & Reopen Task</h2>
+          <h2 className="rd-title">{isApproved ? "Reopen Task" : "Decline & Reopen Task"}</h2>
           <p className="rd-subtitle">{task.title}</p>
         </div>
 
         <div className="rd-body">
           <div className="rd-field">
-            <label className="rd-label">Reopen Comment</label>
-            <textarea
-              className="rd-textarea"
-              placeholder="Explain why this task needs revision..."
-              value={comment}
-              onChange={(e) => { setComment(e.target.value); setIsDirty(true); }}
-              rows={3}
-            />
+            <label className="rd-label">Reason for Reopening <span style={{ color: "var(--color-danger)" }}>*</span></label>
+            <select
+              className="rd-input"
+              value={reopenReason}
+              onChange={(e) => { setReopenReason(e.target.value); setIsDirty(true); }}
+            >
+              <option value="">Select a reason...</option>
+              {REOPEN_REASONS.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
           </div>
+
+          {(reopenReason === "Other" || reopenReason) && (
+            <div className="rd-field">
+              <label className="rd-label">
+                {reopenReason === "Other" ? "Specify Reason *" : "Additional Details"}
+              </label>
+              <textarea
+                className="rd-textarea"
+                placeholder={reopenReason === "Other" ? "Please describe the reason..." : "Provide more details (optional)..."}
+                value={reopenReasonDetail}
+                onChange={(e) => { setReopenReasonDetail(e.target.value); setIsDirty(true); }}
+                rows={3}
+              />
+            </div>
+          )}
 
           <div className="rd-field">
             <label className="rd-label">Additional Instructions</label>
@@ -157,7 +188,7 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
         <div className="rd-footer">
           <button className="rd-cancel-btn" onClick={handleClose} disabled={submitting}>Cancel</button>
           <LoadingButton className="rd-submit-btn" onClick={handleSubmit} loading={submitting}>
-            Decline & Reopen
+            {isApproved ? "Reopen" : "Decline & Reopen"}
           </LoadingButton>
         </div>
       </div>

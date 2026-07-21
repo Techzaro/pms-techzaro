@@ -99,21 +99,20 @@ class DashboardController extends Controller
             // ═══════════════════════════════════════════════
 
             if ($isAdminOrManager) {
-                $adminManagerIds = $this->getAdminManagerIds();
                 $pendingStatuses = ['pending','in_progress','In Progress','In-progress','planned','Planning','submitted','reopened','rejected'];
 
-                $activeProjects = Project::whereIn('id', $projectIds)
+                $activeProjects = Project::where('created_by', $user->id)
                     ->whereIn('status', ['Planning', 'In-progress', 'Paused'])->count();
 
                 $tasksDueToday = DB::table('tasks')
                     ->join('task_user', 'tasks.id', '=', 'task_user.task_id')
-                    ->whereIn('tasks.assigned_by', $adminManagerIds)
+                    ->where('tasks.assigned_by', $user->id)
                     ->whereColumn('task_user.user_id', '!=', 'tasks.assigned_by')
                     ->whereRaw('DATE(COALESCE(task_user.due_date, tasks.end_date)) = ?', [today()->toDateString()])
                     ->whereNotIn('tasks.status', $this->dueTodayCompletedStatuses())
                     ->count('tasks.id');
 
-                $tasksDueToday += Task::whereIn('assigned_by', $adminManagerIds)
+                $tasksDueToday += Task::where('assigned_by', $user->id)
                     ->where('assigned_to', '!=', DB::raw('assigned_by'))
                     ->whereNotIn('id', function ($q) {
                         $q->select('task_id')->from('task_user');
@@ -124,7 +123,7 @@ class DashboardController extends Controller
 
                 $taskStats = DB::table('tasks')
                     ->join('task_user', 'tasks.id', '=', 'task_user.task_id')
-                    ->whereIn('tasks.assigned_by', $adminManagerIds)
+                    ->where('tasks.assigned_by', $user->id)
                     ->whereColumn('task_user.user_id', '!=', 'tasks.assigned_by')
                     ->selectRaw("
                         COUNT(*) as total,
@@ -133,7 +132,7 @@ class DashboardController extends Controller
                         SUM(CASE WHEN tasks.status IN ('".implode("','", $pendingStatuses)."') THEN 1 ELSE 0 END) as pending
                     ")->first();
 
-                $taskAssignedToCount = Task::whereIn('assigned_by', $adminManagerIds)
+                $taskAssignedToCount = Task::where('assigned_by', $user->id)
                     ->where('assigned_to', '!=', DB::raw('assigned_by'))
                     ->whereNotIn('id', function ($q) {
                         $q->select('task_id')->from('task_user');
@@ -313,9 +312,8 @@ class DashboardController extends Controller
         if ($isAssignerView) {
             // ── ASSIGNER VIEW: tasks assigned BY this user ──
             if ($isAdminOrManager) {
-                $adminManagerIds = $this->getAdminManagerIds();
                 $tasks = Task::with(['project:id,title', 'assignees:id,name,role'])
-                    ->whereIn('assigned_by', $adminManagerIds)
+                    ->where('assigned_by', $user->id)
                     ->where(function ($q) use ($user) {
                         $q->whereDoesntHave('assignees', fn ($q) => $q->where('users.id', $user->id))
                             ->orWhere(function ($q) use ($user) {
@@ -498,7 +496,7 @@ class DashboardController extends Controller
             });
 
         if (in_array($role, ['admin', 'manager'])) {
-            $query->whereIn('assigned_by', $this->getAdminManagerIds());
+            $query->where('assigned_by', $user->id);
         } else {
             $query->where(function ($q) use ($user) {
                 $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))

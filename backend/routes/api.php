@@ -279,6 +279,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/reject', [TaskController::class, 'reject'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reject submitted task
     Route::post('/tasks/{task}/reopen', [TaskController::class, 'reopen'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reopen rejected task
 
+    // Task delegation workflow
+    Route::post('/tasks/{task}/delegate', [TaskController::class, 'delegate'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delegate task to another user
+    Route::post('/tasks/{task}/accept-delegation', [TaskController::class, 'acceptDelegation'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Accept pending delegation
+    Route::post('/tasks/{task}/reject-delegation', [TaskController::class, 'rejectDelegation'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reject pending delegation
+    Route::post('/tasks/{task}/revoke-delegation', [TaskController::class, 'revokeDelegation'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Revoke a delegation
+    Route::get('/tasks/{task}/delegation-chain', [TaskController::class, 'delegationChain']); // Get delegation chain details
+
     // Project submission workflow removed - projects no longer submitted as tasks
     Route::post('/projects/reorder', [ProjectController::class, 'reorderProjects'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reorder projects
 
@@ -358,12 +365,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/deliverables/{deliverable}/self-approve', [DeliverableController::class, 'selfApprove'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Self-approve deliverable
     Route::post('/deliverables/{deliverable}/self-rework', [DeliverableController::class, 'selfRework'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Mark for rework
 
+    // Deliverable delegation workflow
+    Route::post('/deliverables/{deliverable}/delegate', [DeliverableController::class, 'delegate'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delegate deliverable to another user
+    Route::post('/deliverables/{deliverable}/accept-delegation', [DeliverableController::class, 'acceptDelegation'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Accept pending delegation
+    Route::post('/deliverables/{deliverable}/reject-delegation', [DeliverableController::class, 'rejectDelegation'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reject pending delegation
+    Route::post('/deliverables/{deliverable}/revoke-delegation', [DeliverableController::class, 'revokeDelegation'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Revoke a delegation
+    Route::get('/deliverables/{deliverable}/delegation-chain', [DeliverableController::class, 'delegationChain']); // Get delegation chain details
+
     // Deliverable acknowledge
     Route::post('/deliverables/{deliverable}/acknowledge', [DeliverableController::class, 'acknowledge']); // Acknowledge deliverable assignment
 
     // Deliverable timer
     Route::post('/deliverables/{deliverable}/pause', [DeliverableController::class, 'pause']); // Pause deliverable timer
     Route::post('/deliverables/{deliverable}/continue', [DeliverableController::class, 'continueTimer']); // Resume deliverable timer
+    Route::post('/deliverables/{deliverable}/assigner-pause', [DeliverableController::class, 'assignerPause']); // Assigner pauses deliverable
+    Route::post('/deliverables/{deliverable}/assigner-resume', [DeliverableController::class, 'assignerResume']); // Assigner resumes deliverable
     Route::get('/deliverables/{deliverable}/timer', [DeliverableController::class, 'timer']); // Get live timer state
     Route::get('/deliverables/{deliverable}/timer-sessions', [DeliverableController::class, 'timerSessions']); // Get pause session history
 

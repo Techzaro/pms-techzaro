@@ -12,10 +12,13 @@ use App\Models\Notification;
 use App\Models\Project;
 use App\Models\SubmissionAttachment;
 use App\Models\Task;
+use App\Models\TaskComment;
+use App\Models\TaskDelegation;
 use App\Models\User;
 use App\Services\ActivityService;
 use App\Services\AuditService;
 use App\Services\NotificationService;
+use App\Services\DelegationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,7 +39,8 @@ class DeliverableController extends Controller
     public function __construct(
         private NotificationService $notificationService,
         private ActivityService $activityService,
-        private AuditService $auditService
+        private AuditService $auditService,
+        private DelegationService $delegationService
     ) {}
 
     /**
@@ -195,8 +199,8 @@ class DeliverableController extends Controller
         $deliverable->load([
             'project:id,title', 'assignee:id,name,email,role', 'creator:id,name,email',
             'task:id,title,assigned_by', 'task.assigner:id,name,email',
-            'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
-            'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
+            'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments', 'approvedBy:id,name', 'reopenedBy:id,name'])->latest(),
+            'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments', 'approvedBy:id,name', 'reopenedBy:id,name']),
             'workflowEvents' => fn ($q) => $q->with('user:id,name,email'),
             'approvedBy:id,name', 'rejectedBy:id,name', 'reopenedBy:id,name',
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
@@ -644,6 +648,11 @@ class DeliverableController extends Controller
         if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
+
+        if (in_array($deliverable->status, ['approved', 'submitted'])) {
+            return response()->json(['success' => false, 'message' => 'Cannot delete a subtask that is ' . $deliverable->status], 422);
+        }
+
         $deliverable->delete();
 
         try {
@@ -678,9 +687,10 @@ class DeliverableController extends Controller
     {
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
+        $isCurrentOwner = $this->delegationService->isCurrentOwnerDeliverable($deliverable, $user);
         $isAuthorizedRole = in_array($user->role, ['admin', 'manager', 'team_lead']);
-        if (! $isAssignee && ! $isAuthorizedRole) {
-            return response()->json(['success' => false, 'message' => 'Only the assignee or authorized roles can submit this deliverable'], 403);
+        if (! $isAssignee && ! $isCurrentOwner && ! $isAuthorizedRole) {
+            return response()->json(['success' => false, 'message' => 'Only the assignee or current owner can submit this deliverable'], 403);
         }
         if (! in_array($deliverable->status, ['pending', 'rejected', 'reopened', 'rework_required'])) {
             return response()->json(['success' => false, 'message' => 'This deliverable cannot be submitted in its current status'], 422);
@@ -703,6 +713,8 @@ class DeliverableController extends Controller
         $submission = DeliverableSubmission::create([
             'deliverable_id' => $deliverable->id, 'submitted_by' => $user->id,
             'comment' => $validated['comment'] ?? null, 'file_path' => $filePath, 'file_name' => $fileName,
+            'version_number' => ($deliverable->submission_count ?? 0) + 1,
+            'status' => 'pending',
         ]);
 
         if ($request->hasFile('files')) {
@@ -740,7 +752,11 @@ class DeliverableController extends Controller
                 $updateData[$f] = null;
             }
         }
+        $deliverable->stopTimer();
         $deliverable->update($updateData);
+
+        // Increment submission count
+        $deliverable->increment('submission_count');
 
         DeliverableWorkflowEvent::create([
             'deliverable_id' => $deliverable->id, 'user_id' => $user->id,
@@ -811,7 +827,10 @@ class DeliverableController extends Controller
     {
         $user = $request->user();
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
-        if (! $isCreator && ! in_array($user->role, ['admin', 'manager', 'team_lead'])) {
+        $isDelegationChain = $this->delegationService->isInDeliverableDelegationChain($deliverable, $user);
+        $nextApprover = $this->delegationService->getDeliverableApprover($deliverable);
+        $isNextApprover = $nextApprover && (int) $nextApprover === (int) $user->id;
+        if (! $isCreator && ! in_array($user->role, ['admin', 'manager', 'team_lead']) && ! $isDelegationChain && ! $isNextApprover) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         if ($deliverable->status !== 'submitted') {
@@ -819,6 +838,16 @@ class DeliverableController extends Controller
         }
 
         $deliverable->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id, 'updated_by' => $user->id]);
+
+        // Mark the latest submission as approved
+        $latestSubmission = DeliverableSubmission::where('deliverable_id', $deliverable->id)->latest()->first();
+        if ($latestSubmission) {
+            $latestSubmission->update([
+                'status' => 'approved',
+                'approved_by' => $user->id,
+                'approved_at' => now(),
+            ]);
+        }
 
         DeliverableWorkflowEvent::create(['deliverable_id' => $deliverable->id, 'event_type' => 'approval', 'user_id' => $user->id]);
 
@@ -961,16 +990,20 @@ class DeliverableController extends Controller
     {
         $user = $request->user();
         $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
-        if (! $isCreator && ! in_array($user->role, ['admin', 'manager', 'team_lead'])) {
+        $isDelegationChain = $this->delegationService->isInDeliverableDelegationChain($deliverable, $user);
+        if (! $isCreator && ! in_array($user->role, ['admin', 'manager', 'team_lead']) && ! $isDelegationChain) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
-        if ($deliverable->status !== 'submitted') {
-            return response()->json(['success' => false, 'message' => 'Can only reopen submitted deliverables'], 422);
+        if (! in_array($deliverable->status, ['submitted', 'approved'])) {
+            return response()->json(['success' => false, 'message' => 'Can only reopen submitted or approved deliverables'], 422);
         }
 
         $validated = $request->validate([
-            'comment' => 'nullable|string|max:2000', 'instructions' => 'nullable|string|max:2000',
-            'new_deadline' => 'nullable|date', 'file' => 'nullable|file|max:51200',
+            'reopen_reason' => 'required|string|max:500',
+            'reopen_reason_detail' => 'nullable|string|max:2000',
+            'instructions' => 'nullable|string|max:2000',
+            'new_deadline' => 'nullable|date',
+            'file' => 'nullable|file|max:51200',
         ]);
 
         $filePath = $fileName = null;
@@ -980,9 +1013,20 @@ class DeliverableController extends Controller
             $filePath = $file->store('deliverable-reopen/'.$deliverable->id, 'public');
         }
 
+        $reopenReason = $validated['reopen_reason'] === 'Other'
+            ? ($validated['reopen_reason_detail'] ?? 'Other')
+            : $validated['reopen_reason'];
+
+        $reopenComment = $reopenReason;
+        if (! empty($validated['reopen_reason_detail']) && $validated['reopen_reason'] !== 'Other') {
+            $reopenComment .= ': '.$validated['reopen_reason_detail'];
+        }
+
         $updateData = [
             'status' => 'reopened', 'reopened_at' => now(), 'reopened_by' => $user->id,
-            'reopen_comment' => $validated['comment'] ?? null, 'reopen_instructions' => $validated['instructions'] ?? null,
+            'reopen_comment' => $reopenComment,
+            'reopen_reason' => $validated['reopen_reason'],
+            'reopen_instructions' => $validated['instructions'] ?? null,
             'updated_by' => $user->id,
         ];
         if (! empty($validated['new_deadline'])) {
@@ -995,17 +1039,49 @@ class DeliverableController extends Controller
 
         $deliverable->update($updateData);
 
+        // Increment reopen count
+        $deliverable->increment('reopen_count');
+
+        // Update latest submission if reopening from approved
+        if ($deliverable->submitted_at) {
+            $latestSubmission = DeliverableSubmission::where('deliverable_id', $deliverable->id)->latest()->first();
+            if ($latestSubmission && $latestSubmission->status !== 'reopened') {
+                $latestSubmission->update([
+                    'status' => 'reopened',
+                    'reopened_by' => $user->id,
+                    'reopened_at' => now(),
+                    'reopen_reason' => $reopenComment,
+                ]);
+            }
+        }
+
         DeliverableWorkflowEvent::create([
             'deliverable_id' => $deliverable->id, 'event_type' => 'reopened', 'user_id' => $user->id,
-            'comment' => $validated['comment'] ?? null, 'instructions' => $validated['instructions'] ?? null,
+            'comment' => $reopenComment, 'instructions' => $validated['instructions'] ?? null,
             'new_deadline' => $validated['new_deadline'] ?? null, 'file_path' => $filePath, 'file_name' => $fileName,
         ]);
 
+        // Add system comment to task discussion
+        $reopenReasonText = $validated['reopen_reason'];
+        if (! empty($validated['reopen_reason_detail']) && $validated['reopen_reason'] !== 'Other') {
+            $reopenReasonText .= ': '.$validated['reopen_reason_detail'];
+        }
+        $systemComment = $user->name.' reopened this subtask. Reason: '.$reopenReasonText;
+        if (! empty($validated['instructions'])) {
+            $systemComment .= ' Instructions: '.$validated['instructions'];
+        }
+
+        // Add comment to parent task if it exists
+        if ($deliverable->task_id) {
+            TaskComment::create([
+                'task_id' => $deliverable->task_id,
+                'user_id' => $user->id,
+                'body' => $systemComment,
+            ]);
+        }
+
         if ($deliverable->assigned_to) {
-            $msg = 'Your deliverable "'.$deliverable->title.'" has been reopened for revision.';
-            if (! empty($validated['comment'])) {
-                $msg .= ' Comment: '.$validated['comment'];
-            }
+            $msg = 'Your subtask "'.$deliverable->title.'" has been reopened. Reason: '.$reopenReasonText;
             if (! empty($validated['instructions'])) {
                 $msg .= ' Instructions: '.$validated['instructions'];
             }
@@ -1015,7 +1091,7 @@ class DeliverableController extends Controller
                 'deliverable_reopened',
                 'deliverable',
                 $deliverable->id,
-                'Deliverable Reopened',
+                'Subtask Reopened',
                 $msg,
                 '/deliveries?selectedDeliverable='.$deliverable->id
             );
@@ -1027,18 +1103,19 @@ class DeliverableController extends Controller
             'Task' => $deliverable->task?->title ?? 'N/A',
             'Subtask ID' => $deliverable->business_id,
             'Assigned To' => $deliverable->assignee?->name ?? 'N/A',
+            'Reason' => $reopenReasonText,
             'Instructions' => $validated['instructions'] ?? 'N/A',
         ]);
 
         // Log activity
-        $this->activityService->log($user->id, 'deliverable_reopened', 'You reopened deliverable "'.$deliverable->title.'" for revision', 'deliverable', $deliverable->id);
+        $this->activityService->log($user->id, 'deliverable_reopened', 'You reopened subtask "'.$deliverable->title.'". Reason: '.$reopenReasonText, 'deliverable', $deliverable->id);
         $this->clearDashboardCache($user->id);
 
         try {
             $this->auditService->log(
                 module: 'deliverable_management',
                 action: 'reopen',
-                description: "Reopened deliverable {$deliverable->title}",
+                description: "Reopened subtask {$deliverable->title}. Reason: {$reopenReasonText}",
                 user: $user,
                 entityType: 'Deliverable',
                 entityId: $deliverable->id,
@@ -1050,8 +1127,10 @@ class DeliverableController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Deliverable reopened successfully',
-            'deliverable' => $deliverable->fresh()->load(['assignee:id,name,email,role', 'creator:id,name', 'reopenedBy:id,name']),
+            'message' => 'Subtask reopened successfully',
+            'deliverable' => $deliverable->fresh()->load(['assignee:id,name,email,role', 'creator:id,name', 'reopenedBy:id,name',
+                'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'approvedBy:id,name', 'reopenedBy:id,name'])->latest(),
+            ]),
         ]);
     }
 
@@ -1332,7 +1411,7 @@ class DeliverableController extends Controller
         ]);
 
         $deliverable->pauseTimer($validated['reason'] ?? null, $validated['reason_detail'] ?? null, false, $user->id);
-        $deliverable->update(['paused_by' => $user->id, 'paused_at' => now(), 'updated_by' => $user->id]);
+        $deliverable->update(['status' => 'paused', 'paused_by' => $user->id, 'paused_at' => now(), 'updated_by' => $user->id]);
 
         DeliverableWorkflowEvent::create([
             'deliverable_id' => $deliverable->id,
@@ -1363,7 +1442,7 @@ class DeliverableController extends Controller
         }
 
         $deliverable->resumeTimer($user->id);
-        $deliverable->update(['updated_by' => $user->id]);
+        $deliverable->update(['status' => 'in_progress', 'updated_by' => $user->id]);
 
         DeliverableWorkflowEvent::create([
             'deliverable_id' => $deliverable->id,
@@ -1375,6 +1454,84 @@ class DeliverableController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Timer resumed',
+            'deliverable' => $deliverable->fresh(),
+        ]);
+    }
+
+    /**
+     * Pause a deliverable as the assigner (creator/admin/manager).
+     * Locks the assignee from resuming work.
+     */
+    public function assignerPause(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
+        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Only the assigner can pause this deliverable'], 403);
+        }
+
+        $updateData = [
+            'assigner_paused' => true,
+            'assigner_paused_at' => now(),
+            'assigner_paused_by' => $user->id,
+            'updated_by' => $user->id,
+        ];
+
+        if ($deliverable->timer_state === 'running') {
+            $deliverable->pauseTimer('Other', null, false, $user->id);
+            $updateData['paused_by'] = $user->id;
+            $updateData['paused_at'] = now();
+        }
+
+        $deliverable->update($updateData);
+
+        DeliverableWorkflowEvent::create([
+            'deliverable_id' => $deliverable->id,
+            'user_id' => $user->id,
+            'event_type' => 'assigner_paused',
+            'comment' => 'Assigner paused the deliverable',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Deliverable paused by assigner',
+            'deliverable' => $deliverable->fresh(),
+        ]);
+    }
+
+    /**
+     * Resume a deliverable as the assigner (creator/admin/manager).
+     * Unlocks the assignee to resume work.
+     */
+    public function assignerResume(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
+        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Only the assigner can resume this deliverable'], 403);
+        }
+
+        $deliverable->update([
+            'assigner_paused' => false,
+            'assigner_paused_at' => null,
+            'assigner_paused_by' => null,
+            'updated_by' => $user->id,
+        ]);
+
+        if ($deliverable->timer_state === 'paused') {
+            $deliverable->resumeTimer($user->id);
+        }
+
+        DeliverableWorkflowEvent::create([
+            'deliverable_id' => $deliverable->id,
+            'user_id' => $user->id,
+            'event_type' => 'assigner_resumed',
+            'comment' => 'Assigner resumed the deliverable',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Deliverable resumed by assigner',
             'deliverable' => $deliverable->fresh(),
         ]);
     }
@@ -1841,5 +1998,191 @@ class DeliverableController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * Delegate a deliverable to another user.
+     *
+     * @param Request $request Input: delegated_to, reason, reason_detail, notes
+     * @param Deliverable $deliverable The deliverable to delegate.
+     * @return JsonResponse JSON response with the delegation record.
+     */
+    public function delegate(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+        $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
+        $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
+        $isCurrentOwner = $this->delegationService->isCurrentOwnerDeliverable($deliverable, $user);
+
+        if (!$isCreator && !$isAssignee && !$isCurrentOwner && !in_array($user->role, ['admin', 'manager', 'team_lead'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        if (in_array($deliverable->status, ['approved', 'rejected'])) {
+            return response()->json(['success' => false, 'message' => 'Cannot delegate a deliverable that is already approved or rejected'], 422);
+        }
+
+        $validated = $request->validate([
+            'delegated_to' => 'required|exists:users,id',
+            'reason' => 'required|string|max:500',
+            'reason_detail' => 'nullable|string|max:2000',
+            'notes' => 'nullable|string|max:2000',
+            'return_to_transferor' => 'nullable|boolean',
+        ]);
+
+        if ((int) $validated['delegated_to'] === (int) $user->id) {
+            return response()->json(['success' => false, 'message' => 'Cannot delegate a deliverable to yourself'], 422);
+        }
+
+        $delegatedTo = User::find($validated['delegated_to']);
+
+        try {
+            $delegation = $this->delegationService->delegateDeliverable(
+                $deliverable,
+                $user,
+                $delegatedTo,
+                $validated['reason'],
+                $validated['reason_detail'] ?? null,
+                $validated['notes'] ?? null,
+                $validated['return_to_transferor'] ?? true
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Deliverable delegated successfully',
+                'delegation' => $delegation->load(['delegatedBy:id,name,email,role', 'delegatedTo:id,name,email,role']),
+                'deliverable' => $deliverable->fresh()->load([
+                    'assignee:id,name,email,role', 'creator:id,name,role',
+                    'currentOwner:id,name,email,role',
+                    'delegations' => fn ($q) => $q->with(['delegatedBy:id,name,role', 'delegatedTo:id,name,role'])->latest(),
+                    'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
+                    'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
+                    'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
+                    'approvedBy:id,name', 'rejectedBy:id,name', 'reopenedBy:id,name',
+                ]),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Accept a pending delegation on a deliverable.
+     *
+     * @param Deliverable $deliverable The deliverable.
+     * @return JsonResponse JSON response with the updated delegation.
+     */
+    public function acceptDelegation(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+
+        $delegation = TaskDelegation::where('deliverable_id', $deliverable->id)
+            ->where('delegated_to', $user->id)
+            ->where('status', 'pending')
+            ->latest()
+            ->first();
+
+        if (!$delegation) {
+            return response()->json(['success' => false, 'message' => 'No pending delegation found for you'], 404);
+        }
+
+        try {
+            $delegation = $this->delegationService->acceptDelegation($delegation, $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Delegation accepted',
+                'delegation' => $delegation->load(['delegatedBy:id,name,email,role', 'delegatedTo:id,name,email,role']),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+
+    /**
+     * Reject a pending delegation on a deliverable.
+     *
+     * @param Deliverable $deliverable The deliverable.
+     * @return JsonResponse JSON response with the updated delegation.
+     */
+    public function rejectDelegation(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:2000',
+        ]);
+
+        $delegation = TaskDelegation::where('deliverable_id', $deliverable->id)
+            ->where('delegated_to', $user->id)
+            ->where('status', 'pending')
+            ->latest()
+            ->first();
+
+        if (!$delegation) {
+            return response()->json(['success' => false, 'message' => 'No pending delegation found for you'], 404);
+        }
+
+        try {
+            $delegation = $this->delegationService->rejectDelegation($delegation, $user, $validated['reason'] ?? null);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Delegation rejected',
+                'delegation' => $delegation->load(['delegatedBy:id,name,email,role', 'delegatedTo:id,name,email,role']),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+
+    /**
+     * Revoke a delegation on a deliverable.
+     *
+     * @param Deliverable $deliverable The deliverable.
+     * @return JsonResponse JSON response with the updated delegation.
+     */
+    public function revokeDelegation(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'delegation_id' => 'required|exists:task_delegations,id',
+        ]);
+
+        $delegation = TaskDelegation::findOrFail($validated['delegation_id']);
+
+        if ((int) $delegation->deliverable_id !== (int) $deliverable->id) {
+            return response()->json(['success' => false, 'message' => 'Delegation does not belong to this deliverable'], 422);
+        }
+
+        try {
+            $delegation = $this->delegationService->revokeDelegation($delegation, $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Delegation revoked',
+                'delegation' => $delegation->load(['delegatedBy:id,name,email,role', 'delegatedTo:id,name,email,role']),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+
+    /**
+     * Get delegation chain details for a deliverable.
+     *
+     * @param Deliverable $deliverable The deliverable.
+     * @return JsonResponse JSON response with the delegation chain.
+     */
+    public function delegationChain(Deliverable $deliverable)
+    {
+        $chain = $this->delegationService->getDeliverableChainDetails($deliverable);
+
+        return response()->json([
+            'success' => true,
+            'chain' => $chain,
+            'approval_chain' => $deliverable->approval_chain ?? [],
+        ]);
     }
 }

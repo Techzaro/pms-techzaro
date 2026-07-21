@@ -401,14 +401,8 @@ function AllDeliveries() {
                             <IoEyeOutline size={20} />
                           </button>
                         }
+                        onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { deliverableIds: deliverableIdList, from: 'all-deliverables', readOnly: true } })}
                       >
-                        <button
-                          className="action-icon-btn action-view"
-                          title="View Subtask"
-                          onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { deliverableIds: deliverableIdList, from: 'all-deliverables', readOnly: true } })}
-                        >
-                          <IoEyeOutline size={16} />
-                        </button>
                         <button
                           className="action-icon-btn action-note"
                           title="Add Note"

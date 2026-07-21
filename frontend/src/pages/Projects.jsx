@@ -20,13 +20,16 @@ import EditProjectModal from "../components/EditProjectModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import { StickyNote } from "lucide-react";
+import { StickyNote, Trash2 } from "lucide-react";
 import ActionPopover from "../components/ActionPopover";
-import AddNoteModal from "../components/AddNoteModal";
+import ConfirmModal from "../components/ConfirmModal";
 
 import { GoDotFill } from "react-icons/go";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath, getUser } from "../utils/auth";
+import { publish } from "../utils/eventBus";
+import { useNotification } from "../context/NotificationContext";
+import { showSuccessMessage } from "../utils/notify";
 import "./Projects.css";
 import "../components/ActionPopover.css";
 import { formatDateTime, formatDateTimeInline } from "../utils/formatDateTime";
@@ -77,6 +80,7 @@ const STATUS_TEXT_COLORS = {
 function Projects() {
   const navigate = useNavigate();
   const location = useLocation();
+  const notify = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -86,6 +90,8 @@ function Projects() {
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get("filter") === "active" ? "active" : "");
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [expandedDesc, setExpandedDesc] = useState({});
   const [overflowDetected, setOverflowDetected] = useState({});
   const descEls = useRef({});
@@ -94,7 +100,6 @@ function Projects() {
   const [viewMode, setViewMode] = useState("card");
   const [orderedProjects, setOrderedProjects] = useState([]);
   const [restoreDraftId, setRestoreDraftId] = useState(null);
-  const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
@@ -185,6 +190,35 @@ function Projects() {
   useAutoRefresh(fetchProjects, {
     events: ['project:created', 'project:updated', 'project:deleted', 'data:changed'],
   });
+
+  const handleDeleteProject = (project) => {
+    setDeleteTarget(project);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteProject = async () => {
+    const project = deleteTarget;
+    setDeleteConfirmOpen(false);
+    setDeleteTarget(null);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/projects/${project.id}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+      });
+      if (res.ok) {
+        setProjects((prev) => prev.filter((p) => p.id !== project.id));
+        publish('project:deleted', { id: project.id });
+        publish('data:changed', { type: 'project', action: 'deleted' });
+        showSuccessMessage("Project", "deleted");
+      } else {
+        const data = await res.json();
+        notify.error(data.message || "Failed to delete project.");
+      }
+    } catch {
+      notify.error("Failed to delete project.");
+    }
+  };
 
   useEffect(() => {
     const nextFilter = searchParams.get("filter") === "active" ? "active" : "";
@@ -535,20 +569,16 @@ function Projects() {
                       </div>
 
                       <div className="project-card-actions-right">
-                        <button
-                          className="action-icon-btn action-view"
-                          title="View Project"
-                          style={{ width: 38, height: 38 }}
-                          onClick={() => { sessionStorage.setItem('projectIds', JSON.stringify(filteredProjects.map(p => p.id))); navigate(rolePath(`projects/project-details/${project.id}`)); }}
+                        <ActionPopover
+                          trigger={
+                            <button className="action-icon-btn action-view action-trigger-lg" title="Actions" style={{ width: 38, height: 38 }}>
+                              <IoEyeOutline size={26} />
+                            </button>
+                          }
+                          onTriggerClick={() => { sessionStorage.setItem('projectIds', JSON.stringify(filteredProjects.map(p => p.id))); navigate(rolePath(`projects/project-details/${project.id}`)); }}
                         >
-                          <IoEyeOutline size={26} />
-                        </button>
-                        {isAdminOrManager && (
-                          <button
-                            className="action-icon-btn action-view"
-                            title="Edit Project"
-                            style={{ width: 38, height: 38 }}
-                            onClick={async () => {
+                          {isAdminOrManager && (
+                            <button className="action-icon-btn action-edit" title="Edit Project" onClick={async () => {
                               try {
                                 const token = authToken();
                                 const res = await fetch(`${API_URL}/projects/${project.id}`, {
@@ -564,11 +594,16 @@ function Projects() {
                                 setEditingProject(project);
                               }
                               setShowEditModal(true);
-                            }}
-                          >
-                            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                          </button>
-                        )}
+                            }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                            </button>
+                          )}
+                          {isAdminOrManager && (
+                            <button className="action-icon-btn action-delete" title="Delete Project" onClick={() => handleDeleteProject(project)}>
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </ActionPopover>
                        </div>
                     </div>
                   </div>
@@ -657,10 +692,8 @@ function Projects() {
                             <IoEyeOutline size={20} />
                           </button>
                         }
+                        onTriggerClick={() => { sessionStorage.setItem('projectIds', JSON.stringify(filteredProjects.map(p => p.id))); navigate(rolePath(`projects/project-details/${project.id}`)); }}
                       >
-                        <button className="action-icon-btn action-view" title="View Project" onClick={() => { sessionStorage.setItem('projectIds', JSON.stringify(filteredProjects.map(p => p.id))); navigate(rolePath(`projects/project-details/${project.id}`)); }}>
-                          <IoEyeOutline size={16} />
-                        </button>
                         {isAdminOrManager && (
                           <button className="action-icon-btn action-edit" title="Edit Project" onClick={async () => {
                             try {
@@ -682,9 +715,11 @@ function Projects() {
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                           </button>
                         )}
-                        <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: project.id })}>
-                          <StickyNote size={16} />
-                        </button>
+                        {isAdminOrManager && (
+                          <button className="action-icon-btn action-delete" title="Delete Project" onClick={() => handleDeleteProject(project)}>
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </ActionPopover>
                     </div>
                   </div>
@@ -724,12 +759,15 @@ function Projects() {
         />
       )}
 
-      <AddNoteModal
-        isOpen={noteModal.open}
-        onClose={() => setNoteModal({ open: false, itemId: null })}
-        itemType="task"
-        itemId={noteModal.itemId}
-        onSaved={fetchProjects}
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        onClose={() => { setDeleteConfirmOpen(false); setDeleteTarget(null); }}
+        onConfirm={confirmDeleteProject}
+        title="Delete Project"
+        message={`Are you sure you want to delete "${deleteTarget?.title || ""}"? This will permanently delete the project and all its data. This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger
       />
     </DashboardLayout>
   );

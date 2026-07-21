@@ -589,6 +589,26 @@
   font-size: 18px;
 }
 
+.action-icon-btn.action-edit {
+  background: #DBEAFE;
+  color: #2563EB;
+}
+
+.action-icon-btn.action-edit:hover {
+  background: #2563EB;
+  color: white;
+}
+
+.action-icon-btn.action-delete {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+
+.action-icon-btn.action-delete:hover {
+  background: #DC2626;
+  color: white;
+}
+
 .Subtask { color: #8B5CF6; }
 .Delivered { color: #22C55E; }
 

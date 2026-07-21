@@ -11,12 +11,17 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useLocation, useNavigate, Link } from "react-router-dom";
-import { BarChart3, Calendar, Check, CheckCircle2, ChevronRight, Copy, FolderOpen, Pause, Play, Timer } from "lucide-react";
+import { BarChart3, Calendar, Check, CheckCircle2, ChevronRight, Copy, FolderOpen, Lock, Pause, Pencil, Play, Timer, Trash2 } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
+import PauseReasonModal from "../components/PauseReasonModal";
+import ReopenDialog from "../components/ReopenDialog";
+import TransferTaskDialog from "../components/TransferTaskDialog";
+import DelegationChain from "../components/DelegationChain";
 import TaskDiscussion from "../components/TaskDiscussion";
 import FileUploadSection from "../components/FileUploadSection";
+import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { publish } from "../utils/eventBus";
@@ -135,12 +140,19 @@ function SubtaskDetails() {
   const { submitting: acknowledging, run: runAcknowledge } = useSubmit();
   const { submitting: pausing, run: runPause } = useSubmit();
   const { submitting: resuming, run: runResume } = useSubmit();
+  const [assignerPauseModalOpen, setAssignerPauseModalOpen] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const { submitting: assignerPausing, run: runAssignerPause } = useSubmit();
+  const { submitting: assignerResuming, run: runAssignerResume } = useSubmit();
+  const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
+  const [transferDialog, setTransferDialog] = useState(false);
 
   const [notes, setNotes] = useState([]);
   const [noteInput, setNoteInput] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteDeleteOpen, setNoteDeleteOpen] = useState(false);
   const [pendingNoteId, setPendingNoteId] = useState(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [files, setFiles] = useState([]);
 
   const currentUser = getUser();
@@ -270,14 +282,15 @@ function SubtaskDetails() {
     });
   };
 
-  const handleReopen = async () => {
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/deliverables/${subtaskId}/reopen`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ comment: "Reopened for revision" }), _notifHandled: true });
-      const data = await res.json();
-      if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "reopened"); fetchSubtask(); }
-      else { notify.error(data.message || "Failed to reopen"); }
-    } catch { notify.error("An error occurred"); }
+  const handleReopen = () => {
+    setReopenDialogOpen(true);
+  };
+
+  const handleReopenSuccess = (updatedSubtask) => {
+    publish('deliverable:updated', updatedSubtask);
+    publish('data:changed', { type: 'deliverable', action: 'updated' });
+    showSuccessMessage("Subtask", "reopened");
+    fetchSubtask();
   };
 
   const handleAcknowledge = async () => {
@@ -313,6 +326,55 @@ function SubtaskDetails() {
         if (res.ok) { publish('deliverable:updated', data.deliverable || data); publish('data:changed', { type: 'deliverable', action: 'updated' }); showSuccessMessage("Subtask", "resumed"); fetchSubtask(); }
         else { notify.error(data.message || "Failed to resume"); }
       } catch { notify.error("An error occurred"); }
+    });
+  };
+
+  const handleAssignerPause = async ({ reason, reason_detail }) => {
+    await runAssignerPause(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/deliverables/${subtaskId}/assigner-pause`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ reason: reason_detail || reason }),
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          publish('deliverable:updated', data.deliverable || data);
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          showSuccessMessage("Subtask", "placed on hold");
+          fetchSubtask();
+        } else {
+          notify.error(data.message || "Failed to place subtask on hold.");
+        }
+      } catch {
+        notify.error("Failed to place subtask on hold.");
+      }
+    });
+  };
+
+  const handleAssignerResume = async () => {
+    await runAssignerResume(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/deliverables/${subtaskId}/assigner-resume`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          publish('deliverable:updated', data.deliverable || data);
+          publish('data:changed', { type: 'deliverable', action: 'updated' });
+          showSuccessMessage("Subtask", "resumed by assigner");
+          fetchSubtask();
+        } else {
+          notify.error(data.message || "Failed to resume subtask.");
+        }
+      } catch {
+        notify.error("Failed to resume subtask.");
+      }
     });
   };
 
@@ -352,12 +414,33 @@ function SubtaskDetails() {
     } catch { notify.error("Could not delete note."); }
   };
 
+  const confirmDeleteSubtask = async () => {
+    setDeleteConfirmOpen(false);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${subtask.id}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        showSuccessMessage("Subtask", "deleted");
+        navigate(-1);
+      } else {
+        const data = await res.json();
+        notify.error(data.message || "Failed to delete");
+      }
+    } catch { notify.error("Failed to delete subtask"); }
+  };
+
   if (loading) return <DashboardLayout hideRightSidebar><div className="td-loading">Loading subtask...</div></DashboardLayout>;
   if (!subtask) return <DashboardLayout hideRightSidebar><div className="td-loading td-error">Subtask not found.</div></DashboardLayout>;
 
   const ss = statusBgColor(subtask.status);
   const workflowEvents = subtask.workflow_events || [];
-  const canSubmit = isAssignee && (subtask.status === "pending" || subtask.status === "rejected" || subtask.status === "reopened");
+  const canSubmit = isAssignee && ["pending", "rejected", "reopened", "in_progress", "paused"].includes(subtask.status);
+  const isAssignerLocked = !!subtask.assigner_paused;
+  const canAssignerPause = readOnly ? false : (isCreator && !subtask.assigner_paused && ["pending", "in_progress", "reopened", "paused"].includes(subtask.status));
+  const canAssignerResume = readOnly ? false : (isCreator && subtask.assigner_paused);
   const isApproved = subtask.status === "approved";
   const isSubmitted = subtask.status === "submitted";
   const isRejected = subtask.status === "rejected";
@@ -426,6 +509,67 @@ function SubtaskDetails() {
                     </span>
                   )}
                 </div>
+                <div className="td-title-actions">
+                  {isCreator && !readOnly && !["approved", "submitted"].includes(subtask.status) && (
+                    <>
+                      <button className="td-btn-outline" onClick={() => setShowEditModal(true)}>
+                        <Pencil size={15} strokeWidth={2.5} />
+                        Edit
+                      </button>
+                      <button className="td-btn-danger" onClick={() => setDeleteConfirmOpen(true)}>
+                        <Trash2 size={15} />
+                        Delete
+                      </button>
+                    </>
+                  )}
+                  {!readOnly && isAssignee && !["approved", "rejected"].includes(subtask.status) && (
+                    <button className="td-btn-outline" onClick={() => setTransferDialog(true)}>
+                      Transfer
+                    </button>
+                  )}
+                  {canAssignerPause && (
+                    <button className="td-btn-primary" onClick={() => setAssignerPauseModalOpen(true)} disabled={assignerPausing} style={{ backgroundColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", borderColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", opacity: assignerPausing ? 0.7 : 1, cursor: assignerPausing ? "not-allowed" : "pointer" }}>
+                      <Lock size={15} />
+                      {assignerPausing ? "Pausing..." : "Put On Hold"}
+                    </button>
+                  )}
+                  {canAssignerResume && (
+                    <button className="td-btn-primary" onClick={handleAssignerResume} disabled={assignerResuming} style={{ backgroundColor: assignerResuming ? "var(--text-muted)" : "var(--color-success)", borderColor: assignerResuming ? "var(--text-muted)" : "var(--color-success)", opacity: assignerResuming ? 0.7 : 1, cursor: assignerResuming ? "not-allowed" : "pointer" }}>
+                      <Play size={15} />
+                      {assignerResuming ? "Resuming..." : "Resume"}
+                    </button>
+                  )}
+                  {isAssignerLocked && !isCreator && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "var(--color-warning-bg)", color: "var(--color-warning)", fontSize: "13px", fontWeight: 600, border: "1px solid var(--color-warning)" }}>
+                      <Lock size={14} />
+                      On Hold by Assigner
+                    </span>
+                  )}
+                  {isPending && !readOnly && isAssignee && (
+                    <button className="td-btn-primary" onClick={handleAcknowledge} disabled={acknowledging}>
+                      <CheckCircle2 size={15} />
+                      {acknowledging ? "Acknowledging..." : "Acknowledge"}
+                    </button>
+                  )}
+                  {!readOnly && isAssignee && isInProgress && !isAssignerLocked && (
+                    <button className="td-btn-primary" onClick={handlePause} disabled={pausing} style={{ backgroundColor: pausing ? "#9CA3AF" : "#D97706" }}><Pause size={15} />{pausing ? "Pausing..." : "Pause"}</button>
+                  )}
+                  {!readOnly && isAssignee && subtask.status === "paused" && !isAssignerLocked && (
+                    <button className="td-btn-primary" onClick={handleResume} disabled={resuming}><Play size={15} />{resuming ? "Resuming..." : "Resume"}</button>
+                  )}
+                  {!readOnly && canSubmit && !showSubmitForm && (
+                    <button className="td-btn-primary" onClick={() => setShowSubmitForm(true)}>{isRejected ? "Resubmit" : "Submit"}</button>
+                  )}
+                  {!readOnly && isSubmitted && canApproveReject && (
+                    <>
+                      <button className="td-btn-primary" onClick={handleApprove} disabled={approving} style={{ background: "#166534" }}>{approving ? "Approving..." : "Approve"}</button>
+                      <button className="td-btn-danger" onClick={() => setShowRejectForm(true)}>Decline</button>
+                    </>
+                  )}
+                  {!readOnly && isApproved && canApproveReject && (
+                    <button className="td-btn-outline" onClick={handleReopen}>Reopen</button>
+                  )}
+                </div>
               </div>
 
               {/* Badges */}
@@ -438,6 +582,12 @@ function SubtaskDetails() {
                   <span className="td-badge-dot" style={{ background: priorityColor(subtask.priority) }} />
                   {subtask.priority || "Medium"} Priority
                 </span>
+                {subtask.assigner_paused && (
+                  <span className="td-badge" style={{ background: "var(--color-warning-bg)", color: "var(--color-warning)" }}>
+                    <Lock size={12} />
+                    On Hold by Assigner
+                  </span>
+                )}
               </div>
 
               {/* STATS — matches TaskDetails duo layout */}
@@ -465,51 +615,6 @@ function SubtaskDetails() {
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Timeline History — matches TaskDetails */}
-              {workflowEvents.length > 0 && (
-                <div className="td-card" style={{ marginTop: 16 }}>
-                  <h3 className="td-card-title">Timeline History</h3>
-                  {workflowEvents.slice(0, 3).map((ev) => (
-                    <div key={ev.id} className="td-timeline-item">
-                      <div className="td-timeline-header">
-                        <span className="td-timeline-action">{ev.event_type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
-                        <span className="td-timeline-time">{formatDateTime(ev.created_at)}</span>
-                      </div>
-                      {ev.user && <div className="td-timeline-user">by {ev.user.name}</div>}
-                      {ev.comment && <div className="td-timeline-comment">{ev.comment}</div>}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Workflow Actions */}
-              <div className="td-actions">
-                {isPending && !readOnly && (isAssignee || isAdminManager) && (
-                  <button className="td-btn-primary" onClick={handleAcknowledge} disabled={acknowledging}>
-                    <CheckCircle2 size={15} />
-                    {acknowledging ? "Acknowledging..." : "Acknowledge"}
-                  </button>
-                )}
-                {isInProgress && !readOnly && isAssignee && (
-                  <>
-                    {timerRunning && <button className="td-btn-primary" onClick={handlePause} disabled={pausing} style={{ backgroundColor: pausing ? "#9CA3AF" : "#D97706" }}><Pause size={15} />{pausing ? "Pausing..." : "Pause"}</button>}
-                    {timerPaused && <button className="td-btn-primary" onClick={handleResume} disabled={resuming}><Play size={15} />{resuming ? "Resuming..." : "Resume"}</button>}
-                  </>
-                )}
-                {!readOnly && canSubmit && !showSubmitForm && (
-                  <button className="td-btn-primary" onClick={() => setShowSubmitForm(true)}>{isRejected ? "Resubmit" : "Submit"}</button>
-                )}
-                {!readOnly && isSubmitted && canApproveReject && (
-                  <>
-                    <button className="td-btn-primary" onClick={handleApprove} disabled={approving} style={{ background: "#166534" }}>{approving ? "Approving..." : "Approve"}</button>
-                    <button className="td-btn-danger" onClick={() => setShowRejectForm(true)}>Decline</button>
-                  </>
-                )}
-                {!readOnly && isApproved && canApproveReject && (
-                  <button className="td-btn-outline" onClick={handleReopen}>Reopen</button>
-                )}
               </div>
 
               {/* TAB CONTENT — matches TaskDetails exactly */}
@@ -809,6 +914,110 @@ function SubtaskDetails() {
                 </div>
               )}
 
+              {/* TIMELINE HISTORY — matches TaskDetails sidebar */}
+              {(() => {
+                const historyItems = workflowEvents
+                  .filter((e) => e.event_type !== 'field_changed')
+                  .map((e) => ({
+                    id: `evt-${e.id}`,
+                    action: e.event_type,
+                    user: e.user,
+                    date: e.created_at,
+                    comment: e.comment,
+                  }));
+                const actionLabel = (action) => {
+                  const map = {
+                    submitted: "Submitted",
+                    resubmitted: "Resubmitted",
+                    acknowledged: "Acknowledged",
+                    paused: "Paused",
+                    continued: "Continued",
+                    approved: "Approved",
+                    rejected: "Declined",
+                    reopened: "Reopened",
+                    created: "Created",
+                    assigner_paused: "On Hold",
+                    assigner_resumed: "Resumed",
+                  };
+                  return map[action] || action?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                };
+                if (historyItems.length === 0) return null;
+                return (
+                  <div className="td-card">
+                    <h3 className="td-card-title">Timeline History</h3>
+                    <ul className="td-history-list">
+                      {historyItems.map((item) => (
+                        <li key={item.id} className="td-history-item">
+                          <div className="td-history-header">
+                            <span className={`td-history-badge td-history-badge--${item.action}`}>{actionLabel(item.action)}</span>
+                            <span className="td-history-date">{formatDateTime(item.date)}</span>
+                          </div>
+                          <div className="td-history-meta">
+                            by {item.user?.name || "Unknown"}
+                          </div>
+                          {item.comment && <p className="td-submission-text">{item.comment}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
+
+              {/* DELEGATION CHAIN */}
+              <DelegationChain
+                task={subtask}
+                delegationChain={subtask?.delegation_chain || []}
+                approvalChain={subtask?.approval_chain || []}
+                onTaskUpdate={fetchSubtask}
+              />
+
+              {/* SUBMISSION HISTORY */}
+              {(subtask.submissions || []).length > 0 && (
+                <div className="td-card">
+                  <h3 className="td-card-title">Submission History</h3>
+                  {(subtask.submissions || []).map((sub, idx) => (
+                    <div key={sub.id} style={{
+                      padding: "10px 0",
+                      borderBottom: idx < (subtask.submissions || []).length - 1 ? "1px solid var(--border)" : "none",
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                        <span style={{ fontWeight: 600, fontSize: "13px" }}>
+                          Submission #{sub.version_number || ((subtask.submissions || []).length - idx)}
+                        </span>
+                        <span className="badge" style={{
+                          background: sub.status === "approved" ? "var(--color-success-bg)" : sub.status === "reopened" ? "var(--color-warning-bg)" : "var(--color-blue-bg)",
+                          color: sub.status === "approved" ? "var(--color-success)" : sub.status === "reopened" ? "var(--color-warning)" : "var(--color-blue)",
+                          fontSize: "11px", padding: "2px 8px", borderRadius: "12px", fontWeight: 600,
+                        }}>
+                          {sub.status === "approved" ? "Approved" : sub.status === "reopened" ? "Reopened" : "Pending"}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+                        <span>By: {sub.submitted_by?.name || sub.submittedBy?.name || "Unknown"}</span>
+                        <span style={{ marginLeft: 12 }}>On: {formatDateTime(sub.created_at)}</span>
+                      </div>
+                      {sub.reopen_reason && (
+                        <p style={{ fontSize: "12px", color: "var(--color-warning)", marginTop: "4px" }}>
+                          Reason: {sub.reopen_reason}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* REOPEN COUNT */}
+              {(subtask.reopen_count > 0 || workflowEvents.filter(e => e.event_type === 'reopened').length > 0) && (
+                <div className="td-card" style={{ padding: "12px 16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Reopen Count</span>
+                    <span style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-warning)" }}>
+                      {subtask.reopen_count || workflowEvents.filter(e => e.event_type === 'reopened').length}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* PERFORMANCE DASHBOARD */}
               {isApproved && (
                 <div className="td-card">
@@ -960,6 +1169,44 @@ function SubtaskDetails() {
         onConfirm={() => { deleteNote(pendingNoteId); setNoteDeleteOpen(false); setPendingNoteId(null); }}
         title="Delete Note"
         message="Are you sure you want to delete this note? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger
+      />
+      <PauseReasonModal
+        isOpen={assignerPauseModalOpen}
+        onClose={() => setAssignerPauseModalOpen(false)}
+        onConfirm={async (data) => { await handleAssignerPause(data); setAssignerPauseModalOpen(false); }}
+        isAssigner
+      />
+      <ReopenDialog
+        isOpen={reopenDialogOpen}
+        onClose={() => setReopenDialogOpen(false)}
+        subtask={subtask}
+        onReopenSuccess={handleReopenSuccess}
+      />
+      <TransferTaskDialog
+        isOpen={transferDialog}
+        onClose={() => setTransferDialog(false)}
+        task={subtask}
+        entityType="deliverable"
+        onTransferSuccess={(updated) => { setSubtask(updated); }}
+      />
+      {showEditModal && (
+        <CreateDeliverableModel
+          onClose={(refresh) => { setShowEditModal(false); if (refresh) fetchSubtask(); }}
+          projectId={subtask?.project_id}
+          taskId={subtask?.task_id}
+          editMode={true}
+          editData={subtask}
+        />
+      )}
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={confirmDeleteSubtask}
+        title="Delete Subtask"
+        message="Are you sure you want to delete this subtask? This action cannot be undone."
         confirmText="Delete"
         cancelText="Cancel"
         danger

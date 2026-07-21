@@ -42,6 +42,9 @@ class Task extends Model
         'reopen_new_deadline',
         'reopen_file_path',
         'reopen_file_name',
+        'reopen_count',
+        'reopen_reason',
+        'submission_count',
         'acknowledged_at',
         'acknowledged_by',
         'paused_at',
@@ -63,6 +66,11 @@ class Task extends Model
         'recurrence_settings',
         'recurrence_status',
         'deliverables_generated',
+        'current_owner',
+        'original_assigner',
+        'delegation_chain',
+        'approval_chain',
+        'delegation_count',
     ];
 
     protected static function booted(): void
@@ -99,6 +107,8 @@ class Task extends Model
         'reopen_new_deadline' => 'datetime:Y-m-d\TH:i:s',
         'recurrence_settings' => 'array',
         'deliverables_generated' => 'integer',
+        'reopen_count' => 'integer',
+        'submission_count' => 'integer',
         'assigner_paused' => 'boolean',
         'total_work_seconds' => 'integer',
         'elapsed_seconds' => 'integer',
@@ -108,6 +118,9 @@ class Task extends Model
         'work_started_at' => 'datetime:Y-m-d\TH:i:s',
         'last_timer_event_at' => 'datetime:Y-m-d\TH:i:s',
         'work_completed_at' => 'datetime:Y-m-d\TH:i:s',
+        'delegation_chain' => 'array',
+        'approval_chain' => 'array',
+        'delegation_count' => 'integer',
     ];
 
     /** Apply filters for querying tasks. */
@@ -271,6 +284,36 @@ class Task extends Model
     public function pauseSessions()
     {
         return $this->hasMany(TaskPauseSession::class)->orderBy('paused_at');
+    }
+
+    /** All delegations for this task. */
+    public function delegations()
+    {
+        return $this->hasMany(TaskDelegation::class)->latest();
+    }
+
+    /** The user who currently owns (is responsible for) this task. */
+    public function currentOwner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'current_owner');
+    }
+
+    /** The user who originally assigned this task. */
+    public function originalAssigner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'original_assigner');
+    }
+
+    /** Get the pending delegation chain for this task. */
+    public function pendingDelegations()
+    {
+        return $this->hasMany(TaskDelegation::class)->where('status', 'pending')->latest();
+    }
+
+    /** Get the latest delegation for this task. */
+    public function latestDelegation()
+    {
+        return $this->hasOne(TaskDelegation::class)->latestOfMany();
     }
 
     /** Start the work timer. */

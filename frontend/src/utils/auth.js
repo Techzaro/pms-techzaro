@@ -6,15 +6,14 @@
  * - Per-tab identity (sessionStorage): currentRole + sessionId
  * - Per-role sessions (localStorage): sessions_{role} = { sessionId: {token, user}, ... }
  *
- * This allows up to 3 tabs per access role simultaneously.
  * Each tab claims a unique sessionId within its role's session pool.
+ * Unlimited tabs per role are allowed.
  *
  * Migration: old tabs that have currentRole but no sessionId are automatically
  * migrated into the session pool on first use.
  */
 
 const ROLES = ["admin", "manager", "team_lead", "member", "guest"];
-const MAX_SESSIONS_PER_ROLE = 3;
 
 /* ───── session ID generation ───── */
 
@@ -41,7 +40,6 @@ function _setSessions(role, sessions) {
 /**
  * Attempts to migrate a legacy tab (has currentRole but no sessionId)
  * into the session pool. Returns true if migration succeeded or wasn't needed.
- * Returns false if max tabs reached and migration failed.
  */
 function _migrateIfNeeded() {
   const role = getCurrentRole();
@@ -49,7 +47,6 @@ function _migrateIfNeeded() {
   if (!role) return true;
   if (sid) return true;
 
-  // Has role but no sessionId — try to migrate from legacy storage
   const legacyToken = localStorage.getItem(`token_${role}`);
   let legacyUser = null;
   try {
@@ -58,49 +55,18 @@ function _migrateIfNeeded() {
 
   if (!legacyToken) return true;
 
-  // Check if this exact token is already in the pool (another tab for same user)
   const sessions = _getSessions(role);
-  const existingEntry = Object.values(sessions).find(s => s.token === legacyToken);
-  if (existingEntry) {
-    // Token already tracked — find its sessionId and claim it
-    const existingSid = Object.keys(sessions).find(k => sessions[k].token === legacyToken);
+  const existingSid = Object.keys(sessions).find(k => sessions[k].token === legacyToken);
+  if (existingSid) {
     setSessionId(existingSid);
     return true;
   }
 
-  // Try to claim a new slot
-  const activeCount = Object.keys(sessions).length;
-  if (activeCount >= MAX_SESSIONS_PER_ROLE) {
-    // Max reached — force re-login
-    return false;
-  }
-
-  // Create new session entry
   const newSid = _generateSessionId();
   sessions[newSid] = { token: legacyToken, user: legacyUser };
   _setSessions(role, sessions);
   setSessionId(newSid);
   return true;
-}
-
-/* ───── cleanup: evict oldest sessions when over limit ───── */
-
-function _cleanupExcessSessions(role) {
-  const sessions = _getSessions(role);
-  const keys = Object.keys(sessions);
-  if (keys.length <= MAX_SESSIONS_PER_ROLE) return;
-
-  // Sort by sessionId timestamp (older = smaller timestamp in sess_XXXX)
-  keys.sort((a, b) => {
-    const timeA = parseInt(a.split("_")[1], 36) || 0;
-    const timeB = parseInt(b.split("_")[1], 36) || 0;
-    return timeA - timeB;
-  });
-
-  // Remove oldest entries until we're at the limit
-  const toRemove = keys.slice(0, keys.length - MAX_SESSIONS_PER_ROLE);
-  toRemove.forEach(k => delete sessions[k]);
-  _setSessions(role, sessions);
 }
 
 /* ───── current role (tab-scoped) ───── */
@@ -233,22 +199,13 @@ export function authHeaders() {
 
 /**
  * Saves a complete session (role, token, user) for this tab.
- * Claims a slot in the role's session pool (max 3 per role).
- * Evicts oldest sessions if over limit.
- * @returns {boolean} true if session was saved, false if max tabs reached
+ * Claims a slot in the role's session pool.
+ * @returns {boolean} always true
  */
 export function saveSession(role, token, user) {
-  // Cleanup excess first (in case stale entries exist)
-  _cleanupExcessSessions(role);
-
   const sessions = _getSessions(role);
-  const activeCount = Object.keys(sessions).length;
-
-  if (activeCount >= MAX_SESSIONS_PER_ROLE) {
-    return false;
-  }
-
   const sid = _generateSessionId();
+
   sessions[sid] = { token, user };
   _setSessions(role, sessions);
 
@@ -302,14 +259,6 @@ export function clearAllSessions() {
 }
 
 /* ───── multi-tab helpers ───── */
-
-/**
- * Checks if a new session can be added for the given role (max 3 tabs).
- */
-export function canAddSession(role) {
-  const sessions = _getSessions(role);
-  return Object.keys(sessions).length < MAX_SESSIONS_PER_ROLE;
-}
 
 /**
  * Returns the number of active sessions for a role.

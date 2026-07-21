@@ -14,7 +14,7 @@ import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { CheckCircle2, Lock, Play, StickyNote } from "lucide-react";
+import { CheckCircle2, Lock, Pause, Play, StickyNote, Users } from "lucide-react";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { publish } from "../utils/eventBus";
@@ -26,6 +26,7 @@ import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
 import TaskNotesPopover from "../components/TaskNotesPopover";
 import AddNoteModal from "../components/AddNoteModal";
+import TransferTaskDialog from "../components/TransferTaskDialog";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { formatDateTimeInline } from "../utils/formatDateTime";
@@ -87,6 +88,7 @@ function Tasks() {
   const [submitTaskModal, setSubmitTaskModal] = useState({ open: false, task: null });
   const [restoreDraftId, setRestoreDraftId] = useState(null);
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
+  const [transferDialog, setTransferDialog] = useState({ open: false, task: null });
 
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
@@ -276,6 +278,33 @@ function Tasks() {
       }
     } catch {
       notify.error("Failed to continue task.");
+    }
+  };
+
+  const handlePause = async (taskId) => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}/pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason: "other" }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === taskId ? { ...item, status: "paused", ...data.task } : item
+          )
+        );
+        publish('task:updated', { id: taskId, status: 'paused' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage("Task", "paused");
+      } else {
+        notify.error(data.message || "Failed to pause task.");
+      }
+    } catch {
+      notify.error("Failed to pause task.");
     }
   };
 
@@ -495,8 +524,8 @@ function Tasks() {
                           <IoEyeOutline size={20} />
                         </button>
                       }
+                      onTriggerClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}
                     >
-                      <button className="action-icon-btn action-view" title="View" onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}><IoEyeOutline size={16} /></button>
                       <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                       {(() => {
                         const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
@@ -522,15 +551,22 @@ function Tasks() {
                             </button>
                           );
                         }
+                        if (item.status === "in_progress" && !item.assigner_paused) {
+                          return (
+                            <button className="action-icon-btn action-submit" title="Pause Task" onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
+                              <Pause size={16} />
+                            </button>
+                          );
+                        }
                         if ((item.status === "in_progress" || item.status === "reopened") && myPivotStatus !== "submitted") {
                           return (
                             <div style={{ position: "relative", display: "inline-flex" }}>
                               <button
                                 className="action-icon-btn action-submit"
-                                title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"}
-                                disabled={item.pending_deliverables_count > 0}
-                                onClick={() => !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item })}
-                                style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                                title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : item.status === "paused" || item.assigner_paused ? "Task is paused/on-hold. Resume first." : "Submit Task"}
+                                disabled={item.pending_deliverables_count > 0 || item.status === "paused" || item.assigner_paused}
+                                onClick={() => !item.pending_deliverables_count && item.status !== "paused" && !item.assigner_paused && setSubmitTaskModal({ open: true, task: item })}
+                                style={item.pending_deliverables_count > 0 || item.status === "paused" || item.assigner_paused ? { opacity: 0.4, cursor: "not-allowed" } : {}}
                               >
                                 <LuSend size={16} />
                               </button>
@@ -539,6 +575,16 @@ function Tasks() {
                         }
                         return null;
                       })()}
+                      {!["approved", "rejected"].includes(item.status) && (
+                        <button
+                          className="action-icon-btn"
+                          title="Transfer Task"
+                          onClick={() => setTransferDialog({ open: true, task: item })}
+                          style={{ color: "#2563EB", cursor: "pointer" }}
+                        >
+                          <Users size={16} />
+                        </button>
+                      )}
                     </ActionPopover>
                   </div>
                 </div>
@@ -567,6 +613,15 @@ function Tasks() {
         itemId={noteModal.itemId}
         onSaved={fetchTasks}
       />
+
+      {transferDialog.open && (
+        <TransferTaskDialog
+          isOpen={transferDialog.open}
+          onClose={() => setTransferDialog({ open: false, task: null })}
+          task={transferDialog.task}
+          onTransferSuccess={() => { setTransferDialog({ open: false, task: null }); fetchTasks(); }}
+        />
+      )}
 
     </DashboardLayout>
   );

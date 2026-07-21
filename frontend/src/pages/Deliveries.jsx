@@ -14,17 +14,21 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
-import { useSearchParams, useLocation, useNavigate } from "react-router-dom";
+import { Link, useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { StickyNote } from "lucide-react";
+import { StickyNote, Pause, Play, CheckCircle2, Lock, Users } from "lucide-react";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
+import { publish } from "../utils/eventBus";
+import { useNotification } from "../context/NotificationContext";
+import { showSuccessMessage } from "../utils/notify";
 import SubmitDeliverableModal from "../components/SubmitDeliverableModal";
 import ViewDeliverableModal from "../components/ViewDeliverableModal";
 import ActionPopover from "../components/ActionPopover";
 import AddNoteModal from "../components/AddNoteModal";
+import TransferTaskDialog from "../components/TransferTaskDialog";
 import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import { formatDateTimeInline } from "../utils/formatDateTime";
 import "../components/ActionPopover.css";
@@ -63,6 +67,7 @@ function Deliveries() {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const notify = useNotification();
   const [subtasks, setSubtasks] = useState([]);
   const [orderedSubtasks, setOrderedSubtasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -77,10 +82,13 @@ function Deliveries() {
   const [submitModal, setSubmitModal] = useState({ open: false, subtask: null });
   const [viewModal, setViewModal] = useState({ open: false, subtask: null });
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
+  const [transferDialog, setTransferDialog] = useState({ open: false, subtask: null });
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [restoreDraftId, setRestoreDraftId] = useState(null);
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
+  const [actingId, setActingId] = useState(null);
+  const [actingType, setActingType] = useState(null);
   const ITEMS_PER_PAGE = 10;
 
   // Debounce search input
@@ -192,6 +200,88 @@ function Deliveries() {
       _notifHandled: true,
     }).catch(() => {});
   }, []);
+
+  const handleAcknowledge = async (itemId) => {
+    setActingId(itemId);
+    setActingType("acknowledge");
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${itemId}/acknowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, status: "in_progress", ...data.deliverable } : d));
+        publish('deliverable:updated', { id: itemId, status: 'in_progress' });
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
+        showSuccessMessage("Subtask", "acknowledged");
+      } else {
+        notify.error(data.message || "Failed to acknowledge.");
+      }
+    } catch {
+      notify.error("Failed to acknowledge.");
+    } finally {
+      setActingId(null);
+      setActingType(null);
+    }
+  };
+
+  const handlePause = async (itemId) => {
+    setActingId(itemId);
+    setActingType("pause");
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${itemId}/pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason: "other" }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, status: "paused", ...data.deliverable } : d));
+        publish('deliverable:updated', { id: itemId, status: 'paused' });
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
+        showSuccessMessage("Subtask", "paused");
+      } else {
+        notify.error(data.message || "Failed to pause.");
+      }
+    } catch {
+      notify.error("Failed to pause.");
+    } finally {
+      setActingId(null);
+      setActingType(null);
+    }
+  };
+
+  const handleResume = async (itemId) => {
+    setActingId(itemId);
+    setActingType("resume");
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${itemId}/continue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, status: "in_progress", ...data.deliverable } : d));
+        publish('deliverable:updated', { id: itemId, status: 'in_progress' });
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
+        showSuccessMessage("Subtask", "resumed");
+      } else {
+        notify.error(data.message || "Failed to resume.");
+      }
+    } catch {
+      notify.error("Failed to resume.");
+    } finally {
+      setActingId(null);
+      setActingType(null);
+    }
+  };
 
   const getInitials = (name) => {
     if (!name) return "??";
@@ -400,15 +490,49 @@ function Deliveries() {
                           <IoEyeOutline size={20} />
                         </button>
                       }
+                      onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "deliveries" } })}
                     >
                       <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
-                      {(item.status === "pending" || item.status === "rejected" || item.status === "reopened") ? (
-                        <button className="action-icon-btn action-submit" title="Submit Subtask" onClick={() => setSubmitModal({ open: true, subtask: item })}>
+                      {item.status === "pending" && (
+                        <button className="action-icon-btn action-submit" title="Acknowledge" disabled={actingId === item.id} onClick={() => handleAcknowledge(item.id)}>
+                          <CheckCircle2 size={16} />
+                        </button>
+                      )}
+                      {item.status === "in_progress" && !item.assigner_paused && (
+                        <button className="action-icon-btn action-submit" title="Pause" disabled={actingId === item.id} onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
+                          <Pause size={16} />
+                        </button>
+                      )}
+                      {item.status === "paused" && !item.assigner_paused && (
+                        <button className="action-icon-btn action-submit" title="Resume" disabled={actingId === item.id} onClick={() => handleResume(item.id)} style={{ color: "#059669" }}>
+                          <Play size={16} />
+                        </button>
+                      )}
+                      {item.assigner_paused && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
+                          <Lock size={12} />
+                          On Hold
+                        </span>
+                      )}
+                      {(item.status === "pending" || item.status === "rejected" || item.status === "reopened") && (
+                        <button
+                          className="action-icon-btn action-submit"
+                          title={item.task?.status === "paused" ? "Parent task is paused. Resume the task first." : item.task?.assigner_paused ? "Parent task is on hold by assigner." : "Submit Subtask"}
+                          disabled={item.task?.status === "paused" || item.task?.assigner_paused}
+                          onClick={() => setSubmitModal({ open: true, subtask: item })}
+                          style={item.task?.status === "paused" || item.task?.assigner_paused ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                        >
                           <LuSend size={16} />
                         </button>
-                      ) : (
-                        <button className="action-icon-btn action-view" title="View Submission" onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "deliveries" } })}>
-                          <IoEyeOutline />
+                      )}
+                      {!["approved", "rejected"].includes(item.status) && (
+                        <button
+                          className="action-icon-btn"
+                          title="Transfer Subtask"
+                          onClick={() => setTransferDialog({ open: true, subtask: item })}
+                          style={{ color: "#2563EB", cursor: "pointer" }}
+                        >
+                          <Users size={16} />
                         </button>
                       )}
                     </ActionPopover>
@@ -438,6 +562,23 @@ function Deliveries() {
           restoreDraftId={restoreDraftId}
           onClose={() => { setShowCreateModal(false); setRestoreDraftId(null); }}
           onCreated={() => { setShowCreateModal(false); setRestoreDraftId(null); fetchSubtasks(); }}
+        />
+      )}
+
+      <AddNoteModal
+        isOpen={noteModal.open}
+        onClose={() => setNoteModal({ open: false, itemId: null })}
+        itemType="deliverable"
+        itemId={noteModal.itemId}
+        onSaved={fetchSubtasks}
+      />
+
+      {transferDialog.open && (
+        <TransferTaskDialog
+          isOpen={transferDialog.open}
+          onClose={() => setTransferDialog({ open: false, subtask: null })}
+          task={transferDialog.subtask}
+          onTransferSuccess={() => { setTransferDialog({ open: false, subtask: null }); fetchSubtasks(); }}
         />
       )}
     </DashboardLayout>

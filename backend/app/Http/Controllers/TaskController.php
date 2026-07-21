@@ -9,6 +9,8 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\TaskPauseSession;
 use App\Models\TaskChange;
+use App\Models\TaskComment;
+use App\Models\TaskDelegation;
 use App\Models\TaskFile;
 use App\Models\TaskSubmission;
 use App\Models\TaskWorkflowEvent;
@@ -17,6 +19,7 @@ use App\Services\ActivityService;
 use App\Services\AuditService;
 use App\Services\NotificationService;
 use App\Services\RecurringService;
+use App\Services\DelegationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -37,7 +40,8 @@ class TaskController extends Controller
     public function __construct(
         private NotificationService $notificationService,
         private ActivityService $activityService,
-        private AuditService $auditService
+        private AuditService $auditService,
+        private DelegationService $delegationService
     ) {}
 
     /**
@@ -395,8 +399,8 @@ class TaskController extends Controller
             'files:id,task_id,name,url',
             'assignees:id,name,email,role',
             'assigner:id,name,email,role',
-            'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
-            'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
+            'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments', 'approvedBy:id,name', 'reopenedBy:id,name'])->latest(),
+            'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments', 'approvedBy:id,name', 'reopenedBy:id,name']),
             'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
             'approvedBy:id,name',
             'rejectedBy:id,name',
@@ -404,6 +408,9 @@ class TaskController extends Controller
             'acknowledgedBy:id,name',
             'pausedBy:id,name',
             'assignerPausedBy:id,name',
+            'currentOwner:id,name,email,role',
+            'originalAssigner:id,name,email,role',
+            'delegations' => fn ($q) => $q->with(['delegatedBy:id,name,email,role', 'delegatedTo:id,name,email,role'])->latest(),
             'unviewedChanges' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'changes' => fn ($q) => $q->with('modifiedBy:id,name')->latest(),
             'deliverableTemplates',
@@ -448,7 +455,7 @@ class TaskController extends Controller
             : (object) ['total' => 0, 'completed' => 0, 'pending' => 0];
 
         $isApproved = strtolower((string) $task->status) === 'approved';
-        $pendingStatuses = ['pending', 'reopened'];
+        $pendingStatuses = ['pending', 'in_progress', 'reopened', 'paused'];
         $pendingDeliverables = $dlvStats->pending ?? 0;
         $allDeliverablesSubmitted = (int) $pendingDeliverables === 0;
 
@@ -474,8 +481,21 @@ class TaskController extends Controller
         $userPivot = $isAssignee ? $task->assignees()->where('users.id', $user->id)->first()?->pivot : null;
         $payload['my_status'] = $userPivot?->status ?? 'pending';
         $payload['my_submitted_at'] = $userPivot?->submitted_at;
-        $payload['can_submit'] = $isAssignee && in_array($task->status, $pendingStatuses) && $allDeliverablesSubmitted
+        $isCurrentOwner = $this->delegationService->isCurrentOwner($task, $user);
+        $payload['is_current_owner'] = $isCurrentOwner;
+        $payload['can_submit'] = ($isAssignee || $isCurrentOwner) && in_array($task->status, $pendingStatuses) && $allDeliverablesSubmitted
             && ($userPivot?->status !== 'submitted');
+        $payload['can_delegate'] = ($isAssignee || $isCurrentOwner)
+            && !in_array($task->status, ['approved', 'rejected']);
+        $payload['has_delegation_chain'] = !empty($task->delegation_chain);
+        $payload['delegation_chain'] = $task->delegation_chain ?? [];
+        $payload['approval_chain'] = $task->approval_chain ?? [];
+        $nextApprover = $this->delegationService->getNextApprover($task);
+        $payload['next_approver_id'] = $nextApprover;
+        $payload['is_next_approver'] = $nextApprover && (int) $nextApprover === (int) $user->id;
+        $payload['pending_delegation'] = $task->pendingDelegations()->where('delegated_to', $user->id)->first();
+        $payload['current_owner_name'] = $task->currentOwner?->name ?? $task->assignee?->name ?? null;
+        $payload['original_assigner_name'] = $task->originalAssigner?->name ?? $task->assigner?->name ?? null;
 
         $taskChangeMax = (int) TaskChange::where('task_id', $task->id)->max('id');
         $taskEventMax = (int) TaskWorkflowEvent::where('task_id', $task->id)->max('id');
@@ -2082,9 +2102,10 @@ class TaskController extends Controller
     {
         $user = $request->user();
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+        $isCurrentOwner = $this->delegationService->isCurrentOwner($task, $user);
 
-        if (! $isAssignee) {
-            return response()->json(['success' => false, 'message' => 'Only the assignee can submit this task'], 403);
+        if (! $isAssignee && ! $isCurrentOwner) {
+            return response()->json(['success' => false, 'message' => 'Only the assignee or current owner can submit this task'], 403);
         }
 
         if ($task->assigner_paused) {
@@ -2117,6 +2138,8 @@ class TaskController extends Controller
         $submission = TaskSubmission::create([
             'task_id' => $task->id, 'submitted_by' => $user->id,
             'comment' => $validated['comment'] ?? null, 'file_path' => $filePath, 'file_name' => $fileName,
+            'version_number' => ($task->submission_count ?? 0) + 1,
+            'status' => 'pending',
         ]);
 
         if ($request->hasFile('files')) {
@@ -2158,6 +2181,9 @@ class TaskController extends Controller
         }
 
         $task->update($updateData);
+
+        // Increment submission count
+        $task->increment('submission_count');
 
         $task->stopTimer();
 
@@ -2241,8 +2267,11 @@ class TaskController extends Controller
     {
         $user = $request->user();
         $isCreator = (int) $task->assigned_by === (int) $user->id;
+        $isDelegationChain = $this->delegationService->isInDelegationChain($task, $user);
+        $nextApprover = $this->delegationService->getNextApprover($task);
+        $isNextApprover = $nextApprover && (int) $nextApprover === (int) $user->id;
 
-        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
+        if (! $isCreator && ! in_array($user->role, ['admin', 'manager']) && ! $isDelegationChain && ! $isNextApprover) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         if ($task->status !== 'submitted') {
@@ -2250,6 +2279,16 @@ class TaskController extends Controller
         }
 
         $task->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id, 'updated_by' => $user->id]);
+
+        // Mark the latest submission as approved
+        $latestSubmission = TaskSubmission::where('task_id', $task->id)->latest()->first();
+        if ($latestSubmission) {
+            $latestSubmission->update([
+                'status' => 'approved',
+                'approved_by' => $user->id,
+                'approved_at' => now(),
+            ]);
+        }
 
         TaskWorkflowEvent::create(['task_id' => $task->id, 'user_id' => $user->id, 'action' => 'approved']);
 
@@ -2390,17 +2429,21 @@ class TaskController extends Controller
     {
         $user = $request->user();
         $isCreator = (int) $task->assigned_by === (int) $user->id;
+        $isDelegationChain = $this->delegationService->isInDelegationChain($task, $user);
 
-        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
+        if (! $isCreator && ! in_array($user->role, ['admin', 'manager']) && ! $isDelegationChain) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
-        if ($task->status !== 'submitted') {
-            return response()->json(['success' => false, 'message' => 'Can only reopen submitted tasks'], 422);
+        if (! in_array($task->status, ['submitted', 'approved'])) {
+            return response()->json(['success' => false, 'message' => 'Can only reopen submitted or approved tasks'], 422);
         }
 
         $validated = $request->validate([
-            'comment' => 'nullable|string|max:2000', 'instructions' => 'nullable|string|max:2000',
-            'new_deadline' => 'nullable|date', 'file' => 'nullable|file|max:51200',
+            'reopen_reason' => 'required|string|max:500',
+            'reopen_reason_detail' => 'nullable|string|max:2000',
+            'instructions' => 'nullable|string|max:2000',
+            'new_deadline' => 'nullable|date',
+            'file' => 'nullable|file|max:51200',
         ]);
 
         $filePath = $fileName = null;
@@ -2410,9 +2453,19 @@ class TaskController extends Controller
             $filePath = $file->store('task-reopen/'.$task->id, 'public');
         }
 
+        $reopenReason = $validated['reopen_reason'] === 'Other'
+            ? ($validated['reopen_reason_detail'] ?? 'Other')
+            : $validated['reopen_reason'];
+
+        $reopenComment = $reopenReason;
+        if (! empty($validated['reopen_reason_detail']) && $validated['reopen_reason'] !== 'Other') {
+            $reopenComment .= ': '.$validated['reopen_reason_detail'];
+        }
+
         $updateData = [
             'status' => 'reopened', 'reopened_at' => now(), 'reopened_by' => $user->id,
-            'reopen_comment' => $validated['comment'] ?? null,
+            'reopen_comment' => $reopenComment,
+            'reopen_reason' => $validated['reopen_reason'],
             'reopen_instructions' => $validated['instructions'] ?? null,
             'updated_by' => $user->id,
         ];
@@ -2427,18 +2480,46 @@ class TaskController extends Controller
 
         $task->update($updateData);
 
+        // Increment reopen count
+        $task->increment('reopen_count');
+
+        // Update latest submission if reopening from approved
+        if ($task->status === 'reopened' && $task->submitted_at) {
+            $latestSubmission = TaskSubmission::where('task_id', $task->id)->latest()->first();
+            if ($latestSubmission && $latestSubmission->status !== 'reopened') {
+                $latestSubmission->update([
+                    'status' => 'reopened',
+                    'reopened_by' => $user->id,
+                    'reopened_at' => now(),
+                    'reopen_reason' => $reopenComment,
+                ]);
+            }
+        }
+
         TaskWorkflowEvent::create([
             'task_id' => $task->id, 'user_id' => $user->id, 'action' => 'reopened',
-            'comment' => $validated['comment'] ?? null, 'instructions' => $validated['instructions'] ?? null,
+            'comment' => $reopenComment, 'instructions' => $validated['instructions'] ?? null,
             'new_deadline' => $validated['new_deadline'] ?? null, 'file_path' => $filePath, 'file_name' => $fileName,
+        ]);
+
+        // Add system comment to task discussion
+        $reopenReasonText = $validated['reopen_reason'];
+        if (! empty($validated['reopen_reason_detail']) && $validated['reopen_reason'] !== 'Other') {
+            $reopenReasonText .= ': '.$validated['reopen_reason_detail'];
+        }
+        $systemComment = $user->name.' reopened this task. Reason: '.$reopenReasonText;
+        if (! empty($validated['instructions'])) {
+            $systemComment .= ' Instructions: '.$validated['instructions'];
+        }
+        TaskComment::create([
+            'task_id' => $task->id,
+            'user_id' => $user->id,
+            'body' => $systemComment,
         ]);
 
         $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
         $assigneeIds = array_values(array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $user->id));
-        $reopenMsg = 'Your task '.$task->business_id.' ("'.$task->title.'") has been reopened for revision.';
-        if (! empty($validated['comment'])) {
-            $reopenMsg .= ' Comment: '.$validated['comment'];
-        }
+        $reopenMsg = 'Your task '.$task->business_id.' ("'.$task->title.'") has been reopened. Reason: '.$reopenReasonText;
         if (! empty($validated['instructions'])) {
             $reopenMsg .= ' Instructions: '.$validated['instructions'];
         }
@@ -2459,18 +2540,19 @@ class TaskController extends Controller
             'Business ID' => $task->business_id,
             'Project' => $task->project?->title ?? 'N/A',
             'Assigned To' => $task->assignees->pluck('name')->implode(', '),
+            'Reason' => $reopenReasonText,
             'Instructions' => $validated['instructions'] ?? 'N/A',
         ]);
 
         // Log activity
-        $this->activityService->log($user->id, 'task_reopened', 'You reopened task "'.$task->title.'" for revision', 'task', $task->id);
+        $this->activityService->log($user->id, 'task_reopened', 'You reopened task "'.$task->title.'". Reason: '.$reopenReasonText, 'task', $task->id);
         $this->clearDashboardCache($user->id);
 
         try {
             $this->auditService->log(
                 module: 'task_management',
                 action: 'reopen',
-                description: "Reopened task {$task->title}",
+                description: "Reopened task {$task->title}. Reason: {$reopenReasonText}",
                 user: $user,
                 entityType: 'Task',
                 entityId: $task->id,
@@ -2484,7 +2566,7 @@ class TaskController extends Controller
             'success' => true,
             'message' => 'Task reopened successfully',
             'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'assigner:id,name', 'reopenedBy:id,name',
-                'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
+                'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'approvedBy:id,name', 'reopenedBy:id,name'])->latest(),
                 'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
             ])->toArray()),
         ]);
@@ -2558,8 +2640,12 @@ class TaskController extends Controller
     public function destroy(Task $task)
     {
         $user = request()->user();
-        if ((int) $task->assigned_by !== (int) $user->id) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized — only the task creator can delete'], 403);
+        if ((int) $task->assigned_by !== (int) $user->id && ! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized — only the task creator or admin/manager can delete'], 403);
+        }
+
+        if (in_array($task->status, ['approved', 'submitted'])) {
+            return response()->json(['success' => false, 'message' => 'Cannot delete a task that is ' . $task->status], 422);
         }
 
         $task->assignees()->detach();
@@ -3252,5 +3338,191 @@ class TaskController extends Controller
         ];
 
         return $payload;
+    }
+
+    /**
+     * Delegate a task to another user.
+     *
+     * @param Request $request Input: delegated_to, reason, reason_detail, notes
+     * @param Task $task The task to delegate.
+     * @return JsonResponse JSON response with the delegation record.
+     */
+    public function delegate(Request $request, Task $task)
+    {
+        $user = $request->user();
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+        $isCurrentOwner = $this->delegationService->isCurrentOwner($task, $user);
+
+        if (!$isCreator && !$isAssignee && !$isCurrentOwner && !in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        if (in_array($task->status, ['approved', 'rejected'])) {
+            return response()->json(['success' => false, 'message' => 'Cannot delegate a task that is already approved or rejected'], 422);
+        }
+
+        $validated = $request->validate([
+            'delegated_to' => 'required|exists:users,id',
+            'reason' => 'required|string|max:500',
+            'reason_detail' => 'nullable|string|max:2000',
+            'notes' => 'nullable|string|max:2000',
+            'return_to_transferor' => 'nullable|boolean',
+        ]);
+
+        if ((int) $validated['delegated_to'] === (int) $user->id) {
+            return response()->json(['success' => false, 'message' => 'Cannot delegate a task to yourself'], 422);
+        }
+
+        $delegatedTo = User::find($validated['delegated_to']);
+
+        try {
+            $delegation = $this->delegationService->delegateTask(
+                $task,
+                $user,
+                $delegatedTo,
+                $validated['reason'],
+                $validated['reason_detail'] ?? null,
+                $validated['notes'] ?? null,
+                $validated['return_to_transferor'] ?? true
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Task delegated successfully',
+                'delegation' => $delegation->load(['delegatedBy:id,name,email,role', 'delegatedTo:id,name,email,role']),
+                'task' => $this->taskWithTimer($task->fresh()->load([
+                    'assignees:id,name,email,role', 'assigner:id,name',
+                    'currentOwner:id,name,email,role',
+                    'delegations' => fn ($q) => $q->with(['delegatedBy:id,name,role', 'delegatedTo:id,name,role'])->latest(),
+                    'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments'])->latest(),
+                    'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments']),
+                    'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
+                    'approvedBy:id,name', 'rejectedBy:id,name', 'reopenedBy:id,name',
+                ])->toArray()),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Accept a pending delegation.
+     *
+     * @param Task $task The task.
+     * @return JsonResponse JSON response with the updated delegation.
+     */
+    public function acceptDelegation(Request $request, Task $task)
+    {
+        $user = $request->user();
+
+        $delegation = TaskDelegation::where('task_id', $task->id)
+            ->where('delegated_to', $user->id)
+            ->where('status', 'pending')
+            ->latest()
+            ->first();
+
+        if (!$delegation) {
+            return response()->json(['success' => false, 'message' => 'No pending delegation found for you'], 404);
+        }
+
+        try {
+            $delegation = $this->delegationService->acceptDelegation($delegation, $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Delegation accepted',
+                'delegation' => $delegation->load(['delegatedBy:id,name,email,role', 'delegatedTo:id,name,email,role']),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+
+    /**
+     * Reject a pending delegation.
+     *
+     * @param Task $task The task.
+     * @return JsonResponse JSON response with the updated delegation.
+     */
+    public function rejectDelegation(Request $request, Task $task)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:2000',
+        ]);
+
+        $delegation = TaskDelegation::where('task_id', $task->id)
+            ->where('delegated_to', $user->id)
+            ->where('status', 'pending')
+            ->latest()
+            ->first();
+
+        if (!$delegation) {
+            return response()->json(['success' => false, 'message' => 'No pending delegation found for you'], 404);
+        }
+
+        try {
+            $delegation = $this->delegationService->rejectDelegation($delegation, $user, $validated['reason'] ?? null);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Delegation rejected',
+                'delegation' => $delegation->load(['delegatedBy:id,name,email,role', 'delegatedTo:id,name,email,role']),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+
+    /**
+     * Revoke a delegation (by the delegator or admin/manager).
+     *
+     * @param Task $task The task.
+     * @return JsonResponse JSON response with the updated delegation.
+     */
+    public function revokeDelegation(Request $request, Task $task)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'delegation_id' => 'required|exists:task_delegations,id',
+        ]);
+
+        $delegation = TaskDelegation::findOrFail($validated['delegation_id']);
+
+        if ((int) $delegation->task_id !== (int) $task->id) {
+            return response()->json(['success' => false, 'message' => 'Delegation does not belong to this task'], 422);
+        }
+
+        try {
+            $delegation = $this->delegationService->revokeDelegation($delegation, $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Delegation revoked',
+                'delegation' => $delegation->load(['delegatedBy:id,name,email,role', 'delegatedTo:id,name,email,role']),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+
+    /**
+     * Get delegation chain details for a task.
+     *
+     * @param Task $task The task.
+     * @return JsonResponse JSON response with the delegation chain.
+     */
+    public function delegationChain(Task $task)
+    {
+        $chain = $this->delegationService->getChainDetails($task);
+
+        return response()->json([
+            'success' => true,
+            'chain' => $chain,
+            'approval_chain' => $task->approval_chain ?? [],
+        ]);
     }
 }

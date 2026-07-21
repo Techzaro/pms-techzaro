@@ -14,15 +14,20 @@ import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import { StickyNote } from "lucide-react";
+import { StickyNote, Pause, Play, Pencil, Trash2, Lock, CheckCircle2, XCircle } from "lucide-react";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
+import { publish } from "../utils/eventBus";
+import { useNotification } from "../context/NotificationContext";
+import { showSuccessMessage } from "../utils/notify";
+import ConfirmModal from "../components/ConfirmModal";
 import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import { formatDateTimeInline } from "../utils/formatDateTime";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
+import AddNoteModal from "../components/AddNoteModal";
 import "../components/ActionPopover.css";
 import "../pages/Deliveries.css";
 import "../pages/Task.css";
@@ -56,6 +61,7 @@ const STATUS_TEXT_COLORS = {
 function DeliveriesByYou() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const notify = useNotification();
   const [subtasks, setSubtasks] = useState([]);
   const [orderedSubtasks, setOrderedSubtasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -68,8 +74,15 @@ function DeliveriesByYou() {
   });
   const [timeFilter, setTimeFilter] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
+  const [actingId, setActingId] = useState(null);
+  const [actingType, setActingType] = useState(null);
   const ITEMS_PER_PAGE = 10;
 
   // Debounce search input
@@ -164,6 +177,150 @@ function DeliveriesByYou() {
       _notifHandled: true,
     }).catch(() => { });
   }, []);
+
+  const handleDelete = (itemId) => {
+    setDeleteTargetId(itemId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    const itemId = deleteTargetId;
+    setDeleteConfirmOpen(false);
+    setDeleteTargetId(null);
+    setActingId(itemId);
+    setActingType("delete");
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${itemId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setSubtasks((prev) => prev.filter((d) => d.id !== itemId));
+        publish('deliverable:deleted', { id: itemId });
+        publish('data:changed', { type: 'deliverable', action: 'deleted' });
+        showSuccessMessage("Subtask", "deleted");
+      } else {
+        const data = await res.json();
+        notify.error(data.message || "Failed to delete.");
+      }
+    } catch {
+      notify.error("Failed to delete.");
+    } finally {
+      setActingId(null);
+      setActingType(null);
+    }
+  };
+
+  const handleApprove = async (itemId) => {
+    setActingId(itemId);
+    setActingType("approve");
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${itemId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, status: "approved", ...data.deliverable } : d));
+        publish('deliverable:updated', { id: itemId, status: 'approved' });
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
+        showSuccessMessage("Subtask", "approved");
+      } else {
+        notify.error(data.message || "Failed to approve.");
+      }
+    } catch {
+      notify.error("Failed to approve.");
+    } finally {
+      setActingId(null);
+      setActingType(null);
+    }
+  };
+
+  const handleReject = async (itemId) => {
+    setActingId(itemId);
+    setActingType("reject");
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${itemId}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ comment: "Declined from list" }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, status: "rejected", ...data.deliverable } : d));
+        publish('deliverable:updated', { id: itemId, status: 'rejected' });
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
+        showSuccessMessage("Subtask", "declined");
+      } else {
+        notify.error(data.message || "Failed to decline.");
+      }
+    } catch {
+      notify.error("Failed to decline.");
+    } finally {
+      setActingId(null);
+      setActingType(null);
+    }
+  };
+
+  const handleAssignerPause = async (itemId) => {
+    setActingId(itemId);
+    setActingType("assigner_pause");
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${itemId}/assigner-pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason: "other" }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, assigner_paused: true, ...data.deliverable } : d));
+        publish('deliverable:updated', { id: itemId });
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
+        showSuccessMessage("Subtask", "placed on hold");
+      } else {
+        notify.error(data.message || "Failed to place on hold.");
+      }
+    } catch {
+      notify.error("Failed to place on hold.");
+    } finally {
+      setActingId(null);
+      setActingType(null);
+    }
+  };
+
+  const handleAssignerResume = async (itemId) => {
+    setActingId(itemId);
+    setActingType("assigner_resume");
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${itemId}/assigner-resume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSubtasks((prev) => prev.map((d) => d.id === itemId ? { ...d, assigner_paused: false, ...data.deliverable } : d));
+        publish('deliverable:updated', { id: itemId });
+        publish('data:changed', { type: 'deliverable', action: 'updated' });
+        showSuccessMessage("Subtask", "resumed");
+      } else {
+        notify.error(data.message || "Failed to resume.");
+      }
+    } catch {
+      notify.error("Failed to resume.");
+    } finally {
+      setActingId(null);
+      setActingType(null);
+    }
+  };
 
   const getInitials = (name) => {
     if (!name) return "??";
@@ -373,15 +530,60 @@ function DeliveriesByYou() {
                             <IoEyeOutline size={20} />
                           </button>
                         }
+                        onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "deliveries-by-you" } })}
                       >
-                        <button
-                          className="action-icon-btn action-view"
-                          title="View"
-                          onClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "deliveries-by-you" } })}
-                        >
-                          <IoEyeOutline size={16} />
-                        </button>
                         <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
+                        {item.status?.toLowerCase() !== "approved" && (
+                          <button
+                            className="action-icon-btn action-edit"
+                            title="Edit Subtask"
+                            onClick={() => { setEditItem(item); setShowEditModal(true); }}
+                          >
+                            <Pencil size={16} />
+                          </button>
+                        )}
+                        {item.status?.toLowerCase() !== "approved" && (
+                          <button
+                            className="action-icon-btn action-delete"
+                            title="Delete Subtask"
+                            disabled={actingId === item.id}
+                            onClick={() => handleDelete(item.id)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                        {item.status === "submitted" && (
+                          <button className="action-icon-btn action-submit" title="Approve" disabled={actingId === item.id} onClick={() => handleApprove(item.id)} style={{ color: "#16A34A" }}>
+                            <CheckCircle2 size={16} />
+                          </button>
+                        )}
+                        {item.status === "submitted" && (
+                          <button className="action-icon-btn action-submit" title="Decline" disabled={actingId === item.id} onClick={() => handleReject(item.id)} style={{ color: "#DC2626" }}>
+                            <XCircle size={16} />
+                          </button>
+                        )}
+                        {["pending", "in_progress", "reopened", "paused"].includes(item.status) && !item.assigner_paused && (
+                          <button
+                            className="action-icon-btn"
+                            title="Put On Hold"
+                            disabled={actingId === item.id}
+                            onClick={() => handleAssignerPause(item.id)}
+                            style={{ color: "#7C3AED", cursor: actingId === item.id ? "not-allowed" : "pointer" }}
+                          >
+                            <Lock size={16} />
+                          </button>
+                        )}
+                        {item.assigner_paused && (
+                          <button
+                            className="action-icon-btn"
+                            title="Resume"
+                            disabled={actingId === item.id}
+                            onClick={() => handleAssignerResume(item.id)}
+                            style={{ color: "#059669", cursor: actingId === item.id ? "not-allowed" : "pointer" }}
+                          >
+                            <Lock size={16} />
+                          </button>
+                        )}
                       </ActionPopover>
                     </div>
                   </div>
@@ -404,6 +606,35 @@ function DeliveriesByYou() {
           onCreated={() => { setShowCreateModal(false); fetchSubtasks(); }}
         />
       )}
+
+      {showEditModal && editItem && (
+        <CreateDeliverableModel
+          onClose={(refresh) => { setShowEditModal(false); setEditItem(null); if (refresh) fetchSubtasks(); }}
+          projectId={editItem.project_id}
+          taskId={editItem.task_id}
+          editMode={true}
+          editData={editItem}
+        />
+      )}
+
+      <AddNoteModal
+        isOpen={noteModal.open}
+        onClose={() => setNoteModal({ open: false, itemId: null })}
+        itemType="deliverable"
+        itemId={noteModal.itemId}
+        onSaved={fetchSubtasks}
+      />
+
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        onClose={() => { setDeleteConfirmOpen(false); setDeleteTargetId(null); }}
+        onConfirm={confirmDelete}
+        title="Delete Subtask"
+        message="Are you sure you want to delete this subtask? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger
+      />
     </DashboardLayout>
   );
 }

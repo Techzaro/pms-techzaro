@@ -16,7 +16,7 @@ import { IoIosArrowDown } from "react-icons/io";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
-import { Lock, Pencil, StickyNote } from "lucide-react";
+import { Lock, Pencil, StickyNote, Trash2 } from "lucide-react";
 import CreateTaskModal from "../components/CreateTaskModal";
 import EditTaskModal from "../components/EditTaskModal";
 import PauseReasonModal from "../components/PauseReasonModal";
@@ -26,9 +26,11 @@ import Pagination from "../components/Pagination";
 import ActionPopover from "../components/ActionPopover";
 import TaskNotesPopover from "../components/TaskNotesPopover";
 import AddNoteModal from "../components/AddNoteModal";
+import ConfirmModal from "../components/ConfirmModal";
 import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { formatDateTimeInline } from "../utils/formatDateTime";
+import { useNotification } from "../context/NotificationContext";
 import "../components/ActionPopover.css";
 import "../pages/Task.css";
 
@@ -67,6 +69,7 @@ const PRIORITY_TEXT_COLORS = {
 /** Main Taskby page — renders tasks assigned by the current user. */
 const Taskby = () => {
   const navigate = useNavigate();
+  const notify = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [items, setItems] = useState([]);
@@ -89,6 +92,8 @@ const Taskby = () => {
   const [pauseModalOpen, setPauseModalOpen] = useState(false);
   const [pauseModalTaskId, setPauseModalTaskId] = useState(null);
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
 
   const ITEMS_PER_PAGE = 10;
 
@@ -213,6 +218,36 @@ const Taskby = () => {
       alert("Failed to resume task.");
     }
     setResumingTaskId(null);
+  };
+
+  const handleDelete = async (taskId) => {
+    setDeleteTargetId(taskId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    const taskId = deleteTargetId;
+    setDeleteConfirmOpen(false);
+    setDeleteTargetId(null);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/tasks/${taskId}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
+      });
+      if (res.ok) {
+        setItems((prev) => prev.filter((item) => item.id !== taskId));
+        publish('task:deleted', { id: taskId });
+        publish('data:changed', { type: 'task', action: 'deleted' });
+        showSuccessMessage("Task", "deleted");
+      } else {
+        const data = await res.json();
+        notify.error(data.message || "Failed to delete task.");
+      }
+    } catch {
+      notify.error("Failed to delete task.");
+    }
   };
 
   const getInitials = (name) => {
@@ -471,21 +506,15 @@ const Taskby = () => {
                     </div>
 
                     <div className="col-action">
-                      <ActionPopover
-                        trigger={
-                          <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
-                            <IoEyeOutline size={20} />
-                          </button>
-                        }
-                      >
-                        <button
-                          className="action-icon-btn action-view"
-                          title="View"
-                          onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
-                        >
-                          <IoEyeOutline size={16} />
+                    <ActionPopover
+                      trigger={
+                        <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
+                          <IoEyeOutline size={20} />
                         </button>
-                        <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
+                      }
+                      onTriggerClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
+                    >
+                      <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                         {item.status?.toLowerCase() !== "approved" && (
                           <button
                             className="action-icon-btn action-edit"
@@ -508,6 +537,15 @@ const Taskby = () => {
                             }}
                           >
                             <Pencil size={16} />
+                          </button>
+                        )}
+                        {item.status?.toLowerCase() !== "approved" && (
+                          <button
+                            className="action-icon-btn action-delete"
+                            title="Delete Task"
+                            onClick={() => handleDelete(item.id)}
+                          >
+                            <Trash2 size={16} />
                           </button>
                         )}
                         {["pending", "in_progress", "reopened", "paused"].includes(item.status) && !item.assigner_paused && (
@@ -566,6 +604,17 @@ const Taskby = () => {
         itemType="task"
         itemId={noteModal.itemId}
         onSaved={fetchTasks}
+      />
+
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        onClose={() => { setDeleteConfirmOpen(false); setDeleteTargetId(null); }}
+        onConfirm={confirmDelete}
+        title="Confirm Deletion"
+        message="Are you sure you want to delete this task? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger
       />
 
     </DashboardLayout>

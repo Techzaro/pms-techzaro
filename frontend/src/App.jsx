@@ -72,7 +72,11 @@ class ErrorBoundary extends Component {
 
 function ScrollToTop() {
   const { pathname } = useLocation();
-  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  useEffect(() => {
+    const el = document.querySelector('.main-layout');
+    if (el) el.scrollTop = 0;
+    window.scrollTo(0, 0);
+  }, [pathname]);
   return null;
 }
 

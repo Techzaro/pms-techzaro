@@ -538,7 +538,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
               <button className="task-save-draft-btn" onClick={handleSaveDraft} type="button" disabled={!form.title.trim()}>
                 Save Draft
               </button>
-              <LoadingButton className="task-create-btn" onClick={() => setOpenSubtaskCreator(true)} disabled={!form.title.trim()}>⊕ Create Subtask</LoadingButton>
               <LoadingButton className="task-create-btn" onClick={handleSubmit} loading={submitting}>+ Create Task</LoadingButton>
               <button className="task-close-btn" onClick={handleClose}>✕</button>
             </div>
