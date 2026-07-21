@@ -175,7 +175,7 @@ const WorkloadItem = memo(function WorkloadItem({ item, navigate, getInitials, r
             style={{
               width: "0%",
               minWidth: "100%",
-              background: "var(--bg-hover)",
+              background: "var(--border-medium)",
             }}
           ></div>
         </div>
@@ -283,7 +283,7 @@ const ProjectCard = memo(function ProjectCard({ project, cardWidth, navigate, ge
             style={{
               width: `${project.progress}%`,
               minWidth: project.progress === 0 ? "100%" : "0",
-              background: project.progress === 0 ? "var(--bg-hover)" : getProgressColor(project.progress),
+              background: project.progress === 0 ? "var(--border-medium)" : getProgressColor(project.progress),
             }}
           ></div>
         </div>

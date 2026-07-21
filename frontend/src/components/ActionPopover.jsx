@@ -11,6 +11,7 @@ import "./ActionPopover.css";
 const ActionPopover = ({ trigger, children, onTriggerClick }) => {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const wrapRef = useRef(null);
   const popoverRef = useRef(null);
   const timeoutRef = useRef(null);
@@ -75,12 +76,38 @@ const ActionPopover = ({ trigger, children, onTriggerClick }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (open) setHighlightedIndex(-1);
+  }, [open]);
+
+  const childArray = Array.isArray(children) ? children.filter(Boolean) : children ? [children] : [];
+
+  const handleKeyDown = (e) => {
+    if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+      if (!open) {
+        e.preventDefault();
+        setOpen(true);
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHighlightedIndex((prev) => (prev < childArray.length - 1 ? prev + 1 : 0));
+      }
+    } else if (e.key === "ArrowUp" && open) {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : childArray.length - 1));
+    } else if (e.key === "Escape" && open) {
+      e.preventDefault();
+      setOpen(false);
+    }
+  };
+
   return (
     <div
       className="ap-wrap"
       ref={wrapRef}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
     >
       <div className="ap-trigger" onClick={onTriggerClick}>{trigger}</div>
       {open &&
@@ -92,7 +119,13 @@ const ActionPopover = ({ trigger, children, onTriggerClick }) => {
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
           >
-            <div className="ap-popover-content">{children}</div>
+            <div className="ap-popover-content">
+              {childArray.map((child, idx) => (
+                <div key={idx} className={`ap-popover-item ${highlightedIndex === idx ? "ap-popover-item--highlighted" : ""}`} onMouseEnter={() => setHighlightedIndex(idx)}>
+                  {child}
+                </div>
+              ))}
+            </div>
           </div>,
           document.body
         )}

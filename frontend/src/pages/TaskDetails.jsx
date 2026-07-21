@@ -1207,20 +1207,19 @@ function TaskDetails() {
                   {tab === "subtasks" && (
                     <div>
                       <div className="td-section-header">
-                        <h2 className="td-section-title">Subtasks</h2>
+                        <h2 className="td-section-title">Subtasks <span className="td-section-count">({(() => { const all = orderedSubtasks.length ? orderedSubtasks : (task.deliverables || []); const filtered = subtaskSearch ? all.filter((d) => { const q = subtaskSearch.toLowerCase(); return (d.title || "").toLowerCase().includes(q) || (d.description || "").toLowerCase().includes(q); }) : all; return filtered.length; })()})</span></h2>
+                        <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                          <input type="text" placeholder="Search subtasks..." value={subtaskSearch} onChange={(e) => setSubtaskSearch(e.target.value)} />
+                        </div>
                         {!readOnly && isCreator && (
                           <button
                             onClick={() => setShowCreateSubtaskModal(true)}
-                            style={{ marginLeft: "auto", marginRight: 12, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "var(--color-primary)", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}
+                            style={{ marginLeft: 12, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "var(--color-primary)", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}
                           >
                             <Plus size={15} /> Create Subtask
                           </button>
                         )}
-                        <div className="pd-files-search" style={{ margin: "0 0 0 auto" }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                          <input type="text" placeholder="Search by subtask name or description..." value={subtaskSearch} onChange={(e) => setSubtaskSearch(e.target.value)} />
-                        </div>
-                        <span className="td-section-count">{task.completed_deliverables || 0}/{task.total_deliverables || 0} Completed</span>
                       </div>
                       {(() => {
                         const allSubtasks = orderedSubtasks.length ? orderedSubtasks : (task.deliverables || []);
@@ -1232,8 +1231,8 @@ function TaskDetails() {
                           <p className="td-empty">{subtaskSearch ? "No subtasks match your search." : "No subtasks linked to this task."}</p>
                         ) : (
                           <div className="pd-table-wrap">
-                            <div className="deliveries-table-header" style={{ gridTemplateColumns: "32px minmax(150px, 1.6fr) minmax(160px, 1.8fr) minmax(110px, 1.1fr) minmax(90px, 0.9fr) minmax(70px, 0.5fr)" }}>
-                              <div></div>
+                            <div className="deliveries-table-header" style={{ gridTemplateColumns: "80px 2fr 1.2fr 110px 130px 50px", alignItems: "center" }}>
+                              <div>ID</div>
                               <div>Subtask</div>
                               <div>{isCreator ? "Assigned To" : "Assigned By"}</div>
                               <div>Status</div>
@@ -1246,29 +1245,31 @@ function TaskDetails() {
                             as="div"
                             handleOnly
                           >
-                            {(d, idx, dndProps) => (
-                              <div className="deliveries-table-row" style={{ gridTemplateColumns: "32px minmax(150px, 1.6fr) minmax(160px, 1.8fr) minmax(110px, 1.1fr) minmax(90px, 0.9fr) minmax(70px, 0.5fr)" }}>
+                            {(d, idx, dndProps) => {
+                              const descText = d.description ? d.description.replace(/<[^>]*>/g, '').trim() : '';
+                              return (
+                              <div className="deliveries-table-row" style={{ gridTemplateColumns: "80px 2fr 1.2fr 110px 130px 50px", alignItems: "center" }}>
                                 <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={d.business_id} color="#16a34a" />
-                                <div className="user-box">
-                                  <div className="avatar" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), width: '42px', height: '42px', fontSize: '14px' }}>
+                                <div className="user-box" style={{ gap: "20px" }}>
+                                  <div className="avatar" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), width: '42px', height: '42px', fontSize: '14px', flexShrink: 0 }}>
                                     {initials(d.title)}
                                   </div>
-                                  <div>
-                                    <div className="user-name">{d.title}</div>
-                                    {d.description && <div className="user-role">{d.description.length > 40 ? d.description.slice(0, 40) + '...' : d.description}</div>}
+                                  <div style={{ minWidth: 0 }}>
+                                    <div className="user-name" style={{ fontSize: 14, fontWeight: 600 }}>{d.title}</div>
+                                    {descText && <div className="user-role" style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{descText.length > 40 ? descText.slice(0, 40) + '...' : descText}</div>}
                                   </div>
                                 </div>
                                 <div>
-                                  <div className="user-name">{isCreator ? (d.assignee?.name || "—") : (d.creator?.name || "—")}</div>
-                                  <div className="user-role">{isCreator ? (d.assignee?.role ? d.assignee.role.replace("_", " ") : "") : (d.creator?.role ? d.creator.role.replace("_", " ") : "")}</div>
+                                  <div className="user-name" style={{ fontSize: 13 }}>{isCreator ? (d.assignee?.name || "—") : (d.creator?.name || "—")}</div>
+                                  <div className="user-role" style={{ fontSize: 11, color: "#6b7280" }}>{isCreator ? (d.assignee?.role ? d.assignee.role.replace("_", " ") : "") : (d.creator?.role ? d.creator.role.replace("_", " ") : "")}</div>
                                 </div>
                                 <div>
-                                  <span className="badge" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }}>
+                                  <span className="badge" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), fontSize: 12, padding: "4px 10px", borderRadius: 999 }}>
                                     <span className="dot" style={{ background: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status) }} />
                                     {statusLabel(d.status)}
                                   </span>
                                 </div>
-                                <div className="date-box" style={{ whiteSpace: "pre-line" }}>{formatDateTimeShort(d.start_date)}{"\n"}{formatDateTimeShort(d.due_date)}</div>
+                                <div style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.6, whiteSpace: "pre-line" }}>{formatDateTimeShort(d.start_date)}{"\n"}{formatDateTimeShort(d.due_date)}</div>
                                 <div className="action-btns">
                                   <ActionPopover
                                     trigger={
@@ -1374,7 +1375,7 @@ function TaskDetails() {
                                   </ActionPopover>
                                 </div>
                               </div>
-                            )}
+                            );}}
                           </SortableTableWrapper>
                         </div>
                       );

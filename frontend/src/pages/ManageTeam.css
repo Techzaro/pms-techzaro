@@ -823,6 +823,18 @@
   background: var(--bg-page);
 }
 
+.mt-dropdown-item--highlighted {
+  background: #4a4a4a !important;
+  color: #fff !important;
+}
+.mt-dropdown-item--highlighted * {
+  color: #fff !important;
+}
+.mt-dropdown-item--highlighted .mt-dropdown-role,
+.mt-dropdown-item--highlighted .mt-dropdown-dept {
+  background: rgba(255,255,255,0.2) !important;
+}
+
 .mt-dropdown-item input[type="checkbox"] {
   width: 16px;
   height: 16px;

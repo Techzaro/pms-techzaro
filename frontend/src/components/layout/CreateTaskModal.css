@@ -456,11 +456,15 @@
 .task-card {
   background: var(--bg-card-alt);
 
-  border: 1px solid var(--border-color);
+  border: none;
 
   border-radius: 18px;
 
   padding: 18px;
+}
+
+.task-card--bordered {
+  border: 1px solid var(--border-color);
 }
 
 .task-card-top {

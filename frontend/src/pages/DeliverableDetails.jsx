@@ -632,7 +632,6 @@ function SubtaskDetails() {
                   {[
                     { id: "overview", label: "Overview", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
                     { id: "files", label: "Platform files & links", icon: <FolderOpen size={16} /> },
-                    { id: "activity", label: "Activity", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg> },
                   ].map(({ id, label, icon }) => (
                     <button key={id} className={`td-tab ${tab === id ? "td-tab--on" : ""}`} onClick={() => setTab(id)}>
                       {icon}
@@ -731,69 +730,6 @@ function SubtaskDetails() {
 
                   {tab === "files" && (
                     <FileUploadSection entityType="deliverable" entityId={subtask.id} files={files} onReorder={handleFileReorder} onFilesChange={fetchSubtask} readOnly={readOnly} />
-                  )}
-
-                  {tab === "activity" && (
-                    <div>
-                      <div className="td-section-header">
-                        <h2 className="td-section-title">Activity Timeline</h2>
-                      </div>
-                      {(() => {
-                        const events = workflowEvents.map((ev) => ({
-                          id: ev.id,
-                          type: 'event',
-                          action: ev.event_type,
-                          comment: ev.comment,
-                          user_name: ev.user?.name,
-                          created_at: ev.created_at,
-                          sort: new Date(ev.created_at).getTime(),
-                        }));
-                        const changes = (subtask.changes || []).map((c) => ({
-                          id: c.id,
-                          type: 'change',
-                          field: c.field_name,
-                          created_at: c.created_at,
-                          sort: new Date(c.created_at).getTime(),
-                        }));
-                        const timeline = [...events, ...changes].sort((a, b) => b.sort - a.sort);
-                        if (!timeline.length) return <p className="td-activity-empty">No activity yet.</p>;
-                        return (
-                          <ul className="td-activity-list">
-                            {timeline.map((item, i) => (
-                              <li key={i} className="td-activity-item">
-                                <span className="td-activity-icon">
-                                  {item.type === 'event' && (
-                                    <>
-                                      {item.action === 'created' && '📝'}
-                                      {item.action === 'submitted' && '📤'}
-                                      {item.action === 'acknowledged' && '👍'}
-                                      {item.action === 'paused' && '⏸️'}
-                                      {item.action === 'resumed' && '▶️'}
-                                      {item.action === 'approval' && '✅'}
-                                      {item.action === 'rejected' && '❌'}
-                                      {item.action === 'reopened' && '🔄'}
-                                      {item.action === 'field_changed' && '✏️'}
-                                      {item.action === 'assigned' && '📋'}
-                                      {!['created','submitted','acknowledged','paused','resumed','approval','rejected','reopened','field_changed','assigned'].includes(item.action) && '📌'}
-                                    </>
-                                  )}
-                                  {item.type === 'change' && '✏️'}
-                                </span>
-                                <div className="td-activity-body">
-                                  <span className="td-activity-text">
-                                    {item.type === 'event'
-                                      ? (item.comment || item.action?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()))
-                                      : item.field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + ' changed'
-                                    }
-                                  </span>
-                                  <span className="td-activity-time">{formatDateTime(item.created_at)}</span>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        );
-                      })()}
-                    </div>
                   )}
                 </div>
 
@@ -1073,65 +1009,6 @@ function SubtaskDetails() {
                   </div>
                 </div>
               )}
-
-              {/* ACTIVITY LOG — matches TaskDetails merged timeline */}
-              <div className="td-card">
-                <h3 className="td-card-title">Activity</h3>
-                {(() => {
-                  const events = workflowEvents.map((ev) => ({
-                    id: ev.id,
-                    type: 'event',
-                    action: ev.event_type,
-                    comment: ev.comment,
-                    created_at: ev.created_at,
-                    sort: new Date(ev.created_at).getTime(),
-                  }));
-                  const changes = (subtask.changes || []).map((c) => ({
-                    id: c.id,
-                    type: 'change',
-                    field: c.field_name,
-                    created_at: c.created_at,
-                    sort: new Date(c.created_at).getTime(),
-                  }));
-                  const timeline = [...events, ...changes].sort((a, b) => b.sort - a.sort).slice(0, 10);
-                  if (!timeline.length) return <p className="td-activity-empty">No activity yet.</p>;
-                  return (
-                    <ul className="td-activity-list">
-                      {timeline.map((item, i) => (
-                        <li key={i} className="td-activity-item">
-                          <span className="td-activity-icon">
-                            {item.type === 'event' && (
-                              <>
-                                {item.action === 'created' && '📝'}
-                                {item.action === 'submitted' && '📤'}
-                                {item.action === 'acknowledged' && '👍'}
-                                {item.action === 'paused' && '⏸️'}
-                                {item.action === 'resumed' && '▶️'}
-                                {item.action === 'approval' && '✅'}
-                                {item.action === 'rejected' && '❌'}
-                                {item.action === 'reopened' && '🔄'}
-                                {item.action === 'field_changed' && '✏️'}
-                                {item.action === 'assigned' && '📋'}
-                                {!['created','submitted','acknowledged','paused','resumed','approval','rejected','reopened','field_changed','assigned'].includes(item.action) && '📌'}
-                              </>
-                            )}
-                            {item.type === 'change' && '✏️'}
-                          </span>
-                          <div className="td-activity-body">
-                            <span className="td-activity-text">
-                              {item.type === 'event'
-                                ? (item.comment || item.action?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()))
-                                : item.field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + ' changed'
-                              }
-                            </span>
-                            <span className="td-activity-time">{formatDateTime(item.created_at)}</span>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  );
-                })()}
-              </div>
 
               {/* NOTES — matches TaskDetails multi-note support */}
               <div className="td-card">

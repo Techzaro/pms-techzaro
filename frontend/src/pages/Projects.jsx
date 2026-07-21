@@ -318,8 +318,12 @@ function Projects() {
 
 
   const filteredProjects = orderedProjects.filter((project) => {
-    if (searchQuery && !project.title?.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const titleMatch = project.title?.toLowerCase().includes(q);
+      const creatorMatch = project.creator?.name?.toLowerCase().includes(q);
+      const updatedMatch = project.updatedBy?.name?.toLowerCase().includes(q);
+      if (!titleMatch && !creatorMatch && !updatedMatch) return false;
     }
     if (statusFilter === "due_today") {
       if (!project.active_deadline) return false;
@@ -394,7 +398,7 @@ function Projects() {
             <IoSearchOutline fontSize={"20px"} />
             <input
               type="text"
-              placeholder="Search by project name"
+              placeholder="Search by project name or creator"
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
             />
@@ -414,7 +418,6 @@ function Projects() {
 
         {/* STATUS FILTERS */}
         <div className="task-progress">
-          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
           <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
             <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
           </p>
@@ -436,6 +439,7 @@ function Projects() {
           <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Declined ({rejectedCount})
           </p>
+          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
         </div>
 
         {/* PROJECTS */}
@@ -540,7 +544,7 @@ function Projects() {
                           style={{
                             width: `${progress}%`,
                             minWidth: progress === 0 ? "100%" : "0",
-                            background: progress === 0 ? "var(--bg-hover)" : getProgressColor(progress),
+                            background: progress === 0 ? "var(--border-medium)" : getProgressColor(progress),
                           }}
                         ></div>
                       </div>

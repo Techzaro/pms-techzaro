@@ -82,9 +82,13 @@ const EditProjectModal = ({ project, onClose }) => {
   const [categoryCustomMode, setCategoryCustomMode] = useState(false);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const categoryDropdownRef = useRef(null);
+  const [catHighlightedIndex, setCatHighlightedIndex] = useState(-1);
+  const catListRef = useRef(null);
   const [teamRolesOpen, setTeamRolesOpen] = useState(false);
   const [teamRolesSearch, setTeamRolesSearch] = useState("");
   const teamRolesRef = useRef(null);
+  const [teamHighlightedIndex, setTeamHighlightedIndex] = useState(-1);
+  const teamListRef = useRef(null);
   const [catDeleteOpen, setCatDeleteOpen] = useState(false);
   const [pendingCatDelete, setPendingCatDelete] = useState("");
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
@@ -188,6 +192,23 @@ const EditProjectModal = ({ project, onClose }) => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => { setCatHighlightedIndex(-1); }, [catSearch, categoryDropdownOpen]);
+  useEffect(() => { setTeamHighlightedIndex(-1); }, [teamRolesSearch, teamRolesOpen]);
+
+  useEffect(() => {
+    if (catHighlightedIndex >= 0 && catListRef.current) {
+      const items = catListRef.current.querySelectorAll(".cp-dropdown-item");
+      if (items[catHighlightedIndex]) items[catHighlightedIndex].scrollIntoView({ block: "nearest" });
+    }
+  }, [catHighlightedIndex]);
+
+  useEffect(() => {
+    if (teamHighlightedIndex >= 0 && teamListRef.current) {
+      const items = teamListRef.current.querySelectorAll(".cp-dropdown-item");
+      if (items[teamHighlightedIndex]) items[teamHighlightedIndex].scrollIntoView({ block: "nearest" });
+    }
+  }, [teamHighlightedIndex]);
 
   useEffect(() => {
     const token = authToken();
@@ -964,19 +985,35 @@ const EditProjectModal = ({ project, onClose }) => {
                         value={catSearch}
                         onChange={(e) => { setCatSearch(e.target.value); }}
                         onFocus={() => setCategoryDropdownOpen(true)}
-                        onKeyDown={(e) => { if (e.key === "Escape") { setCatSearch(""); setCategoryDropdownOpen(false); } }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") { setCatSearch(""); setCategoryDropdownOpen(false); return; }
+                          const filteredCount = existingCategories.filter((c) => !categoriesList.includes(c)).filter((c) => !catSearch.trim() || c.toLowerCase().includes(catSearch.toLowerCase())).length;
+                          const totalCount = filteredCount + 1;
+                          if (e.key === "ArrowDown") { e.preventDefault(); setCatHighlightedIndex((prev) => prev < totalCount - 1 ? prev + 1 : 0); }
+                          if (e.key === "ArrowUp") { e.preventDefault(); setCatHighlightedIndex((prev) => prev > 0 ? prev - 1 : totalCount - 1); }
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (catHighlightedIndex >= 0 && catHighlightedIndex < filteredCount) {
+                              const filtered = existingCategories.filter((c) => !categoriesList.includes(c)).filter((c) => !catSearch.trim() || c.toLowerCase().includes(catSearch.toLowerCase()));
+                              const cat = filtered[catHighlightedIndex];
+                              if (cat && !categoriesList.includes(cat)) { markDirty(); setCategoriesList((prev) => [...prev, cat]); }
+                            } else if (catHighlightedIndex === filteredCount) {
+                              setCategoryCustomMode(true); setCategoryDropdownOpen(false); setCategoryInput("");
+                            }
+                          }
+                        }}
                         autoFocus
                       />
                     )}
                     <svg className={`cp-dropdown-arrow ${categoryDropdownOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" onClick={(e) => { e.stopPropagation(); setCategoryDropdownOpen((prev) => !prev); }}><polyline points="6 9 12 15 18 9" /></svg>
                   </div>
                   {categoryDropdownOpen && (
-                    <div className="cp-dropdown-menu">
+                    <div className="cp-dropdown-menu" ref={catListRef}>
                       {existingCategories
                         .filter((c) => !categoriesList.includes(c))
                         .filter((c) => !catSearch.trim() || c.toLowerCase().includes(catSearch.toLowerCase()))
-                        .map((cat) => (
-                        <div key={cat} className="cp-dropdown-item cp-dropdown-item-row">
+                        .map((cat, idx) => (
+                        <div key={cat} className={`cp-dropdown-item cp-dropdown-item-row${catHighlightedIndex === idx ? " cp-dropdown-item--highlighted" : ""}`} onMouseEnter={() => setCatHighlightedIndex(idx)}>
                           <label className="cp-dropdown-item-check">
                             <input
                               type="checkbox"
@@ -1001,7 +1038,8 @@ const EditProjectModal = ({ project, onClose }) => {
                         </div>
                       ))}
                       <div
-                        className="cp-dropdown-item cp-dropdown-custom"
+                        className={`cp-dropdown-item cp-dropdown-custom${catHighlightedIndex === existingCategories.filter((c) => !categoriesList.includes(c)).filter((c) => !catSearch.trim() || c.toLowerCase().includes(catSearch.toLowerCase())).length ? " cp-dropdown-item--highlighted" : ""}`}
+                        onMouseEnter={() => setCatHighlightedIndex(existingCategories.filter((c) => !categoriesList.includes(c)).filter((c) => !catSearch.trim() || c.toLowerCase().includes(catSearch.toLowerCase())).length)}
                         onClick={() => { setCategoryCustomMode(true); setCategoryDropdownOpen(false); setCategoryInput(""); }}
                       >
                         Custom / Type Here
@@ -1045,15 +1083,33 @@ const EditProjectModal = ({ project, onClose }) => {
                     placeholder="Search by team name..."
                     value={teamRolesSearch}
                     onChange={(e) => setTeamRolesSearch(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Escape") { setTeamRolesSearch(""); setTeamRolesOpen(false); } }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") { setTeamRolesSearch(""); setTeamRolesOpen(false); return; }
+                      const filtered = teams.filter((t) => !teamRolesSearch.trim() || t.name.toLowerCase().includes(teamRolesSearch.toLowerCase()));
+                      if (e.key === "ArrowDown") { e.preventDefault(); setTeamHighlightedIndex((prev) => prev < filtered.length - 1 ? prev + 1 : 0); }
+                      if (e.key === "ArrowUp") { e.preventDefault(); setTeamHighlightedIndex((prev) => prev > 0 ? prev - 1 : filtered.length - 1); }
+                      if (e.key === "Enter" && teamHighlightedIndex >= 0 && teamHighlightedIndex < filtered.length) {
+                        e.preventDefault();
+                        const team = filtered[teamHighlightedIndex];
+                        if (team) {
+                          markDirty();
+                          setForm((prev) => ({
+                            ...prev,
+                            team_ids: prev.team_ids.includes(team.id)
+                              ? prev.team_ids.filter((id) => id !== team.id)
+                              : [...prev.team_ids, team.id],
+                          }));
+                        }
+                      }
+                    }}
                     autoFocus
                   />
                 )}
                 <svg className={`cp-dropdown-arrow ${teamRolesOpen ? "open" : ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" onClick={(e) => { e.stopPropagation(); if (teamRolesOpen) { setTeamRolesOpen(false); setTeamRolesSearch(""); } else { setTeamRolesOpen(true); setTeamRolesSearch(""); } }}><polyline points="6 9 12 15 18 9" /></svg>
                 {teamRolesOpen && (
-                  <div className="cp-dropdown-menu" onClick={(e) => e.stopPropagation()}>
-                    {teams.filter((t) => !teamRolesSearch.trim() || t.name.toLowerCase().includes(teamRolesSearch.toLowerCase())).map((team) => (
-                      <label key={team.id} className="cp-dropdown-item">
+                  <div className="cp-dropdown-menu" ref={teamListRef} onClick={(e) => e.stopPropagation()}>
+                    {teams.filter((t) => !teamRolesSearch.trim() || t.name.toLowerCase().includes(teamRolesSearch.toLowerCase())).map((team, idx) => (
+                      <label key={team.id} className={`cp-dropdown-item${teamHighlightedIndex === idx ? " cp-dropdown-item--highlighted" : ""}`} onMouseEnter={() => setTeamHighlightedIndex(idx)}>
                         <input
                           type="checkbox"
                           checked={form.team_ids.includes(team.id)}

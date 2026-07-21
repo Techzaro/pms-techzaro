@@ -19,7 +19,10 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
   const [error, setError] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [aamSearch, setAamSearch] = useState("");
+  const [aamHighlightedIndex, setAamHighlightedIndex] = useState(0);
   const dropdownRef = useRef(null);
+  const aamListRef = useRef(null);
+  const aamInputRef = useRef(null);
   const [pendingRemoveUser, setPendingRemoveUser] = useState(null);
 
   const isEdit = !!credential;
@@ -55,6 +58,8 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
     setAssignedUserIds([]);
     setError(null);
     setDropdownOpen(false);
+    setAamSearch("");
+    setAamHighlightedIndex(0);
   };
 
   const fetchUsers = async () => {
@@ -78,6 +83,23 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
     );
   };
+
+  const aamFilteredUsers = users.filter((u) => {
+    if (!aamSearch.trim()) return true;
+    const q = aamSearch.toLowerCase();
+    return u.name?.toLowerCase().includes(q) || u.role?.toLowerCase().includes(q) || u.department?.toLowerCase().includes(q);
+  });
+
+  useEffect(() => {
+    setAamHighlightedIndex(0);
+  }, [aamSearch, dropdownOpen]);
+
+  useEffect(() => {
+    if (dropdownOpen && aamListRef.current) {
+      const el = aamListRef.current.children[aamHighlightedIndex];
+      if (el) el.scrollIntoView({ block: "nearest" });
+    }
+  }, [aamHighlightedIndex, dropdownOpen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -217,7 +239,22 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
                     value={aamSearch}
                     onChange={(e) => { setAamSearch(e.target.value); }}
                     onFocus={() => setDropdownOpen(true)}
-                    onKeyDown={(e) => { if (e.key === "Escape") { setAamSearch(""); setDropdownOpen(false); } }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") { setAamSearch(""); setDropdownOpen(false); setAamHighlightedIndex(0); }
+                      else if (e.key === "ArrowDown") { e.preventDefault(); setAamHighlightedIndex((prev) => (prev < aamFilteredUsers.length + 1 ? prev + 1 : 0)); }
+                      else if (e.key === "ArrowUp") { e.preventDefault(); setAamHighlightedIndex((prev) => (prev > 0 ? prev - 1 : aamFilteredUsers.length + 1)); }
+                      else if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (aamHighlightedIndex === 0) {
+                          setIsDirty(true);
+                          if (assignedUserIds.length === users.length) { setAssignedUserIds([]); } else { setAssignedUserIds(users.map((u) => u.id)); }
+                        } else if (aamFilteredUsers[aamHighlightedIndex - 1]) {
+                          setIsDirty(true);
+                          toggleUser(aamFilteredUsers[aamHighlightedIndex - 1].id);
+                        }
+                      }
+                    }}
+                    ref={aamInputRef}
                     autoFocus
                   />
                 )}
@@ -240,47 +277,44 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
                     />
                     {aamSearch && <button type="button" className="aam-multiselect-search-clear" onClick={() => setAamSearch("")}>✕</button>}
                   </div>
-                  <label className="aam-multiselect-option" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={assignedUserIds.length === users.length && users.length > 0}
-                      onChange={() => {
-                        setIsDirty(true);
-                        if (assignedUserIds.length === users.length) {
-                          setAssignedUserIds([]);
-                        } else {
-                          setAssignedUserIds(users.map((u) => u.id));
-                        }
-                      }}
-                    />
-                    <span className="aam-multiselect-label">Select All</span>
-                  </label>
-                  <div className="aam-multiselect-divider" />
-                  {users
-                    .filter((u) => {
-                      if (!aamSearch.trim()) return true;
-                      const q = aamSearch.toLowerCase();
-                      return u.name?.toLowerCase().includes(q) || u.role?.toLowerCase().includes(q) || u.department?.toLowerCase().includes(q);
-                    })
-                    .map((u) => (
-                    <label key={u.id} className="aam-multiselect-option" onClick={(e) => e.stopPropagation()}>
+                  <div ref={aamListRef}>
+                    <label className={`aam-multiselect-option ${aamHighlightedIndex === 0 ? "aam-multiselect-option--highlighted" : ""}`} onClick={(e) => e.stopPropagation()} onMouseEnter={() => setAamHighlightedIndex(0)}>
                       <input
                         type="checkbox"
-                        checked={assignedUserIds.includes(u.id)}
-                        onChange={() => { setIsDirty(true); toggleUser(u.id); }}
+                        checked={assignedUserIds.length === users.length && users.length > 0}
+                        onChange={() => {
+                          setIsDirty(true);
+                          if (assignedUserIds.length === users.length) {
+                            setAssignedUserIds([]);
+                          } else {
+                            setAssignedUserIds(users.map((u) => u.id));
+                          }
+                        }}
                       />
-                      <span className="aam-multiselect-check">
-                        {assignedUserIds.includes(u.id) && <Check size={12} />}
-                      </span>
-                      <div className="aam-multiselect-info">
-                        <span className="aam-multiselect-label">{u.name}</span>
-                        <div className="aam-multiselect-badges">
-                          {u.role && <span className="aam-multiselect-role">{u.role.replace("_", " ")}</span>}
-                          {u.department && <span className="aam-multiselect-dept">{u.department}</span>}
-                        </div>
-                      </div>
+                      <span className="aam-multiselect-label">Select All</span>
                     </label>
-                  ))}
+                    <div className="aam-multiselect-divider" />
+                    {aamFilteredUsers
+                      .map((u, idx) => (
+                      <label key={u.id} className={`aam-multiselect-option ${aamHighlightedIndex === idx + 1 ? "aam-multiselect-option--highlighted" : ""}`} onClick={(e) => e.stopPropagation()} onMouseEnter={() => setAamHighlightedIndex(idx + 1)}>
+                        <input
+                          type="checkbox"
+                          checked={assignedUserIds.includes(u.id)}
+                          onChange={() => { setIsDirty(true); toggleUser(u.id); }}
+                        />
+                        <span className="aam-multiselect-check">
+                          {assignedUserIds.includes(u.id) && <Check size={12} />}
+                        </span>
+                        <div className="aam-multiselect-info">
+                          <span className="aam-multiselect-label">{u.name}</span>
+                          <div className="aam-multiselect-badges">
+                            {u.role && <span className="aam-multiselect-role">{u.role.replace("_", " ")}</span>}
+                            {u.department && <span className="aam-multiselect-dept">{u.department}</span>}
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

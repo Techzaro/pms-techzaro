@@ -14,7 +14,7 @@
  *
  * Access restricted to admin and manager roles.
  */
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Crown } from "lucide-react";
@@ -109,6 +109,10 @@ function ManageTeam() {
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [mtMemberSearch, setMtMemberSearch] = useState("");
   const [mtUserSearch, setMtUserSearch] = useState("");
+  const [memberHighlightedIndex, setMemberHighlightedIndex] = useState(0);
+  const [userHighlightedIndex, setUserHighlightedIndex] = useState(0);
+  const mtMemberListRef = useRef(null);
+  const mtUserListRef = useRef(null);
 
   const [deleteTeamConfirmOpen, setDeleteTeamConfirmOpen] = useState(false);
   const [deleteTeamId, setDeleteTeamId] = useState(null);
@@ -185,6 +189,21 @@ function ManageTeam() {
       setSelectedTeamFilter(teamId);
     }
   }, [searchParams]);
+
+  useEffect(() => { setMemberHighlightedIndex(0); }, [isMemberDropdownOpen, mtMemberSearch]);
+  useEffect(() => { setUserHighlightedIndex(0); }, [isUserDropdownOpen, mtUserSearch]);
+  useEffect(() => {
+    if (isMemberDropdownOpen && mtMemberListRef.current) {
+      const el = mtMemberListRef.current.children[memberHighlightedIndex];
+      if (el) el.scrollIntoView({ block: "nearest" });
+    }
+  }, [memberHighlightedIndex, isMemberDropdownOpen]);
+  useEffect(() => {
+    if (isUserDropdownOpen && mtUserListRef.current) {
+      const el = mtUserListRef.current.children[userHighlightedIndex];
+      if (el) el.scrollIntoView({ block: "nearest" });
+    }
+  }, [userHighlightedIndex, isUserDropdownOpen]);
 
   // ... rest of the functions (handleSetLeader, handleRemoveMember, etc.)
 
@@ -714,7 +733,17 @@ function ManageTeam() {
                           value={mtUserSearch}
                           onChange={(e) => { setMtUserSearch(e.target.value); }}
                           onFocus={() => setIsUserDropdownOpen(true)}
-                          onKeyDown={(e) => { if (e.key === "Escape") { setMtUserSearch(""); setIsUserDropdownOpen(false); } }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") { setMtUserSearch(""); setIsUserDropdownOpen(false); setUserHighlightedIndex(0); }
+                            else if (e.key === "ArrowDown") { e.preventDefault(); setUserHighlightedIndex((p) => (p < availableUsersForTeam.filter((u) => !mtUserSearch.trim() || u.name?.toLowerCase().includes(mtUserSearch.toLowerCase()) || u.role?.toLowerCase().includes(mtUserSearch.toLowerCase()) || u.department?.toLowerCase().includes(mtUserSearch.toLowerCase())).length ? p + 1 : 0)); }
+                            else if (e.key === "ArrowUp") { e.preventDefault(); setUserHighlightedIndex((p) => (p > 0 ? p - 1 : availableUsersForTeam.filter((u) => !mtUserSearch.trim() || u.name?.toLowerCase().includes(mtUserSearch.toLowerCase()) || u.role?.toLowerCase().includes(mtUserSearch.toLowerCase()) || u.department?.toLowerCase().includes(mtUserSearch.toLowerCase())).length)); }
+                            else if (e.key === "Enter") {
+                              e.preventDefault();
+                              const filtered = availableUsersForTeam.filter((u) => !mtUserSearch.trim() || u.name?.toLowerCase().includes(mtUserSearch.toLowerCase()) || u.role?.toLowerCase().includes(mtUserSearch.toLowerCase()) || u.department?.toLowerCase().includes(mtUserSearch.toLowerCase()));
+                              if (userHighlightedIndex === 0) { toggleSelectAllUsers(currentTeamMembers); }
+                              else if (filtered[userHighlightedIndex - 1]) { toggleUserSelection(filtered[userHighlightedIndex - 1].id); }
+                            }
+                          }}
                           autoFocus
                         />
                       )}
@@ -745,32 +774,47 @@ function ManageTeam() {
                             <span className="mt-dropdown-count">{selectedUserIds.length} selected</span>
                           )}
                         </div>
-                        <div className="mt-dropdown-items">
+                        <div className="mt-dropdown-items" ref={mtUserListRef}>
                           {availableUsersForTeam.length === 0 ? (
                             <p className="mt-dropdown-empty">All users are already members of this team.</p>
                           ) : (
-                            availableUsersForTeam
-                              .filter((user) => {
-                                if (!mtUserSearch.trim()) return true;
-                                const q = mtUserSearch.toLowerCase();
-                                return user.name?.toLowerCase().includes(q) || user.role?.toLowerCase().includes(q) || user.department?.toLowerCase().includes(q);
-                              })
-                              .map((user) => (
-                              <label key={user.id} className="mt-dropdown-item">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedUserIds.includes(user.id)}
-                                  onChange={() => toggleUserSelection(user.id)}
-                                />
-                                <div className="mt-dropdown-info">
-                                  <span className="mt-dropdown-name">{user.name}</span>
-                                  <div className="mt-dropdown-badges">
-                                    {user.role && <span className="mt-dropdown-role">{user.role}</span>}
-                                    {user.department && <span className="mt-dropdown-dept">{user.department}</span>}
+                            <>
+                              <div className={`mt-dropdown-item ${userHighlightedIndex === 0 ? "mt-dropdown-item--highlighted" : ""}`} onMouseEnter={() => setUserHighlightedIndex(0)} style={{ cursor: "pointer" }}>
+                                <label className="mt-dropdown-item" style={{ margin: 0 }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={
+                                      availableUsersForTeam.length > 0 &&
+                                      selectedUserIds.length === availableUsersForTeam.length
+                                    }
+                                    onChange={() => toggleSelectAllUsers(currentTeamMembers)}
+                                  />
+                                  Select All
+                                </label>
+                              </div>
+                              {availableUsersForTeam
+                                .filter((user) => {
+                                  if (!mtUserSearch.trim()) return true;
+                                  const q = mtUserSearch.toLowerCase();
+                                  return user.name?.toLowerCase().includes(q) || user.role?.toLowerCase().includes(q) || user.department?.toLowerCase().includes(q);
+                                })
+                                .map((user, idx) => (
+                                <label key={user.id} className={`mt-dropdown-item ${userHighlightedIndex === idx + 1 ? "mt-dropdown-item--highlighted" : ""}`} onMouseEnter={() => setUserHighlightedIndex(idx + 1)}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedUserIds.includes(user.id)}
+                                    onChange={() => toggleUserSelection(user.id)}
+                                  />
+                                  <div className="mt-dropdown-info">
+                                    <span className="mt-dropdown-name">{user.name}</span>
+                                    <div className="mt-dropdown-badges">
+                                      {user.role && <span className="mt-dropdown-role">{user.role}</span>}
+                                      {user.department && <span className="mt-dropdown-dept">{user.department}</span>}
+                                    </div>
                                   </div>
-                                </div>
-                              </label>
-                            ))
+                                </label>
+                              ))}
+                            </>
                           )}
                         </div>
                       </div>
@@ -853,7 +897,17 @@ function ManageTeam() {
                           value={mtMemberSearch}
                           onChange={(e) => { setMtMemberSearch(e.target.value); }}
                           onFocus={() => setIsMemberDropdownOpen(true)}
-                          onKeyDown={(e) => { if (e.key === "Escape") { setMtMemberSearch(""); setIsMemberDropdownOpen(false); } }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") { setMtMemberSearch(""); setIsMemberDropdownOpen(false); setMemberHighlightedIndex(0); }
+                            else if (e.key === "ArrowDown") { e.preventDefault(); setMemberHighlightedIndex((p) => (p < users.filter((u) => !mtMemberSearch.trim() || u.name?.toLowerCase().includes(mtMemberSearch.toLowerCase()) || u.role?.toLowerCase().includes(mtMemberSearch.toLowerCase()) || u.department?.toLowerCase().includes(mtMemberSearch.toLowerCase())).length ? p + 1 : 0)); }
+                            else if (e.key === "ArrowUp") { e.preventDefault(); setMemberHighlightedIndex((p) => (p > 0 ? p - 1 : users.filter((u) => !mtMemberSearch.trim() || u.name?.toLowerCase().includes(mtMemberSearch.toLowerCase()) || u.role?.toLowerCase().includes(mtMemberSearch.toLowerCase()) || u.department?.toLowerCase().includes(mtMemberSearch.toLowerCase())).length)); }
+                            else if (e.key === "Enter") {
+                              e.preventDefault();
+                              const filtered = users.filter((u) => !mtMemberSearch.trim() || u.name?.toLowerCase().includes(mtMemberSearch.toLowerCase()) || u.role?.toLowerCase().includes(mtMemberSearch.toLowerCase()) || u.department?.toLowerCase().includes(mtMemberSearch.toLowerCase()));
+                              if (memberHighlightedIndex === 0) { toggleSelectAllMembers(); }
+                              else if (filtered[memberHighlightedIndex - 1]) { toggleMemberSelection(filtered[memberHighlightedIndex - 1].id); }
+                            }
+                          }}
                           autoFocus
                         />
                       )}
@@ -883,32 +937,44 @@ function ManageTeam() {
                             <span className="mt-dropdown-count">{selectedMemberIds.length} selected</span>
                           )}
                         </div>
-                        <div className="mt-dropdown-items">
+                        <div className="mt-dropdown-items" ref={mtMemberListRef}>
                           {users.length === 0 ? (
                             <p className="mt-dropdown-empty">No users available.</p>
                           ) : (
-                            users
-                              .filter((user) => {
-                                if (!mtMemberSearch.trim()) return true;
-                                const q = mtMemberSearch.toLowerCase();
-                                return user.name?.toLowerCase().includes(q) || user.role?.toLowerCase().includes(q) || user.department?.toLowerCase().includes(q);
-                              })
-                              .map((user) => (
-                              <label key={user.id} className="mt-dropdown-item">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedMemberIds.includes(user.id)}
-                                  onChange={() => toggleMemberSelection(user.id)}
-                                />
-                                <div className="mt-dropdown-info">
-                                  <span className="mt-dropdown-name">{user.name}</span>
-                                  <div className="mt-dropdown-badges">
-                                    {user.role && <span className="mt-dropdown-role">{user.role}</span>}
-                                    {user.department && <span className="mt-dropdown-dept">{user.department}</span>}
+                            <>
+                              <div className={`mt-dropdown-item ${memberHighlightedIndex === 0 ? "mt-dropdown-item--highlighted" : ""}`} onMouseEnter={() => setMemberHighlightedIndex(0)} style={{ cursor: "pointer" }}>
+                                <label className="mt-dropdown-item" style={{ margin: 0 }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={users.length > 0 && selectedMemberIds.length === users.length}
+                                    onChange={toggleSelectAllMembers}
+                                  />
+                                  Select All
+                                </label>
+                              </div>
+                              {users
+                                .filter((user) => {
+                                  if (!mtMemberSearch.trim()) return true;
+                                  const q = mtMemberSearch.toLowerCase();
+                                  return user.name?.toLowerCase().includes(q) || user.role?.toLowerCase().includes(q) || user.department?.toLowerCase().includes(q);
+                                })
+                                .map((user, idx) => (
+                                <label key={user.id} className={`mt-dropdown-item ${memberHighlightedIndex === idx + 1 ? "mt-dropdown-item--highlighted" : ""}`} onMouseEnter={() => setMemberHighlightedIndex(idx + 1)}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedMemberIds.includes(user.id)}
+                                    onChange={() => toggleMemberSelection(user.id)}
+                                  />
+                                  <div className="mt-dropdown-info">
+                                    <span className="mt-dropdown-name">{user.name}</span>
+                                    <div className="mt-dropdown-badges">
+                                      {user.role && <span className="mt-dropdown-role">{user.role}</span>}
+                                      {user.department && <span className="mt-dropdown-dept">{user.department}</span>}
+                                    </div>
                                   </div>
-                                </div>
-                              </label>
-                            ))
+                                </label>
+                              ))}
+                            </>
                           )}
                         </div>
                       </div>

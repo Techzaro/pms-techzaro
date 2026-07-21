@@ -520,7 +520,7 @@ const CreateSubtaskModal = ({
             </div>
 
             {/* Dates */}
-            <div className="task-card">
+            <div className="task-card task-card--bordered">
               <div className="task-card-top"><span>Dates</span></div>
               <div className="task-deadline-grid">
                 <div>

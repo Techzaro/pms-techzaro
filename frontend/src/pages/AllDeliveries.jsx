@@ -95,7 +95,6 @@ function AllDeliveries() {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
-    if (debouncedSearch) params.append("search", debouncedSearch);
     if (statusFilter) params.append("status", statusFilter);
     if (timeFilter) params.append("time_filter", timeFilter);
 
@@ -189,14 +188,23 @@ function AllDeliveries() {
   const approvedCount = baseItems.filter((i) => i.status === "approved").length;
   const rejectedCount = baseItems.filter((i) => i.status === "rejected").length;
 
-  const filteredItems = statusFilter && statusFilter !== "due_today"
+  const searchFilteredItems = debouncedSearch
     ? baseItems.filter((item) => {
+        const q = debouncedSearch.toLowerCase();
+        const titleMatch = (item.title || "").toLowerCase().includes(q);
+        const assigneeMatch = (item.assignee?.name || "").toLowerCase().includes(q);
+        const creatorMatch = (item.creator?.name || "").toLowerCase().includes(q);
+        return titleMatch || assigneeMatch || creatorMatch;
+      })
+    : baseItems;
+  const filteredItems = statusFilter && statusFilter !== "due_today"
+    ? searchFilteredItems.filter((item) => {
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
         return item.status === statusFilter;
       })
-    : baseItems;
+    : searchFilteredItems;
 
   const deliverableIdList = filteredItems.map((i) => i.id);
 
@@ -229,7 +237,6 @@ function AllDeliveries() {
 
         {/* STATUS FILTERS */}
         <div className="task-progress">
-          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
           <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
             <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
           </p>
@@ -254,6 +261,7 @@ function AllDeliveries() {
           <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Declined ({rejectedCount})
           </p>
+          <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
         </div>
 
         {/* SEARCH BAR */}
@@ -341,11 +349,6 @@ function AllDeliveries() {
                     <div className="col-parent-task">
                       <div>
                         <div className="task-title">{item.task?.title || "-"}</div>
-                        {item.project && (
-                          <Link to={rolePath(`projects/project-details/${item.project.id}`)} onClick={(e) => e.stopPropagation()} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", marginTop: "2px", display: "inline-block" }}>
-                            {item.project.title}
-                          </Link>
-                        )}
                       </div>
                     </div>
 

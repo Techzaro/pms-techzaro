@@ -75,8 +75,12 @@ function ManageUsers() {
   const [showProfPassword, setShowProfPassword] = useState(false);
   const [desgDropdownOpen, setDesgDropdownOpen] = useState(false);
   const [deptDropdownOpen, setDeptDropdownOpen] = useState(false);
+  const [desgHighlightedIndex, setDesgHighlightedIndex] = useState(-1);
+  const [deptHighlightedIndex, setDeptHighlightedIndex] = useState(-1);
   const desgDropdownRef = useRef(null);
   const deptDropdownRef = useRef(null);
+  const desgOptionsRef = useRef(null);
+  const deptOptionsRef = useRef(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState({ type: "", value: "" });
   const [avatarRemoveConfirmOpen, setAvatarRemoveConfirmOpen] = useState(false);
@@ -330,6 +334,23 @@ function ManageUsers() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => { setDesgHighlightedIndex(-1); }, [desgDropdownOpen]);
+  useEffect(() => { setDeptHighlightedIndex(-1); }, [deptDropdownOpen]);
+
+  useEffect(() => {
+    if (desgHighlightedIndex >= 0 && desgOptionsRef.current) {
+      const items = desgOptionsRef.current.children;
+      if (items[desgHighlightedIndex]) items[desgHighlightedIndex].scrollIntoView({ block: "nearest" });
+    }
+  }, [desgHighlightedIndex]);
+
+  useEffect(() => {
+    if (deptHighlightedIndex >= 0 && deptOptionsRef.current) {
+      const items = deptOptionsRef.current.children;
+      if (items[deptHighlightedIndex]) items[deptHighlightedIndex].scrollIntoView({ block: "nearest" });
+    }
+  }, [deptHighlightedIndex]);
 
   // Drag-and-drop handlers for user row reordering
   const handleDragStart = useCallback((event) => {
@@ -1788,21 +1809,42 @@ function ManageUsers() {
                       </div>
                     ) : (
                       <div className="category-dropdown-container" ref={desgDropdownRef}>
-                        <button type="button" className="category-dropdown-trigger" onClick={() => setDesgDropdownOpen((o) => !o)} style={addErrors.designation ? { border: "1px solid var(--color-danger)" } : {}}>
+                        <button type="button" className="category-dropdown-trigger" onClick={() => setDesgDropdownOpen((o) => !o)} onKeyDown={(e) => {
+                          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                            e.preventDefault();
+                            if (!desgDropdownOpen) { setDesgDropdownOpen(true); return; }
+                            const total = designations.length + 2;
+                            if (e.key === "ArrowDown") setDesgHighlightedIndex((i) => (i < total - 1 ? i + 1 : 0));
+                            else setDesgHighlightedIndex((i) => (i > 0 ? i - 1 : total - 1));
+                          } else if (e.key === "Enter" && desgDropdownOpen && desgHighlightedIndex >= 0) {
+                            e.preventDefault();
+                            if (desgHighlightedIndex === 0) {
+                              setNewUser((prev) => ({ ...prev, designation: "" }));
+                            } else if (desgHighlightedIndex <= designations.length) {
+                              setNewUser((prev) => ({ ...prev, designation: designations[desgHighlightedIndex - 1] }));
+                            } else {
+                              setNewUser((prev) => ({ ...prev, designation: "__custom__" }));
+                            }
+                            setDesgDropdownOpen(false);
+                          } else if (e.key === "Escape" && desgDropdownOpen) {
+                            e.preventDefault();
+                            setDesgDropdownOpen(false);
+                          }
+                        }} style={addErrors.designation ? { border: "1px solid var(--color-danger)" } : {}}>
                           {newUser.designation || "Select Designation"} <span className={`category-dropdown-arrow ${desgDropdownOpen ? "open" : ""}`}>&#9662;</span>
                         </button>
                         {desgDropdownOpen && (
-                          <div className="category-dropdown-options">
-                            <div className="category-dropdown-option" onClick={() => { setNewUser((prev) => ({ ...prev, designation: "" })); setDesgDropdownOpen(false); }} style={{ fontWeight: !newUser.designation ? "600" : "400", background: !newUser.designation ? "var(--color-primary-bg)" : "transparent" }}>
+                          <div className="category-dropdown-options" ref={desgOptionsRef}>
+                            <div className={`category-dropdown-option ${desgHighlightedIndex === 0 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setNewUser((prev) => ({ ...prev, designation: "" })); setDesgDropdownOpen(false); }} onMouseEnter={() => setDesgHighlightedIndex(0)} style={{ fontWeight: !newUser.designation ? "600" : "400", background: !newUser.designation ? "var(--color-primary-bg)" : "transparent" }}>
                               Select Designation
                             </div>
-                            {designations.map((d) => (
-                              <div key={d} className="category-dropdown-option" onClick={() => { setNewUser((prev) => ({ ...prev, designation: d })); setDesgDropdownOpen(false); }} style={{ fontWeight: newUser.designation === d ? "600" : "400", background: newUser.designation === d ? "var(--color-primary-bg)" : "transparent" }}>
+                            {designations.map((d, idx) => (
+                              <div key={d} className={`category-dropdown-option ${desgHighlightedIndex === idx + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setNewUser((prev) => ({ ...prev, designation: d })); setDesgDropdownOpen(false); }} onMouseEnter={() => setDesgHighlightedIndex(idx + 1)} style={{ fontWeight: newUser.designation === d ? "600" : "400", background: newUser.designation === d ? "var(--color-primary-bg)" : "transparent" }}>
                                 {d}
                                 <span className="category-option-delete" onClick={(e) => { e.stopPropagation(); deleteDesignation(d); }} title="Delete">&times;</span>
                               </div>
                             ))}
-                            <div className="category-dropdown-option category-dropdown-custom" onClick={() => { setNewUser((prev) => ({ ...prev, designation: "__custom__" })); setDesgDropdownOpen(false); }}>Custom / Type Here</div>
+                            <div className={`category-dropdown-option category-dropdown-custom ${desgHighlightedIndex === designations.length + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setNewUser((prev) => ({ ...prev, designation: "__custom__" })); setDesgDropdownOpen(false); }} onMouseEnter={() => setDesgHighlightedIndex(designations.length + 1)}>Custom / Type Here</div>
                           </div>
                         )}
                       </div>
@@ -1819,21 +1861,42 @@ function ManageUsers() {
                       </div>
                     ) : (
                       <div className="category-dropdown-container" ref={deptDropdownRef}>
-                        <button type="button" className="category-dropdown-trigger" onClick={() => setDeptDropdownOpen((o) => !o)} style={addErrors.department ? { border: "1px solid var(--color-danger)" } : {}}>
+                        <button type="button" className="category-dropdown-trigger" onClick={() => setDeptDropdownOpen((o) => !o)} onKeyDown={(e) => {
+                          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                            e.preventDefault();
+                            if (!deptDropdownOpen) { setDeptDropdownOpen(true); return; }
+                            const total = departments.length + 2;
+                            if (e.key === "ArrowDown") setDeptHighlightedIndex((i) => (i < total - 1 ? i + 1 : 0));
+                            else setDeptHighlightedIndex((i) => (i > 0 ? i - 1 : total - 1));
+                          } else if (e.key === "Enter" && deptDropdownOpen && deptHighlightedIndex >= 0) {
+                            e.preventDefault();
+                            if (deptHighlightedIndex === 0) {
+                              setNewUser((prev) => ({ ...prev, department: "" }));
+                            } else if (deptHighlightedIndex <= departments.length) {
+                              setNewUser((prev) => ({ ...prev, department: departments[deptHighlightedIndex - 1] }));
+                            } else {
+                              setNewUser((prev) => ({ ...prev, department: "__custom__" }));
+                            }
+                            setDeptDropdownOpen(false);
+                          } else if (e.key === "Escape" && deptDropdownOpen) {
+                            e.preventDefault();
+                            setDeptDropdownOpen(false);
+                          }
+                        }} style={addErrors.department ? { border: "1px solid var(--color-danger)" } : {}}>
                           {newUser.department || "Select Department"} <span className={`category-dropdown-arrow ${deptDropdownOpen ? "open" : ""}`}>&#9662;</span>
                         </button>
                         {deptDropdownOpen && (
-                          <div className="category-dropdown-options">
-                            <div className="category-dropdown-option" onClick={() => { setNewUser((prev) => ({ ...prev, department: "" })); setDeptDropdownOpen(false); }} style={{ fontWeight: !newUser.department ? "600" : "400", background: !newUser.department ? "var(--color-primary-bg)" : "transparent" }}>
+                          <div className="category-dropdown-options" ref={deptOptionsRef}>
+                            <div className={`category-dropdown-option ${deptHighlightedIndex === 0 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setNewUser((prev) => ({ ...prev, department: "" })); setDeptDropdownOpen(false); }} onMouseEnter={() => setDeptHighlightedIndex(0)} style={{ fontWeight: !newUser.department ? "600" : "400", background: !newUser.department ? "var(--color-primary-bg)" : "transparent" }}>
                               Select Department
                             </div>
-                            {departments.map((d) => (
-                              <div key={d} className="category-dropdown-option" onClick={() => { setNewUser((prev) => ({ ...prev, department: d })); setDeptDropdownOpen(false); }} style={{ fontWeight: newUser.department === d ? "600" : "400", background: newUser.department === d ? "var(--color-primary-bg)" : "transparent" }}>
+                            {departments.map((d, idx) => (
+                              <div key={d} className={`category-dropdown-option ${deptHighlightedIndex === idx + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setNewUser((prev) => ({ ...prev, department: d })); setDeptDropdownOpen(false); }} onMouseEnter={() => setDeptHighlightedIndex(idx + 1)} style={{ fontWeight: newUser.department === d ? "600" : "400", background: newUser.department === d ? "var(--color-primary-bg)" : "transparent" }}>
                                 {d}
                                 <span className="category-option-delete" onClick={(e) => { e.stopPropagation(); deleteDepartment(d); }} title="Delete">&times;</span>
                               </div>
                             ))}
-                            <div className="category-dropdown-option category-dropdown-custom" onClick={() => { setNewUser((prev) => ({ ...prev, department: "__custom__" })); setDeptDropdownOpen(false); }}>Custom / Type Here</div>
+                            <div className={`category-dropdown-option category-dropdown-custom ${deptHighlightedIndex === departments.length + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setNewUser((prev) => ({ ...prev, department: "__custom__" })); setDeptDropdownOpen(false); }} onMouseEnter={() => setDeptHighlightedIndex(departments.length + 1)}>Custom / Type Here</div>
                           </div>
                         )}
                       </div>

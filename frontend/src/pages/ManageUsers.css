@@ -1037,6 +1037,14 @@
   background: var(--bg-hover);
 }
 
+.category-dropdown-option--highlighted {
+  background: #4a4a4a !important;
+  color: #fff !important;
+}
+.category-dropdown-option--highlighted * {
+  color: #fff !important;
+}
+
 .category-dropdown-custom {
   color: #6366f1;
   font-weight: 600;

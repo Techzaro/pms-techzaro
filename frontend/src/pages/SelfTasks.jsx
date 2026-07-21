@@ -111,7 +111,6 @@ const SelfTasks = () => {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
-    if (debouncedSearch) params.append("search", debouncedSearch);
     if (statusFilter) params.append("status", statusFilter);
     if (timeFilter) params.append("time_filter", timeFilter);
 
@@ -272,14 +271,23 @@ const SelfTasks = () => {
   const reopenedCount = baseItems.filter((i) => i.status === "reopened").length;
   const approvedCount = baseItems.filter((i) => i.status === "approved").length;
   const rejectedCount = baseItems.filter((i) => i.status === "rejected").length;
-  const filteredItems = statusFilter && statusFilter !== "due_today"
+  const searchFilteredItems = debouncedSearch
     ? baseItems.filter((item) => {
+        const q = debouncedSearch.toLowerCase();
+        const titleMatch = (item.title || "").toLowerCase().includes(q);
+        const assigneeMatch = (item.assignees || []).some(a => (a.name || "").toLowerCase().includes(q));
+        const assignerMatch = (item.assigner?.name || "").toLowerCase().includes(q);
+        return titleMatch || assigneeMatch || assignerMatch;
+      })
+    : baseItems;
+  const filteredItems = statusFilter && statusFilter !== "due_today"
+    ? searchFilteredItems.filter((item) => {
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
         return item.status === statusFilter;
       })
-    : baseItems;
+    : searchFilteredItems;
 
   const taskIdList = filteredItems.map((i) => i.id);
 
@@ -321,7 +329,6 @@ const SelfTasks = () => {
       </div>
 
       <div className="task-progress">
-        <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
         <p className={`DueToday ${statusFilter === "due_today" ? "active" : ""}`} onClick={() => selectStatusFilter("due_today")} style={{ cursor: "pointer" }}>
           <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
         </p>
@@ -346,6 +353,7 @@ const SelfTasks = () => {
         <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Declined ({rejectedCount})
         </p>
+        <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
       </div>
 
       <div className="tasks-search-bar">

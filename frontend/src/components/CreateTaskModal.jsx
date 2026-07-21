@@ -178,6 +178,8 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
   const [subtasks, setSubtasks] = useState([]);
   const [subtaskInput, setSubtaskInput] = useState({ title: "", start_datetime: "", due_datetime: "" });
   const [openSubtaskDropdown, setOpenSubtaskDropdown] = useState(null);
+  const [subtaskAssigneeHighlightedIndex, setSubtaskAssigneeHighlightedIndex] = useState(-1);
+  const subtaskAssigneeListRef = useRef(null);
 
   const [requirementsList, setRequirementsList] = useState([]);
   const [reqInput, setReqInput] = useState("");
@@ -288,6 +290,18 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
   }, [openSubtaskDropdown]);
 
   useEffect(() => {
+    setSubtaskAssigneeHighlightedIndex(-1);
+  }, [openSubtaskDropdown]);
+
+  useEffect(() => {
+    if (subtaskAssigneeHighlightedIndex < 0 || !subtaskAssigneeListRef.current) return;
+    const items = subtaskAssigneeListRef.current.children;
+    if (items[subtaskAssigneeHighlightedIndex]) {
+      items[subtaskAssigneeHighlightedIndex].scrollIntoView({ block: "nearest" });
+    }
+  }, [subtaskAssigneeHighlightedIndex]);
+
+  useEffect(() => {
     const token = authToken();
     const currentUser = getUser();
     const ensureCurrentUser = (users) => {
@@ -392,6 +406,26 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
   const handleSubtaskAssignee = (index, userId) => {
     setSubtasks((prev) => prev.map((d, i) => i === index ? { ...d, assigned_to: userId || null } : d));
     setOpenSubtaskDropdown(null);
+  };
+
+  const handleSubtaskDropdownKeyDown = (e, idx) => {
+    if (openSubtaskDropdown !== idx) return;
+    const filteredUsers = displayUsers.filter(u => form.assigned_to.includes(u.id));
+    const itemCount = 1 + filteredUsers.length;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSubtaskAssigneeHighlightedIndex((prev) => (prev < itemCount - 1 ? prev + 1 : 0));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSubtaskAssigneeHighlightedIndex((prev) => (prev > 0 ? prev - 1 : itemCount - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (subtaskAssigneeHighlightedIndex === 0) {
+        handleSubtaskAssignee(idx, null);
+      } else if (subtaskAssigneeHighlightedIndex > 0 && filteredUsers[subtaskAssigneeHighlightedIndex - 1]) {
+        handleSubtaskAssignee(idx, filteredUsers[subtaskAssigneeHighlightedIndex - 1].id);
+      }
+    }
   };
 
   const confirmRemoveItem = () => {
@@ -702,7 +736,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                 )}
               </div>
 
-              <div className="task-card">
+              <div className="task-card task-card--bordered">
                 <div className="task-card-top"><span>Dates</span></div>
                 <div className="task-deadline-grid">
                   <div>
@@ -851,6 +885,85 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                     </div>
                   )}
                 </>
+              )}
+
+              {subtasks.length > 0 && (
+                <div className="task-card task-card--bordered">
+                  <div className="task-card-top">
+                    <span>Subtasks</span>
+                  </div>
+                  <div className="task-phase-list">
+                    {subtasks.map((d, index) => {
+                      const assignedUser = d.assigned_to ? displayUsers.find(u => String(u.id) === String(d.assigned_to)) : null;
+                      const isDropdownOpen = openSubtaskDropdown === index;
+                      return (
+                      <div key={index} className="task-phase-item" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #f3f4f6", position: "relative" }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#8b5cf6", display: "inline-block", flexShrink: 0 }}></span>
+                        <span style={{ flex: 1, fontSize: 13, color: "#111827" }}>{d.title}</span>
+                        <span style={{ fontSize: 11, color: "#6b7280", whiteSpace: "pre-line" }}>
+                          {d.start_date ? formatDateTime(d.start_date).replace("\n", " ") : ""}
+                          {d.start_date && d.due_date ? "\n" : ""}
+                          {d.due_date ? formatDateTime(d.due_date).replace("\n", " ") : "No due date"}
+                        </span>
+                        <div style={{ position: "relative" }}>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setOpenSubtaskDropdown(isDropdownOpen ? null : index); }}
+                            onKeyDown={(e) => handleSubtaskDropdownKeyDown(e, index)}
+                            style={{
+                              fontSize: 11, cursor: "pointer", padding: "3px 8px", borderRadius: 4, border: "1px solid #e5e7eb",
+                              background: assignedUser ? "#eef2ff" : "#f9fafb", color: assignedUser ? "#6366f1" : "#6b7280",
+                              fontWeight: 500, whiteSpace: "nowrap",
+                            }}
+                          >
+                            {assignedUser ? assignedUser.name : "Assign"}
+                          </button>
+                          {isDropdownOpen && (
+                            <div onClick={(e) => e.stopPropagation()} ref={subtaskAssigneeListRef} style={{
+                              position: "absolute", bottom: "100%", right: 0, zIndex: 100,
+                              background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
+                              boxShadow: "0 4px 12px rgba(0,0,0,0.1)", minWidth: 150, padding: "4px 0", marginBottom: 4,
+                            }}>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); handleSubtaskAssignee(index, null); }}
+                                onMouseEnter={() => setSubtaskAssigneeHighlightedIndex(0)}
+                                style={{
+                                  display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
+                                  fontSize: 12, cursor: "pointer",
+                                  background: subtaskAssigneeHighlightedIndex === 0 ? "#eef2ff" : (!assignedUser ? "#f3f4f6" : "transparent"),
+                                  border: "none", color: "#374151",
+                                }}
+                              >
+                                All assignees
+                              </button>
+                              {displayUsers.filter(u => form.assigned_to.includes(u.id)).map((u, uIdx) => (
+                                <button
+                                  key={u.id}
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); handleSubtaskAssignee(index, u.id); }}
+                                  onMouseEnter={() => setSubtaskAssigneeHighlightedIndex(uIdx + 1)}
+                                  style={{
+                                    display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
+                                    fontSize: 12, cursor: "pointer",
+                                    background: subtaskAssigneeHighlightedIndex === uIdx + 1 ? "#eef2ff" : (String(d.assigned_to) === String(u.id) ? "#f3f4f6" : "transparent"),
+                                    border: "none", color: "#374151",
+                                  }}
+                                >
+                                  <span>{u.name}</span>
+                                  {u.role && <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 6 }}>({u.role.replace("_", " ")})</span>}
+                                  {u.department && <span style={{ fontSize: 10, fontWeight: 500, color: "#6366f1", background: "#eef2ff", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>{u.department}</span>}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "subtask", index }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
+                      </div>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
 
             </div>

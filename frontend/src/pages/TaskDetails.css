@@ -1764,8 +1764,9 @@ background: var(--color-success-bg);
   cursor: pointer;
   transition: background 0.12s;
 }
-.td-toolbar-dropdown-item:hover {
-  background: var(--bg-hover);
+.td-toolbar-dropdown-item--highlighted {
+  background: #4a4a4a !important;
+  color: #fff !important;
 }
 .td-toolbar-dropdown-item.active {
   background: var(--color-primary-bg);
