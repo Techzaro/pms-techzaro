@@ -23,7 +23,7 @@ class ProjectResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'business_id' => $this->business_id,
+            'business_id' => $this->business_id ?? 'PRJ-' . $this->id,
             'project_code' => $this->project_code,
             'project_number' => $this->project_number,
             'title' => $this->title,

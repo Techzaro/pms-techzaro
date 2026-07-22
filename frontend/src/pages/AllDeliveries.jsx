@@ -12,7 +12,7 @@
  *
  * This page is strictly read-only — no edit, submit, or workflow actions.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -178,17 +178,17 @@ function AllDeliveries() {
   const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
   const inProgressStatuses = ["in_progress", "In Progress", "In-progress"];
 
-  const allCount = baseItems.length;
-  const dueTodayCount = baseItems.filter((i) => { const d = i.due_date ? new Date(i.due_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length;
-  const pendingCount = baseItems.filter((i) => pendingStatuses.includes(i.status)).length;
-  const inProgressCount = baseItems.filter((i) => inProgressStatuses.includes(i.status)).length;
-  const pausedCount = baseItems.filter((i) => i.status === "paused").length;
-  const submittedCount = baseItems.filter((i) => i.status === "submitted").length;
-  const reopenedCount = baseItems.filter((i) => i.status === "reopened").length;
-  const approvedCount = baseItems.filter((i) => i.status === "approved").length;
-  const rejectedCount = baseItems.filter((i) => i.status === "rejected").length;
+  const allCount = useMemo(() => baseItems.length, [baseItems]);
+  const dueTodayCount = useMemo(() => baseItems.filter((i) => { const d = i.due_date ? new Date(i.due_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length, [baseItems]);
+  const pendingCount = useMemo(() => baseItems.filter((i) => pendingStatuses.includes(i.status)).length, [baseItems]);
+  const inProgressCount = useMemo(() => baseItems.filter((i) => inProgressStatuses.includes(i.status)).length, [baseItems]);
+  const pausedCount = useMemo(() => baseItems.filter((i) => i.status === "paused").length, [baseItems]);
+  const submittedCount = useMemo(() => baseItems.filter((i) => i.status === "submitted").length, [baseItems]);
+  const reopenedCount = useMemo(() => baseItems.filter((i) => i.status === "reopened").length, [baseItems]);
+  const approvedCount = useMemo(() => baseItems.filter((i) => i.status === "approved").length, [baseItems]);
+  const rejectedCount = useMemo(() => baseItems.filter((i) => i.status === "rejected").length, [baseItems]);
 
-  const searchFilteredItems = debouncedSearch
+  const searchFilteredItems = useMemo(() => debouncedSearch
     ? baseItems.filter((item) => {
         const q = debouncedSearch.toLowerCase();
         const titleMatch = (item.title || "").toLowerCase().includes(q);
@@ -196,15 +196,15 @@ function AllDeliveries() {
         const creatorMatch = (item.creator?.name || "").toLowerCase().includes(q);
         return titleMatch || assigneeMatch || creatorMatch;
       })
-    : baseItems;
-  const filteredItems = statusFilter && statusFilter !== "due_today"
+    : baseItems, [baseItems, debouncedSearch]);
+  const filteredItems = useMemo(() => statusFilter && statusFilter !== "due_today"
     ? searchFilteredItems.filter((item) => {
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
         return item.status === statusFilter;
       })
-    : searchFilteredItems;
+    : searchFilteredItems, [searchFilteredItems, statusFilter]);
 
   const deliverableIdList = filteredItems.map((i) => i.id);
 
@@ -312,7 +312,7 @@ function AllDeliveries() {
 
                 return (
                   <div className="all-subtasks-row" key={uniqueKey}>
-                    <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={item.business_id} color="#16a34a" />
+                    <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} color="#16a34a" />
 
                     {/* Assigned To */}
                     <div className="col-assigned-to">

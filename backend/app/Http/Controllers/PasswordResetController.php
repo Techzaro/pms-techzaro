@@ -90,7 +90,7 @@ class PasswordResetController extends Controller
             ]);
 
             try {
-                Mail::to($sendTo)->send(new PasswordResetMail($user, $resetUrl, $token));
+                Mail::to($sendTo)->queue(new PasswordResetMail($user, $resetUrl, $token));
                 \Log::info('Password reset: email sent successfully', ['send_to' => $sendTo]);
             } catch (\Throwable $mailException) {
                 \Log::error('Password reset: SMTP send failed', [

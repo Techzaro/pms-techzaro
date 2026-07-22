@@ -1372,7 +1372,7 @@ function ProjectDetails() {
                                     const statusKey = (t.status || "").toLowerCase();
                                       return (
                                         <div className="ptt-row" key={t.id}>
-                                          <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={t.business_id} />
+                                          <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={t.id} businessId={t.business_id} />
                                           <div>{isCreator || isAdminOrManager ? ((t.assignees || []).map((a) => a.name).join(", ") || "—") : (t.assigner?.name || "—")}</div>
                                         <div className="ptt-col-name">
                                           <Link to={rolePath(`tasks/task-details/${t.id}`)} state={{ from: getTaskFrom(t) }} className="ptt-task-link">
@@ -1609,7 +1609,7 @@ function ProjectDetails() {
                                   return (
                                     <div key={f.id} className="pd-file-box" style={{ background: bg }}>
                                       <div className="pd-file-box__drag-handle">
-                                        <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={f.business_id} color="#16a34a" />
+                                        <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={f.id} businessId={f.business_id} color="#16a34a" />
                                       </div>
                                       <div className="pd-file-box__content">
                                         <div className="pd-file-box__name">

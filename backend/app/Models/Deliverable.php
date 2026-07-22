@@ -80,6 +80,30 @@ class Deliverable extends Model
         'delegation_count',
     ];
 
+    /**
+     * Auto-generate business_id if missing (for old data without migration).
+     */
+    public function getBusinessIdAttribute($value)
+    {
+        if ($value) return $value;
+
+        $service = app(BusinessIdService::class);
+        if ($this->task_id && $this->task) {
+            $bizId = $service->generateSubtaskBusinessId($this->task);
+        } elseif ($this->project_id && $this->project) {
+            $bizId = $service->generateProjectDeliverableBusinessId($this->project, $this->id);
+        } else {
+            $bizId = 'SUB-' . $this->id;
+        }
+        $parts = explode('.', $bizId);
+        $this->updateQuietly([
+            'subtask_number' => (int) end($parts),
+            'business_id' => $bizId,
+        ]);
+
+        return $bizId;
+    }
+
     protected static function booted(): void
     {
         static::created(function (Deliverable $deliverable) {

@@ -121,12 +121,8 @@ class NotificationService
                         $senderEmail,
                         $senderName
                     );
-                    if (config('queue.default') !== 'sync') {
-                        Mail::to($notification->user->professional_email)->queue($mail);
-                    } else {
-                        Mail::to($notification->user->professional_email)->send($mail);
-                    }
-                    Log::info('createBulk email sent', [
+                    Mail::to($notification->user->professional_email)->queue($mail);
+                    Log::info('createBulk email queued', [
                         'notification_id' => $notification->id,
                         'recipient' => $notification->user->professional_email,
                         'type' => $notification->type,
@@ -380,11 +376,7 @@ class NotificationService
                 $performer->professional_email,
                 $performer->name
             );
-            if (config('queue.default') !== 'sync') {
-                Mail::to($performer->professional_email)->queue($mail);
-            } else {
-                Mail::to($performer->professional_email)->send($mail);
-            }
+            Mail::to($performer->professional_email)->queue($mail);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Failed to send action confirmation email', [
                 'user_id' => $performer->id,

@@ -76,7 +76,9 @@ class DelegationService
             'delegation_chain' => $existingChain,
             'approval_chain' => $approvalChain,
             'delegation_count' => $level,
+            'status' => 'paused',
         ]);
+        $task->stopTimer();
 
         // If no original_assigner set yet, save the first assigner
         if (empty($task->original_assigner)) {
@@ -198,6 +200,7 @@ class DelegationService
             'delegation_chain' => $existingChain,
             'approval_chain' => $approvalChain,
             'delegation_count' => $level,
+            'status' => 'paused',
         ]);
 
         if (empty($deliverable->original_assigner)) {
@@ -345,6 +348,7 @@ class DelegationService
         $task->update([
             'delegation_chain' => $chain,
             'current_owner' => $delegation->delegated_by,
+            'status' => 'pending',
         ]);
 
         $comment = "{$rejector->name} rejected the delegation." . ($reason ? " Reason: {$reason}" : '');
@@ -407,6 +411,7 @@ class DelegationService
         $task->update([
             'delegation_chain' => $chain,
             'current_owner' => $delegation->delegated_by,
+            'status' => 'pending',
         ]);
 
         $comment = "{$revoker->name} revoked the delegation.";
@@ -444,8 +449,18 @@ class DelegationService
     public function getNextApprover(Task $task): ?int
     {
         $chain = $task->delegation_chain ?? [];
+        $approvalChain = $task->approval_chain ?? [];
+
         if (empty($chain)) {
             return null; // Original assigner approves
+        }
+
+        // Check if transferor has already approved in approval_chain
+        foreach ($approvalChain as $aEntry) {
+            if ($aEntry['status'] === 'approved') {
+                // This transferor already approved; route to original assigner
+                return null;
+            }
         }
 
         // Find the last accepted delegation in the chain
@@ -485,8 +500,17 @@ class DelegationService
     public function getDeliverableApprover(Deliverable $deliverable): ?int
     {
         $chain = $deliverable->delegation_chain ?? [];
+        $approvalChain = $deliverable->approval_chain ?? [];
+
         if (empty($chain)) {
             return null;
+        }
+
+        // Check if transferor has already approved
+        foreach ($approvalChain as $aEntry) {
+            if ($aEntry['status'] === 'approved') {
+                return null;
+            }
         }
 
         $lastAccepted = null;

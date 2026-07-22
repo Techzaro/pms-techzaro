@@ -123,7 +123,7 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
             Task Transferred to You
           </div>
           <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "12px" }}>
-            <strong>{pendingDelegation.delegated_by_name || "Someone"}</strong> has transferred this task to you.
+            <strong>{pendingDelegation.delegated_by_name || "Someone"}</strong> has transferred this task to you. The task has been paused until you accept and acknowledge it.
             {pendingDelegation.reason && (
               <span> Reason: <em>{pendingDelegation.reason}</em></span>
             )}

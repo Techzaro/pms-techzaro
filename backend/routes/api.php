@@ -87,6 +87,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/search', [\App\Http\Controllers\SearchController::class, 'search']);
 
     /*
+    | Business ID Backfill Route
+    | Run once after deployment to generate missing business_ids for existing data.
+    | GET /api/admin/backfill-business-ids
+    */
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin')->get('/admin/backfill-business-ids', function () {
+        $result = app(\App\Services\BusinessIdService::class)->backfillMissingBusinessIds();
+        return response()->json([
+            'success' => true,
+            'message' => "Backfill complete: {$result['projects']} projects, {$result['tasks']} tasks, {$result['deliverables']} deliverables updated.",
+            'data' => $result,
+        ]);
+    });
+
+    /*
     | Dashboard Routes
     | Main dashboard data for authenticated users.
     */

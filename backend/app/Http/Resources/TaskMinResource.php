@@ -24,7 +24,7 @@ class TaskMinResource extends JsonResource
         if (!$this->resource) return null;
         return [
             'id' => $this->id,
-            'business_id' => $this->business_id,
+            'business_id' => $this->business_id ?? 'TSK-' . $this->id,
             'title' => $this->title,
             'status' => $this->status,
             'priority' => $this->priority,

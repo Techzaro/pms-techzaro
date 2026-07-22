@@ -619,7 +619,7 @@ class AuthController extends Controller
             // Send confirmation email to professional email
             if ($user->professional_email) {
                 try {
-                    Mail::to($user->professional_email)->send(new PasswordChangedMail($user));
+                    Mail::to($user->professional_email)->queue(new PasswordChangedMail($user));
                 } catch (\Throwable $e) {
                     \Log::error('Failed to send password changed email', ['user_id' => $user->id, 'error' => $e->getMessage()]);
                 }

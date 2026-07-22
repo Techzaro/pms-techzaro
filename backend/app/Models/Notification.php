@@ -67,11 +67,7 @@ class Notification extends Model
                     $senderEmail = $notification->sender?->professional_email ?? '';
                     $senderName = $notification->sender?->name ?? config('mail.from.name', 'PMS Techxaro');
                     $mail = new NotificationMail($notification, $senderEmail, $senderName);
-                    if (config('queue.default') !== 'sync') {
-                        Mail::to($notification->user->professional_email)->queue($mail);
-                    } else {
-                        Mail::to($notification->user->professional_email)->send($mail);
-                    }
+                    Mail::to($notification->user->professional_email)->queue($mail);
                 } catch (\Throwable $e) {
                     Log::error('Failed to send notification email (model boot)', [
                         'notification_id' => $notification->id,

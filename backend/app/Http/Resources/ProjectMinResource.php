@@ -25,6 +25,7 @@ class ProjectMinResource extends JsonResource
         return [
             'id' => $this->id,
             'title' => $this->title,
+            'business_id' => $this->business_id ?? 'PRJ-' . $this->id,
             'status' => $this->when($this->status, $this->status),
             'team_id' => $this->when($this->team_id, $this->team_id),
         ];

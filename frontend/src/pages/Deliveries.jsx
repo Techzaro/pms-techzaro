@@ -442,7 +442,7 @@ function Deliveries() {
                 const colors = getRandomColors(item.id);
                 return (
                   <div className="deliveries-table-row" key={item.id}>
-                    <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={item.business_id} color="#16a34a" />
+                    <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} color="#16a34a" />
                     <div className="user-box">
                       <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                         {getInitials(item.creator?.name)}
@@ -494,6 +494,11 @@ function Deliveries() {
                       }
                       onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "deliveries" } })}
                     >
+                      {/* Transferors: hide all action buttons (view-only) */}
+                      {(() => {
+                        if (item.is_transferor) return null;
+                        return (
+                      <>
                       <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                       {item.status === "pending" && (
                         <button className="action-icon-btn action-submit" title="Acknowledge" disabled={actingId === item.id} onClick={() => handleAcknowledge(item.id)}>
@@ -527,7 +532,7 @@ function Deliveries() {
                           <LuSend size={16} />
                         </button>
                       )}
-                      {!["approved", "rejected"].includes(item.status) && (
+                      {!["approved", "rejected", "pending"].includes(item.status) && !item.is_transferor && (
                         <button
                           className="action-icon-btn"
                           title="Transfer Subtask"
@@ -537,6 +542,9 @@ function Deliveries() {
                           <Users size={16} />
                         </button>
                       )}
+                      </>
+                      );
+                      })()}
                     </ActionPopover>
                   </div>
                 );

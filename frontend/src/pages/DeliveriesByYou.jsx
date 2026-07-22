@@ -477,7 +477,7 @@ function DeliveriesByYou() {
                 const colors = getRandomColors(item.id);
                 return (
                   <div className="deliveries-table-row" key={`subtask-${item.id}-${index}`}>
-                    <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={item.business_id} color="#16a34a" />
+                    <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} color="#16a34a" />
                     <div>
                       <div className="user-box">
                         <div className="avatar" style={{ background: colors.bg, color: colors.text }}>

@@ -73,6 +73,29 @@ class Task extends Model
         'delegation_count',
     ];
 
+    /**
+     * Auto-generate business_id if missing (for old data without migration).
+     */
+    public function getBusinessIdAttribute($value)
+    {
+        if ($value) return $value;
+
+        $service = app(BusinessIdService::class);
+        if ($this->project_id && $this->project) {
+            $bizId = $service->generateTaskBusinessId($this->project);
+            $taskNumber = (int) substr(strrchr($bizId, '.'), 1);
+        } else {
+            $bizId = 'TASK-' . $this->id;
+            $taskNumber = $this->id;
+        }
+        $this->updateQuietly([
+            'task_number' => $taskNumber,
+            'business_id' => $bizId,
+        ]);
+
+        return $bizId;
+    }
+
     protected static function booted(): void
     {
         static::creating(function (Task $task) {

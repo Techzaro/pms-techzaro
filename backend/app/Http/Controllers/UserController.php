@@ -484,7 +484,7 @@ class UserController extends Controller
         $emailError = null;
         if (!empty($changes)) {
             try {
-                Mail::to($user->professional_email)->send(new UserProfileUpdated($user, $authUser->name, $changes, $authUser->professional_email, $authUser->name));
+                Mail::to($user->professional_email)->queue(new UserProfileUpdated($user, $authUser->name, $changes, $authUser->professional_email, $authUser->name));
                 $emailSent = true;
             } catch (\Exception $e) {
                 $emailError = $e->getMessage();
@@ -1843,7 +1843,7 @@ class UserController extends Controller
         $emailSent = false;
 
         try {
-            Mail::to($user->personal_email)->send(new GuestInvitation($user, $plainPassword, $loginUrl, false));
+            Mail::to($user->personal_email)->queue(new GuestInvitation($user, $plainPassword, $loginUrl, false));
             $emailSent = true;
         } catch (\Throwable $e) {
             Log::error("Failed to send guest invitation email to {$user->personal_email}: " . $e->getMessage());
@@ -1954,7 +1954,7 @@ class UserController extends Controller
         $emailSent = false;
 
         try {
-            Mail::to($user->personal_email)->send(new GuestInvitation($user, $plainPassword, $loginUrl, false));
+            Mail::to($user->personal_email)->queue(new GuestInvitation($user, $plainPassword, $loginUrl, false));
             $emailSent = true;
         } catch (\Throwable $e) {
             Log::error("Failed to resend guest invitation to {$user->personal_email}: " . $e->getMessage());
@@ -2000,7 +2000,7 @@ class UserController extends Controller
         $emailSent = false;
 
         try {
-            Mail::to($user->personal_email)->send(new GuestInvitation($user, $plainPassword, $loginUrl, true));
+            Mail::to($user->personal_email)->queue(new GuestInvitation($user, $plainPassword, $loginUrl, true));
             $emailSent = true;
         } catch (\Throwable $e) {
             Log::error("Failed to send password reset to guest {$user->personal_email}: " . $e->getMessage());

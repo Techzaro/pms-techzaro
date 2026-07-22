@@ -7,7 +7,7 @@
  * creating new tasks and submitting subtasks.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -262,16 +262,16 @@ const SelfTasks = () => {
   const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
   const inProgressStatuses = ["in_progress", "In Progress", "In-progress"];
 
-  const allCount = baseItems.length;
-  const dueTodayCount = baseItems.filter((i) => { const d = i.end_date ? new Date(i.end_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length;
-  const pendingCount = baseItems.filter((i) => pendingStatuses.includes(i.status)).length;
-  const inProgressCount = baseItems.filter((i) => inProgressStatuses.includes(i.status)).length;
-  const pausedCount = baseItems.filter((i) => i.status === "paused").length;
-  const submittedCount = baseItems.filter((i) => i.status === "submitted").length;
-  const reopenedCount = baseItems.filter((i) => i.status === "reopened").length;
-  const approvedCount = baseItems.filter((i) => i.status === "approved").length;
-  const rejectedCount = baseItems.filter((i) => i.status === "rejected").length;
-  const searchFilteredItems = debouncedSearch
+  const allCount = useMemo(() => baseItems.length, [baseItems]);
+  const dueTodayCount = useMemo(() => baseItems.filter((i) => { const d = i.end_date ? new Date(i.end_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length, [baseItems]);
+  const pendingCount = useMemo(() => baseItems.filter((i) => pendingStatuses.includes(i.status)).length, [baseItems]);
+  const inProgressCount = useMemo(() => baseItems.filter((i) => inProgressStatuses.includes(i.status)).length, [baseItems]);
+  const pausedCount = useMemo(() => baseItems.filter((i) => i.status === "paused").length, [baseItems]);
+  const submittedCount = useMemo(() => baseItems.filter((i) => i.status === "submitted").length, [baseItems]);
+  const reopenedCount = useMemo(() => baseItems.filter((i) => i.status === "reopened").length, [baseItems]);
+  const approvedCount = useMemo(() => baseItems.filter((i) => i.status === "approved").length, [baseItems]);
+  const rejectedCount = useMemo(() => baseItems.filter((i) => i.status === "rejected").length, [baseItems]);
+  const searchFilteredItems = useMemo(() => debouncedSearch
     ? baseItems.filter((item) => {
         const q = debouncedSearch.toLowerCase();
         const titleMatch = (item.title || "").toLowerCase().includes(q);
@@ -279,15 +279,15 @@ const SelfTasks = () => {
         const assignerMatch = (item.assigner?.name || "").toLowerCase().includes(q);
         return titleMatch || assigneeMatch || assignerMatch;
       })
-    : baseItems;
-  const filteredItems = statusFilter && statusFilter !== "due_today"
+    : baseItems, [baseItems, debouncedSearch]);
+  const filteredItems = useMemo(() => statusFilter && statusFilter !== "due_today"
     ? searchFilteredItems.filter((item) => {
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
         return item.status === statusFilter;
       })
-    : searchFilteredItems;
+    : searchFilteredItems, [searchFilteredItems, statusFilter]);
 
   const taskIdList = filteredItems.map((i) => i.id);
 
@@ -392,7 +392,7 @@ const SelfTasks = () => {
             {(item, idx, dndProps) => {
               return (
                 <div className="taskby-row-compact" key={item.sortableId}>
-                  <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={item.business_id} />
+                  <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} />
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                       <div className="task-title">{item.title}</div>

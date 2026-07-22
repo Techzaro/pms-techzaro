@@ -54,6 +54,7 @@ function Chat() {
       const token = authToken();
       const res = await fetch(`${API_URL}/conversations`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
       });
       const data = await res.json();
       if (data.success) {
@@ -70,6 +71,7 @@ function Chat() {
       const token = authToken();
       const res = await fetch(`${API_URL}/conversations/${id}`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
       });
       const data = await res.json();
       if (data.success) {
@@ -155,8 +157,8 @@ function Chat() {
     try {
       const token = authToken();
       const [usersRes, itemsRes] = await Promise.all([
-        fetch(`${API_URL}/team-users`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } }),
-        fetch(`${API_URL}/chat-items`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } }),
+        fetch(`${API_URL}/team-users`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true }),
+        fetch(`${API_URL}/chat-items`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true }),
       ]);
       const usersData = await usersRes.json();
       const itemsData = await itemsRes.json();

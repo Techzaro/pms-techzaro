@@ -7,7 +7,7 @@
  * and a modal for creating new tasks.
  */
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
@@ -287,17 +287,17 @@ const Taskby = () => {
   const pendingStatuses = ["pending", "planned", "Planning", "Planned"];
   const inProgressStatuses = ["in_progress", "In Progress", "In-progress"];
 
-  const allCount = baseItems.length;
-  const dueTodayCount = baseItems.filter((i) => { const d = i.end_date ? new Date(i.end_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length;
-  const pendingCount = baseItems.filter((i) => pendingStatuses.includes(i.status)).length;
-  const inProgressCount = baseItems.filter((i) => inProgressStatuses.includes(i.status)).length;
-  const pausedCount = baseItems.filter((i) => i.status === "paused").length;
-  const submittedCount = baseItems.filter((i) => i.status === "submitted").length;
-  const reopenedCount = baseItems.filter((i) => i.status === "reopened").length;
-  const approvedCount = baseItems.filter((i) => i.status === "approved").length;
-  const rejectedCount = baseItems.filter((i) => i.status === "rejected").length;
+  const allCount = useMemo(() => baseItems.length, [baseItems]);
+  const dueTodayCount = useMemo(() => baseItems.filter((i) => { const d = i.end_date ? new Date(i.end_date) : null; return d && d.toDateString() === new Date().toDateString(); }).length, [baseItems]);
+  const pendingCount = useMemo(() => baseItems.filter((i) => pendingStatuses.includes(i.status)).length, [baseItems]);
+  const inProgressCount = useMemo(() => baseItems.filter((i) => inProgressStatuses.includes(i.status)).length, [baseItems]);
+  const pausedCount = useMemo(() => baseItems.filter((i) => i.status === "paused").length, [baseItems]);
+  const submittedCount = useMemo(() => baseItems.filter((i) => i.status === "submitted").length, [baseItems]);
+  const reopenedCount = useMemo(() => baseItems.filter((i) => i.status === "reopened").length, [baseItems]);
+  const approvedCount = useMemo(() => baseItems.filter((i) => i.status === "approved").length, [baseItems]);
+  const rejectedCount = useMemo(() => baseItems.filter((i) => i.status === "rejected").length, [baseItems]);
 
-  const filteredItems = baseItems.filter((item) => {
+  const filteredItems = useMemo(() => baseItems.filter((item) => {
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase();
       const titleMatch = (item.title || "").toLowerCase().includes(q);
@@ -315,7 +315,7 @@ const Taskby = () => {
       return item.status === statusFilter;
     }
     return true;
-  });
+  }), [baseItems, debouncedSearch, statusFilter]);
 
   const taskIdList = filteredItems.map((i) => i.id);
 
@@ -440,7 +440,7 @@ const Taskby = () => {
                 const primaryAssignee = assignees[0];
                 return (
                   <div className="taskby-row" key={uniqueKey}>
-                    <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={item.business_id} />
+                    <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} />
                     <div className="col-assigned-to">
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <div className="avatar" style={{ background: colors.bg, color: colors.text }}>

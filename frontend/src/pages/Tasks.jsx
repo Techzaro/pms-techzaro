@@ -451,7 +451,7 @@ function Tasks() {
               const assigner = item.assigner;
               return (
                 <div className="taskby-row" key={item.sortableId}>
-                  <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={item.business_id} />
+                  <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} />
                   <div className="col-assigned-to">
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <div className="avatar" style={{ background: colors.bg, color: colors.text }}>{getInitials(assigner?.name)}</div>
@@ -536,6 +536,10 @@ function Tasks() {
                     >
                       <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                       {(() => {
+                        // Transferors: hide all action buttons (view-only)
+                        if (item.is_transferor) {
+                          return null;
+                        }
                         const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
                         if (item.assigner_paused) {
                           return (
@@ -583,7 +587,7 @@ function Tasks() {
                         }
                         return null;
                       })()}
-                      {!["approved", "rejected"].includes(item.status) && (
+                      {!["approved", "rejected", "pending"].includes(item.status) && !item.is_transferor && (
                         <button
                           className="action-icon-btn"
                           title="Transfer Task"

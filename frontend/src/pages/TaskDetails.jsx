@@ -324,6 +324,7 @@ function TaskDetails() {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${taskId}`, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
         _notifHandled: true,
       });
       if (res.ok) {
@@ -390,6 +391,9 @@ function TaskDetails() {
   const canAssignerPause = readOnly ? false : (task && currentUser && isCreator && !task?.assigner_paused && ["pending", "in_progress", "reopened", "paused"].includes(task?.status));
   const canAssignerResume = readOnly ? false : (task && currentUser && isCreator && task?.assigner_paused);
   const isApproved = task?.status?.toLowerCase() === "approved";
+  const isTransferor = task?.is_transferor ?? false;
+  const transferorReturnToSelf = task?.transferor_return_to_self ?? true;
+  const transferorHasApproved = task?.transferor_has_approved ?? false;
 
   const { submitting: acknowledging, run: runAcknowledge } = useSubmit();
   const { submitting: pausing, run: runPause } = useSubmit();
@@ -511,22 +515,24 @@ function TaskDetails() {
   useEffect(() => {
     if (!task?.id) return;
     const token = authToken();
-    fetch(`${API_URL}/tasks/${task.id}/my-note`, {
+    const fetchNotes = fetch(`${API_URL}/tasks/${task.id}/my-note`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
     })
       .then((res) => res.ok ? res.json() : { notes: [] })
       .then((data) => { setNotes(data.notes || []); setNoteInput(""); })
       .catch(() => { });
-  }, [task?.id]);
 
-  useEffect(() => {
-    if (!task?.id || !task?.unviewed_changes_count) return;
-    const token = authToken();
-    fetch(`${API_URL}/tasks/${task.id}/changes/mark-read`, {
-      method: "POST",
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      _notifHandled: true,
-    }).catch(() => { });
+    const markRead = task?.unviewed_changes_count
+      ? fetch(`${API_URL}/tasks/${task.id}/changes/mark-read`, {
+          method: "POST",
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          skipLoader: true,
+          _notifHandled: true,
+        }).catch(() => { })
+      : Promise.resolve();
+
+    Promise.all([fetchNotes, markRead]);
   }, [task?.id, task?.unviewed_changes_count]);
 
   const saveNote = async () => {
@@ -1017,7 +1023,7 @@ function TaskDetails() {
                       </button>
                     </>
                   )}
-                  {!readOnly && isAssignee && !["approved", "rejected"].includes(task?.status) && (
+                  {!readOnly && isAssignee && !["approved", "rejected", "pending"].includes(task?.status) && !isTransferor && (
                     <button className="td-btn-outline" onClick={() => setTransferDialog(true)}>
                       <Users size={15} />
                       Transfer
@@ -1059,7 +1065,7 @@ function TaskDetails() {
                       On Hold by Assigner
                     </span>
                   )}
-                  {!readOnly && isAssignee && ["in_progress", "reopened", "paused"].includes(task?.status) && (
+                  {!readOnly && isAssignee && ["in_progress", "reopened", "paused"].includes(task?.status) && !isTransferor && (
                     <button
                       className="td-btn-primary"
                       disabled={task?.status === "paused" || isAssignerLocked}
@@ -1249,7 +1255,7 @@ function TaskDetails() {
                               const descText = d.description ? d.description.replace(/<[^>]*>/g, '').trim() : '';
                               return (
                               <div className="deliveries-table-row" style={{ gridTemplateColumns: "80px 2fr 1.2fr 110px 130px 50px", alignItems: "center" }}>
-                                <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={d.business_id} color="#16a34a" />
+                                <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={d.id} businessId={d.business_id} color="#16a34a" />
                                 <div className="user-box" style={{ gap: "20px" }}>
                                   <div className="avatar" style={{ background: statusBgColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), color: statusColor(d.status === 'approved' ? 'completed' : d.status === 'submitted' ? 'review' : d.status === 'rejected' ? 'failed' : d.status === 'reopened' ? 'pending' : d.status), width: '42px', height: '42px', fontSize: '14px', flexShrink: 0 }}>
                                     {initials(d.title)}

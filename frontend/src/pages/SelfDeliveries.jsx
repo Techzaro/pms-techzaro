@@ -371,7 +371,7 @@ function SelfDeliveries() {
                 const canSubmit = item.status === "pending" || item.status === "rework_required";
                 return (
                   <div className="deliveries-table-row self-deliveries-grid">
-                    <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={item.business_id} color="#16a34a" />
+                    <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} color="#16a34a" />
                     <div className="user-box">
                       <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                         {getInitials(item.title)}

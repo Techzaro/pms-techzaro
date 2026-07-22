@@ -9,7 +9,7 @@
  * drag-and-drop.
  */
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -317,7 +317,7 @@ function Projects() {
   };
 
 
-  const filteredProjects = orderedProjects.filter((project) => {
+  const filteredProjects = useMemo(() => orderedProjects.filter((project) => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const titleMatch = project.title?.toLowerCase().includes(q);
@@ -342,16 +342,16 @@ function Projects() {
       if (statusFilter === "rejected" && project.status !== "rejected" && project.status !== "Pause") return false;
     }
     return true;
-  });
+  }), [orderedProjects, searchQuery, statusFilter]);
 
-  const allCount = orderedProjects.length;
-  const dueTodayCount = orderedProjects.filter((p) => { if (!p.active_deadline) return false; const d = new Date(p.active_deadline); const t = new Date(); return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate(); }).length;
-  const activeCount = orderedProjects.filter((p) => p.status === "In-progress" || p.status === "in_progress" || p.status === "Planning" || p.status === "planned").length;
-  const pendingCount = orderedProjects.filter((p) => p.status === "pending" || p.status === "submitted").length;
-  const submittedCount = orderedProjects.filter((p) => p.status === "submitted").length;
-  const reopenedCount = orderedProjects.filter((p) => p.status === "reopened").length;
-  const approvedCount = orderedProjects.filter((p) => p.status === "Completed" || p.status === "approved").length;
-  const rejectedCount = orderedProjects.filter((p) => p.status === "rejected" || p.status === "Pause").length;
+  const allCount = useMemo(() => orderedProjects.length, [orderedProjects]);
+  const dueTodayCount = useMemo(() => orderedProjects.filter((p) => { if (!p.active_deadline) return false; const d = new Date(p.active_deadline); const t = new Date(); return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate(); }).length, [orderedProjects]);
+  const activeCount = useMemo(() => orderedProjects.filter((p) => p.status === "In-progress" || p.status === "in_progress" || p.status === "Planning" || p.status === "planned").length, [orderedProjects]);
+  const pendingCount = useMemo(() => orderedProjects.filter((p) => p.status === "pending" || p.status === "submitted").length, [orderedProjects]);
+  const submittedCount = useMemo(() => orderedProjects.filter((p) => p.status === "submitted").length, [orderedProjects]);
+  const reopenedCount = useMemo(() => orderedProjects.filter((p) => p.status === "reopened").length, [orderedProjects]);
+  const approvedCount = useMemo(() => orderedProjects.filter((p) => p.status === "Completed" || p.status === "approved").length, [orderedProjects]);
+  const rejectedCount = useMemo(() => orderedProjects.filter((p) => p.status === "rejected" || p.status === "Pause").length, [orderedProjects]);
 
   const totalPages = showAll ? 1 : Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
   const paginatedProjects = showAll ? filteredProjects : filteredProjects.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
@@ -463,7 +463,7 @@ function Projects() {
                     <div className="projects-card" key={project.id}>
                       {/* DRAG HANDLE */}
                       <div className="project-card-drag-handle">
-                          <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={project.business_id} />
+                          <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={project.id} businessId={project.business_id} />
                       </div>
                       {/* HEADER */}
                       <div className="project-card-header">
@@ -646,7 +646,7 @@ function Projects() {
                     <div className="project-list-row" key={project.id}>
                       <div className="col-project-name">
                         <div className="project-name-drag-handle">
-                        <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} businessId={project.business_id} />
+                        <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={project.id} businessId={project.business_id} />
                         </div>
                         <div className="project-name-text">{project.title}</div>
                       </div>

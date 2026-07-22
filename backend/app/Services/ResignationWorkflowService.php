@@ -158,7 +158,7 @@ class ResignationWorkflowService
             );
 
             try {
-                Mail::to($user->professional_email)->send(
+                Mail::to($user->professional_email)->queue(
                     new \App\Mail\UserResigned($user, $admin->name, $admin->professional_email, $admin->name)
                 );
             } catch (\Throwable $e) {

@@ -131,6 +131,7 @@ function MyProfile() {
     try {
       const res = await fetch(`${API_URL}/auth/my-changes`, {
         headers: { Accept: "application/json", ...authHeaders() },
+        skipLoader: true,
       });
       const data = await res.json();
       if (data.success) setChanges(data.changes || []);
@@ -143,14 +144,11 @@ function MyProfile() {
       navigate("/");
       return;
     }
-    fetchProfile();
-    fetchChanges();
-
-    // Fetch company documents
     const fetchCompanyDocs = async () => {
       try {
         const res = await fetch(`${API_URL}/company-documents`, {
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          skipLoader: true,
         });
         if (res.ok) {
           const data = await res.json();
@@ -158,7 +156,7 @@ function MyProfile() {
         }
       } catch { }
     };
-    fetchCompanyDocs();
+    Promise.all([fetchProfile(), fetchChanges(), fetchCompanyDocs()]);
   }, [navigate]);
 
   /** Extract up to 2 uppercase initials from a full name for the avatar. */

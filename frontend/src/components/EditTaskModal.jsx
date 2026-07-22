@@ -505,44 +505,45 @@ export default function EditTaskModal({ task, onClose }) {
 
     if (pendingFiles.length === 0 && links.length === 0) return;
 
-    const fileResults = await Promise.allSettled(
-      pendingFiles.map((file) => {
-        const fd = new FormData();
-        fd.append("file", file.file);
-        fd.append("name", file.customName || file.name);
-        return fetch(`${API_URL}/tasks/${task.id}/files`, {
-          method: "POST",
-          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-          body: fd,
-          _notifHandled: true,
-        }).then(async (res) => {
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.message || "File upload failed");
-          return data;
-        });
-      })
-    );
+    const [fileResults, linkResults] = await Promise.all([
+      Promise.allSettled(
+        pendingFiles.map((file) => {
+          const fd = new FormData();
+          fd.append("file", file.file);
+          fd.append("name", file.customName || file.name);
+          return fetch(`${API_URL}/tasks/${task.id}/files`, {
+            method: "POST",
+            headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+            body: fd,
+            _notifHandled: true,
+          }).then(async (res) => {
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || "File upload failed");
+            return data;
+          });
+        })
+      ),
+      Promise.allSettled(
+        links.map((link) => {
+          return fetch(`${API_URL}/tasks/${task.id}/links`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ url: link.url, name: link.customName || link.name }),
+            _notifHandled: true,
+          }).then(async (res) => {
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || "Link add failed");
+            return data;
+          });
+        })
+      ),
+    ]);
 
     fileResults.forEach((result, i) => {
       if (result.status === "rejected") {
         errors.push(`File "${pendingFiles[i].name}": ${result.reason?.message || "upload failed"}`);
       }
     });
-
-    const linkResults = await Promise.allSettled(
-      links.map((link) => {
-        return fetch(`${API_URL}/tasks/${task.id}/links`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ url: link.url, name: link.customName || link.name }),
-          _notifHandled: true,
-        }).then(async (res) => {
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.message || "Link add failed");
-          return data;
-        });
-      })
-    );
 
     linkResults.forEach((result, i) => {
       if (result.status === "rejected") {

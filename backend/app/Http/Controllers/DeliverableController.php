@@ -94,8 +94,34 @@ class DeliverableController extends Controller
                 ->toArray();
         }
 
-        $deliverables->transform(function ($deliverable) use ($submittedIds) {
+        $deliverables->transform(function ($deliverable) use ($submittedIds, $user) {
             $deliverable->has_submitted = in_array($deliverable->id, $submittedIds);
+
+            // Transferor flag for list views
+            $isTransferor = false;
+            $chain = $deliverable->delegation_chain ?? [];
+            foreach ($chain as $entry) {
+                if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                    $isTransferor = true;
+                    break;
+                }
+            }
+            $deliverable->is_transferor = $isTransferor;
+            $deliverable->transferor_return_to_self = true;
+            $deliverable->transferor_has_approved = false;
+            foreach ($chain as $entry) {
+                if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                    $deliverable->transferor_return_to_self = $entry['return_to_transferor'] ?? true;
+                    break;
+                }
+            }
+            $approvalChain = $deliverable->approval_chain ?? [];
+            foreach ($approvalChain as $aEntry) {
+                if ((int) $aEntry['approver_id'] === (int) $user->id && $aEntry['status'] === 'approved') {
+                    $deliverable->transferor_has_approved = true;
+                    break;
+                }
+            }
 
             return $deliverable;
         });
@@ -209,6 +235,53 @@ class DeliverableController extends Controller
         $payload = $deliverable->toArray();
         $payload['unviewed_changes'] = $deliverable->unviewedChanges;
         $payload['unviewed_changes_count'] = $deliverable->unviewedChanges->count();
+
+        // Delegation flags
+        $payload['has_delegation_chain'] = !empty($deliverable->delegation_chain);
+        $payload['delegation_chain'] = $deliverable->delegation_chain ?? [];
+        $payload['approval_chain'] = $deliverable->approval_chain ?? [];
+        $isCurrentOwner = $this->delegationService->isCurrentOwnerDeliverable($deliverable, $user);
+        $payload['is_current_owner'] = $isCurrentOwner;
+        $isTransferor = false;
+        $transferorReturnToSelf = true;
+        $transferorHasApproved = false;
+        $chain = $deliverable->delegation_chain ?? [];
+        foreach ($chain as $entry) {
+            if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                $isTransferor = true;
+                $transferorReturnToSelf = $entry['return_to_transferor'] ?? true;
+                break;
+            }
+        }
+        $approvalChain = $deliverable->approval_chain ?? [];
+        foreach ($approvalChain as $aEntry) {
+            if ((int) $aEntry['approver_id'] === (int) $user->id && $aEntry['status'] === 'approved') {
+                $transferorHasApproved = true;
+                break;
+            }
+        }
+        $payload['is_transferor'] = $isTransferor;
+        $payload['transferor_return_to_self'] = $transferorReturnToSelf;
+        $payload['transferor_has_approved'] = $transferorHasApproved;
+        $pendingStatuses = ['pending', 'in_progress', 'reopened', 'paused', 'rework_required'];
+        $payload['can_submit'] = ($isAssignee || $isCurrentOwner) && in_array($deliverable->status, $pendingStatuses);
+        if ($isTransferor) {
+            $payload['can_submit'] = false;
+            if (!$transferorReturnToSelf) {
+                $payload['is_assignee'] = false;
+            }
+        }
+        $payload['can_delegate'] = ($isAssignee || $isCurrentOwner)
+            && !in_array($deliverable->status, ['approved', 'rejected']);
+        if ($isTransferor) {
+            $payload['can_delegate'] = false;
+        }
+        $nextApprover = $this->delegationService->getDeliverableApprover($deliverable);
+        $payload['next_approver_id'] = $nextApprover;
+        $payload['is_next_approver'] = $nextApprover && (int) $nextApprover === (int) $user->id;
+        $payload['pending_delegation'] = $deliverable->delegations()->where('delegated_to', $user->id)->where('status', 'pending')->first();
+        $payload['current_owner_name'] = $deliverable->currentOwner?->name ?? $deliverable->assignee?->name ?? null;
+        $payload['original_assigner_name'] = $deliverable->originalAssigner?->name ?? $deliverable->creator?->name ?? null;
 
         return response()->json(['success' => true, 'deliverable' => $payload]);
     }
@@ -835,6 +908,55 @@ class DeliverableController extends Controller
         }
         if ($deliverable->status !== 'submitted') {
             return response()->json(['success' => false, 'message' => 'Can only approve submitted deliverables'], 422);
+        }
+
+        // Check if user is a transferor (next_approver from delegation chain with return_to_transferor=true)
+        $isNextApproverTransferor = $isNextApprover && !$isCreator;
+        if ($isNextApproverTransferor) {
+            $approvalChain = $deliverable->approval_chain ?? [];
+            $updatedApprovalChain = [];
+            foreach ($approvalChain as $aEntry) {
+                if ((int) $aEntry['approver_id'] === (int) $user->id) {
+                    $aEntry['status'] = 'approved';
+                    $aEntry['approved_at'] = now()->toISOString();
+                }
+                $updatedApprovalChain[] = $aEntry;
+            }
+            $deliverable->update([
+                'approval_chain' => $updatedApprovalChain,
+                'updated_by' => $user->id,
+            ]);
+
+            // Notify original assigner
+            $originalAssigner = $deliverable->originalAssigner;
+            if ($originalAssigner) {
+                $this->notificationService->notify(
+                    $originalAssigner,
+                    $user->id,
+                    'deliverable_transferor_approved',
+                    'deliverable',
+                    $deliverable->id,
+                    'Transferor Approved',
+                    $user->name.' has approved the delegated subtask "'.$deliverable->title.'" and forwarded it for final approval.',
+                    '/deliveries?selectedDeliverable='.$deliverable->id
+                );
+            }
+
+            DeliverableWorkflowEvent::create([
+                'deliverable_id' => $deliverable->id,
+                'event_type' => 'transferor_approved',
+                'user_id' => $user->id,
+                'comment' => $user->name.' (transferor) approved the submission and forwarded to original assigner',
+            ]);
+
+            $this->activityService->log($user->id, 'deliverable_transferor_approved', 'You approved the delegated subtask "'.$deliverable->title.'" as transferor', 'deliverable', $deliverable->id);
+
+            $deliverable->fresh();
+            return response()->json([
+                'success' => true,
+                'message' => 'Approval forwarded to original assigner',
+                'deliverable' => $deliverable->fresh()->load(['assignee:id,name,email,role', 'creator:id,name', 'approvedBy:id,name']),
+            ]);
         }
 
         $deliverable->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id, 'updated_by' => $user->id]);
@@ -2020,6 +2142,10 @@ class DeliverableController extends Controller
 
         if (in_array($deliverable->status, ['approved', 'rejected'])) {
             return response()->json(['success' => false, 'message' => 'Cannot delegate a deliverable that is already approved or rejected'], 422);
+        }
+
+        if ($deliverable->status === 'pending') {
+            return response()->json(['success' => false, 'message' => 'You must acknowledge this subtask first before transferring it'], 422);
         }
 
         $validated = $request->validate([

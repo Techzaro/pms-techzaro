@@ -241,21 +241,23 @@ const CreateSubtaskModal = ({
 
   const uploadAttachments = useCallback(async (deliverableId) => {
     if (pendingFiles.length === 0 && links.length === 0) return;
-    for (const fileObj of pendingFiles) {
-      const fd = new FormData();
-      fd.append("file", fileObj.file);
-      if (fileObj.customName) fd.append("name", fileObj.customName);
-      await fetch(`${API_URL}/deliverables/${deliverableId}/files`, {
-        method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd,
-      });
-    }
-    for (const link of links) {
-      await fetch(`${API_URL}/deliverables/${deliverableId}/links`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ url: link.url, name: link.customName || null }),
-      });
-    }
+    await Promise.all([
+      ...pendingFiles.map((fileObj) => {
+        const fd = new FormData();
+        fd.append("file", fileObj.file);
+        if (fileObj.customName) fd.append("name", fileObj.customName);
+        return fetch(`${API_URL}/deliverables/${deliverableId}/files`, {
+          method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd,
+        });
+      }),
+      ...links.map((link) => {
+        return fetch(`${API_URL}/deliverables/${deliverableId}/links`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ url: link.url, name: link.customName || null }),
+        });
+      }),
+    ]);
   }, [pendingFiles, links, token]);
 
   const doSubmit = useCallback(async () => {

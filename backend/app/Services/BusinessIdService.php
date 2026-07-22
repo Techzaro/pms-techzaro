@@ -149,6 +149,129 @@ class BusinessIdService
     }
 
     /**
+     * Backfill missing business_ids for all projects, tasks, and deliverables.
+     * Safe to run multiple times — only processes records with null business_id.
+     *
+     * @return array ['projects' => int, 'tasks' => int, 'deliverables' => int]
+     */
+    public function backfillMissingBusinessIds(): array
+    {
+        $projectsCount = 0;
+        $tasksCount = 0;
+        $deliverablesCount = 0;
+
+        // ── Projects ──────────────────────────────────────────────
+        $existingCodes = DB::table('projects')->whereNotNull('business_id')->pluck('project_code')->toArray();
+        $missingProjects = DB::table('projects')->whereNull('business_id')->orderBy('id')->get();
+
+        foreach ($missingProjects as $project) {
+            $initials = $this->generateProjectInitials($project->title);
+            $baseInitials = $initials;
+            $counter = 1;
+            while (in_array($initials, $existingCodes)) {
+                $counter++;
+                $initials = $baseInitials . $counter;
+            }
+            $existingCodes[] = $initials;
+
+            $maxNumber = DB::table('projects')
+                ->where('project_code', $initials)
+                ->whereNotNull('project_number')
+                ->max('project_number');
+            $number = ($maxNumber ?? 0) + 1;
+
+            DB::table('projects')->where('id', $project->id)->update([
+                'project_code'   => $initials,
+                'project_number' => $number,
+                'business_id'    => $initials . '-' . $number,
+            ]);
+            $projectsCount++;
+        }
+
+        // ── Tasks ─────────────────────────────────────────────────
+        $taskCounters = [];
+        $missingTasks = DB::table('tasks')->whereNull('business_id')->orderBy('id')->get();
+
+        foreach ($missingTasks as $task) {
+            $projectId = $task->project_id;
+            if ($projectId) {
+                $project = DB::table('projects')->where('id', $projectId)->first();
+                if ($project && $project->project_code && $project->project_number) {
+                    if (!isset($taskCounters[$projectId])) {
+                        $taskCounters[$projectId] = DB::table('tasks')
+                            ->where('project_id', $projectId)
+                            ->whereNotNull('business_id')
+                            ->max('task_number') ?? 0;
+                    }
+                    $taskCounters[$projectId]++;
+
+                    DB::table('tasks')->where('id', $task->id)->update([
+                        'task_number' => $taskCounters[$projectId],
+                        'business_id' => $project->project_code . '-' . $project->project_number . '.' . $taskCounters[$projectId],
+                    ]);
+                    $tasksCount++;
+                    continue;
+                }
+            }
+            DB::table('tasks')->where('id', $task->id)->update([
+                'task_number' => $task->id,
+                'business_id' => 'TASK-' . $task->id,
+            ]);
+            $tasksCount++;
+        }
+
+        // ── Deliverables ──────────────────────────────────────────
+        $dlvCounters = [];
+        $missingDlv = DB::table('deliverables')->whereNull('business_id')->orderBy('id')->get();
+
+        foreach ($missingDlv as $dlv) {
+            $taskId = $dlv->task_id;
+            if ($taskId) {
+                $taskBizId = DB::table('tasks')->where('id', $taskId)->value('business_id');
+                if ($taskBizId) {
+                    if (!isset($dlvCounters[$taskId])) {
+                        $dlvCounters[$taskId] = DB::table('deliverables')
+                            ->where('task_id', $taskId)
+                            ->whereNotNull('business_id')
+                            ->max('subtask_number') ?? 0;
+                    }
+                    $dlvCounters[$taskId]++;
+
+                    DB::table('deliverables')->where('id', $dlv->id)->update([
+                        'subtask_number' => $dlvCounters[$taskId],
+                        'business_id'    => $taskBizId . '.' . $dlvCounters[$taskId],
+                    ]);
+                    $deliverablesCount++;
+                    continue;
+                }
+            }
+            $projectId = $dlv->project_id;
+            if ($projectId) {
+                $projBizId = DB::table('projects')->where('id', $projectId)->value('business_id');
+                if ($projBizId) {
+                    DB::table('deliverables')->where('id', $dlv->id)->update([
+                        'subtask_number' => $dlv->id,
+                        'business_id'    => $projBizId . '.' . $dlv->id,
+                    ]);
+                    $deliverablesCount++;
+                    continue;
+                }
+            }
+            DB::table('deliverables')->where('id', $dlv->id)->update([
+                'subtask_number' => $dlv->id,
+                'business_id'    => 'SUB-' . $dlv->id,
+            ]);
+            $deliverablesCount++;
+        }
+
+        return [
+            'projects'     => $projectsCount,
+            'tasks'        => $tasksCount,
+            'deliverables' => $deliverablesCount,
+        ];
+    }
+
+    /**
      * Generate the next draft code (DRF-{n}).
      */
     public function generateDraftCode(): string

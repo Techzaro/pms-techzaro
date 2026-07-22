@@ -43,6 +43,24 @@ class Project extends Model
         'sort_order',
     ];
 
+    /**
+     * Auto-generate business_id if missing (for old data without migration).
+     */
+    public function getBusinessIdAttribute($value)
+    {
+        if ($value) return $value;
+
+        $service = app(BusinessIdService::class);
+        $ids = $service->generateProjectBusinessId($this);
+        $this->updateQuietly([
+            'project_code' => $ids['code'],
+            'project_number' => $ids['number'],
+            'business_id' => $ids['business_id'],
+        ]);
+
+        return $ids['business_id'];
+    }
+
     protected static function booted(): void
     {
         static::creating(function (Project $project) {

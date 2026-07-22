@@ -411,6 +411,7 @@ function UserProfile() {
     try {
       const res = await fetch(`${API_URL}/users/${userId}/changes`, {
         headers: { Accept: "application/json", ...authHeaders() },
+        skipLoader: true,
       });
       const data = await res.json();
       if (data.success) setChanges(data.changes || []);
@@ -424,12 +425,6 @@ function UserProfile() {
       navigate("/");
       return;
     }
-    fetchProfile();
-    fetchChanges();
-  }, [userId, navigate]);
-
-  // Fetch all users for dynamic department/designation dropdowns
-  useEffect(() => {
     const fetchAllUsers = async () => {
       try {
         const res = await fetch(`${API_URL}/users`, {
@@ -442,15 +437,11 @@ function UserProfile() {
         }
       } catch { }
     };
-    fetchAllUsers();
-  }, []);
-
-  // Fetch company documents
-  useEffect(() => {
     const fetchCompanyDocs = async () => {
       try {
         const res = await fetch(`${API_URL}/company-documents`, {
           headers: { Accept: "application/json", Authorization: `Bearer ${authToken()}` },
+          skipLoader: true,
         });
         if (res.ok) {
           const data = await res.json();
@@ -458,8 +449,8 @@ function UserProfile() {
         }
       } catch { }
     };
-    fetchCompanyDocs();
-  }, []);
+    Promise.all([fetchProfile(), fetchChanges(), fetchAllUsers(), fetchCompanyDocs()]);
+  }, [userId, navigate]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {

@@ -162,6 +162,7 @@ function SubtaskDetails() {
     const token = authToken();
     fetch(`${API_URL}/deliverables/${subtaskId}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -179,30 +180,35 @@ function SubtaskDetails() {
   useAutoRefresh(fetchSubtask, { events: ["deliverable:updated", "task:updated", "data:changed"] });
 
   useEffect(() => {
-    if (!subtask?.id || !subtask?.unviewed_changes_count) return;
-    const token = authToken();
-    fetch(`${API_URL}/deliverables/${subtask.id}/changes/mark-read`, {
-      method: "POST",
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      _notifHandled: true,
-    }).catch(() => {});
-  }, [subtask?.id, subtask?.unviewed_changes_count]);
-
-  useEffect(() => {
     if (!subtask?.id) return;
     const token = authToken();
-    fetch(`${API_URL}/deliverables/${subtask.id}/my-note`, {
+    const markRead = subtask?.unviewed_changes_count
+      ? fetch(`${API_URL}/deliverables/${subtask.id}/changes/mark-read`, {
+          method: "POST",
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          skipLoader: true,
+          _notifHandled: true,
+        }).catch(() => {})
+      : Promise.resolve();
+
+    const fetchNotes = fetch(`${API_URL}/deliverables/${subtask.id}/my-note`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      skipLoader: true,
     })
       .then((r) => r.ok ? r.json() : { notes: [] })
       .then((data) => { setNotes(data.notes || []); setNoteInput(""); })
       .catch(() => {});
-  }, [subtask?.id]);
+
+    Promise.all([markRead, fetchNotes]);
+  }, [subtask?.id, subtask?.unviewed_changes_count]);
 
   const isCreator = subtask && currentUser && parseInt(subtask.created_by, 10) === parseInt(currentUser.id, 10);
   const isAdminManager = currentUser && ["admin", "manager"].includes(currentUser.role);
   const isAssignee = subtask && currentUser && subtask.assigned_to && parseInt(subtask.assigned_to, 10) === parseInt(currentUser.id, 10);
   const canApproveReject = isCreator || isAdminManager;
+  const isTransferor = subtask?.is_transferor ?? false;
+  const transferorReturnToSelf = subtask?.transferor_return_to_self ?? true;
+  const transferorHasApproved = subtask?.transferor_has_approved ?? false;
 
   const timerData = subtask?.timer || {
     state: subtask?.timer_state || "idle",
@@ -522,7 +528,7 @@ function SubtaskDetails() {
                       </button>
                     </>
                   )}
-                  {!readOnly && isAssignee && !["approved", "rejected"].includes(subtask.status) && (
+                  {!readOnly && isAssignee && !["approved", "rejected", "pending"].includes(subtask.status) && !isTransferor && (
                     <button className="td-btn-outline" onClick={() => setTransferDialog(true)}>
                       Transfer
                     </button>
@@ -545,22 +551,22 @@ function SubtaskDetails() {
                       On Hold by Assigner
                     </span>
                   )}
-                  {isPending && !readOnly && isAssignee && (
+                  {isPending && !readOnly && isAssignee && !isTransferor && (
                     <button className="td-btn-primary" onClick={handleAcknowledge} disabled={acknowledging}>
                       <CheckCircle2 size={15} />
                       {acknowledging ? "Acknowledging..." : "Acknowledge"}
                     </button>
                   )}
-                  {!readOnly && isAssignee && isInProgress && !isAssignerLocked && (
+                  {!readOnly && isAssignee && isInProgress && !isAssignerLocked && !isTransferor && (
                     <button className="td-btn-primary" onClick={handlePause} disabled={pausing} style={{ backgroundColor: pausing ? "#9CA3AF" : "#D97706" }}><Pause size={15} />{pausing ? "Pausing..." : "Pause"}</button>
                   )}
-                  {!readOnly && isAssignee && subtask.status === "paused" && !isAssignerLocked && (
+                  {!readOnly && isAssignee && subtask.status === "paused" && !isAssignerLocked && !isTransferor && (
                     <button className="td-btn-primary" onClick={handleResume} disabled={resuming}><Play size={15} />{resuming ? "Resuming..." : "Resume"}</button>
                   )}
-                  {!readOnly && canSubmit && !showSubmitForm && (
+                  {!readOnly && canSubmit && !showSubmitForm && !isTransferor && (
                     <button className="td-btn-primary" onClick={() => setShowSubmitForm(true)}>{isRejected ? "Resubmit" : "Submit"}</button>
                   )}
-                  {!readOnly && isSubmitted && canApproveReject && (
+                  {!readOnly && isSubmitted && canApproveReject && !transferorHasApproved && (
                     <>
                       <button className="td-btn-primary" onClick={handleApprove} disabled={approving} style={{ background: "#166534" }}>{approving ? "Approving..." : "Approve"}</button>
                       <button className="td-btn-danger" onClick={() => setShowRejectForm(true)}>Decline</button>

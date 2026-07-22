@@ -3,12 +3,13 @@ import { GripVertical } from 'lucide-react';
 
 /**
  * SmartDragHandle - Shows business_id by default, swaps to drag handle on hover.
- * Listeners are always attached for drag to work; visual swap is CSS only.
+ * Falls back to "ID-{id}" if business_id is null/empty.
  */
-export default function SmartDragHandle({ listeners, attributes, businessId, color = '#2563eb' }) {
+export default function SmartDragHandle({ listeners, attributes, businessId, id, color = '#2563eb' }) {
   const [hovered, setHovered] = useState(false);
+  const displayId = businessId || (id ? `ID-${id}` : '');
 
-  if (!businessId) return null;
+  if (!displayId) return null;
 
   return (
     <span
@@ -42,7 +43,7 @@ export default function SmartDragHandle({ listeners, attributes, businessId, col
           pointerEvents: 'none',
         }}
       >
-        {businessId}
+        {displayId}
       </span>
       <span
         style={{

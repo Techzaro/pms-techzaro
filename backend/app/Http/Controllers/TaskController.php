@@ -90,7 +90,7 @@ class TaskController extends Controller
                 ->get()->keyBy('task_id');
         }
 
-        $tasks->transform(function ($task) use ($dlvStats) {
+        $tasks->transform(function ($task) use ($dlvStats, $user) {
             $task->item_type = 'task';
             $stats = $dlvStats->get($task->id);
             $total = $stats ? (int) $stats->total : 0;
@@ -100,6 +100,32 @@ class TaskController extends Controller
             $task->completed_deliverables = $completed;
             $task->pending_deliverables_count = $pending;
             $task->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
+
+            // Transferor flag for list views
+            $isTransferor = false;
+            $chain = $task->delegation_chain ?? [];
+            foreach ($chain as $entry) {
+                if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                    $isTransferor = true;
+                    break;
+                }
+            }
+            $task->is_transferor = $isTransferor;
+            $task->transferor_return_to_self = true;
+            $task->transferor_has_approved = false;
+            foreach ($chain as $entry) {
+                if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                    $task->transferor_return_to_self = $entry['return_to_transferor'] ?? true;
+                    break;
+                }
+            }
+            $approvalChain = $task->approval_chain ?? [];
+            foreach ($approvalChain as $aEntry) {
+                if ((int) $aEntry['approver_id'] === (int) $user->id && $aEntry['status'] === 'approved') {
+                    $task->transferor_has_approved = true;
+                    break;
+                }
+            }
 
             return $task;
         });
@@ -173,7 +199,7 @@ class TaskController extends Controller
                 ->get()->keyBy('task_id');
         }
 
-        $tasks->transform(function ($task) use ($dlvStats) {
+        $tasks->transform(function ($task) use ($dlvStats, $user) {
             $task->item_type = 'task';
             $stats = $dlvStats->get($task->id);
             $total = $stats ? (int) $stats->total : 0;
@@ -183,6 +209,32 @@ class TaskController extends Controller
             $task->completed_deliverables = $completed;
             $task->pending_deliverables_count = $pending;
             $task->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
+
+            // Transferor flag for list views
+            $isTransferor = false;
+            $chain = $task->delegation_chain ?? [];
+            foreach ($chain as $entry) {
+                if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                    $isTransferor = true;
+                    break;
+                }
+            }
+            $task->is_transferor = $isTransferor;
+            $task->transferor_return_to_self = true;
+            $task->transferor_has_approved = false;
+            foreach ($chain as $entry) {
+                if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                    $task->transferor_return_to_self = $entry['return_to_transferor'] ?? true;
+                    break;
+                }
+            }
+            $approvalChain = $task->approval_chain ?? [];
+            foreach ($approvalChain as $aEntry) {
+                if ((int) $aEntry['approver_id'] === (int) $user->id && $aEntry['status'] === 'approved') {
+                    $task->transferor_has_approved = true;
+                    break;
+                }
+            }
 
             return $task;
         });
@@ -367,6 +419,31 @@ class TaskController extends Controller
                 $clone->completed_deliverables = $progress['completed'];
                 $clone->pending_deliverables_count = $progress['pending'];
                 $clone->deliverables_progress = $progress['progress'];
+                // Transferor flags
+                $isTransferor = false;
+                $chain = $task->delegation_chain ?? [];
+                foreach ($chain as $entry) {
+                    if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                        $isTransferor = true;
+                        break;
+                    }
+                }
+                $clone->is_transferor = $isTransferor;
+                $clone->transferor_return_to_self = true;
+                $clone->transferor_has_approved = false;
+                foreach ($chain as $entry) {
+                    if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                        $clone->transferor_return_to_self = $entry['return_to_transferor'] ?? true;
+                        break;
+                    }
+                }
+                $approvalChain = $task->approval_chain ?? [];
+                foreach ($approvalChain as $aEntry) {
+                    if ((int) $aEntry['approver_id'] === (int) $user->id && $aEntry['status'] === 'approved') {
+                        $clone->transferor_has_approved = true;
+                        break;
+                    }
+                }
                 $expandedTasks->push($clone);
             }
         }
@@ -483,10 +560,45 @@ class TaskController extends Controller
         $payload['my_submitted_at'] = $userPivot?->submitted_at;
         $isCurrentOwner = $this->delegationService->isCurrentOwner($task, $user);
         $payload['is_current_owner'] = $isCurrentOwner;
+
+        // Determine if the current user is a transferor
+        $isTransferor = false;
+        $transferorReturnToSelf = true;
+        $transferorHasApproved = false;
+        $chain = $task->delegation_chain ?? [];
+        foreach ($chain as $entry) {
+            if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                $isTransferor = true;
+                $transferorReturnToSelf = $entry['return_to_transferor'] ?? true;
+                break;
+            }
+        }
+        // Check approval_chain for this transferor
+        $approvalChain = $task->approval_chain ?? [];
+        foreach ($approvalChain as $aEntry) {
+            if ((int) $aEntry['approver_id'] === (int) $user->id && $aEntry['status'] === 'approved') {
+                $transferorHasApproved = true;
+                break;
+            }
+        }
+        $payload['is_transferor'] = $isTransferor;
+        $payload['transferor_return_to_self'] = $transferorReturnToSelf;
+        $payload['transferor_has_approved'] = $transferorHasApproved;
+
+        // Transferors: can_submit is always false, is_assignee false when return_to_transferor=false
         $payload['can_submit'] = ($isAssignee || $isCurrentOwner) && in_array($task->status, $pendingStatuses) && $allDeliverablesSubmitted
             && ($userPivot?->status !== 'submitted');
+        if ($isTransferor) {
+            $payload['can_submit'] = false;
+            if (!$transferorReturnToSelf) {
+                $payload['is_assignee'] = false;
+            }
+        }
         $payload['can_delegate'] = ($isAssignee || $isCurrentOwner)
             && !in_array($task->status, ['approved', 'rejected']);
+        if ($isTransferor) {
+            $payload['can_delegate'] = false;
+        }
         $payload['has_delegation_chain'] = !empty($task->delegation_chain);
         $payload['delegation_chain'] = $task->delegation_chain ?? [];
         $payload['approval_chain'] = $task->approval_chain ?? [];
@@ -2108,6 +2220,14 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Only the assignee or current owner can submit this task'], 403);
         }
 
+        // Transferors cannot submit
+        $chain = $task->delegation_chain ?? [];
+        foreach ($chain as $entry) {
+            if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                return response()->json(['success' => false, 'message' => 'Transferors cannot submit this task'], 403);
+            }
+        }
+
         if ($task->assigner_paused) {
             return response()->json(['success' => false, 'message' => 'This task is paused by the assigner and cannot be submitted'], 422);
         }
@@ -2276,6 +2396,60 @@ class TaskController extends Controller
         }
         if ($task->status !== 'submitted') {
             return response()->json(['success' => false, 'message' => 'Can only approve submitted tasks'], 422);
+        }
+
+        // Check if user is a transferor (next_approver from delegation chain with return_to_transferor=true)
+        $isNextApproverTransferor = $isNextApprover && !$isCreator;
+        $approvalChain = $task->approval_chain ?? [];
+        if ($isNextApproverTransferor) {
+            // Mark this transferor as approved in the approval_chain, keep as 'submitted'
+            $updatedApprovalChain = [];
+            foreach ($approvalChain as $aEntry) {
+                if ((int) $aEntry['approver_id'] === (int) $user->id) {
+                    $aEntry['status'] = 'approved';
+                    $aEntry['approved_at'] = now()->toISOString();
+                }
+                $updatedApprovalChain[] = $aEntry;
+            }
+            $task->update([
+                'approval_chain' => $updatedApprovalChain,
+                'updated_by' => $user->id,
+            ]);
+
+            // Notify original assigner that transferor has approved
+            $originalAssigner = $task->originalAssigner;
+            if ($originalAssigner) {
+                $this->notificationService->notify(
+                    $originalAssigner,
+                    $user->id,
+                    'task_transferor_approved',
+                    'task',
+                    $task->id,
+                    'Transferor Approved',
+                    $user->name.' has approved the delegated task "'.$task->title.'" and forwarded it to you for final approval.',
+                    '/tasks/task-details/'.$task->id.'?from=tasks'
+                );
+            }
+
+            TaskWorkflowEvent::create([
+                'task_id' => $task->id,
+                'user_id' => $user->id,
+                'action' => 'transferor_approved',
+                'comment' => $user->name.' (transferor) approved the submission and forwarded to original assigner',
+            ]);
+
+            // Log activity
+            $this->activityService->log($user->id, 'task_transferor_approved', 'You approved the delegated task "'.$task->title.'" as transferor', 'task', $task->id);
+
+            $task->fresh();
+            return response()->json([
+                'success' => true,
+                'message' => 'Approval forwarded to original assigner',
+                'task' => $this->taskWithTimer($task->load(['assignees:id,name,email,role', 'assigner:id,name', 'approvedBy:id,name',
+                    'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
+                    'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
+                ])->toArray()),
+            ]);
         }
 
         $task->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id, 'updated_by' => $user->id]);
@@ -3226,7 +3400,7 @@ class TaskController extends Controller
                 ->get()->keyBy('task_id');
         }
 
-        $tasks->transform(function ($task) use ($dlvStats) {
+        $tasks->transform(function ($task) use ($dlvStats, $user) {
             $task->item_type = 'task';
             $stats = $dlvStats->get($task->id);
             $total = $stats ? (int) $stats->total : 0;
@@ -3236,6 +3410,32 @@ class TaskController extends Controller
             $task->completed_deliverables = $completed;
             $task->pending_deliverables_count = $pending;
             $task->deliverables_progress = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
+
+            // Transferor flag for list views
+            $isTransferor = false;
+            $chain = $task->delegation_chain ?? [];
+            foreach ($chain as $entry) {
+                if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                    $isTransferor = true;
+                    break;
+                }
+            }
+            $task->is_transferor = $isTransferor;
+            $task->transferor_return_to_self = true;
+            $task->transferor_has_approved = false;
+            foreach ($chain as $entry) {
+                if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                    $task->transferor_return_to_self = $entry['return_to_transferor'] ?? true;
+                    break;
+                }
+            }
+            $approvalChain = $task->approval_chain ?? [];
+            foreach ($approvalChain as $aEntry) {
+                if ((int) $aEntry['approver_id'] === (int) $user->id && $aEntry['status'] === 'approved') {
+                    $task->transferor_has_approved = true;
+                    break;
+                }
+            }
 
             return $task;
         });
@@ -3360,6 +3560,11 @@ class TaskController extends Controller
 
         if (in_array($task->status, ['approved', 'rejected'])) {
             return response()->json(['success' => false, 'message' => 'Cannot delegate a task that is already approved or rejected'], 422);
+        }
+
+        // User must acknowledge the task first before transferring
+        if ($task->status === 'pending') {
+            return response()->json(['success' => false, 'message' => 'You must acknowledge this task first before transferring it'], 422);
         }
 
         $validated = $request->validate([

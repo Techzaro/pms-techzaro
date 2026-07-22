@@ -94,7 +94,8 @@ function TaskSubmissionPanel({
   const status = task.status;
   const isNextApprover = task.is_next_approver;
   const hasDelegationChain = task.has_delegation_chain;
-  const canApprove = isCreator || isNextApprover;
+  const transferorHasApproved = task.transferor_has_approved ?? false;
+  const canApprove = (isCreator && !transferorHasApproved) || isNextApprover;
 
   const handleAction = async (action, body = {}) => {
     setActing(true);

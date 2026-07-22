@@ -23,7 +23,7 @@ class DeliverableResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'business_id' => $this->business_id,
+            'business_id' => $this->business_id ?? 'SUB-' . $this->id,
             'project_id' => $this->project_id,
             'task_id' => $this->task_id,
             'title' => $this->title,
@@ -70,7 +70,7 @@ class DeliverableResource extends JsonResource
             'task' => $this->whenLoaded('task', fn () => [
                 'id' => $this->task->id,
                 'title' => $this->task->title,
-                'business_id' => $this->task->business_id,
+                'business_id' => $this->task->business_id ?? 'TSK-' . $this->task->id,
             ]),
             'files' => $this->whenLoaded('files'),
             'submissions' => $this->whenLoaded('submissions'),
