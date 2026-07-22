@@ -41,53 +41,7 @@ class Notification extends Model
     protected static function booted(): void
     {
         static::created(function (self $notification) {
-            $notification->loadMissing('user.emailPreference', 'sender');
-
-            if (!$notification->user || !$notification->user->professional_email) {
-                Log::info('Notification email skipped (model boot): recipient has no professional_email', [
-                    'notification_id' => $notification->id,
-                    'user_id' => $notification->user_id,
-                ]);
-                return;
-            }
-
-            // Skip email for user_updated — dedicated UserProfileUpdated email is already sent
-            if ($notification->type === 'user_updated') {
-                return;
-            }
-
-            // Chat messages: in-app only — no email or push
-            if ($notification->related_module === 'chat') {
-                return;
-            }
-
-            // Send email notification
-            if (static::wantsChannel($notification, 'email')) {
-                try {
-                    $senderEmail = $notification->sender?->professional_email ?? '';
-                    $senderName = $notification->sender?->name ?? config('mail.from.name', 'PMS Techxaro');
-                    $mail = new NotificationMail($notification, $senderEmail, $senderName);
-                    Mail::to($notification->user->professional_email)->queue($mail);
-                } catch (\Throwable $e) {
-                    Log::error('Failed to send notification email (model boot)', [
-                        'notification_id' => $notification->id,
-                        'user_id' => $notification->user_id,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            }
-
-            // Queue FCM push notification (async via dispatch)
-            if (static::wantsChannel($notification, 'mobile_push')) {
-                try {
-                    \App\Jobs\SendFcmNotification::dispatch($notification);
-                } catch (\Throwable $e) {
-                    Log::error('Failed to dispatch FCM push', [
-                        'notification_id' => $notification->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            }
+            \App\Jobs\SendBulkNotificationEmails::dispatch([$notification->id]);
         });
     }
 

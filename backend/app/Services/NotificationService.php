@@ -88,72 +88,7 @@ class NotificationService
         $firstId = (int) DB::getPdo()->lastInsertId();
         $ids = range($firstId, $firstId + count($rows) - 1);
 
-        $createdNotifications = Notification::whereIn('id', $ids)
-            ->with(['user.emailPreference', 'sender'])
-            ->get();
-
-        Log::info('createBulk: fetched notifications for email', [
-            'expected' => count($rows),
-            'fetched' => $createdNotifications->count(),
-            'ids' => $ids,
-        ]);
-
-        foreach ($createdNotifications as $notification) {
-            if (!$notification->user) {
-                Log::info('createBulk email skipped: user not found', ['notification_id' => $notification->id, 'user_id' => $notification->user_id]);
-                continue;
-            }
-            if (empty($notification->user->professional_email)) {
-                Log::info('createBulk email skipped: no professional_email', ['notification_id' => $notification->id, 'user_id' => $notification->user_id]);
-                continue;
-            }
-            if ($notification->type === 'user_updated') continue;
-
-            // Chat messages: in-app only — no email or push
-            if ($notification->related_module === 'chat') continue;
-
-            if (Notification::wantsChannel($notification, 'email')) {
-                try {
-                    $senderEmail = $notification->sender?->professional_email ?? '';
-                    $senderName = $notification->sender?->name ?? config('mail.from.name', 'PMS Techxaro');
-                    $mail = new \App\Mail\NotificationMail(
-                        $notification,
-                        $senderEmail,
-                        $senderName
-                    );
-                    Mail::to($notification->user->professional_email)->queue($mail);
-                    Log::info('createBulk email queued', [
-                        'notification_id' => $notification->id,
-                        'recipient' => $notification->user->professional_email,
-                        'type' => $notification->type,
-                    ]);
-                } catch (\Throwable $e) {
-                    Log::error('createBulk email FAILED', [
-                        'notification_id' => $notification->id,
-                        'user_id' => $notification->user_id,
-                        'error' => $e->getMessage(),
-                        'file' => $e->getFile(),
-                        'line' => $e->getLine(),
-                    ]);
-                }
-            } else {
-                Log::info('createBulk email skipped: wantsChannel false', [
-                    'notification_id' => $notification->id,
-                    'module' => $notification->related_module,
-                ]);
-            }
-
-            if (Notification::wantsChannel($notification, 'mobile_push')) {
-                try {
-                    \App\Jobs\SendFcmNotification::dispatch($notification);
-                } catch (\Throwable $e) {
-                    Log::error('Failed to dispatch FCM push', [
-                        'notification_id' => $notification->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            }
-        }
+        \App\Jobs\SendBulkNotificationEmails::dispatch($ids);
     }
 
     /**
