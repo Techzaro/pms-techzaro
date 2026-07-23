@@ -13,6 +13,7 @@ import { useEscapeKey } from "../hooks/useEscapeKey";
 import draftService from "../services/draftService";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
+import MultiSelectDropdown from "./MultiSelectDropdown";
 import LoadingButton from "./LoadingButton";
 import ConfirmModal from "./ConfirmModal";
 import { formatDateTime, toDatetimeLocal, toUTCIso, getNowDatetimeLocal } from "../utils/formatDateTime";
@@ -165,7 +166,7 @@ export default function EditTaskModal({ task, onClose }) {
     description: task.description || "",
     priority: task.priority || "Medium",
     task_type: task.task_type || "standard",
-    project_id: task.project?.id || "",
+    project_id: task.project?.id ? [task.project.id] : [],
     start_date: task.start_date ? toDatetimeLocal(task.start_date) : "",
     end_date: task.end_date ? toDatetimeLocal(task.end_date) : "",
     allow_transfer: task.allow_transfer !== false ? "allow" : "disallow",
@@ -292,24 +293,40 @@ export default function EditTaskModal({ task, onClose }) {
 
   useEffect(() => {
     const token = authToken();
-    if (!form.project_id) {
+    if (!form.project_id || form.project_id.length === 0) {
       if (allUsers.length) setDisplayUsers(allUsers);
       return;
     }
     const currentUser = getUser();
-    fetch(`${API_URL}/projects/${form.project_id}/members`, {
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      skipLoader: true,
-    })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((d) => {
-        let members = Array.isArray(d) ? d : [];
-        if (currentUser && !members.some((u) => u.id === currentUser.id)) {
-          members = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department }, ...members];
-        }
-        setDisplayUsers(members.length ? members : allUsers);
-      })
-      .catch(() => { if (allUsers.length) setDisplayUsers(allUsers); });
+    Promise.all(
+      form.project_id.map((pid) =>
+        fetch(`${API_URL}/projects/${pid}/members`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          skipLoader: true,
+        })
+          .then((res) => (res.ok ? res.json() : [])).catch(() => [])
+      )
+    ).then((results) => {
+      const memberSets = results.map((members) => {
+        const map = new Map();
+        (Array.isArray(members) ? members : []).forEach((u) => map.set(u.id, u));
+        return map;
+      });
+      let users;
+      if (memberSets.length === 1) {
+        users = Array.from(memberSets[0].values());
+      } else {
+        const smallest = memberSets.reduce((a, b) => a.size <= b.size ? a : b);
+        users = [];
+        smallest.forEach((u, id) => {
+          if (memberSets.every((s) => s.has(id))) users.push(u);
+        });
+      }
+      if (currentUser && !users.some((u) => u.id === currentUser.id)) {
+        users = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department }, ...users];
+      }
+      setDisplayUsers(users.length ? users : allUsers);
+    }).catch(() => { if (allUsers.length) setDisplayUsers(allUsers); });
   }, [form.project_id, allUsers]);
 
   useEffect(() => {
@@ -592,7 +609,7 @@ export default function EditTaskModal({ task, onClose }) {
           body = {
             ...form,
             allow_transfer: form.allow_transfer === "allow",
-            project_id: form.project_id || null,
+            project_id: form.project_id?.[0] || null,
             start_date: toUTCIso(form.start_date),
             end_date: toUTCIso(form.end_date),
             assigned_to: selectedAssigneeIds,
@@ -673,12 +690,13 @@ export default function EditTaskModal({ task, onClose }) {
             <div className="task-grid-2">
               <div className="task-field">
                 <label>Project</label>
-                <CustomSelect
+                <MultiSelectDropdown
                   name="project_id"
                   value={form.project_id}
                   onChange={(val) => { setForm((prev) => ({ ...prev, project_id: val })); setSelectedAssigneeIds([]); markDirty(); }}
-                  placeholder="Select project"
-                  options={[{ value: "", label: "No Project" }, ...projects.map((p) => ({ value: p.id, label: p.title }))]}
+                  placeholder="Select projects"
+                  searchPlaceholder="Search projects..."
+                  options={projects.map((p) => ({ value: p.id, label: p.title }))}
                 />
               </div>
               <div className="task-field">
