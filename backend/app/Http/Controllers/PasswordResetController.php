@@ -33,14 +33,17 @@ class PasswordResetController extends Controller
                 'email' => 'required|email',
             ]);
 
-            $professionalEmail = $request->input('email');
+            $inputEmail = $request->input('email');
 
-            \Log::info('Password reset requested', ['professional_email' => $professionalEmail]);
+            \Log::info('Password reset requested', ['email' => $inputEmail]);
 
-            $user = User::where('professional_email', $professionalEmail)->first();
+            $user = User::where('professional_email', $inputEmail)
+                ->orWhere('email', $inputEmail)
+                ->orWhere('personal_email', $inputEmail)
+                ->first();
 
-            if (! $user || ! $user->active) {
-                \Log::info('Password reset: user not found or inactive', ['professional_email' => $professionalEmail]);
+            if (! $user) {
+                \Log::info('Password reset: user not found', ['email' => $inputEmail]);
 
                 return response()->json([
                     'success' => true,
@@ -59,19 +62,21 @@ class PasswordResetController extends Controller
                 ], 403);
             }
 
-            if (empty($user->professional_email)) {
-                \Log::error('Password reset: user has no professional_email', ['user_id' => $user->id]);
+            if (empty($user->professional_email) && empty($user->personal_email) && empty($user->email)) {
+                \Log::error('Password reset: user has no email address', ['user_id' => $user->id]);
 
                 return response()->json([
                     'success' => false,
-                    'message' => 'No professional email configured for this account. Please contact admin.',
+                    'message' => 'No email configured for this account. Please contact admin.',
                 ], 422);
             }
+
+            $sendTo = $user->professional_email ?: $user->personal_email ?: $user->email;
 
             $token = Str::random(64);
 
             \DB::table('password_reset_tokens')->updateOrInsert(
-                ['email' => $user->professional_email],
+                ['email' => $sendTo],
                 [
                     'token' => Hash::make($token),
                     'created_at' => now(),
@@ -79,9 +84,7 @@ class PasswordResetController extends Controller
             );
 
             $frontendUrl = config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:5173'));
-            $resetUrl = $frontendUrl.'/reset-password?token='.$token.'&email='.urlencode($user->professional_email);
-
-            $sendTo = $user->professional_email;
+            $resetUrl = $frontendUrl.'/reset-password?token='.$token.'&email='.urlencode($sendTo);
 
             \Log::info('Password reset: sending email', [
                 'user_id' => $user->id,
@@ -90,7 +93,7 @@ class PasswordResetController extends Controller
             ]);
 
             try {
-                Mail::to($sendTo)->queue(new PasswordResetMail($user, $resetUrl, $token));
+                Mail::to($sendTo)->send(new PasswordResetMail($user, $resetUrl, $token));
                 \Log::info('Password reset: email sent successfully', ['send_to' => $sendTo]);
             } catch (\Throwable $mailException) {
                 \Log::error('Password reset: SMTP send failed', [
@@ -99,9 +102,9 @@ class PasswordResetController extends Controller
                 ]);
 
                 return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to send email. Please try again later.',
-                ], 500);
+                    'success' => true,
+                    'message' => 'If an account with that email exists, a password reset link has been sent.',
+                ]);
             }
 
             return response()->json([
@@ -115,7 +118,7 @@ class PasswordResetController extends Controller
                 'errors' => $e->errors(),
             ], 422);
         } catch (\Throwable $e) {
-            \Log::error('Password reset email failed', ['email' => $professionalEmail ?? null, 'error' => $e->getMessage()]);
+            \Log::error('Password reset email failed', ['email' => $inputEmail ?? null, 'error' => $e->getMessage()]);
 
             return response()->json([
                 'success' => false,
@@ -176,7 +179,10 @@ class PasswordResetController extends Controller
                 ], 422);
             }
 
-            $user = User::where('professional_email', $email)->first();
+            $user = User::where('professional_email', $email)
+                ->orWhere('email', $email)
+                ->orWhere('personal_email', $email)
+                ->first();
 
             if (! $user) {
                 return response()->json([

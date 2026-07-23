@@ -871,15 +871,8 @@
   }
 
   .task-progress {
-    gap: 6px;
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    padding-bottom: 4px;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .task-progress::-webkit-scrollbar {
-    display: none;
+    gap: 4px;
+    flex-wrap: wrap;
   }
 
   .tasks-search-bar {

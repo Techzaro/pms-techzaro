@@ -94,9 +94,13 @@
 
 .task-progress {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   margin-bottom: 30px;
   flex-wrap: wrap;
+}
+
+.task-progress p {
+  margin: 0;
 }
 
 .All,
@@ -108,24 +112,27 @@
 .Progress,
 .Submitted,
 .Reopened,
+.Transferred,
 .Approved,
 .Rejected,
 .Completed,
 .Failed,
-.Aban {
+.Aban,
+.Planning {
   border: 1px solid #64748B;
-  padding: 6px 12px;
+  padding: 3px 8px;
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  border-radius: 8px;
-  gap: 4px;
+  border-radius: 5px;
+  gap: 2px;
   cursor: pointer;
   white-space: nowrap;
   background: transparent;
   transition: 0.15s ease;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
+  margin: 0;
 }
 
 .All.active,
@@ -137,11 +144,13 @@
 .Progress.active,
 .Submitted.active,
 .Reopened.active,
+.Transferred.active,
 .Approved.active,
 .Rejected.active,
 .Completed.active,
 .Failed.active,
-.Aban.active {
+.Aban.active,
+.Planning.active {
   background: var(--bg-card);
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
   border-color: #64748B;
@@ -188,8 +197,16 @@
   color: #EF4444;
 }
 
+.Transferred {
+  color: #6366F1;
+}
+
 .Completed {
   color: #22C55E;
+}
+
+.Planning {
+  color: #8B5CF6;
 }
 
 .Failed {
@@ -767,9 +784,9 @@
   }
 
   .task-progress {
-    gap: 8px;
+    gap: 4px;
   }
-  
+
   .table-header1,
   .taskby-row,
   .table-header-compact,
@@ -829,7 +846,7 @@
   .task-progress {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 4px;
     margin-bottom: 20px;
     padding-bottom: 0;
   }
@@ -887,6 +904,7 @@
   .Progress,
   .Submitted,
   .Reopened,
+  .Transferred,
   .Approved,
   .Rejected,
   .Completed,

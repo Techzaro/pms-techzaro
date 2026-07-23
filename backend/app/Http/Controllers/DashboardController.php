@@ -100,8 +100,9 @@ class DashboardController extends Controller
 
             if ($isAdminOrManager) {
                 $pendingStatuses = ['pending','in_progress','In Progress','In-progress','planned','Planning','submitted','reopened','rejected'];
+                $onlyPendingStatuses = ['pending','planned','Planning'];
 
-                $activeProjects = Project::where('created_by', $user->id)
+                $activeProjects = Project::whereIn('id', $projectIds)
                     ->whereIn('status', ['Planning', 'In-progress', 'Paused'])->count();
 
                 $tasksDueToday = DB::table('tasks')
@@ -129,7 +130,7 @@ class DashboardController extends Controller
                         COUNT(*) as total,
                         SUM(CASE WHEN tasks.status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
                         SUM(CASE WHEN tasks.status = 'approved' THEN 1 ELSE 0 END) as approved,
-                        SUM(CASE WHEN tasks.status IN ('".implode("','", $pendingStatuses)."') THEN 1 ELSE 0 END) as pending
+                        SUM(CASE WHEN tasks.status IN ('".implode("','", $onlyPendingStatuses)."') THEN 1 ELSE 0 END) as pending
                     ")->first();
 
                 $taskAssignedToCount = Task::where('assigned_by', $user->id)
@@ -141,7 +142,7 @@ class DashboardController extends Controller
                         COUNT(*) as total,
                         SUM(CASE WHEN tasks.status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
                         SUM(CASE WHEN tasks.status = 'approved' THEN 1 ELSE 0 END) as approved,
-                        SUM(CASE WHEN tasks.status IN ('".implode("','", $pendingStatuses)."') THEN 1 ELSE 0 END) as pending
+                        SUM(CASE WHEN tasks.status IN ('".implode("','", $onlyPendingStatuses)."') THEN 1 ELSE 0 END) as pending
                     ")->first();
 
                 $expandedTaskTotal = (int) $taskStats->total + (int) $taskAssignedToCount->total;
@@ -160,6 +161,7 @@ class DashboardController extends Controller
             } else {
                 // Regular user assigner view — tasks they assigned to others
                 $pendingStatuses = ['pending','in_progress','In Progress','In-progress','planned','Planning','submitted','reopened','rejected'];
+                $onlyPendingStatuses = ['pending','planned','Planning'];
 
                 $activeProjects = Project::where('created_by', $user->id)
                     ->whereIn('status', ['Planning', 'In-progress', 'Paused'])->count();
@@ -189,7 +191,7 @@ class DashboardController extends Controller
                         COUNT(*) as total,
                         SUM(CASE WHEN tasks.status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
                         SUM(CASE WHEN tasks.status = 'approved' THEN 1 ELSE 0 END) as approved,
-                        SUM(CASE WHEN tasks.status IN ('".implode("','", $pendingStatuses)."') THEN 1 ELSE 0 END) as pending
+                        SUM(CASE WHEN tasks.status IN ('".implode("','", $onlyPendingStatuses)."') THEN 1 ELSE 0 END) as pending
                     ")->first();
 
                 $taskAssignedToCount = Task::where('assigned_by', $user->id)
@@ -201,7 +203,7 @@ class DashboardController extends Controller
                         COUNT(*) as total,
                         SUM(CASE WHEN tasks.status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
                         SUM(CASE WHEN tasks.status = 'approved' THEN 1 ELSE 0 END) as approved,
-                        SUM(CASE WHEN tasks.status IN ('".implode("','", $pendingStatuses)."') THEN 1 ELSE 0 END) as pending
+                        SUM(CASE WHEN tasks.status IN ('".implode("','", $onlyPendingStatuses)."') THEN 1 ELSE 0 END) as pending
                     ")->first();
 
                 $expandedTaskTotal = (int) $taskStats->total + (int) $taskAssignedToCount->total;
@@ -227,6 +229,7 @@ class DashboardController extends Controller
         if ($isAdminOrManager) {
             // Admin/Manager assignee view — tasks assigned to them by others
             $pendingStatuses = ['pending','in_progress','In Progress','In-progress','planned','Planning','submitted','reopened','rejected'];
+            $onlyPendingStatuses = ['pending','planned','Planning'];
 
             $activeProjects = Project::whereIn('id', $projectIds)
                 ->whereIn('status', ['Planning', 'In-progress', 'Paused'])->count();
@@ -249,7 +252,7 @@ class DashboardController extends Controller
                     COUNT(*) as total,
                     SUM(CASE WHEN status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
                     SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
-                    SUM(CASE WHEN status IN ('".implode("','", $pendingStatuses)."') THEN 1 ELSE 0 END) as pending
+                    SUM(CASE WHEN status IN ('".implode("','", $onlyPendingStatuses)."') THEN 1 ELSE 0 END) as pending
                 ")->first();
 
             return [
@@ -273,7 +276,7 @@ class DashboardController extends Controller
             ->whereNotIn('status', $this->dueTodayCompletedStatuses())
             ->count();
 
-        $pendingStatuses = ['pending','in_progress','In Progress','In-progress','planned','Planning','submitted','reopened','rejected'];
+        $onlyPendingStatuses = ['pending','planned','Planning'];
 
         $taskStats = Task::where(function ($q) use ($user) {
             $q->where('assigned_by', $user->id)
@@ -283,7 +286,7 @@ class DashboardController extends Controller
             COUNT(*) as total,
             SUM(CASE WHEN status IN ('completed','done','approved') THEN 1 ELSE 0 END) as completed,
             SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
-            SUM(CASE WHEN status IN ('".implode("','", $pendingStatuses)."') THEN 1 ELSE 0 END) as pending
+            SUM(CASE WHEN status IN ('".implode("','", $onlyPendingStatuses)."') THEN 1 ELSE 0 END) as pending
         ")->first();
 
         return [

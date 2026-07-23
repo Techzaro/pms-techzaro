@@ -95,7 +95,7 @@ function TaskSubmissionPanel({
   const isNextApprover = task.is_next_approver;
   const hasDelegationChain = task.has_delegation_chain;
   const transferorHasApproved = task.transferor_has_approved ?? false;
-  const canApprove = (isCreator && !transferorHasApproved) || isNextApprover;
+  const canApprove = (isCreator && !transferorHasApproved && !(hasDelegationChain && !isNextApprover)) || isNextApprover;
 
   const handleAction = async (action, body = {}) => {
     setActing(true);
@@ -192,7 +192,7 @@ function TaskSubmissionPanel({
       )}
 
       {/* Submission details */}
-      {(status === "submitted" || status === "approved" || status === "rejected") && latestSubmission && (
+      {(status === "submitted" || status === "approved" || status === "rejected" || status === "in_progress") && latestSubmission && (
         <div className="td-card td-submission-card">
           <h3 className="td-card-title">Submission Details</h3>
           <div className="td-submission-grid">
@@ -374,6 +374,23 @@ function TaskSubmissionPanel({
                   <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "6px", fontStyle: "italic" }}>
                     "{sub.comment}"
                   </p>
+                )}
+                {/* Show attachments for all submissions in history */}
+                {(sub.attachments?.length > 0 || sub.file_name) && (
+                  <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                    {(sub.attachments || []).map((att) => (
+                      <a key={att.id} className="td-submission-file-link" href={fileUrl(att.full_url)} target="_blank" rel="noopener noreferrer" style={{ fontSize: "11px", padding: "2px 8px" }}>
+                        {att.attachment_type === "link" ? <ExternalLink size={12} /> : <FileText size={12} />}
+                        <span>{att.original_name || att.file_name}</span>
+                      </a>
+                    ))}
+                    {sub.file_name && (!sub.attachments || sub.attachments.length === 0) && (
+                      <a className="td-submission-file-link" href={`${API_URL}/tasks/submission-file/${sub.id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "11px", padding: "2px 8px" }}>
+                        <FileText size={12} />
+                        <span>{sub.file_name}</span>
+                      </a>
+                    )}
+                  </div>
                 )}
               </div>
             ))}

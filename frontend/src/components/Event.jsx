@@ -5,7 +5,7 @@
  * Supports both single-date and multi-day events, all-day mode, and global assignment.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
@@ -100,9 +100,27 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
     allDay: false,
   });
 
+  const autoSaveData = useMemo(() => {
+    const finalType = formData.eventType === "__custom__" ? formData.eventTypeCustom.trim() : (TYPE_MAP[formData.eventType] || "Meeting");
+    return {
+      title: formData.title,
+      description: formData.description,
+      start_date: formData.startDate,
+      start_time: formData.startTime,
+      end_date: formData.endDate,
+      end_time: formData.endTime,
+      has_end_date: formData.hasEndDate,
+      event_type: finalType || "Meeting",
+      event_type_custom: formData.eventTypeCustom,
+      all_day: formData.allDay,
+      assigned_user_ids: assignedUserIds,
+      is_global: isGlobal,
+    };
+  }, [formData, assignedUserIds, isGlobal]);
+
   const { lastSaved, isSaving, draftId: autoSaveDraftId } = useAutoSave({
     draftId,
-    formData,
+    formData: autoSaveData,
     moduleType: "event",
     enabled: isDirty,
   });
@@ -340,6 +358,7 @@ function Event({ isOpen, onClose, onEventCreated, editEvent = null, restoreDraft
           publish('event:created', data.event || data);
           publish('data:changed', { type: 'event', action: 'created' });
         }
+        if (restoreDraftId) draftService.delete(restoreDraftId).catch(() => {});
         onEventCreated?.(data.event);
         onClose();
       } catch (err) {

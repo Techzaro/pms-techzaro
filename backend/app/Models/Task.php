@@ -71,6 +71,7 @@ class Task extends Model
         'delegation_chain',
         'approval_chain',
         'delegation_count',
+        'allow_transfer',
     ];
 
     /**
@@ -133,6 +134,7 @@ class Task extends Model
         'reopen_count' => 'integer',
         'submission_count' => 'integer',
         'assigner_paused' => 'boolean',
+        'allow_transfer' => 'boolean',
         'total_work_seconds' => 'integer',
         'elapsed_seconds' => 'integer',
         'pause_count' => 'integer',

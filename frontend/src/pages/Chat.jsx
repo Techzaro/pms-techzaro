@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
@@ -7,6 +7,38 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import RichTextEditor from "../components/RichTextEditor";
 import CustomSelect from "../components/CustomSelect";
 import "./Chat.css";
+
+function ChatFileImage({ msgId, fileName }) {
+  const [src, setSrc] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/messages/${msgId}/file`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        setSrc(URL.createObjectURL(blob));
+      }
+    } catch (err) {
+      console.error("Failed to load image:", err);
+    }
+  }, [msgId]);
+
+  useEffect(() => {
+    load();
+    return () => { if (src) URL.revokeObjectURL(src); };
+  }, [load]);
+
+  if (!src) return null;
+
+  return (
+    <a href={src} target="_blank" rel="noopener noreferrer">
+      <img src={src} alt={fileName} className="message-image-preview" />
+    </a>
+  );
+}
 
 function Chat() {
   const { conversationId } = useParams();
@@ -397,13 +429,37 @@ function Chat() {
                       {msg.file_name && (
                         <div className="message-file">
                           {msg.file_name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ? (
-                            <a href={`${API_URL}/messages/${msg.id}/file?token=${authToken()}`} target="_blank" rel="noopener noreferrer">
-                              <img src={`${API_URL}/messages/${msg.id}/file?token=${authToken()}`} alt={msg.file_name} className="message-image-preview" />
-                            </a>
+                            <ChatFileImage msgId={msg.id} fileName={msg.file_name} />
                           ) : (
-                            <a href={`${API_URL}/messages/${msg.id}/file?token=${authToken()}`} target="_blank" rel="noopener noreferrer">
+                            <button
+                              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#7c3aed", textAlign: "left" }}
+                              onClick={async () => {
+                                try {
+                                  const token = authToken();
+                                  const res = await fetch(`${API_URL}/messages/${msg.id}/file`, {
+                                    headers: { Authorization: `Bearer ${token}` },
+                                  });
+                                  if (!res.ok) {
+                                    const err = await res.json().catch(() => null);
+                                    alert(err?.message || "Failed to download file");
+                                    return;
+                                  }
+                                  const blob = await res.blob();
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement("a");
+                                  a.href = url;
+                                  a.download = msg.file_name;
+                                  document.body.appendChild(a);
+                                  a.click();
+                                  document.body.removeChild(a);
+                                  URL.revokeObjectURL(url);
+                                } catch (err) {
+                                  console.error("Download failed:", err);
+                                }
+                              }}
+                            >
                               📎 {msg.file_name}
-                            </a>
+                            </button>
                           )}
                         </div>
                       )}

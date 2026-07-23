@@ -155,15 +155,20 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
   const [projectEndDate, setProjectEndDate] = useState(null);
   const [draftId, setDraftId] = useState(null);
 
-  const [form, setForm] = useState({
-    project_id: projectId || "",
-    assigned_to: [],
-    title: "",
-    description: "",
-    priority: "Medium",
-    task_type: "standard",
-    start_date: "",
-    end_date: "",
+  const [form, setForm] = useState(() => {
+    const user = getUser();
+    const defaultTransfer = (user?.role === "admin" || user?.role === "manager") ? "allow" : "disallow";
+    return {
+      project_id: projectId || "",
+      assigned_to: [],
+      title: "",
+      description: "",
+      priority: "Medium",
+      task_type: "standard",
+      start_date: "",
+      end_date: "",
+      allow_transfer: defaultTransfer,
+    };
   });
 
   const [recurrenceSettings, setRecurrenceSettings] = useState({
@@ -201,9 +206,17 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
   const [editFileDeleteConfirm, setEditFileDeleteConfirm] = useState(false);
   const [showVariablesHint, setShowVariablesHint] = useState(false);
 
+  const autoSaveData = useMemo(() => ({
+    ...form,
+    deliverables: subtasks,
+    recurringTemplates,
+    requirementsList,
+    links: links.map(l => ({ url: l.url, name: l.name || l.customName })),
+  }), [form, subtasks, recurringTemplates, requirementsList, links]);
+
   const { lastSaved, isSaving, draftId: autoSaveDraftId } = useAutoSave({
     draftId,
-    formData: form,
+    formData: autoSaveData,
     moduleType: "task",
     enabled: isDirty,
     project_id: form.project_id || projectId,
@@ -235,8 +248,12 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
           task_type: d.task_type || "standard",
           start_date: d.start_date || "",
           end_date: d.end_date || "",
+          allow_transfer: d.allow_transfer ?? "allow",
         });
         if (d.requirementsList) setRequirementsList(d.requirementsList);
+        if (d.deliverables) setSubtasks(d.deliverables);
+        if (d.recurringTemplates) setRecurringTemplates(d.recurringTemplates);
+        if (d.links) setLinks(d.links.map(l => ({ url: l.url, name: l.name || "", renaming: false })));
         setDraftId(restoreDraftId);
       } catch (err) {
         console.error("Failed to restore draft:", err);
@@ -251,7 +268,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
       const payload = {
         module_type: "task",
         title: form.title || "Untitled Task Draft",
-        draft_data: { ...form, deliverables: subtasks, recurringTemplates: recurringTemplates },
+        draft_data: { ...form, deliverables: subtasks, recurringTemplates: recurringTemplates, requirementsList, links: links.map(l => ({ url: l.url, name: l.name || l.customName })) },
         project_id: form.project_id || projectId,
       };
       if (draftId) {
@@ -518,6 +535,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
           recurrence_settings: settings,
           deliverable_templates: validTemplates.length > 0 ? validTemplates.map((t) => ({ title: t.title.trim(), description: t.description || null, quantity: t.quantity || 1, combined: t.combined || false })) : undefined,
           deliverables: subtasks.length > 0 ? subtasks.map((d) => ({ title: d.title, start_date: d.start_date || null, due_date: d.due_date || null, assigned_to: d.assigned_to || null })) : undefined,
+          allow_transfer: form.allow_transfer === "allow",
         };
 
         const pid = projectId || form.project_id;
@@ -545,6 +563,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
         showSuccessMessage("Task", "created");
         publish("task:created", data.task || data);
         publish("data:changed", { type: "task", action: "created" });
+        if (restoreDraftId) draftService.delete(restoreDraftId).catch(() => {});
         onClose(true);
       } catch (err) {
         notify.error(err.message);
@@ -766,6 +785,16 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                     }
                   }}
                   options={[{ value: "standard", label: "Standard" }, { value: "recurring", label: "Recurring" }]} />
+              </div>
+
+              <div className="task-card">
+                <label>Transfer To</label>
+                <CustomSelect name="allow_transfer" value={form.allow_transfer ?? "allow"}
+                  onChange={(val) => { setForm((prev) => ({ ...prev, allow_transfer: val })); markDirty(); }}
+                  options={[{ value: "allow", label: "Allow" }, { value: "disallow", label: "Disallow" }]} />
+                <small style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, display: "block" }}>
+                  Whether assignees can transfer this task to others
+                </small>
               </div>
 
               {/* RECURRING SETTINGS */}

@@ -15,7 +15,7 @@ export const queryClient = new QueryClient({
     queries: {
       staleTime: 30000,
       gcTime: 60000, // Keep unused cache for 60 seconds
-      refetchOnWindowFocus: true, // Refetch when tab gains focus
+      refetchOnWindowFocus: false, // Do NOT refetch on tab focus — prevents losing form data
       retry: 1, // Retry failed requests once
     },
   },

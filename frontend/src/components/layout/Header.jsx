@@ -23,7 +23,6 @@ import "./Header.css";
 import CreateTaskModal from "../CreateTaskModal";
 import CreateProjectModal from "../CreateProjectModal";
 import CreateDeliverableModel from "./CreateDeliverableModel";
-import ChangePasswordModal from "../ChangePasswordModal";
 
 /**
  * Header component – renders the top navigation bar.
@@ -49,7 +48,6 @@ function Header() {
   const [unreadCount, setUnreadCount] = useState(0);
   const initialPollDoneRef = useRef(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
   const [notifPermission, setNotifPermission] = useState(() => getNotificationPermission());
 
   // Initialise Firebase on mount
@@ -827,7 +825,7 @@ function Header() {
                   <MdPerson size={20} />
                   <span>My Profile</span>
                 </button>
-                <button className={`hmc-menu-item${profileHighlightIndex === 1 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); setShowProfileModal(true); }} onMouseEnter={() => setProfileHighlightIndex(1)}>
+                <button className={`hmc-menu-item${profileHighlightIndex === 1 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); navigate(`${rolePath("my-profile")}?openPassword=true`); }} onMouseEnter={() => setProfileHighlightIndex(1)}>
                   <MdLock size={20} />
                   <span>Change Password</span>
                 </button>
@@ -889,10 +887,6 @@ function Header() {
             }}
           />
         </div>
-      )}
-
-      {showProfileModal && (
-        <ChangePasswordModal onClose={() => setShowProfileModal(false)} />
       )}
 
       {showSubtaskModal && (

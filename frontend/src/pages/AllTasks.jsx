@@ -17,7 +17,7 @@ import Breadcrumb from "../components/Breadcrumb";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import { StickyNote } from "lucide-react";
+import { ArrowUpRight, StickyNote } from "lucide-react";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
@@ -95,7 +95,6 @@ function AllTasks() {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
-    if (statusFilter) params.append("status", statusFilter);
     if (timeFilter) params.append("time_filter", timeFilter);
 
     fetch(`${API_URL}/all-tasks?${params.toString()}`, {
@@ -113,7 +112,7 @@ function AllTasks() {
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch, statusFilter, timeFilter]);
+  }, [debouncedSearch, timeFilter]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -188,6 +187,7 @@ function AllTasks() {
   const pausedCount = useMemo(() => baseItems.filter((i) => i.status === "paused").length, [baseItems]);
   const submittedCount = useMemo(() => baseItems.filter((i) => i.status === "submitted").length, [baseItems]);
   const reopenedCount = useMemo(() => baseItems.filter((i) => i.status === "reopened").length, [baseItems]);
+  const transferredCount = useMemo(() => baseItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length, [baseItems]);
   const approvedCount = useMemo(() => baseItems.filter((i) => i.status === "approved").length, [baseItems]);
   const rejectedCount = useMemo(() => baseItems.filter((i) => i.status === "rejected").length, [baseItems]);
 
@@ -205,6 +205,9 @@ function AllTasks() {
     if (statusFilter) {
       if (statusFilter === "pending") {
         return pendingStatuses.includes(item.status);
+      }
+      if (statusFilter === "transferred") {
+        return item.delegation_chain && item.delegation_chain.length > 0;
       }
       return item.status === statusFilter;
     }
@@ -261,6 +264,9 @@ function AllTasks() {
         </p>
         <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Reopened ({reopenedCount})
+        </p>
+        <p className={`Transferred ${statusFilter === "transferred" ? "active" : ""}`} onClick={() => selectStatusFilter("transferred")} style={{ cursor: "pointer" }}>
+          <GoDotFill /> Transferred ({transferredCount})
         </p>
         <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Approved ({approvedCount})
@@ -352,6 +358,7 @@ function AllTasks() {
                   {/* Task Name */}
                   <div className="col-task-name">
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      {item.delegation_chain && item.delegation_chain.length > 0 && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />}
                       <div className="task-title">{item.title}</div>
                       <TaskNotesPopover taskId={item.id} itemType="task" />
                     </div>

@@ -192,7 +192,7 @@ function TaskReopenDialog({ isOpen, onClose, task, onReopenSuccess }) {
           </LoadingButton>
         </div>
       </div>
-      <ConfirmDialog />
+      {ConfirmDialog}
     </div>,
     document.body
   );

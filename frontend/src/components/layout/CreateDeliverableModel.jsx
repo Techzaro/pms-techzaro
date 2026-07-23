@@ -13,7 +13,7 @@ import useAutoSave from "../../hooks/useAutoSave";
 import AutoSaveIndicator from "../AutoSaveIndicator";
 import draftService from "../../services/draftService";
 import { useSubmit } from "../../hooks/useSubmit";
-import { authToken } from "../../utils/auth";
+import { authToken, getUser } from "../../utils/auth";
 import { publish } from "../../utils/eventBus";
 import { notify, showSuccessMessage } from "../../utils/notify";
 import { getNowDatetimeLocal } from "../../utils/formatDateTime";
@@ -67,15 +67,22 @@ const CreateSubtaskModal = ({
   const [draftId, setDraftId] = useState(null);
 
   const [formErrors, setFormErrors] = useState({});
-  const [form, setForm] = useState({
-    title: editData?.title || "",
-    description: editData?.description || "",
-    project_id: editData?.project_id || initialProjectId || "",
-    task_id: editData?.task_id || initialTaskId || "",
-    assigned_to: editData?.assignees?.map(a => a.id || a) || (editData?.assigned_to ? [editData.assigned_to] : []),
-    priority: editData?.priority || "Medium",
-    start_date: editData?.start_date ? editData.start_date.slice(0, 16) : "",
-    due_date: editData?.due_date ? editData.due_date.slice(0, 16) : "",
+  const [form, setForm] = useState(() => {
+    const user = getUser();
+    const defaultTransfer = editData?.allow_transfer !== undefined
+      ? (editData.allow_transfer ? "allow" : "disallow")
+      : ((user?.role === "admin" || user?.role === "manager") ? "allow" : "disallow");
+    return {
+      title: editData?.title || "",
+      description: editData?.description || "",
+      project_id: editData?.project_id || initialProjectId || "",
+      task_id: editData?.task_id || initialTaskId || "",
+      assigned_to: editData?.assignees?.map(a => a.id || a) || (editData?.assigned_to ? [editData.assigned_to] : []),
+      priority: editData?.priority || "Medium",
+      start_date: editData?.start_date ? editData.start_date.slice(0, 16) : "",
+      due_date: editData?.due_date ? editData.due_date.slice(0, 16) : "",
+      allow_transfer: defaultTransfer,
+    };
   });
 
   const [pendingFiles, setPendingFiles] = useState([]);
@@ -85,9 +92,14 @@ const CreateSubtaskModal = ({
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [pendingRemoveItem, setPendingRemoveItem] = useState({ type: "", index: -1 });
 
+  const autoSaveData = useMemo(() => ({
+    ...form,
+    links: links.map(l => ({ url: l.url, name: l.customName || l.name })),
+  }), [form, links]);
+
   const { lastSaved, isSaving, draftId: autoSaveDraftId, clearTimer } = useAutoSave({
     draftId,
-    formData: form,
+    formData: autoSaveData,
     moduleType: "deliverable",
     enabled: isDirty,
     project_id: form.project_id || initialProjectId,
@@ -134,7 +146,9 @@ const CreateSubtaskModal = ({
           priority: d.priority || "Medium",
           start_date: d.start_date || "",
           due_date: d.due_date || "",
+          allow_transfer: d.allow_transfer ?? "allow",
         });
+        if (d.links) setLinks(d.links.map(l => ({ url: l.url, customName: l.name || "", name: l.name || "" })));
         setDraftId(restoreDraftId);
       } catch (err) {
         console.error("Failed to restore draft:", err);
@@ -183,7 +197,7 @@ const CreateSubtaskModal = ({
       const payload = {
         module_type: "deliverable",
         title: form.title || "Untitled Subtask Draft",
-        draft_data: { ...form },
+        draft_data: { ...form, links: links.map(l => ({ url: l.url, name: l.customName || l.name })) },
         project_id: form.project_id || initialProjectId,
         parent_id: form.task_id || initialTaskId,
       };
@@ -237,6 +251,7 @@ const CreateSubtaskModal = ({
     due_date: form.due_date || null,
     assignees: form.assigned_to.length > 0 ? form.assigned_to : null,
     assigned_to: form.assigned_to.length > 0 ? form.assigned_to[0] : null,
+    allow_transfer: form.allow_transfer === "allow",
   }), [form]);
 
   const uploadAttachments = useCallback(async (deliverableId) => {
@@ -285,8 +300,8 @@ const CreateSubtaskModal = ({
         }
         const subtask = data.deliverable;
         if (!editMode && subtask?.id) await uploadAttachments(subtask.id);
-        if (!editMode && draftId) {
-          draftService.delete(draftId).catch(() => {});
+        if (!editMode && restoreDraftId) {
+          draftService.delete(restoreDraftId).catch(() => {});
         }
         showSuccessMessage("Subtask", editMode ? "updated" : "created");
         publish("data:changed", { type: "deliverable", action: editMode ? "updated" : "created" });
@@ -519,6 +534,19 @@ const CreateSubtaskModal = ({
                 onChange={(val) => updateForm("priority", val)}
                 options={PRIORITY_OPTIONS}
               />
+            </div>
+
+            {/* Transfer To */}
+            <div className="task-card">
+              <div className="task-card-top"><span>Transfer To</span></div>
+              <CustomSelect
+                value={form.allow_transfer}
+                onChange={(val) => updateForm("allow_transfer", val)}
+                options={[{ value: "allow", label: "Allow" }, { value: "disallow", label: "Disallow" }]}
+              />
+              <small style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, display: "block" }}>
+                Whether assignees can transfer this subtask to others
+              </small>
             </div>
 
             {/* Dates */}

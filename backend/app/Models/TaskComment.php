@@ -13,6 +13,7 @@ class TaskComment extends Model
 
     protected $fillable = [
         'task_id',
+        'deliverable_id',
         'user_id',
         'parent_id',
         'body',
@@ -21,6 +22,7 @@ class TaskComment extends Model
         'file_size',
         'is_edited',
         'edited_at',
+        'delegation_id',
     ];
 
     protected $casts = [
@@ -31,6 +33,11 @@ class TaskComment extends Model
     public function task(): BelongsTo
     {
         return $this->belongsTo(Task::class);
+    }
+
+    public function deliverable(): BelongsTo
+    {
+        return $this->belongsTo(Deliverable::class);
     }
 
     public function user(): BelongsTo

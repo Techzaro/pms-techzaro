@@ -9,7 +9,7 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { MdEdit } from "react-icons/md";
 import { Eye } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -62,6 +62,7 @@ const displayDate = (dateStr) => {
  */
 function MyProfile() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const notify = useNotification();
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -158,6 +159,14 @@ function MyProfile() {
     };
     Promise.all([fetchProfile(), fetchChanges(), fetchCompanyDocs()]);
   }, [navigate]);
+
+  useEffect(() => {
+    if (searchParams.get("openPassword") === "true") {
+      setIsPasswordModalOpen(true);
+      searchParams.delete("openPassword");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   /** Extract up to 2 uppercase initials from a full name for the avatar. */
   const getInitials = (name) => {

@@ -1,10 +1,46 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import API_URL from "../../config/api";
 import { authToken, getCurrentRole, rolePath } from "../../utils/auth";
 import { useNotification } from "../../context/NotificationContext";
 import RichTextEditor from "../RichTextEditor";
 import CustomSelect from "../CustomSelect";
 import "./ChatWidget.css";
+
+function ChatFileImage({ msgId, fileName }) {
+  const [src, setSrc] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/messages/${msgId}/file`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        setSrc(URL.createObjectURL(blob));
+      }
+    } catch (err) {
+      console.error("Failed to load image:", err);
+    }
+  }, [msgId]);
+
+  useEffect(() => {
+    load();
+    return () => { if (src) URL.revokeObjectURL(src); };
+  }, [load]);
+
+  if (!src) return null;
+
+  return (
+    <a
+      href={src}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      <img src={src} alt={fileName} className="cw-message-image-preview" />
+    </a>
+  );
+}
 
 function ChatWidget() {
   const notify = useNotification();
@@ -29,6 +65,10 @@ function ChatWidget() {
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [chatSubject, setChatSubject] = useState("");
   const [participantSearch, setParticipantSearch] = useState("");
+  const [showParticipantDropdown, setShowParticipantDropdown] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const participantDropdownRef = useRef(null);
+  const participantSearchRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
   const messagesEndRef = useRef(null);
@@ -57,6 +97,20 @@ function ChatWidget() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (participantDropdownRef.current && !participantDropdownRef.current.contains(e.target)) {
+        setShowParticipantDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredUsers = users.filter((u) =>
+    u.name.toLowerCase().includes(participantSearch.toLowerCase())
+  );
 
   const fetchConversations = async () => {
     try {
@@ -358,35 +412,108 @@ function ChatWidget() {
                       )}
                     </div>
                   </div>
-                  <div className="cw-form-group">
+                  <div className="cw-form-group" ref={participantDropdownRef}>
                     <label>Participants *</label>
-                    <input
-                      type="text"
-                      className="cw-participant-search"
-                      placeholder="Search participants..."
-                      value={participantSearch}
-                      onChange={(e) => setParticipantSearch(e.target.value)}
-                    />
-                    <div className="cw-user-checkboxes">
-                      {users
-                        .filter((u) => u.name.toLowerCase().includes(participantSearch.toLowerCase()))
-                        .map((u) => (
-                        <label key={u.id} className="cw-checkbox-label">
+                    <div className="cw-participant-dropdown">
+                      <button
+                        type="button"
+                        className="cw-participant-trigger"
+                        onClick={() => {
+                          setShowParticipantDropdown((p) => !p);
+                          setTimeout(() => participantSearchRef.current?.focus(), 0);
+                        }}
+                      >
+                        {selectedUsers.length === 0
+                          ? "Select participants..."
+                          : `${selectedUsers.length} selected`}
+                        <span className="cw-participant-trigger-arrow">{showParticipantDropdown ? "\u25B2" : "\u25BC"}</span>
+                      </button>
+                      {showParticipantDropdown && (
+                        <div className="cw-participant-menu">
                           <input
-                            type="checkbox"
-                            checked={selectedUsers.includes(u.id)}
+                            ref={participantSearchRef}
+                            type="text"
+                            className="cw-participant-search"
+                            placeholder="Search participants..."
+                            value={participantSearch}
                             onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedUsers((prev) => [...prev, u.id]);
-                              } else {
-                                setSelectedUsers((prev) => prev.filter((id) => id !== u.id));
+                              setParticipantSearch(e.target.value);
+                              setHighlightedIndex(-1);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "ArrowDown") {
+                                e.preventDefault();
+                                setHighlightedIndex((prev) =>
+                                  prev < filteredUsers.length - 1 ? prev + 1 : 0
+                                );
+                              } else if (e.key === "ArrowUp") {
+                                e.preventDefault();
+                                setHighlightedIndex((prev) =>
+                                  prev > 0 ? prev - 1 : filteredUsers.length - 1
+                                );
+                              } else if (e.key === "Enter") {
+                                e.preventDefault();
+                                if (highlightedIndex >= 0 && highlightedIndex < filteredUsers.length) {
+                                  const u = filteredUsers[highlightedIndex];
+                                  setSelectedUsers((prev) =>
+                                    prev.includes(u.id)
+                                      ? prev.filter((id) => id !== u.id)
+                                      : [...prev, u.id]
+                                  );
+                                }
+                              } else if (e.key === "Escape") {
+                                setShowParticipantDropdown(false);
                               }
                             }}
                           />
-                          {u.name}
-                        </label>
-                      ))}
+                          <div className="cw-participant-list">
+                            {filteredUsers.map((u, idx) => (
+                                <label
+                                  key={u.id}
+                                  className={`cw-participant-option${highlightedIndex === idx ? " highlighted" : ""}`}
+                                  onMouseEnter={() => setHighlightedIndex(idx)}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedUsers.includes(u.id)}
+                                    onChange={() => {
+                                      setSelectedUsers((prev) =>
+                                        prev.includes(u.id)
+                                          ? prev.filter((id) => id !== u.id)
+                                          : [...prev, u.id]
+                                      );
+                                    }}
+                                  />
+                                  {u.name}
+                                </label>
+                              ))}
+                            {filteredUsers.length === 0 && (
+                              <div className="cw-participant-empty">No users found</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
+                    {selectedUsers.length > 0 && (
+                      <div className="cw-participant-tags">
+                        {users
+                          .filter((u) => selectedUsers.includes(u.id))
+                          .map((u) => (
+                            <span key={u.id} className="cw-participant-tag">
+                              {u.name}
+                              <button
+                                type="button"
+                                className="cw-participant-tag-remove"
+                                onClick={() =>
+                                  setSelectedUsers((prev) => prev.filter((id) => id !== u.id))
+                                }
+                              >
+                                &times;
+                              </button>
+                            </span>
+                          ))}
+                      </div>
+                    )}
                   </div>
                   <div className="cw-form-group">
                     <label>First Message *</label>
@@ -425,13 +552,38 @@ function ChatWidget() {
                           {msg.file_name && (
                             <div className="cw-msg-file">
                               {msg.file_name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ? (
-                                <a href={`${API_URL}/messages/${msg.id}/file?token=${authToken()}`} target="_blank" rel="noopener noreferrer">
-                                  <img src={`${API_URL}/messages/${msg.id}/file?token=${authToken()}`} alt={msg.file_name} className="cw-message-image-preview" />
-                                </a>
+                                <ChatFileImage msgId={msg.id} fileName={msg.file_name} />
                               ) : (
-                                <a href={`${API_URL}/messages/${msg.id}/file?token=${authToken()}`} target="_blank" rel="noopener noreferrer">
+                                <button
+                                  className="cw-file-download-btn"
+                                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#7c3aed", textAlign: "left" }}
+                                  onClick={async () => {
+                                    try {
+                                      const token = authToken();
+                                      const res = await fetch(`${API_URL}/messages/${msg.id}/file`, {
+                                        headers: { Authorization: `Bearer ${token}` },
+                                      });
+                                      if (!res.ok) {
+                                        const err = await res.json().catch(() => null);
+                                        alert(err?.message || "Failed to download file");
+                                        return;
+                                      }
+                                      const blob = await res.blob();
+                                      const url = URL.createObjectURL(blob);
+                                      const a = document.createElement("a");
+                                      a.href = url;
+                                      a.download = msg.file_name;
+                                      document.body.appendChild(a);
+                                      a.click();
+                                      document.body.removeChild(a);
+                                      URL.revokeObjectURL(url);
+                                    } catch (err) {
+                                      console.error("Download failed:", err);
+                                    }
+                                  }}
+                                >
                                   📎 {msg.file_name}
-                                </a>
+                                </button>
                               )}
                             </div>
                           )}

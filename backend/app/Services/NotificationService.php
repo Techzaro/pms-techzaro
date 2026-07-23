@@ -292,9 +292,8 @@ class NotificationService
             return;
         }
 
-        // Sirf professional email (Outlook) pe bhejo
-        // Personal email pe sirf first time welcome email jata hai
-        if (empty($performer->professional_email)) {
+        $performerEmail = $performer->professional_email ?: $performer->personal_email ?: $performer->email;
+        if (empty($performerEmail)) {
             return;
         }
 
@@ -308,14 +307,14 @@ class NotificationService
                 $entityName,
                 $details,
                 $loginUrl,
-                $performer->professional_email,
+                $performerEmail,
                 $performer->name
             );
-            Mail::to($performer->professional_email)->queue($mail);
+            Mail::to($performerEmail)->queue($mail);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Failed to send action confirmation email', [
                 'user_id' => $performer->id,
-                'email' => $performer->professional_email,
+                'email' => $performerEmail,
                 'action' => $actionVerb,
                 'entity_type' => $entityType,
                 'error' => $e->getMessage(),

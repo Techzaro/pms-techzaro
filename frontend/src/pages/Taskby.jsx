@@ -16,7 +16,7 @@ import { IoIosArrowDown } from "react-icons/io";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
-import { Lock, Pencil, StickyNote, Trash2 } from "lucide-react";
+import { ArrowUpRight, Lock, Pencil, StickyNote, Trash2 } from "lucide-react";
 import CreateTaskModal from "../components/CreateTaskModal";
 import EditTaskModal from "../components/EditTaskModal";
 import PauseReasonModal from "../components/PauseReasonModal";
@@ -102,12 +102,11 @@ const Taskby = () => {
     return () => clearTimeout(timer);
   }, [search]);
 
-  /** Fetch tasks assigned by the current user from the API. */
+  /** Fetch tasks assigned by the current user from the API — always fetch ALL for accurate counts. */
   const fetchTasks = () => {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
-    if (statusFilter) params.append("status", statusFilter);
     if (timeFilter) params.append("time_filter", timeFilter);
 
     fetch(`${API_URL}/assigned-tasks?${params.toString()}`, {
@@ -125,7 +124,7 @@ const Taskby = () => {
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch, statusFilter, timeFilter]);
+  }, [debouncedSearch, timeFilter]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -294,6 +293,7 @@ const Taskby = () => {
   const pausedCount = useMemo(() => baseItems.filter((i) => i.status === "paused").length, [baseItems]);
   const submittedCount = useMemo(() => baseItems.filter((i) => i.status === "submitted").length, [baseItems]);
   const reopenedCount = useMemo(() => baseItems.filter((i) => i.status === "reopened").length, [baseItems]);
+  const transferredCount = useMemo(() => baseItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length, [baseItems]);
   const approvedCount = useMemo(() => baseItems.filter((i) => i.status === "approved").length, [baseItems]);
   const rejectedCount = useMemo(() => baseItems.filter((i) => i.status === "rejected").length, [baseItems]);
 
@@ -311,6 +311,9 @@ const Taskby = () => {
     if (statusFilter) {
       if (statusFilter === "pending") {
         return pendingStatuses.includes(item.status);
+      }
+      if (statusFilter === "transferred") {
+        return item.delegation_chain && item.delegation_chain.length > 0;
       }
       return item.status === statusFilter;
     }
@@ -380,6 +383,9 @@ const Taskby = () => {
         <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Reopened ({reopenedCount})
         </p>
+        <p className={`Transferred ${statusFilter === "transferred" ? "active" : ""}`} onClick={() => selectStatusFilter("transferred")} style={{ cursor: "pointer" }}>
+          <GoDotFill /> Transferred ({transferredCount})
+        </p>
         <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Approved ({approvedCount})
         </p>
@@ -437,7 +443,8 @@ const Taskby = () => {
                 const uniqueKey = `task-${item.id}-${idx}`;
 
                 const assignees = item.assignees || [];
-                const primaryAssignee = assignees[0];
+                const isDirectToOa = item.has_direct_to_oa_delegation && item.current_owner_name && item.current_owner_id;
+                const primaryAssignee = isDirectToOa ? { name: item.current_owner_name } : assignees[0];
                 return (
                   <div className="taskby-row" key={uniqueKey}>
                     <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} />
@@ -447,14 +454,25 @@ const Taskby = () => {
                           {getInitials(primaryAssignee?.name)}
                         </div>
                         <div style={{ minWidth: 0 }}>
-                          <div className="user-name">{primaryAssignee?.name || "Unassigned"}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <div className="user-name">{primaryAssignee?.name || "Unassigned"}</div>
+                            {item.is_transferee && (
+                              <span style={{ fontSize: "10px", fontWeight: 600, color: "#6B7280", background: "#F3F4F6", padding: "1px 6px", borderRadius: "4px", border: "1px solid #D1D5DB" }}>Transferee</span>
+                            )}
+                          </div>
                           <div className="user-role">{primaryAssignee?.role || ""}</div>
+                          {isDirectToOa && item.delegator_name && (
+                            <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                              via {item.delegator_name}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
 
                     <div className="col-task-name">
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        {item.delegation_chain && item.delegation_chain.length > 0 && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />}
                         <div className="task-title">{item.title}</div>
                         <TaskNotesPopover taskId={item.id} itemType="task" />
                       </div>

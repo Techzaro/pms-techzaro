@@ -27,6 +27,7 @@ import {
   Pencil,
   Play,
   Plus,
+  RefreshCw,
   Shield,
   Timer,
   Trash2,
@@ -49,6 +50,7 @@ import ActionPopover from "../components/ActionPopover";
 import "../components/ActionPopover.css";
 import SubmitTaskModal from "../components/SubmitTaskModal";
 import TaskSubmissionPanel from "../components/TaskSubmissionPanel";
+import TaskReopenDialog from "../components/TaskReopenDialog";
 import TransferTaskDialog from "../components/TransferTaskDialog";
 import DelegationChain from "../components/DelegationChain";
 import AddAccessModal from "../components/AddAccessModal";
@@ -329,10 +331,12 @@ function TaskDetails() {
       });
       if (res.ok) {
         const data = await res.json();
+        console.log('[FETCH_TASK_RESPONSE]', { can_submit: data.task?.can_submit, is_assignee: data.task?.is_assignee, is_transferor: data.task?.is_transferor, transferor_has_approved: data.task?.transferor_has_approved, my_status: data.task?.my_status, status: data.task?.status, active_outgoing_delegation: data.task?.active_outgoing_delegation, is_current_owner: data.task?.is_current_owner });
         setTask(data.task);
       } else if (res.status === 404) {
         setTask(null);
-        notify.error("Task not found");
+        notify.error("This task has been deleted.");
+        setTimeout(() => navigate(rolePath("tasks")), 1500);
       } else {
         setTask(null);
       }
@@ -342,7 +346,7 @@ function TaskDetails() {
     } finally {
       setLoading(false);
     }
-  }, [taskId]);
+  }, [taskId, navigate]);
 
   useEffect(() => {
     if (taskId) fetchTask(true);
@@ -383,10 +387,10 @@ function TaskDetails() {
   const isCreator = task?.is_creator ?? (task && currentUser && parseInt(task.assigned_by, 10) === parseInt(currentUser.id, 10));
   const isAssignee = task?.is_assignee ?? (task && currentUser && (task.assignees || []).some((a) => parseInt(a.id, 10) === parseInt(currentUser.id, 10)));
   const canEdit = readOnly ? false : (task?.can_edit ?? (task && currentUser && isCreator && !["approved", "submitted"].includes(task?.status?.toLowerCase())));
-  const canSubmitTask = readOnly ? false : (task?.can_submit ?? (task && currentUser && isAssignee && ["pending", "in_progress", "reopened", "paused"].includes(task?.status)));
-  const canAcknowledge = readOnly ? false : (task && currentUser && isAssignee && task?.status === "pending");
-  const canPause = readOnly ? false : (task && currentUser && isAssignee && task?.status === "in_progress" && !task?.assigner_paused);
-  const canContinue = readOnly ? false : (task && currentUser && isAssignee && task?.status === "paused" && !task?.assigner_paused);
+  const canSubmitTask = readOnly ? false : (task?.can_submit ?? (task && currentUser && isAssignee && ["in_progress", "reopened", "paused"].includes(task?.status)));
+  const canAcknowledge = readOnly ? false : (task && currentUser && isAssignee && ["pending", "reopened"].includes(task?.status));
+  const canPause = readOnly ? false : (task && currentUser && isAssignee && task?.my_status !== "submitted" && task?.status === "in_progress" && !task?.assigner_paused);
+  const canContinue = readOnly ? false : (task && currentUser && isAssignee && task?.my_status !== "submitted" && task?.status === "paused" && !task?.assigner_paused);
   const isAssignerLocked = !!task?.assigner_paused;
   const canAssignerPause = readOnly ? false : (task && currentUser && isCreator && !task?.assigner_paused && ["pending", "in_progress", "reopened", "paused"].includes(task?.status));
   const canAssignerResume = readOnly ? false : (task && currentUser && isCreator && task?.assigner_paused);
@@ -394,6 +398,28 @@ function TaskDetails() {
   const isTransferor = task?.is_transferor ?? false;
   const transferorReturnToSelf = task?.transferor_return_to_self ?? true;
   const transferorHasApproved = task?.transferor_has_approved ?? false;
+  const hasPendingDelegation = task?.pending_delegation && task.pending_delegation.delegated_to === currentUser?.id;
+  const isDelegatee = task?.is_delegatee ?? false;
+
+  if (task && isTransferor) {
+    console.log('[TRANSFEROR_DEBUG]', {
+      canSubmitTask,
+      canPause,
+      isAssignee,
+      isTransferor,
+      transferorHasApproved,
+      transferorReturnToSelf,
+      hasPendingDelegation,
+      my_status: task?.my_status,
+      status: task?.status,
+      can_submit: task?.can_submit,
+      is_current_owner: task?.is_current_owner,
+      active_outgoing_delegation: task?.active_outgoing_delegation,
+      pending_delegation: task?.pending_delegation,
+      assigner_paused: task?.assigner_paused,
+      readOnly,
+    });
+  }
 
   const { submitting: acknowledging, run: runAcknowledge } = useSubmit();
   const { submitting: pausing, run: runPause } = useSubmit();
@@ -403,6 +429,9 @@ function TaskDetails() {
   const [assignerPauseModalOpen, setAssignerPauseModalOpen] = useState(false);
   const { submitting: assignerPausing, run: runAssignerPause } = useSubmit();
   const { submitting: assignerResuming, run: runAssignerResume } = useSubmit();
+  const { submitting: revoking, run: runRevoke } = useSubmit();
+  const { submitting: approvingTask, run: runApproveTask } = useSubmit();
+  const { submitting: rejectingTask, run: runRejectTask } = useSubmit();
 
   const { workDisplay, workSeconds, elapsedDisplay, elapsedSeconds, pauseDisplay, pauseSeconds, pauseCount, state: timerState } = useWorkTimer(task?.timer);
 
@@ -803,7 +832,8 @@ function TaskDetails() {
     setActingSubtaskId(null);
   };
 
-  const handleTaskActionSuccess = (updatedTask) => {
+  const handleTaskActionSuccess = (updatedTask, options = {}) => {
+    console.log('[TASK_ACTION_SUCCESS]', { can_submit: updatedTask?.can_submit, is_assignee: updatedTask?.is_assignee, is_transferor: updatedTask?.is_transferor, transferor_has_approved: updatedTask?.transferor_has_approved, my_status: updatedTask?.my_status, status: updatedTask?.status, active_outgoing_delegation: updatedTask?.active_outgoing_delegation, is_current_owner: updatedTask?.is_current_owner });
     setTask((prev) => ({ ...prev, ...updatedTask }));
     const statusActions = {
       submitted: "submitted",
@@ -811,7 +841,9 @@ function TaskDetails() {
       rejected: "rejected",
       reopened: "reopened",
     };
-    const action = statusActions[updatedTask?.status] || "updated";
+    const action = options.isTransfer
+      ? "transferred"
+      : statusActions[updatedTask?.status] || "updated";
     showSuccessMessage("Task", action);
     publish('task:updated', updatedTask);
     publish('data:changed', { type: 'task', action: 'updated' });
@@ -959,6 +991,115 @@ function TaskDetails() {
     });
   };
 
+  const handleRevokeDelegation = async () => {
+    await runRevoke(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/tasks/${taskId}/revoke-delegation`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ delegation_id: task?.active_outgoing_delegation_id }),
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setTask(data.task);
+          publish('task:updated', { id: taskId });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage("Delegation", "revoked");
+        } else {
+          notify.error(data.message || "Failed to revoke delegation.");
+        }
+      } catch {
+        notify.error("Failed to revoke delegation.");
+      }
+    });
+  };
+
+  const handleTaskApprove = async () => {
+    await runApproveTask(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/tasks/${taskId}/approve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          console.log('[APPROVE_RESPONSE]', { can_submit: data.task?.can_submit, is_assignee: data.task?.is_assignee, is_transferor: data.task?.is_transferor, transferor_has_approved: data.task?.transferor_has_approved, my_status: data.task?.my_status, status: data.task?.status, active_outgoing_delegation: data.task?.active_outgoing_delegation, is_current_owner: data.task?.is_current_owner });
+          setTask(data.task);
+          publish('task:updated', { id: taskId, status: 'in_progress' });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage("Task", "approved");
+        } else {
+          notify.error(data.message || "Failed to approve task.");
+        }
+      } catch {
+        notify.error("Failed to approve task.");
+      }
+    });
+  };
+
+  const handleTaskReject = async () => {
+    await runRejectTask(async () => {
+      try {
+        const token = authToken();
+        const res = await fetch(`${API_URL}/tasks/${taskId}/reject`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+          _notifHandled: true,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setTask(data.task);
+          publish('task:updated', { id: taskId, status: 'rejected' });
+          publish('data:changed', { type: 'task', action: 'updated' });
+          showSuccessMessage("Task", "declined");
+        } else {
+          notify.error(data.message || "Failed to decline task.");
+        }
+      } catch {
+        notify.error("Failed to decline task.");
+      }
+    });
+  };
+
+  const handleTaskReopen = async () => {
+    setTaskReopenDialog(true);
+  };
+
+  const handleTaskReopenConfirm = async (reopenData) => {
+    try {
+      const token = authToken();
+      const formData = new FormData();
+      formData.append('reopen_reason', reopenData.reopen_reason || 'Other');
+      if (reopenData.reopen_reason_detail) formData.append('reopen_reason_detail', reopenData.reopen_reason_detail);
+      if (reopenData.instructions) formData.append('instructions', reopenData.instructions);
+      if (reopenData.new_deadline) formData.append('new_deadline', reopenData.new_deadline);
+      if (reopenData.file) formData.append('file', reopenData.file);
+
+      const res = await fetch(`${API_URL}/tasks/${taskId}/reopen`, {
+        method: "POST",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: formData,
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTask(data.task || data);
+        publish('task:updated', { id: taskId, status: 'reopened' });
+        publish('data:changed', { type: 'task', action: 'updated' });
+        showSuccessMessage("Task", "reopened for revision");
+      } else {
+        notify.error(data.message || "Failed to reopen task.");
+      }
+    } catch {
+      notify.error("Failed to reopen task.");
+    }
+    setTaskReopenDialog(false);
+  };
+
   const handleStatusChange = async (newStatus) => {
     try {
       const token = authToken();
@@ -973,7 +1114,7 @@ function TaskDetails() {
   };
 
   if (loading) return <DashboardLayout hideRightSidebar><div className="td-loading">Loading task...</div></DashboardLayout>;
-  if (!task) return <DashboardLayout hideRightSidebar><div className="td-loading td-error">Task not found.</div></DashboardLayout>;
+  if (!task) return <DashboardLayout hideRightSidebar><div className="td-loading td-error">This task has been deleted. Redirecting...</div></DashboardLayout>;
 
   return (
     <>
@@ -1023,37 +1164,37 @@ function TaskDetails() {
                       </button>
                     </>
                   )}
-                  {!readOnly && isAssignee && !["approved", "rejected", "pending"].includes(task?.status) && !isTransferor && (
+                  {!readOnly && isAssignee && task?.allow_transfer === true && !["approved", "rejected", "pending", "submitted"].includes(task?.status) && task?.my_status !== "submitted" && !isTransferor && !task?.active_outgoing_delegation && !hasPendingDelegation && !isDelegatee && (
                     <button className="td-btn-outline" onClick={() => setTransferDialog(true)}>
                       <Users size={15} />
                       Transfer
                     </button>
                   )}
-                  {canAcknowledge && (
+                  {canAcknowledge && !isTransferor && !task?.active_outgoing_delegation && (
                     <button className="td-btn-primary" onClick={handleAcknowledge} disabled={acknowledging || isAssignerLocked} style={acknowledging || isAssignerLocked ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
                       <CheckCircle2 size={15} />
                       {acknowledging ? "Acknowledging..." : "Acknowledge"}
                     </button>
                   )}
-                  {canPause && (
+                  {canPause && (!isTransferor || transferorHasApproved) && !task?.active_outgoing_delegation && (
                     <button className="td-btn-primary" onClick={() => setPauseModalOpen(true)} disabled={pausing} style={{ backgroundColor: pausing ? "var(--text-muted)" : "var(--color-warning)", borderColor: pausing ? "var(--text-muted)" : "var(--color-warning)", opacity: pausing ? 0.7 : 1, cursor: pausing ? "not-allowed" : "pointer" }}>
                       <Pause size={15} />
                       {pausing ? "Pausing..." : "Pause"}
                     </button>
                   )}
-                  {canContinue && (
+                  {canContinue && (!isTransferor || transferorHasApproved) && !task?.active_outgoing_delegation && !hasPendingDelegation && (
                     <button className="td-btn-primary" onClick={handleContinue} disabled={continuing} style={continuing ? { opacity: 0.6, cursor: "not-allowed" } : {}}>
                       <Play size={15} />
                       {continuing ? "Resuming..." : "Resume"}
                     </button>
                   )}
-                  {canAssignerPause && (
+                  {canAssignerPause && !isTransferor && !task?.active_outgoing_delegation && (
                     <button className="td-btn-primary" onClick={() => setAssignerPauseModalOpen(true)} disabled={assignerPausing} style={{ backgroundColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", borderColor: assignerPausing ? "var(--text-muted)" : "var(--color-primary)", opacity: assignerPausing ? 0.7 : 1, cursor: assignerPausing ? "not-allowed" : "pointer" }}>
                       <Lock size={15} />
                       {assignerPausing ? "Pausing..." : "Put On Hold"}
                     </button>
                   )}
-                  {canAssignerResume && (
+                  {canAssignerResume && !isTransferor && !task?.active_outgoing_delegation && (
                     <button className="td-btn-primary" onClick={handleAssignerResume} disabled={assignerResuming} style={{ backgroundColor: assignerResuming ? "var(--text-muted)" : "var(--color-success)", borderColor: assignerResuming ? "var(--text-muted)" : "var(--color-success)", opacity: assignerResuming ? 0.7 : 1, cursor: assignerResuming ? "not-allowed" : "pointer" }}>
                       <Play size={15} />
                       {assignerResuming ? "Resuming..." : "Resume"}
@@ -1065,7 +1206,7 @@ function TaskDetails() {
                       On Hold by Assigner
                     </span>
                   )}
-                  {!readOnly && isAssignee && ["in_progress", "reopened", "paused"].includes(task?.status) && !isTransferor && (
+                  {canSubmitTask && !task?.active_outgoing_delegation && !hasPendingDelegation && (
                     <button
                       className="td-btn-primary"
                       disabled={task?.status === "paused" || isAssignerLocked}
@@ -1076,6 +1217,24 @@ function TaskDetails() {
                       <LuSend size={15} />
                       {task.status === "reopened" ? "Resubmit Task" : "Submit Task"}
                     </button>
+                  )}
+                  {isTransferor && task?.status === "submitted" && !transferorHasApproved && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "#EFF6FF", color: "#1D4ED8", fontSize: "13px", fontWeight: 600 }}>
+                      Transferred
+                    </span>
+                  )}
+                  {!transferorHasApproved && (isTransferor || task?.active_outgoing_delegation) && !(isTransferor && transferorReturnToSelf && task?.status === "submitted") && (
+                    <>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "6px", backgroundColor: "#EFF6FF", color: "#1D4ED8", fontSize: "13px", fontWeight: 600 }}>
+                        Transferred
+                      </span>
+                      {task?.can_revoke_delegation && task?.active_outgoing_delegation_id && (
+                        <button className="td-btn-danger" onClick={handleRevokeDelegation} disabled={revoking}>
+                          <Trash2 size={15} />
+                          {revoking ? "Revoking..." : "Revoke"}
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -1089,12 +1248,10 @@ function TaskDetails() {
                   <span className="td-badge-dot" style={{ background: priorityColor(task.priority) }} />
                   {task.priority} Priority
                 </span>
-                {task?.assigner_paused && (
-                  <span className="td-badge" style={{ background: "var(--color-warning-bg)", color: "var(--color-warning)" }}>
-                    <Lock size={12} />
-                    On Hold by Assigner
-                  </span>
-                )}
+                <span className="td-badge" style={{ background: task.allow_transfer ? "#f0fdf4" : "#fef2f2", color: task.allow_transfer ? "#16a34a" : "#dc2626" }}>
+                  <span className="td-badge-dot" style={{ background: task.allow_transfer ? "#16a34a" : "#dc2626" }} />
+                  {task.allow_transfer ? "Transfer Allowed" : "Transfer Not Allowed"}
+                </span>
               </div>
 
               {/* STATS */}
@@ -1286,7 +1443,7 @@ function TaskDetails() {
                                     onTriggerClick={() => {
                                       const deliverableIds = (orderedSubtasks.length ? orderedSubtasks : (task.deliverables || [])).map((s) => s.id);
                                       const subtaskFrom = isCreator && !isAssignee ? "deliveries-by-you" : isAssignee && !isCreator ? "deliveries" : "self-deliveries";
-                                      navigate(rolePath(`deliveries/deliverable-details/${d.id}`), { state: { from: subtaskFrom, deliverableIds } });
+                                      navigate(rolePath(`deliveries/deliverable-details/${d.id}`), { state: { from: subtaskFrom, subtaskIds: deliverableIds } });
                                     }}
                                   >
                                     <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: d.id })}>
@@ -1443,6 +1600,56 @@ function TaskDetails() {
 
         {/* ===== RIGHT SIDEBAR - UPDATED WITH START DATE AND DUE DATE WITH TIME ===== */}
           <aside className="td-sidebar">
+            {/* DELEGATION CHAIN */}
+            <DelegationChain
+              task={task}
+              delegationChain={task?.delegation_chain || []}
+              approvalChain={task?.approval_chain || []}
+              onTaskUpdate={fetchTask}
+            />
+
+            {/* WORK DURATION */}
+            {(timerState !== 'idle' || task?.timer?.work_started_at) && (
+              <div className="td-card">
+                <h3 className="td-card-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Timer size={16} />
+                  {timerState === 'completed' ? 'Time Summary' : 'Work Duration'}
+                </h3>
+                <div className="td-timer-display">
+                  <span className={`td-timer-value ${timerState === 'running' ? 'td-timer-running' : ''} ${timerState === 'completed' ? 'td-timer-completed' : ''}`}>
+                    {workDisplay}
+                  </span>
+                  {timerState === 'running' && (
+                    <span className="td-timer-pulse" />
+                  )}
+                </div>
+
+                <div className="td-timer-metrics">
+                  <div className="td-timer-metric">
+                    <span className="td-timer-metric-label">Elapsed</span>
+                    <span className="td-timer-metric-value">{elapsedDisplay}</span>
+                  </div>
+                  <div className="td-timer-metric">
+                    <span className="td-timer-metric-label">Pauses</span>
+                    <span className="td-timer-metric-value">{pauseCount} ({pauseDisplay})</span>
+                  </div>
+                  <div className="td-timer-metric">
+                    <span className="td-timer-metric-label">Resumes</span>
+                    <span className="td-timer-metric-value">{task?.timer?.resume_count || 0}</span>
+                  </div>
+                </div>
+
+                {task?.timer?.work_started_at && (
+                  <div className="td-timer-meta">
+                    <span>Started: {formatDateTime(task.timer.work_started_at)}</span>
+                    {task?.timer?.work_completed_at && (
+                      <span>Finished: {formatDateTime(task.timer.work_completed_at)}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="td-card">
               <h3 className="td-card-title">Task Information</h3>
               <ul className="td-info">
@@ -1556,14 +1763,6 @@ function TaskDetails() {
               );
             })()}
 
-            {/* DELEGATION CHAIN */}
-            <DelegationChain
-              task={task}
-              delegationChain={task?.delegation_chain || []}
-              approvalChain={task?.approval_chain || []}
-              onTaskUpdate={fetchTask}
-            />
-
             {/* SUBMISSION HISTORY */}
             {(task?.submissions || []).length > 0 && (
               <div className="td-card">
@@ -1608,48 +1807,6 @@ function TaskDetails() {
                     {task?.reopen_count || (task?.workflow_events || task?.workflowEvents || []).filter(e => e.action === 'reopened').length}
                   </span>
                 </div>
-              </div>
-            )}
-
-            {/* WORK DURATION */}
-            {(timerState !== 'idle' || task?.timer?.work_started_at) && (
-              <div className="td-card">
-                <h3 className="td-card-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Timer size={16} />
-                  {timerState === 'completed' ? 'Time Summary' : 'Work Duration'}
-                </h3>
-                <div className="td-timer-display">
-                  <span className={`td-timer-value ${timerState === 'running' ? 'td-timer-running' : ''} ${timerState === 'completed' ? 'td-timer-completed' : ''}`}>
-                    {workDisplay}
-                  </span>
-                  {timerState === 'running' && (
-                    <span className="td-timer-pulse" />
-                  )}
-                </div>
-
-                <div className="td-timer-metrics">
-                  <div className="td-timer-metric">
-                    <span className="td-timer-metric-label">Elapsed</span>
-                    <span className="td-timer-metric-value">{elapsedDisplay}</span>
-                  </div>
-                  <div className="td-timer-metric">
-                    <span className="td-timer-metric-label">Pauses</span>
-                    <span className="td-timer-metric-value">{pauseCount} ({pauseDisplay})</span>
-                  </div>
-                  <div className="td-timer-metric">
-                    <span className="td-timer-metric-label">Resumes</span>
-                    <span className="td-timer-metric-value">{task?.timer?.resume_count || 0}</span>
-                  </div>
-                </div>
-
-                {task?.timer?.work_started_at && (
-                  <div className="td-timer-meta">
-                    <span>Started: {formatDateTime(task.timer.work_started_at)}</span>
-                    {task?.timer?.work_completed_at && (
-                      <span>Finished: {formatDateTime(task.timer.work_completed_at)}</span>
-                    )}
-                  </div>
-                )}
               </div>
             )}
 
@@ -1920,6 +2077,15 @@ function TaskDetails() {
         itemId={noteModal.itemId}
         onSaved={() => { setNoteModal({ open: false, itemId: null }); fetchTask(false); }}
       />
+
+      {!readOnly && !(isAssignee || isCreator) && isTransferor && (
+        <TaskReopenDialog
+          isOpen={taskReopenDialog}
+          onClose={() => setTaskReopenDialog(false)}
+          task={task}
+          onReopenSuccess={handleTaskActionSuccess}
+        />
+      )}
 
       {idleModalOpen && (
         <div className="cm-overlay" onClick={handleIdleResume}>

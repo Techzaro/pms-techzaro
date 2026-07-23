@@ -168,6 +168,7 @@ export default function EditTaskModal({ task, onClose }) {
     project_id: task.project?.id || "",
     start_date: task.start_date ? toDatetimeLocal(task.start_date) : "",
     end_date: task.end_date ? toDatetimeLocal(task.end_date) : "",
+    allow_transfer: task.allow_transfer !== false ? "allow" : "disallow",
   });
   const [recurrenceSettings, setRecurrenceSettings] = useState({
     repeat: task.recurrence_settings?.repeat || "daily",
@@ -590,6 +591,7 @@ export default function EditTaskModal({ task, onClose }) {
         } else {
           body = {
             ...form,
+            allow_transfer: form.allow_transfer === "allow",
             project_id: form.project_id || null,
             start_date: toUTCIso(form.start_date),
             end_date: toUTCIso(form.end_date),
@@ -1007,6 +1009,16 @@ export default function EditTaskModal({ task, onClose }) {
                 options={[{ value: "standard", label: "Standard" }, { value: "recurring", label: "Recurring" }]} />
             </div>
 
+            <div className="task-card">
+              <label>Transfer To</label>
+              <CustomSelect name="allow_transfer" value={form.allow_transfer}
+                onChange={(val) => { setForm((prev) => ({ ...prev, allow_transfer: val })); markDirty(); }}
+                options={[{ value: "allow", label: "Allow" }, { value: "disallow", label: "Disallow" }]} />
+              <small style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, display: "block" }}>
+                Whether assignees can transfer this task to others
+              </small>
+            </div>
+
             {form.task_type === "recurring" && (
               <>
                 <div className="task-card">
@@ -1115,146 +1127,6 @@ export default function EditTaskModal({ task, onClose }) {
                 )}
               </>
             )}
-
-            {/* SUBTASKS */}
-            <div className="task-card">
-              <div className="task-card-top">
-                <span>Subtasks</span>
-              </div>
-              <div className="task-deadline-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-                <div className="task-field">
-                  <label style={{ fontSize: "13px" }}>Subtask Name</label>
-                  <input
-                    type="text"
-                    placeholder="Enter subtask name"
-                    value={subtaskInput.title}
-                    onChange={(e) => { setIsDirty(true); setSubtaskInput((prev) => ({ ...prev, title: e.target.value })); }}
-                    onKeyDown={handleSubtaskKeyDown}
-                  />
-                </div>
-                <div className="task-field">
-                  <label style={{ fontSize: "13px" }}>Start Date & Time</label>
-                  <input
-                    type="datetime-local"
-                    value={subtaskInput.start_datetime}
-                    min={form.start_date || getNowDatetimeLocal()}
-                    max={form.end_date || undefined}
-                    onChange={(e) => {
-                      setIsDirty(true);
-                      const val = e.target.value;
-                      setSubtaskInput((prev) => ({ ...prev, start_datetime: val }));
-                    }}
-                  />
-                </div>
-                <div className="task-field">
-                  <label style={{ fontSize: "13px" }}>Due Date & Time</label>
-                  <input
-                    type="datetime-local"
-                    value={subtaskInput.due_datetime}
-                    min={subtaskInput.start_datetime || getNowDatetimeLocal()}
-                    max={form.end_date || undefined}
-                    onChange={(e) => {
-                      setIsDirty(true);
-                      const val = e.target.value;
-                      if (subtaskInput.start_datetime && val && val < subtaskInput.start_datetime) {
-                        setSubtaskInput((prev) => ({ ...prev, due_datetime: subtaskInput.start_datetime }));
-                      } else if (form.end_date && val && val > form.end_date) {
-                        setSubtaskInput((prev) => ({ ...prev, due_datetime: form.end_date }));
-                      } else {
-                        setSubtaskInput((prev) => ({ ...prev, due_datetime: val }));
-                      }
-                    }}
-                  />
-                  {form.end_date && (
-                    <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(form.end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                  )}
-                </div>
-              </div>
-              {subtaskInput.start_datetime && subtaskInput.due_datetime && subtaskInput.due_datetime < subtaskInput.start_datetime && (
-                <span style={{ fontSize: 12, color: "#dc2626", marginTop: 4, display: "block" }}>Due Date cannot be earlier than Start Date</span>
-              )}
-              <button
-                type="button"
-                className="task-add-phase-btn"
-                onClick={handleAddSubtask}
-                disabled={!subtaskInput.title.trim() || !subtaskInput.start_datetime || !subtaskInput.due_datetime || (subtaskInput.start_datetime && subtaskInput.due_datetime && subtaskInput.due_datetime < subtaskInput.start_datetime)}
-              >
-                + Add Subtask
-              </button>
-              {subtasks.length > 0 && (
-                <div className="task-phase-list">
-                  {subtasks.map((d, index) => {
-                    const assignedUser = d.assigned_to ? displayUsers.find(u => String(u.id) === String(d.assigned_to)) : null;
-                    const isDropdownOpen = openSubtaskDropdown === index;
-                    return (
-                    <div key={index} className="task-phase-item" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #f3f4f6", position: "relative" }}>
-                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#8b5cf6", display: "inline-block", flexShrink: 0 }}></span>
-                      <span style={{ flex: 1, fontSize: 13, color: "#111827" }}>{d.title}</span>
-                      <span style={{ fontSize: 11, color: "#6b7280", whiteSpace: "pre-line" }}>
-                        {d.start_date ? formatDateTime(d.start_date).replace("\n", " ") : ""}
-                        {d.start_date && d.due_date ? "\n" : ""}
-                        {d.due_date ? formatDateTime(d.due_date).replace("\n", " ") : "No due date"}
-                      </span>
-                      <div style={{ position: "relative" }}>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setOpenSubtaskDropdown(isDropdownOpen ? null : index); }}
-                          onKeyDown={(e) => handleSubtaskDropdownKeyDown(e, index)}
-                          style={{
-                            fontSize: 11, cursor: "pointer", padding: "3px 8px", borderRadius: 4, border: "1px solid #e5e7eb",
-                            background: assignedUser ? "#eef2ff" : "#f9fafb", color: assignedUser ? "#6366f1" : "#6b7280",
-                            fontWeight: 500, whiteSpace: "nowrap",
-                          }}
-                        >
-                          {assignedUser ? assignedUser.name : "Assign"}
-                        </button>
-                        {isDropdownOpen && (
-                          <div onClick={(e) => e.stopPropagation()} ref={subtaskAssigneeListRef} style={{
-                            position: "absolute", bottom: "100%", right: 0, zIndex: 100,
-                            background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
-                            boxShadow: "0 4px 12px rgba(0,0,0,0.1)", minWidth: 150, padding: "4px 0", marginBottom: 4,
-                          }}>
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); handleSubtaskAssignee(index, null); }}
-                              onMouseEnter={() => setSubtaskAssigneeHighlightedIndex(0)}
-                              style={{
-                                display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
-                                fontSize: 12, cursor: "pointer",
-                                background: subtaskAssigneeHighlightedIndex === 0 ? "#eef2ff" : (!assignedUser ? "#f3f4f6" : "transparent"),
-                                border: "none", color: "#374151",
-                              }}
-                            >
-                              All assignees
-                            </button>
-                            {displayUsers.filter(u => selectedAssigneeIds.includes(u.id)).map((u, uIdx) => (
-                              <button
-                                key={u.id}
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); handleSubtaskAssignee(index, u.id); }}
-                                onMouseEnter={() => setSubtaskAssigneeHighlightedIndex(uIdx + 1)}
-                                style={{
-                                  display: "block", width: "100%", textAlign: "left", padding: "6px 12px",
-                                  fontSize: 12, cursor: "pointer",
-                                  background: subtaskAssigneeHighlightedIndex === uIdx + 1 ? "#eef2ff" : (String(d.assigned_to) === String(u.id) ? "#f3f4f6" : "transparent"),
-                                  border: "none", color: "#374151",
-                                }}
-                              >
-                                <span>{u.name}</span>
-                                {u.role && <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 6 }}>({u.role.replace("_", " ")})</span>}
-                                {u.department && <span style={{ fontSize: 10, fontWeight: 500, color: "#6366f1", background: "#eef2ff", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>{u.department}</span>}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <button type="button" className="task-phase-item-remove" onClick={() => { setPendingRemoveItem({ type: "subtask", index, id: "" }); setRemoveConfirmOpen(true); }} style={{ fontSize: 14 }}>✕</button>
-                    </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
 
           </div>
 

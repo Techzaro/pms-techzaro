@@ -30,17 +30,19 @@ class SendBulkNotificationEmails implements ShouldQueue
             ->get();
 
         foreach ($notifications as $notification) {
-            if (!$notification->user || empty($notification->user->professional_email)) continue;
+            if (!$notification->user) continue;
+            $recipientEmail = $notification->user->professional_email ?: $notification->user->personal_email ?: $notification->user->email;
+            if (empty($recipientEmail)) continue;
             if ($notification->type === 'user_updated') continue;
             if ($notification->related_module === 'chat') continue;
 
             try {
                 if (!Notification::wantsChannel($notification, 'email')) continue;
 
-                $senderEmail = $notification->sender?->professional_email ?? '';
+                $senderEmail = $notification->sender?->professional_email ?? $notification->sender?->personal_email ?? $notification->sender?->email ?? '';
                 $senderName = $notification->sender?->name ?? config('mail.from.name', 'PMS Techxaro');
                 $mail = new NotificationMail($notification, $senderEmail, $senderName);
-                Mail::to($notification->user->professional_email)->queue($mail);
+                Mail::to($recipientEmail)->queue($mail);
             } catch (\Throwable $e) {
                 Log::error('Bulk email failed', [
                     'notification_id' => $notification->id,

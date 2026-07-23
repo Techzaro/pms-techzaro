@@ -158,8 +158,10 @@ class ResignationWorkflowService
             );
 
             try {
-                Mail::to($user->professional_email)->queue(
-                    new \App\Mail\UserResigned($user, $admin->name, $admin->professional_email, $admin->name)
+                $sendTo = $user->professional_email ?: $user->personal_email ?: $user->email;
+                $senderEmail = $admin->professional_email ?: $admin->personal_email ?: $admin->email;
+                Mail::to($sendTo)->queue(
+                    new \App\Mail\UserResigned($user, $admin->name, $senderEmail, $admin->name)
                 );
             } catch (\Throwable $e) {
                 Log::error("Failed to send resignation email: " . $e->getMessage());
@@ -187,6 +189,7 @@ class ResignationWorkflowService
             'id' => $p->id,
             'title' => $p->title,
             'business_id' => $p->business_id,
+            'project_code' => $p->project_code,
             'assigner' => $p->creator ? ['id' => $p->creator->id, 'name' => $p->creator->name] : ['id' => $p->created_by, 'name' => 'Unknown'],
         ])->values()->all();
     }

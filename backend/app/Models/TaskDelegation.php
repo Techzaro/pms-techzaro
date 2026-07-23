@@ -29,6 +29,8 @@ class TaskDelegation extends Model
         'return_to_transferor',
     ];
 
+    protected $appends = ['delegated_by_name'];
+
     protected $casts = [
         'delegation_level' => 'integer',
         'return_to_transferor' => 'boolean',
@@ -71,5 +73,10 @@ class TaskDelegation extends Model
     public function childDelegations(): HasMany
     {
         return $this->hasMany(TaskDelegation::class, 'parent_delegation_id');
+    }
+
+    public function getDelegatedByNameAttribute(): ?string
+    {
+        return $this->delegatedBy?->name;
     }
 }

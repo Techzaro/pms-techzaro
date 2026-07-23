@@ -4,22 +4,22 @@ namespace App\Http\Controllers;
 
 use App\Models\Deliverable;
 use App\Models\DeliverableSubmission;
-use App\Models\DeliverableTemplate;
 use App\Models\Project;
 use App\Models\Task;
-use App\Models\TaskPauseSession;
+use App\Models\TaskAccessCredential;
 use App\Models\TaskChange;
-use App\Models\TaskComment;
 use App\Models\TaskDelegation;
 use App\Models\TaskFile;
+use App\Models\TaskPauseSession;
 use App\Models\TaskSubmission;
 use App\Models\TaskWorkflowEvent;
 use App\Models\User;
 use App\Services\ActivityService;
 use App\Services\AuditService;
+use App\Services\DelegationService;
 use App\Services\NotificationService;
 use App\Services\RecurringService;
-use App\Services\DelegationService;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,6 +27,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
@@ -69,12 +70,15 @@ class TaskController extends Controller
             $q->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))
                 ->orWhere('assigned_to', $user->id);
         })
-            ->where('assigned_by', '!=', $user->id)
+            ->where(function ($q) use ($user) {
+                $q->where('assigned_by', '!=', $user->id)
+                    ->orWhere('current_owner', $user->id);
+            })
             ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->when($isInProgressFilter, fn ($q) => $q->whereIn('status', $this->inProgressTaskStatuses()))
             ->when($isPausedFilter, fn ($q) => $q->whereIn('status', $this->pausedTaskStatuses()))
-            ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role'])
+            ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role', 'currentOwner:id,name'])
             ->orderBy('sort_order')->latest('updated_at')
             ->filter($filters);
 
@@ -127,6 +131,17 @@ class TaskController extends Controller
                 }
             }
 
+            $task->current_owner_id = $task->current_owner;
+            $task->current_owner_name = $task->currentOwner?->name;
+
+            // Set transferred_by_name for the transferee
+            $task->transferred_by_name = null;
+            foreach ($chain as $entry) {
+                if ((int) $entry['delegated_to'] === (int) $user->id && $entry['status'] === 'accepted') {
+                    $task->transferred_by_name = $entry['delegated_by_name'];
+                }
+            }
+
             return $task;
         });
 
@@ -172,7 +187,7 @@ class TaskController extends Controller
             ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
             ->when($isInProgressFilter, fn ($q) => $q->whereIn('status', $this->inProgressTaskStatuses()))
             ->when($isPausedFilter, fn ($q) => $q->whereIn('status', $this->pausedTaskStatuses()))
-            ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role'])
+            ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role', 'currentOwner:id,name'])
             ->orderBy('sort_order')->latest('updated_at')
             ->filter($filters)
             ->limit(200)
@@ -233,6 +248,31 @@ class TaskController extends Controller
                 if ((int) $aEntry['approver_id'] === (int) $user->id && $aEntry['status'] === 'approved') {
                     $task->transferor_has_approved = true;
                     break;
+                }
+            }
+
+            $task->current_owner_id = $task->current_owner;
+            $task->current_owner_name = $task->currentOwner?->name;
+
+            // Set transferred_by_name for the transferee
+            $task->transferred_by_name = null;
+            foreach ($chain as $entry) {
+                if ((int) $entry['delegated_to'] === (int) $user->id && $entry['status'] === 'accepted') {
+                    $task->transferred_by_name = $entry['delegated_by_name'];
+                }
+            }
+
+            // Check if any accepted delegation has return_to_transferor=false (Direct to OA)
+            $task->has_direct_to_oa_delegation = false;
+            $task->delegator_name = null;
+            foreach ($chain as $entry) {
+                if ($entry['status'] === 'accepted') {
+                    $rt = $entry['return_to_transferor'] ?? true;
+                    if ($rt === false || $rt === 0 || $rt === '0' || $rt === 'false') {
+                        $task->has_direct_to_oa_delegation = true;
+                        $task->delegator_name = $entry['delegated_by_name'] ?? null;
+                        break;
+                    }
                 }
             }
 
@@ -354,7 +394,7 @@ class TaskController extends Controller
         $isInProgressFilter = $request->input('status') === 'in_progress';
         $isPausedFilter = $request->input('status') === 'paused';
 
-        $tasksQuery = Task::with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role']);
+        $tasksQuery = Task::with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role', 'currentOwner:id,name']);
 
         if ($user->role === 'guest') {
             $tasksQuery->whereHas('project', fn ($q) => $q->where('client_name', $user->name));
@@ -397,7 +437,20 @@ class TaskController extends Controller
                 'progress' => ($stats->total ?? 0) > 0 ? (int) round((($stats->completed ?? 0) / $stats->total) * 100) : 0,
             ] : ['total' => 0, 'completed' => 0, 'pending' => 0, 'progress' => 0];
 
+            // Check delegation chain for OA visibility
+            $delegationChain = $task->delegation_chain ?? [];
+            $latestDelegation = null;
+            if (! empty($delegationChain)) {
+                $latestDelegation = end($delegationChain);
+            }
+            $hasActiveDelegation = $latestDelegation && in_array($latestDelegation['status'], ['pending', 'accepted']);
+            $delegationReturnToTransferor = $hasActiveDelegation ? ($latestDelegation['return_to_transferor'] ?? true) : true;
+
+            $delegationTransfereeId = $hasActiveDelegation ? (int) $latestDelegation['delegated_to'] : null;
+            $delegationTransferorId = $hasActiveDelegation ? (int) $latestDelegation['delegated_by'] : null;
+
             $assignees = $task->assignees->isEmpty() ? collect([null]) : $task->assignees;
+            $rowCreated = false;
             foreach ($assignees as $assignee) {
                 if ($assignee && (int) $assignee->id === (int) $task->assigned_by) {
                     continue;
@@ -407,8 +460,23 @@ class TaskController extends Controller
                 }
                 if ($isDueTodayFilter && $assignee) {
                     $effectiveDueDate = ($assignee->pivot->due_date ?? null) ?: $task->end_date;
-                    if (! $effectiveDueDate || \Carbon\Carbon::parse($effectiveDueDate)->toDateString() !== today()->toDateString()) {
+                    if (! $effectiveDueDate || Carbon::parse($effectiveDueDate)->toDateString() !== today()->toDateString()) {
                         continue;
+                    }
+                }
+                // When delegation exists, show only the relevant assignee's row
+                if ($delegationTransfereeId && $assignee) {
+                    if ($delegationReturnToTransferor) {
+                        // return_to_transferor=true → show the transferor
+                        if ((int) $assignee->id !== $delegationTransferorId) {
+                            continue;
+                        }
+                    } else {
+                        // return_to_transferor=false → show the transferee
+                        // If the transferee is not in the assignees list, skip and create virtual row later
+                        if ((int) $assignee->id !== $delegationTransfereeId) {
+                            continue;
+                        }
                     }
                 }
 
@@ -444,6 +512,46 @@ class TaskController extends Controller
                         break;
                     }
                 }
+                // Set transferred_by_name for the transferee
+                $clone->transferred_by_name = null;
+                foreach ($chain as $entry) {
+                    if ((int) $entry['delegated_to'] === (int) $user->id && $entry['status'] === 'accepted') {
+                        $clone->transferred_by_name = $entry['delegated_by_name'];
+                    }
+                }
+                // Set delegation flags for OA view
+                $clone->has_direct_to_oa_delegation = false;
+                $clone->delegator_name = null;
+                $clone->is_transferee = false;
+                if ($hasActiveDelegation && ! $delegationReturnToTransferor) {
+                    $clone->has_direct_to_oa_delegation = true;
+                    $clone->delegator_name = $latestDelegation['delegated_by_name'] ?? null;
+                    $clone->is_transferee = true;
+                }
+                $clone->current_owner_id = $task->current_owner;
+                $clone->current_owner_name = $task->currentOwner?->name;
+                $expandedTasks->push($clone);
+                $rowCreated = true;
+            }
+
+            // If no row was created for Direct to OA delegation, create a virtual transferee row
+            if (! $rowCreated && $hasActiveDelegation && ! $delegationReturnToTransferor) {
+                $clone = clone $task;
+                $clone->setRelation('assignees', collect());
+                $clone->item_type = 'task';
+                $clone->total_deliverables = $progress['total'];
+                $clone->completed_deliverables = $progress['completed'];
+                $clone->pending_deliverables_count = $progress['pending'];
+                $clone->deliverables_progress = $progress['progress'];
+                $clone->is_transferor = false;
+                $clone->transferor_return_to_self = false;
+                $clone->transferor_has_approved = false;
+                $clone->transferred_by_name = null;
+                $clone->has_direct_to_oa_delegation = true;
+                $clone->delegator_name = $latestDelegation['delegated_by_name'] ?? null;
+                $clone->is_transferee = true;
+                $clone->current_owner_id = (int) $latestDelegation['delegated_to'];
+                $clone->current_owner_name = $latestDelegation['delegated_to_name'] ?? null;
                 $expandedTasks->push($clone);
             }
         }
@@ -543,6 +651,49 @@ class TaskController extends Controller
         ]);
 
         $payload = $task->toArray();
+
+        // When return_to_transferor=true, only the transferor should see the transferee's submissions
+        // The OA and other viewers should NOT see them until the transferor submits
+        $delegationChain = $task->delegation_chain ?? [];
+        if (is_string($delegationChain)) {
+            $delegationChain = json_decode($delegationChain, true) ?? [];
+        }
+        if (! empty($delegationChain)) {
+            $lastAccepted = null;
+            foreach ($delegationChain as $entry) {
+                if (strtolower($entry['status'] ?? '') === 'accepted') {
+                    $lastAccepted = $entry;
+                }
+            }
+            if ($lastAccepted && ($lastAccepted['return_to_transferor'] ?? true)) {
+                $transferorId = (int) ($lastAccepted['delegated_by'] ?? 0);
+                $transfereeId = (int) ($lastAccepted['delegated_to'] ?? 0);
+                // Only transferor and transferee should see the transferee's submissions
+                if ((int) $user->id !== $transferorId && (int) $user->id !== $transfereeId) {
+                    $allSubmissions = $payload['submissions'] ?? [];
+                    $payload['submissions'] = array_values(array_filter($allSubmissions, function ($s) use ($transfereeId) {
+                        $sb = $s['submitted_by'] ?? null;
+                        if (is_array($sb)) {
+                            $sb = $sb['id'] ?? $sb['submitted_by'] ?? 0;
+                        }
+                        return (int) $sb !== $transfereeId;
+                    }));
+                    foreach (['latest_submission', 'latestSubmission'] as $key) {
+                        $latestSub = $payload[$key] ?? null;
+                        if ($latestSub) {
+                            $sb = $latestSub['submitted_by'] ?? null;
+                            if (is_array($sb)) {
+                                $sb = $sb['id'] ?? $sb['submitted_by'] ?? 0;
+                            }
+                            if ((int) $sb === $transfereeId) {
+                                $payload[$key] = null;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         $payload['deliverables'] = $deliverables;
         $payload['deliverables_progress'] = (int) $dlvStats->total > 0 ? (int) round(((int) $dlvStats->completed / max((int) $dlvStats->total, 1)) * 100) : 0;
         $payload['total_deliverables'] = (int) $dlvStats->total;
@@ -581,33 +732,82 @@ class TaskController extends Controller
                 break;
             }
         }
+        // Fallback: if approval_chain is empty/stale but the transferor is the current owner
+        // and the task is in_progress after a submitted status, they must have approved
+        if (! $transferorHasApproved && $isTransferor && $transferorReturnToSelf) {
+            if ((int) ($task->current_owner ?? 0) === (int) $user->id && $task->status === 'in_progress') {
+                $transferorHasApproved = true;
+                // Also fix the approval_chain in DB for future requests
+                if (empty($approvalChain)) {
+                    $fixedChain = [];
+                    foreach ($chain as $entry) {
+                        if ((int) $entry['delegated_by'] === (int) $user->id && ($entry['return_to_transferor'] ?? true)) {
+                            $fixedChain[] = [
+                                'approver_id' => $entry['delegated_by'],
+                                'approver_name' => $entry['delegated_by_name'] ?? null,
+                                'level' => $entry['level'],
+                                'status' => 'approved',
+                                'approved_at' => now()->toISOString(),
+                            ];
+                        }
+                    }
+                    if (! empty($fixedChain)) {
+                        $task->update(['approval_chain' => $fixedChain]);
+                    }
+                }
+            }
+        }
+        error_log('[TASK_SHOW_DEBUG] user=' . $user->id . ' task=' . $task->id . ' isTransferor=' . json_encode($isTransferor) . ' transferorHasApproved=' . json_encode($transferorHasApproved) . ' transferorReturnToSelf=' . json_encode($transferorReturnToSelf) . ' delegation_chain=' . json_encode($chain) . ' approval_chain=' . json_encode($approvalChain));
         $payload['is_transferor'] = $isTransferor;
         $payload['transferor_return_to_self'] = $transferorReturnToSelf;
         $payload['transferor_has_approved'] = $transferorHasApproved;
 
-        // Transferors: can_submit is always false, is_assignee false when return_to_transferor=false
-        $payload['can_submit'] = ($isAssignee || $isCurrentOwner) && in_array($task->status, $pendingStatuses) && $allDeliverablesSubmitted
+        $activeOutgoingDelegation = TaskDelegation::where('task_id', $task->id)
+            ->where('delegated_by', $user->id)
+            ->where('status', 'pending')
+            ->latest()
+            ->first();
+        $payload['active_outgoing_delegation'] = $activeOutgoingDelegation ? true : false;
+        $payload['active_outgoing_delegation_id'] = $activeOutgoingDelegation?->id;
+        $payload['can_revoke_delegation'] = $activeOutgoingDelegation && $activeOutgoingDelegation->status === 'pending';
+
+        // Transferors: can_submit is false until they approve; after approval they can submit to OA
+        $payload['can_submit'] = ($isAssignee || $isCurrentOwner) && in_array($task->status, ['in_progress', 'reopened', 'paused']) && $allDeliverablesSubmitted
             && ($userPivot?->status !== 'submitted');
-        if ($isTransferor) {
+        if ($isTransferor && ! $transferorHasApproved) {
+            // Transferor hasn't approved yet — block submit
             $payload['can_submit'] = false;
-            if (!$transferorReturnToSelf) {
+            if (! $transferorReturnToSelf) {
                 $payload['is_assignee'] = false;
             }
         }
+        // Transferor has approved — force allow submit so they can forward to OA
+        if ($isTransferor && $transferorHasApproved && $transferorReturnToSelf) {
+            $payload['can_submit'] = true;
+            $payload['is_assignee'] = true;
+            $payload['is_current_owner'] = true;
+            $payload['my_status'] = $payload['my_status'] === 'submitted' ? 'pending' : ($payload['my_status'] ?? 'pending');
+        }
+        error_log('[TASK_SHOW_DEBUG_FORCE] user=' . $user->id . ' task=' . $task->id . ' can_submit=' . json_encode($payload['can_submit']) . ' is_assignee=' . json_encode($payload['is_assignee']) . ' is_current_owner=' . json_encode($payload['is_current_owner']) . ' my_status=' . json_encode($payload['my_status'] ?? 'null') . ' status=' . json_encode($task->status));
         $payload['can_delegate'] = ($isAssignee || $isCurrentOwner)
-            && !in_array($task->status, ['approved', 'rejected']);
+            && ! in_array($task->status, ['approved', 'rejected', 'submitted'])
+            && $task->allow_transfer;
         if ($isTransferor) {
             $payload['can_delegate'] = false;
         }
-        $payload['has_delegation_chain'] = !empty($task->delegation_chain);
+        $payload['has_delegation_chain'] = ! empty($task->delegation_chain);
         $payload['delegation_chain'] = $task->delegation_chain ?? [];
         $payload['approval_chain'] = $task->approval_chain ?? [];
         $nextApprover = $this->delegationService->getNextApprover($task);
         $payload['next_approver_id'] = $nextApprover;
-        $payload['is_next_approver'] = $nextApprover && (int) $nextApprover === (int) $user->id;
+        $payload['is_next_approver'] = ($nextApprover && (int) $nextApprover === (int) $user->id)
+            || ($nextApprover === null && !empty($task->delegation_chain) && (int) $task->assigned_by === (int) $user->id);
         $payload['pending_delegation'] = $task->pendingDelegations()->where('delegated_to', $user->id)->first();
         $payload['current_owner_name'] = $task->currentOwner?->name ?? $task->assignee?->name ?? null;
         $payload['original_assigner_name'] = $task->originalAssigner?->name ?? $task->assigner?->name ?? null;
+        $payload['is_delegatee'] = $task->current_owner && (int) $task->current_owner === (int) $user->id
+            && ($task->delegation_count > 0 || ! empty($task->delegation_chain));
+        $payload['allow_transfer'] = $task->allow_transfer ?? true;
 
         $taskChangeMax = (int) TaskChange::where('task_id', $task->id)->max('id');
         $taskEventMax = (int) TaskWorkflowEvent::where('task_id', $task->id)->max('id');
@@ -627,6 +827,8 @@ class TaskController extends Controller
             'work_completed_at' => $task->work_completed_at?->format('Y-m-d\TH:i:s'),
             'last_timer_event_at' => $task->last_timer_event_at?->format('Y-m-d\TH:i:s'),
         ];
+
+        error_log('[TASK_SHOW_FINAL] user=' . $user->id . ' task=' . $task->id . ' can_submit=' . json_encode($payload['can_submit']) . ' is_assignee=' . json_encode($payload['is_assignee']) . ' is_transferor=' . json_encode($payload['is_transferor']) . ' transferor_has_approved=' . json_encode($payload['transferor_has_approved']) . ' my_status=' . json_encode($payload['my_status'] ?? 'null') . ' status=' . json_encode($payload['status']) . ' active_outgoing_delegation=' . json_encode($payload['active_outgoing_delegation']));
 
         return response()->json(['success' => true, 'task' => $payload]);
     }
@@ -672,14 +874,15 @@ class TaskController extends Controller
             'deliverable_templates.*.description' => 'nullable|string|max:2000',
             'deliverable_templates.*.quantity' => 'nullable|integer|min:1|max:100',
             'deliverable_templates.*.combined' => 'nullable|boolean',
+            'allow_transfer' => 'nullable|boolean',
         ]);
 
         // Validate task end_date does not exceed project end_date
         if (! empty($validated['end_date']) && $project->end_date) {
-            $taskEnd = \Carbon\Carbon::parse($validated['end_date']);
-            $projectEnd = \Carbon\Carbon::parse($project->end_date);
+            $taskEnd = Carbon::parse($validated['end_date']);
+            $projectEnd = Carbon::parse($project->end_date);
             if ($taskEnd->gt($projectEnd)) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
+                throw ValidationException::withMessages([
                     'end_date' => 'Task deadline cannot exceed the project deadline ('.$projectEnd->format('d M Y h:i A').').',
                 ]);
             }
@@ -687,12 +890,12 @@ class TaskController extends Controller
 
         // Validate deliverable due_date does not exceed task end_date
         if (! empty($validated['end_date']) && ! empty($validated['deliverables'])) {
-            $endDateTime = \Carbon\Carbon::parse($validated['end_date']);
+            $endDateTime = Carbon::parse($validated['end_date']);
             foreach ($validated['deliverables'] as $index => $del) {
                 if (! empty($del['due_date'])) {
-                    $deliverableDateTime = \Carbon\Carbon::parse($del['due_date']);
+                    $deliverableDateTime = Carbon::parse($del['due_date']);
                     if ($deliverableDateTime->gt($endDateTime)) {
-                        throw \Illuminate\Validation\ValidationException::withMessages([
+                        throw ValidationException::withMessages([
                             "deliverables.{$index}.due_date" => 'Deliverable due date cannot exceed the task end date.',
                         ]);
                     }
@@ -701,7 +904,7 @@ class TaskController extends Controller
         }
 
         // Validate that all assignees are members of the project
-        $projectMemberIds = collect(app(\App\Http\Controllers\ProjectController::class)
+        $projectMemberIds = collect(app(ProjectController::class)
             ->getMembers($project)
             ->getData())
             ->pluck('id')
@@ -714,7 +917,7 @@ class TaskController extends Controller
         );
 
         if (! empty($invalidAssignees)) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'assigned_to' => 'One or more selected users are not members of this project. Please select only project members.',
             ]);
         }
@@ -740,6 +943,7 @@ class TaskController extends Controller
                 'status' => 'pending',
                 'task_type' => $validated['task_type'] ?? 'standard',
                 'recurrence_settings' => $validated['recurrence_settings'] ?? null,
+                'allow_transfer' => $validated['allow_transfer'] ?? true,
             ]);
             $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
 
@@ -1007,16 +1211,17 @@ class TaskController extends Controller
             'deliverable_templates.*.description' => 'nullable|string|max:2000',
             'deliverable_templates.*.quantity' => 'nullable|integer|min:1|max:100',
             'deliverable_templates.*.combined' => 'nullable|boolean',
+            'allow_transfer' => 'nullable|boolean',
         ]);
 
         // Validate deliverable due_date does not exceed task end_date
         if (! empty($validated['end_date']) && ! empty($validated['deliverables'])) {
-            $endDateTime = \Carbon\Carbon::parse($validated['end_date']);
+            $endDateTime = Carbon::parse($validated['end_date']);
             foreach ($validated['deliverables'] as $index => $del) {
                 if (! empty($del['due_date'])) {
-                    $deliverableDateTime = \Carbon\Carbon::parse($del['due_date']);
+                    $deliverableDateTime = Carbon::parse($del['due_date']);
                     if ($deliverableDateTime->gt($endDateTime)) {
-                        throw \Illuminate\Validation\ValidationException::withMessages([
+                        throw ValidationException::withMessages([
                             "deliverables.{$index}.due_date" => 'Deliverable due date cannot exceed the task end date.',
                         ]);
                     }
@@ -1044,6 +1249,7 @@ class TaskController extends Controller
                 'project_id' => null,
                 'task_type' => $validated['task_type'] ?? 'standard',
                 'recurrence_settings' => $validated['recurrence_settings'] ?? null,
+                'allow_transfer' => $validated['allow_transfer'] ?? true,
             ]);
             $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
 
@@ -1062,13 +1268,13 @@ class TaskController extends Controller
                 $deliverableData = collect($validated['deliverables'])
                     ->filter(fn ($del) => empty($del['assigned_to']) || (int) $del['assigned_to'] === (int) $userId)
                     ->map(fn ($del) => [
-                    'title' => $del['title'], 'description' => $del['description'] ?? null,
-                    'status' => 'pending', 'priority' => $validated['priority'],
-                    'start_date' => $del['start_date'] ?? null,
-                    'due_date' => $del['due_date'] ?? $validated['end_date'] ?? null,
-                    'assigned_to' => $userId, 'created_by' => $user->id,
-                    'created_at' => now(), 'updated_at' => now(),
-                ])->toArray();
+                        'title' => $del['title'], 'description' => $del['description'] ?? null,
+                        'status' => 'pending', 'priority' => $validated['priority'],
+                        'start_date' => $del['start_date'] ?? null,
+                        'due_date' => $del['due_date'] ?? $validated['end_date'] ?? null,
+                        'assigned_to' => $userId, 'created_by' => $user->id,
+                        'created_at' => now(), 'updated_at' => now(),
+                    ])->toArray();
                 $createdDeliverables = $task->deliverables()->createMany($deliverableData);
                 foreach ($createdDeliverables as $dlv) {
                     if ((int) $dlv->assigned_to !== (int) $user->id) {
@@ -1256,6 +1462,7 @@ class TaskController extends Controller
             'existing_file_names.*.url' => 'nullable|string|max:2048',
             'due_dates' => 'nullable|array',
             'due_dates.*' => 'nullable|date',
+            'allow_transfer' => 'sometimes|boolean',
         ]);
 
         $assigneeIds = $validated['assigned_to'] ?? null;
@@ -1267,10 +1474,10 @@ class TaskController extends Controller
 
         // Validate task end_date does not exceed project end_date
         if (! empty($validated['end_date']) && $task->project && $task->project->end_date) {
-            $taskEnd = \Carbon\Carbon::parse($validated['end_date']);
-            $projectEnd = \Carbon\Carbon::parse($task->project->end_date);
+            $taskEnd = Carbon::parse($validated['end_date']);
+            $projectEnd = Carbon::parse($task->project->end_date);
             if ($taskEnd->gt($projectEnd)) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
+                throw ValidationException::withMessages([
                     'end_date' => 'Task deadline cannot exceed the project deadline ('.$projectEnd->format('d M Y h:i A').').',
                 ]);
             }
@@ -1291,10 +1498,14 @@ class TaskController extends Controller
         if ($existingFileNames) {
             foreach ($existingFileNames as $item) {
                 $updateData = [];
-                if (isset($item['name'])) $updateData['name'] = $item['name'];
-                if (isset($item['url'])) $updateData['url'] = $item['url'];
-                if (!empty($updateData)) {
-                    \App\Models\TaskFile::where('id', $item['id'])
+                if (isset($item['name'])) {
+                    $updateData['name'] = $item['name'];
+                }
+                if (isset($item['url'])) {
+                    $updateData['url'] = $item['url'];
+                }
+                if (! empty($updateData)) {
+                    TaskFile::where('id', $item['id'])
                         ->where('task_id', $task->id)
                         ->update($updateData);
                 }
@@ -1351,7 +1562,7 @@ class TaskController extends Controller
                     $this->notificationService->createBulk($newAssignNotifications);
                 }
             }
-        } elseif (!empty($dueDates) && !empty($assigneeIds)) {
+        } elseif (! empty($dueDates) && ! empty($assigneeIds)) {
             $syncData = [];
             foreach ($assigneeIds as $id) {
                 $syncData[$id] = ['due_date' => $dueDates[$id] ?? null];
@@ -1454,7 +1665,6 @@ class TaskController extends Controller
      *
      * @param  Request  $request  Recurrence settings, templates, and regenerate flag.
      * @param  Task  $task  The recurring task.
-     * @return JsonResponse
      */
     public function updateRecurring(Request $request, Task $task, RecurringService $recurringService): JsonResponse
     {
@@ -1481,12 +1691,12 @@ class TaskController extends Controller
         }
 
         // Update recurrence settings
-        if (!empty($validated['recurrence_settings'])) {
+        if (! empty($validated['recurrence_settings'])) {
             $task->update(['recurrence_settings' => $validated['recurrence_settings']]);
         }
 
         // Update templates
-        if (!empty($validated['deliverable_templates'])) {
+        if (! empty($validated['deliverable_templates'])) {
             DB::table('deliverable_templates')->where('task_id', $task->id)->delete();
             $templateData = [];
             foreach ($validated['deliverable_templates'] as $order => $tmpl) {
@@ -1527,7 +1737,7 @@ class TaskController extends Controller
             // Recalculate delivered count
             $remainingDeliverables = $task->deliverables()->count();
             $totalPerPeriod = array_sum(
-                array_map(fn($t) => (int) ($t['quantity'] ?? 1), $validated['deliverable_templates'] ?? $task->deliverableTemplates()->get()->toArray())
+                array_map(fn ($t) => (int) ($t['quantity'] ?? 1), $validated['deliverable_templates'] ?? $task->deliverableTemplates()->get()->toArray())
             );
             $completedPeriods = $totalPerPeriod > 0 ? (int) floor($remainingDeliverables / $totalPerPeriod) : 0;
 
@@ -1669,17 +1879,17 @@ class TaskController extends Controller
 
             // Log activity
             $this->activityService->log($user->id, 'task_completed', 'You completed task "'.$task->title.'"', 'task', $task->id);
-        $this->clearDashboardCache($user->id);
+            $this->clearDashboardCache($user->id);
 
-        // Also clear dashboard cache for all assignees so their "today tasks" and summary refresh
-        $taskAssigneeIds = $task->assignees()->pluck('users.id')->toArray();
-        foreach ($taskAssigneeIds as $assigneeId) {
-            if ((int) $assigneeId !== (int) $user->id) {
-                $this->clearDashboardCache((int) $assigneeId);
+            // Also clear dashboard cache for all assignees so their "today tasks" and summary refresh
+            $taskAssigneeIds = $task->assignees()->pluck('users.id')->toArray();
+            foreach ($taskAssigneeIds as $assigneeId) {
+                if ((int) $assigneeId !== (int) $user->id) {
+                    $this->clearDashboardCache((int) $assigneeId);
+                }
             }
-        }
 
-        try {
+            try {
                 $this->auditService->log(
                     module: 'task_management',
                     action: 'complete',
@@ -1786,7 +1996,7 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'This task is paused by the assigner and cannot be acknowledged'], 422);
         }
 
-        if (strtolower((string) $task->status) !== 'pending') {
+        if (! in_array(strtolower((string) $task->status), ['pending', 'reopened'])) {
             return response()->json(['success' => false, 'message' => 'This task cannot be acknowledged in its current status'], 422);
         }
 
@@ -2220,11 +2430,22 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'Only the assignee or current owner can submit this task'], 403);
         }
 
-        // Transferors cannot submit
+        // Transferors cannot submit unless they've approved (return_to_transferor flow)
         $chain = $task->delegation_chain ?? [];
         foreach ($chain as $entry) {
             if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
-                return response()->json(['success' => false, 'message' => 'Transferors cannot submit this task'], 403);
+                $approvalChain = $task->approval_chain ?? [];
+                $transferorApproved = false;
+                foreach ($approvalChain as $aEntry) {
+                    if ((int) $aEntry['approver_id'] === (int) $user->id && $aEntry['status'] === 'approved') {
+                        $transferorApproved = true;
+                        break;
+                    }
+                }
+                if (! $transferorApproved) {
+                    return response()->json(['success' => false, 'message' => 'Transferors cannot submit this task'], 403);
+                }
+                break;
             }
         }
 
@@ -2324,9 +2545,52 @@ class TaskController extends Controller
 
         $task->load('project:id,title');
 
-        if ($task->assigned_by && $task->assigned_by !== $user->id) {
+        // Determine who to notify about the submission
+        $notifyUserId = null;
+        $chain = $task->delegation_chain ?? [];
+        $isTransferor = false;
+
+        // Check if this user is the transferor (delegated_by in an accepted delegation)
+        foreach ($chain as $entry) {
+            if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                $isTransferor = true;
+                break;
+            }
+        }
+
+        if ($isTransferor) {
+            // Transferor is submitting → notify original assigner
+            if ($task->assigned_by && $task->assigned_by !== $user->id) {
+                $notifyUserId = $task->assigned_by;
+            }
+        } elseif (! empty($chain)) {
+            // Transferee is submitting → find the transferor (delegated_by of last accepted entry)
+            $lastAccepted = null;
+            foreach ($chain as $entry) {
+                if ($entry['status'] === 'accepted') {
+                    $lastAccepted = $entry;
+                }
+            }
+            if ($lastAccepted) {
+                $returnToTransferor = $lastAccepted['return_to_transferor'] ?? true;
+                if ($returnToTransferor) {
+                    // Notify the transferor only
+                    $notifyUserId = (int) $lastAccepted['delegated_by'];
+                } else {
+                    // No return_to_transferor → notify original assigner
+                    $notifyUserId = $task->assigned_by;
+                }
+            }
+        } else {
+            // No delegation chain → notify original assigner
+            if ($task->assigned_by && $task->assigned_by !== $user->id) {
+                $notifyUserId = $task->assigned_by;
+            }
+        }
+
+        if ($notifyUserId && (int) $notifyUserId !== (int) $user->id) {
             $this->notificationService->notify(
-                $task->assigned_by,
+                $notifyUserId,
                 $user->id,
                 'task_submitted',
                 'task',
@@ -2338,10 +2602,11 @@ class TaskController extends Controller
         }
 
         // Send confirmation email to performer
+        $submittedToName = User::find($notifyUserId)?->name ?? 'N/A';
         $this->notificationService->confirmAction($user, $isResubmit ? 'Resubmitted' : 'Submitted', 'task', $task->title, [
             'Business ID' => $task->business_id,
             'Project' => $task->project?->title ?? 'N/A',
-            'Submitted To' => User::find($task->assigned_by)?->name ?? 'N/A',
+            'Submitted To' => $submittedToName,
         ]);
 
         // Log activity
@@ -2399,10 +2664,15 @@ class TaskController extends Controller
         }
 
         // Check if user is a transferor (next_approver from delegation chain with return_to_transferor=true)
-        $isNextApproverTransferor = $isNextApprover && !$isCreator;
+        $isNextApproverTransferor = $isNextApprover && ! $isCreator;
+        error_log('[TASK_APPROVE_DEBUG] user=' . $user->id . ' task=' . $task->id . ' isCreator=' . json_encode($isCreator) . ' isNextApprover=' . json_encode($isNextApprover) . ' nextApprover=' . json_encode($nextApprover) . ' isNextApproverTransferor=' . json_encode($isNextApproverTransferor) . ' isDelegationChain=' . json_encode($isDelegationChain) . ' task_status=' . json_encode($task->status));
         $approvalChain = $task->approval_chain ?? [];
         if ($isNextApproverTransferor) {
-            // Mark this transferor as approved in the approval_chain, keep as 'submitted'
+            // Mark this transferor as approved in the approval_chain, then set task back to the transferor for submission to OA
+            // If approval_chain is empty (legacy data), rebuild it from the delegation chain first
+            if (empty($approvalChain)) {
+                $approvalChain = $this->delegationService->rebuildApprovalChain($task);
+            }
             $updatedApprovalChain = [];
             foreach ($approvalChain as $aEntry) {
                 if ((int) $aEntry['approver_id'] === (int) $user->id) {
@@ -2411,44 +2681,75 @@ class TaskController extends Controller
                 }
                 $updatedApprovalChain[] = $aEntry;
             }
+
+            // Find the delegatee from the delegation chain
+            $delegateeId = null;
+            $delegateeName = null;
+            $chain = $task->delegation_chain ?? [];
+            foreach ($chain as $entry) {
+                if ((int) $entry['delegated_by'] === (int) $user->id && $entry['status'] === 'accepted') {
+                    $delegateeId = (int) $entry['delegated_to'];
+                    $delegateeName = $entry['delegated_to_name'] ?? null;
+                    break;
+                }
+            }
+
             $task->update([
                 'approval_chain' => $updatedApprovalChain,
+                'status' => 'in_progress',
+                'current_owner' => $user->id,
                 'updated_by' => $user->id,
             ]);
 
-            // Notify original assigner that transferor has approved
-            $originalAssigner = $task->originalAssigner;
-            if ($originalAssigner) {
-                $this->notificationService->notify(
-                    $originalAssigner,
-                    $user->id,
-                    'task_transferor_approved',
-                    'task',
-                    $task->id,
-                    'Transferor Approved',
-                    $user->name.' has approved the delegated task "'.$task->title.'" and forwarded it to you for final approval.',
-                    '/tasks/task-details/'.$task->id.'?from=tasks'
-                );
-            }
+            // Reset transferor's pivot status so they can submit to the original assigner
+            $task->assignees()->updateExistingPivot($user->id, [
+                'status' => 'pending',
+                'submitted_at' => null,
+            ]);
+
+            // Notify the transferor that they can now submit to OA
+            $this->notificationService->notify(
+                $user->id,
+                $user->id,
+                'task_ready_to_forward',
+                'task',
+                $task->id,
+                'Ready to Forward',
+                'You have approved the delegated task "'.$task->title.'". You can now submit it to the original assigner for final approval.',
+                '/tasks/task-details/'.$task->id.'?from=tasks'
+            );
 
             TaskWorkflowEvent::create([
                 'task_id' => $task->id,
                 'user_id' => $user->id,
                 'action' => 'transferor_approved',
-                'comment' => $user->name.' (transferor) approved the submission and forwarded to original assigner',
+                'comment' => $user->name.' (transferor) approved the submission. Task is now with the transferor ready to forward to original assigner.',
             ]);
 
-            // Log activity
-            $this->activityService->log($user->id, 'task_transferor_approved', 'You approved the delegated task "'.$task->title.'" as transferor', 'task', $task->id);
+            $this->activityService->log($user->id, 'task_transferor_approved', 'You approved the delegated task "'.$task->title.'" – you can now submit it to the original assigner', 'task', $task->id);
 
             $task->fresh();
+
+            $taskData = $this->taskWithTimer($task->load(['assignees:id,name,email,role', 'assigner:id,name', 'approvedBy:id,name',
+                'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
+                'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
+            ])->toArray());
+            $taskData['transferor_has_approved'] = true;
+            $taskData['is_assignee'] = true;
+            $taskData['is_current_owner'] = true;
+            $taskData['my_status'] = 'pending';
+            $taskData['can_submit'] = true;
+            $taskData['active_outgoing_delegation'] = false;
+            $taskData['active_outgoing_delegation_id'] = null;
+            $taskData['can_delegate'] = false;
+            $taskData['status'] = 'in_progress';
+
+            error_log('[TASK_APPROVE_TRANSFEROR] user=' . $user->id . ' task=' . $task->id . ' can_submit=' . json_encode($taskData['can_submit']) . ' is_assignee=' . json_encode($taskData['is_assignee']) . ' status=' . json_encode($taskData['status']) . ' approval_chain=' . json_encode($taskData['approval_chain'] ?? 'null'));
+
             return response()->json([
                 'success' => true,
-                'message' => 'Approval forwarded to original assigner',
-                'task' => $this->taskWithTimer($task->load(['assignees:id,name,email,role', 'assigner:id,name', 'approvedBy:id,name',
-                    'submissions' => fn ($q) => $q->with('submittedBy:id,name,email')->latest(),
-                    'workflowEvents' => fn ($q) => $q->with('user:id,name,email')->latest(),
-                ])->toArray()),
+                'message' => 'Approved – you can now submit to the original assigner',
+                'task' => $taskData,
             ]);
         }
 
@@ -2524,8 +2825,11 @@ class TaskController extends Controller
     {
         $user = $request->user();
         $isCreator = (int) $task->assigned_by === (int) $user->id;
+        $isDelegationChain = $this->delegationService->isInDelegationChain($task, $user);
+        $nextApprover = $this->delegationService->getNextApprover($task);
+        $isNextApprover = $nextApprover && (int) $nextApprover === (int) $user->id;
 
-        if (! $isCreator && ! in_array($user->role, ['admin', 'manager'])) {
+        if (! $isCreator && ! in_array($user->role, ['admin', 'manager']) && ! $isDelegationChain && ! $isNextApprover) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         if ($task->status !== 'submitted') {
@@ -2676,20 +2980,10 @@ class TaskController extends Controller
             'new_deadline' => $validated['new_deadline'] ?? null, 'file_path' => $filePath, 'file_name' => $fileName,
         ]);
 
-        // Add system comment to task discussion
         $reopenReasonText = $validated['reopen_reason'];
         if (! empty($validated['reopen_reason_detail']) && $validated['reopen_reason'] !== 'Other') {
             $reopenReasonText .= ': '.$validated['reopen_reason_detail'];
         }
-        $systemComment = $user->name.' reopened this task. Reason: '.$reopenReasonText;
-        if (! empty($validated['instructions'])) {
-            $systemComment .= ' Instructions: '.$validated['instructions'];
-        }
-        TaskComment::create([
-            'task_id' => $task->id,
-            'user_id' => $user->id,
-            'body' => $systemComment,
-        ]);
 
         $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
         $assigneeIds = array_values(array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $user->id));
@@ -2819,7 +3113,7 @@ class TaskController extends Controller
         }
 
         if (in_array($task->status, ['approved', 'submitted'])) {
-            return response()->json(['success' => false, 'message' => 'Cannot delete a task that is ' . $task->status], 422);
+            return response()->json(['success' => false, 'message' => 'Cannot delete a task that is '.$task->status], 422);
         }
 
         $task->assignees()->detach();
@@ -2984,8 +3278,8 @@ class TaskController extends Controller
      * Rename a task file/link by updating its name (and optionally URL).
      *
      * @param  Request  $request  Input: name (required), url (optional).
-     * @param  Task     $task     The task the file belongs to.
-     * @param  TaskFile $file     The file to rename.
+     * @param  Task  $task  The task the file belongs to.
+     * @param  TaskFile  $file  The file to rename.
      * @return JsonResponse JSON response with the updated file.
      */
     public function renameFile(Request $request, Task $task, TaskFile $file)
@@ -3126,7 +3420,7 @@ class TaskController extends Controller
         $isCreator = (int) $task->assigned_by === (int) $user->id;
         $isAssignee = $task->assignees->contains('id', $user->id);
 
-        if (!$isCreator && !$isAssignee) {
+        if (! $isCreator && ! $isAssignee) {
             return response()->json(['success' => true, 'credentials' => []]);
         }
 
@@ -3137,6 +3431,7 @@ class TaskController extends Controller
                 if ($isCreator) {
                     return true;
                 }
+
                 return $cred->assignedUsers->contains('id', $user->id);
             })
             ->values();
@@ -3150,7 +3445,7 @@ class TaskController extends Controller
                     'website_url' => $cred->website_url,
                     'username' => $cred->username,
                     'password' => $cred->password_decrypted,
-                    'assigned_users' => $cred->assignedUsers->map(fn($u) => ['id' => $u->id, 'name' => $u->name]),
+                    'assigned_users' => $cred->assignedUsers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]),
                     'created_by' => $cred->creator?->name,
                     'created_at' => $cred->created_at,
                 ];
@@ -3190,7 +3485,7 @@ class TaskController extends Controller
                 'website_url' => $credential->website_url,
                 'username' => $credential->username,
                 'password' => $credential->password_decrypted,
-                'assigned_users' => $credential->assignedUsers->map(fn($u) => ['id' => $u->id, 'name' => $u->name]),
+                'assigned_users' => $credential->assignedUsers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]),
             ],
         ], 201);
     }
@@ -3198,7 +3493,7 @@ class TaskController extends Controller
     /**
      * Update an access credential for a task.
      */
-    public function updateAccessCredential(Request $request, Task $task, \App\Models\TaskAccessCredential $credential)
+    public function updateAccessCredential(Request $request, Task $task, TaskAccessCredential $credential)
     {
         if ($credential->task_id !== $task->id) {
             return response()->json(['success' => false, 'message' => 'Credential does not belong to this task'], 404);
@@ -3231,7 +3526,7 @@ class TaskController extends Controller
                 'website_url' => $credential->website_url,
                 'username' => $credential->username,
                 'password' => $credential->password_decrypted,
-                'assigned_users' => $credential->assignedUsers->map(fn($u) => ['id' => $u->id, 'name' => $u->name]),
+                'assigned_users' => $credential->assignedUsers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]),
             ],
         ]);
     }
@@ -3239,7 +3534,7 @@ class TaskController extends Controller
     /**
      * Delete an access credential for a task.
      */
-    public function deleteAccessCredential(Task $task, \App\Models\TaskAccessCredential $credential)
+    public function deleteAccessCredential(Task $task, TaskAccessCredential $credential)
     {
         if ($credential->task_id !== $task->id) {
             return response()->json(['success' => false, 'message' => 'Credential does not belong to this task'], 404);
@@ -3437,6 +3732,14 @@ class TaskController extends Controller
                 }
             }
 
+            // Set transferred_by_name for the transferee
+            $task->transferred_by_name = null;
+            foreach ($chain as $entry) {
+                if ((int) $entry['delegated_to'] === (int) $user->id && $entry['status'] === 'accepted') {
+                    $task->transferred_by_name = $entry['delegated_by_name'];
+                }
+            }
+
             return $task;
         });
 
@@ -3514,7 +3817,7 @@ class TaskController extends Controller
             return $payload;
         }
 
-        $task = \App\Models\Task::with([])->find($payload['id'] ?? 0);
+        $task = Task::with([])->find($payload['id'] ?? 0);
         if (! $task) {
             return $payload;
         }
@@ -3543,8 +3846,8 @@ class TaskController extends Controller
     /**
      * Delegate a task to another user.
      *
-     * @param Request $request Input: delegated_to, reason, reason_detail, notes
-     * @param Task $task The task to delegate.
+     * @param  Request  $request  Input: delegated_to, reason, reason_detail, notes
+     * @param  Task  $task  The task to delegate.
      * @return JsonResponse JSON response with the delegation record.
      */
     public function delegate(Request $request, Task $task)
@@ -3554,12 +3857,16 @@ class TaskController extends Controller
         $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
         $isCurrentOwner = $this->delegationService->isCurrentOwner($task, $user);
 
-        if (!$isCreator && !$isAssignee && !$isCurrentOwner && !in_array($user->role, ['admin', 'manager'])) {
+        if (! $isCreator && ! $isAssignee && ! $isCurrentOwner && ! in_array($user->role, ['admin', 'manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
-        if (in_array($task->status, ['approved', 'rejected'])) {
-            return response()->json(['success' => false, 'message' => 'Cannot delegate a task that is already approved or rejected'], 422);
+        if (in_array($task->status, ['approved', 'rejected', 'submitted'])) {
+            return response()->json(['success' => false, 'message' => 'Cannot delegate a task that is already approved, rejected, or submitted'], 422);
+        }
+
+        if (! $task->allow_transfer) {
+            return response()->json(['success' => false, 'message' => 'Transfers are not allowed for this task'], 422);
         }
 
         // User must acknowledge the task first before transferring
@@ -3614,7 +3921,7 @@ class TaskController extends Controller
     /**
      * Accept a pending delegation.
      *
-     * @param Task $task The task.
+     * @param  Task  $task  The task.
      * @return JsonResponse JSON response with the updated delegation.
      */
     public function acceptDelegation(Request $request, Task $task)
@@ -3627,7 +3934,7 @@ class TaskController extends Controller
             ->latest()
             ->first();
 
-        if (!$delegation) {
+        if (! $delegation) {
             return response()->json(['success' => false, 'message' => 'No pending delegation found for you'], 404);
         }
 
@@ -3647,7 +3954,7 @@ class TaskController extends Controller
     /**
      * Reject a pending delegation.
      *
-     * @param Task $task The task.
+     * @param  Task  $task  The task.
      * @return JsonResponse JSON response with the updated delegation.
      */
     public function rejectDelegation(Request $request, Task $task)
@@ -3664,7 +3971,7 @@ class TaskController extends Controller
             ->latest()
             ->first();
 
-        if (!$delegation) {
+        if (! $delegation) {
             return response()->json(['success' => false, 'message' => 'No pending delegation found for you'], 404);
         }
 
@@ -3684,7 +3991,7 @@ class TaskController extends Controller
     /**
      * Revoke a delegation (by the delegator or admin/manager).
      *
-     * @param Task $task The task.
+     * @param  Task  $task  The task.
      * @return JsonResponse JSON response with the updated delegation.
      */
     public function revokeDelegation(Request $request, Task $task)
@@ -3717,7 +4024,7 @@ class TaskController extends Controller
     /**
      * Get delegation chain details for a task.
      *
-     * @param Task $task The task.
+     * @param  Task  $task  The task.
      * @return JsonResponse JSON response with the delegation chain.
      */
     public function delegationChain(Task $task)

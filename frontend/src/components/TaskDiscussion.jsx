@@ -98,7 +98,10 @@ function renderCommentBody(text) {
 
 function CommentItem({
   comment,
-  taskId,
+  commentsEndpoint,
+  commentDeleteEndpoint,
+  commentUpdateEndpoint,
+  commentFileEndpoint,
   currentUser,
   onDelete,
   onEdit,
@@ -139,7 +142,7 @@ function CommentItem({
       formData.append("body", replyText.trim());
       formData.append("parent_id", comment.id);
 
-      const res = await fetch(`${API_URL}/tasks/${taskId}/comments`, {
+      const res = await fetch(commentsEndpoint, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -159,7 +162,7 @@ function CommentItem({
     setEditSending(true);
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/comments/${comment.id}`, {
+      const res = await fetch(commentUpdateEndpoint(comment.id), {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -281,14 +284,35 @@ function CommentItem({
         {comment.file_name && (
           <div className="td-comment-attachment">
             <FileText size={14} />
-            <a
-              href={`${API_URL}/comments/${comment.id}/file`}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
               className="td-comment-attachment-link"
+              onClick={async () => {
+                try {
+                  const token = authToken();
+                  const res = await fetch(`${API_URL}/comments/${comment.id}/file`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  if (!res.ok) {
+                    const err = await res.json().catch(() => null);
+                    alert(err?.message || "Failed to download file");
+                    return;
+                  }
+                  const blob = await res.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = comment.file_name;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                } catch (err) {
+                  console.error("Download failed:", err);
+                }
+              }}
             >
               {comment.file_name}
-            </a>
+            </button>
             {comment.file_size && (
               <span className="td-comment-attachment-size">
                 ({formatFileSize(comment.file_size)})
@@ -371,7 +395,10 @@ function CommentItem({
               <CommentItem
                 key={reply.id}
                 comment={reply}
-                taskId={taskId}
+                commentsEndpoint={commentsEndpoint}
+                commentDeleteEndpoint={commentDeleteEndpoint}
+                commentUpdateEndpoint={commentUpdateEndpoint}
+                commentFileEndpoint={commentFileEndpoint}
                 currentUser={currentUser}
                 onDelete={onDelete}
                 onEdit={onEdit}
@@ -385,7 +412,20 @@ function CommentItem({
   );
 }
 
-export default function TaskDiscussion({ taskId, readOnly }) {
+export default function TaskDiscussion({ taskId, deliverableId, entityType, readOnly }) {
+  const isDeliverable = entityType === "deliverable" && deliverableId;
+  const commentsEndpoint = isDeliverable
+    ? `${API_URL}/deliverables/${deliverableId}/comments`
+    : `${API_URL}/tasks/${taskId}/comments`;
+  const participantsEndpoint = isDeliverable
+    ? `${API_URL}/deliverables/${deliverableId}/comments-participants`
+    : `${API_URL}/tasks/${taskId}/comments-participants`;
+  const commentDeleteEndpoint = (id) =>
+    `${API_URL}/comments/${id}`;
+  const commentUpdateEndpoint = (id) =>
+    `${API_URL}/comments/${id}`;
+  const commentFileEndpoint = (id) =>
+    `${API_URL}/comments/${id}/file`;
   const [comments, setComments] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -428,7 +468,7 @@ export default function TaskDiscussion({ taskId, readOnly }) {
         setLoading(true);
         const token = authToken();
         const res = await fetch(
-          `${API_URL}/tasks/${taskId}/comments?page=${pageNum}&per_page=50`,
+          `${commentsEndpoint}?page=${pageNum}&per_page=50`,
           {
             headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
           }
@@ -446,13 +486,13 @@ export default function TaskDiscussion({ taskId, readOnly }) {
       } catch (err) { console.error("Failed to load comments:", err); }
       setLoading(false);
     },
-    [taskId]
+    [commentsEndpoint]
   );
 
   const fetchParticipants = useCallback(async () => {
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/comments-participants`, {
+      const res = await fetch(participantsEndpoint, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -460,15 +500,15 @@ export default function TaskDiscussion({ taskId, readOnly }) {
         setParticipants(data.participants || []);
       }
     } catch (err) { console.error("Failed to load participants:", err); }
-  }, [taskId]);
+  }, [participantsEndpoint]);
 
   useEffect(() => {
-    if (taskId) {
+    if (taskId || deliverableId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchComments(1);
       fetchParticipants();
     }
-  }, [taskId, fetchComments, fetchParticipants]);
+  }, [taskId, deliverableId, fetchComments, fetchParticipants]);
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -498,14 +538,6 @@ export default function TaskDiscussion({ taskId, readOnly }) {
     }
   }, [sizeHighlightedIndex, showSizeMenu]);
 
-  useEffect(() => {
-    if (comments.length > 0 && page === 1) {
-      setTimeout(() => {
-        commentsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
-    }
-  }, [comments.length, page]);
-
   const handlePost = async () => {
     if (!newComment.trim() && !file) return;
     setSending(true);
@@ -517,7 +549,7 @@ export default function TaskDiscussion({ taskId, readOnly }) {
         formData.append("file", file);
       }
 
-      const res = await fetch(`${API_URL}/tasks/${taskId}/comments`, {
+      const res = await fetch(commentsEndpoint, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -536,7 +568,7 @@ export default function TaskDiscussion({ taskId, readOnly }) {
   const handleDelete = async (commentId) => {
     try {
       const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/comments/${commentId}`, {
+      const res = await fetch(commentDeleteEndpoint(commentId), {
         method: "DELETE",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       });
@@ -695,7 +727,10 @@ export default function TaskDiscussion({ taskId, readOnly }) {
                 <CommentItem
                   key={comment.id}
                   comment={comment}
-                  taskId={taskId}
+                  commentsEndpoint={commentsEndpoint}
+                  commentDeleteEndpoint={commentDeleteEndpoint}
+                  commentUpdateEndpoint={commentUpdateEndpoint}
+                  commentFileEndpoint={commentFileEndpoint}
                   currentUser={currentUser}
                   onDelete={handleDelete}
                   onEdit={handleRefresh}

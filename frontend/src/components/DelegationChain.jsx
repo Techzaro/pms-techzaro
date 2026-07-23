@@ -13,14 +13,16 @@ import { formatDateTime } from "../utils/formatDateTime";
 
 function DelegationChain({ task, delegationChain = [], approvalChain = [], onTaskUpdate }) {
   const currentUser = getUser();
-  const [acting, setActing] = useState(false);
+  const [accepting, setAccepting] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [revoking, setRevoking] = useState(false);
 
   const pendingDelegation = task?.pending_delegation;
   const isDelegatedToMe = pendingDelegation && pendingDelegation.delegated_to === currentUser?.id;
 
   const handleAccept = async () => {
     if (!pendingDelegation) return;
-    setActing(true);
+    setAccepting(true);
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${task.id}/accept-delegation`, {
@@ -37,13 +39,13 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
     } catch {
       notify.error("Error accepting transfer");
     } finally {
-      setActing(false);
+      setAccepting(false);
     }
   };
 
   const handleReject = async () => {
     if (!pendingDelegation) return;
-    setActing(true);
+    setRejecting(true);
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${task.id}/reject-delegation`, {
@@ -61,12 +63,12 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
     } catch {
       notify.error("Error rejecting transfer");
     } finally {
-      setActing(false);
+      setRejecting(false);
     }
   };
 
   const handleRevoke = async (delegationId) => {
-    setActing(true);
+    setRevoking(true);
     try {
       const token = authToken();
       const res = await fetch(`${API_URL}/tasks/${task.id}/revoke-delegation`, {
@@ -84,7 +86,7 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
     } catch {
       notify.error("Error revoking transfer");
     } finally {
-      setActing(false);
+      setRevoking(false);
     }
   };
 
@@ -123,7 +125,7 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
             Task Transferred to You
           </div>
           <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "12px" }}>
-            <strong>{pendingDelegation.delegated_by_name || "Someone"}</strong> has transferred this task to you. The task has been paused until you accept and acknowledge it.
+            <strong>{pendingDelegation.delegated_by_name || "Someone"}</strong> has transferred this task to you.
             {pendingDelegation.reason && (
               <span> Reason: <em>{pendingDelegation.reason}</em></span>
             )}
@@ -137,18 +139,18 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
             <button
               className="btn btn-primary"
               onClick={handleAccept}
-              disabled={acting}
-              style={{ fontSize: "13px", padding: "6px 16px" }}
+              disabled={accepting || rejecting}
+              style={{ fontSize: "13px", padding: "6px 16px", opacity: accepting ? 0.6 : 1, cursor: accepting ? "not-allowed" : "pointer" }}
             >
-              Accept
+              {accepting ? "Accepting..." : "Accept"}
             </button>
             <button
               className="btn btn-secondary"
               onClick={handleReject}
-              disabled={acting}
-              style={{ fontSize: "13px", padding: "6px 16px" }}
+              disabled={accepting || rejecting}
+              style={{ fontSize: "13px", padding: "6px 16px", opacity: rejecting ? 0.6 : 1, cursor: rejecting ? "not-allowed" : "pointer" }}
             >
-              Reject
+              {rejecting ? "Rejecting..." : "Reject"}
             </button>
           </div>
         </div>
@@ -159,7 +161,7 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
       <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
         {delegationChain.map((entry, idx) => {
           const isLast = idx === delegationChain.length - 1;
-          const canRevoke = entry.status === 'pending' || entry.status === 'accepted';
+          const canRevoke = entry.status === 'pending';
           const isDelegator = entry.delegated_by === currentUser?.id;
 
           return (
@@ -211,15 +213,16 @@ function DelegationChain({ task, delegationChain = [], approvalChain = [], onTas
                   <button
                     className="btn btn-sm"
                     onClick={() => handleRevoke(entry.id)}
-                    disabled={acting}
+                    disabled={revoking}
                     style={{
                       marginTop: "6px", fontSize: "11px", padding: "2px 8px",
                       color: "var(--color-error, #DC2626)", background: "none",
                       border: "1px solid var(--color-error, #DC2626)", borderRadius: "4px",
-                      cursor: "pointer",
+                      cursor: revoking ? "not-allowed" : "pointer",
+                      opacity: revoking ? 0.6 : 1,
                     }}
                   >
-                    Revoke
+                    {revoking ? "Revoking..." : "Revoke"}
                   </button>
                 )}
               </div>

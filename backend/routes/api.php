@@ -323,12 +323,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/tasks/{task}/access-credentials/{credential}', [TaskController::class, 'deleteAccessCredential']);
 
     // Task discussion / comments
-    Route::get('/tasks/{task}/comments', [TaskCommentController::class, 'index']); // List comments
-    Route::post('/tasks/{task}/comments', [TaskCommentController::class, 'store']); // Post a comment
-    Route::put('/tasks/{task}/comments/{comment}', [TaskCommentController::class, 'update']); // Edit a comment
-    Route::delete('/tasks/{task}/comments/{comment}', [TaskCommentController::class, 'destroy']); // Delete a comment
-    Route::get('/tasks/{task}/comments-count', [TaskCommentController::class, 'count']); // Get comment count
-    Route::get('/tasks/{task}/comments-participants', [TaskCommentController::class, 'participants']); // Get mentionable participants
+    Route::get('/tasks/{task}/comments', [TaskCommentController::class, 'index']); // List task comments
+    Route::post('/tasks/{task}/comments', [TaskCommentController::class, 'store']); // Post a task comment
+    Route::get('/tasks/{task}/comments-count', [TaskCommentController::class, 'count']); // Get task comment count
+    Route::get('/tasks/{task}/comments-participants', [TaskCommentController::class, 'participants']); // Get task mentionable participants
+
+    // Subtask (deliverable) discussion / comments
+    Route::get('/deliverables/{deliverable}/comments', [TaskCommentController::class, 'indexByDeliverable']); // List subtask comments
+    Route::post('/deliverables/{deliverable}/comments', [TaskCommentController::class, 'storeByDeliverable']); // Post a subtask comment
+    Route::get('/deliverables/{deliverable}/comments-count', [TaskCommentController::class, 'countByDeliverable']); // Get subtask comment count
+    Route::get('/deliverables/{deliverable}/comments-participants', [TaskCommentController::class, 'participantsByDeliverable']); // Get subtask mentionable participants
+
+    // Shared comment routes
+    Route::put('/comments/{comment}', [TaskCommentController::class, 'update']); // Edit a comment
+    Route::delete('/comments/{comment}', [TaskCommentController::class, 'destroy']); // Delete a comment
     Route::get('/comments/{comment}/file', [TaskCommentController::class, 'downloadFile']); // Download attachment
 
     // Personal user notes on tasks (private per user)

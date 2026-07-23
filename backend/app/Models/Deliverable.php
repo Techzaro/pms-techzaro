@@ -78,6 +78,7 @@ class Deliverable extends Model
         'delegation_chain',
         'approval_chain',
         'delegation_count',
+        'allow_transfer',
     ];
 
     /**
@@ -86,6 +87,14 @@ class Deliverable extends Model
     public function getBusinessIdAttribute($value)
     {
         if ($value) return $value;
+
+        // Auto-infer project_id from task if missing
+        if (empty($this->project_id) && !empty($this->task_id)) {
+            $task = $this->task ?? \App\Models\Task::find($this->task_id);
+            if ($task && $task->project_id) {
+                $this->project_id = $task->project_id;
+            }
+        }
 
         $service = app(BusinessIdService::class);
         if ($this->task_id && $this->task) {
@@ -99,6 +108,7 @@ class Deliverable extends Model
         $this->updateQuietly([
             'subtask_number' => (int) end($parts),
             'business_id' => $bizId,
+            'project_id' => $this->project_id,
         ]);
 
         return $bizId;
@@ -106,7 +116,26 @@ class Deliverable extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (Deliverable $deliverable) {
+            // Auto-infer project_id from parent task when not set
+            if (empty($deliverable->project_id) && !empty($deliverable->task_id)) {
+                $task = $deliverable->task ?? \App\Models\Task::find($deliverable->task_id);
+                if ($task && $task->project_id) {
+                    $deliverable->project_id = $task->project_id;
+                }
+            }
+        });
+
         static::created(function (Deliverable $deliverable) {
+            // Auto-infer project_id after save if still missing
+            if (empty($deliverable->project_id) && !empty($deliverable->task_id)) {
+                $task = $deliverable->task;
+                if ($task && $task->project_id) {
+                    $deliverable->project_id = $task->project_id;
+                    $deliverable->saveQuietly();
+                }
+            }
+
             if (empty($deliverable->business_id)) {
                 if ($deliverable->task_id && $deliverable->task) {
                     $deliverable->business_id = app(BusinessIdService::class)->generateSubtaskBusinessId($deliverable->task);
@@ -149,6 +178,7 @@ class Deliverable extends Model
         'total_pause_seconds' => 'integer',
         'resume_count' => 'integer',
         'assigner_paused' => 'boolean',
+        'allow_transfer' => 'boolean',
         'reopen_count' => 'integer',
         'submission_count' => 'integer',
         'delegation_chain' => 'array',
@@ -351,6 +381,12 @@ class Deliverable extends Model
     public function userNotes(): HasMany
     {
         return $this->hasMany(DeliverableUserNote::class);
+    }
+
+    /** Discussion comments on this deliverable. */
+    public function comments(): HasMany
+    {
+        return $this->hasMany(TaskComment::class)->latest();
     }
 
     /** Start the work timer. */

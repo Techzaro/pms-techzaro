@@ -205,6 +205,7 @@ function Projects() {
       const res = await fetch(`${API_URL}/projects/${project.id}`, {
         method: "DELETE",
         headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+        _notifHandled: true,
       });
       if (res.ok) {
         setProjects((prev) => prev.filter((p) => p.id !== project.id));
@@ -231,17 +232,13 @@ function Projects() {
   }, [searchParams]);
 
   const selectStatusFilter = (filter) => {
-    if (filter === statusFilter && filter === "") {
-      setShowAll(!showAll);
+    setStatusFilter(filter);
+    setShowAll(false);
+    setPage(1);
+    if (filter === "active") {
+      setSearchParams({ filter: "active" });
     } else {
-      setStatusFilter(filter);
-      setShowAll(false);
-      setPage(1);
-      if (filter === "active") {
-        setSearchParams({ filter: "active" });
-      } else {
-        setSearchParams({});
-      }
+      setSearchParams({});
     }
   };
 
@@ -325,21 +322,25 @@ function Projects() {
       const updatedMatch = project.updatedBy?.name?.toLowerCase().includes(q);
       if (!titleMatch && !creatorMatch && !updatedMatch) return false;
     }
-    if (statusFilter === "due_today") {
-      if (!project.active_deadline) return false;
-      const today = new Date();
-      const end = new Date(project.active_deadline);
-      return end.getFullYear() === today.getFullYear() &&
-        end.getMonth() === today.getMonth() &&
-        end.getDate() === today.getDate();
-    }
     if (statusFilter) {
       if (statusFilter === "active") return true;
-      if (statusFilter === "pending" && project.status !== "pending" && project.status !== "Planned" && project.status !== "in_progress" && project.status !== "Planning" && project.status !== "In-progress") return false;
-      if (statusFilter === "submitted" && project.status !== "submitted") return false;
-      if (statusFilter === "reopened" && project.status !== "reopened") return false;
-      if (statusFilter === "approved" && project.status !== "approved" && project.status !== "Completed") return false;
-      if (statusFilter === "rejected" && project.status !== "rejected" && project.status !== "Pause") return false;
+      if (statusFilter === "In-progress") {
+        const s = (project.status || "").toLowerCase();
+        return s === "in-progress" || s === "in_progress" || s === "pending" || s === "planned";
+      }
+      if (statusFilter === "Planning") {
+        const s = (project.status || "").toLowerCase();
+        return s === "planning" || s === "planned";
+      }
+      if (statusFilter === "Pause") {
+        const s = (project.status || "").toLowerCase();
+        return s === "pause" || s === "paused" || s === "rejected";
+      }
+      if (statusFilter === "Completed") {
+        const s = (project.status || "").toLowerCase();
+        return s === "completed" || s === "approved";
+      }
+      if (project.status !== statusFilter) return false;
     }
     return true;
   }), [orderedProjects, searchQuery, statusFilter]);
@@ -347,11 +348,10 @@ function Projects() {
   const allCount = useMemo(() => orderedProjects.length, [orderedProjects]);
   const dueTodayCount = useMemo(() => orderedProjects.filter((p) => { if (!p.active_deadline) return false; const d = new Date(p.active_deadline); const t = new Date(); return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate(); }).length, [orderedProjects]);
   const activeCount = useMemo(() => orderedProjects.filter((p) => p.status === "In-progress" || p.status === "in_progress" || p.status === "Planning" || p.status === "planned").length, [orderedProjects]);
-  const pendingCount = useMemo(() => orderedProjects.filter((p) => p.status === "pending" || p.status === "submitted").length, [orderedProjects]);
-  const submittedCount = useMemo(() => orderedProjects.filter((p) => p.status === "submitted").length, [orderedProjects]);
-  const reopenedCount = useMemo(() => orderedProjects.filter((p) => p.status === "reopened").length, [orderedProjects]);
-  const approvedCount = useMemo(() => orderedProjects.filter((p) => p.status === "Completed" || p.status === "approved").length, [orderedProjects]);
-  const rejectedCount = useMemo(() => orderedProjects.filter((p) => p.status === "rejected" || p.status === "Pause").length, [orderedProjects]);
+  const inProgressCount = useMemo(() => orderedProjects.filter((p) => { const s = (p.status || "").toLowerCase(); return s === "in-progress" || s === "in_progress" || s === "pending" || s === "planned"; }).length, [orderedProjects]);
+  const planningCount = useMemo(() => orderedProjects.filter((p) => { const s = (p.status || "").toLowerCase(); return s === "planning" || s === "planned"; }).length, [orderedProjects]);
+  const pauseCount = useMemo(() => orderedProjects.filter((p) => { const s = (p.status || "").toLowerCase(); return s === "pause" || s === "paused" || s === "rejected"; }).length, [orderedProjects]);
+  const completedCount = useMemo(() => orderedProjects.filter((p) => { const s = (p.status || "").toLowerCase(); return s === "completed" || s === "approved"; }).length, [orderedProjects]);
 
   const totalPages = showAll ? 1 : Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
   const paginatedProjects = showAll ? filteredProjects : filteredProjects.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
@@ -422,22 +422,19 @@ function Projects() {
             <GoDotFill color="#EF4444" /> Due Today ({dueTodayCount})
           </p>
           <p className={`Active ${statusFilter === "active" ? "active" : ""}`} onClick={() => selectStatusFilter("active")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Active Projects ({activeCount})
+            <GoDotFill color="#22C55E" /> Active Projects ({activeCount})
           </p>
-          <p className={`Pending ${statusFilter === "pending" ? "active" : ""}`} onClick={() => selectStatusFilter("pending")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Pending ({pendingCount})
+          <p className={`InProgress ${statusFilter === "In-progress" ? "active" : ""}`} onClick={() => selectStatusFilter("In-progress")} style={{ cursor: "pointer" }}>
+            <GoDotFill color="#3B82F6" /> In Progress ({inProgressCount})
           </p>
-          <p className={`Submitted ${statusFilter === "submitted" ? "active" : ""}`} onClick={() => selectStatusFilter("submitted")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Submitted ({submittedCount})
+          <p className={`Planning ${statusFilter === "Planning" ? "active" : ""}`} onClick={() => selectStatusFilter("Planning")} style={{ cursor: "pointer" }}>
+            <GoDotFill color="#8B5CF6" /> Planning ({planningCount})
           </p>
-          <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Reopened ({reopenedCount})
+          <p className={`Paused ${statusFilter === "Pause" ? "active" : ""}`} onClick={() => selectStatusFilter("Pause")} style={{ cursor: "pointer" }}>
+            <GoDotFill color="#F59E0B" /> Pause ({pauseCount})
           </p>
-          <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Approved ({approvedCount})
-          </p>
-          <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
-            <GoDotFill /> Declined ({rejectedCount})
+          <p className={`Completed ${statusFilter === "Completed" ? "active" : ""}`} onClick={() => selectStatusFilter("Completed")} style={{ cursor: "pointer" }}>
+            <GoDotFill color="#22C55E" /> Completed ({completedCount})
           </p>
           <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
         </div>

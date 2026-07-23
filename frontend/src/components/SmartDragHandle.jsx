@@ -4,6 +4,7 @@ import { GripVertical } from 'lucide-react';
 /**
  * SmartDragHandle - Shows business_id by default, swaps to drag handle on hover.
  * Falls back to "ID-{id}" if business_id is null/empty.
+ * Always has data-dnd-handle so HandleSensor can activate drag.
  */
 export default function SmartDragHandle({ listeners, attributes, businessId, id, color = '#2563eb' }) {
   const [hovered, setHovered] = useState(false);
@@ -13,6 +14,7 @@ export default function SmartDragHandle({ listeners, attributes, businessId, id,
 
   return (
     <span
+      data-dnd-handle="true"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{

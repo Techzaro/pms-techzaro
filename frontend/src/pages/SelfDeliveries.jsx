@@ -15,7 +15,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { Pause, Play, Lock } from "lucide-react";
+import { ArrowUpRight, Pause, Play, Lock } from "lucide-react";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
@@ -100,7 +100,6 @@ function SelfDeliveries() {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
-    if (statusFilter) params.append("status", statusFilter);
     if (timeFilter) params.append("time_filter", timeFilter);
 
     fetch(`${API_URL}/self-deliverables?${params.toString()}`, {
@@ -118,7 +117,7 @@ function SelfDeliveries() {
 
   useEffect(() => {
     fetchSubtasks();
-  }, [debouncedSearch, statusFilter, timeFilter]);
+  }, [debouncedSearch, timeFilter]);
 
   useAutoRefresh(fetchSubtasks, { events: ['deliverable:updated', 'deliverable:created', 'deliverable:deleted', 'data:changed'] });
 
@@ -261,6 +260,7 @@ function SelfDeliveries() {
   const pausedCount = displayItems.filter((i) => i.status === "paused").length;
   const submittedCount = displayItems.filter((i) => i.status === "submitted").length;
   const reopenedCount = displayItems.filter((i) => i.status === "reopened").length;
+  const transferredCount = displayItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length;
   const approvedCount = displayItems.filter((i) => i.status === "approved").length;
   const rejectedCount = displayItems.filter((i) => i.status === "rejected").length;
   const reworkRequiredCount = displayItems.filter((i) => i.status === "rework_required").length;
@@ -278,9 +278,14 @@ function SelfDeliveries() {
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
+        if (statusFilter === "transferred") {
+          return item.delegation_chain && item.delegation_chain.length > 0;
+        }
         return item.status === statusFilter;
       })
     : searchFilteredItems;
+
+  const subtaskIds = filteredItems.map((item) => item.id);
 
   const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
   const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
@@ -333,6 +338,9 @@ function SelfDeliveries() {
           <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Reopened ({reopenedCount})
           </p>
+          <p className={`Transferred ${statusFilter === "transferred" ? "active" : ""}`} onClick={() => selectStatusFilter("transferred")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Transferred ({transferredCount})
+          </p>
           <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Approved ({approvedCount})
           </p>
@@ -377,7 +385,7 @@ function SelfDeliveries() {
                         {getInitials(item.title)}
                       </div>
                       <div>
-                        <div className="user-name">{item.title}</div>
+                        <div className="user-name">{item.delegation_chain && item.delegation_chain.length > 0 && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />} {item.title}</div>
                       </div>
                     </div>
                     <div>
@@ -412,7 +420,7 @@ function SelfDeliveries() {
                           <IoEyeOutline size={20} />
                         </button>
                       }
-                      onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "self-deliveries" } })}
+                      onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "self-deliveries", subtaskIds } })}
                     >
                       <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                       {item.status === "in_progress" && !item.assigner_paused && (

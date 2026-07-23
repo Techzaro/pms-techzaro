@@ -14,7 +14,7 @@ import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { CheckCircle2, Lock, Pause, Play, StickyNote, Users } from "lucide-react";
+import { CheckCircle2, Lock, Pause, Play, StickyNote, Users, ArrowUpRight } from "lucide-react";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { publish } from "../utils/eventBus";
@@ -104,7 +104,6 @@ function Tasks() {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
-    if (statusFilter) params.append("status", statusFilter);
 
     fetch(`${API_URL}/my-tasks?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -121,7 +120,7 @@ function Tasks() {
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch, statusFilter]);
+  }, [debouncedSearch]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -318,6 +317,7 @@ function Tasks() {
   const pausedCount = baseItems.filter((i) => i.status === "paused").length;
   const submittedCount = baseItems.filter((i) => i.status === "submitted").length;
   const reopenedCount = baseItems.filter((i) => i.status === "reopened").length;
+  const transferredCount = baseItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length;
   const approvedCount = baseItems.filter((i) => i.status === "approved").length;
   const rejectedCount = baseItems.filter((i) => i.status === "rejected").length;
   const searchFilteredItems = debouncedSearch
@@ -333,6 +333,9 @@ function Tasks() {
     ? searchFilteredItems.filter((item) => {
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
+        }
+        if (statusFilter === "transferred") {
+          return item.delegation_chain && item.delegation_chain.length > 0;
         }
         return item.status === statusFilter;
       })
@@ -400,6 +403,9 @@ function Tasks() {
         <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Reopened ({reopenedCount})
         </p>
+        <p className={`Transferred ${statusFilter === "transferred" ? "active" : ""}`} onClick={() => selectStatusFilter("transferred")} style={{ cursor: "pointer" }}>
+          <GoDotFill /> Transferred ({transferredCount})
+        </p>
         <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Approved ({approvedCount})
         </p>
@@ -448,22 +454,26 @@ function Tasks() {
             {(item, idx, dndProps) => {
               const colors = getRandomColors(item.id);
 
+              const hasChain = item.delegation_chain && item.delegation_chain.length > 0;
               const assigner = item.assigner;
+              const displayName = item.transferred_by_name || assigner?.name || "System";
+              const displayRole = item.transferred_by_name ? "Transferred" : (assigner?.role || "");
               return (
                 <div className="taskby-row" key={item.sortableId}>
                   <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} />
                   <div className="col-assigned-to">
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div className="avatar" style={{ background: colors.bg, color: colors.text }}>{getInitials(assigner?.name)}</div>
+                      <div className="avatar" style={{ background: colors.bg, color: colors.text }}>{getInitials(displayName)}</div>
                       <div style={{ minWidth: 0 }}>
-                        <div className="user-name">{assigner?.name || "System"}</div>
-                        <div className="user-role">{assigner?.role || ""}</div>
+                        <div className="user-name">{displayName}</div>
+                        <div className="user-role">{displayRole}</div>
                       </div>
                     </div>
                   </div>
                   
                   <div className="col-task-name">
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      {hasChain && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />}
                       <div className="task-title">{item.title}</div>
                       <TaskNotesPopover taskId={item.id} itemType="task" />
                     </div>
@@ -536,9 +546,12 @@ function Tasks() {
                     >
                       <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                       {(() => {
-                        // Transferors: hide all action buttons (view-only)
                         if (item.is_transferor) {
-                          return null;
+                          return (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#EFF6FF", color: "#1D4ED8", fontSize: "11px", fontWeight: 600 }}>
+                              Transferred
+                            </span>
+                          );
                         }
                         const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
                         if (item.assigner_paused) {
@@ -587,7 +600,7 @@ function Tasks() {
                         }
                         return null;
                       })()}
-                      {!["approved", "rejected", "pending"].includes(item.status) && !item.is_transferor && (
+                      {!["approved", "rejected", "pending", "submitted"].includes(item.status) && !item.is_transferor && (
                         <button
                           className="action-icon-btn"
                           title="Transfer Task"
@@ -631,7 +644,7 @@ function Tasks() {
           isOpen={transferDialog.open}
           onClose={() => setTransferDialog({ open: false, task: null })}
           task={transferDialog.task}
-          onTransferSuccess={() => { setTransferDialog({ open: false, task: null }); fetchTasks(); }}
+          onTransferSuccess={() => { setTransferDialog({ open: false, task: null }); fetchTasks(); showSuccessMessage("Task", "transferred"); }}
         />
       )}
 

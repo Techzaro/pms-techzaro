@@ -98,22 +98,23 @@
 
 .task-progress {
   display: flex;
-  gap: 10px;
+  gap: 4px;
   margin-top: 8px;
   margin-bottom: 24px;
   flex-wrap: wrap;
 }
 
 .task-progress p {
+  margin: 0;
   border: 1px solid #64748B;
-  padding: 8px 14px;
+  padding: 3px 8px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  border-radius: 12px;
+  gap: 2px;
+  border-radius: 5px;
   cursor: pointer;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: 11px;
   color: var(--text-dark);
   background: transparent;
   transition: 0.15s ease;
@@ -146,6 +147,7 @@
 .task-progress .Approved { color: #22C55E; }
 .task-progress .Failed { color: #EF4444; }
 .task-progress .Rejected { color: #EF4444; }
+.task-progress .Transferred { color: #6366F1; }
 .task-progress .Aban { color: var(--text-secondary); }
 
 .delivery-serach-bar {
@@ -722,11 +724,11 @@
     min-width: 120px;
   }
   .task-progress {
-    gap: 6px;
+    gap: 4px;
   }
   .task-progress p {
-    padding: 6px 10px;
-    font-size: 12px;
+    padding: 3px 8px;
+    font-size: 11px;
   }
   .delivery-serach-bar {
     max-width: 100%;

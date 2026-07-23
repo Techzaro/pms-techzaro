@@ -110,14 +110,14 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(body),
+          _notifHandled: true,
         });
 
         const data = await res.json();
         if (res.ok && data.success) {
-          notify.success(data.message || "Transferred successfully");
           setIsDirty(false);
-          onTransferSuccess?.(data.task || data.deliverable);
-          handleClose();
+          onTransferSuccess?.(data.task || data.deliverable, { isTransfer: true });
+          onClose();
         } else {
           notify.error(data.message || "Failed to transfer task");
         }

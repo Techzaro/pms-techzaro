@@ -5,7 +5,7 @@
  * subtasks, attachments (files & links), client info, and priority.
  */
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
@@ -110,9 +110,17 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null }) => {
   const [editFileForm, setEditFileForm] = useState({ title: "" });
   const [editFileNewFile, setEditFileNewFile] = useState(null);
 
+  const autoSaveData = useMemo(() => ({
+    ...form,
+    categoriesList,
+    milestones,
+    pendingFiles: pendingFiles.map(f => f.name || f.customName),
+    links,
+  }), [form, categoriesList, milestones, pendingFiles, links]);
+
   const { lastSaved, isSaving, draftId: autoSaveDraftId } = useAutoSave({
     draftId,
-    formData: form,
+    formData: autoSaveData,
     moduleType: "project",
     enabled: isDirty,
   });
@@ -557,6 +565,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null }) => {
         showSuccessMessage("Project", "created");
         publish('project:created', data.project || data);
         publish('data:changed', { type: 'project', action: 'created' });
+        if (restoreDraftId) draftService.delete(restoreDraftId).catch(() => {});
         onClose(true);
       } catch (err) {
         notify.error(err.message);

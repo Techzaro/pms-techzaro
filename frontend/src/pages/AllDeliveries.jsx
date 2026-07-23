@@ -19,7 +19,7 @@ import Breadcrumb from "../components/Breadcrumb";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import { StickyNote } from "lucide-react";
+import { ArrowUpRight, StickyNote } from "lucide-react";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
@@ -95,7 +95,6 @@ function AllDeliveries() {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
-    if (statusFilter) params.append("status", statusFilter);
     if (timeFilter) params.append("time_filter", timeFilter);
 
     fetch(`${API_URL}/all-deliverables?${params.toString()}`, {
@@ -113,7 +112,7 @@ function AllDeliveries() {
 
   useEffect(() => {
     fetchDeliverables();
-  }, [debouncedSearch, statusFilter, timeFilter]);
+  }, [debouncedSearch, timeFilter]);
 
   useAutoRefresh(fetchDeliverables, {
     events: ['deliverable:created', 'deliverable:updated', 'deliverable:deleted', 'data:changed'],
@@ -185,6 +184,7 @@ function AllDeliveries() {
   const pausedCount = useMemo(() => baseItems.filter((i) => i.status === "paused").length, [baseItems]);
   const submittedCount = useMemo(() => baseItems.filter((i) => i.status === "submitted").length, [baseItems]);
   const reopenedCount = useMemo(() => baseItems.filter((i) => i.status === "reopened").length, [baseItems]);
+  const transferredCount = useMemo(() => baseItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length, [baseItems]);
   const approvedCount = useMemo(() => baseItems.filter((i) => i.status === "approved").length, [baseItems]);
   const rejectedCount = useMemo(() => baseItems.filter((i) => i.status === "rejected").length, [baseItems]);
 
@@ -201,6 +201,9 @@ function AllDeliveries() {
     ? searchFilteredItems.filter((item) => {
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
+        }
+        if (statusFilter === "transferred") {
+          return item.delegation_chain && item.delegation_chain.length > 0;
         }
         return item.status === statusFilter;
       })
@@ -254,6 +257,9 @@ function AllDeliveries() {
           </p>
           <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Reopened ({reopenedCount})
+          </p>
+          <p className={`Transferred ${statusFilter === "transferred" ? "active" : ""}`} onClick={() => selectStatusFilter("transferred")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Transferred ({transferredCount})
           </p>
           <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Approved ({approvedCount})
@@ -342,6 +348,7 @@ function AllDeliveries() {
 
                     {/* Sub-Task Name */}
                     <div className="col-subtask-name">
+                      {item.delegation_chain && item.delegation_chain.length > 0 && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />}
                       <div className="task-title">{item.title}</div>
                     </div>
 
@@ -404,7 +411,7 @@ function AllDeliveries() {
                             <IoEyeOutline size={20} />
                           </button>
                         }
-                        onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { deliverableIds: deliverableIdList, from: 'all-deliverables', readOnly: true } })}
+                        onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { subtaskIds: deliverableIdList, from: 'all-deliverables', readOnly: true } })}
                       >
                         <button
                           className="action-icon-btn action-note"

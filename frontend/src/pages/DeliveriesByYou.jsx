@@ -14,7 +14,7 @@ import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import { StickyNote, Pause, Play, Pencil, Trash2, Lock, CheckCircle2, XCircle } from "lucide-react";
+import { ArrowUpRight, StickyNote, Pause, Play, Pencil, Trash2, Lock, CheckCircle2, XCircle } from "lucide-react";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import { publish } from "../utils/eventBus";
@@ -96,7 +96,6 @@ function DeliveriesByYou() {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
-    if (statusFilter) params.append("status", statusFilter);
     if (timeFilter) params.append("time_filter", timeFilter);
 
     fetch(`${API_URL}/deliverables/assigned-by-me?${params.toString()}`, {
@@ -114,7 +113,7 @@ function DeliveriesByYou() {
 
   useEffect(() => {
     fetchSubtasks();
-  }, [debouncedSearch, statusFilter, timeFilter]);
+  }, [debouncedSearch, timeFilter]);
 
   useAutoRefresh(fetchSubtasks, { events: ['deliverable:updated', 'deliverable:created', 'deliverable:deleted', 'data:changed'] });
 
@@ -135,7 +134,7 @@ function DeliveriesByYou() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.deliverable) {
-          navigate(rolePath(`deliveries/deliverable-details/${data.deliverable.id}`), { state: { from: "deliveries-by-you" } });
+          navigate(rolePath(`deliveries/deliverable-details/${data.deliverable.id}`), { state: { from: "deliveries-by-you", subtaskIds } });
         }
       })
       .catch(() => { });
@@ -193,6 +192,7 @@ function DeliveriesByYou() {
       const res = await fetch(`${API_URL}/deliverables/${itemId}`, {
         method: "DELETE",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        _notifHandled: true,
       });
       if (res.ok) {
         setSubtasks((prev) => prev.filter((d) => d.id !== itemId));
@@ -369,6 +369,7 @@ function DeliveriesByYou() {
   const pausedCount = displayItems.filter((i) => i.status === "paused").length;
   const submittedCount = displayItems.filter((i) => i.status === "submitted").length;
   const reopenedCount = displayItems.filter((i) => i.status === "reopened").length;
+  const transferredCount = displayItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length;
   const approvedCount = displayItems.filter((i) => i.status === "approved").length;
   const rejectedCount = displayItems.filter((i) => i.status === "rejected").length;
 
@@ -385,9 +386,14 @@ function DeliveriesByYou() {
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
+        if (statusFilter === "transferred") {
+          return item.delegation_chain && item.delegation_chain.length > 0;
+        }
         return item.status === statusFilter;
       })
     : searchFilteredItems;
+
+  const subtaskIds = filteredItems.map((item) => item.id);
 
   const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
   const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
@@ -440,6 +446,9 @@ function DeliveriesByYou() {
           <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Reopened ({reopenedCount})
           </p>
+          <p className={`Transferred ${statusFilter === "transferred" ? "active" : ""}`} onClick={() => selectStatusFilter("transferred")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Transferred ({transferredCount})
+          </p>
           <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Approved ({approvedCount})
           </p>
@@ -475,17 +484,24 @@ function DeliveriesByYou() {
               <SortableTableWrapper items={paginatedItems} onReorder={handleSubtaskReorder} as="div" handleOnly>
               {(item, index, dndProps) => {
                 const colors = getRandomColors(item.id);
+                const isDirectToOa = item.has_direct_to_oa_delegation && item.current_owner_name && item.current_owner_id;
+                const primaryAssignee = isDirectToOa ? { name: item.current_owner_name } : item.assignee;
                 return (
                   <div className="deliveries-table-row" key={`subtask-${item.id}-${index}`}>
                     <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} color="#16a34a" />
                     <div>
                       <div className="user-box">
                         <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                          {getInitials(item.assignee?.name)}
+                          {getInitials(primaryAssignee?.name)}
                         </div>
                         <div>
-                          <div className="user-name">{item.assignee?.name || "Unassigned"}</div>
-                          <div className="user-role">{item.assignee?.role ? item.assignee.role.replace("_", " ") : ""}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <div className="user-name">{primaryAssignee?.name || "Unassigned"}</div>
+                            {item.is_transferee && (
+                              <span style={{ fontSize: "10px", fontWeight: 600, color: "#6B7280", background: "#F3F4F6", padding: "1px 6px", borderRadius: "4px", border: "1px solid #D1D5DB" }}>Transferee</span>
+                            )}
+                          </div>
+                          <div className="user-role">{primaryAssignee?.role ? primaryAssignee.role.replace("_", " ") : ""}</div>
                         </div>
                       </div>
                     </div>
@@ -495,7 +511,7 @@ function DeliveriesByYou() {
                           {getInitials(item.title)}
                         </div>
                         <div>
-                          <div className="user-name">{item.title}</div>
+                          <div className="user-name">{item.delegation_chain && item.delegation_chain.length > 0 && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0 }} />} {item.title}</div>
                         </div>
                       </div>
                     </div>
@@ -532,7 +548,7 @@ function DeliveriesByYou() {
                             <IoEyeOutline size={20} />
                           </button>
                         }
-                        onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "deliveries-by-you" } })}
+                        onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "deliveries-by-you", subtaskIds } })}
                       >
                         <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
                         {item.status?.toLowerCase() !== "approved" && (

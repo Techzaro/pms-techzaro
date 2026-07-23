@@ -60,10 +60,6 @@ export function useUnifiedSummary() {
 
     // Listen for calendar sync events from other components
     const handleSync = () => { fetchSummary(); };
-    // Refetch when tab becomes visible again
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") fetchSummary();
-    };
 
     // Check for date changes every minute
     let lastDate = new Date().toDateString();
@@ -76,11 +72,9 @@ export function useUnifiedSummary() {
     }, 60000);
 
     window.addEventListener("calendar-sync", handleSync);
-    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
       window.removeEventListener("calendar-sync", handleSync);
-      document.removeEventListener("visibilitychange", handleVisibility);
       clearInterval(interval);
     };
   }, [fetchSummary]);

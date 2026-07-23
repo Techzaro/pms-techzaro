@@ -11,7 +11,7 @@ const REQUIREMENTS = [
   { label: "One uppercase letter", test: (v) => /[A-Z]/.test(v) },
   { label: "One lowercase letter", test: (v) => /[a-z]/.test(v) },
   { label: "One number", test: (v) => /[0-9]/.test(v) },
-  { label: "One special character (@#$%*?&#)", test: (v) => /[@#$%*?&#]/.test(v) },
+  { label: "One special character (@$!%*?&#)", test: (v) => /[@$!%*?&#]/.test(v) },
 ];
 
 export default function ChangePasswordModal({ onClose }) {
@@ -47,7 +47,7 @@ export default function ChangePasswordModal({ onClose }) {
       const res = await fetch(`${API_URL}/user/change-password`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ current_password: currentPassword, password: newPassword }),
+        body: JSON.stringify({ old_password: currentPassword, new_password: newPassword }),
         _notifHandled: true,
       });
       const data = await res.json();

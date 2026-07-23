@@ -18,7 +18,7 @@ import { Link, useSearchParams, useLocation, useNavigate } from "react-router-do
 import { GoDotFill } from "react-icons/go";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { StickyNote, Pause, Play, CheckCircle2, Lock, Users } from "lucide-react";
+import { StickyNote, Pause, Play, CheckCircle2, Lock, Users, ArrowUpRight } from "lucide-react";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import API_URL from "../config/api";
 import { publish } from "../utils/eventBus";
@@ -102,7 +102,6 @@ function Deliveries() {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
-    if (statusFilter) params.append("status", statusFilter);
 
     fetch(`${API_URL}/deliverables?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -119,7 +118,7 @@ function Deliveries() {
 
   useEffect(() => {
     fetchSubtasks();
-  }, [debouncedSearch, statusFilter, timeFilter]);
+  }, [debouncedSearch, timeFilter]);
 
   useAutoRefresh(fetchSubtasks, { events: ['deliverable:updated', 'deliverable:created', 'deliverable:deleted', 'data:changed'] });
 
@@ -156,7 +155,7 @@ function Deliveries() {
           if (d.status === "pending" || d.status === "rejected" || d.status === "reopened") {
             setSubmitModal({ open: true, subtask: d });
           } else {
-            navigate(rolePath(`deliveries/deliverable-details/${d.id}`), { state: { from: "deliveries" } });
+            navigate(rolePath(`deliveries/deliverable-details/${d.id}`), { state: { from: "deliveries", subtaskIds } });
           }
         }
       })
@@ -341,6 +340,7 @@ function Deliveries() {
   const pausedCount = displayItems.filter((i) => i.status === "paused").length;
   const submittedCount = displayItems.filter((i) => i.status === "submitted").length;
   const reopenedCount = displayItems.filter((i) => i.status === "reopened").length;
+  const transferredCount = displayItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length;
   const approvedCount = displayItems.filter((i) => i.status === "approved").length;
   const rejectedCount = displayItems.filter((i) => i.status === "rejected").length;
 
@@ -357,9 +357,14 @@ function Deliveries() {
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
+        if (statusFilter === "transferred") {
+          return item.delegation_chain && item.delegation_chain.length > 0;
+        }
         return item.status === statusFilter;
       })
     : searchFilteredItems;
+
+  const subtaskIds = filteredItems.map((item) => item.id);
 
   const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
   const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
@@ -407,6 +412,9 @@ function Deliveries() {
           <p className={`Reopened ${statusFilter === "reopened" ? "active" : ""}`} onClick={() => selectStatusFilter("reopened")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Reopened ({reopenedCount})
           </p>
+          <p className={`Transferred ${statusFilter === "transferred" ? "active" : ""}`} onClick={() => selectStatusFilter("transferred")} style={{ cursor: "pointer" }}>
+            <GoDotFill /> Transferred ({transferredCount})
+          </p>
           <p className={`Approved ${statusFilter === "approved" ? "active" : ""}`} onClick={() => selectStatusFilter("approved")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Approved ({approvedCount})
           </p>
@@ -440,19 +448,23 @@ function Deliveries() {
             <SortableTableWrapper items={paginatedItems} onReorder={handleSubtaskReorder} as="div" handleOnly>
               {(item, idx, dndProps) => {
                 const colors = getRandomColors(item.id);
+                const hasChain = item.delegation_chain && item.delegation_chain.length > 0;
+                const displayName = item.transferred_by_name || item.creator?.name || "-";
+                const displayRole = item.transferred_by_name ? "Transferred" : (item.creator?.role ? item.creator.role.replace("_", " ") : "");
                 return (
                   <div className="deliveries-table-row" key={item.id}>
                     <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={item.id} businessId={item.business_id} color="#16a34a" />
                     <div className="user-box">
                       <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
-                        {getInitials(item.creator?.name)}
+                        {getInitials(displayName)}
                       </div>
                       <div>
-                        <div className="user-name">{item.creator?.name || "-"}</div>
-                        <div className="user-role">{item.creator?.role ? item.creator.role.replace("_", " ") : ""}</div>
+                        <div className="user-name">{displayName}</div>
+                        <div className="user-role">{displayRole}</div>
                       </div>
                     </div>
                     <div className="user-box">
+                      {hasChain && <ArrowUpRight size={14} style={{ color: "#6B7280", flexShrink: 0, marginRight: 4 }} />}
                       <div className="avatar" style={{ background: colors.bg, color: colors.text }}>
                         {getInitials(item.title)}
                       </div>
@@ -492,11 +504,14 @@ function Deliveries() {
                           <IoEyeOutline size={20} />
                         </button>
                       }
-                      onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "deliveries" } })}
+                      onTriggerClick={() => navigate(rolePath(`deliveries/deliverable-details/${item.id}`), { state: { from: "deliveries", subtaskIds } })}
                     >
-                      {/* Transferors: hide all action buttons (view-only) */}
                       {(() => {
-                        if (item.is_transferor) return null;
+                        if (item.is_transferor) return (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#EFF6FF", color: "#1D4ED8", fontSize: "11px", fontWeight: 600 }}>
+                            Transferred
+                          </span>
+                        );
                         return (
                       <>
                       <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
@@ -532,7 +547,7 @@ function Deliveries() {
                           <LuSend size={16} />
                         </button>
                       )}
-                      {!["approved", "rejected", "pending"].includes(item.status) && !item.is_transferor && (
+                      {!["approved", "rejected", "pending", "submitted"].includes(item.status) && !item.is_transferor && (
                         <button
                           className="action-icon-btn"
                           title="Transfer Subtask"
@@ -588,7 +603,7 @@ function Deliveries() {
           isOpen={transferDialog.open}
           onClose={() => setTransferDialog({ open: false, subtask: null })}
           task={transferDialog.subtask}
-          onTransferSuccess={() => { setTransferDialog({ open: false, subtask: null }); fetchSubtasks(); }}
+          onTransferSuccess={() => { setTransferDialog({ open: false, subtask: null }); fetchSubtasks(); showSuccessMessage("Subtask", "transferred"); }}
         />
       )}
     </DashboardLayout>

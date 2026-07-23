@@ -626,9 +626,13 @@ function ProjectDetails() {
         },
         _notifHandled: true,
       });
-      if (!res.ok) throw new Error("Failed to delete task");
-      await loadProject();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        notify.error(data.message || "Failed to delete task.");
+        return;
+      }
       showSuccessMessage("Task", "deleted");
+      loadProject().catch(() => {});
     } catch (err) {
       console.error(err);
       notify.error("Failed to delete task.");
