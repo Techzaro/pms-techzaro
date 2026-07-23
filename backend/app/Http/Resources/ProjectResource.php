@@ -31,6 +31,7 @@ class ProjectResource extends JsonResource
             'status' => $this->status,
             'priority' => $this->priority,
             'client_name' => $this->client_name,
+            'guest_ids' => $this->guest_ids ?? [],
             'category' => $this->category,
             'budget' => $this->budget,
             'start_date' => $this->start_date?->format('Y-m-d\TH:i:s'),

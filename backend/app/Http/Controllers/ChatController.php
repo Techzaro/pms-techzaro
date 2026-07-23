@@ -44,7 +44,7 @@ class ChatController extends Controller
         $user = $request->user();
 
         if ($user->role === 'guest') {
-            $guestProjectIds = Project::where('client_name', $user->name)->pluck('id');
+            $guestProjectIds = Project::whereJsonContains('guest_ids', $user->id)->pluck('id');
 
             $projects = Project::select('id', 'title')
                 ->whereIn('id', $guestProjectIds)
@@ -127,7 +127,7 @@ class ChatController extends Controller
         // Verify guest can only create conversations for their own projects
         if ($user->role === 'guest' && !empty($validated['project_id'])) {
             $project = Project::find($validated['project_id']);
-            if (!$project || $project->client_name !== $user->name) {
+            if (!$project || !$project->isAccessibleByGuest($user)) {
                 return response()->json(['success' => false, 'message' => 'You can only create conversations for your own projects.'], 403);
             }
         }

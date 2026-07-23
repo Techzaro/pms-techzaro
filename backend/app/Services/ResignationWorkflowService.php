@@ -180,7 +180,7 @@ class ResignationWorkflowService
 
     private function getActiveProjects(User $user): array
     {
-        $projects = Project::whereRaw("JSON_CONTAINS(assigned_users, ?)", [$user->id])
+        $projects = Project::whereRaw("JSON_CONTAINS(assigned_users, ?)", [json_encode($user->id)])
             ->whereNotIn('status', ['Completed', 'Cancelled', 'Archived'])
             ->with('creator:id,name')
             ->get();

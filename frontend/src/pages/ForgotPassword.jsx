@@ -47,6 +47,16 @@ function ForgotPassword() {
         return;
       }
 
+      if (res.status === 404 && data.code === "EMAIL_NOT_FOUND") {
+        setFieldError(data.message || "This email is not registered in our system. Please contact our support team.");
+        return;
+      }
+
+      if (res.status === 403 && data.code === "ACCOUNT_INACTIVE") {
+        setFieldError(data.message || "This account has been deactivated. Please contact our support team.");
+        return;
+      }
+
       if (!res.ok) {
         setFieldError(data.message || "Something went wrong. Please try again.");
         return;

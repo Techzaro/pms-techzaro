@@ -168,6 +168,15 @@ Route::middleware('auth:sanctum')->group(function () {
     // Get users for team management (all authenticated users)
     Route::get('/team-users', [UserController::class, 'getTeamUsers']);
 
+    // Get all guest users (for project creation dropdown)
+    Route::get('/guest-users', function () {
+        $guests = \App\Models\User::select('id', 'name', 'email', 'role', 'department', 'active')
+            ->where('role', 'guest')
+            ->orderBy('name')
+            ->get();
+        return response()->json(['success' => true, 'users' => $guests]);
+    });
+
     // Member/Team Lead: view own team(s)
     Route::get('/my-team', [TeamController::class, 'myTeam']);
 

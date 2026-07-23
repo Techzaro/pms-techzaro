@@ -731,7 +731,7 @@ class UserController extends Controller
 
         if ($user->role === 'guest') {
             // Guest can only see admin/manager + team members of their projects
-            $projectIds = Project::where('client_name', $user->name)->pluck('id');
+            $projectIds = Project::whereJsonContains('guest_ids', $user->id)->pluck('id');
 
             $teamIds = \App\Models\Team::whereIn('id', function ($q) use ($projectIds) {
                 $q->select('team_id')->from('projects')->whereIn('id', $projectIds)->whereNotNull('team_id');
@@ -1843,7 +1843,7 @@ class UserController extends Controller
         $emailSent = false;
 
         try {
-            Mail::to($user->personal_email)->queue(new GuestInvitation($user, $plainPassword, $loginUrl, false));
+            Mail::to($user->personal_email)->send(new GuestInvitation($user, $plainPassword, $loginUrl, false));
             $emailSent = true;
         } catch (\Throwable $e) {
             Log::error("Failed to send guest invitation email to {$user->personal_email}: " . $e->getMessage());
@@ -1954,7 +1954,7 @@ class UserController extends Controller
         $emailSent = false;
 
         try {
-            Mail::to($user->personal_email)->queue(new GuestInvitation($user, $plainPassword, $loginUrl, false));
+            Mail::to($user->personal_email)->send(new GuestInvitation($user, $plainPassword, $loginUrl, false));
             $emailSent = true;
         } catch (\Throwable $e) {
             Log::error("Failed to resend guest invitation to {$user->personal_email}: " . $e->getMessage());
@@ -2000,7 +2000,7 @@ class UserController extends Controller
         $emailSent = false;
 
         try {
-            Mail::to($user->personal_email)->queue(new GuestInvitation($user, $plainPassword, $loginUrl, true));
+            Mail::to($user->personal_email)->send(new GuestInvitation($user, $plainPassword, $loginUrl, true));
             $emailSent = true;
         } catch (\Throwable $e) {
             Log::error("Failed to send password reset to guest {$user->personal_email}: " . $e->getMessage());

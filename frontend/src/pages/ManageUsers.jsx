@@ -1483,7 +1483,7 @@ function ManageUsers() {
             <span className="tab-count">{localUsers.filter((u) => u.role !== "guest").length || ""}</span>
           </button>
           <button className={`tab-button ${activeTab === "guests" ? "tab-active" : ""}`} onClick={() => { setActiveTab("guests"); setGuestPage(1); }}>
-            <span className="tab-icon">👥</span> Guests (Clients)
+            <span className="tab-icon">👥</span> Guests
             <span className="tab-count">{guests.length || ""}</span>
           </button>
         </div>
@@ -1589,7 +1589,7 @@ function ManageUsers() {
 
         <div className="manage-users-table-card">
           <div className="table-card-header">
-            <h2>Guests (Client Portal Users)</h2>
+            <h2>Existing Guests</h2>
           </div>
           <table className="manage-user-table">
             <thead>

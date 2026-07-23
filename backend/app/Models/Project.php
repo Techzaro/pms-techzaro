@@ -28,6 +28,7 @@ class Project extends Model
         'website_name',
         'website_link',
         'client_name',
+        'guest_ids',
         'category',
         'budget',
         'priority',
@@ -76,6 +77,7 @@ class Project extends Model
     protected $casts = [
         'assigned_users' => 'array',
         'team_ids' => 'array',
+        'guest_ids' => 'array',
         'start_date' => 'datetime:Y-m-d\TH:i:s',
         'end_date' => 'datetime:Y-m-d\TH:i:s',
         'budget' => 'decimal:2',
@@ -85,6 +87,18 @@ class Project extends Model
     public function tasks()
     {
         return $this->hasMany(Task::class);
+    }
+
+    /**
+     * Check if a guest user has access to this project.
+     * Only checks guest_ids field.
+     */
+    public function isAccessibleByGuest(User $user): bool
+    {
+        if ($user->role !== 'guest') return false;
+
+        $guestIds = $this->guest_ids ?? [];
+        return !empty($guestIds) && in_array($user->id, $guestIds);
     }
 
     /** The user who created this project. */

@@ -1056,7 +1056,7 @@ class DashboardController extends Controller
             return true;
         }
         // Guest: task belongs to their client project
-        if ($user->role === 'guest' && $task->project && $task->project->client_name === $user->name) {
+        if ($user->role === 'guest' && $task->project && $task->project->isAccessibleByGuest($user)) {
             return true;
         }
         // Admin/Manager see all
@@ -1091,7 +1091,7 @@ class DashboardController extends Controller
             return true;
         }
         // Guest client: name matches project's client_name
-        if ($user->role === 'guest' && $project->client_name === $user->name) {
+        if ($user->role === 'guest' && $project->isAccessibleByGuest($user)) {
             return true;
         }
         // Admin/Manager see all
@@ -1120,7 +1120,7 @@ class DashboardController extends Controller
             return true;
         }
         // Guest: deliverable belongs to their client project
-        if ($user->role === 'guest' && $dlv->project && $dlv->project->client_name === $user->name) {
+        if ($user->role === 'guest' && $dlv->project && $dlv->project->isAccessibleByGuest($user)) {
             return true;
         }
 
@@ -1187,7 +1187,7 @@ class DashboardController extends Controller
             }
 
             if ($user->role === 'guest') {
-                return Project::where('client_name', $user->name)->pluck('id')->toArray();
+                return Project::whereJsonContains('guest_ids', $user->id)->pluck('id')->toArray();
             }
 
             return Project::where(function ($q) use ($user) {

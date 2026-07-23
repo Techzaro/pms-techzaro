@@ -398,7 +398,7 @@ function Projects() {
             <IoSearchOutline fontSize={"20px"} />
             <input
               type="text"
-              placeholder="Search by project name or creator"
+              placeholder="Search by project name or manager"
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
             />
@@ -473,10 +473,7 @@ function Projects() {
                               <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "var(--color-primary)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 600 }}>
                                 {project.creator.name?.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
                               </span>
-                              Created: {project.creator.name}
-                              <span style={{ background: project.creator.role === "admin" ? "var(--color-primary-dark)" : "var(--color-success)", color: "#fff", padding: "0 4px", borderRadius: "4px", fontSize: "9px", marginLeft: "2px" }}>
-                                {project.creator.role === "admin" ? "Admin" : "Manager"}
-                              </span>
+                              Manager: {project.creator.name}
                             </span>
                           )}
                           {project.updatedBy && project.updated_by !== project.created_by && (

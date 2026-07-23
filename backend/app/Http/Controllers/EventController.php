@@ -86,7 +86,7 @@ class EventController extends Controller
         // Tasks
         $taskQuery = Task::where(function ($q) use ($user) {
             if ($user->role === 'guest') {
-                $q->whereHas('project', fn ($pq) => $pq->where('client_name', $user->name));
+                $q->whereHas('project', fn ($pq) => $pq->whereJsonContains('guest_ids', $user->id));
             } else {
                 $q->where('assigned_to', $user->id)
                     ->orWhereHas('assignees', fn ($aq) => $aq->where('user_id', $user->id))
@@ -109,7 +109,7 @@ class EventController extends Controller
 
         // Projects
         if ($user->role === 'guest') {
-            $projectQuery = Project::where('client_name', $user->name)
+            $projectQuery = Project::whereJsonContains('guest_ids', $user->id)
                 ->select(['id', 'title', 'description', 'start_date', 'end_date', 'assigned_users', 'status', 'priority', 'created_by'])
                 ->with(['creator:id,name']);
         } else {
@@ -132,7 +132,7 @@ class EventController extends Controller
 
         // Deliverables
         if ($user->role === 'guest') {
-            $deliverableQuery = Deliverable::whereHas('project', fn ($q) => $q->where('client_name', $user->name))
+            $deliverableQuery = Deliverable::whereHas('project', fn ($q) => $q->whereJsonContains('guest_ids', $user->id))
                 ->select(['id', 'title', 'description', 'due_date', 'assigned_to', 'created_by', 'project_id', 'task_id', 'status', 'priority', 'submitted_at', 'approved_at', 'rejected_at'])
                 ->with(['project:id,title', 'assignee:id,name', 'creator:id,name']);
         } else {

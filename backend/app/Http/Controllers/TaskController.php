@@ -194,7 +194,7 @@ class TaskController extends Controller
             ->get();
 
         if ($user->role === 'guest') {
-            $tasks = Task::whereHas('project', fn ($q) => $q->where('client_name', $user->name))
+            $tasks = Task::whereHas('project', fn ($q) => $q->whereJsonContains('guest_ids', $user->id))
                 ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
                 ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
                 ->with(['project:id,title,team_id', 'assigners:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role'])
@@ -397,7 +397,7 @@ class TaskController extends Controller
         $tasksQuery = Task::with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role', 'currentOwner:id,name']);
 
         if ($user->role === 'guest') {
-            $tasksQuery->whereHas('project', fn ($q) => $q->where('client_name', $user->name));
+            $tasksQuery->whereHas('project', fn ($q) => $q->whereJsonContains('guest_ids', $user->id));
         } else {
             $tasksQuery->where('assigned_by', $userId)
                 ->where(function ($q) {

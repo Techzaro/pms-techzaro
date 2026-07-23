@@ -1360,7 +1360,7 @@ function ProjectDetails() {
                             <div className="project-task-table">
                               <div className="ptt-header">
                                 <div>ID</div>
-                                <div>{isCreator || isAdminOrManager ? "Assigned To" : "Assigned By"}</div>
+                                {currentUser?.role !== "guest" && <div>{isCreator || isAdminOrManager ? "Assigned To" : "Assigned By"}</div>}
                                 <div className="ptt-col-name">Task Name</div>
                                 <div>Status</div>
                                 <div>Progress</div>
@@ -1377,7 +1377,7 @@ function ProjectDetails() {
                                       return (
                                         <div className="ptt-row" key={t.id}>
                                           <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={t.id} businessId={t.business_id} />
-                                          <div>{isCreator || isAdminOrManager ? ((t.assignees || []).map((a) => a.name).join(", ") || "—") : (t.assigner?.name || "—")}</div>
+                                          {currentUser?.role !== "guest" && <div>{isCreator || isAdminOrManager ? ((t.assignees || []).map((a) => a.name).join(", ") || "—") : (t.assigner?.name || "—")}</div>}
                                         <div className="ptt-col-name">
                                           <Link to={rolePath(`tasks/task-details/${t.id}`)} state={{ from: getTaskFrom(t) }} className="ptt-task-link">
                                             {t.title}

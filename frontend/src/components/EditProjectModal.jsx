@@ -50,6 +50,7 @@ const EditProjectModal = ({ project, onClose }) => {
   const [formErrors, setFormErrors] = useState({});
   const [teams, setTeams] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
+  const [guests, setGuests] = useState([]);
   const [draftId, setDraftId] = useState(null);
 
   const [form, setForm] = useState({
@@ -58,11 +59,11 @@ const EditProjectModal = ({ project, onClose }) => {
     team_id: project?.team_id || "",
     team_ids: project?.team_ids || [],
     assigned_users: project?.assigned_users || [],
+    guest_ids: project?.guest_ids || [],
     priority: project?.priority || "Medium",
     status: project?.status || "Planning",
-    client_name: project?.client_name || "",
     budget: project?.budget || "",
-
+    client_name: project?.client_name || "",
   });
 
   const [categoriesList, setCategoriesList] = useState(() => {
@@ -228,6 +229,16 @@ const EditProjectModal = ({ project, onClose }) => {
       })
         .then((res) => (res.ok ? res.json() : { users: [] }))
         .then((data) => setAllUsers(Array.isArray(data) ? data : (data.users || [])))
+        .catch(() => {}),
+
+      fetch(`${API_URL}/guest-users`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        skipLoader: true,
+      })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          setGuests(data.users || []);
+        })
         .catch(() => {}),
 
       fetch(`${API_URL}/projects`, {
@@ -520,9 +531,10 @@ const EditProjectModal = ({ project, onClose }) => {
           team_id: form.team_id ? parseInt(form.team_id) : null,
           team_ids: form.team_ids,
           assigned_users: form.assigned_users.length > 0 ? form.assigned_users : [],
+          guest_ids: form.guest_ids.length > 0 ? form.guest_ids : [],
+          client_name: form.client_name.trim() || null,
           priority: form.priority,
           status: form.status,
-          client_name: form.client_name || null,
           budget: form.budget ? parseFloat(form.budget) : null,
           milestones: milestones.length > 0 ? milestones : [],
           existing_file_names: existingFiles.reduce((acc, f) => {
@@ -1141,14 +1153,24 @@ const EditProjectModal = ({ project, onClose }) => {
               />
             </div>
 
+            <div className="cp-field">
+              <label>Guests (Optional)</label>
+              <UserSelectDropdown
+                users={guests}
+                selectedIds={form.guest_ids}
+                onChange={(ids) => { markDirty(); setForm(prev => ({ ...prev, guest_ids: ids })); }}
+                placeholder="Click to select guests"
+              />
+            </div>
+
             {/* CLIENT INFO */}
             <div className="cp-card">
               <div className="cp-card-top">
                 <span>Client Info</span>
               </div>
-              <div className="cp-field" style={{ marginBottom: "12px" }}>
+              <div className="cp-field">
                 <label style={{ fontSize: "13px" }}>Client Name</label>
-                <input type="text" name="client_name" placeholder="Client name" value={form.client_name} onChange={handleChange} />
+                <input type="text" name="client_name" placeholder="Enter client name" value={form.client_name} onChange={handleChange} />
               </div>
               <div className="cp-field">
                 <label style={{ fontSize: "13px" }}>Budget</label>

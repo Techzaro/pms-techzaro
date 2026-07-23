@@ -67,7 +67,7 @@ class ProjectController extends Controller
                 ->orderBy('sort_order')
                 ->latest('id');
         } elseif ($user->role === 'guest') {
-            $projectsQuery = Project::where('client_name', $user->name)
+            $projectsQuery = Project::whereJsonContains('guest_ids', $user->id)
                 ->with(['creator:id,name,role', 'team:id,name', 'updatedBy:id,name,role'])
                 ->withCount(['tasks as total_tasks', 'tasks as completed_tasks' => function ($q) {
                     $q->whereIn('status', $this->completedTaskStatuses());
@@ -166,8 +166,10 @@ class ProjectController extends Controller
             'sheets_documents' => 'nullable|string',
             'website_name' => 'nullable|string',
             'website_link' => 'nullable|string',
-            'client_name' => 'nullable|string|max:255',
+            'guest_ids' => 'nullable|array',
+            'guest_ids.*' => 'exists:users,id',
             'category' => 'nullable|string|max:1000',
+            'client_name' => 'nullable|string|max:255',
             'budget' => 'nullable|numeric|min:0',
             'priority' => 'nullable|string|max:32',
             'sidebar_notes' => 'nullable|string',
@@ -310,7 +312,7 @@ class ProjectController extends Controller
                 ->where('is_visible', true)
                 ->exists();
             $isTeamLead = $user->role === 'team_lead';
-            $isGuestClient = $user->role === 'guest' && $project->client_name === $user->name;
+            $isGuestClient = $user->role === 'guest' && $project->isAccessibleByGuest($user);
 
             if (! $isCreator && ! $isAssigned && ! $isTeamMember && ! $hasTasksUnderProject && ! $isManuallyVisible && ! $isTeamLead && ! $isGuestClient) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -432,8 +434,10 @@ class ProjectController extends Controller
             'sheets_documents' => 'nullable|string',
             'website_name' => 'nullable|string',
             'website_link' => 'nullable|string',
-            'client_name' => 'nullable|string|max:255',
+            'guest_ids' => 'nullable|array',
+            'guest_ids.*' => 'exists:users,id',
             'category' => 'nullable|string|max:1000',
+            'client_name' => 'nullable|string|max:255',
             'budget' => 'nullable|numeric|min:0',
             'priority' => 'nullable|string|max:32',
             'sidebar_notes' => 'nullable|string',
@@ -460,7 +464,7 @@ class ProjectController extends Controller
         unset($validated['existing_file_names']);
 
         $oldValues = [];
-        $fieldLabels = ['title' => 'Title', 'description' => 'Description', 'start_date' => 'Start Date', 'end_date' => 'End Date', 'priority' => 'Priority', 'status' => 'Status', 'budget' => 'Budget', 'category' => 'Category', 'client_name' => 'Client Name', 'website_name' => 'Website Name', 'website_link' => 'Website Link', 'team_id' => 'Team', 'sheets_documents' => 'Documents'];
+        $fieldLabels = ['title' => 'Title', 'description' => 'Description', 'start_date' => 'Start Date', 'end_date' => 'End Date', 'priority' => 'Priority', 'status' => 'Status', 'budget' => 'Budget', 'category' => 'Category', 'guest_ids' => 'Guests', 'website_name' => 'Website Name', 'website_link' => 'Website Link', 'team_id' => 'Team', 'sheets_documents' => 'Documents'];
         foreach (array_keys($fieldLabels) as $f) {
             if (array_key_exists($f, $validated)) {
                 $oldValues[$f] = $project->{$f};

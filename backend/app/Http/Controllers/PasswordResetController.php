@@ -46,9 +46,21 @@ class PasswordResetController extends Controller
                 \Log::info('Password reset: user not found', ['email' => $inputEmail]);
 
                 return response()->json([
-                    'success' => true,
-                    'message' => 'If an account with that email exists, a password reset link has been sent.',
-                ]);
+                    'success' => false,
+                    'code' => 'EMAIL_NOT_FOUND',
+                    'message' => 'This email is not registered in our system or has been removed. Please contact our support team for assistance.',
+                ], 404);
+            }
+
+            // Check if user account is inactive/deactivated
+            if (isset($user->active) && ! $user->active) {
+                \Log::info('Password reset: user account inactive', ['user_id' => $user->id, 'email' => $inputEmail]);
+
+                return response()->json([
+                    'success' => false,
+                    'code' => 'ACCOUNT_INACTIVE',
+                    'message' => 'This account has been deactivated. Please contact our support team for assistance.',
+                ], 403);
             }
 
             // Check if password recovery is locked by admin

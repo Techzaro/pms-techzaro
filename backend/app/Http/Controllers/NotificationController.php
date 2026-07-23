@@ -45,14 +45,14 @@ class NotificationController extends Controller
                     ->orWhere(function ($q) use ($user) {
                         $q->where('related_module', 'project')
                             ->whereIn('related_id', function ($sq) use ($user) {
-                                $sq->select('id')->from('projects')->where('client_name', $user->name);
+                                $sq->select('id')->from('projects')->whereJsonContains('guest_ids', $user->id);
                             });
                     })
                     ->orWhere(function ($q) use ($user) {
                         $q->where('related_module', 'task')
                             ->whereIn('related_id', function ($sq) use ($user) {
                                 $sq->select('id')->from('tasks')->whereIn('project_id', function ($sq2) use ($user) {
-                                    $sq2->select('id')->from('projects')->where('client_name', $user->name);
+                                    $sq2->select('id')->from('projects')->whereJsonContains('guest_ids', $user->id);
                                 });
                             });
                     })
@@ -60,7 +60,7 @@ class NotificationController extends Controller
                         $q->where('related_module', 'deliverable')
                             ->whereIn('related_id', function ($sq) use ($user) {
                                 $sq->select('id')->from('deliverables')->whereIn('project_id', function ($sq2) use ($user) {
-                                    $sq2->select('id')->from('projects')->where('client_name', $user->name);
+                                    $sq2->select('id')->from('projects')->whereJsonContains('guest_ids', $user->id);
                                 });
                             });
                     })
@@ -68,7 +68,7 @@ class NotificationController extends Controller
                         $q->where('related_module', 'chat')
                             ->whereIn('related_id', function ($sq) use ($user) {
                                 $sq->select('id')->from('conversations')->whereIn('project_id', function ($sq2) use ($user) {
-                                    $sq2->select('id')->from('projects')->where('client_name', $user->name);
+                                    $sq2->select('id')->from('projects')->whereJsonContains('guest_ids', $user->id);
                                 });
                             });
                     });
@@ -122,14 +122,14 @@ class NotificationController extends Controller
                     ->orWhere(function ($q) use ($user) {
                         $q->where('related_module', 'project')
                             ->whereIn('related_id', function ($sq) use ($user) {
-                                $sq->select('id')->from('projects')->where('client_name', $user->name);
+                                $sq->select('id')->from('projects')->whereJsonContains('guest_ids', $user->id);
                             });
                     })
                     ->orWhere(function ($q) use ($user) {
                         $q->where('related_module', 'task')
                             ->whereIn('related_id', function ($sq) use ($user) {
                                 $sq->select('id')->from('tasks')->whereIn('project_id', function ($sq2) use ($user) {
-                                    $sq2->select('id')->from('projects')->where('client_name', $user->name);
+                                    $sq2->select('id')->from('projects')->whereJsonContains('guest_ids', $user->id);
                                 });
                             });
                     })
@@ -137,7 +137,7 @@ class NotificationController extends Controller
                         $q->where('related_module', 'deliverable')
                             ->whereIn('related_id', function ($sq) use ($user) {
                                 $sq->select('id')->from('deliverables')->whereIn('project_id', function ($sq2) use ($user) {
-                                    $sq2->select('id')->from('projects')->where('client_name', $user->name);
+                                    $sq2->select('id')->from('projects')->whereJsonContains('guest_ids', $user->id);
                                 });
                             });
                     })
@@ -145,7 +145,7 @@ class NotificationController extends Controller
                         $q->where('related_module', 'chat')
                             ->whereIn('related_id', function ($sq) use ($user) {
                                 $sq->select('id')->from('conversations')->whereIn('project_id', function ($sq2) use ($user) {
-                                    $sq2->select('id')->from('projects')->where('client_name', $user->name);
+                                    $sq2->select('id')->from('projects')->whereJsonContains('guest_ids', $user->id);
                                 });
                             });
                     });

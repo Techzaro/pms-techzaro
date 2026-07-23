@@ -218,7 +218,7 @@ class AuthController extends Controller
         $user = $request->user();
 
         if ($user->role === 'guest') {
-            $taskStats = Task::whereHas('project', fn ($q) => $q->where('client_name', $user->name))
+            $taskStats = Task::whereHas('project', fn ($q) => $q->whereJsonContains('guest_ids', $user->id))
                 ->selectRaw('COUNT(*) as total_assigned')
                 ->selectRaw("COUNT(CASE WHEN status IN ('completed','done','approved') THEN 1 END) as completed")
                 ->selectRaw("COUNT(CASE WHEN status IN ('pending', 'in_progress') THEN 1 END) as pending")
@@ -237,7 +237,7 @@ class AuthController extends Controller
         $taskStats = $taskStats ?? (object) ['total_assigned' => 0, 'completed' => 0, 'pending' => 0];
 
         if ($user->role === 'guest') {
-            $totalProjects = Project::where('client_name', $user->name)->count();
+            $totalProjects = Project::whereJsonContains('guest_ids', $user->id)->count();
         } else {
             $totalProjects = Project::where('created_by', $user->id)->count();
         }
