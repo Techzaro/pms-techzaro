@@ -24,7 +24,7 @@ const ActionPopover = ({ trigger, children, onTriggerClick }) => {
     const popoverHeight = popoverEl ? popoverEl.offsetHeight : 40;
 
     let top = rect.top + rect.height / 2 - popoverHeight / 2;
-    let left = rect.right - 12;
+    let left = rect.right + 8;
 
     if (left + popoverWidth > window.innerWidth) {
       left = rect.left - popoverWidth;

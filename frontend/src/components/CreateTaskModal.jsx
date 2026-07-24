@@ -9,6 +9,7 @@ import AutoSaveIndicator from "./AutoSaveIndicator";
 import draftService from "../services/draftService";
 import UserSelectDropdown from "./UserSelectDropdown";
 import CustomSelect from "./CustomSelect";
+import MultiSelectDropdown from "./MultiSelectDropdown";
 import LoadingButton from "./LoadingButton";
 import ConfirmModal from "./ConfirmModal";
 
@@ -159,7 +160,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
     const user = getUser();
     const defaultTransfer = (user?.role === "admin" || user?.role === "manager") ? "allow" : "disallow";
     return {
-      project_id: projectId || "",
+      project_id: projectId ? [projectId] : [],
       assigned_to: [],
       title: "",
       description: "",
@@ -219,7 +220,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
     formData: autoSaveData,
     moduleType: "task",
     enabled: isDirty,
-    project_id: form.project_id || projectId,
+    project_id: form.project_id?.[0] || projectId,
   });
 
   useEffect(() => {
@@ -239,8 +240,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
         if (!draft?.draft_data) return;
 
         const d = draft.draft_data;
+        const restoredProjectId = d.project_id || projectId;
         setForm({
-          project_id: d.project_id || projectId || "",
+          project_id: Array.isArray(restoredProjectId) ? restoredProjectId : restoredProjectId ? [restoredProjectId] : [],
           assigned_to: d.assigned_to || [],
           title: d.title || "",
           description: d.description || "",
@@ -269,7 +271,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
         module_type: "task",
         title: form.title || "Untitled Task Draft",
         draft_data: { ...form, deliverables: subtasks, recurringTemplates: recurringTemplates, requirementsList, links: links.map(l => ({ url: l.url, name: l.name || l.customName })) },
-        project_id: form.project_id || projectId,
+        project_id: form.project_id?.[0] || projectId,
       };
       if (draftId) {
         await draftService.update(draftId, { title: payload.title, draft_data: payload.draft_data }, { skipNotify: true });
@@ -356,24 +358,46 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
   }, []);
   const markDirty = useCallback(() => { if (userInteractedRef.current) setIsDirty(true); }, []);
 
+  const fetchMembersForProjects = useCallback((projectIds) => {
+    const token = authToken();
+    const currentUser = getUser();
+    if (!projectIds || projectIds.length === 0) {
+      setDisplayUsers(allUsers);
+      return;
+    }
+    Promise.all(
+      projectIds.map((pid) =>
+        fetch(`${API_URL}/projects/${pid}/members`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
+          .then((r) => (r.ok ? r.json() : [])).catch(() => [])
+      )
+    ).then((results) => {
+      const memberSets = results.map((members) => {
+        const map = new Map();
+        (Array.isArray(members) ? members : []).forEach((u) => map.set(u.id, u));
+        return map;
+      });
+      let users;
+      if (memberSets.length === 1) {
+        users = Array.from(memberSets[0].values());
+      } else {
+        const smallest = memberSets.reduce((a, b) => a.size <= b.size ? a : b);
+        users = [];
+        smallest.forEach((u, id) => {
+          if (memberSets.every((s) => s.has(id))) users.push(u);
+        });
+      }
+      if (currentUser && !users.some((u) => u.id === currentUser.id)) {
+        users = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department }, ...users];
+      }
+      setDisplayUsers(users);
+    }).catch(() => setDisplayUsers(allUsers));
+  }, [allUsers]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === "project_id") {
       setForm((prev) => ({ ...prev, project_id: value, assigned_to: [] }));
-      if (value) {
-        const token = authToken();
-        const currentUser = getUser();
-        fetch(`${API_URL}/projects/${value}/members`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, skipLoader: true })
-          .then((r) => (r.ok ? r.json() : [])).then((d) => {
-            let members = Array.isArray(d) ? d : [];
-            if (currentUser && !members.some((u) => u.id === currentUser.id)) {
-              members = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role, department: currentUser.department }, ...members];
-            }
-            setDisplayUsers(members);
-          }).catch(() => setDisplayUsers(allUsers));
-      } else {
-        setDisplayUsers(allUsers);
-      }
+      fetchMembersForProjects(value);
     } else {
       setForm((prev) => ({ ...prev, [name]: value }));
     }
@@ -494,6 +518,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
     if (!form.title.trim()) errors.title = "Task Name is required.";
     if (!form.assigned_to || form.assigned_to.length === 0) errors.assigned_to = "Select at least one user.";
     if (!form.priority) errors.priority = "Priority is required.";
+    if (!projectId && (!form.project_id || form.project_id.length === 0)) errors.project_id = "Select at least one project.";
     if (form.task_type === "recurring") {
       const validTemplates = recurringTemplates.filter((t) => t.title.trim());
       if (validTemplates.length === 0) errors.recurring_templates = "Add at least one subtask template.";
@@ -538,30 +563,55 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
           allow_transfer: form.allow_transfer === "allow",
         };
 
-        const pid = projectId || form.project_id;
-        const url = pid ? `${API_URL}/projects/${pid}/tasks` : `${API_URL}/tasks`;
+        const projectIds = projectId ? [projectId] : form.project_id;
+        const allTaskIds = [];
 
-        const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify(body),
-          _notifHandled: true,
-        });
-
-        const data = await response.json();
-        if (!response.ok) {
-          const msg = data.message || "Failed to create task";
-          const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
-          throw new Error(errors || msg);
+        if (projectIds && projectIds.length > 0) {
+          const results = await Promise.all(
+            projectIds.map((pid) =>
+              fetch(`${API_URL}/projects/${pid}/tasks`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify(body),
+                _notifHandled: true,
+              }).then(async (r) => {
+                const data = await r.json();
+                if (!r.ok) {
+                  const msg = data.message || "Failed to create task";
+                  const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
+                  throw new Error(errors || msg);
+                }
+                return data;
+              })
+            )
+          );
+          results.forEach((data) => {
+            const ids = data.tasks?.map((t) => t.id) || (data.task?.id ? [data.task.id] : []);
+            allTaskIds.push(...ids);
+          });
+        } else {
+          const response = await fetch(`${API_URL}/tasks`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify(body),
+            _notifHandled: true,
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            const msg = data.message || "Failed to create task";
+            const errors = data.errors ? Object.values(data.errors).flat().join(". ") : "";
+            throw new Error(errors || msg);
+          }
+          const ids = data.tasks?.map((t) => t.id) || (data.task?.id ? [data.task.id] : []);
+          allTaskIds.push(...ids);
         }
 
-        const taskIds = data.tasks?.map((t) => t.id) || (data.task?.id ? [data.task.id] : []);
-        if (taskIds.length > 0 && (pendingFiles.length > 0 || links.length > 0)) {
-          await Promise.all(taskIds.map((id) => uploadAttachments(id, token)));
+        if (allTaskIds.length > 0 && (pendingFiles.length > 0 || links.length > 0)) {
+          await Promise.all(allTaskIds.map((id) => uploadAttachments(id, token)));
         }
 
         showSuccessMessage("Task", "created");
-        publish("task:created", data.task || data);
+        publish("task:created", {});
         publish("data:changed", { type: "task", action: "created" });
         if (restoreDraftId) draftService.delete(restoreDraftId).catch(() => {});
         onClose(true);
@@ -603,8 +653,9 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                 {!projectId ? (
                   <div className="task-field">
                     <label>Projects</label>
-                    <CustomSelect name="project_id" value={form.project_id} onChange={(val) => handleChange({ target: { name: "project_id", value: val } })}
-                      placeholder="Select project" options={[{ value: "", label: "Select project" }, ...projects.map((p) => ({ value: p.id, label: p.title }))]} />
+                    <MultiSelectDropdown name="project_id" value={form.project_id} onChange={(val) => handleChange({ target: { name: "project_id", value: val } })}
+                      placeholder="Select projects" searchPlaceholder="Search projects..." options={projects.map((p) => ({ value: p.id, label: p.title }))} />
+                    {formErrors.project_id && <span className="field-error-text">{formErrors.project_id}</span>}
                   </div>
                 ) : (
                   <div className="task-field">
@@ -1130,7 +1181,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
       {openSubtaskCreator && (
         <CreateSubtaskModal
           onClose={() => setOpenSubtaskCreator(false)}
-          projectId={form.project_id || null}
+          projectId={form.project_id?.[0] || null}
           onCreated={() => setOpenSubtaskCreator(false)}
         />
       )}
