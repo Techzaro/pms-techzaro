@@ -518,7 +518,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
     if (!form.title.trim()) errors.title = "Task Name is required.";
     if (!form.assigned_to || form.assigned_to.length === 0) errors.assigned_to = "Select at least one user.";
     if (!form.priority) errors.priority = "Priority is required.";
-    if (!projectId && (!form.project_id || form.project_id.length === 0)) errors.project_id = "Select at least one project.";
     if (form.task_type === "recurring") {
       const validTemplates = recurringTemplates.filter((t) => t.title.trim());
       if (validTemplates.length === 0) errors.recurring_templates = "Add at least one subtask template.";
