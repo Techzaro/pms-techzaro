@@ -5,14 +5,13 @@ namespace App\Jobs;
 use App\Mail\UserCreated;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable as QueueableTrait;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
-class SendUserCreatedEmails implements ShouldQueue
+class SendUserCreatedEmails
 {
     use QueueableTrait, InteractsWithQueue, SerializesModels;
 

@@ -12,7 +12,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
-class SendBulkNotificationEmails implements ShouldQueue
+class SendBulkNotificationEmails
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -42,7 +42,7 @@ class SendBulkNotificationEmails implements ShouldQueue
                 $senderEmail = $notification->sender?->professional_email ?? $notification->sender?->personal_email ?? $notification->sender?->email ?? '';
                 $senderName = $notification->sender?->name ?? config('mail.from.name', 'PMS Techxaro');
                 $mail = new NotificationMail($notification, $senderEmail, $senderName);
-                Mail::to($recipientEmail)->queue($mail);
+                Mail::to($recipientEmail)->send($mail);
             } catch (\Throwable $e) {
                 Log::error('Bulk email failed', [
                     'notification_id' => $notification->id,

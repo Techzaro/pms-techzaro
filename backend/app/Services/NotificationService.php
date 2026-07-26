@@ -310,7 +310,7 @@ class NotificationService
                 $performerEmail,
                 $performer->name
             );
-            Mail::to($performerEmail)->queue($mail);
+            Mail::to($performerEmail)->send($mail);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Failed to send action confirmation email', [
                 'user_id' => $performer->id,

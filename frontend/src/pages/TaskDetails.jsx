@@ -337,6 +337,10 @@ function TaskDetails() {
         setTask(null);
         notify.error("This task has been deleted.");
         setTimeout(() => navigate(rolePath("tasks")), 1500);
+      } else if (res.status === 403) {
+        setTask(null);
+        notify.error("You don't have permission to view this task.");
+        setTimeout(() => navigate(rolePath("tasks")), 1500);
       } else {
         setTask(null);
       }

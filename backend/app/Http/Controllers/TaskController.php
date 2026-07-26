@@ -607,8 +607,9 @@ class TaskController extends Controller
         $isProjectCreator = $task->project && (int) $task->project->created_by === (int) $user->id;
         $isTeamLeader = $task->project && $task->project->team && (int) $task->project->team->leader_id === (int) $user->id;
         $isTeamMember = $task->project && $task->project->team && $task->project->team->members && $task->project->team->members->contains('id', $user->id);
+        $isGuestOfProject = $user->role === 'guest' && $task->project && $task->project->isAccessibleByGuest($user);
 
-        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager && ! $isProjectCreator && ! $isTeamLeader && ! $isTeamMember) {
+        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager && ! $isProjectCreator && ! $isTeamLeader && ! $isTeamMember && ! $isGuestOfProject) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
