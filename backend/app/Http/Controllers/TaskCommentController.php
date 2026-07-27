@@ -429,6 +429,10 @@ class TaskCommentController extends Controller
                     return true;
                 }
             }
+
+            if ($user->role === 'guest' && $task->project->isAccessibleByGuest($user)) {
+                return true;
+            }
         }
 
         return false;

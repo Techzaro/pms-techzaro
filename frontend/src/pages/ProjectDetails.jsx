@@ -1358,7 +1358,7 @@ function ProjectDetails() {
                           </div>
                           <div className="pd-table-wrap">
                             <div className="project-task-table">
-                              <div className="ptt-header">
+                                <div className={`ptt-header ${currentUser?.role === "guest" ? "ptt-header--guest" : ""}`}>
                                 <div>ID</div>
                                 {currentUser?.role !== "guest" && <div>{isCreator || isAdminOrManager ? "Assigned To" : "Assigned By"}</div>}
                                 <div className="ptt-col-name">Task Name</div>
@@ -1375,7 +1375,7 @@ function ProjectDetails() {
                                   {(t, idx, dndProps) => {
                                     const statusKey = (t.status || "").toLowerCase();
                                       return (
-                                        <div className="ptt-row" key={t.id}>
+                                        <div className={`ptt-row ${currentUser?.role === "guest" ? "ptt-row--guest" : ""}`} key={t.id}>
                                           <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={t.id} businessId={t.business_id} />
                                           {currentUser?.role !== "guest" && <div>{isCreator || isAdminOrManager ? ((t.assignees || []).map((a) => a.name).join(", ") || "—") : (t.assigner?.name || "—")}</div>}
                                         <div className="ptt-col-name">

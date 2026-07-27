@@ -145,6 +145,10 @@
   gap: 24px;
 }
 
+.projects-container > * {
+  min-width: 0;
+}
+
 .projects-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -152,6 +156,8 @@
   overflow: hidden;
   transition: all 0.3s ease;
   padding: 16px;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .projects-card:hover {
@@ -186,6 +192,8 @@
   line-height: 1.7;
   color: var(--text-dark);
   overflow: hidden;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .card-subtitle.clamped {

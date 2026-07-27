@@ -489,8 +489,8 @@ class ProjectController extends Controller
         foreach ($oldValues as $f => $oldVal) {
             if ($f === 'team_id') continue;
             $newVal = $project->{$f};
-            $oldStr = is_object($oldVal) && method_exists($oldVal, 'format') ? $oldVal->format('Y-m-d H:i') : (string) $oldVal;
-            $newStr = is_object($newVal) && method_exists($newVal, 'format') ? $newVal->format('Y-m-d H:i') : (string) $newVal;
+            $oldStr = is_object($oldVal) && method_exists($oldVal, 'format') ? $oldVal->format('Y-m-d H:i') : (is_array($oldVal) ? json_encode($oldVal) : (string) $oldVal);
+            $newStr = is_object($newVal) && method_exists($newVal, 'format') ? $newVal->format('Y-m-d H:i') : (is_array($newVal) ? json_encode($newVal) : (string) $newVal);
             if ($oldStr !== $newStr) {
                 $changes[] = ['field_name' => $f, 'label' => $fieldLabels[$f], 'old_value' => $oldStr, 'new_value' => $newStr];
             }

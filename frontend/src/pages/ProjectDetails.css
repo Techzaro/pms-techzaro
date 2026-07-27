@@ -1433,6 +1433,10 @@
   gap: 12px;
 }
 
+.ptt-header--guest {
+  grid-template-columns: 80px minmax(150px, 2.2fr) minmax(90px, 0.8fr) minmax(110px, 1.2fr) minmax(90px, 0.8fr) minmax(170px, 1.2fr) minmax(70px, 0.5fr) !important;
+}
+
 .ptt-row {
   display: grid !important;
   grid-template-columns: 80px minmax(130px, 1.8fr) minmax(150px, 2.2fr) minmax(90px, 0.8fr) minmax(110px, 1.2fr) minmax(90px, 0.8fr) minmax(170px, 1.2fr) minmax(70px, 0.5fr) !important;
@@ -1443,6 +1447,10 @@
   font-size: 15px;
   font-weight: 500;
   transition: background 0.15s;
+}
+
+.ptt-row--guest {
+  grid-template-columns: 80px minmax(150px, 2.2fr) minmax(90px, 0.8fr) minmax(110px, 1.2fr) minmax(90px, 0.8fr) minmax(170px, 1.2fr) minmax(70px, 0.5fr) !important;
 }
 
 .ptt-row:hover {

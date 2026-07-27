@@ -427,11 +427,23 @@ class AuthController extends Controller
             $oldAvatar = $user->avatar;
             $file = $request->file('avatar');
             if ($file->isValid()) {
-                if ($oldAvatar && Storage::disk('public')->exists($oldAvatar)) {
-                    Storage::disk('public')->delete($oldAvatar);
+                $disk = Storage::disk('public');
+                if ($oldAvatar && $disk->exists($oldAvatar)) {
+                    $disk->delete($oldAvatar);
+                }
+                if (!$disk->exists('avatars/' . $user->id)) {
+                    $disk->makeDirectory('avatars/' . $user->id);
                 }
                 $filename = 'avatar_' . time() . '_' . mt_rand(10000, 99999) . '.' . $file->getClientOriginalExtension();
-                $user->avatar = $file->storeAs('avatars/' . $user->id, $filename, 'public');
+                $avatarPath = $file->storeAs('avatars/' . $user->id, $filename, 'public');
+                if ($avatarPath && $disk->exists($avatarPath)) {
+                    $user->avatar = $avatarPath;
+                } else {
+                    \Log::error('Auth profile avatar upload failed', [
+                        'user_id' => $user->id,
+                        'returned_path' => $avatarPath,
+                    ]);
+                }
             }
         }
 
@@ -476,6 +488,11 @@ class AuthController extends Controller
             'other_document',
         ];
 
+        $disk = \Storage::disk('public');
+        if (!$disk->exists('user_documents/' . $user->id)) {
+            $disk->makeDirectory('user_documents/' . $user->id);
+        }
+
         $hasFileUploads = false;
         foreach ($documentFields as $field) {
             if ($field === 'other_document' && $request->hasFile('other_document')) {
@@ -490,9 +507,17 @@ class AuthController extends Controller
                         if ($file->isValid()) {
                             $filename = $field . '_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
                             $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
-                            $customName = isset($names[$index]) ? $names[$index] : $file->getClientOriginalName();
-                            $customName = preg_replace('/\.[^.]+$/', '', $customName);
-                            $newDocs[] = ['path' => $path, 'name' => $customName];
+
+                            if ($path && $disk->exists($path)) {
+                                $customName = isset($names[$index]) ? $names[$index] : $file->getClientOriginalName();
+                                $customName = preg_replace('/\.[^.]+$/', '', $customName);
+                                $newDocs[] = ['path' => $path, 'name' => $customName];
+                            } else {
+                                \Log::error('Auth profile other_document upload failed', [
+                                    'user_id' => $user->id,
+                                    'returned_path' => $path,
+                                ]);
+                            }
                         }
                     }
 
@@ -509,22 +534,41 @@ class AuthController extends Controller
                     ]);
                 }
             } elseif ($request->hasFile($field)) {
-                if ($user->$field && \Storage::disk('public')->exists($user->$field)) {
-                    \Storage::disk('public')->delete($user->$field);
-                }
                 $file = $request->file($field);
+                if (!$file->isValid()) {
+                    \Log::warning('Auth profile document upload invalid', [
+                        'user_id' => $user->id,
+                        'field' => $field,
+                        'error' => $file->getError(),
+                    ]);
+                    continue;
+                }
+
+                if ($user->$field && $disk->exists($user->$field)) {
+                    $disk->delete($user->$field);
+                }
+
                 $filename = $field.'_'.time().'_'.$file->getClientOriginalName();
                 $path = $file->storeAs('user_documents/'.$user->id, $filename, 'public');
-                $user->$field = $path;
-                $hasFileUploads = true;
 
-                UserChange::create([
-                    'user_id' => $user->id,
-                    'field_name' => $field,
-                    'old_value' => null,
-                    'new_value' => $file->getClientOriginalName(),
-                    'modified_by' => $user->id,
-                ]);
+                if ($path && $disk->exists($path)) {
+                    $user->$field = $path;
+                    $hasFileUploads = true;
+
+                    UserChange::create([
+                        'user_id' => $user->id,
+                        'field_name' => $field,
+                        'old_value' => null,
+                        'new_value' => $file->getClientOriginalName(),
+                        'modified_by' => $user->id,
+                    ]);
+                } else {
+                    \Log::error('Auth profile document upload failed - file not on disk', [
+                        'user_id' => $user->id,
+                        'field' => $field,
+                        'returned_path' => $path,
+                    ]);
+                }
             }
         }
 

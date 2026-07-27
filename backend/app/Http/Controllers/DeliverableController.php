@@ -278,8 +278,15 @@ class DeliverableController extends Controller
         $user = request()->user();
         $isCreator = (int) $deliverable->created_by === (int) $user->id;
         $isAssignee = (int) $deliverable->assigned_to === (int) $user->id;
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
 
-        if (! $isCreator && ! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
+        $isGuestOfProject = false;
+        if ($user->role === 'guest') {
+            $project = $deliverable->project ?? ($deliverable->task ? $deliverable->task->project : null);
+            $isGuestOfProject = $project && $project->isAccessibleByGuest($user);
+        }
+
+        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager && ! $isGuestOfProject) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -292,6 +299,7 @@ class DeliverableController extends Controller
         $deliverable->load([
             'project:id,title', 'assignee:id,name,email,role', 'creator:id,name,email',
             'task:id,title,assigned_by', 'task.assigner:id,name,email',
+            'files',
             'submissions' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments', 'approvedBy:id,name', 'reopenedBy:id,name'])->latest(),
             'latestSubmission' => fn ($q) => $q->with(['submittedBy:id,name,email', 'attachments', 'approvedBy:id,name', 'reopenedBy:id,name']),
             'workflowEvents' => fn ($q) => $q->with('user:id,name,email'),

@@ -29,7 +29,6 @@ const PRIORITY_OPTIONS = [
   { value: "Low", label: "Low" },
   { value: "Medium", label: "Medium" },
   { value: "High", label: "High" },
-  { value: "Critical", label: "Critical" },
 ];
 
 const CreateSubtaskModal = ({
@@ -299,7 +298,7 @@ const CreateSubtaskModal = ({
           throw new Error(errors || msg);
         }
         const subtask = data.deliverable;
-        if (!editMode && subtask?.id) await uploadAttachments(subtask.id);
+        if (subtask?.id) await uploadAttachments(subtask.id);
         if (!editMode && restoreDraftId) {
           draftService.delete(restoreDraftId).catch(() => {});
         }

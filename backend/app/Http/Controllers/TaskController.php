@@ -574,7 +574,7 @@ class TaskController extends Controller
     {
         $user = request()->user();
         $task->load([
-            'project:id,title,team_id,created_by,client_name,category,budget,priority,sidebar_notes,sheets_documents,website_link,website_name,status,start_date,end_date',
+            'project:id,title,team_id,created_by,client_name,category,budget,priority,sidebar_notes,sheets_documents,website_link,website_name,status,start_date,end_date,guest_ids',
             'project.creator:id,name,email,role',
             'project.team:id,name,leader_id',
             'project.team.leader:id,name',
@@ -608,13 +608,15 @@ class TaskController extends Controller
         $isTeamLeader = $task->project && $task->project->team && (int) $task->project->team->leader_id === (int) $user->id;
         $isTeamMember = $task->project && $task->project->team && $task->project->team->members && $task->project->team->members->contains('id', $user->id);
         $isGuestOfProject = $user->role === 'guest' && $task->project && $task->project->isAccessibleByGuest($user);
+        $isGuestDeliverableAssignee = $user->role === 'guest' && \App\Models\Deliverable::where('task_id', $task->id)->where('assigned_to', $user->id)->exists();
+        $isCurrentOwner = $task->current_owner && (int) $task->current_owner === (int) $user->id;
 
-        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager && ! $isProjectCreator && ! $isTeamLeader && ! $isTeamMember && ! $isGuestOfProject) {
+        if (! $isCreator && ! $isAssignee && ! $isAdminOrManager && ! $isProjectCreator && ! $isTeamLeader && ! $isTeamMember && ! $isGuestOfProject && ! $isGuestDeliverableAssignee && ! $isCurrentOwner) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
         // Single query for deliverables with stats
-        $deliverables = $task->deliverables()->when(! $isCreator, function ($q) use ($user) {
+        $deliverables = $task->deliverables()->when(! $isCreator && ! $isGuestOfProject, function ($q) use ($user) {
             $q->where(function ($qq) use ($user) {
                 $qq->where('assigned_to', $user->id)->orWhere('created_by', $user->id);
             });
@@ -758,7 +760,6 @@ class TaskController extends Controller
                 }
             }
         }
-        error_log('[TASK_SHOW_DEBUG] user=' . $user->id . ' task=' . $task->id . ' isTransferor=' . json_encode($isTransferor) . ' transferorHasApproved=' . json_encode($transferorHasApproved) . ' transferorReturnToSelf=' . json_encode($transferorReturnToSelf) . ' delegation_chain=' . json_encode($chain) . ' approval_chain=' . json_encode($approvalChain));
         $payload['is_transferor'] = $isTransferor;
         $payload['transferor_return_to_self'] = $transferorReturnToSelf;
         $payload['transferor_has_approved'] = $transferorHasApproved;
@@ -789,7 +790,6 @@ class TaskController extends Controller
             $payload['is_current_owner'] = true;
             $payload['my_status'] = $payload['my_status'] === 'submitted' ? 'pending' : ($payload['my_status'] ?? 'pending');
         }
-        error_log('[TASK_SHOW_DEBUG_FORCE] user=' . $user->id . ' task=' . $task->id . ' can_submit=' . json_encode($payload['can_submit']) . ' is_assignee=' . json_encode($payload['is_assignee']) . ' is_current_owner=' . json_encode($payload['is_current_owner']) . ' my_status=' . json_encode($payload['my_status'] ?? 'null') . ' status=' . json_encode($task->status));
         $payload['can_delegate'] = ($isAssignee || $isCurrentOwner)
             && ! in_array($task->status, ['approved', 'rejected', 'submitted'])
             && $task->allow_transfer;
@@ -828,8 +828,6 @@ class TaskController extends Controller
             'work_completed_at' => $task->work_completed_at?->format('Y-m-d\TH:i:s'),
             'last_timer_event_at' => $task->last_timer_event_at?->format('Y-m-d\TH:i:s'),
         ];
-
-        error_log('[TASK_SHOW_FINAL] user=' . $user->id . ' task=' . $task->id . ' can_submit=' . json_encode($payload['can_submit']) . ' is_assignee=' . json_encode($payload['is_assignee']) . ' is_transferor=' . json_encode($payload['is_transferor']) . ' transferor_has_approved=' . json_encode($payload['transferor_has_approved']) . ' my_status=' . json_encode($payload['my_status'] ?? 'null') . ' status=' . json_encode($payload['status']) . ' active_outgoing_delegation=' . json_encode($payload['active_outgoing_delegation']));
 
         return response()->json(['success' => true, 'task' => $payload]);
     }
@@ -2666,7 +2664,6 @@ class TaskController extends Controller
 
         // Check if user is a transferor (next_approver from delegation chain with return_to_transferor=true)
         $isNextApproverTransferor = $isNextApprover && ! $isCreator;
-        error_log('[TASK_APPROVE_DEBUG] user=' . $user->id . ' task=' . $task->id . ' isCreator=' . json_encode($isCreator) . ' isNextApprover=' . json_encode($isNextApprover) . ' nextApprover=' . json_encode($nextApprover) . ' isNextApproverTransferor=' . json_encode($isNextApproverTransferor) . ' isDelegationChain=' . json_encode($isDelegationChain) . ' task_status=' . json_encode($task->status));
         $approvalChain = $task->approval_chain ?? [];
         if ($isNextApproverTransferor) {
             // Mark this transferor as approved in the approval_chain, then set task back to the transferor for submission to OA
@@ -2744,8 +2741,6 @@ class TaskController extends Controller
             $taskData['active_outgoing_delegation_id'] = null;
             $taskData['can_delegate'] = false;
             $taskData['status'] = 'in_progress';
-
-            error_log('[TASK_APPROVE_TRANSFEROR] user=' . $user->id . ' task=' . $task->id . ' can_submit=' . json_encode($taskData['can_submit']) . ' is_assignee=' . json_encode($taskData['is_assignee']) . ' status=' . json_encode($taskData['status']) . ' approval_chain=' . json_encode($taskData['approval_chain'] ?? 'null'));
 
             return response()->json([
                 'success' => true,

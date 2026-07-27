@@ -258,7 +258,7 @@ function Sidebar() {
           {/* Projects link */}
           <Link
             to={rolePath("projects")}
-            className={`sidebar-link ${isActiveOrStart("projects") ? "active" : ""}`}
+            className={`sidebar-link ${isActiveOrStart("projects") || (user.role === "guest" && location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`)) ? "active" : ""}`}
             onClick={(e) => e.stopPropagation()}
           >
             <MdOutlineDescription />
@@ -269,7 +269,7 @@ function Sidebar() {
           {user.role === "guest" && (
           <Link
             to={rolePath("guest-tasks")}
-            className={`sidebar-link ${isActive("guest-tasks") || location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "active" : ""}`}
+            className={`sidebar-link ${isActive("guest-tasks") && !location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "active" : ""}`}
             onClick={(e) => e.stopPropagation()}
           >
             <MdTask />

@@ -10,13 +10,14 @@
  *   onFilesChange - Callback when files are added/removed/renamed
  *   readOnly    - Boolean
  */
-import { useState } from "react";
-import { FolderOpen } from "lucide-react";
+import { useState, useRef } from "react";
+import { FolderOpen, Upload, Link as LinkIcon, X } from "lucide-react";
 import SortableTableWrapper, { DragHandle } from "./SortableTableWrapper";
 import ConfirmModal from "./ConfirmModal";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { showSuccessMessage } from "../utils/notify";
+import { useNotification } from "../context/NotificationContext";
 
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
 
@@ -39,6 +40,13 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
   const [editSaving, setEditSaving] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [linkInput, setLinkInput] = useState("");
+  const [linkName, setLinkName] = useState("");
+  const [showLinkForm, setShowLinkForm] = useState(false);
+  const [addingLink, setAddingLink] = useState(false);
+  const fileInputRef = useRef(null);
+  const { notify } = useNotification();
 
   const baseEndpoint = entityType === "task" ? "tasks" : "deliverables";
 
@@ -74,10 +82,10 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
         if (onFilesChange) onFilesChange();
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(data.message || "Failed to rename file");
+        notify.error(data.message || "Failed to rename file");
       }
     } catch {
-      alert("Failed to rename file");
+      notify.error("Failed to rename file");
     }
     setEditSaving(false);
   };
@@ -102,12 +110,68 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
         if (onFilesChange) onFilesChange();
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(data.message || "Failed to delete file");
+        notify.error(data.message || "Failed to delete file");
       }
     } catch {
-      alert("Failed to delete file");
+      notify.error("Failed to delete file");
     }
     done?.();
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const token = authToken();
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("name", file.name);
+      const res = await fetch(`${API_URL}/${baseEndpoint}/${entityId}/files`, {
+        method: "POST",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (res.ok) {
+        showSuccessMessage("File uploaded successfully");
+        if (onFilesChange) onFilesChange();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        notify.error(data.message || "Failed to upload file");
+      }
+    } catch {
+      notify.error("Failed to upload file");
+    }
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleAddLink = async () => {
+    if (!linkInput.trim()) return;
+    let url = linkInput.trim();
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    setAddingLink(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/${baseEndpoint}/${entityId}/links`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ url, name: linkName.trim() || null }),
+      });
+      if (res.ok) {
+        showSuccessMessage("Link added successfully");
+        setLinkInput("");
+        setLinkName("");
+        setShowLinkForm(false);
+        if (onFilesChange) onFilesChange();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        notify.error(data.message || "Failed to add link");
+      }
+    } catch {
+      notify.error("Failed to add link");
+    }
+    setAddingLink(false);
   };
 
   return (
@@ -126,6 +190,65 @@ export default function FileUploadSection({ entityType, entityId, files, onReord
           </div>
         )}
       </div>
+
+      {!readOnly && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <input type="file" ref={fileInputRef} onChange={handleFileUpload} style={{ display: "none" }} />
+          <button
+            className="td-btn-outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", fontSize: 13, borderRadius: 8, border: "1px solid var(--border-color, #e2e8f0)", background: "#fff", cursor: uploading ? "not-allowed" : "pointer" }}
+          >
+            <Upload size={14} />
+            {uploading ? "Uploading..." : "Upload File"}
+          </button>
+          <button
+            className="td-btn-outline"
+            onClick={() => setShowLinkForm(!showLinkForm)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", fontSize: 13, borderRadius: 8, border: "1px solid var(--border-color, #e2e8f0)", background: "#fff", cursor: "pointer" }}
+          >
+            <LinkIcon size={14} />
+            Add Link
+          </button>
+        </div>
+      )}
+
+      {showLinkForm && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <input
+            type="text"
+            placeholder="https://..."
+            value={linkInput}
+            onChange={(e) => setLinkInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleAddLink(); }}
+            style={{ flex: 1, minWidth: 200, padding: "6px 10px", fontSize: 13, borderRadius: 8, border: "1px solid var(--border-color, #e2e8f0)" }}
+          />
+          <input
+            type="text"
+            placeholder="Link name (optional)"
+            value={linkName}
+            onChange={(e) => setLinkName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleAddLink(); }}
+            style={{ width: 180, padding: "6px 10px", fontSize: 13, borderRadius: 8, border: "1px solid var(--border-color, #e2e8f0)" }}
+          />
+          <button
+            className="td-btn-primary"
+            onClick={handleAddLink}
+            disabled={addingLink || !linkInput.trim()}
+            style={{ padding: "6px 14px", fontSize: 13, borderRadius: 8 }}
+          >
+            {addingLink ? "Adding..." : "Add"}
+          </button>
+          <button
+            onClick={() => { setShowLinkForm(false); setLinkInput(""); setLinkName(""); }}
+            style={{ padding: "6px 8px", fontSize: 13, borderRadius: 8, border: "1px solid var(--border-color, #e2e8f0)", background: "#fff", cursor: "pointer" }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {files.length === 0 ? (
         <p className="td-empty">No files attached.</p>
       ) : filteredFiles.length === 0 ? (

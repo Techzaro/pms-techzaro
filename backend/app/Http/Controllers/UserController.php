@@ -995,63 +995,114 @@ class UserController extends Controller
 
         $file = $request->file('avatar');
         if (!$file->isValid()) {
+            Log::warning('Avatar upload invalid', [
+                'user_id' => $user?->id,
+                'error' => $file->getError(),
+            ]);
             return $user?->avatar;
         }
 
-        // Delete old avatar if exists
-        if ($user && $user->avatar && Storage::disk('public')->exists($user->avatar)) {
-            Storage::disk('public')->delete($user->avatar);
+        $disk = Storage::disk('public');
+
+        if ($user && $user->avatar && $disk->exists($user->avatar)) {
+            $disk->delete($user->avatar);
         }
 
         $userId = $user ? $user->id : 'temp_' . time();
+
+        if (!$disk->exists('avatars/' . $userId)) {
+            $disk->makeDirectory('avatars/' . $userId);
+        }
+
         $filename = 'avatar_' . time() . '_' . mt_rand(10000, 99999) . '.' . $file->getClientOriginalExtension();
         $path = $file->storeAs('avatars/' . $userId, $filename, 'public');
 
-        return $path;
+        if ($path && $disk->exists($path)) {
+            return $path;
+        }
+
+        Log::error('Avatar upload failed - file not found on disk after store', [
+            'user_id' => $user?->id,
+            'returned_path' => $path,
+        ]);
+
+        return $user?->avatar;
     }
 
     private function handleFileUploads(Request $request, User $user): void
     {
         $authUser = $request->user();
+
+        $disk = Storage::disk('public');
+        $diskRoot = $disk->getRootedPath('');
+
+        if (!$disk->exists('user_documents/' . $user->id)) {
+            $disk->makeDirectory('user_documents/' . $user->id);
+        }
+
         $singleFields = [
             'employment_contract', 'offer_letter', 'techxaro_regulations',
         ];
+
+        $uploadErrors = [];
 
         foreach ($singleFields as $field) {
             if ($request->hasFile($field)) {
                 $file = $request->file($field);
 
                 if (!$file->isValid()) {
+                    $uploadErrors[$field] = 'File upload failed or file is invalid.';
+                    Log::warning('Document upload invalid', [
+                        'user_id' => $user->id,
+                        'field' => $field,
+                        'error' => $file->getError(),
+                    ]);
                     continue;
                 }
 
-                // Delete old file if exists
-                if ($user->$field && Storage::disk('public')->exists($user->$field)) {
-                    Storage::disk('public')->delete($user->$field);
+                if ($user->$field && $disk->exists($user->$field)) {
+                    $disk->delete($user->$field);
                 }
 
                 $filename = $field . '_' . time() . '_' . $file->getClientOriginalName();
                 $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
 
-                $user->$field = $path;
+                if ($path && $disk->exists($path)) {
+                    $user->$field = $path;
 
-                \App\Models\UserChange::create([
-                    'user_id' => $user->id,
-                    'field_name' => $field,
-                    'old_value' => null,
-                    'new_value' => $file->getClientOriginalName(),
-                    'modified_by' => $authUser->id,
-                ]);
+                    \App\Models\UserChange::create([
+                        'user_id' => $user->id,
+                        'field_name' => $field,
+                        'old_value' => null,
+                        'new_value' => $file->getClientOriginalName(),
+                        'modified_by' => $authUser->id,
+                    ]);
+
+                    Log::info('Document uploaded successfully', [
+                        'user_id' => $user->id,
+                        'field' => $field,
+                        'path' => $path,
+                        'disk_root' => $diskRoot,
+                        'file_size' => $file->getSize(),
+                    ]);
+                } else {
+                    $uploadErrors[$field] = 'File could not be saved to storage.';
+                    Log::error('Document upload failed - file not found on disk after store', [
+                        'user_id' => $user->id,
+                        'field' => $field,
+                        'returned_path' => $path,
+                        'disk_root' => $diskRoot,
+                        'expected_path' => $diskRoot . '/' . $path,
+                    ]);
+                }
             }
         }
 
-        // Handle multiple other_document files
         if ($request->hasFile('other_document')) {
             $files = $request->file('other_document');
             $names = $request->input('other_document_names', []);
 
             if (is_array($files)) {
-                // Keep existing files and append new ones
                 $existingDocs = $this->parseOtherDocumentPaths($user->other_document);
 
                 $newDocs = [];
@@ -1059,9 +1110,31 @@ class UserController extends Controller
                     if ($file->isValid()) {
                         $filename = 'other_document_' . time() . '_' . mt_rand(10000, 99999) . '_' . $file->getClientOriginalName();
                         $path = $file->storeAs('user_documents/' . $user->id, $filename, 'public');
-                        $customName = isset($names[$index]) ? $names[$index] : $file->getClientOriginalName();
-                        $customName = preg_replace('/\.[^.]+$/', '', $customName);
-                        $newDocs[] = ['path' => $path, 'name' => $customName];
+
+                        if ($path && $disk->exists($path)) {
+                            $customName = isset($names[$index]) ? $names[$index] : $file->getClientOriginalName();
+                            $customName = preg_replace('/\.[^.]+$/', '', $customName);
+                            $newDocs[] = ['path' => $path, 'name' => $customName];
+
+                            Log::info('Other document uploaded successfully', [
+                                'user_id' => $user->id,
+                                'path' => $path,
+                                'file_size' => $file->getSize(),
+                            ]);
+                        } else {
+                            $uploadErrors['other_document_' . $index] = 'File could not be saved to storage.';
+                            Log::error('Other document upload failed - file not found on disk after store', [
+                                'user_id' => $user->id,
+                                'returned_path' => $path,
+                                'disk_root' => $diskRoot,
+                            ]);
+                        }
+                    } else {
+                        $uploadErrors['other_document_' . $index] = 'File upload failed or file is invalid.';
+                        Log::warning('Other document upload invalid', [
+                            'user_id' => $user->id,
+                            'error' => $file->getError(),
+                        ]);
                     }
                 }
 
@@ -1078,7 +1151,6 @@ class UserController extends Controller
             }
         }
 
-        // Handle existing docs renames and removals (when no new files uploaded)
         if (!$request->hasFile('other_document') && $request->has('existing_other_docs')) {
             $existingDocsJson = $request->input('existing_other_docs');
             $updatedDocs = json_decode($existingDocsJson, true);
@@ -1086,7 +1158,6 @@ class UserController extends Controller
             if (is_array($updatedDocs)) {
                 $oldDocs = $this->parseOtherDocumentPaths($user->other_document);
 
-                // Find and delete removed files
                 $oldPaths = array_map(function($doc) {
                     return is_array($doc) ? $doc['path'] : $doc;
                 }, $oldDocs);
@@ -1095,8 +1166,8 @@ class UserController extends Controller
                 }, $updatedDocs);
                 $removedPaths = array_diff($oldPaths, $newPaths);
                 foreach ($removedPaths as $removedPath) {
-                    if ($removedPath && Storage::disk('public')->exists($removedPath)) {
-                        Storage::disk('public')->delete($removedPath);
+                    if ($removedPath && $disk->exists($removedPath)) {
+                        $disk->delete($removedPath);
                     }
                 }
 
@@ -1113,6 +1184,13 @@ class UserController extends Controller
         }
 
         $user->save();
+
+        if (!empty($uploadErrors)) {
+            Log::warning('Some document uploads failed for user', [
+                'user_id' => $user->id,
+                'errors' => $uploadErrors,
+            ]);
+        }
     }
 
     /**

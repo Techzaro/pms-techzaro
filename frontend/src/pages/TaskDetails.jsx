@@ -331,7 +331,6 @@ function TaskDetails() {
       });
       if (res.ok) {
         const data = await res.json();
-        console.log('[FETCH_TASK_RESPONSE]', { can_submit: data.task?.can_submit, is_assignee: data.task?.is_assignee, is_transferor: data.task?.is_transferor, transferor_has_approved: data.task?.transferor_has_approved, my_status: data.task?.my_status, status: data.task?.status, active_outgoing_delegation: data.task?.active_outgoing_delegation, is_current_owner: data.task?.is_current_owner });
         setTask(data.task);
       } else if (res.status === 404) {
         setTask(null);
@@ -404,26 +403,6 @@ function TaskDetails() {
   const transferorHasApproved = task?.transferor_has_approved ?? false;
   const hasPendingDelegation = task?.pending_delegation && task.pending_delegation.delegated_to === currentUser?.id;
   const isDelegatee = task?.is_delegatee ?? false;
-
-  if (task && isTransferor) {
-    console.log('[TRANSFEROR_DEBUG]', {
-      canSubmitTask,
-      canPause,
-      isAssignee,
-      isTransferor,
-      transferorHasApproved,
-      transferorReturnToSelf,
-      hasPendingDelegation,
-      my_status: task?.my_status,
-      status: task?.status,
-      can_submit: task?.can_submit,
-      is_current_owner: task?.is_current_owner,
-      active_outgoing_delegation: task?.active_outgoing_delegation,
-      pending_delegation: task?.pending_delegation,
-      assigner_paused: task?.assigner_paused,
-      readOnly,
-    });
-  }
 
   const { submitting: acknowledging, run: runAcknowledge } = useSubmit();
   const { submitting: pausing, run: runPause } = useSubmit();
@@ -837,7 +816,6 @@ function TaskDetails() {
   };
 
   const handleTaskActionSuccess = (updatedTask, options = {}) => {
-    console.log('[TASK_ACTION_SUCCESS]', { can_submit: updatedTask?.can_submit, is_assignee: updatedTask?.is_assignee, is_transferor: updatedTask?.is_transferor, transferor_has_approved: updatedTask?.transferor_has_approved, my_status: updatedTask?.my_status, status: updatedTask?.status, active_outgoing_delegation: updatedTask?.active_outgoing_delegation, is_current_owner: updatedTask?.is_current_owner });
     setTask((prev) => ({ ...prev, ...updatedTask }));
     const statusActions = {
       submitted: "submitted",
@@ -1031,7 +1009,6 @@ function TaskDetails() {
         });
         const data = await res.json();
         if (res.ok) {
-          console.log('[APPROVE_RESPONSE]', { can_submit: data.task?.can_submit, is_assignee: data.task?.is_assignee, is_transferor: data.task?.is_transferor, transferor_has_approved: data.task?.transferor_has_approved, my_status: data.task?.my_status, status: data.task?.status, active_outgoing_delegation: data.task?.active_outgoing_delegation, is_current_owner: data.task?.is_current_owner });
           setTask(data.task);
           publish('task:updated', { id: taskId, status: 'in_progress' });
           publish('data:changed', { type: 'task', action: 'updated' });
@@ -1319,7 +1296,7 @@ function TaskDetails() {
                     { id: "subtasks", label: "Subtasks", icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg> },
                     { id: "files", label: "Platform files & links", icon: <FolderOpen size={16} /> },
                     { id: "access", label: "Access", icon: <Shield size={16} /> },
-                  ].map(({ id, label, icon }) => (
+                  ].filter((t) => currentUser?.role !== "guest" || t.id !== "subtasks").map(({ id, label, icon }) => (
                     <button key={id} className={`td-tab ${tab === id ? "td-tab--on" : ""}`} onClick={() => setTab(id)}>
                       {icon}
                       {label}
@@ -1371,7 +1348,7 @@ function TaskDetails() {
                     </div>
                   )}
 
-                  {tab === "subtasks" && (
+                  {tab === "subtasks" && currentUser?.role !== "guest" && (
                     <div>
                       <div className="td-section-header">
                         <h2 className="td-section-title">Subtasks <span className="td-section-count">({(() => { const all = orderedSubtasks.length ? orderedSubtasks : (task.deliverables || []); const filtered = subtaskSearch ? all.filter((d) => { const q = subtaskSearch.toLowerCase(); return (d.title || "").toLowerCase().includes(q) || (d.description || "").toLowerCase().includes(q); }) : all; return filtered.length; })()})</span></h2>
@@ -1423,7 +1400,6 @@ function TaskDetails() {
                                   </div>
                                   <div style={{ minWidth: 0 }}>
                                     <div className="user-name" style={{ fontSize: 14, fontWeight: 600 }}>{d.title}</div>
-                                    {descText && <div className="user-role" style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{descText.length > 40 ? descText.slice(0, 40) + '...' : descText}</div>}
                                   </div>
                                 </div>
                                 <div>
@@ -1447,7 +1423,8 @@ function TaskDetails() {
                                     onTriggerClick={() => {
                                       const deliverableIds = (orderedSubtasks.length ? orderedSubtasks : (task.deliverables || [])).map((s) => s.id);
                                       const subtaskFrom = isCreator && !isAssignee ? "deliveries-by-you" : isAssignee && !isCreator ? "deliveries" : "self-deliveries";
-                                      navigate(rolePath(`deliveries/deliverable-details/${d.id}`), { state: { from: subtaskFrom, subtaskIds: deliverableIds } });
+                                      const isGuest = currentUser?.role === "guest";
+                                      navigate(rolePath(`deliveries/deliverable-details/${d.id}`), { state: { from: subtaskFrom, subtaskIds: deliverableIds, readOnly: isGuest } });
                                     }}
                                   >
                                     <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: d.id })}>

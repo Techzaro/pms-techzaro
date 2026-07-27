@@ -60,6 +60,11 @@ class NotificationService
         }
 
         $filtered = array_values($filtered);
+
+        $validUserIds = \App\Models\User::whereIn('id', array_column($filtered, 'user_id'))->pluck('id')->toArray();
+        $filtered = array_filter($filtered, fn($n) => in_array($n['user_id'], $validUserIds));
+
+        if (empty($filtered)) return;
         $now = now()->toDateTimeString();
 
         $rows = array_map(function ($n) use ($now) {

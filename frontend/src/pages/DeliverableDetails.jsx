@@ -127,7 +127,7 @@ function SubtaskDetails() {
     "all-deliverables": { label: "All Sub-Tasks", path: rolePath("all-deliverables") },
   };
   const subtaskSource = subtaskSourcePages[location.state?.from] || null;
-  const readOnly = location.state?.readOnly === true;
+  const readOnly = location.state?.readOnly === true || currentUser?.role === "guest";
   const subtaskIds = location.state?.subtaskIds || [];
 
   const currentIdx = subtaskIds.findIndex(
@@ -242,7 +242,6 @@ function SubtaskDetails() {
   const isCreator = subtask && currentUser && parseInt(subtask.created_by, 10) === parseInt(currentUser.id, 10);
   const isAdminManager = currentUser && ["admin", "manager"].includes(currentUser.role);
   const isAssignee = subtask && currentUser && subtask.assigned_to && parseInt(subtask.assigned_to, 10) === parseInt(currentUser.id, 10);
-  const canApproveReject = (isCreator && !(hasDelegationChain && !isNextApprover)) || isAdminManager || (isNextApprover && !transferorHasApproved);
   const isTransferor = subtask?.is_transferor ?? false;
   const isNextApprover = subtask?.is_next_approver ?? false;
   const transferorReturnToSelf = subtask?.transferor_return_to_self ?? true;
@@ -250,6 +249,7 @@ function SubtaskDetails() {
   const hasDelegationChain = subtask?.has_delegation_chain ?? false;
   const hasPendingDelegation = subtask?.pending_delegation && subtask.pending_delegation.delegated_to === currentUser?.id;
   const isDelegatee = subtask?.is_delegatee ?? false;
+  const canApproveReject = (isCreator && !(hasDelegationChain && !isNextApprover)) || isAdminManager || (isNextApprover && !transferorHasApproved);
 
   const timerData = subtask?.timer || {
     state: subtask?.timer_state || "idle",
@@ -820,7 +820,7 @@ function SubtaskDetails() {
                   )}
 
                   {tab === "files" && (
-                    <FileUploadSection entityType="deliverable" entityId={subtask.id} files={files} onReorder={handleFileReorder} onFilesChange={fetchSubtask} readOnly={readOnly} />
+                    <FileUploadSection entityType="deliverable" entityId={subtask.id} files={files} onReorder={handleFileReorder} onFilesChange={fetchSubtask} readOnly={true} />
                   )}
                 </div>
 
