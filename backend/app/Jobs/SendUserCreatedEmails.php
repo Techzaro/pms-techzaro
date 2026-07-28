@@ -25,9 +25,9 @@ class SendUserCreatedEmails
         public string $profPassword,
         public string $loginUrl,
         public array $emailAttachments,
-        public string $personalEmail,
-        public string $adderEmail,
-        public string $adderName,
+        public ?string $personalEmail = null,
+        public ?string $adderEmail = null,
+        public string $adderName = 'PMS Techxaro',
     ) {}
 
     public function handle(): void

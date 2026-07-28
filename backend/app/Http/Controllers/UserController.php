@@ -268,17 +268,24 @@ class UserController extends Controller
         $profEmail = $request->input('professional_email') ?: $user->professional_email;
         $profPassword = $request->input('professional_email_password') ?: '';
         $personalEmail = $request->input('personal_email');
-        $adderEmail = $authUser->professional_email;
+        $adderEmail = $authUser->professional_email ?: $authUser->personal_email ?: $authUser->email;
 
         $message = $personalEmail
             ? 'User created successfully. Welcome email will be sent to ' . $personalEmail
             : 'User created successfully.';
 
-        // Dispatch emails to queue — user creation is instant
-        SendUserCreatedEmails::dispatch(
-            $user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments,
-            $personalEmail, $adderEmail, $authUser->name
-        );
+        // Send emails synchronously to ensure delivery
+        try {
+            SendUserCreatedEmails::dispatchSync(
+                $user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments,
+                $personalEmail, $adderEmail, $authUser->name
+            );
+        } catch (\Throwable $e) {
+            Log::error('Failed to send user created emails', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return response()->json([
             'success' => true,
@@ -1034,7 +1041,7 @@ class UserController extends Controller
         $authUser = $request->user();
 
         $disk = Storage::disk('public');
-        $diskRoot = $disk->getRootedPath('');
+        $diskRoot = $disk->path('');
 
         if (!$disk->exists('user_documents/' . $user->id)) {
             $disk->makeDirectory('user_documents/' . $user->id);

@@ -119,6 +119,7 @@ function SubtaskDetails() {
   const navigate = useNavigate();
   const subtaskId = params.deliverable;
   const notify = useNotification();
+  const currentUser = getUser();
 
   const subtaskSourcePages = {
     deliveries: { label: "Subtasks Assigned To You", path: rolePath("deliveries") },
@@ -180,8 +181,6 @@ function SubtaskDetails() {
   const [pendingNoteId, setPendingNoteId] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [files, setFiles] = useState([]);
-
-  const currentUser = getUser();
 
   const fetchSubtask = useCallback(() => {
     setLoading(true);

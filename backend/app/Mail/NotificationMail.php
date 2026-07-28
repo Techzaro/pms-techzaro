@@ -93,6 +93,7 @@ class NotificationMail extends Mailable
 
         return new Content(
             view: $view,
+            with: $this->deliverableContext,
         );
     }
 }

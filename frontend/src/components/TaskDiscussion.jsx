@@ -8,20 +8,11 @@ import {
   ChevronDown,
   ChevronUp,
   X,
-  Bold,
-  Italic,
-  Underline,
-  Strikethrough,
-  List,
-  ListOrdered,
-  AtSign,
   FileText,
-  Palette,
-  Highlighter,
-  RemoveFormatting,
 } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
+import RichTextEditor from "./RichTextEditor";
 
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
 
@@ -79,6 +70,9 @@ function roleLabel(role) {
 
 function renderCommentBody(text) {
   if (!text) return null;
+  if (text.includes("<p>") || text.includes("<div>") || text.includes("<span>")) {
+    return text;
+  }
   let html = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -88,6 +82,8 @@ function renderCommentBody(text) {
   html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
   html = html.replace(/__(.+?)__/g, "<u>$1</u>");
   html = html.replace(/~~(.+?)~~/g, "<s>$1</s>");
+  html = html.replace(/\{color:([^}]+)\}(.+?)\{\/color\}/g, '<span style="color:$1">$2</span>');
+  html = html.replace(/\{highlight:([^}]+)\}(.+?)\{\/highlight\}/g, '<mark style="background:$1">$2</mark>');
   html = html.replace(/\n/g, "<br/>");
   html = html.replace(
     /@(\w+(?:\s\w+)?)/g,
@@ -439,28 +435,10 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [collapsed, setCollapsed] = useState(false);
-  const [fontFamily, setFontFamily] = useState("Sans Serif");
-  const [fontSize, setFontSize] = useState("Normal");
-  const [textColor, setTextColor] = useState("#000000");
-  const [highlightColor, setHighlightColor] = useState("#FFFF00");
-  const [showFontMenu, setShowFontMenu] = useState(false);
-  const [showSizeMenu, setShowSizeMenu] = useState(false);
-  const [showColorPicker, setShowColorPicker] = useState(false);
-  const [showHighlightPicker, setShowHighlightPicker] = useState(false);
-  const [fontHighlightedIndex, setFontHighlightedIndex] = useState(0);
-  const [sizeHighlightedIndex, setSizeHighlightedIndex] = useState(0);
   const commentsEndRef = useRef(null);
-  const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
-  const fontMenuRef = useRef(null);
-  const sizeMenuRef = useRef(null);
-  const colorPickerRef = useRef(null);
-  const highlightPickerRef = useRef(null);
-  const cursorPosRef = useRef({ start: 0, end: 0 });
-  const commentTextRef = useRef("");
+  const quillRef = useRef(null);
   const currentUser = getUser();
-
-  commentTextRef.current = newComment;
 
   const fetchComments = useCallback(
     async (pageNum = 1, append = false) => {
@@ -510,36 +488,9 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
     }
   }, [taskId, deliverableId, fetchComments, fetchParticipants]);
 
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (fontMenuRef.current && !fontMenuRef.current.contains(e.target)) setShowFontMenu(false);
-      if (sizeMenuRef.current && !sizeMenuRef.current.contains(e.target)) setShowSizeMenu(false);
-      if (colorPickerRef.current && !colorPickerRef.current.contains(e.target)) setShowColorPicker(false);
-      if (highlightPickerRef.current && !highlightPickerRef.current.contains(e.target)) setShowHighlightPicker(false);
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  useEffect(() => { setFontHighlightedIndex(0); }, [showFontMenu]);
-  useEffect(() => { setSizeHighlightedIndex(0); }, [showSizeMenu]);
-  const fontMenuListRef = useRef(null);
-  const sizeMenuListRef = useRef(null);
-  useEffect(() => {
-    if (showFontMenu && fontMenuListRef.current) {
-      const el = fontMenuListRef.current.children[fontHighlightedIndex];
-      if (el) el.scrollIntoView({ block: "nearest" });
-    }
-  }, [fontHighlightedIndex, showFontMenu]);
-  useEffect(() => {
-    if (showSizeMenu && sizeMenuListRef.current) {
-      const el = sizeMenuListRef.current.children[sizeHighlightedIndex];
-      if (el) el.scrollIntoView({ block: "nearest" });
-    }
-  }, [sizeHighlightedIndex, showSizeMenu]);
-
   const handlePost = async () => {
-    if (!newComment.trim() && !file) return;
+    const stripped = newComment.replace(/<[^>]*>/g, "").trim();
+    if (!stripped && !file) return;
     setSending(true);
     try {
       const token = authToken();
@@ -590,14 +541,12 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
     fetchComments(nextPage, true);
   };
 
-  const handleMentionInput = (e) => {
-    const value = e.target.value;
+  const handleQuillChange = (value, delta, source, editor) => {
     setNewComment(value);
-
-    const cursorPos = e.target.selectionStart;
-    const textBeforeCursor = value.substring(0, cursorPos);
+    const text = editor.getText();
+    const cursorPos = editor.getSelection()?.index || 0;
+    const textBeforeCursor = text.substring(0, cursorPos);
     const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
-
     if (mentionMatch) {
       setMentionQuery(mentionMatch[1].toLowerCase());
       setShowMentions(true);
@@ -607,14 +556,18 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
   };
 
   const insertMention = (participant) => {
-    const currentText = commentTextRef.current;
-    const cursorPos = textareaRef.current?.selectionStart || currentText.length;
-    const textBeforeCursor = currentText.substring(0, cursorPos);
-    const textAfterCursor = currentText.substring(cursorPos);
-    const mentionText = textBeforeCursor.replace(/@\w*$/, `@${participant.name} `);
-    setNewComment(mentionText + textAfterCursor);
+    const quill = quillRef.current?.getQuill();
+    if (!quill) return;
+    const cursorPos = quill.getSelection()?.index || quill.getLength() - 1;
+    const textBeforeCursor = quill.getText(0, cursorPos);
+    const atMatch = textBeforeCursor.match(/@(\w*)$/);
+    if (atMatch) {
+      const atIndex = cursorPos - atMatch[0].length;
+      quill.deleteText(atIndex, atMatch[0].length);
+      quill.insertText(atIndex, `@${participant.name} `, { bold: false });
+      quill.setSelection(atIndex + participant.name.length + 2);
+    }
     setShowMentions(false);
-    requestAnimationFrame(() => { textareaRef.current?.focus(); });
   };
 
   const filteredParticipants = participants.filter(
@@ -622,49 +575,6 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
       p.id !== currentUser?.id &&
       (p.name || "").toLowerCase().includes(mentionQuery)
   );
-
-  const trackCursor = () => {
-    const ta = textareaRef.current;
-    if (ta) {
-      cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd };
-    }
-  };
-
-  const insertFormatting = (before, after) => {
-    const { start, end } = cursorPosRef.current;
-    const currentText = commentTextRef.current;
-    const selected = currentText.substring(start, end);
-    const insertText = selected || "text";
-    const text = currentText.substring(0, start) + before + insertText + after + currentText.substring(end);
-    const newCursorPos = start + before.length + insertText.length + after.length;
-    setNewComment(text);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const ta = textareaRef.current;
-        if (ta) {
-          ta.focus();
-          ta.setSelectionRange(newCursorPos, newCursorPos);
-        }
-      });
-    });
-  };
-
-  const insertAtCursor = (text) => {
-    const { start } = cursorPosRef.current;
-    const currentText = commentTextRef.current;
-    const newText = currentText.substring(0, start) + text + currentText.substring(start);
-    const newPos = start + text.length;
-    setNewComment(newText);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const ta = textareaRef.current;
-        if (ta) {
-          ta.focus();
-          ta.setSelectionRange(newPos, newPos);
-        }
-      });
-    });
-  };
 
   const handleFileSelect = (e) => {
     const selected = e.target.files?.[0];
@@ -682,13 +592,6 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
     setFile(null);
     setFileName("");
     if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      handlePost();
-    }
   };
 
   return (
@@ -778,243 +681,42 @@ export default function TaskDiscussion({ taskId, deliverableId, entityType, read
               )}
 
               <div className="td-discussion-input-wrapper">
-                <div className="td-discussion-toolbar">
-                  <div className="td-discussion-formatting">
-                    {/* Font Family Dropdown */}
-                    <div className="td-toolbar-dropdown" ref={fontMenuRef}>
-                      <button
-                        className="td-toolbar-dropdown-btn"
-                        title="Font family"
-                        onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
-                        onClick={() => { setShowFontMenu(!showFontMenu); setShowSizeMenu(false); setShowColorPicker(false); setShowHighlightPicker(false); }}
-                        onKeyDown={(e) => {
-                          if (!showFontMenu && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-                            e.preventDefault();
-                            setShowFontMenu(true);
-                          } else if (showFontMenu) {
-                            if (e.key === "Escape") { setShowFontMenu(false); }
-                            else if (e.key === "ArrowDown") { e.preventDefault(); setFontHighlightedIndex((p) => (p < 3 ? p + 1 : 0)); }
-                            else if (e.key === "ArrowUp") { e.preventDefault(); setFontHighlightedIndex((p) => (p > 0 ? p - 1 : 3)); }
-                            else if (e.key === "Enter") { e.preventDefault(); const fonts = ["Sans Serif", "Serif", "Monospace", "Cursive"]; if (fonts[fontHighlightedIndex]) { setFontFamily(fonts[fontHighlightedIndex]); setShowFontMenu(false); } }
-                          }
-                        }}
-                      >
-                        {fontFamily} <ChevronDown size={12} />
-                      </button>
-                      {showFontMenu && (
-                        <div className="td-toolbar-dropdown-menu" ref={fontMenuListRef}>
-                          {["Sans Serif", "Serif", "Monospace", "Cursive"].map((f, idx) => (
-                            <button key={f} className={`td-toolbar-dropdown-item ${fontFamily === f ? "active" : ""} ${fontHighlightedIndex === idx ? "td-toolbar-dropdown-item--highlighted" : ""}`}
-                              onMouseEnter={() => setFontHighlightedIndex(idx)}
-                              onClick={() => { setFontFamily(f); setShowFontMenu(false); }}>
-                              {f}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Font Size Dropdown */}
-                    <div className="td-toolbar-dropdown" ref={sizeMenuRef}>
-                      <button
-                        className="td-toolbar-dropdown-btn"
-                        title="Font size"
-                        onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
-                        onClick={() => { setShowSizeMenu(!showSizeMenu); setShowFontMenu(false); setShowColorPicker(false); setShowHighlightPicker(false); }}
-                        onKeyDown={(e) => {
-                          if (!showSizeMenu && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-                            e.preventDefault();
-                            setShowSizeMenu(true);
-                          } else if (showSizeMenu) {
-                            if (e.key === "Escape") { setShowSizeMenu(false); }
-                            else if (e.key === "ArrowDown") { e.preventDefault(); setSizeHighlightedIndex((p) => (p < 3 ? p + 1 : 0)); }
-                            else if (e.key === "ArrowUp") { e.preventDefault(); setSizeHighlightedIndex((p) => (p > 0 ? p - 1 : 3)); }
-                            else if (e.key === "Enter") { e.preventDefault(); const sizes = ["Small", "Normal", "Medium", "Large"]; if (sizes[sizeHighlightedIndex]) { setFontSize(sizes[sizeHighlightedIndex]); setShowSizeMenu(false); } }
-                          }
-                        }}
-                      >
-                        {fontSize} <ChevronDown size={12} />
-                      </button>
-                      {showSizeMenu && (
-                        <div className="td-toolbar-dropdown-menu" ref={sizeMenuListRef}>
-                          {["Small", "Normal", "Medium", "Large"].map((s, idx) => (
-                            <button key={s} className={`td-toolbar-dropdown-item ${fontSize === s ? "active" : ""} ${sizeHighlightedIndex === idx ? "td-toolbar-dropdown-item--highlighted" : ""}`}
-                              onMouseEnter={() => setSizeHighlightedIndex(idx)}
-                              onClick={() => { setFontSize(s); setShowSizeMenu(false); }}>
-                              {s}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="td-toolbar-separator" />
-
-                    <button
-                      title="Bold"
-                      onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
-                      onClick={() => insertFormatting("**", "**")}
-                    >
-                      <Bold size={14} />
-                    </button>
-                    <button
-                      title="Italic"
-                      onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
-                      onClick={() => insertFormatting("*", "*")}
-                    >
-                      <Italic size={14} />
-                    </button>
-                    <button
-                      title="Underline"
-                      onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
-                      onClick={() => insertFormatting("__", "__")}
-                    >
-                      <Underline size={14} />
-                    </button>
-                    <button
-                      title="Strikethrough"
-                      onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
-                      onClick={() => insertFormatting("~~", "~~")}
-                    >
-                      <Strikethrough size={14} />
-                    </button>
-
-                    <div className="td-toolbar-separator" />
-
-                    {/* Text Color */}
-                    <div className="td-toolbar-dropdown" ref={colorPickerRef}>
-                      <button
-                        className="td-toolbar-color-btn"
-                        title="Text color"
-                        onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
-                        onClick={() => { setShowColorPicker(!showColorPicker); setShowFontMenu(false); setShowSizeMenu(false); setShowHighlightPicker(false); }}
-                      >
-                        <span className="td-toolbar-color-label">A</span>
-                        <span className="td-toolbar-color-bar" style={{ backgroundColor: textColor }} />
-                      </button>
-                      {showColorPicker && (
-                        <div className="td-toolbar-color-picker">
-                          {["#000000", "#434343", "#666666", "#999999", "#B7B7B7", "#CCCCCC", "#D9D9D9", "#EFEFEF", "#F3F3F3", "#FFFFFF",
-                            "#980000", "#FF0000", "#FF9900", "#FFFF00", "#00FF00", "#00FFFF", "#4A86E8", "#0000FF", "#9900FF", "#FF00FF",
-                            "#E6B8AF", "#F4CCCC", "#FCE5CD", "#FFF2CC", "#D9EAD3", "#D0E0E3", "#C9DAF8", "#CFE2F3", "#D9D2E9", "#EAD1DC"].map((c) => (
-                            <button key={c} className="td-toolbar-color-swatch" style={{ backgroundColor: c }} onClick={() => { setTextColor(c); setShowColorPicker(false); }} title={c} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Highlight Color */}
-                    <div className="td-toolbar-dropdown" ref={highlightPickerRef}>
-                      <button
-                        className="td-toolbar-color-btn"
-                        title="Highlight color"
-                        onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
-                        onClick={() => { setShowHighlightPicker(!showHighlightPicker); setShowFontMenu(false); setShowSizeMenu(false); setShowColorPicker(false); }}
-                      >
-                        <span className="td-toolbar-color-label" style={{ backgroundColor: highlightColor, padding: "0 3px", borderRadius: "2px" }}>A</span>
-                      </button>
-                      {showHighlightPicker && (
-                        <div className="td-toolbar-color-picker">
-                          {["#FFFF00", "#00FF00", "#00FFFF", "#FF00FF", "#FF0000", "#0000FF", "#FFFFFF", "#F4CCCC", "#FCE5CD", "#FFF2CC",
-                            "#D9EAD3", "#D0E0E3", "#CFE2F3", "#D9D2E9", "#EAD1DC", "#FFFFFF"].map((c) => (
-                            <button key={c} className="td-toolbar-color-swatch" style={{ backgroundColor: c }} onClick={() => { setHighlightColor(c); setShowHighlightPicker(false); }} title={c} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="td-toolbar-separator" />
-
-                    <button
-                      title="Bullet list"
-                      onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
-                      onClick={() => insertAtCursor("\n- ")}
-                    >
-                      <List size={14} />
-                    </button>
-                    <button
-                      title="Numbered list"
-                      onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
-                      onClick={() => insertAtCursor("\n1. ")}
-                    >
-                      <ListOrdered size={14} />
-                    </button>
-
-                    <div className="td-toolbar-separator" />
-
-                    <button
-                      title="Clear formatting"
-                      onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
-                      onClick={() => {
-                        const currentText = commentTextRef.current;
-                        const cleaned = currentText
-                          .replace(/\*\*(.+?)\*\*/g, "$1")
-                          .replace(/\*(.+?)\*/g, "$1")
-                          .replace(/__(.+?)__/g, "$1")
-                          .replace(/~~(.+?)~~/g, "$1")
-                          .replace(/<mark>(.+?)<\/mark>/g, "$1");
-                        setNewComment(cleaned);
-                        requestAnimationFrame(() => { textareaRef.current?.focus(); });
-                      }}
-                    >
-                      <RemoveFormatting size={14} />
-                    </button>
-                    <button
-                      title="Mention someone"
-                      onMouseDown={(e) => { const ta = textareaRef.current; if (ta) cursorPosRef.current = { start: ta.selectionStart, end: ta.selectionEnd }; }}
-                      onClick={() => {
-                        insertAtCursor("@");
-                        setShowMentions(true);
-                        setMentionQuery("");
-                      }}
-                    >
-                      <AtSign size={14} />
-                    </button>
-                  </div>
-                  <div className="td-discussion-send-row">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      className="td-discussion-file-input"
-                      onChange={handleFileSelect}
-                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.avi"
-                    />
-                    <button
-                      className="td-discussion-attach-btn"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => fileInputRef.current?.click()}
-                      title="Attach file"
-                    >
-                      <Paperclip size={16} />
-                    </button>
-                    <button
-                      className="td-discussion-send-btn"
-                      onClick={handlePost}
-                      disabled={sending || (!newComment.trim() && !file)}
-                    >
-                      {sending ? (
-                        "Sending..."
-                      ) : (
-                        <>
-                          <Send size={14} /> Send
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <textarea
-                  ref={textareaRef}
-                  className="td-discussion-textarea"
-                  placeholder="Write a comment... (Use @ to mention, Ctrl+Enter to send)"
+                <RichTextEditor
+                  ref={quillRef}
                   value={newComment}
-                  onChange={handleMentionInput}
-                  onKeyDown={handleKeyDown}
-                  onSelect={trackCursor}
-                  onClick={trackCursor}
-                  onKeyUp={trackCursor}
-                  rows={3}
-                  disabled={sending}
+                  onChange={handleQuillChange}
+                  placeholder="Write a comment..."
+                  style={{ height: "auto" }}
                 />
+                <div className="td-discussion-send-row">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="td-discussion-file-input"
+                    onChange={handleFileSelect}
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.avi"
+                  />
+                  <button
+                    className="td-discussion-attach-btn"
+                    onClick={() => fileInputRef.current?.click()}
+                    title="Attach file"
+                  >
+                    <Paperclip size={16} />
+                  </button>
+                  <button
+                    className="td-discussion-send-btn"
+                    onClick={handlePost}
+                    disabled={sending || (!newComment.replace(/<[^>]*>/g, "").trim() && !file)}
+                  >
+                    {sending ? (
+                      "Sending..."
+                    ) : (
+                      <>
+                        <Send size={14} /> Send
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           )}

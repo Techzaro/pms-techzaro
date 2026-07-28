@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Services\BusinessIdService;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Represents a task within a project.
@@ -82,17 +83,25 @@ class Task extends Model
         if ($value) return $value;
 
         $service = app(BusinessIdService::class);
-        if ($this->project_id && $this->project) {
+        if ($this->project_id && $this->project && !empty($this->project->project_code) && !empty($this->project->project_number)) {
             $bizId = $service->generateTaskBusinessId($this->project);
             $taskNumber = (int) substr(strrchr($bizId, '.'), 1);
         } else {
             $bizId = 'TASK-' . $this->id;
             $taskNumber = $this->id;
         }
-        $this->updateQuietly([
-            'task_number' => $taskNumber,
-            'business_id' => $bizId,
-        ]);
+
+        try {
+            $this->updateQuietly([
+                'task_number' => $taskNumber,
+                'business_id' => $bizId,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to auto-generate business_id for task', [
+                'task_id' => $this->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return $bizId;
     }
