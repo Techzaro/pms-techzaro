@@ -52,6 +52,15 @@ const DraftCenter = lazy(() => import("./pages/DraftCenter"));
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleProtectedRoute from "./components/RoleProtectedRoute";
 
+//============================== HRM Routes+Layout==================================================
+//=================== HRM Layout=========================================== 
+const HRMAdminLayout=lazy(()=>import("./components/layout/hrm/DashboardLayout"))
+// ======================================================================
+//======================== HRM Route ======================================
+const HRMAdmin=lazy(()=>import("./pages/HRM/Admin"))
+const RecruitmentOnboarding=lazy(()=>import("./pages/HRM/Recruitment"))
+const OfferLetters=lazy(()=>import("./pages/HRM/OfferLetter"))
+// =======================================================================================
 class ErrorBoundary extends Component {
   state = { hasError: false };
   static getDerivedStateFromError() { return { hasError: true }; }
@@ -142,8 +151,20 @@ function App() {
 
             {/* Catch-all redirect */}
             <Route path="*" element={<Navigate to="/" replace />} />
+          {/* ================HRM ROUTES ============== */}
+           <Route element={<HRMAdminLayout/>}>
+            <Route path="/HRM" element={<HRMAdmin/>}></Route>
+            <Route path="/:role/RecruitmentOnboarding" element={<RecruitmentOnboarding/>}></Route>
+            <Route path="/:role/OfferLetters" element={<OfferLetters/>}></Route>
+          </Route>
+          
+          
           </Routes>
-        </Suspense>
+        
+         
+    
+          </Suspense>
+        
       </ErrorBoundary>
     </BrowserRouter>
   );

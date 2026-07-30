@@ -1,31 +1,39 @@
 /**
- * Header - Application header bar for the PMS dashboard.
- * Contains: logo, global search (pages/projects/tasks/users), quick-create
- * buttons (+ Task, + Project), notification bell with unread badge, and a
- * user profile dropdown. Handles responsive behaviour (logo visibility,
- * sidebar toggle) and real-time notification polling.
+ * Header - Application header bar for the HRM dashboard.
+ * Contains: logo, global search (pages/employees/candidates/notices/
+ * trainings), quick-create buttons (+ Employee, + Job Opening, + Notice),
+ * notification bell with unread badge, and a user profile dropdown.
+ * Handles responsive behaviour (logo visibility, sidebar toggle) and
+ * real-time notification polling.
+ *
+ * Adapted from the PMS Header: the shell (logo, theme toggle, notif
+ * panel, profile dropdown, keyboard nav) is unchanged so the two apps
+ * still feel like the same product family — only the search entities
+ * and quick-create actions were swapped to match the HR_SECTIONS defined
+ * in Sidebar.jsx (Hiring / Workforce / Payroll / Engagement / Insights).
  *
  * Also renders a hover dropdown on the logo/text ("app switcher") that
- * lets the user jump from the PMS portal into the HRM portal at /hrm.
+ * mirrors the one added to the PMS Header, letting the user jump back
+ * from the HRM portal to the PMS portal at /.
  */
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { MdKeyboardArrowDown, MdNotifications, MdPerson, MdHistory, MdLogout, MdLock, MdDarkMode, MdLightMode, MdBusinessCenter, MdApps } from "react-icons/md";
+import { MdKeyboardArrowDown, MdNotifications, MdPerson, MdHistory, MdLogout, MdLock, MdDarkMode, MdLightMode, MdWork, MdCampaign, MdBusinessCenter, MdApps } from "react-icons/md";
 import { useNavigate, Link } from "react-router-dom";
 
-import API_URL from "../../config/api";
-import { authToken, getCurrentRole, getUser, setUser, clearSession, getToken, rolePath, normalizeRole } from "../../utils/auth";
-import { subscribe } from "../../utils/eventBus";
-import { requestNotificationPermissionAsync, showDesktopNotification, getNotificationPermission } from "../../utils/browserNotification";
-import { initFirebase } from "../../utils/firebase";
-import { formatDateTimeInline } from "../../utils/formatDateTime";
-import { getNotificationDestination } from "../../utils/navigation";
-import { useTheme } from "../../context/ThemeContext.jsx";
+import API_URL from "../../../../config/api.js";
+import { authToken, getCurrentRole, getUser, setUser, clearSession, getToken, rolePath, normalizeRole } from "../../../../utils/auth";
+import { subscribe } from "../../../../utils/eventBus.js";
+import { requestNotificationPermissionAsync, showDesktopNotification, getNotificationPermission } from "../../../../utils/browserNotification.js";
+import { initFirebase } from "../../../../utils/firebase";
+import { formatDateTimeInline } from "../../../../utils/formatDateTime";
+import { getNotificationDestination } from "../../../../utils/navigation";
+import { useTheme } from "../../../../context/ThemeContext.jsx";
 import "./Header.css";
 
-import CreateTaskModal from "../CreateTaskModal";
-import CreateProjectModal from "../CreateProjectModal";
-import CreateDeliverableModel from "./CreateDeliverableModel";
+// import CreateEmployeeModal from "../../../CreateEmployeeModal";
+// import CreateJobOpeningModal from "../../../CreateJobOpeningModal";
+// import CreateNoticeModal from "../../CreateNoticeModal.jsx";
 
 /**
  * Header component – renders the top navigation bar.
@@ -43,9 +51,9 @@ function Header() {
 
   // ── State ──
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [showTaskModal, setShowTaskModal] = useState(false);
-  const [showProjectModal, setShowProjectModal] = useState(false);
-  const [showSubtaskModal, setShowSubtaskModal] = useState(false);
+  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+  const [showJobOpeningModal, setShowJobOpeningModal] = useState(false);
+  const [showNoticeModal, setShowNoticeModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth <= 1200);
   const [notifications, setNotifications] = useState([]);
@@ -65,24 +73,29 @@ function Header() {
   // ── Search state & debounce ──
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [searchResults, setSearchResults] = useState({ pages: [], projects: [], tasks: [], users: [] });
+  const [searchResults, setSearchResults] = useState({ pages: [], employees: [], candidates: [], notices: [], trainings: [] });
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [searchHighlightIndex, setSearchHighlightIndex] = useState(-1);
   const [notifHighlightIndex, setNotifHighlightIndex] = useState(-1);
   const [profileHighlightIndex, setProfileHighlightIndex] = useState(-1);
 
-  /** Returns the list of navigable pages with keywords for local search. */
+  /**
+   * Returns the list of navigable pages with keywords for local search.
+   * Mirrors the Dashboard link + HR_SECTIONS items in Sidebar.jsx exactly,
+   * so anything a user can click in the sidebar is also reachable by typing.
+   */
   const getPageLinks = () => [
-    { name: "Dashboard", path: rolePath("dashboard"), keywords: "dashboard home" },
-    { name: "Projects", path: rolePath("projects"), keywords: "projects list" },
-    { name: "Tasks Assigned to You", path: rolePath("tasks"), keywords: "my tasks assigned" },
-    { name: "Tasks Assigned by You", path: rolePath("taskby"), keywords: "tasks created by me" },
-    { name: "Subtasks", path: rolePath("deliveries"), keywords: "deliveries subtasks" },
-    { name: "Calendar", path: rolePath("calender"), keywords: "calendar events schedule" },
-    { name: "Manage Users", path: rolePath("manage-users"), keywords: "users manage" },
-    { name: "Manage Team", path: rolePath("manage-team"), keywords: "team manage" },
-    { name: "Reports", path: rolePath("reports"), keywords: "reports analytics" },
-    { name: "History", path: rolePath("history"), keywords: "history activity log" },
+    { name: "Dashboard", path: rolePath("dashboard"), keywords: "dashboard home overview" },
+    { name: "Recruitment & Onboarding", path: rolePath("hrm/recruitment"), keywords: "hiring recruitment onboarding jobs candidates" },
+    { name: "Offer Letters", path: rolePath("hrm/offer-letters"), keywords: "offer letters hiring" },
+    { name: "Employee Documents", path: rolePath("hrm/documents"), keywords: "documents employee files workforce" },
+    { name: "Attendance & Leave", path: rolePath("hrm/attendance"), keywords: "attendance leave time off workforce" },
+    { name: "Performance & Evaluation", path: rolePath("hrm/performance"), keywords: "performance reviews evaluation workforce" },
+    { name: "Assets / Items Issued", path: rolePath("hrm/assets"), keywords: "assets items issued equipment workforce" },
+    { name: "Payroll & Salary", path: rolePath("hrm/payroll"), keywords: "payroll salary pay payslip" },
+    { name: "Notice Board", path: rolePath("hrm/notice-board"), keywords: "notice board announcements engagement" },
+    { name: "Training & Learning", path: rolePath("hrm/training"), keywords: "training learning courses engagement" },
+    { name: "HR Reports & Analytics", path: rolePath("hrm/reports"), keywords: "reports analytics insights" },
   ];
 
   // Listen for sidebar open/close to control logo visibility
@@ -125,7 +138,6 @@ function Header() {
     const current = getNotificationPermission();
 
     if (current === 'denied') {
-      // Browser ne permission deny kar di hai - manually settings mein jaake enable karna padega
       alert(
         'Desktop notifications are blocked by your browser.\n\n' +
         'To enable them:\n' +
@@ -139,7 +151,7 @@ function Header() {
     const result = await requestNotificationPermissionAsync();
     setNotifPermission(result);
     if (result === 'granted') {
-      console.log('[PMS Notifications] Desktop notifications enabled!');
+      console.log('[HRM Notifications] Desktop notifications enabled!');
     }
   };
 
@@ -156,7 +168,7 @@ function Header() {
   // Fire search when debounced value changes
   useEffect(() => {
     if (debouncedQuery.trim().length < 2) {
-      setSearchResults({ pages: [], projects: [], tasks: [], users: [] });
+      setSearchResults({ pages: [], employees: [], candidates: [], notices: [], trainings: [] });
       setShowSearchDropdown(false);
       return;
     }
@@ -164,9 +176,13 @@ function Header() {
   }, [debouncedQuery]);
 
   /**
-   * Performs a combined search across local page links and remote APIs
-   * (projects, tasks, users, deliverables via new search endpoint).
+   * Performs a combined search across local page links and remote HR APIs
+   * (employees, candidates, notices, trainings via the search endpoint).
    * Results are limited to 5 per category.
+   *
+   * Expected shape from GET /search?q=: { employees: [], candidates: [],
+   * notices: [], trainings: [] } — same "one search endpoint" convention
+   * the PMS Header used for projects/tasks/deliverables.
    */
   const handleSearch = async (query) => {
 
@@ -177,47 +193,38 @@ function Header() {
       (p) => p.name.toLowerCase().includes(q) || p.keywords.includes(q)
     );
 
-    let matchedProjects = [];
-    let matchedTasks = [];
-    let matchedUsers = [];
-    let matchedDeliverables = [];
+    let matchedEmployees = [];
+    let matchedCandidates = [];
+    let matchedNotices = [];
+    let matchedTrainings = [];
 
-    // 2. Use the dedicated search endpoint for entities
+    // 2. Use the dedicated search endpoint for HR entities
     try {
       const token = authToken();
       const headers = { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" };
 
-      const [searchRes, userRes] = await Promise.allSettled([
-        fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`, { headers, skipLoader: true }),
-        fetch(`${API_URL}/users`, { headers, skipLoader: true }),
-      ]);
+      const searchRes = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`, { headers, skipLoader: true });
 
-      if (searchRes.status === "fulfilled" && searchRes.value.ok) {
-        const data = await searchRes.value.json();
-        matchedProjects = (data.projects || [])
+      if (searchRes.ok) {
+        const data = await searchRes.json();
+        matchedEmployees = (data.employees || [])
           .slice(0, 5)
-          .map((p) => ({ id: p.id, name: p.title, code: p.business_id, path: rolePath(`projects/project-details/${p.id}`) }));
-        matchedTasks = (data.tasks || [])
+          .map((e) => ({ id: e.id, name: e.name, code: e.employee_code, department: e.department, path: rolePath(`hrm/documents/${e.id}`) }));
+        matchedCandidates = (data.candidates || [])
           .slice(0, 5)
-          .map((t) => ({ id: t.id, name: t.title, code: t.business_id, path: rolePath(`tasks/task-details/${t.id}`) }));
-        matchedDeliverables = (data.deliverables || [])
+          .map((c) => ({ id: c.id, name: c.name, code: c.position, path: rolePath(`hrm/recruitment/candidate-details/${c.id}`) }));
+        matchedNotices = (data.notices || [])
           .slice(0, 5)
-          .map((d) => ({ id: d.id, name: d.title, code: d.business_id, path: rolePath(`deliveries/deliverable-details/${d.id}`) }));
-      }
-
-      if (userRes.status === "fulfilled" && userRes.value.ok) {
-        const userData = await userRes.value.json();
-        const userList = userData.users ?? userData ?? [];
-        matchedUsers = userList
-          .filter((u) => u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q))
+          .map((n) => ({ id: n.id, name: n.title, path: rolePath(`hrm/notice-board/${n.id}`) }));
+        matchedTrainings = (data.trainings || [])
           .slice(0, 5)
-          .map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, department: u.department, path: rolePath(`manage-users/user-profile/${u.id}`) }));
+          .map((t) => ({ id: t.id, name: t.title, code: t.status, path: rolePath(`hrm/training/${t.id}`) }));
       }
     } catch {
       // API not available, show only page results
     }
 
-    setSearchResults({ pages: matchedPages, projects: matchedProjects, tasks: matchedTasks, deliverables: matchedDeliverables, users: matchedUsers });
+    setSearchResults({ pages: matchedPages, employees: matchedEmployees, candidates: matchedCandidates, notices: matchedNotices, trainings: matchedTrainings });
     setShowSearchDropdown(true);
   };
 
@@ -226,21 +233,20 @@ function Header() {
     setShowSearchDropdown(false);
     setSearchQuery("");
     let from = "";
-    if (path.includes("/tasks/")) from = "tasks";
-    else if (path.includes("/projects/")) from = "projects";
-    else if (path.includes("/deliveries/")) from = "deliveries";
-    else if (path.includes("/manage-users/")) from = "manage-users";
-    else if (path.includes("/manage-team/")) from = "manage-team";
+    if (path.includes("/hrm/recruitment/")) from = "recruitment";
+    else if (path.includes("/hrm/documents/")) from = "documents";
+    else if (path.includes("/hrm/notice-board/")) from = "notice-board";
+    else if (path.includes("/hrm/training/")) from = "training";
     navigate(`${path}${from ? `?from=${from}` : ""}`, { state: { from } });
   };
 
   const flatSearchItems = useMemo(() => {
     const items = [];
     searchResults.pages.forEach(p => items.push({ type: 'page', ...p }));
-    searchResults.projects.forEach(p => items.push({ type: 'project', ...p }));
-    searchResults.tasks.forEach(t => items.push({ type: 'task', ...t }));
-    (searchResults.deliverables || []).forEach(d => items.push({ type: 'deliverable', ...d }));
-    searchResults.users.forEach(u => items.push({ type: 'user', ...u }));
+    searchResults.employees.forEach(e => items.push({ type: 'employee', ...e }));
+    searchResults.candidates.forEach(c => items.push({ type: 'candidate', ...c }));
+    searchResults.notices.forEach(n => items.push({ type: 'notice', ...n }));
+    searchResults.trainings.forEach(t => items.push({ type: 'training', ...t }));
     return items;
   }, [searchResults]);
 
@@ -567,7 +573,7 @@ function Header() {
           </button>
 
           {/* Logo + text – hovering (or tapping, on touch devices) opens a
-              portal switcher that jumps to the HRM app at /hrm. */}
+              portal switcher that jumps back to the PMS app at /. */}
           <div
             className="header-logo-switcher"
             ref={logoSwitcherRef}
@@ -581,7 +587,7 @@ function Header() {
 
             <div className={"logo-text" + (showFullLogo || isSmallScreen ? "" : " logo-text--hidden")}>
               <h3>Techxaro</h3>
-              <span>PMS Portal</span>
+              <span>HRM Portal</span>
             </div>
 
             <MdKeyboardArrowDown
@@ -615,7 +621,7 @@ function Header() {
                 </div>
 
                 <Link
-                  to="/hrm"
+                  to="/admin/dashboard"
                   onClick={() => setShowAppSwitcher(false)}
                   style={{
                     display: "flex",
@@ -631,12 +637,12 @@ function Header() {
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-primary-bg, #eef2ff)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
-                  <MdBusinessCenter fontSize="18px" style={{ color: "var(--color-primary, #6366f1)" }} />
+                  <MdApps fontSize="18px" style={{ color: "var(--color-primary, #6366f1)" }} />
                   <span>
-                    HR Management
+                    Project Management
                     <br />
                     <span style={{ fontWeight: 400, fontSize: 11.5, color: "var(--color-text-secondary, #6b7280)" }}>
-                      Employees, payroll, recruitment
+                      Projects, tasks, deliverables
                     </span>
                   </span>
                 </Link>
@@ -654,9 +660,9 @@ function Header() {
                     background: "var(--color-primary-bg, #eef2ff)",
                   }}
                 >
-                  <MdApps fontSize="18px" style={{ color: "var(--color-primary, #6366f1)" }} />
+                  <MdBusinessCenter fontSize="18px" style={{ color: "var(--color-primary, #6366f1)" }} />
                   <span>
-                    Project Management
+                    HR Management
                     <br />
                     <span style={{ fontWeight: 400, fontSize: 11.5, color: "var(--color-text-secondary, #6b7280)" }}>
                       You're here
@@ -677,7 +683,7 @@ function Header() {
           <input
             type="text"
             className="form-control"
-            placeholder="Search projects, tasks or employees..."
+            placeholder="Search employees, candidates, notices..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => searchQuery.length >= 2 && setShowSearchDropdown(true)}
@@ -686,7 +692,7 @@ function Header() {
 
           {showSearchDropdown && (
             <div className="search-dropdown" ref={searchDropdownRef}>
-              {searchResults.pages.length === 0 && searchResults.projects.length === 0 && searchResults.tasks.length === 0 && searchResults.deliverables.length === 0 && searchResults.users.length === 0 ? (
+              {searchResults.pages.length === 0 && searchResults.employees.length === 0 && searchResults.candidates.length === 0 && searchResults.notices.length === 0 && searchResults.trainings.length === 0 ? (
                 <div className="search-dropdown-empty">No results found</div>
               ) : (
                 <>
@@ -701,24 +707,25 @@ function Header() {
                       ))}
                     </div>
                   )}
-                  {searchResults.projects.length > 0 && (
+                  {searchResults.employees.length > 0 && (
                     <div className="search-dropdown-section">
-                      <div className="search-dropdown-label">Projects</div>
-                      {searchResults.projects.map((item) => (
+                      <div className="search-dropdown-label">Employees</div>
+                      {searchResults.employees.map((item) => (
                         <div key={item.id} className={`search-dropdown-item${isSearchItemHighlighted(item) ? ' search-dropdown-item--highlighted' : ''}`} onClick={() => handleSearchSelect(item.path)} onMouseEnter={() => setSearchItemHighlight(item)}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                           <div>
                             <span>{item.name}</span>
                             {item.code && <span style={{ fontSize: 11, color: "#10b981", fontWeight: 700, marginLeft: 6 }}>{item.code}</span>}
+                            {item.department && <span style={{ fontSize: 10, fontWeight: 500, color: "var(--color-primary)", background: "var(--color-primary-bg)", padding: "1px 5px", borderRadius: 4, marginLeft: 6 }}>{item.department}</span>}
                           </div>
                         </div>
                       ))}
                     </div>
                   )}
-                  {searchResults.tasks.length > 0 && (
+                  {searchResults.candidates.length > 0 && (
                     <div className="search-dropdown-section">
-                      <div className="search-dropdown-label">Tasks</div>
-                      {searchResults.tasks.map((item) => (
+                      <div className="search-dropdown-label">Candidates</div>
+                      {searchResults.candidates.map((item) => (
                         <div key={item.id} className={`search-dropdown-item${isSearchItemHighlighted(item) ? ' search-dropdown-item--highlighted' : ''}`} onClick={() => handleSearchSelect(item.path)} onMouseEnter={() => setSearchItemHighlight(item)}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
                           <div>
@@ -729,32 +736,26 @@ function Header() {
                       ))}
                     </div>
                   )}
-                  {searchResults.deliverables.length > 0 && (
+                  {searchResults.notices.length > 0 && (
                     <div className="search-dropdown-section">
-                      <div className="search-dropdown-label">Subtasks</div>
-                      {searchResults.deliverables.map((item) => (
+                      <div className="search-dropdown-label">Notices</div>
+                      {searchResults.notices.map((item) => (
                         <div key={item.id} className={`search-dropdown-item${isSearchItemHighlighted(item) ? ' search-dropdown-item--highlighted' : ''}`} onClick={() => handleSearchSelect(item.path)} onMouseEnter={() => setSearchItemHighlight(item)}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-                          <div>
-                            <span>{item.name}</span>
-                            {item.code && <span style={{ fontSize: 11, color: "#8b5cf6", fontWeight: 700, marginLeft: 6 }}>{item.code}</span>}
-                          </div>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                          <span>{item.name}</span>
                         </div>
                       ))}
                     </div>
                   )}
-                  {searchResults.users.length > 0 && (
+                  {searchResults.trainings.length > 0 && (
                     <div className="search-dropdown-section">
-                      <div className="search-dropdown-label">Users</div>
-                      {searchResults.users.map((item) => (
+                      <div className="search-dropdown-label">Training</div>
+                      {searchResults.trainings.map((item) => (
                         <div key={item.id} className={`search-dropdown-item${isSearchItemHighlighted(item) ? ' search-dropdown-item--highlighted' : ''}`} onClick={() => handleSearchSelect(item.path)} onMouseEnter={() => setSearchItemHighlight(item)}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
                           <div>
                             <span>{item.name}</span>
-                            {item.role && <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 6 }}>({item.role.replace("_", " ")})</span>}
-                            {item.department && <span style={{ fontSize: 10, fontWeight: 500, color: "var(--color-primary)", background: "var(--color-primary-bg)", padding: "1px 5px", borderRadius: 4, marginLeft: 4 }}>{item.department}</span>}
-                            <br />
-                            <small style={{ color: "#9ca3af", fontSize: 11 }}>{item.email}</small>
+                            {item.code && <span style={{ fontSize: 11, color: "#8b5cf6", fontWeight: 700, marginLeft: 6 }}>{item.code}</span>}
                           </div>
                         </div>
                       ))}
@@ -770,41 +771,34 @@ function Header() {
         {/* ── Right: Create buttons, notifications, user menu ── */}
         <div className="header-right">
 
-          {/* Quick-create task button – not for guests */}
-
-          {getCurrentRole() !== "guest" && (
+          {/* Quick-create: post a job opening – recruiter/admin/manager only */}
+          {["admin", "manager", "recruiter"].includes(getCurrentRole()) && (
           <button
             className="task-btn1"
-            onClick={() =>
-              setShowTaskModal(true)
-            }
+            onClick={() => setShowJobOpeningModal(true)}
           >
-            + Task
+            <MdWork style={{ marginRight: 4, verticalAlign: -2 }} /> + Job Opening
           </button>
           )}
 
-          {getCurrentRole() !== "guest" && (
+          {/* Quick-create: add employee – admin/manager (HR) only */}
+          {["admin", "manager"].includes(getCurrentRole()) && (
           <button
             className="task-btn1"
-            style={{ background: "#7c3aed" }}
-            onClick={() =>
-              setShowSubtaskModal(true)
-            }
+            style={{ background: "#10b981" }}
+            onClick={() => setShowEmployeeModal(true)}
           >
-            + Subtask
+            + Employee
           </button>
           )}
 
-          {/* Quick-create project button – visible to admin/manager only */}
-
+          {/* Quick-create: post a notice – admin/manager only */}
           {["admin", "manager"].includes(getCurrentRole()) && (
           <button
             className="project-btn"
-            onClick={() =>
-              setShowProjectModal(true)
-            }
+            onClick={() => setShowNoticeModal(true)}
           >
-            + Project
+            <MdCampaign style={{ marginRight: 4, verticalAlign: -2 }} /> + Notice
           </button>
           )}
 
@@ -992,33 +986,21 @@ function Header() {
 
       {/* ── Modals ── */}
 
-      {/* Task creation modal */}
-
-      {showTaskModal && (
-
-        <CreateTaskModal
-          onClose={() =>
-            setShowTaskModal(false)
-          }
-        />
+      {/* Job opening creation modal */}
+      {showJobOpeningModal && (
+        <CreateJobOpeningModal onClose={() => setShowJobOpeningModal(false)} />
       )}
 
-      {/* Project creation modal – admin/manager only */}
-
-      {showProjectModal && (
+      {/* Employee creation modal */}
+      {showEmployeeModal && (
         <div className="modal-overlay">
-          <CreateProjectModal
-            onClose={(created) => {
-              setShowProjectModal(false);
-            }}
-          />
+          <CreateEmployeeModal onClose={() => setShowEmployeeModal(false)} />
         </div>
       )}
 
-      {showSubtaskModal && (
-        <CreateDeliverableModel
-          onClose={() => setShowSubtaskModal(false)}
-        />
+      {/* Notice creation modal */}
+      {showNoticeModal && (
+        <CreateNoticeModal onClose={() => setShowNoticeModal(false)} />
       )}
 
     </>
