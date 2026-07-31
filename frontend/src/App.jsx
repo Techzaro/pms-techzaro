@@ -59,7 +59,13 @@ const HRMAdminLayout=lazy(()=>import("./components/layout/hrm/DashboardLayout"))
 //======================== HRM Route ======================================
 const HRMAdmin=lazy(()=>import("./pages/HRM/Admin"))
 const RecruitmentOnboarding=lazy(()=>import("./pages/HRM/Recruitment"))
-const OfferLetters=lazy(()=>import("./pages/HRM/OfferLetter"))
+const OfferLetters=lazy(()=>import("./pages/HRM/Offerletter"))
+const CandidateOfferPortal=lazy(()=>import("./pages/HRM/CandidateOfferPortal"))
+const Workforce=lazy(()=>import("./pages/HRM/Workforce"))
+const EmployeeDocuments=lazy(()=>import("./pages/HRM/EmployeeDocuments"))
+const Attendance=lazy(()=>import("./pages/HRM/Attendance"))
+const MemberHrmDashboard=lazy(()=>import("./pages/HRM/MemberHrmDashboard"))
+// =======================================================================================
 // =======================================================================================
 class ErrorBoundary extends Component {
   state = { hasError: false };
@@ -149,14 +155,35 @@ function App() {
             <Route path="/:role/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
             <Route path="/:role/chat/:conversationId" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
 
-            {/* Catch-all redirect */}
-            <Route path="*" element={<Navigate to="/" replace />} />
           {/* ================HRM ROUTES ============== */}
-           <Route element={<HRMAdminLayout/>}>
-            <Route path="/HRM" element={<HRMAdmin/>}></Route>
-            <Route path="/:role/RecruitmentOnboarding" element={<RecruitmentOnboarding/>}></Route>
-            <Route path="/:role/OfferLetters" element={<OfferLetters/>}></Route>
+          <Route element={<HRMAdminLayout/>}>
+            <Route path="/HRM" element={<HRMAdmin/>} />
+            <Route path="/:role/HRM" element={<HRMAdmin/>} />
+            <Route path="/:role/hrm" element={<HRMAdmin/>} />
+            <Route path="/:role/RecruitmentOnboarding" element={<RecruitmentOnboarding/>} />
+            <Route path="/:role/hrm/recruitment" element={<RecruitmentOnboarding/>} />
+            <Route path="/:role/recruitment" element={<RecruitmentOnboarding/>} />
+            <Route path="/:role/OfferLetters" element={<OfferLetters/>} />
+            <Route path="/:role/offerletters" element={<OfferLetters/>} />
+            <Route path="/:role/hrm/offer-letters" element={<OfferLetters/>} />
+            <Route path="/:role/Workforce" element={<Workforce/>} />
+            <Route path="/:role/workforce" element={<Workforce/>} />
+            <Route path="/:role/hrm/workforce" element={<Workforce/>} />
+            <Route path="/:role/EmployeeDocuments" element={<EmployeeDocuments/>} />
+            <Route path="/:role/documents" element={<EmployeeDocuments/>} />
+            <Route path="/:role/hrm/documents" element={<EmployeeDocuments/>} />
+            <Route path="/:role/hrm/attendance" element={<Attendance/>} />
+            <Route path="/:role/attendance" element={<Attendance/>} />
+            <Route path="/:role/hrm/member-dashboard" element={<MemberHrmDashboard/>} />
+            <Route path="/member/hrm" element={<MemberHrmDashboard/>} />
           </Route>
+
+          {/* Candidate Public Offer Portal */}
+          <Route path="/offer-letter/portal/:id" element={<CandidateOfferPortal />} />
+          <Route path="/:role/offer-letter/portal/:id" element={<CandidateOfferPortal />} />
+
+          {/* Catch-all redirect */}
+          <Route path="*" element={<Navigate to="/" replace />} />
           
           
           </Routes>

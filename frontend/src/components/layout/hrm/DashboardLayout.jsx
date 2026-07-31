@@ -105,7 +105,6 @@ function DashboardLayout({ hideRightSidebar = false }) {
           <Outlet />
         </div>
 
-        {!hideRightSidebar && <RightSidebar isOpen={rightOpen} onClose={() => setRightOpen(false)} />}
       </div>
 
       {!hideRightSidebar && !modalOpen && (

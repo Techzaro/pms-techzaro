@@ -167,7 +167,7 @@ class AuthController extends Controller
                 ], 422);
             }
 
-            $user->password = bcrypt($request->new_password);
+            $user->password = $request->new_password;
             $user->must_change_password = false;
             $user->active = true;
             $user->password_changed_by = $user->id;
@@ -643,7 +643,7 @@ class AuthController extends Controller
                 ], 422);
             }
 
-            $user->password = bcrypt($request->new_password);
+            $user->password = $request->new_password;
             $user->password_changed_by = $user->id;
             $user->password_changed_at = now();
             $user->password_version = ($user->password_version ?? 1) + 1;

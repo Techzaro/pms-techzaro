@@ -24,6 +24,10 @@ use App\Http\Controllers\ChatController;
 use App\Http\Controllers\TaskCommentController;
 use App\Http\Controllers\DraftController;
 use App\Http\Controllers\CredentialController;
+use App\Http\Controllers\HrmRecruitmentController;
+use App\Http\Controllers\HrmAttendanceController;
+use App\Http\Controllers\HrmMemberPortalController;
+use App\Http\Controllers\HrmGlobalSettingsController;
 
 /*
 | Public Routes
@@ -119,6 +123,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/users/{user}', [UserController::class, 'show']);
         // Update user information
         Route::put('/users/{user}', [UserController::class, 'update']);
+        Route::post('/users/{user}', [UserController::class, 'update']);
         // Delete user
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
         // Mark user as resigned
@@ -549,7 +554,99 @@ Route::middleware('auth:sanctum')->group(function () {
         });
     });
 
+    /*
+    | HRM Recruitment & Onboarding Routes
+    */
+    // Job openings
+    Route::get('/hrm/job-openings', [HrmRecruitmentController::class, 'getJobOpenings']);
+    Route::post('/hrm/job-openings', [HrmRecruitmentController::class, 'storeJobOpening']);
+    Route::patch('/hrm/job-openings/{id}', [HrmRecruitmentController::class, 'updateJobOpening']);
+    Route::put('/hrm/job-openings/{id}', [HrmRecruitmentController::class, 'updateJobOpening']);
+    Route::delete('/hrm/job-openings/{id}', [HrmRecruitmentController::class, 'deleteJobOpening']);
+
+    // Candidates
+    Route::get('/hrm/candidates', [HrmRecruitmentController::class, 'getCandidates']);
+    Route::post('/hrm/candidates', [HrmRecruitmentController::class, 'storeCandidate']);
+    Route::post('/hrm/candidates/upload-resume', [HrmRecruitmentController::class, 'uploadCandidateResume']);
+    Route::post('/hrm/candidates/{id}/analyze-cv', [HrmRecruitmentController::class, 'analyzeCandidateCV']);
+    Route::post('/hrm/candidates/{id}/schedule-interview', [HrmRecruitmentController::class, 'scheduleInterview']);
+    Route::patch('/hrm/candidates/{id}', [HrmRecruitmentController::class, 'updateCandidate']);
+    Route::put('/hrm/candidates/{id}', [HrmRecruitmentController::class, 'updateCandidate']);
+    Route::delete('/hrm/candidates/{id}', [HrmRecruitmentController::class, 'deleteCandidate']);
+
+    // Onboarding
+    Route::get('/hrm/onboarding', [HrmRecruitmentController::class, 'getOnboarding']);
+    Route::post('/hrm/onboarding', [HrmRecruitmentController::class, 'storeOnboarding']);
+    Route::patch('/hrm/onboarding/{id}', [HrmRecruitmentController::class, 'updateOnboarding']);
+    Route::put('/hrm/onboarding/{id}', [HrmRecruitmentController::class, 'updateOnboarding']);
+
+    // Offer Letters
+    Route::get('/offer-letters', [HrmRecruitmentController::class, 'getOfferLetters']);
+    Route::get('/hrm/offer-letters', [HrmRecruitmentController::class, 'getOfferLetters']);
+    Route::post('/offer-letters', [HrmRecruitmentController::class, 'storeOfferLetter']);
+    Route::post('/hrm/offer-letters', [HrmRecruitmentController::class, 'storeOfferLetter']);
+    Route::patch('/offer-letters/{id}', [HrmRecruitmentController::class, 'updateOfferLetter']);
+    Route::put('/offer-letters/{id}', [HrmRecruitmentController::class, 'updateOfferLetter']);
+    Route::patch('/hrm/offer-letters/{id}', [HrmRecruitmentController::class, 'updateOfferLetter']);
+    Route::put('/hrm/offer-letters/{id}', [HrmRecruitmentController::class, 'updateOfferLetter']);
+    Route::post('/hrm/offer-letters/{id}/send-email', [HrmRecruitmentController::class, 'sendOfferLetterEmail']);
+    Route::post('/offer-letters/{id}/send-email', [HrmRecruitmentController::class, 'sendOfferLetterEmail']);
+    Route::patch('/offer-letters/{id}/status', [HrmRecruitmentController::class, 'updateOfferLetterStatus']);
+    Route::delete('/offer-letters/{id}', [HrmRecruitmentController::class, 'deleteOfferLetter']);
+    Route::delete('/hrm/offer-letters/{id}', [HrmRecruitmentController::class, 'deleteOfferLetter']);
+
+    // Dashboard stats & real-time notifications for HRM
+    Route::get('/dashboard/hrm-stats', [HrmRecruitmentController::class, 'getDashboardStats']);
+    Route::get('/hrm/notifications', [HrmRecruitmentController::class, 'getHrmNotifications']);
+    Route::post('/hrm/notifications/mark-read', [HrmRecruitmentController::class, 'markHrmNotificationsRead']);
+
+    // Convert candidate to user employee account
+    Route::post('/hrm/candidates/{id}/convert-to-user', [HrmRecruitmentController::class, 'convertCandidateToUser']);
+
+    // Employee Documents Vault
+    Route::get('/hrm/employee-documents', [HrmRecruitmentController::class, 'getEmployeeDocuments']);
+    Route::post('/hrm/employee-documents', [HrmRecruitmentController::class, 'storeEmployeeDocument']);
+    Route::delete('/hrm/employee-documents/{id}', [HrmRecruitmentController::class, 'deleteEmployeeDocument']);
+
+    // Attendance & Work Timer Routes
+    Route::post('/hrm/attendance/clock-in', [HrmAttendanceController::class, 'clockIn']);
+    Route::post('/hrm/attendance/pause-work', [HrmAttendanceController::class, 'pauseWork']);
+    Route::post('/hrm/attendance/resume-work', [HrmAttendanceController::class, 'resumeWork']);
+    Route::post('/hrm/attendance/clock-out', [HrmAttendanceController::class, 'clockOut']);
+    Route::post('/hrm/attendance/consent', [HrmAttendanceController::class, 'updateConsent']);
+    Route::post('/hrm/attendance/wfh-request', [HrmAttendanceController::class, 'submitWfhRequest']);
+    Route::patch('/hrm/attendance/wfh-request/{id}', [HrmAttendanceController::class, 'respondWfhRequest']);
+    Route::post('/hrm/attendance/work-snapshot', [HrmAttendanceController::class, 'uploadWorkSnapshot']);
+    Route::get('/hrm/attendance/today', [HrmAttendanceController::class, 'getTodayAttendance']);
+    Route::get('/hrm/attendance/corrections', [HrmAttendanceController::class, 'getCorrections']);
+    Route::post('/hrm/attendance/corrections', [HrmAttendanceController::class, 'submitCorrection']);
+    Route::patch('/hrm/attendance/corrections/{id}', [HrmAttendanceController::class, 'respondCorrection']);
+
+    // Leaves Management Routes
+    Route::get('/hrm/leaves', [HrmAttendanceController::class, 'getLeaves']);
+    Route::post('/hrm/leaves', [HrmAttendanceController::class, 'storeLeaveRequest']);
+    Route::patch('/hrm/leaves/{id}', [HrmAttendanceController::class, 'respondLeaveRequest']);
+
+    // Member Self-Service Portal Routes
+    Route::get('/hrm/member/summary', [HrmMemberPortalController::class, 'getMemberDashboardSummary']);
+    Route::post('/hrm/member/request-form', [HrmMemberPortalController::class, 'submitHrForm']);
+
+    // Global HRM Settings & Timesheets Routes
+    Route::get('/hrm/settings', [HrmGlobalSettingsController::class, 'getSettings']);
+    Route::post('/hrm/settings', [HrmGlobalSettingsController::class, 'updateSettings']);
+    Route::get('/hrm/timesheets', [HrmGlobalSettingsController::class, 'getTimesheets']);
+    Route::post('/hrm/timesheets/generate', [HrmGlobalSettingsController::class, 'generateTimesheet']);
+    Route::patch('/hrm/timesheets/{id}', [HrmGlobalSettingsController::class, 'respondTimesheet']);
 });
+
+/*
+| Public Candidate Offer Letter Portal Routes
+| Accessible by candidate from email link without requiring staff login.
+*/
+Route::get('/public/offer-letters/{id}', [HrmRecruitmentController::class, 'getPublicOfferLetter']);
+Route::get('/public/offer-letters/{id}/document', [HrmRecruitmentController::class, 'downloadOfferLetterDocument']);
+Route::get('/hrm/offer-letters/{id}/document', [HrmRecruitmentController::class, 'downloadOfferLetterDocument']);
+Route::post('/public/offer-letters/{id}/respond', [HrmRecruitmentController::class, 'candidateRespondOfferLetter']);
 
 /*
 | Document Download Routes

@@ -1,0 +1,231 @@
+.m-dashboard-page {
+  padding: 24px;
+  background-color: #f8fafc;
+  min-height: 100vh;
+  font-family: inherit;
+}
+
+.m-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.m-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.m-title-row h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.m-role-badge {
+  padding: 4px 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.m-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13.5px;
+}
+
+.m-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.m-stat-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+}
+
+.m-stat-label {
+  font-size: 12px;
+  color: #64748b;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.m-stat-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.m-stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.m-stat-icon--blue { background: #eff6ff; color: #0082ff; }
+.m-stat-icon--green { background: #f0fdf4; color: #166534; }
+.m-stat-icon--amber { background: #fffbeb; color: #b45309; }
+.m-stat-icon--sky { background: #f0f9ff; color: #0284c7; }
+
+.m-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+}
+
+.m-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.m-timer-ticker {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 22px;
+  font-weight: 800;
+  color: #64748b;
+}
+
+.m-timer-ticker.active {
+  color: #10b981;
+}
+
+.m-mode-btn {
+  flex: 1;
+  padding: 8px 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.m-mode-btn.selected {
+  background: #0082ff;
+  color: #ffffff;
+  border-color: #0082ff;
+}
+
+.m-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.m-btn--primary { background: #0082ff; color: #ffffff; }
+.m-btn--primary:hover { background: #0066cc; }
+.m-btn--danger { background: #ef4444; color: #ffffff; }
+.m-btn--ghost { background: #f1f5f9; color: #334155; }
+
+.m-field {
+  margin-bottom: 12px;
+}
+
+.m-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 4px;
+}
+
+.m-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  box-sizing: border-box;
+  background: #fff;
+}
+
+.m-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 9999;
+}
+.m-toast--success { background: #10b981; color: #fff; }
+.m-toast--error { background: #ef4444; color: #fff; }
+
+.m-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.m-modal-panel {
+  background: #fff;
+  width: 480px;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+}
+
+.m-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 12px;
+}
+
+.m-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #0f172a;
+}
+
+.m-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}

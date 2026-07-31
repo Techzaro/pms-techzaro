@@ -1,737 +1,992 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  Users, Briefcase, Clock, CheckCircle2, Search, Plus, MoreVertical, ChevronRight,
-  X, Mail, Phone, Star, FileText, UserCheck, Calendar, MapPin, Wifi, WifiOff,
-  ArrowRight, Trash2, Edit3, ThumbsDown, Link as LinkIcon, ClipboardList
-} from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import API_URL from "../../config/api";
+import { authToken } from "../../utils/auth";
 
-/* =========================================================================
-   BACKEND CONNECTION LAYER
-   ========================================================================= */
-const API_BASE = 'http://localhost:8000/api';
+import {
+  MdWork, MdGroups, MdSearch, MdAdd, MdClose, MdChevronRight, MdArrowForward,
+  MdMailOutline, MdPhone, MdStar, MdStarBorder, MdCalendarToday, MdLocationOn,
+  MdLink, MdEdit, MdDeleteOutline, MdThumbDownAlt, MdRefresh, MdFilterList,
+  MdKeyboardArrowDown, MdFiberNew, MdWifi, MdWifiOff, MdAssignmentTurnedIn,
+  MdPersonAddAlt1, MdWarningAmber, MdCheckCircle, MdAccessTime, MdFileUpload,
+  MdPsychology, MdSend, MdDescription, MdBadge, MdOutlineCloudUpload, MdVideoCall,
+  MdEvent, MdNotifications, MdVpnKey
+} from "react-icons/md";
+
+/* Modularized HRM Modal Components */
+import JobFormModal from "../../components/layout/hrm/layoutComponent/hrm Modal/JobFormModal";
+import CandidateFormModal from "../../components/layout/hrm/layoutComponent/hrm Modal/CandidateFormModal";
+import ScheduleInterviewModal from "../../components/layout/hrm/layoutComponent/hrm Modal/ScheduleInterviewModal";
+import DirectOfferModal from "../../components/layout/hrm/layoutComponent/hrm Modal/DirectOfferModal";
+import OnboardingFormModal from "../../components/layout/hrm/layoutComponent/hrm Modal/OnboardingFormModal";
+import CandidateProfileModal from "../../components/layout/hrm/layoutComponent/hrm Modal/CandidateProfileModal";
+
+import "./Recruitment.css";
+
+const ENDPOINTS = {
+  jobs: "/hrm/job-openings",
+  candidates: "/hrm/candidates",
+  onboarding: "/hrm/onboarding",
+};
 
 async function apiRequest(path, options = {}) {
-  const token = window.__HRM_TOKEN__ || null;
-  const res = await fetch(`${API_BASE}${path}`, {
+  const token = authToken();
+  const res = await fetch(`${API_URL}${path}`, {
     ...options,
+    skipLoader: true,
     headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
+      "Content-Type": "application/json",
+      Accept: "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
   });
-  if (!res.ok) throw new Error(`API ${res.status}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `API ${res.status}: ${res.statusText}`);
+  }
   return res.json();
 }
 
-async function withFallback(liveCall, fallback) {
-  try {
-    return { data: await liveCall(), live: true };
-  } catch (e) {
-    return { data: fallback(), live: false };
-  }
-}
+const STAGE_TABS = ["Applied", "Screening", "Interview", "Offer", "Hired", "Rejected"];
 
-/* ---------------------------- Demo seed data ---------------------------- */
-const seedJobs = [
-  { id: 'j1', title: 'Frontend Developer', department: 'Engineering', location: 'Lahore, PK', type: 'Full-time', status: 'Open', openings: 2, postedDate: '2026-07-10', description: 'Build and maintain customer-facing React interfaces.' },
-  { id: 'j2', title: 'Backend Developer', department: 'Engineering', location: 'Remote', type: 'Full-time', status: 'Open', openings: 1, postedDate: '2026-07-05', description: 'Own Laravel API services and database design.' },
-  { id: 'j3', title: 'UI/UX Designer', department: 'Design', location: 'Lahore, PK', type: 'Full-time', status: 'Open', openings: 1, postedDate: '2026-07-01', description: 'Design product flows and maintain the design system.' },
-  { id: 'j4', title: 'DevOps Engineer', department: 'Infrastructure', location: 'Remote', type: 'Contract', status: 'Open', openings: 1, postedDate: '2026-06-20', description: 'Manage CI/CD, infra-as-code, and observability.' },
-];
-
-const STAGES = ['Applied', 'Screening', 'Interview', 'Offer', 'Hired'];
-
-const seedCandidates = [
-  { id: 'c1', name: 'Alice Smith', email: 'alice.smith@example.com', phone: '+92 300 1234567', jobId: 'j1', stage: 'Applied', appliedDate: '2026-07-27', source: 'LinkedIn', rating: 0, notes: '' },
-  { id: 'c2', name: 'John Doe', email: 'john.doe@example.com', phone: '+92 301 2345678', jobId: 'j2', stage: 'Applied', appliedDate: '2026-07-26', source: 'Referral', rating: 0, notes: '' },
-  { id: 'c3', name: 'Sarah Lee', email: 'sarah.lee@example.com', phone: '+92 302 3456789', jobId: 'j3', stage: 'Interview', appliedDate: '2026-07-24', source: 'Indeed', rating: 4, notes: 'Strong portfolio, second interview scheduled.' },
-  { id: 'c4', name: 'Mike Chen', email: 'mike.chen@example.com', phone: '+92 303 4567890', jobId: 'j4', stage: 'Offer', appliedDate: '2026-07-20', source: 'LinkedIn', rating: 5, notes: 'Offer sent, awaiting response.' },
-  { id: 'c5', name: 'David Kim', email: 'david.kim@example.com', phone: '+92 304 5678901', jobId: 'j2', stage: 'Hired', appliedDate: '2026-07-05', source: 'Referral', rating: 5, notes: 'Accepted offer.' },
-];
-
-const defaultChecklist = () => ([
-  { id: 't1', label: 'Sign contract', done: false },
-  { id: 't2', label: 'Provision hardware', done: false },
-  { id: 't3', label: 'Create system accounts', done: false },
-  { id: 't4', label: 'Complete orientation', done: false },
-]);
-
-const seedOnboarding = [
-  { id: 'o1', candidateId: 'c5', name: 'David Kim', role: 'Backend Developer', startDate: '2026-08-01', buddy: 'Fatima Noor', status: 'In Progress', tasks: [
-    { id: 't1', label: 'Sign contract', done: true },
-    { id: 't2', label: 'Provision hardware', done: true },
-    { id: 't3', label: 'Create system accounts', done: false },
-    { id: 't4', label: 'Complete orientation', done: false },
-  ] },
-];
-
-const uid = (p) => `${p}${Math.random().toString(36).slice(2, 9)}`;
-const progressOf = (tasks) => tasks.length ? Math.round((tasks.filter(t => t.done).length / tasks.length) * 100) : 0;
-
-/* ------------------------------ UI atoms -------------------------------- */
-const Modal = ({ open, onClose, title, children, width = 'max-w-lg' }) => {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-[#0B1F29]/50 backdrop-blur-sm transition-opacity" onClick={onClose} />
-      <div className={`relative w-full ${width} max-h-[90vh] flex flex-col bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-[#E4E7EB] animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95`}>
-        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-[#E4E7EB] bg-white rounded-t-2xl flex-shrink-0">
-          <h3 className="text-base font-semibold text-[#163B4D] pr-2">{title}</h3>
-          <button onClick={onClose} className="p-2 -mr-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition flex-shrink-0">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain">
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const Field = ({ label, children }) => (
-  <label className="block mb-4">
-    <span className="block text-xs font-semibold text-[#6B7280] uppercase tracking-wide mb-1.5">{label}</span>
-    {children}
-  </label>
-);
-
-// Increased padding on mobile (py-3) for better touch targets, scales down on sm (py-2.5)
-const inputCls = "w-full px-3 py-3 sm:py-2.5 bg-[#F6F7F9] border border-[#E4E7EB] rounded-lg text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#163B4D]/20 focus:border-[#163B4D] transition appearance-none";
-
-const Toast = ({ message, kind = 'success', onDone }) => {
-  useEffect(() => { const t = setTimeout(onDone, 2800); return () => clearTimeout(t); }, [onDone]);
-  const colors = kind === 'success' ? 'bg-[#163B4D] text-white' : 'bg-[#C1483B] text-white';
-  return (
-    <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 sm:left-auto sm:right-6 sm:translate-x-0 z-[60] w-[90vw] sm:w-auto px-4 py-3 rounded-xl shadow-xl text-sm font-medium ${colors} animate-in slide-in-from-bottom-5 fade-in`}>
-      {message}
-    </div>
-  );
-};
-
-const MetricCard = ({ title, value, icon, accent }) => (
-  <div className="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-[#E4E7EB] flex items-center justify-between gap-3" style={{ borderLeft: `4px solid ${accent}` }}>
-    <div className="min-w-0 flex-1">
-      <p className="text-xs sm:text-sm text-[#6B7280] font-medium mb-1 truncate">{title}</p>
-      <h3 className="text-xl sm:text-2xl font-bold text-[#1F2937] truncate">{value}</h3>
-    </div>
-    <div className="p-2 sm:p-3 rounded-lg flex-shrink-0" style={{ backgroundColor: `${accent}14` }}>{icon}</div>
-  </div>
-);
-
-const initials = (name) => name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
-
-/* ================================ MAIN =================================== */
-const RecruitmentOnboarding = () => {
-  const [activeView, setActiveView] = useState('recruitment');
-  const [live, setLive] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState(null);
-
+export default function RecruitmentOnboarding() {
+  const [activeTab, setActiveTab] = useState("Open Roles");
+  const [search, setSearch] = useState("");
   const [jobs, setJobs] = useState([]);
   const [candidates, setCandidates] = useState([]);
   const [onboarding, setOnboarding] = useState([]);
-  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
 
-  const [showJobModal, setShowJobModal] = useState(false);
-  const [showCandidateModal, setShowCandidateModal] = useState(false);
-  const [showJobsList, setShowJobsList] = useState(false);
-  const [detailCandidate, setDetailCandidate] = useState(null);
-  const [showOnboardModal, setShowOnboardModal] = useState(false);
-  const [taskDetail, setTaskDetail] = useState(null);
+  /* Modals state */
+  const [modalCandidate, setModalCandidate] = useState(null);
+  const [modalJobOpen, setModalJobOpen] = useState(false);
+  const [editJob, setEditJob] = useState(null);
+  const [modalCandidateOpen, setModalCandidateOpen] = useState(false);
+  const [modalOnboardingOpen, setModalOnboardingOpen] = useState(false);
+  const [onboardingCandidateId, setOnboardingCandidateId] = useState(null);
 
-  const notify = (message, kind = 'success') => setToast({ message, kind });
+  /* Schedule Interview Modal */
+  const [interviewCandidate, setInterviewCandidate] = useState(null);
+  const [schedulingInterview, setSchedulingInterview] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const [jRes, cRes, oRes] = await Promise.all([
-        withFallback(() => apiRequest('/job-openings'), () => seedJobs),
-        withFallback(() => apiRequest('/candidates'), () => seedCandidates),
-        withFallback(() => apiRequest('/onboarding'), () => seedOnboarding),
-      ]);
-      setJobs(jRes.data);
-      setCandidates(cRes.data);
-      setOnboarding(oRes.data);
-      setLive(jRes.live && cRes.live && oRes.live);
-      setLoading(false);
-    })();
+  /* Send Offer Modal from Recruitment */
+  const [directOfferCandidate, setDirectOfferCandidate] = useState(null);
+  const [sendingOffer, setSendingOffer] = useState(false);
+
+  /* AI CV Processing state */
+  const [analyzingId, setAnalyzingId] = useState(null);
+
+  const notify = useCallback((message, kind = "success") => {
+    setToast({ message, kind });
+    setTimeout(() => setToast(null), 4000);
   }, []);
 
-  const jobById = useCallback((id) => jobs.find(j => j.id === id), [jobs]);
+  /* Audio Chime Synthesizer for Real-time Notifications */
+  const playNotificationChime = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(523.25, ctx.currentTime);
+      gain1.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(ctx.currentTime);
+      osc1.stop(ctx.currentTime + 0.3);
 
-  const metrics = useMemo(() => ({
-    openRoles: jobs.filter(j => j.status === 'Open').length,
-    activeCandidates: candidates.filter(c => c.stage !== 'Refused').length,
-    timeToHire: '22 Days',
-    onboardingCompletion: onboarding.length
-      ? `${Math.round(onboarding.reduce((s, o) => s + progressOf(o.tasks), 0) / onboarding.length)}%`
-      : '0%',
-  }), [jobs, candidates, onboarding]);
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(783.99, ctx.currentTime + 0.15);
+      gain2.gain.setValueAtTime(0.2, ctx.currentTime + 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(ctx.currentTime + 0.15);
+      osc2.stop(ctx.currentTime + 0.55);
+    } catch (e) {
+      // Audio context policy fallback
+    }
+  }, []);
 
-  const filteredCandidates = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return candidates;
-    return candidates.filter(c =>
-      c.name.toLowerCase().includes(q) ||
-      (jobById(c.jobId)?.title || '').toLowerCase().includes(q)
+  /* Real-time Offer Notifications State */
+  const [hrmNotifications, setHrmNotifications] = useState([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
+  const prevUnreadRef = useRef(0);
+
+  const fetchHrmNotifications = useCallback(async () => {
+    try {
+      const res = await apiRequest("/hrm/notifications");
+      if (res && res.notifications) {
+        setHrmNotifications(res.notifications);
+        const newUnread = res.unreadCount || 0;
+        if (newUnread > prevUnreadRef.current) {
+          playNotificationChime();
+          const latestNotif = res.notifications[0];
+          if (latestNotif) {
+            notify(`${latestNotif.title} — ${latestNotif.message}`, "success");
+          }
+        }
+        prevUnreadRef.current = newUnread;
+        setUnreadNotifications(newUnread);
+      }
+    } catch (err) {
+      // silent
+    }
+  }, [notify, playNotificationChime]);
+
+  useEffect(() => {
+    fetchHrmNotifications();
+    const interval = setInterval(fetchHrmNotifications, 10000);
+    return () => clearInterval(interval);
+  }, [fetchHrmNotifications]);
+
+  const handleMarkNotificationsRead = async () => {
+    try {
+      await apiRequest("/hrm/notifications/mark-read", { method: "POST" });
+      setUnreadNotifications(0);
+      setHrmNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch (err) {
+      // silent
+    }
+  };
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [jData, cData, oData] = await Promise.all([
+        apiRequest(ENDPOINTS.jobs),
+        apiRequest(ENDPOINTS.candidates),
+        apiRequest(ENDPOINTS.onboarding).catch(() => []),
+      ]);
+      setJobs(jData || []);
+      setCandidates(cData || []);
+      setOnboarding(oData || []);
+    } catch (err) {
+      notify(err.message || "Failed to sync with backend.", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [notify]);
+
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
+
+  /* Backend Job Actions */
+  const handleSaveJob = async (jobData) => {
+    try {
+      if (editJob) {
+        const updated = await apiRequest(`${ENDPOINTS.jobs}/${editJob.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(jobData),
+        });
+        setJobs((prev) => prev.map((j) => (j.id === editJob.id ? (updated || { ...j, ...jobData }) : j)));
+        notify("Job updated successfully.");
+      } else {
+        const created = await apiRequest(ENDPOINTS.jobs, {
+          method: "POST",
+          body: JSON.stringify(jobData),
+        });
+        setJobs((prev) => [created, ...prev]);
+        notify("Job posting created.");
+      }
+      setModalJobOpen(false);
+      setEditJob(null);
+    } catch (err) {
+      notify(err.message || "Failed to save job.", "error");
+    }
+  };
+
+  const handleDeleteJob = async (jobId) => {
+    try {
+      await apiRequest(`${ENDPOINTS.jobs}/${jobId}`, { method: "DELETE" });
+      setJobs((prev) => prev.filter((j) => j.id !== jobId));
+      notify("Job opening permanently deleted.");
+    } catch (err) {
+      notify(err.message || "Failed to delete job.", "error");
+    }
+  };
+
+  /* Backend Candidate Actions */
+  const handleSaveCandidate = async (candData) => {
+    try {
+      const created = await apiRequest(ENDPOINTS.candidates, {
+        method: "POST",
+        body: JSON.stringify(candData),
+      });
+      setCandidates((prev) => [created, ...prev]);
+      setModalCandidateOpen(false);
+      notify(`Candidate ${created.name} added successfully.`);
+    } catch (err) {
+      notify(err.message || "Failed to save candidate.", "error");
+    }
+  };
+
+  const handleUpdateCandidateStage = async (candidateId, newStage) => {
+    try {
+      await apiRequest(`${ENDPOINTS.candidates}/${candidateId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ stage: newStage }),
+      });
+      setCandidates((prev) =>
+        prev.map((c) => (c.id === candidateId ? { ...c, stage: newStage } : c))
+      );
+      if (modalCandidate && modalCandidate.id === candidateId) {
+        setModalCandidate((prev) => ({ ...prev, stage: newStage }));
+      }
+      notify(`Candidate moved to ${newStage}.`);
+    } catch (err) {
+      notify(err.message || "Failed to update stage.", "error");
+    }
+  };
+
+  const handleUpdateCandidateRating = async (candidateId, rating) => {
+    try {
+      await apiRequest(`${ENDPOINTS.candidates}/${candidateId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ rating }),
+      });
+      setCandidates((prev) =>
+        prev.map((c) => (c.id === candidateId ? { ...c, rating } : c))
+      );
+      if (modalCandidate && modalCandidate.id === candidateId) {
+        setModalCandidate((prev) => ({ ...prev, rating }));
+      }
+      notify("Rating updated.");
+    } catch (err) {
+      notify(err.message || "Failed to update rating.", "error");
+    }
+  };
+
+  const handleUpdateCandidateNotes = async (candidateId, notes) => {
+    try {
+      const updated = await apiRequest(`${ENDPOINTS.candidates}/${candidateId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ notes }),
+      });
+      setCandidates((prev) =>
+        prev.map((c) => (c.id === candidateId ? (updated || { ...c, notes }) : c))
+      );
+      if (modalCandidate && modalCandidate.id === candidateId) {
+        setModalCandidate((prev) => ({ ...prev, notes }));
+      }
+      notify("HR candidate notes saved successfully.");
+    } catch (err) {
+      notify(err.message || "Failed to save HR notes.", "error");
+    }
+  };
+
+  /* AI CV Screening Engine */
+  const handleRunAICVScreening = async (candidateId) => {
+    setAnalyzingId(candidateId);
+    try {
+      const result = await apiRequest(`/hrm/candidates/${candidateId}/analyze-cv`, {
+        method: "POST",
+      });
+      if (result.candidate) {
+        setCandidates((prev) =>
+          prev.map((c) => (c.id === candidateId ? result.candidate : c))
+        );
+        if (modalCandidate && modalCandidate.id === candidateId) {
+          setModalCandidate(result.candidate);
+        }
+      }
+      notify(`AI CV Analysis complete! Score: ${result.analysis.matchScore}% Match.`);
+    } catch (err) {
+      notify(err.message || "AI Analysis failed.", "error");
+    } finally {
+      setAnalyzingId(null);
+    }
+  };
+
+  /* Schedule & Email Interview Invitation */
+  const handleScheduleInterview = async (interviewForm) => {
+    setSchedulingInterview(true);
+    try {
+      const result = await apiRequest(`/hrm/candidates/${interviewForm.candidateId}/schedule-interview`, {
+        method: 'POST',
+        body: JSON.stringify(interviewForm),
+      });
+
+      if (result.candidate) {
+        setCandidates((prev) =>
+          prev.map((c) => (c.id === interviewForm.candidateId ? result.candidate : c))
+        );
+      }
+
+      setInterviewCandidate(null);
+      notify(result.message || `Interview invitation emailed to ${interviewForm.candidateEmail}!`);
+    } catch (err) {
+      notify(err.message || "Failed to schedule interview.", "error");
+    } finally {
+      setSchedulingInterview(false);
+    }
+  };
+
+  /* Direct Offer Letter Sending from Recruitment Page */
+  const handleSendDirectOffer = async (offerForm) => {
+    setSendingOffer(true);
+    try {
+      const createdOffer = await apiRequest('/hrm/offer-letters', {
+        method: 'POST',
+        body: JSON.stringify(offerForm),
+      });
+      
+      await apiRequest(`/hrm/offer-letters/${createdOffer.id}/send-email`, { method: 'POST' });
+      
+      if (offerForm.candidateId) {
+        handleUpdateCandidateStage(offerForm.candidateId, 'Offer');
+      }
+
+      setDirectOfferCandidate(null);
+      notify(`Official Offer Letter created and emailed directly to ${offerForm.candidateEmail}!`);
+    } catch (err) {
+      notify(err.message || 'Failed to send direct offer letter.', 'error');
+    } finally {
+      setSendingOffer(false);
+    }
+  };
+
+  /* Onboarding Actions */
+  const handleSaveOnboarding = async (formData) => {
+    try {
+      const created = await apiRequest(ENDPOINTS.onboarding, {
+        method: "POST",
+        body: JSON.stringify(formData),
+      });
+      setOnboarding((prev) => [created, ...prev]);
+
+      // Move candidate stage from Hired to Onboarding
+      if (formData.candidateId) {
+        await handleUpdateCandidateStage(formData.candidateId, "Onboarding");
+      }
+
+      setModalOnboardingOpen(false);
+      setOnboardingCandidateId(null);
+      setActiveTab("Onboarding");
+      notify("Candidate moved from Hired section to Onboarding!");
+    } catch (err) {
+      notify(err.message || "Failed to add onboarding record.", "error");
+    }
+  };
+
+  const handleToggleTask = async (onboardingId, taskId) => {
+    const record = onboarding.find((o) => o.id === onboardingId);
+    if (!record) return;
+    const updatedTasks = record.tasks.map((t) =>
+      t.id === taskId ? { ...t, done: !t.done } : t
     );
-  }, [candidates, query, jobById]);
-
-  const pipeline = STAGES.map(stage => ({
-    stage,
-    items: filteredCandidates.filter(c => c.stage === stage),
-  }));
-
-  /* ------------------------------ Handlers ------------------------------ */
-  const createJob = async (form) => {
-    const payload = { id: uid('j'), status: 'Open', postedDate: new Date().toISOString().slice(0, 10), ...form };
-    const { data, live: isLive } = await withFallback(() => apiRequest('/job-openings', { method: 'POST', body: JSON.stringify(form) }), () => payload);
-    setJobs(prev => [isLive ? data : payload, ...prev]);
-    setShowJobModal(false);
-    notify(`Job opening created${isLive ? '' : ' (local)'}`);
+    const allDone = updatedTasks.every((t) => t.done);
+    const newStatus = allDone ? "Completed" : "In Progress";
+    try {
+      await apiRequest(`${ENDPOINTS.onboarding}/${onboardingId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ tasks: updatedTasks, status: newStatus }),
+      });
+      setOnboarding((prev) =>
+        prev.map((o) =>
+          o.id === onboardingId ? { ...o, tasks: updatedTasks, status: newStatus } : o
+        )
+      );
+    } catch (err) {
+      notify(err.message || "Failed to update task.", "error");
+    }
   };
 
-  const createCandidate = async (form) => {
-    const payload = { id: uid('c'), stage: 'Applied', appliedDate: new Date().toISOString().slice(0, 10), rating: 0, notes: '', ...form };
-    const { data, live: isLive } = await withFallback(() => apiRequest('/candidates', { method: 'POST', body: JSON.stringify(form) }), () => payload);
-    setCandidates(prev => [isLive ? data : payload, ...prev]);
-    setShowCandidateModal(false);
-    notify(`${form.name} added${isLive ? '' : ' (local)'}`);
+  const handleConvertToUser = async (candidateId) => {
+    try {
+      const res = await apiRequest(`/hrm/candidates/${candidateId}/convert-to-user`, {
+        method: "POST",
+      });
+      notify(`🎉 ${res.message}`);
+      loadAll();
+    } catch (err) {
+      notify(err.message || "Failed to convert candidate to employee user.", "error");
+    }
   };
 
-  const updateCandidate = async (id, patch) => {
-    const { live: isLive } = await withFallback(() => apiRequest(`/candidates/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }), () => null);
-    setCandidates(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c));
-    if (detailCandidate?.id === id) setDetailCandidate(prev => ({ ...prev, ...patch }));
-    return isLive;
+  /* Stats */
+  const stats = useMemo(() => {
+    const openRoles = jobs.filter((j) => j.status === "Open").length;
+    const activeCandidates = candidates.filter((c) => c.stage !== "Rejected").length;
+    const hiredCount = candidates.filter((c) => c.stage === "Hired").length;
+    const onboardingPending = onboarding.filter((o) => o.status !== "Completed").length;
+    return { openRoles, activeCandidates, hiredCount, onboardingPending };
+  }, [jobs, candidates, onboarding]);
+
+  /* Filtered Lists */
+  const filteredJobs = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return jobs;
+    return jobs.filter((j) => j.title.toLowerCase().includes(q) || j.department.toLowerCase().includes(q));
+  }, [jobs, search]);
+
+  const filteredCandidatesForStage = (stage) => {
+    const q = search.trim().toLowerCase();
+    return candidates.filter((c) => {
+      if (c.stage !== stage) return false;
+      if (!q) return true;
+      return c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
+    });
   };
 
-  const advanceStage = async (candidate) => {
-    const idx = STAGES.indexOf(candidate.stage);
-    if (idx === -1 || idx === STAGES.length - 1) return;
-    const nextStage = STAGES[idx + 1];
-    await updateCandidate(candidate.id, { stage: nextStage });
-    notify(`Moved to ${nextStage}`);
-  };
-
-  const refuseCandidate = async (candidate) => {
-    await updateCandidate(candidate.id, { stage: 'Refused' });
-    setDetailCandidate(null);
-    notify('Candidate refused', 'error');
-  };
-
-  const deleteCandidate = async (candidate) => {
-    await withFallback(() => apiRequest(`/candidates/${candidate.id}`, { method: 'DELETE' }), () => null);
-    setCandidates(prev => prev.filter(c => c.id !== candidate.id));
-    setDetailCandidate(null);
-    notify('Candidate removed', 'error');
-  };
-
-  const hiredWithoutOnboarding = candidates.filter(c => c.stage === 'Hired' && !onboarding.some(o => o.candidateId === c.id));
-
-  const startOnboarding = async (form) => {
-    const candidate = candidates.find(c => c.id === form.candidateId);
-    const payload = {
-      id: uid('o'), candidateId: candidate.id, name: candidate.name,
-      role: jobById(candidate.jobId)?.title || 'New Hire', startDate: form.startDate,
-      buddy: form.buddy, status: 'Pending', tasks: defaultChecklist(),
-    };
-    const { data, live: isLive } = await withFallback(() => apiRequest('/onboarding', { method: 'POST', body: JSON.stringify(form) }), () => payload);
-    setOnboarding(prev => [isLive ? data : payload, ...prev]);
-    setShowOnboardModal(false);
-    notify(`Onboarding started${isLive ? '' : ' (local)'}`);
-  };
-
-  const toggleTask = async (onboardId, taskId) => {
-    setOnboarding(prev => prev.map(o => {
-      if (o.id !== onboardId) return o;
-      const tasks = o.tasks.map(t => t.id === taskId ? { ...t, done: !t.done } : t);
-      const status = progressOf(tasks) === 100 ? 'Completed' : progressOf(tasks) === 0 ? 'Pending' : 'In Progress';
-      const updated = { ...o, tasks, status };
-      if (taskDetail?.id === onboardId) setTaskDetail(updated);
-      withFallback(() => apiRequest(`/onboarding/${onboardId}`, { method: 'PATCH', body: JSON.stringify({ tasks, status }) }), () => null);
-      return updated;
-    }));
-  };
+  const jobMap = useMemo(() => {
+    const map = {};
+    jobs.forEach((j) => { map[j.id] = j; });
+    return map;
+  }, [jobs]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F6F7F9]">
-        <div className="flex items-center gap-3 text-[#6B7280] text-sm">
-          <div className="w-4 h-4 border-2 border-[#163B4D] border-t-transparent rounded-full animate-spin" />
-          Loading…
+      <div className="r-page">
+        <div className="r-loading">
+          <div className="r-loading-inner">
+            <div className="r-spinner" />
+            <span>Syncing HRM recruitment engine...</span>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 sm:p-6 bg-[#F6F7F9] min-h-screen text-[#1F2937]">
-      {toast && <Toast message={toast.message} kind={toast.kind} onDone={() => setToast(null)} />}
+    <div className="r-page">
+      {toast && (
+        <div className={`r-toast r-toast--${toast.kind}`}>{toast.message}</div>
+      )}
 
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 sm:mb-8">
-        <div className="min-w-0 w-full lg:w-auto">
-          <div className="flex flex-wrap items-center gap-2 mb-1">
-            <h1 className="text-xl sm:text-2xl font-bold text-[#163B4D]">Talent &amp; Onboarding</h1>
-            <span className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${live ? 'bg-[#2F8F5B]/10 text-[#2F8F5B]' : 'bg-gray-200 text-gray-600'}`}>
-              {live ? <Wifi size={11} /> : <WifiOff size={11} />}
-              <span className="hidden sm:inline">{live ? 'Connected' : 'Offline Mode'}</span>
+      {/* HEADER */}
+      <div className="r-header">
+        <div className="r-header-text">
+          <div className="r-header-title-row">
+            <h1>Recruitment &amp; Talent Acquisition</h1>
+            <span className="r-status-pill r-status-pill--live">
+              <MdWifi size={13} /> Live System
             </span>
           </div>
-          <p className="text-sm text-[#6B7280]">Manage recruitment pipeline and integration.</p>
+          <p>Manage job requisitions, schedule interviews, evaluate AI CV match scores, and issue offer letters.</p>
         </div>
-        <div className="flex flex-row gap-2 w-full lg:w-auto">
-          <button onClick={() => setShowJobsList(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-white border border-[#E4E7EB] text-[#163B4D] px-4 py-2.5 sm:py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition whitespace-nowrap shadow-sm">
-            <Briefcase size={16} /> <span className="hidden sm:inline">Job Openings</span>
-          </button>
-          <button
-            onClick={() => activeView === 'recruitment' ? setShowCandidateModal(true) : setShowOnboardModal(true)}
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#163B4D] text-white px-4 py-2.5 sm:py-2 rounded-lg text-sm font-medium hover:bg-[#0F2C3A] transition whitespace-nowrap shadow-sm"
-          >
-            <Plus size={18} />
-            {activeView === 'recruitment' ? 'Candidate' : 'Onboard'}
-          </button>
-        </div>
-      </div>
 
-      {/* Metrics Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
-        <MetricCard title="Open Roles" value={metrics.openRoles} icon={<Briefcase size={20} style={{ color: '#163B4D' }} />} accent="#163B4D" />
-        <MetricCard title="Active Candidates" value={metrics.activeCandidates} icon={<Users size={20} style={{ color: '#2F8F5B' }} />} accent="#2F8F5B" />
-        <MetricCard title="Avg Time-to-Hire" value={metrics.timeToHire} icon={<Clock size={20} style={{ color: '#D98E3E' }} />} accent="#D98E3E" />
-        <MetricCard title="Onboarding" value={metrics.onboardingCompletion} icon={<CheckCircle2 size={20} style={{ color: '#6C5CE7' }} />} accent="#6C5CE7" />
-      </div>
-
-      {/* Toggle + Search */}
-      <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-[#E4E7EB] mb-6 gap-3 lg:gap-0">
-        <div className="flex p-1 bg-[#F6F7F9] rounded-lg w-full lg:w-auto">
-          <button onClick={() => setActiveView('recruitment')} className={`flex-1 lg:flex-none px-4 py-2 sm:py-1.5 rounded-md text-sm font-medium transition ${activeView === 'recruitment' ? 'bg-white shadow-sm text-[#163B4D]' : 'text-gray-500 hover:text-gray-700'}`}>
-            Pipeline
+        <div className="r-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {activeTab === "Open Roles" && (
+            <button className="r-btn r-btn--ghost" onClick={() => { setEditJob(null); setModalJobOpen(true); }}>
+              <MdAdd size={18} /> Post Vacancy
+            </button>
+          )}
+          
+          <button className="r-btn r-btn--primary" onClick={() => setModalCandidateOpen(true)}>
+            <MdPersonAddAlt1 size={18} /> Add New Candidate
           </button>
-          <button onClick={() => setActiveView('onboarding')} className={`flex-1 lg:flex-none px-4 py-2 sm:py-1.5 rounded-md text-sm font-medium transition ${activeView === 'onboarding' ? 'bg-white shadow-sm text-[#163B4D]' : 'text-gray-500 hover:text-gray-700'}`}>
-            Onboarding
-          </button>
-        </div>
-        <div className="relative w-full lg:w-72">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search people or roles…"
-            className="w-full pl-10 pr-4 py-2.5 sm:py-2 bg-[#F6F7F9] border border-[#E4E7EB] rounded-lg text-sm focus:outline-none focus:border-[#163B4D] appearance-none"
-          />
-        </div>
-      </div>
 
-      {/* Views */}
-      {activeView === 'recruitment' ? (
-        // Horizontal scroll container on mobile, native grid on Desktop
-        <div className="flex lg:grid lg:grid-cols-5 gap-4 overflow-x-auto snap-x snap-mandatory pb-4 lg:pb-0 lg:overflow-visible">
-          {pipeline.map((col) => (
-            <div key={col.stage} className="w-[85vw] sm:w-[320px] lg:w-auto flex-shrink-0 snap-center bg-white/60 rounded-xl p-4 border border-[#E4E7EB] flex flex-col h-[65vh] lg:h-auto lg:max-h-[600px]">
-              <div className="flex justify-between items-center mb-4 flex-shrink-0">
-                <h3 className="font-semibold text-[#163B4D] text-sm">{col.stage}</h3>
-                <span className="bg-[#163B4D]/10 text-[#163B4D] text-xs font-bold px-2 py-1 rounded-full">{col.items.length}</span>
-              </div>
-              <div className="space-y-3 overflow-y-auto pr-1 pb-2 flex-1 overscroll-contain">
-                {col.items.map(candidate => (
-                  <div
-                    key={candidate.id}
-                    onClick={() => setDetailCandidate(candidate)}
-                    className="bg-white p-3 sm:p-4 rounded-lg shadow-sm border border-[#E4E7EB] cursor-pointer hover:shadow-md hover:border-[#163B4D]/30 transition group"
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-medium text-[#1F2937] text-sm truncate pr-2">{candidate.name}</h4>
-                      <MoreVertical size={16} className="text-gray-400 lg:opacity-0 group-hover:opacity-100 transition flex-shrink-0" />
-                    </div>
-                    <p className="text-xs text-[#6B7280] mb-3 truncate">{jobById(candidate.jobId)?.title || 'Unassigned role'}</p>
-                    <div className="flex justify-between items-center text-xs text-gray-400 mt-auto">
-                      <span>{candidate.appliedDate}</span>
-                      <div className="w-6 h-6 rounded-full bg-[#163B4D]/10 text-[#163B4D] flex items-center justify-center font-bold text-[10px] flex-shrink-0">
-                        {initials(candidate.name)}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {col.items.length === 0 && (
-                  <div className="text-center p-4 border-2 border-dashed border-[#E4E7EB] rounded-lg text-gray-400 text-xs">
-                    No candidates
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-[#E4E7EB] overflow-hidden">
-          {onboarding.length === 0 ? (
-            <div className="p-8 sm:p-12 text-center text-sm text-[#6B7280]">
-              No onboarding in progress.<br className="sm:hidden" /> Hire a candidate, then click <span className="font-medium text-[#163B4D]">Onboard</span>.
-            </div>
-          ) : (
-            <>
-              {/* Desktop / tablet table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-[#F6F7F9] border-b border-[#E4E7EB] text-[#6B7280]">
-                    <tr>
-                      <th className="px-6 py-4 font-medium whitespace-nowrap">New Hire</th>
-                      <th className="px-6 py-4 font-medium whitespace-nowrap">Role</th>
-                      <th className="px-6 py-4 font-medium whitespace-nowrap">Start Date</th>
-                      <th className="px-6 py-4 font-medium whitespace-nowrap">Progress</th>
-                      <th className="px-6 py-4 font-medium whitespace-nowrap">Status</th>
-                      <th className="px-6 py-4"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#E4E7EB]">
-                    {onboarding.map(person => {
-                      const pct = progressOf(person.tasks);
-                      return (
-                        <tr key={person.id} className="hover:bg-[#F6F7F9] transition cursor-pointer" onClick={() => setTaskDetail(person)}>
-                          <td className="px-6 py-4 font-medium text-[#1F2937] whitespace-nowrap">{person.name}</td>
-                          <td className="px-6 py-4 text-[#6B7280] whitespace-nowrap">{person.role}</td>
-                          <td className="px-6 py-4 text-[#6B7280] whitespace-nowrap">{person.startDate}</td>
-                          <td className="px-6 py-4 min-w-[150px]">
-                            <div className="flex items-center gap-2">
-                              <div className="bg-gray-200 rounded-full h-1.5 w-full max-w-[100px]">
-                                <div className="bg-[#2F8F5B] h-1.5 rounded-full transition-all" style={{ width: `${pct}%` }}></div>
-                              </div>
-                              <span className="text-xs text-[#6B7280] font-medium">{pct}%</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`text-[11px] font-semibold px-2 py-1 rounded-full ${person.status === 'Completed' ? 'bg-[#2F8F5B]/10 text-[#2F8F5B]' : person.status === 'In Progress' ? 'bg-[#D98E3E]/10 text-[#D98E3E]' : 'bg-gray-100 text-gray-500'}`}>
-                              {person.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <button className="text-[#163B4D] hover:text-[#0F2C3A] p-2 -mr-2">
-                              <ChevronRight size={18} />
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+          {/* Real-time Notification Bell on the RIGHT side of Add New Candidate */}
+          <div className="r-notifications-bell-wrap" style={{ position: "relative" }}>
+            <button
+              className="r-btn r-btn--ghost"
+              style={{ position: "relative", padding: "8px 12px" }}
+              title="Real-time Offer Letter Notifications"
+              onClick={() => {
+                setShowNotificationDropdown(!showNotificationDropdown);
+                if (unreadNotifications > 0) handleMarkNotificationsRead();
+              }}
+            >
+              <MdNotifications size={20} />
+              {unreadNotifications > 0 && (
+                <span style={{
+                  position: "absolute",
+                  top: "-4px",
+                  right: "-4px",
+                  background: "#ef4444",
+                  color: "#ffffff",
+                  borderRadius: "999px",
+                  padding: "2px 6px",
+                  fontSize: "10px",
+                  fontWeight: "800"
+                }}>
+                  {unreadNotifications}
+                </span>
+              )}
+            </button>
 
-              {/* Mobile card list */}
-              <div className="md:hidden divide-y divide-[#E4E7EB]">
-                {onboarding.map(person => {
-                  const pct = progressOf(person.tasks);
-                  return (
-                    <button key={person.id} onClick={() => setTaskDetail(person)} className="w-full text-left px-4 py-4 active:bg-[#F6F7F9] transition">
-                      <div className="flex justify-between items-start gap-2 mb-2">
-                        <div className="min-w-0">
-                          <p className="font-medium text-[#1F2937] text-sm truncate">{person.name}</p>
-                          <p className="text-xs text-[#6B7280] truncate mt-0.5">{person.role}</p>
-                        </div>
-                        <ChevronRight size={16} className="text-[#163B4D] flex-shrink-0 mt-1" />
+            {showNotificationDropdown && (
+              <div style={{
+                position: "absolute",
+                right: 0,
+                top: "42px",
+                width: "320px",
+                background: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "12px",
+                boxShadow: "0 12px 30px rgba(15, 23, 42, 0.15)",
+                zIndex: 9999,
+                overflow: "hidden"
+              }}>
+                <div style={{ padding: "12px 16px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", fontWeight: "700", fontSize: "13px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span>Offer Letter Alerts</span>
+                  <button style={{ background: "none", border: "none", cursor: "pointer" }} onClick={() => setShowNotificationDropdown(false)}>
+                    <MdClose size={16} />
+                  </button>
+                </div>
+                <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+                  {hrmNotifications.length === 0 ? (
+                    <p style={{ padding: "20px", textAlign: "center", color: "#94a3b8", fontSize: "12px", margin: 0 }}>
+                      No recent offer letter notifications.
+                    </p>
+                  ) : (
+                    hrmNotifications.map((n) => (
+                      <div key={n.id} style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9", background: n.read ? "#ffffff" : "#f0f9ff" }}>
+                        <div style={{ fontWeight: "700", fontSize: "12.5px", color: "#0f172a" }}>{n.title}</div>
+                        <div style={{ fontSize: "12px", color: "#475569", marginTop: "2px" }}>{n.message}</div>
+                        <small style={{ color: "#94a3b8", fontSize: "10.5px" }}>{new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
                       </div>
-                      <div className="flex items-center justify-between gap-3 mt-3">
-                        <span className="text-xs text-gray-400">Starts {person.startDate}</span>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${person.status === 'Completed' ? 'bg-[#2F8F5B]/10 text-[#2F8F5B]' : person.status === 'In Progress' ? 'bg-[#D98E3E]/10 text-[#D98E3E]' : 'bg-gray-100 text-gray-500'}`}>
-                          {person.status}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-3">
-                        <div className="bg-gray-200 rounded-full h-1.5 flex-1">
-                          <div className="bg-[#2F8F5B] h-1.5 rounded-full transition-all" style={{ width: `${pct}%` }}></div>
-                        </div>
-                        <span className="text-xs text-[#6B7280] font-medium w-8 text-right">{pct}%</span>
-                      </div>
-                    </button>
-                  );
-                })}
+                    ))
+                  )}
+                </div>
               </div>
-            </>
+            )}
+          </div>
+
+          {activeTab === "Onboarding" && (
+            <button className="r-btn r-btn--ghost" onClick={() => setModalOnboardingOpen(true)}>
+              <MdAdd size={18} /> Initialize Onboarding
+            </button>
           )}
         </div>
-      )}
+      </div>
 
-      {/* --------------------------- Modals --------------------------- */}
-      <Modal open={showJobModal} onClose={() => setShowJobModal(false)} title="New Job Opening">
-        <JobForm onSubmit={createJob} onCancel={() => setShowJobModal(false)} />
-      </Modal>
-
-      <Modal open={showJobsList} onClose={() => setShowJobsList(false)} title="Job Openings" width="max-w-2xl">
-        <div className="space-y-3">
-          {jobs.map(job => (
-            <div key={job.id} className="border border-[#E4E7EB] rounded-lg p-4 flex flex-col sm:flex-row justify-between items-start gap-4">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                  <h4 className="font-semibold text-[#1F2937] text-sm">{job.title}</h4>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${job.status === 'Open' ? 'bg-[#2F8F5B]/10 text-[#2F8F5B]' : 'bg-gray-100 text-gray-500'}`}>{job.status}</span>
-                </div>
-                <div className="text-xs text-[#6B7280] flex flex-wrap items-center gap-x-3 gap-y-2">
-                  <span className="flex items-center gap-1"><Briefcase size={12} />{job.department}</span>
-                  <span className="flex items-center gap-1"><MapPin size={12} />{job.location}</span>
-                  <span className="bg-gray-100 px-1.5 py-0.5 rounded">{job.type}</span>
-                </div>
-                <p className="text-xs text-gray-500 mt-2 line-clamp-2">{job.description}</p>
-              </div>
-              <div className="w-full sm:w-auto bg-[#163B4D]/5 px-3 py-2 sm:px-2 sm:py-1 rounded-lg sm:rounded-full flex items-center justify-center">
-                 <span className="text-xs font-semibold text-[#163B4D] whitespace-nowrap">
-                   {candidates.filter(c => c.jobId === job.id).length} applicants
-                 </span>
-              </div>
-            </div>
-          ))}
+      {/* STAT CARDS */}
+      <div className="r-stats-row">
+        <div className="r-stat-card">
+          <div className="r-stat-info">
+            <span className="r-stat-label">Active Job Openings</span>
+            <span className="r-stat-value">{stats.openRoles}</span>
+          </div>
+          <div className="r-stat-icon r-stat-icon--violet"><MdWork size={22} /></div>
         </div>
+        <div className="r-stat-card">
+          <div className="r-stat-info">
+            <span className="r-stat-label">Active Pipeline</span>
+            <span className="r-stat-value">{stats.activeCandidates}</span>
+          </div>
+          <div className="r-stat-icon r-stat-icon--sky"><MdGroups size={22} /></div>
+        </div>
+        <div className="r-stat-card">
+          <div className="r-stat-info">
+            <span className="r-stat-label">Hired Candidates</span>
+            <span className="r-stat-value">{stats.hiredCount}</span>
+          </div>
+          <div className="r-stat-icon r-stat-icon--success"><MdCheckCircle size={22} /></div>
+        </div>
+        <div className="r-stat-card">
+          <div className="r-stat-info">
+            <span className="r-stat-label">Onboarding Pending</span>
+            <span className="r-stat-value">{stats.onboardingPending}</span>
+          </div>
+          <div className="r-stat-icon r-stat-icon--warning"><MdAccessTime size={22} /></div>
+        </div>
+      </div>
+
+      {/* NAVBAR / TABS */}
+      <div className="recruitment-tabs">
         <button
-          onClick={() => { setShowJobsList(false); setShowJobModal(true); }}
-          className="mt-4 w-full flex items-center justify-center gap-2 border border-dashed border-[#163B4D]/40 text-[#163B4D] py-3 sm:py-2.5 rounded-lg text-sm font-medium hover:bg-[#163B4D]/5 transition"
+          className={`recruitment-tab ${activeTab === "Open Roles" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("Open Roles")}
         >
-          <Plus size={16} /> Add another opening
+          Open Roles <span className="recruitment-tab-count">{jobs.length}</span>
         </button>
-      </Modal>
+        {STAGE_TABS.map((stg) => {
+          const count = candidates.filter((c) => c.stage === stg).length;
+          return (
+            <button
+              key={stg}
+              className={`recruitment-tab ${activeTab === stg ? "is-active" : ""}`}
+              onClick={() => setActiveTab(stg)}
+            >
+              {stg} <span className="recruitment-tab-count">{count}</span>
+            </button>
+          );
+        })}
+        <button
+          className={`recruitment-tab ${activeTab === "Onboarding" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("Onboarding")}
+        >
+          Onboarding <span className="recruitment-tab-count">{onboarding.length}</span>
+        </button>
+      </div>
 
-      <Modal open={showCandidateModal} onClose={() => setShowCandidateModal(false)} title="Add Candidate">
-        <CandidateForm jobs={jobs} onSubmit={createCandidate} onCancel={() => setShowCandidateModal(false)} />
-      </Modal>
+      {/* SEARCH BAR */}
+      <div className="recruitment-search">
+        <MdSearch size={18} />
+        <input
+          type="text"
+          placeholder={`Search ${activeTab.toLowerCase()}...`}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
 
-      <Modal open={!!detailCandidate} onClose={() => setDetailCandidate(null)} title="Candidate Profile">
-        {detailCandidate && (
-          <CandidateDetail
-            candidate={detailCandidate}
-            job={jobById(detailCandidate.jobId)}
-            onAdvance={() => advanceStage(detailCandidate)}
-            onRefuse={() => refuseCandidate(detailCandidate)}
-            onDelete={() => deleteCandidate(detailCandidate)}
-            onSaveNotes={(notes) => updateCandidate(detailCandidate.id, { notes })}
-            onRate={(rating) => updateCandidate(detailCandidate.id, { rating })}
-          />
-        )}
-      </Modal>
-
-      <Modal open={showOnboardModal} onClose={() => setShowOnboardModal(false)} title="Start Onboarding">
-        <OnboardForm candidates={hiredWithoutOnboarding} onSubmit={startOnboarding} onCancel={() => setShowOnboardModal(false)} />
-      </Modal>
-
-      <Modal open={!!taskDetail} onClose={() => setTaskDetail(null)} title="Onboarding Checklist">
-        {taskDetail && (
-          <div>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-full bg-[#163B4D]/10 text-[#163B4D] flex items-center justify-center font-bold text-base flex-shrink-0">
-                {initials(taskDetail.name)}
+      {/* MAIN TAB CONTENT */}
+      <div className="recruitment-tab-content">
+        {/* OPEN ROLES TAB */}
+        {activeTab === "Open Roles" && (
+          <div className="r-card-grid r-card-grid--jobs">
+            {filteredJobs.length === 0 ? (
+              <div className="r-empty-state">
+                <div className="r-empty-state-icon"><MdWork size={24} /></div>
+                <h3 className="r-empty-state-title">No Job Openings</h3>
+                <p className="r-empty-state-message">Click "Post Vacancy" to list a new job opening.</p>
               </div>
-              <div className="min-w-0">
-                <p className="font-semibold text-[#1F2937] text-base truncate">{taskDetail.name}</p>
-                <p className="text-sm text-[#6B7280] truncate">{taskDetail.role}</p>
-                <p className="text-xs text-gray-400 mt-0.5">Starts {taskDetail.startDate}</p>
-              </div>
-            </div>
-            <div className="space-y-2.5 mb-4">
-              {taskDetail.tasks.map(t => (
-                <label key={t.id} className="flex items-center gap-3 p-3 sm:p-3.5 border border-[#E4E7EB] rounded-xl cursor-pointer hover:bg-[#F6F7F9] active:bg-gray-100 transition touch-manipulation">
-                  <input type="checkbox" checked={t.done} onChange={() => toggleTask(taskDetail.id, t.id)} className="w-5 h-5 rounded border-gray-300 accent-[#163B4D]" />
-                  <span className={`text-sm ${t.done ? 'line-through text-gray-400' : 'text-[#1F2937]'}`}>{t.label}</span>
-                </label>
-              ))}
-            </div>
-            <div className="bg-[#F6F7F9] p-3 rounded-lg flex items-start gap-2">
-               <UserCheck size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
-               <p className="text-xs text-[#6B7280] leading-relaxed">
-                 Buddy assigned:<br/>
-                 <span className="font-medium text-[#1F2937] text-sm">{taskDetail.buddy || 'None assigned'}</span>
-               </p>
-            </div>
+            ) : (
+              filteredJobs.map((j) => (
+                <div key={j.id} className="r-job-card">
+                  <div className="r-job-card-top">
+                    <h3 className="r-job-card-title">{j.title}</h3>
+                    <div className="r-job-card-actions">
+                      <button className="r-icon-btn" title="Edit Job" onClick={() => { setEditJob(j); setModalJobOpen(true); }}>
+                        <MdEdit size={16} />
+                      </button>
+                      <button className="r-icon-btn r-icon-btn--danger" title="Delete Job" onClick={() => handleDeleteJob(j.id)}>
+                        <MdDeleteOutline size={16} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="r-job-card-meta">
+                    <span><MdWork size={14} /> {j.department}</span>
+                    <span><MdLocationOn size={14} /> {j.location}</span>
+                    <span className={`r-pill r-pill--${j.status === "Open" ? "success" : "neutral"}`}>{j.status}</span>
+                  </div>
+                  <p className="r-job-card-desc">{j.description || "No description provided."}</p>
+                  <div className="r-job-card-footer">
+                    <span>{j.type} ({j.openings} opening{j.openings > 1 ? "s" : ""})</span>
+                    <span className="r-job-card-applicants"><MdGroups size={16} /> {candidates.filter(c => c.jobId === j.id).length} candidates</span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
-      </Modal>
-    </div>
-  );
-};
 
-/* ------------------------------- Form parts ------------------------------ */
-const JobForm = ({ onSubmit, onCancel }) => {
-  const [form, setForm] = useState({ title: '', department: '', location: '', type: 'Full-time', openings: 1, description: '' });
-  const [saving, setSaving] = useState(false);
-  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
-  const valid = form.title.trim() && form.department.trim() && form.location.trim();
-  
-  return (
-    <form onSubmit={async (e) => { e.preventDefault(); if (!valid) return; setSaving(true); await onSubmit(form); setSaving(false); }}>
-      <Field label="Job Title"><input className={inputCls} value={form.title} onChange={set('title')} placeholder="e.g. Senior Backend Developer" required /></Field>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 sm:gap-4">
-        <Field label="Department"><input className={inputCls} value={form.department} onChange={set('department')} placeholder="Engineering" required /></Field>
-        <Field label="Location"><input className={inputCls} value={form.location} onChange={set('location')} placeholder="Lahore, PK" required /></Field>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 sm:gap-4">
-        <Field label="Employment Type">
-          <select className={inputCls} value={form.type} onChange={set('type')}>
-            <option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option>
-          </select>
-        </Field>
-        <Field label="Openings"><input type="number" min="1" className={inputCls} value={form.openings} onChange={set('openings')} /></Field>
-      </div>
-      <Field label="Description"><textarea className={inputCls} rows={4} value={form.description} onChange={set('description')} placeholder="Role summary and responsibilities" /></Field>
-      <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 mt-6">
-        <button type="button" onClick={onCancel} className="w-full sm:w-auto px-4 py-3 sm:py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition">Cancel</button>
-        <button type="submit" disabled={!valid || saving} className="w-full sm:w-auto px-4 py-3 sm:py-2 text-sm font-medium bg-[#163B4D] text-white rounded-lg hover:bg-[#0F2C3A] transition disabled:opacity-50">
-          {saving ? 'Creating…' : 'Create Opening'}
-        </button>
-      </div>
-    </form>
-  );
-};
+        {/* CANDIDATE STAGE TABS */}
+        {STAGE_TABS.includes(activeTab) && (
+          <div className="r-card-grid">
+            {filteredCandidatesForStage(activeTab).length === 0 ? (
+              <div className="r-empty-state">
+                <div className="r-empty-state-icon"><MdGroups size={24} /></div>
+                <h3 className="r-empty-state-title">No Candidates in {activeTab}</h3>
+                <p className="r-empty-state-message">Click "+ Add New Candidate" to register a candidate into the pipeline.</p>
+              </div>
+            ) : (
+              filteredCandidatesForStage(activeTab).map((c) => {
+                const targetJob = jobMap[c.jobId];
+                const candOnboarding = onboarding.find(
+                  (o) => o.candidate_id === c.id || o.name === c.name || o.email === c.email
+                );
+                const totalTasks = candOnboarding?.tasks?.length || 0;
+                const completedTasks = candOnboarding?.tasks?.filter((t) => t.done)?.length || 0;
+                const remainingTasks = totalTasks - completedTasks;
+                const isAllOnboarded = totalTasks > 0 && remainingTasks === 0;
 
-const CandidateForm = ({ jobs, onSubmit, onCancel }) => {
-  const [form, setForm] = useState({ name: '', email: '', phone: '', jobId: jobs[0]?.id || '', source: 'LinkedIn', resumeUrl: '' });
-  const [saving, setSaving] = useState(false);
-  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
-  const valid = form.name.trim() && form.email.trim() && form.jobId;
-  
-  return (
-    <form onSubmit={async (e) => { e.preventDefault(); if (!valid) return; setSaving(true); await onSubmit(form); setSaving(false); }}>
-      <Field label="Full Name"><input className={inputCls} value={form.name} onChange={set('name')} placeholder="Jane Cooper" required /></Field>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 sm:gap-4">
-        <Field label="Email"><input type="email" className={inputCls} value={form.email} onChange={set('email')} placeholder="jane@example.com" required /></Field>
-        <Field label="Phone"><input type="tel" className={inputCls} value={form.phone} onChange={set('phone')} placeholder="+92 300 0000000" /></Field>
-      </div>
-      <Field label="Applying For">
-        <select className={inputCls} value={form.jobId} onChange={set('jobId')} required>
-          {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
-        </select>
-      </Field>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 sm:gap-4">
-        <Field label="Source">
-          <select className={inputCls} value={form.source} onChange={set('source')}>
-            <option>LinkedIn</option><option>Referral</option><option>Indeed</option><option>Company Website</option><option>Other</option>
-          </select>
-        </Field>
-        <Field label="Resume Link"><input type="url" className={inputCls} value={form.resumeUrl} onChange={set('resumeUrl')} placeholder="https://…" /></Field>
-      </div>
-      <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 mt-6">
-        <button type="button" onClick={onCancel} className="w-full sm:w-auto px-4 py-3 sm:py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition">Cancel</button>
-        <button type="submit" disabled={!valid || saving} className="w-full sm:w-auto px-4 py-3 sm:py-2 text-sm font-medium bg-[#163B4D] text-white rounded-lg hover:bg-[#0F2C3A] transition disabled:opacity-50">
-          {saving ? 'Adding…' : 'Add Candidate'}
-        </button>
-      </div>
-    </form>
-  );
-};
+                return (
+                  <div key={c.id} className="r-candidate-card" onClick={() => setModalCandidate(c)}>
+                    <div className="r-candidate-card-top">
+                      <h4 className="r-candidate-card-name">{c.name}</h4>
+                      {c.aiScore > 0 && (
+                        <span className={`r-ai-badge ${c.aiScore >= 85 ? 'r-ai-badge--high' : 'r-ai-badge--mid'}`}>
+                          <MdPsychology size={14} /> {c.aiScore}% Match
+                        </span>
+                      )}
+                    </div>
+                    <p className="r-candidate-card-role">{targetJob ? targetJob.title : "General Applicant"} • {c.email}</p>
+                    
+                    <div className="r-rating-row" onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '4px', margin: '4px 0' }}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <span key={star} onClick={() => handleUpdateCandidateRating(c.id, star)} style={{ cursor: 'pointer' }}>
+                          {star <= c.rating ? <MdStar size={16} color="#f59e0b" /> : <MdStarBorder size={16} color="#94a3b8" />}
+                        </span>
+                      ))}
+                    </div>
 
-const CandidateDetail = ({ candidate, job, onAdvance, onRefuse, onDelete, onSaveNotes, onRate }) => {
-  const [notes, setNotes] = useState(candidate.notes || '');
-  const idx = STAGES.indexOf(candidate.stage);
-  const isFinal = candidate.stage === 'Hired' || candidate.stage === 'Refused';
-  
-  return (
-    <div>
-      <div className="flex items-center gap-3 sm:gap-4 mb-6">
-        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#163B4D]/10 text-[#163B4D] flex items-center justify-center font-bold text-lg flex-shrink-0">
-          {initials(candidate.name)}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold text-[#1F2937] text-base sm:text-lg truncate">{candidate.name}</p>
-          <p className="text-sm text-[#6B7280] truncate">{job?.title || 'Unassigned role'}</p>
-        </div>
-        <span className={`text-[11px] font-semibold px-2 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${candidate.stage === 'Refused' ? 'bg-[#C1483B]/10 text-[#C1483B]' : 'bg-[#163B4D]/10 text-[#163B4D]'}`}>
-          {candidate.stage}
-        </span>
+                    <div className="r-candidate-card-footer" onClick={(e) => e.stopPropagation()}>
+                      <div className="r-card-footer-meta">
+                        <span className="r-candidate-card-date">{c.appliedDate}</span>
+                        {candOnboarding ? (
+                          isAllOnboarded ? (
+                            <span className="r-pill r-pill--success" title="All Onboarding Checklist Tasks Completed">
+                              <MdCheckCircle size={12} /> Onboarding Done
+                            </span>
+                          ) : (
+                            <span className="r-pill r-pill--warning" title={`${remainingTasks} tasks remaining`}>
+                              ⚡ {completedTasks}/{totalTasks} ({remainingTasks} left)
+                            </span>
+                          )
+                        ) : (
+                          <span className="r-pill r-pill--sky">{c.stage}</span>
+                        )}
+                      </div>
+                      <div className="r-actions-row">
+                        {/* APPLIED STAGE */}
+                        {c.stage === "Applied" && (
+                          <>
+                            <button
+                              className="r-btn r-btn--xs r-btn--ghost"
+                              onClick={() => handleRunAICVScreening(c.id)}
+                            >
+                              <MdPsychology size={14} /> AI Review
+                            </button>
+                            <button
+                              className="r-btn r-btn--xs r-btn--primary"
+                              onClick={() => handleUpdateCandidateStage(c.id, "Screening")}
+                            >
+                              <MdArrowForward size={14} /> Screening
+                            </button>
+                          </>
+                        )}
+
+                        {/* SCREENING STAGE */}
+                        {c.stage === "Screening" && (
+                          <>
+                            <button
+                              className="r-btn r-btn--xs r-btn--ghost"
+                              onClick={() => setInterviewCandidate(c)}
+                            >
+                              <MdEvent size={14} /> Schedule Interview
+                            </button>
+                            <button
+                              className="r-btn r-btn--xs r-btn--primary"
+                              onClick={() => handleUpdateCandidateStage(c.id, "Interview")}
+                            >
+                              <MdArrowForward size={14} /> To Interview
+                            </button>
+                          </>
+                        )}
+
+                        {/* INTERVIEW STAGE */}
+                        {c.stage === "Interview" && (
+                          <>
+                            <button
+                              className="r-btn r-btn--xs r-btn--ghost"
+                              title="Schedule & Send Interview Email"
+                              onClick={() => setInterviewCandidate(c)}
+                            >
+                              <MdEvent size={14} /> Schedule Interview
+                            </button>
+                            <button
+                              className="r-btn r-btn--xs r-btn--primary"
+                              title="Issue Official Offer Letter"
+                              onClick={() => setDirectOfferCandidate(c)}
+                            >
+                              <MdSend size={14} /> Send Offer
+                            </button>
+                          </>
+                        )}
+
+                        {/* OFFER STAGE */}
+                        {c.stage === "Offer" && (
+                          <>
+                            <button
+                              className="r-btn r-btn--xs r-btn--primary"
+                              onClick={() => setDirectOfferCandidate(c)}
+                            >
+                              <MdSend size={14} /> Send Offer
+                            </button>
+                            <button
+                              className="r-btn r-btn--xs r-btn--ghost"
+                              onClick={() => handleUpdateCandidateStage(c.id, "Hired")}
+                            >
+                              <MdCheckCircle size={14} /> Mark Hired
+                            </button>
+                          </>
+                        )}
+
+                        {/* HIRED STAGE */}
+                        {c.stage === "Hired" && (
+                          <button
+                            className="r-btn r-btn--xs r-btn--primary"
+                            style={{ width: "100%" }}
+                            onClick={() => {
+                              setOnboardingCandidateId(c.id);
+                              setModalOnboardingOpen(true);
+                            }}
+                          >
+                            <MdAssignmentTurnedIn size={14} /> Start Onboarding
+                          </button>
+                        )}
+
+                        {/* REJECTED STAGE */}
+                        {c.stage === "Rejected" && (
+                          <button
+                            className="r-btn r-btn--xs r-btn--ghost"
+                            style={{ width: "100%" }}
+                            onClick={() => handleUpdateCandidateStage(c.id, "Applied")}
+                          >
+                            <MdRefresh size={14} /> Re-evaluate
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* ONBOARDING TAB */}
+        {activeTab === "Onboarding" && (
+          <div className="r-onboarding-list">
+            {onboarding.length === 0 ? (
+              <div className="r-empty-state">
+                <div className="r-empty-state-icon"><MdAssignmentTurnedIn size={24} /></div>
+                <h3 className="r-empty-state-title">No Onboarding Records</h3>
+                <p className="r-empty-state-message">Initialize onboarding when a candidate is hired.</p>
+              </div>
+            ) : (
+              onboarding.map((o) => {
+                const oTotal = o.tasks ? o.tasks.length : 0;
+                const oCompleted = o.tasks ? o.tasks.filter((t) => t.done).length : 0;
+                const oRemaining = oTotal - oCompleted;
+                const oDoneAll = oTotal > 0 && oRemaining === 0;
+
+                return (
+                  <div key={o.id} className="r-onboarding-card">
+                    <div className="r-onboarding-header">
+                      <div>
+                        <h3>{o.name}</h3>
+                        <span className="r-sub">{o.role} • Start Date: {o.start_date || o.startDate}</span>
+                      </div>
+                      <span className={`r-pill r-pill--${oDoneAll ? "success" : "warning"}`}>
+                        {oDoneAll ? "✔ Onboarding Completed" : `In Progress (${oCompleted}/${oTotal})`}
+                      </span>
+                    </div>
+
+                    <div style={{ margin: "12px 0 14px", background: "#e2e8f0", borderRadius: "999px", height: "8px", overflow: "hidden" }}>
+                      <div
+                        style={{
+                          width: `${oTotal ? (oCompleted / oTotal) * 100 : 0}%`,
+                          background: oDoneAll ? "#10b981" : "#0082ff",
+                          height: "100%",
+                          transition: "width 0.3s ease"
+                        }}
+                      />
+                    </div>
+
+                    <div className="r-checklist">
+                      {o.tasks && o.tasks.map((task) => (
+                        <label key={task.id} className="r-check-item">
+                          <input
+                            type="checkbox"
+                            checked={task.done}
+                            onChange={() => handleToggleTask(o.id, task.id)}
+                          />
+                          <span className={task.done ? "line-through" : ""}>{task.label}</span>
+                        </label>
+                      ))}
+                    </div>
+
+                    <div style={{ marginTop: "16px", paddingTop: "14px", borderTop: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+                      <button
+                        className="r-btn r-btn--primary r-btn--sm"
+                        style={{ background: "#0082ff", borderRadius: "8px" }}
+                        onClick={() => handleConvertToUser(o.candidate_id || o.id)}
+                      >
+                        <MdVpnKey size={16} /> Email Sign-In Credentials to Candidate
+                      </button>
+
+                      {oDoneAll ? (
+                        <span style={{ color: "#166534", fontSize: "12.5px", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px" }}>
+                          <MdCheckCircle size={16} color="#166534" /> Account &amp; Docs Ready
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: "12px", color: "#64748b" }}>
+                          ⚡ {oRemaining} task{oRemaining > 1 ? "s" : ""} left
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-4 text-sm mb-6 bg-[#F6F7F9] p-4 rounded-xl">
-        <div className="flex items-center gap-2.5 text-[#1F2937] overflow-hidden"><Mail size={16} className="text-gray-400 flex-shrink-0" /><span className="truncate">{candidate.email}</span></div>
-        <div className="flex items-center gap-2.5 text-[#1F2937]"><Phone size={16} className="text-gray-400 flex-shrink-0" />{candidate.phone || '—'}</div>
-        <div className="flex items-center gap-2.5 text-[#1F2937]"><Calendar size={16} className="text-gray-400 flex-shrink-0" />Applied {candidate.appliedDate}</div>
-        <div className="flex items-center gap-2.5 text-[#1F2937]"><LinkIcon size={16} className="text-gray-400 flex-shrink-0" />{candidate.source}</div>
-      </div>
-
-      <div className="mb-5">
-        <span className="block text-xs font-semibold text-[#6B7280] uppercase tracking-wide mb-2">Rating</span>
-        <div className="flex gap-2">
-          {[1, 2, 3, 4, 5].map(n => (
-            <button key={n} onClick={() => onRate(n)} type="button" className="p-1 -ml-1">
-              <Star size={24} className={n <= (candidate.rating || 0) ? 'fill-[#D98E3E] text-[#D98E3E]' : 'text-gray-200'} />
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <Field label="Notes">
-        <textarea className={inputCls} rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => onSaveNotes(notes)} placeholder="Interview feedback, next steps…" />
-      </Field>
-
-      {!isFinal && (
-        <div className="flex items-center gap-1.5 mb-6 mt-4">
-          {STAGES.map((s, i) => (
-            <React.Fragment key={s}>
-              <div className={`h-2 flex-1 rounded-full ${i <= idx ? 'bg-[#163B4D]' : 'bg-gray-200'}`} />
-            </React.Fragment>
-          ))}
-        </div>
+      {/* MODULARIZED MODAL DIALOGS */}
+      {modalCandidate && (
+        <CandidateProfileModal
+          candidate={modalCandidate}
+          onClose={() => setModalCandidate(null)}
+          onUpdateStage={handleUpdateCandidateStage}
+          onRunAIScreening={handleRunAICVScreening}
+          analyzingId={analyzingId}
+          onSaveNotes={handleUpdateCandidateNotes}
+          onOpenScheduleInterview={(cand) => {
+            setModalCandidate(null);
+            setInterviewCandidate(cand);
+          }}
+          onOpenDirectOffer={(cand) => {
+            setModalCandidate(null);
+            setDirectOfferCandidate(cand);
+          }}
+        />
       )}
 
-      <div className="flex flex-col sm:flex-row gap-3 sm:gap-0 justify-between items-stretch sm:items-center pt-4 border-t border-[#E4E7EB]">
-        <button onClick={onDelete} className="flex items-center justify-center sm:justify-start gap-1.5 px-3 py-3 sm:py-2 text-sm font-medium text-[#C1483B] hover:bg-[#C1483B]/10 rounded-lg transition order-2 sm:order-1">
-          <Trash2 size={16} /> Remove
-        </button>
-        <div className="flex flex-col sm:flex-row gap-2 order-1 sm:order-2">
-          {!isFinal && (
-            <button onClick={onRefuse} className="flex flex-1 sm:flex-none items-center justify-center gap-1.5 px-4 py-3 sm:py-2 text-sm font-medium text-[#C1483B] border border-[#C1483B]/30 rounded-lg hover:bg-[#C1483B]/5 transition">
-              <ThumbsDown size={16} /> Refuse
-            </button>
-          )}
-          {!isFinal && (
-            <button onClick={onAdvance} className="flex flex-1 sm:flex-none items-center justify-center gap-1.5 px-5 py-3 sm:py-2 text-sm font-medium bg-[#163B4D] text-white rounded-lg hover:bg-[#0F2C3A] transition">
-              Move to {STAGES[idx + 1]} <ArrowRight size={16} />
-            </button>
-          )}
-        </div>
-      </div>
+      {modalJobOpen && (
+        <JobFormModal
+          open={modalJobOpen}
+          initialData={editJob}
+          onClose={() => setModalJobOpen(false)}
+          onSubmit={handleSaveJob}
+        />
+      )}
+
+      {modalCandidateOpen && (
+        <CandidateFormModal
+          open={modalCandidateOpen}
+          jobs={jobs}
+          onClose={() => setModalCandidateOpen(false)}
+          onSubmit={handleSaveCandidate}
+        />
+      )}
+
+      {interviewCandidate && (
+        <ScheduleInterviewModal
+          open={!!interviewCandidate}
+          candidate={interviewCandidate}
+          onClose={() => setInterviewCandidate(null)}
+          onSubmit={handleScheduleInterview}
+          submitting={schedulingInterview}
+        />
+      )}
+
+      {modalOnboardingOpen && (
+        <OnboardingFormModal
+          open={modalOnboardingOpen}
+          candidates={candidates}
+          initialCandidateId={onboardingCandidateId}
+          onClose={() => {
+            setModalOnboardingOpen(false);
+            setOnboardingCandidateId(null);
+          }}
+          onSubmit={handleSaveOnboarding}
+        />
+      )}
+
+      {directOfferCandidate && (
+        <DirectOfferModal
+          open={!!directOfferCandidate}
+          candidate={directOfferCandidate}
+          onClose={() => setDirectOfferCandidate(null)}
+          onSubmit={handleSendDirectOffer}
+          submitting={sendingOffer}
+        />
+      )}
     </div>
   );
-};
-
-const OnboardForm = ({ candidates, onSubmit, onCancel }) => {
-  const [form, setForm] = useState({ candidateId: candidates[0]?.id || '', startDate: '', buddy: '' });
-  const [saving, setSaving] = useState(false);
-  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
-  const valid = form.candidateId && form.startDate;
-
-  if (candidates.length === 0) {
-    return (
-      <div className="text-center py-8">
-        <UserCheck size={36} className="mx-auto text-gray-300 mb-3" />
-        <p className="text-sm text-[#1F2937] font-medium mb-1">No pending candidates</p>
-        <p className="text-sm text-[#6B7280]">Move a candidate to the "Hired" stage first to begin onboarding.</p>
-        <button onClick={onCancel} className="mt-6 w-full sm:w-auto px-6 py-3 sm:py-2 text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg transition">Close</button>
-      </div>
-    );
-  }
-
-  return (
-    <form onSubmit={async (e) => { e.preventDefault(); if (!valid) return; setSaving(true); await onSubmit(form); setSaving(false); }}>
-      <Field label="Hired Candidate">
-        <select className={inputCls} value={form.candidateId} onChange={set('candidateId')}>
-          {candidates.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      </Field>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 sm:gap-4">
-        <Field label="Start Date"><input type="date" className={inputCls} value={form.startDate} onChange={set('startDate')} required /></Field>
-        <Field label="Onboarding Buddy"><input className={inputCls} value={form.buddy} onChange={set('buddy')} placeholder="e.g. Fatima Noor" /></Field>
-      </div>
-      <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-6 flex gap-2">
-        <ClipboardList size={16} className="text-blue-500 flex-shrink-0 mt-0.5" /> 
-        <p className="text-xs text-blue-700 leading-relaxed">
-          A standard checklist (contract, hardware, system accounts, orientation) will be generated automatically.
-        </p>
-      </div>
-      <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
-        <button type="button" onClick={onCancel} className="w-full sm:w-auto px-4 py-3 sm:py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition">Cancel</button>
-        <button type="submit" disabled={!valid || saving} className="w-full sm:w-auto px-4 py-3 sm:py-2 text-sm font-medium bg-[#163B4D] text-white rounded-lg hover:bg-[#0F2C3A] transition disabled:opacity-50">
-          {saving ? 'Starting…' : 'Start Onboarding'}
-        </button>
-      </div>
-    </form>
-  );
-};
-
-export default RecruitmentOnboarding;
+}

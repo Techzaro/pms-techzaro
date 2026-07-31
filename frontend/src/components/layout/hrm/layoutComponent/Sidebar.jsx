@@ -31,6 +31,7 @@ import { authToken, getCurrentRole, getUser, setUser, rolePath, getUrlRole } fro
 
 import {
   MdDashboard,
+  MdPeople,
   // HR Management icons
   MdWork,
   MdDescription,
@@ -54,13 +55,14 @@ const HR_SECTIONS = [
   {
     label: "Hiring",
     items: [
-      { page: "RecruitmentOnboarding", label: "Recruitment & Onboarding", icon: MdWork },
-      { page: "offerletters", label: "Offer Letters", icon: MdDescription },
+      { page: "hrm/recruitment", label: "Recruitment & Onboarding", icon: MdWork },
+      { page: "hrm/offer-letters", label: "Offer Letters", icon: MdDescription },
     ],
   },
   {
     label: "Workforce",
     items: [
+      { page: "hrm/workforce", label: "Workforce Directory", icon: MdPeople },
       { page: "hrm/documents", label: "Employee Documents", icon: MdOutlineDescription },
       { page: "hrm/attendance", label: "Attendance & Leave", icon: MdEventAvailable },
       { page: "hrm/performance", label: "Performance & Evaluation", icon: MdTrendingUp },
@@ -113,9 +115,25 @@ function Sidebar() {
 
   // ── Route-matching helpers ──
   /** Exact match for a given page slug. */
-  const isActive = (page) => location.pathname === `${rolePrefix}/${page}`;
+  const isActive = (page) => {
+    const current = location.pathname.toLowerCase();
+    const target = `${rolePrefix}/${page}`.toLowerCase();
+    return current === target || (page.toLowerCase() === "hrm" && (current.endsWith("/hrm") || current.endsWith("/hrm/")));
+  };
+
   /** Exact or prefix match (for detail pages). */
-  const isActiveOrStart = (page) => location.pathname === `${rolePrefix}/${page}` || location.pathname.startsWith(`${rolePrefix}/${page}/`);
+  const isActiveOrStart = (page) => {
+    const current = location.pathname.toLowerCase();
+    const target = `${rolePrefix}/${page}`.toLowerCase();
+    if (current === target || current.startsWith(`${target}/`)) return true;
+    if (page.includes("recruitment") || page === "RecruitmentOnboarding") {
+      return current.includes("recruitment") || current.includes("onboarding");
+    }
+    if (page.includes("offer") || page === "offerletters") {
+      return current.includes("offer");
+    }
+    return false;
+  };
 
   // Fetch user data from API on mount
   useEffect(() => {
@@ -204,17 +222,24 @@ function Sidebar() {
 
           {/* Dashboard link – overview / landing page */}
           <Link
-            to={rolePath("HRM")}
-            className={`sidebar-link ${isActive("dashboard") ? "active" : ""}`}
-            aria-current={isActive("dashboard") ? "page" : undefined}
+            to={user?.role?.toLowerCase() === "member" ? rolePath("hrm/member-dashboard") : rolePath("HRM")}
+            className={`sidebar-link ${isActive("HRM") || isActive("hrm") || isActive("hrm/member-dashboard") ? "active" : ""}`}
+            aria-current={isActive("HRM") || isActive("hrm") || isActive("hrm/member-dashboard") ? "page" : undefined}
             onClick={(e) => e.stopPropagation()}
           >
             <MdDashboard />
-            <span>Dashboard</span>
+            <span>{user?.role?.toLowerCase() === "member" ? "My Member Hub" : "Dashboard"}</span>
           </Link>
 
           {/* HR modules, grouped into labeled sections for scannability */}
-          {HR_SECTIONS.map((section) => (
+          {(user?.role?.toLowerCase() === "member" ? [
+            {
+              label: "My Member Portal",
+              items: [
+                { page: "hrm/member-dashboard", label: "My HRM Dashboard", icon: MdDashboard },
+              ],
+            },
+          ] : HR_SECTIONS).map((section) => (
             <div className="sidebar-section" key={section.label}>
               <div className="sidebar-section-title">{section.label}</div>
               {section.items.map(({ page, label, icon: Icon }) => {

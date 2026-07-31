@@ -1,0 +1,1522 @@
+/**
+ * Recruitment.css
+ * Styles for the "Recruitment & Onboarding" HRM page (Recruitment.jsx).
+ *
+ * Inherits the same design tokens already defined in Dashboard.css
+ * (--color-primary, --color-primary-bg, --color-border, --color-surface,
+ * --color-text, --color-text-secondary) so light/dark theme keeps working
+ * via ThemeContext without any extra work here.
+ *
+ * Anything this page needs that ISN'T already a global token (status tones
+ * for stages/badges, success/warning/violet/sky/danger) is declared locally
+ * below with a `var(--color-x, fallback)` so it degrades safely even if the
+ * app-wide token doesn't exist yet.
+ */
+
+:root {
+  /* Reuse of the app's existing scale */
+  --color-primary: var(--color-primary, #6366f1);
+  --color-primary-bg: var(--color-primary-bg, #eef2ff);
+  --color-border: var(--border-color, #e5e7eb);
+  --color-surface: var(--bg-card, #ffffff);
+  --color-text: var(--text-primary, #111827);
+  --color-text-secondary: var(--text-secondary, #6b7280);
+
+  /* Local tone tokens */
+  --color-success: var(--color-success, #10b981);
+  --color-success-bg: var(--bg-badge-green, #ecfdf5);
+  --color-warning: var(--color-warning, #f59e0b);
+  --color-warning-bg: var(--bg-badge-yellow, #fffbeb);
+  --color-violet: #8b5cf6;
+  --color-violet-bg: var(--bg-badge-blue, #f5f3ff);
+  --color-sky: #0ea5e9;
+  --color-sky-bg: var(--bg-badge-blue, #f0f9ff);
+  --color-danger: var(--color-danger, #ef4444);
+  --color-danger-bg: var(--bg-badge-red, #fef2f2);
+  --color-neutral: var(--text-secondary, #6b7280);
+  --color-neutral-bg: var(--bg-badge, #f3f4f6);
+}
+
+/* ---------------------------------------------------------------------------
+ * 0. PAGE SHELL
+ * -------------------------------------------------------------------------*/
+
+.recruitment-page {
+  padding: 24px 28px 48px;
+  max-width: 1280px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* ---------------------------------------------------------------------------
+ * 1. HEADER
+ * -------------------------------------------------------------------------*/
+
+.recruitment-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.recruitment-header-text h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0 0 4px;
+}
+
+.recruitment-header-text p {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.recruitment-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+.recruitment-header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ── Live / Demo status pill ── */
+.r-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.6;
+}
+
+.r-status-pill--live {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.r-status-pill--demo {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+/* ---------------------------------------------------------------------------
+ * 1.5. EXECUTIVE BEAUTIFUL STAT CARDS (TechXaro Theme)
+ * -------------------------------------------------------------------------*/
+
+.r-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.r-stat-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 22px;
+  background: var(--color-surface, #ffffff);
+  border-radius: 16px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  box-shadow: 0 4px 15px rgba(15, 23, 42, 0.03);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.r-stat-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #0082ff, #38bdf8);
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+}
+
+.r-stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px rgba(0, 130, 255, 0.12);
+  border-color: rgba(0, 130, 255, 0.3);
+}
+
+.r-stat-card:hover::before {
+  opacity: 1;
+}
+
+.r-stat-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.r-stat-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--color-text-secondary, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.r-stat-value {
+  font-size: 26px;
+  font-weight: 900;
+  color: var(--color-text, #0f172a);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.r-stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 130, 255, 0.2);
+}
+
+.r-stat-icon--violet  { background: linear-gradient(135deg, #0082ff 0%, #0052cc 100%); }
+.r-stat-icon--sky     { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); }
+.r-stat-icon--success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+.r-stat-icon--warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+
+/* ---------------------------------------------------------------------------
+ * 2. BUTTONS
+ * -------------------------------------------------------------------------*/
+
+.r-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: filter 0.15s ease, transform 0.1s ease, background 0.15s ease,
+    border-color 0.15s ease, color 0.15s ease;
+}
+
+.r-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.r-btn--primary {
+  background: #2563eb;
+  color: #ffffff !important;
+  border-color: #1d4ed8;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+}
+
+.r-btn--primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1e40af;
+  transform: translateY(-1px);
+}
+
+.r-btn--secondary {
+  background: var(--color-surface, #ffffff);
+  color: var(--color-primary, #2563eb);
+  border-color: var(--color-border, #cbd5e1);
+  font-weight: 600;
+}
+
+.r-btn--secondary:hover:not(:disabled) {
+  border-color: var(--color-primary, #2563eb);
+  background: var(--color-primary-bg, #eff6ff);
+}
+
+.r-btn--ghost {
+  background: #f8fafc;
+  color: #1e293b;
+  border-color: #cbd5e1;
+  font-weight: 600;
+}
+
+.r-btn--ghost:hover:not(:disabled) {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.r-btn--danger {
+  background: var(--color-danger);
+  color: #fff;
+  border-color: var(--color-danger);
+}
+
+.r-btn--danger:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.r-btn--danger-outline {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border-color: transparent;
+}
+
+.r-btn--danger-outline:hover:not(:disabled) {
+  filter: brightness(0.97);
+}
+
+.r-btn--sm {
+  padding: 6px 12px;
+  font-size: 12.5px;
+}
+
+.r-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.r-icon-btn:hover {
+  background: var(--color-neutral-bg);
+  color: var(--color-text);
+}
+
+.r-icon-btn--danger:hover {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.r-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+ * 3. CONNECTION BANNER
+ * -------------------------------------------------------------------------*/
+
+.r-connection-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--color-warning-bg);
+  color: #92620a;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  font-size: 13px;
+  margin-bottom: 18px;
+}
+
+.r-connection-banner svg {
+  color: var(--color-warning);
+  flex-shrink: 0;
+}
+
+.r-connection-banner p {
+  margin: 0;
+  flex: 1;
+  line-height: 1.5;
+}
+
+.r-connection-banner code {
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+ * 4. TABS
+ * -------------------------------------------------------------------------*/
+
+.recruitment-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.recruitment-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.recruitment-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  position: relative;
+  top: 1px;
+}
+
+.recruitment-tab:hover {
+  color: var(--color-text);
+}
+
+.recruitment-tab.is-active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.recruitment-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-neutral-bg);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.recruitment-tab.is-active .recruitment-tab-count {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+/* ---------------------------------------------------------------------------
+ * 5. SEARCH BAR
+ * -------------------------------------------------------------------------*/
+
+.recruitment-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 9px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  max-width: 380px;
+  margin-bottom: 20px;
+  color: var(--color-text-secondary);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.recruitment-search:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-bg);
+}
+
+.recruitment-search input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--color-text);
+}
+
+.recruitment-search input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.recruitment-tab-content {
+  animation: r-fade-in 0.15s ease;
+}
+
+@keyframes r-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------------------------------------------------------------------------
+ * 6. CARD GRID (shared by jobs + candidates)
+ * -------------------------------------------------------------------------*/
+
+.r-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.r-card-grid--jobs {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+/* ── Job card ── */
+.r-job-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.r-job-card:hover {
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+}
+
+.r-job-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.r-job-card-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.r-job-card-title {
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.r-job-card-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+}
+
+.r-job-card-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.r-chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-neutral-bg);
+  color: var(--color-text-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.r-job-card-desc {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.r-job-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.r-job-card-applicants {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* ── Candidate card ── */
+.r-candidate-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.r-candidate-card:hover {
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+}
+
+.r-candidate-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.r-new-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-sky-bg);
+  color: var(--color-sky);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.r-candidate-card-name {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.r-candidate-card-role {
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  margin: -6px 0 0;
+}
+
+.r-candidate-card-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+}
+
+.r-card-footer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.r-candidate-card-date {
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+}
+
+.r-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+}
+
+.r-actions-row .r-btn {
+  flex: 1;
+  min-width: 110px;
+  justify-content: center;
+  white-space: nowrap;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+/* ---------------------------------------------------------------------------
+ * 7. EMPTY STATE
+ * -------------------------------------------------------------------------*/
+
+.r-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  padding: 56px 24px;
+  border-radius: 12px;
+  border: 1px dashed var(--color-border);
+  background: var(--color-surface);
+}
+
+.r-empty-state-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  margin-bottom: 10px;
+}
+
+.r-empty-state-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.r-empty-state-message {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin: 0 0 14px;
+  max-width: 320px;
+}
+
+/* ---------------------------------------------------------------------------
+ * 8. SKELETON LOADER
+ * -------------------------------------------------------------------------*/
+
+.r-skeleton-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.r-skeleton {
+  background: var(--color-border);
+  border-radius: 5px;
+  animation: r-skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+.r-skeleton--circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+.r-skeleton--line {
+  height: 12px;
+  width: 100%;
+}
+
+@keyframes r-skeleton-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* ---------------------------------------------------------------------------
+ * 9. ONBOARDING TABLE
+ * -------------------------------------------------------------------------*/
+
+.r-table-wrap {
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.r-table-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.r-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.r-table thead th {
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  padding: 10px 16px;
+  background: var(--color-neutral-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.r-table tbody tr {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.r-table tbody tr:not(:last-child) td {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.r-table tbody tr:hover {
+  background: var(--color-primary-bg);
+}
+
+.r-table td {
+  padding: 12px 16px;
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+.r-table-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.r-muted {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.r-progress {
+  width: 100px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-neutral-bg);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.r-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-primary);
+  transition: width 0.2s ease;
+}
+
+.r-progress-label {
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+}
+
+.r-table-chevron {
+  color: var(--color-text-secondary);
+  text-align: right;
+}
+
+/* Responsive: collapse the table into stacked cards below 720px */
+@media (max-width: 720px) {
+  .r-table thead {
+    display: none;
+  }
+
+  .r-table, .r-table tbody, .r-table tr, .r-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .r-table tbody tr {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .r-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: none !important;
+  }
+
+  .r-table td::before {
+    content: attr(data-label);
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--color-text-secondary);
+    margin-right: 12px;
+  }
+
+  .r-table-chevron {
+    display: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 10. MODAL / CONFIRM DIALOG / TOAST
+ * -------------------------------------------------------------------------*/
+
+.r-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  padding: 50px;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 9999;
+  animation: r-overlay-in 0.15s ease;
+}
+
+@keyframes r-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.r-modal-panel {
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface, #ffffff);
+  border-radius: 16px;
+  box-shadow: 0 25px 60px rgba(15, 23, 42, 0.3);
+  animation: r-modal-in 0.18s ease;
+  overflow: hidden;
+  position: relative;
+}
+
+.r-modal-panel--sm {
+  max-width: 420px;
+}
+
+.r-modal-panel--md {
+  max-width: 580px;
+}
+
+.r-modal-panel--lg {
+  max-width: 760px;
+}
+
+@keyframes r-modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.r-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-surface, #ffffff);
+  flex-shrink: 0;
+  z-index: 5;
+}
+
+.r-modal-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text, #0f172a);
+  margin: 0;
+}
+
+.r-modal-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.r-modal-body {
+  padding: 22px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.r-modal-footer,
+.r-form-actions {
+  padding: 14px 22px;
+  background: var(--color-surface, #ffffff);
+  border-top: 1px solid var(--color-border, #e2e8f0);
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.r-confirm-message {
+  font-size: 13.5px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin: 0 0 18px;
+}
+
+.r-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #fff;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.18);
+  z-index: 1100;
+  animation: r-toast-in 0.2s ease;
+}
+
+@keyframes r-toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.r-toast--success {
+  background: var(--color-success);
+}
+
+.r-toast--danger {
+  background: var(--color-danger);
+}
+
+/* ---------------------------------------------------------------------------
+ * 11. AVATAR / BADGE / RATING
+ * -------------------------------------------------------------------------*/
+
+.r-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 700;
+  flex-shrink: 0;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+.r-avatar--sm {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
+
+.r-avatar--md {
+  width: 38px;
+  height: 38px;
+  font-size: 13px;
+}
+
+.r-avatar--lg {
+  width: 52px;
+  height: 52px;
+  font-size: 16px;
+}
+
+.r-avatar--primary { background: var(--color-primary-bg); color: var(--color-primary); }
+.r-avatar--success { background: var(--color-success-bg); color: var(--color-success); }
+.r-avatar--warning { background: var(--color-warning-bg); color: var(--color-warning); }
+.r-avatar--violet  { background: var(--color-violet-bg);  color: var(--color-violet); }
+.r-avatar--sky     { background: var(--color-sky-bg);     color: var(--color-sky); }
+.r-avatar--danger  { background: var(--color-danger-bg);  color: var(--color-danger); }
+
+.r-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.r-badge--neutral { background: var(--color-neutral-bg); color: var(--color-text-secondary); }
+.r-badge--sky     { background: var(--color-sky-bg);     color: var(--color-sky); }
+.r-badge--warning { background: var(--color-warning-bg); color: var(--color-warning); }
+.r-badge--violet  { background: var(--color-violet-bg);  color: var(--color-violet); }
+.r-badge--success { background: var(--color-success-bg); color: var(--color-success); }
+.r-badge--danger  { background: var(--color-danger-bg);  color: var(--color-danger); }
+
+.r-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.r-rating-btn {
+  display: inline-flex;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: #f59e0b;
+  line-height: 0;
+}
+
+.r-rating-filled {
+  color: #f59e0b;
+}
+
+.r-rating-empty {
+  color: var(--color-border);
+}
+
+/* ---------------------------------------------------------------------------
+ * 12. CANDIDATE DETAIL (profile modal)
+ * -------------------------------------------------------------------------*/
+
+.r-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.r-detail-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.r-detail-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.r-detail-role {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin: 2px 0 0;
+}
+
+.r-detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--color-neutral-bg);
+  margin-bottom: 18px;
+}
+
+.r-detail-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.r-detail-meta svg {
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * 13. FORM ELEMENTS (shared by JobForm / CandidateForm / OnboardForm)
+ * -------------------------------------------------------------------------*/
+
+.r-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.r-field-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.r-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.r-input,
+.r-textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 13.5px;
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.r-input:focus,
+.r-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-bg);
+}
+
+.r-textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.r-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  background: var(--color-primary-bg);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.r-hint svg {
+  color: var(--color-primary);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.r-form-actions {
+  position: sticky;
+  bottom: -20px;
+  margin-top: auto;
+  padding: 14px 20px;
+  margin-left: -20px;
+  margin-right: -20px;
+  margin-bottom: -20px;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  z-index: 10;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.r-form-actions--split {
+  justify-content: space-between;
+}
+
+/* ---------------------------------------------------------------------------
+ * 14. STAGE PROGRESS (candidate detail)
+ * -------------------------------------------------------------------------*/
+
+.r-stage-progress {
+  display: flex;
+  gap: 4px;
+  margin: 4px 0 20px;
+}
+
+.r-stage-progress-seg {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--color-border);
+  transition: background 0.15s ease;
+}
+
+.r-stage-progress-seg.is-filled {
+  background: var(--color-primary);
+}
+
+/* ---------------------------------------------------------------------------
+ * 15. ONBOARDING CHECKLIST
+ * -------------------------------------------------------------------------*/
+
+.r-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 18px;
+}
+
+.r-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.r-checklist-item:hover {
+  background: var(--color-neutral-bg);
+}
+
+.r-checklist-item input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.r-checklist-item span {
+  font-size: 13.5px;
+  color: var(--color-text);
+  transition: color 0.15s ease;
+}
+
+.r-checklist-item span.is-done {
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+}
+
+.r-buddy-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+.r-buddy-note svg {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.r-buddy-note p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------------------
+ * 16. RESPONSIVE
+ * -------------------------------------------------------------------------*/
+
+@media (max-width: 768px) {
+  .recruitment-page {
+    padding: 16px 16px 32px;
+  }
+
+  .recruitment-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .recruitment-header-actions {
+    width: 100%;
+  }
+
+  .recruitment-header-actions .r-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .recruitment-search {
+    max-width: none;
+  }
+
+  .r-form-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .r-modal-body {
+    padding: 16px;
+  }
+
+  .r-toast {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recruitment-tab-content,
+  .r-job-card,
+  .r-candidate-card,
+  .r-modal-overlay,
+  .r-modal-panel,
+  .r-toast,
+  .r-skeleton {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 17. AI CV SCREENING BOX & PIPELINE STAGE BUTTONS
+ * -------------------------------------------------------------------------*/
+
+.r-pipeline-section {
+  margin: 16px 0;
+  padding: 16px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 12px;
+}
+
+.r-pipeline-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.r-ai-box {
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 14px;
+  padding: 20px;
+  margin: 18px 0;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
+}
+
+.r-ai-box-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.r-ai-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.r-ai-title svg {
+  flex-shrink: 0;
+}
+
+.r-ai-title h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text, #0f172a);
+}
+
+.r-ai-score-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 14px;
+  background: var(--bg-badge, #f8fafc);
+  border-radius: 12px;
+}
+
+.r-score-circle {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: #10b981;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 15px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.r-score-circle small {
+  font-size: 9px;
+  opacity: 0.9;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.r-skills-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.r-skills-label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.r-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.r-tag {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.r-tag--green { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+.r-tag--red   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+.r-file-upload-box {
+  border: 2px dashed var(--color-border, #cbd5e1);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  background: var(--color-surface, #ffffff);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.r-file-upload-box:hover {
+  border-color: var(--color-primary, #3b82f6);
+  background: var(--color-primary-bg, rgba(59, 130, 246, 0.05));
+}
+
+.r-file-upload-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--color-text-secondary, #64748b);
+  font-weight: 600;
+}

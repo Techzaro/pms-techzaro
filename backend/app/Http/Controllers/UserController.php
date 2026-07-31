@@ -50,6 +50,13 @@ class UserController extends Controller
         'offer_letter',
         'techxaro_regulations',
         'other_document',
+        'cv',
+        'latest_education_cert',
+        'previous_exp_letter',
+        'previous_salary_slip',
+        'criminal_record_file',
+        'cnic_front_image',
+        'cnic_back_image',
     ];
 
     /**
@@ -61,12 +68,8 @@ class UserController extends Controller
      */
     public function index()
     {
-        $users = Cache::remember('all_users_list', 10, fn () =>
-            User::select('id', 'name', 'avatar', 'email', 'role', 'active', 'department', 'designation', 'employee_code', 'contact_no', 'sort_order', 'must_change_password', 'personal_email', 'professional_email', 'company_name', 'phone_number', 'last_login_at', 'created_at', 'credentials_managed_by_admin', 'password_reset_locked')
-                ->orderBy('sort_order')->latest('updated_at')
-                ->get()
-                ->toArray()
-        );
+        Cache::forget('all_users_list');
+        $users = User::orderBy('sort_order')->latest('updated_at')->get()->toArray();
 
         return response()->json([
             'success' => true,
@@ -160,7 +163,7 @@ class UserController extends Controller
         $user = User::create([
             'name' => $request->input('name'),
             'email' => $request->input('email'),
-            'password' => Hash::make($plainPassword),
+            'password' => $plainPassword,
             'role' => $role,
             'active' => false,
             'must_change_password' => true,
@@ -755,15 +758,11 @@ class UserController extends Controller
 
             $allIds = $adminManagerIds->merge($memberIds)->unique();
 
-            $users = User::select('id', 'name', 'email', 'role', 'department')
-                ->where('active', true)
-                ->whereIn('id', $allIds)
+            $users = User::whereIn('id', $allIds)
                 ->orderBy('name')
                 ->get();
         } else {
-            $users = User::select('id', 'name', 'email', 'role', 'department')
-                ->where('active', true)
-                ->orderBy('name')
+            $users = User::orderBy('name')
                 ->get();
         }
 
@@ -1049,6 +1048,9 @@ class UserController extends Controller
 
         $singleFields = [
             'employment_contract', 'offer_letter', 'techxaro_regulations',
+            'cv', 'latest_education_cert', 'previous_exp_letter',
+            'previous_salary_slip', 'criminal_record_file',
+            'cnic_front_image', 'cnic_back_image',
         ];
 
         $uploadErrors = [];

@@ -83,7 +83,7 @@ class CredentialController extends Controller
             }
 
             // Update password
-            $user->password = bcrypt($request->new_password);
+            $user->password = $request->new_password;
 
             // Mark as admin-managed
             $user->credentials_managed_by_admin = true;

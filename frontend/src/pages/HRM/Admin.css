@@ -7,12 +7,12 @@
  */
 
 :root {
-  --color-primary: #6366f1;
-  --color-primary-bg: #eef2ff;
-  --color-border: #e5e7eb;
-  --color-surface: #ffffff;
-  --color-text: #111827;
-  --color-text-secondary: #6b7280;
+  --color-primary: var(--color-primary, #6366f1);
+  --color-primary-bg: var(--color-primary-bg, #eef2ff);
+  --color-border: var(--border-color, #e5e7eb);
+  --color-surface: var(--bg-card, #ffffff);
+  --color-text: var(--text-primary, #111827);
+  --color-text-secondary: var(--text-secondary, #6b7280);
 }
 
 .hrm-dashboard {
