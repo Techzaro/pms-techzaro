@@ -188,11 +188,14 @@ export function authToken() {
 
 export function authHeaders() {
   const t = authToken();
-  if (!t) return { "Content-Type": "application/json" };
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${t}`,
-  };
+  const headers = { "Content-Type": "application/json" };
+  if (t) headers.Authorization = `Bearer ${t}`;
+
+  // Include tenant slug for cross-tenant users
+  const tenantSlug = localStorage.getItem("tenant_slug");
+  if (tenantSlug) headers["X-Tenant-ID"] = tenantSlug;
+
+  return headers;
 }
 
 /* ───── session management ───── */
@@ -213,6 +216,20 @@ export function saveSession(role, token, user) {
   setSessionId(sid);
 
   return true;
+}
+
+/* ───── tenant slug (for cross-tenant users) ───── */
+
+export function setTenantSlug(slug) {
+  if (slug) localStorage.setItem("tenant_slug", slug);
+}
+
+export function getTenantSlug() {
+  return localStorage.getItem("tenant_slug") || "";
+}
+
+export function clearTenantSlug() {
+  localStorage.removeItem("tenant_slug");
 }
 
 /**
@@ -256,6 +273,7 @@ export function clearAllSessions() {
   localStorage.removeItem("userId");
   localStorage.removeItem("name");
   localStorage.removeItem("email");
+  localStorage.removeItem("tenant_slug");
 }
 
 /* ───── multi-tab helpers ───── */

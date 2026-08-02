@@ -5,7 +5,7 @@
  */
 
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Suspense, lazy, useEffect, Component } from "react";
+import { Suspense, lazy, useEffect, useState, Component } from "react";
 import { useLocation } from "react-router-dom";
 import LoadingSpinner from "./components/LoadingSpinner";
 import { useInactivityTimeout } from "./utils/useInactivityTimeout";
@@ -13,6 +13,20 @@ import { useInactivityTimeout } from "./utils/useInactivityTimeout";
 // Lazy-loaded page components for code splitting
 const Login = lazy(() => import("./pages/Login"));
 const Admin = lazy(() => import("./pages/Admin"));
+
+// Super Admin lazy-loaded pages
+const SuperAdminLayout = lazy(() => import("./pages/super-admin/layouts/SuperAdminLayout"));
+const SuperDashboard = lazy(() => import("./pages/super-admin/DashboardPage"));
+const SuperOrganizations = lazy(() => import("./pages/super-admin/OrganizationsPage"));
+const SuperOrganizationDetail = lazy(() => import("./pages/super-admin/OrganizationDetailPage"));
+const SuperPlans = lazy(() => import("./pages/super-admin/PlansPage"));
+const SuperModules = lazy(() => import("./pages/super-admin/ModulesPage"));
+const SuperDomains = lazy(() => import("./pages/super-admin/DomainsPage"));
+const SuperHealth = lazy(() => import("./pages/super-admin/SystemHealthPage"));
+const SuperActivity = lazy(() => import("./pages/super-admin/ActivityLogsPage"));
+const SuperSettings = lazy(() => import("./pages/super-admin/SettingsPage"));
+const SuperCreateOrg = lazy(() => import("./pages/super-admin/CreateOrganizationPage"));
+const RegisterOrganization = lazy(() => import("./pages/super-admin/RegisterOrganization"));
 const Manager = lazy(() => import("./pages/Manager"));
 const TeamLead = lazy(() => import("./pages/TeamLead"));
 const Member = lazy(() => import("./pages/Member"));
@@ -80,6 +94,18 @@ function ScrollToTop() {
   return null;
 }
 
+function SuperAdminWrapper() {
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
+  const toggleTheme = () => {
+    setIsDark((prev) => {
+      const next = !prev;
+      document.documentElement.classList.toggle('dark', next);
+      return next;
+    });
+  };
+  return <SuperAdminLayout isDark={isDark} toggleTheme={toggleTheme} />;
+}
+
 function App() {
   useInactivityTimeout();
 
@@ -94,6 +120,7 @@ function App() {
             <Route path="/logged-out" element={<LoggedOut />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/register-organization" element={<RegisterOrganization />} />
 
             {/* Dashboard routes - role-specific */}
             <Route path="/:role/dashboard" element={<RoleProtectedRoute><Admin /></RoleProtectedRoute>} />
@@ -139,6 +166,20 @@ function App() {
             <Route path="/:role/reports/team-members/:teamId" element={<ProtectedRoute><TeamMembersReport /></ProtectedRoute>} />
             <Route path="/:role/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
             <Route path="/:role/chat/:conversationId" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+
+            {/* Super Admin routes */}
+            <Route path="/super-admin" element={<SuperAdminWrapper />}>
+              <Route index element={<SuperDashboard />} />
+              <Route path="organizations" element={<SuperOrganizations />} />
+              <Route path="organizations/new" element={<SuperCreateOrg />} />
+              <Route path="organizations/:id" element={<SuperOrganizationDetail />} />
+              <Route path="plans" element={<SuperPlans />} />
+              <Route path="modules" element={<SuperModules />} />
+              <Route path="domains" element={<SuperDomains />} />
+              <Route path="health" element={<SuperHealth />} />
+              <Route path="activity" element={<SuperActivity />} />
+              <Route path="settings" element={<SuperSettings />} />
+            </Route>
 
             {/* Catch-all redirect */}
             <Route path="*" element={<Navigate to="/" replace />} />

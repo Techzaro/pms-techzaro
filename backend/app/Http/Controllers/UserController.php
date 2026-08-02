@@ -9,6 +9,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\Task;
 use App\Services\ActivityService;
+use App\Services\EmailPolicyService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use App\Models\Project;
@@ -157,9 +158,11 @@ class UserController extends Controller
             ], 403);
         }
 
+        $loginEmail = $request->input('email');
+
         $user = User::create([
             'name' => $request->input('name'),
-            'email' => $request->input('email'),
+            'email' => $loginEmail,
             'password' => Hash::make($plainPassword),
             'role' => $role,
             'active' => false,
@@ -268,7 +271,7 @@ class UserController extends Controller
         $profEmail = $request->input('professional_email') ?: $user->professional_email;
         $profPassword = $request->input('professional_email_password') ?: '';
         $personalEmail = $request->input('personal_email');
-        $adderEmail = $authUser->professional_email ?: $authUser->personal_email ?: $authUser->email;
+        $adderEmail = $authUser->notification_email;
 
         $message = $personalEmail
             ? 'User created successfully. Welcome email will be sent to ' . $personalEmail
@@ -491,8 +494,13 @@ class UserController extends Controller
         $emailError = null;
         if (!empty($changes)) {
             try {
-                Mail::to($user->professional_email)->queue(new UserProfileUpdated($user, $authUser->name, $changes, $authUser->professional_email, $authUser->name));
-                $emailSent = true;
+                $notifEmail = $user->notification_email;
+                if ($notifEmail) {
+                    Mail::to($notifEmail)->queue(new UserProfileUpdated($user, $authUser->name, $changes, $authUser->notification_email, $authUser->name));
+                    $emailSent = true;
+                } else {
+                    $emailSent = false;
+                }
             } catch (\Exception $e) {
                 $emailError = $e->getMessage();
                 \Illuminate\Support\Facades\Log::error('Failed to send profile update email: ' . $e->getMessage());
@@ -1471,7 +1479,7 @@ class UserController extends Controller
 
         try {
             $authUser = $request->user();
-            Mail::to($testUser->email)->send(new UserCreated($testUser, $plainPassword, '', '', $loginUrl, [], false, '', $authUser->professional_email ?? '', $authUser->name ?? 'PMS Techxaro'));
+            Mail::to($testUser->email)->send(new UserCreated($testUser, $plainPassword, '', '', $loginUrl, [], false, '', $authUser->notification_email ?? '', $authUser->name ?? 'PMS Techxaro'));
             Log::info("Test email sent successfully to {$testUser->email}");
 
             return response()->json([

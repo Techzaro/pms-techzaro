@@ -13,7 +13,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import API_URL from "../config/api";
-import { saveSession, clearAllSessions, authToken } from "../utils/auth";
+import { saveSession, clearAllSessions, authToken, authHeaders, setTenantSlug } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { PasswordInput, isPasswordValid } from "../components/PasswordInput";
@@ -115,6 +115,11 @@ function Login() {
       if (data.success) {
         saveSession(data.role, data.token, data.user || {});
 
+        // Store tenant slug for cross-tenant users
+        if (data.tenant_slug) {
+          setTenantSlug(data.tenant_slug);
+        }
+
         if (data.must_change_password) {
           setMustChangePassword(true);
           setPassword("");
@@ -168,15 +173,9 @@ function Login() {
     try {
       setChangingPassword(true);
 
-      const token = authToken();
-
       const res = await fetch(`${API_URL}/user/first-time-change-password`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
+        headers: authHeaders(),
         body: JSON.stringify({
           new_password: newPassword,
         }),
@@ -191,12 +190,30 @@ function Login() {
 
       clearAllSessions();
 
+      // Auto-login with new password so user doesn't have to re-enter credentials
+      const loginRes = await fetch(`${API_URL}/login`, {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        _notifHandled: true,
+        body: JSON.stringify({ email, password: newPassword })
+      });
+
+      const loginData = await loginRes.json();
+
+      if (!loginRes.ok || !loginData.success) {
+        throw new Error(loginData.message || "Password changed but login failed. Please login manually.");
+      }
+
+      saveSession(loginData.role, loginData.token, loginData.user || {});
+      if (loginData.tenant_slug) {
+        setTenantSlug(loginData.tenant_slug);
+      }
+
       showSuccessMessage("Password", "changed");
-      setMustChangePassword(false);
-      setNewPassword("");
-      setConfirmPassword("");
-      setEmail("");
-      setPassword("");
+      redirectToDashboard(loginData.role);
 
     } catch (error) {
       notify.error(error.message || "Failed to change password. Please try again.");
@@ -322,6 +339,13 @@ function Login() {
               </LoadingButton>
             </div>
           </div>
+
+          <p style={{ textAlign: "center", marginTop: 20, fontSize: 14, color: "#747d8c" }}>
+            Want your own organization?{" "}
+            <Link to="/register-organization" style={{ color: "#1e90ff", textDecoration: "none", fontWeight: 600 }}>
+              Register here
+            </Link>
+          </p>
         </div>
       </div>
     </div>

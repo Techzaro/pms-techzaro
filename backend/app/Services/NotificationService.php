@@ -297,7 +297,7 @@ class NotificationService
             return;
         }
 
-        $performerEmail = $performer->professional_email ?: $performer->personal_email ?: $performer->email;
+        $performerEmail = $performer->notification_email;
         if (empty($performerEmail)) {
             return;
         }

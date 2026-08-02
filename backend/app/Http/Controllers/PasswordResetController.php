@@ -74,7 +74,7 @@ class PasswordResetController extends Controller
                 ], 403);
             }
 
-            if (empty($user->professional_email) && empty($user->personal_email) && empty($user->email)) {
+            if (empty($user->professional_email) && empty($user->email) && empty($user->personal_email)) {
                 \Log::error('Password reset: user has no email address', ['user_id' => $user->id]);
 
                 return response()->json([
@@ -83,7 +83,7 @@ class PasswordResetController extends Controller
                 ], 422);
             }
 
-            $sendTo = $user->professional_email ?: $user->personal_email ?: $user->email;
+            $sendTo = $user->notification_email;
 
             $token = Str::random(64);
 
@@ -162,7 +162,7 @@ class PasswordResetController extends Controller
             $token = $request->input('token');
             $password = $request->input('password');
 
-            // Look up by professional_email (login email)
+            // Look up by login_email (policy-aware primary email)
             $record = \DB::table('password_reset_tokens')
                 ->where('email', $email)
                 ->first();

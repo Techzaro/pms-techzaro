@@ -99,7 +99,7 @@ class PasswordChangedMail extends Mailable
                                                     </tr>
                                                     <tr>
                                                         <td style="padding:6px 0;color:#6b7280;font-size:13px;font-weight:600;">Email</td>
-                                                        <td style="padding:6px 0;color:#111827;font-size:13px;">{$this->user->email}</td>
+                                                        <td style="padding:6px 0;color:#111827;font-size:13px;">{$this->user->notification_email}</td>
                                                     </tr>
                                                     <tr>
                                                         <td style="padding:6px 0;color:#6b7280;font-size:13px;font-weight:600;">Changed On</td>

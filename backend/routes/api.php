@@ -37,6 +37,9 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'forgotPassword']);
 Route::post('/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'resetPassword']);
 
+// First-time password change (token-based auth, NOT auth:sanctum — avoids multi-tenant connection issues)
+Route::put('/user/first-time-change-password', [AuthController::class, 'firstTimeChangePassword']);
+
 
 /*
 | Protected Routes (require valid Sanctum token)
@@ -72,9 +75,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Change password (requires old password)
     Route::put('/user/change-password', [AuthController::class, 'changePassword']);
-
-    // First-time password change (no old password required)
-    Route::put('/user/first-time-change-password', [AuthController::class, 'firstTimeChangePassword']);
 
     // Activity view tracking
     Route::post('/activity-views/check', [\App\Http\Controllers\ActivityviewController::class, 'check']);
@@ -480,6 +480,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/audit-logs/users', [AuditLogController::class, 'users']);
         Route::post('/audit-logs/export', [AuditLogController::class, 'export']);
         Route::get('/audit-logs/{auditLog}', [AuditLogController::class, 'show']);
+    });
+
+    /*
+    | Organization Settings Routes
+    | Admin only: manage organization-level settings like email policy.
+    */
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin')->group(function () {
+        Route::get('/organization-settings/email-policy', [\App\Http\Controllers\OrganizationSettingsController::class, 'getEmailPolicy']);
+        Route::put('/organization-settings/email-policy', [\App\Http\Controllers\OrganizationSettingsController::class, 'updateEmailPolicy']);
     });
 
     /*

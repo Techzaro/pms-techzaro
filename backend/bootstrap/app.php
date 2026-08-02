@@ -6,6 +6,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -13,12 +14,17 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        then: function () {
+            // SaaS Super Admin routes (no tenant resolution, no auth for now)
+            Route::prefix('api/super-admin')->group(base_path('routes/saas.php'));
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'auth' => \App\Http\Middleware\Authenticate::class,
             'guest.role' => \App\Http\Middleware\GuestMiddleware::class,
             'not.guest' => \App\Http\Middleware\EnsureNotGuest::class,
+            'tenant.resolve' => \App\Http\Middleware\ResolveTenantDatabase::class,
         ]);
         if (env('APP_ENV') === 'local') {
             $middleware->api(prepend: [
@@ -26,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
             ]);
         }
         $middleware->api(append: [
+            \App\Http\Middleware\ResolveTenantDatabase::class,
             \App\Http\Middleware\CheckUserStatus::class,
         ]);
         $middleware->prepend(\Illuminate\Http\Middleware\HandleCors::class);

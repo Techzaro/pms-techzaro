@@ -10,10 +10,16 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use App\Services\EmailPolicyService;
 
 /**
  * Application user model.
  * Stores personal, employment, and authentication data; links to tasks, projects, teams, and notifications.
+ *
+ * Email resolution is policy-driven:
+ * - login_email: the email used for authentication (policy-aware).
+ * - notification_email: the email used for sending notifications (policy-aware).
+ * - best_email: best available email with fallback chain.
  */
 class User extends Authenticatable
 {
@@ -100,6 +106,43 @@ class User extends Authenticatable
         'password_changed_at' => 'datetime',
         'last_login_at' => 'datetime',
     ];
+
+    /**
+     * Get the login email based on organization email policy.
+     * Standard policy: uses the primary 'email' column.
+     * Company required policy: uses 'professional_email' if set, otherwise 'email'.
+     */
+    public function getLoginEmailAttribute(): string
+    {
+        return EmailPolicyService::getLoginEmail($this);
+    }
+
+    /**
+     * Get the notification email based on organization email policy.
+     * Standard policy: uses the primary 'email' column.
+     * Company required policy: uses 'professional_email' if set, otherwise 'email'.
+     */
+    public function getNotificationEmailAttribute(): string
+    {
+        return EmailPolicyService::getNotificationEmail($this);
+    }
+
+    /**
+     * Get the best available email with fallback chain.
+     * Priority: professional_email > email > personal_email.
+     */
+    public function getBestEmailAttribute(): string
+    {
+        return EmailPolicyService::getBestEmail($this);
+    }
+
+    /**
+     * Check if this user's organization requires separate company email.
+     */
+    public function isCompanyRequired(): bool
+    {
+        return EmailPolicyService::isCompanyRequired($this);
+    }
 
     /**
      * Normalize the role attribute (e.g., 'teamlead' -> 'team_lead').

@@ -5,7 +5,7 @@
  * and cross-tab session synchronization.
  */
 
-import { getCurrentRole, getToken, clearSession, getSessionId } from "../utils/auth";
+import { getCurrentRole, getToken, clearSession, getSessionId, getTenantSlug } from "../utils/auth";
 import { notify } from "../utils/notify";
 
 /** @type {string} API base URL without trailing slashes */
@@ -18,12 +18,24 @@ window.fetch = async function (...args) {
   try {
     const [resource, config = {}] = args;
     const noCacheConfig = { ...config, cache: 'no-store' };
+
+    // Inject X-Tenant-ID header only for authenticated requests (not login/register)
+    const tenantSlug = getTenantSlug();
+    const url = typeof resource === "string" ? resource : resource?.url || "";
+    const isPublicAuth = url.includes("/api/login") || url.includes("/api/forgot-password") || url.includes("/api/reset-password") || url.includes("/organizations/register");
+    if (tenantSlug && !isPublicAuth) {
+      noCacheConfig.headers = { ...noCacheConfig.headers, "X-Tenant-ID": tenantSlug };
+    }
+
     const role = getCurrentRole();
     const tokenAtRequest = getToken(role);
     const res = await originalFetch.apply(this, [resource, noCacheConfig]);
 
     // Handle session expiration (401 Unauthorized)
-    if (res.status === 401) {
+    // Skip for first-time-change-password (uses its own token verification)
+    const url = typeof resource === "string" ? resource : resource?.url || "";
+    const isPasswordChange = url.includes("/first-time-change-password");
+    if (res.status === 401 && !isPasswordChange) {
       const tokenNow = getToken(role);
       const isTokenExpired = tokenNow && tokenNow === tokenAtRequest;
       const isZombieTab = !tokenAtRequest && !tokenNow && role;

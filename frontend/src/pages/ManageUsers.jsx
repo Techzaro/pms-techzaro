@@ -83,6 +83,7 @@ function ManageUsers() {
   const deptOptionsRef = useRef(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState({ type: "", value: "" });
+  const [emailPolicy, setEmailPolicy] = useState("standard");
   const [avatarRemoveConfirmOpen, setAvatarRemoveConfirmOpen] = useState(false);
   const [newUser, setNewUser] = useState({
     fullName: "",
@@ -299,6 +300,18 @@ function ManageUsers() {
       fetchCurrentUser();
     }
     fetchUsers();
+
+    // Fetch organization email policy
+    fetch(`${API_URL}/organization-settings/email-policy`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.email_policy) {
+          setEmailPolicy(data.email_policy);
+        }
+      })
+      .catch(() => {});
   }, [navigate]);
 
   useAutoRefresh(fetchUsers, { events: ["data:changed"] });
@@ -778,17 +791,27 @@ function ManageUsers() {
     if (newUser.emergencyContactPhone.trim() && !/^0\d{3}-\d{7}$/.test(newUser.emergencyContactPhone.trim())) {
       errors.emergencyContactPhone = "Emergency Phone must be in format 03XX-XXXXXXX.";
     }
-    if (!newUser.personalEmail.trim()) {
-      errors.personalEmail = "Personal Email Address is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.personalEmail.trim())) {
-      errors.personalEmail = "Please enter a valid personal email address.";
-    }
-    if (newUser.professionalEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.professionalEmail.trim())) {
-      errors.professionalEmail = "Please enter a valid professional email address.";
-    }
-    const isExistingProEmail = editingUser && newUser.professionalEmail.trim() === (editingUser.professional_email || "").trim();
-    if (newUser.professionalEmail.trim() && !newUser.professionalEmailPassword.trim() && !isExistingProEmail) {
-      errors.professionalEmailPassword = "Password is required when professional email is provided.";
+    if (emailPolicy === "standard") {
+      // Standard policy: email is the single required email
+      if (!newUser.personalEmail.trim()) {
+        errors.personalEmail = "Email Address is required.";
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.personalEmail.trim())) {
+        errors.personalEmail = "Please enter a valid email address.";
+      }
+    } else {
+      // Company required policy: personal email is required, professional email is optional
+      if (!newUser.personalEmail.trim()) {
+        errors.personalEmail = "Personal Email Address is required.";
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.personalEmail.trim())) {
+        errors.personalEmail = "Please enter a valid personal email address.";
+      }
+      if (newUser.professionalEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.professionalEmail.trim())) {
+        errors.professionalEmail = "Please enter a valid professional email address.";
+      }
+      const isExistingProEmail = editingUser && newUser.professionalEmail.trim() === (editingUser.professional_email || "").trim();
+      if (newUser.professionalEmail.trim() && !newUser.professionalEmailPassword.trim() && !isExistingProEmail) {
+        errors.professionalEmailPassword = "Password is required when professional email is provided.";
+      }
     }
     if (!newUser.department) {
       errors.department = "Department is required.";
@@ -1292,7 +1315,17 @@ function ManageUsers() {
 
     const formData = new FormData();
     formData.append("name", newUser.fullName.trim());
-    formData.append("email", (newUser.personalEmail || newUser.email || "").trim());
+    if (emailPolicy === "standard") {
+      formData.append("email", (newUser.personalEmail || "").trim());
+      formData.append("personal_email", "");
+    } else {
+      formData.append("email", (newUser.personalEmail || "").trim());
+      formData.append("personal_email", newUser.personalEmail || "");
+      formData.append("professional_email", newUser.professionalEmail || "");
+      if (!editingUser || newUser.professionalEmailPassword) {
+        formData.append("professional_email_password", newUser.professionalEmailPassword || "");
+      }
+    }
     formData.append("father_name", newUser.fatherName);
     formData.append("id_card_number", newUser.idCardNumber);
     formData.append("present_address", newUser.presentAddress);
@@ -1301,11 +1334,6 @@ function ManageUsers() {
     formData.append("emergency_contact_name", newUser.emergencyContactName);
     formData.append("emergency_contact_relation", newUser.emergencyContactRelation);
     formData.append("emergency_contact_phone", newUser.emergencyContactPhone);
-    formData.append("personal_email", newUser.personalEmail || "");
-    formData.append("professional_email", newUser.professionalEmail || "");
-    if (!editingUser || newUser.professionalEmailPassword) {
-      formData.append("professional_email_password", newUser.professionalEmailPassword || "");
-    }
     formData.append("department", finalDepartment || "");
     formData.append("designation", finalDesignation || "");
     formData.append("hired_for", newUser.hiredFor);
@@ -1774,27 +1802,33 @@ function ManageUsers() {
                 <h3 className="form-section-title">Email Accounts</h3>
                 <div className="user-form-grid">
                   <div className="form-row">
-                    <label htmlFor="personalEmail">Personal Email Address *</label>
-                    <input type="email" id="personalEmail" name="personalEmail" value={newUser.personalEmail} onChange={handleChange} placeholder="Enter personal email address" className={addErrors.personalEmail ? "field-error" : ""} />
+                    <label htmlFor="personalEmail">
+                      {emailPolicy === "standard" ? "Email Address *" : "Personal Email Address *"}
+                    </label>
+                    <input type="email" id="personalEmail" name="personalEmail" value={newUser.personalEmail} onChange={handleChange} placeholder={emailPolicy === "standard" ? "Enter email address" : "Enter personal email address"} className={addErrors.personalEmail ? "field-error" : ""} />
                     {addErrors.personalEmail && <span className="field-error-text">{addErrors.personalEmail}</span>}
                   </div>
-                  <div className="form-row">
-                    <label htmlFor="professionalEmail">Professional Email *</label>
-                    <input type="email" id="professionalEmail" name="professionalEmail" value={newUser.professionalEmail} onChange={handleChange} placeholder="Enter professional email address" className={addErrors.professionalEmail ? "field-error" : ""} />
-                    {addErrors.professionalEmail && <span className="field-error-text">{addErrors.professionalEmail}</span>}
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="professionalEmailPassword">Password of Professional Email {editingUser ? "" : "*"}</label>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <input type={showProfPassword ? "text" : "password"} id="professionalEmailPassword" name="professionalEmailPassword" value={newUser.professionalEmailPassword} onChange={handleChange} placeholder={editingUser ? "Leave blank to keep current" : "Enter professional email password"} className={addErrors.professionalEmailPassword ? "field-error" : ""} style={{ flex: 1 }} />
-                      {editingUser && newUser.professionalEmailPassword && (
-                        <button type="button" onClick={() => setShowProfPassword(!showProfPassword)} style={{ background: "none", border: "1px solid var(--border-color)", borderRadius: "6px", padding: "6px 10px", cursor: "pointer", fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
-                          {showProfPassword ? "Hide" : "Show"}
-                        </button>
-                      )}
-                    </div>
-                    {addErrors.professionalEmailPassword && <span className="field-error-text">{addErrors.professionalEmailPassword}</span>}
-                  </div>
+                  {emailPolicy === "company_required" && (
+                    <>
+                      <div className="form-row">
+                        <label htmlFor="professionalEmail">Professional Email</label>
+                        <input type="email" id="professionalEmail" name="professionalEmail" value={newUser.professionalEmail} onChange={handleChange} placeholder="Enter professional email address" className={addErrors.professionalEmail ? "field-error" : ""} />
+                        {addErrors.professionalEmail && <span className="field-error-text">{addErrors.professionalEmail}</span>}
+                      </div>
+                      <div className="form-row">
+                        <label htmlFor="professionalEmailPassword">Password of Professional Email</label>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <input type={showProfPassword ? "text" : "password"} id="professionalEmailPassword" name="professionalEmailPassword" value={newUser.professionalEmailPassword} onChange={handleChange} placeholder={editingUser ? "Leave blank to keep current" : "Enter professional email password"} className={addErrors.professionalEmailPassword ? "field-error" : ""} style={{ flex: 1 }} />
+                          {editingUser && newUser.professionalEmailPassword && (
+                            <button type="button" onClick={() => setShowProfPassword(!showProfPassword)} style={{ background: "none", border: "1px solid var(--border-color)", borderRadius: "6px", padding: "6px 10px", cursor: "pointer", fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+                              {showProfPassword ? "Hide" : "Show"}
+                            </button>
+                          )}
+                        </div>
+                        {addErrors.professionalEmailPassword && <span className="field-error-text">{addErrors.professionalEmailPassword}</span>}
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* ===== Employment Details ===== */}

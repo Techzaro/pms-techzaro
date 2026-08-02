@@ -5,7 +5,7 @@
  */
 
 import API_URL from "../config/api";
-import { authToken } from "../utils/auth";
+import { authToken, getTenantSlug } from "../utils/auth";
 import { notify } from "../utils/notify";
 
 /**
