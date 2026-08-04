@@ -77,8 +77,10 @@
   font-size: 15px;
 }
 
+/* Added type="text" to maintain styles when password is visible */
 .login-box input[type="email"],
-.login-box input[type="password"] {
+.login-box input[type="password"],
+.login-box input[type="text"] {
   width: 100%;
   padding: 14px 16px;
   margin-bottom: 6px;
@@ -91,8 +93,10 @@
   color: #2f3542;
 }
 
+/* Added type="text" to maintain error styles when password is visible */
 .login-box input[type="email"].field-error,
-.login-box input[type="password"].field-error {
+.login-box input[type="password"].field-error,
+.login-box input[type="text"].field-error {
   border-color: #e74c3c;
 }
 
@@ -114,8 +118,10 @@
   text-align: center;
 }
 
+/* Added type="text" to maintain focus styles when password is visible */
 .login-box input[type="email"]:focus,
-.login-box input[type="password"]:focus {
+.login-box input[type="password"]:focus,
+.login-box input[type="text"]:focus {
   border-color: #1e90ff;
   background: white;
   box-shadow: 0px 0px 8px rgba(30, 144, 255, 0.25);

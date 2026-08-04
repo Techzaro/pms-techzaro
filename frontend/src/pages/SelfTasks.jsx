@@ -15,7 +15,7 @@ import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { ArrowUpRight, CheckCircle2, Lock, Pause, Play, StickyNote } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Lock, Pause, Play, StickyNote, ChevronDown, XCircle, RotateCcw, AlertOctagon, Sliders } from "lucide-react";
 import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
@@ -43,6 +43,8 @@ const STATUS_COLORS = {
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
   rejected: "#FEE2E2",
+  abandon_requested: "#FEF3C7",
+  abandoned: "#FEE2E2",
 };
 
 const STATUS_TEXT_COLORS = {
@@ -53,6 +55,8 @@ const STATUS_TEXT_COLORS = {
   reopened: "#5B21B6",
   approved: "#166534",
   rejected: "#991B1B",
+  abandon_requested: "#92400E",
+  abandoned: "#991B1B",
 };
 
 const PRIORITY_COLORS = {
@@ -89,7 +93,7 @@ const SelfTasks = () => {
   const [orderedItems, setOrderedItems] = useState([]);
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const selectStatusFilter = (filter) => {
     if (filter === statusFilter && filter === "") {
@@ -253,6 +257,8 @@ const SelfTasks = () => {
       reopened: "Reopened",
       approved: "Approved",
       rejected: "Declined",
+      abandon_requested: "Abandon Requested",
+      abandoned: "Abandoned",
     };
     return map[status] || status;
   };
@@ -271,6 +277,7 @@ const SelfTasks = () => {
   const transferredCount = useMemo(() => baseItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length, [baseItems]);
   const approvedCount = useMemo(() => baseItems.filter((i) => i.status === "approved").length, [baseItems]);
   const rejectedCount = useMemo(() => baseItems.filter((i) => i.status === "rejected").length, [baseItems]);
+  const abandonedCount = useMemo(() => baseItems.filter((i) => i.status === "abandoned" || i.status === "abandon_requested").length, [baseItems]);
   const searchFilteredItems = useMemo(() => debouncedSearch
     ? baseItems.filter((item) => {
         const q = debouncedSearch.toLowerCase();
@@ -280,13 +287,25 @@ const SelfTasks = () => {
         return titleMatch || assigneeMatch || assignerMatch;
       })
     : baseItems, [baseItems, debouncedSearch]);
-  const filteredItems = useMemo(() => statusFilter && statusFilter !== "due_today"
+  const filteredItems = useMemo(() => statusFilter
     ? searchFilteredItems.filter((item) => {
+        if (statusFilter === "due_today") {
+          const dateVal = item.end_date || item.due_date || item.start_date;
+          if (!dateVal) return false;
+          const d = new Date(dateVal);
+          const now = new Date();
+          const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+          const isCompleted = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
+          return isToday && !isCompleted;
+        }
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
         if (statusFilter === "transferred") {
           return item.delegation_chain && item.delegation_chain.length > 0;
+        }
+        if (statusFilter === "abandoned") {
+          return item.status === "abandoned" || item.status === "abandon_requested";
         }
         return item.status === statusFilter;
       })
@@ -294,8 +313,8 @@ const SelfTasks = () => {
 
   const taskIdList = filteredItems.map((i) => i.id);
 
-  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
-  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / itemsPerPage);
+  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const breadcrumbs = [
     { label: "Tasks", path: rolePath("tasks") },
@@ -358,6 +377,9 @@ const SelfTasks = () => {
         </p>
         <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Declined ({rejectedCount})
+        </p>
+        <p className={`Abandoned ${statusFilter === "abandoned" ? "active" : ""}`} onClick={() => selectStatusFilter("abandoned")} style={{ cursor: "pointer" }}>
+          <GoDotFill color="#DC2626" /> Abandoned ({abandonedCount})
         </p>
         <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
       </div>
@@ -444,64 +466,120 @@ const SelfTasks = () => {
                   <div className="date-box">
                     <div style={{ whiteSpace: "pre-line" }}>{formatDate(item.start_date)}{"\n"}{formatDate(item.end_date)}</div>
                   </div>
-                  <ActionPopover
-                    trigger={
-                      <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
-                        <IoEyeOutline size={20} />
-                      </button>
-                    }
-                    onTriggerClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}
-                  >
-                    <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
-                    {(() => {
-                      const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
-                      if (item.assigner_paused) {
-                        return (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
-                            <Lock size={12} />
-                            On Hold
-                          </span>
-                        );
-                      }
-                      if (item.status === "pending") {
-                        return (
-                          <button className="action-icon-btn action-submit" title="Acknowledge Task" onClick={() => handleAcknowledge(item.id)}>
-                            <CheckCircle2 size={16} />
-                          </button>
-                        );
-                      }
-                      if (item.status === "paused") {
-                        return (
-                          <button className="action-icon-btn action-submit" title="Continue Task" onClick={() => handleContinue(item.id)}>
-                            <Play size={16} />
-                          </button>
-                        );
-                      }
-                      if (item.status === "in_progress" && !item.assigner_paused) {
-                        return (
-                          <button className="action-icon-btn action-submit" title="Pause Task" onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
-                            <Pause size={16} />
-                          </button>
-                        );
-                      }
-                      if ((item.status === "in_progress" || item.status === "reopened") && myPivotStatus !== "submitted") {
-                        return (
-                        <div style={{ position: "relative", display: "inline-flex" }}>
-                          <button 
-                            className="action-icon-btn action-submit" 
-                            title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"} 
-                            disabled={item.pending_deliverables_count > 0} 
-                          onClick={() => !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item })} 
-                          style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
-                        >
-                          <LuSend size={16} />
+                  <div className="col-action" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <button
+                      className="action-icon-btn action-view action-trigger-lg"
+                      title="View Task"
+                      onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}
+                    >
+                      <IoEyeOutline size={20} />
+                    </button>
+                    <ActionPopover
+                      trigger={
+                        <button className="action-icon-btn action-manage action-trigger-lg" title="Status Actions" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px", borderRadius: "6px", background: "var(--bg-hover, #f3f4f6)", color: "var(--text-primary, #374151)", border: "1px solid var(--border-color, #e5e7eb)", cursor: "pointer" }}>
+                          <Sliders size={18} />
                         </button>
-                      </div>
-                      );
                       }
-                      return null;
-                    })()}
-                  </ActionPopover>
+                    >
+                      <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
+                      {(() => {
+                        const isUserAdminOrManager = ["admin", "manager"].includes(currentUser?.role);
+                        const canUserApprove = isUserAdminOrManager || item.created_by === currentUser?.id || item.is_next_approver;
+                        return (
+                          <>
+                            {canUserApprove && (item.status === "submitted" || item.status === "reopened") && (
+                              <button
+                                className="action-icon-btn"
+                                title="Approve Task"
+                                style={{ color: "#16A34A" }}
+                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}
+                              >
+                                <CheckCircle2 size={16} />
+                              </button>
+                            )}
+                            {canUserApprove && (item.status === "submitted" || item.status === "reopened") && (
+                              <button
+                                className="action-icon-btn"
+                                title="Decline Task"
+                                style={{ color: "#DC2626" }}
+                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}
+                              >
+                                <XCircle size={16} />
+                              </button>
+                            )}
+                            {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened") && (
+                              <button
+                                className="action-icon-btn"
+                                title="Reopen Task"
+                                style={{ color: "#2563EB" }}
+                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}
+                              >
+                                <RotateCcw size={16} />
+                              </button>
+                            )}
+                            {item.status !== "abandoned" && (
+                              <button
+                                className="action-icon-btn"
+                                title={isUserAdminOrManager ? "Abandon Task" : "Request Abandon"}
+                                style={{ color: "#F59E0B" }}
+                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'self-tasks' } })}
+                              >
+                                <AlertOctagon size={16} />
+                              </button>
+                            )}
+                          </>
+                        );
+                      })()}
+                      {(() => {
+                        const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
+                        if (item.assigner_paused) {
+                          return (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontSize: "11px", fontWeight: 600, border: "1px solid #F59E0B" }}>
+                              <Lock size={12} />
+                              On Hold
+                            </span>
+                          );
+                        }
+                        if (item.status === "pending") {
+                          return (
+                            <button className="action-icon-btn action-submit" title="Acknowledge Task" onClick={() => handleAcknowledge(item.id)}>
+                              <CheckCircle2 size={16} />
+                            </button>
+                          );
+                        }
+                        if (item.status === "paused") {
+                          return (
+                            <button className="action-icon-btn action-submit" title="Continue Task" onClick={() => handleContinue(item.id)}>
+                              <Play size={16} />
+                            </button>
+                          );
+                        }
+                        if (item.status === "in_progress" && !item.assigner_paused) {
+                          return (
+                            <button className="action-icon-btn action-submit" title="Pause Task" onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
+                              <Pause size={16} />
+                            </button>
+                          );
+                        }
+                        if ((item.status === "in_progress" || item.status === "reopened") && myPivotStatus !== "submitted") {
+                          return (
+                            <div style={{ position: "relative", display: "inline-flex" }}>
+                              <button 
+                                className="action-icon-btn action-submit" 
+                                title={item.pending_deliverables_count > 0 ? "Submit all subtasks first" : "Submit Task"} 
+                                disabled={item.pending_deliverables_count > 0} 
+                                onClick={() => !item.pending_deliverables_count && setSubmitTaskModal({ open: true, task: item })} 
+                                style={item.pending_deliverables_count > 0 ? { opacity: 0.4, cursor: "not-allowed" } : {}}
+                              >
+                                <LuSend size={16} />
+                              </button>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </ActionPopover>
+                  </div>
                 </div>
               );
             }}
@@ -509,8 +587,14 @@ const SelfTasks = () => {
         )}
       </div>
 
-      {!showAll && totalPages > 1 && (
-        <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+      {!showAll && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
+        />
       )}
 
       {/* Modals */}

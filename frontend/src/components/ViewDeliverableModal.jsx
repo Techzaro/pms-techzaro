@@ -14,6 +14,7 @@ import { useEscapeKey } from "../hooks/useEscapeKey";
 import useConfirmOnClose from "../hooks/useConfirmOnClose";
 import { formatDateTime } from "../utils/formatDateTime";
 import { notify, showSuccessMessage } from "../utils/notify";
+import SubmitDeliverableModal from "./SubmitDeliverableModal";
 import "./ViewDeliverableModal.css";
 
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
@@ -57,6 +58,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
   const [links, setLinks] = useState([""]);
   const [submitting, setSubmitting] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !subtask) return;
@@ -201,8 +203,18 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
               {submission && (
                 <>
                   <div className="vd-section">
-                    <h3 className="vd-section-title">Submission Notes</h3>
-                    <p className="vd-text">{submission.comment || "\u2014"}</p>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <h3 className="vd-section-title" style={{ margin: 0 }}>Submission Notes</h3>
+                      <button
+                        type="button"
+                        className="task-add-phase-btn"
+                        onClick={() => setEditModalOpen(true)}
+                        style={{ padding: "4px 12px", fontSize: 12, cursor: "pointer", background: "#6366f1", color: "#fff", border: "none", borderRadius: 6 }}
+                      >
+                        Edit Submission
+                      </button>
+                    </div>
+                    <p className="vd-text">{submission.comment || "—"}</p>
                   </div>
 
                   {/* Files */}
@@ -361,6 +373,19 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
         </div>
         {ConfirmDialog}
       </div>
+
+      {editModalOpen && submission && (
+        <SubmitDeliverableModal
+          isOpen={editModalOpen}
+          onClose={() => setEditModalOpen(false)}
+          subtask={subtask}
+          submissionToEdit={submission}
+          onSubmitSuccess={(updatedSubtask) => {
+            if (onSubmitSuccess) onSubmitSuccess(updatedSubtask);
+            onClose();
+          }}
+        />
+      )}
     </div>,
     document.body
   );

@@ -17,6 +17,12 @@ use App\Console\Commands\SendEventReminders;
 // Send event reminders every minute
 Schedule::command('events:send-reminders')->everyMinute();
 
+// Send task reminders every 5 minutes
+Schedule::command('tasks:send-reminders')->everyFiveMinutes();
+
+// Check task deadlines every 5 minutes
+Schedule::command('tasks:check-deadlines')->everyFiveMinutes();
+
 // Generate daily deliverables for recurring tasks at midnight
 Schedule::command('deliverables:generate-daily')->dailyAt('00:01');
 

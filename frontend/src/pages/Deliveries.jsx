@@ -33,6 +33,18 @@ import CreateDeliverableModel from "../components/layout/CreateDeliverableModel"
 import { formatDateTimeInline } from "../utils/formatDateTime";
 import "../components/ActionPopover.css";
 import "../pages/Deliveries.css";
+
+function canUserPauseResume(item, currentUser) {
+  if (!item || !currentUser) return false;
+  if (["admin", "manager"].includes(currentUser.role)) return true;
+  const uid = parseInt(currentUser.id, 10);
+  if (item.assigned_to && parseInt(item.assigned_to, 10) === uid) return true;
+  if (item.assignedTo?.id && parseInt(item.assignedTo.id, 10) === uid) return true;
+  if (item.assignee?.id && parseInt(item.assignee.id, 10) === uid) return true;
+  if (Array.isArray(item.assignees) && item.assignees.some((a) => parseInt(a.id, 10) === uid)) return true;
+  if (item.is_assignee) return true;
+  return false;
+}
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
@@ -46,6 +58,8 @@ const STATUS_COLORS = {
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
   rejected: "#FEE2E2",
+  abandon_requested: "#FEF3C7",
+  abandoned: "#FEE2E2",
 };
 
 /** Text colors for status badges */
@@ -57,6 +71,8 @@ const STATUS_TEXT_COLORS = {
   reopened: "#5B21B6",
   approved: "#166534",
   rejected: "#991B1B",
+  abandon_requested: "#92400E",
+  abandoned: "#991B1B",
 };
 
 /**
@@ -311,6 +327,8 @@ function Deliveries() {
       reopened: "Reopened",
       approved: "Approved",
       rejected: "Declined",
+      abandon_requested: "Abandon Requested",
+      abandoned: "Abandoned",
     };
     return map[status] || status;
   };
@@ -343,6 +361,7 @@ function Deliveries() {
   const transferredCount = displayItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length;
   const approvedCount = displayItems.filter((i) => i.status === "approved").length;
   const rejectedCount = displayItems.filter((i) => i.status === "rejected").length;
+  const abandonedCount = displayItems.filter((i) => i.status === "abandoned" || i.status === "abandon_requested").length;
 
   const searchFilteredItems = debouncedSearch
     ? displayItems.filter((item) => {
@@ -359,6 +378,9 @@ function Deliveries() {
         }
         if (statusFilter === "transferred") {
           return item.delegation_chain && item.delegation_chain.length > 0;
+        }
+        if (statusFilter === "abandoned") {
+          return item.status === "abandoned" || item.status === "abandon_requested";
         }
         return item.status === statusFilter;
       })
@@ -420,6 +442,9 @@ function Deliveries() {
           </p>
           <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
             <GoDotFill /> Declined ({rejectedCount})
+          </p>
+          <p className={`Abandoned ${statusFilter === "abandoned" ? "active" : ""}`} onClick={() => selectStatusFilter("abandoned")} style={{ cursor: "pointer" }}>
+            <GoDotFill color="#DC2626" /> Abandoned ({abandonedCount})
           </p>
           <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
         </div>
@@ -520,12 +545,12 @@ function Deliveries() {
                           <CheckCircle2 size={16} />
                         </button>
                       )}
-                      {item.status === "in_progress" && !item.assigner_paused && (
+                      {item.status === "in_progress" && !item.assigner_paused && canUserPauseResume(item, currentUser) && (
                         <button className="action-icon-btn action-submit" title="Pause" disabled={actingId === item.id} onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
                           <Pause size={16} />
                         </button>
                       )}
-                      {item.status === "paused" && !item.assigner_paused && (
+                      {item.status === "paused" && !item.assigner_paused && canUserPauseResume(item, currentUser) && (
                         <button className="action-icon-btn action-submit" title="Resume" disabled={actingId === item.id} onClick={() => handleResume(item.id)} style={{ color: "#059669" }}>
                           <Play size={16} />
                         </button>

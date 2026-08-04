@@ -5,11 +5,13 @@
  * a submission history section, and a chronological history of all workflow events.
  */
 
+import { useState } from "react";
 import { FileText, Download, ExternalLink } from "lucide-react";
 import ConfirmationDialog from "./ConfirmationDialog";
 import TaskReopenDialog from "./TaskReopenDialog";
+import AbandonModal from "./AbandonModal";
 import API_URL from "../config/api";
-import { authToken } from "../utils/auth";
+import { authToken, getUser } from "../utils/auth";
 import { formatDateTime } from "../utils/formatDateTime";
 
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
@@ -18,6 +20,41 @@ function fileUrl(url) {
   if (!url) return null;
   if (/^https?:\/\//i.test(url)) return url;
   return API_BASE + url;
+}
+
+function downloadUrl(path, filename) {
+  if (!path) return null;
+  const name = filename || path.split("/").pop();
+  return `${API_URL}/files/download?path=${encodeURIComponent(path)}&name=${encodeURIComponent(name)}`;
+}
+
+async function triggerDownload(e, path, filename) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  if (!path) return;
+
+  const name = filename || path.split("/").pop();
+  const downloadApiUrl = `${API_URL}/files/download?path=${encodeURIComponent(path)}&name=${encodeURIComponent(name)}`;
+
+  try {
+    const token = authToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const res = await fetch(downloadApiUrl, { headers });
+    if (!res.ok) throw new Error("Fetch failed");
+    const blob = await res.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(blobUrl);
+  } catch {
+    window.open(downloadApiUrl, "_blank");
+  }
 }
 
 function formatFileSize(bytes) {
@@ -95,7 +132,25 @@ function TaskSubmissionPanel({
   const isNextApprover = task.is_next_approver;
   const hasDelegationChain = task.has_delegation_chain;
   const transferorHasApproved = task.transferor_has_approved ?? false;
-  const canApprove = (isCreator && !transferorHasApproved && !(hasDelegationChain && !isNextApprover)) || isNextApprover;
+  const currentUser = getUser();
+  const userRole = currentUser?.role;
+  const isAdminOrManager = userRole === "admin" || userRole === "manager";
+  const isMemberOrTeamLead = userRole === "member" || userRole === "team_lead" || userRole === "teamlead";
+  const canApprove = isAdminOrManager || (isCreator && !transferorHasApproved && !(hasDelegationChain && !isNextApprover)) || isNextApprover;
+
+  const [abandonModalOpen, setAbandonModalOpen] = useState(false);
+  const [abandonAction, setAbandonAction] = useState(null);
+
+  const handleAbandonSubmit = async (reason) => {
+    setAbandonModalOpen(false);
+    if (abandonAction === "request") {
+      await handleAction("request-abandon", { reason });
+    } else if (abandonAction === "decline") {
+      await handleAction("decline-abandon", { reason });
+    } else if (abandonAction === "direct") {
+      await handleAction("abandon", { reason });
+    }
+  };
 
   const handleAction = async (action, body = {}) => {
     setActing(true);
@@ -114,6 +169,8 @@ function TaskSubmissionPanel({
       const data = await res.json();
       if (res.ok) {
         onTaskUpdate(data.task);
+        publish("task:updated", data.task);
+        publish("data:changed", { type: "task", action, id: task.id });
       }
     } catch {
       // silently fail
@@ -144,6 +201,55 @@ function TaskSubmissionPanel({
 
   return (
     <div className="td-submission-panel">
+      {/* Abandon requested details */}
+      {status === "abandon_requested" && (
+        <div className="td-card td-submission-card" style={{ borderLeft: "4px solid var(--color-warning, #f59e0b)" }}>
+          <h3 className="td-card-title" style={{ color: "var(--color-warning, #d97706)" }}>Abandon Requested</h3>
+          <div className="td-submission-grid">
+            <div className="td-submission-item">
+              <span className="td-submission-label">Requested By</span>
+              <span className="td-submission-value">{(task.abandon_requested_by || task.abandonRequestedBy)?.name || "—"}</span>
+            </div>
+            {task.abandon_requested_at && (
+              <div className="td-submission-item">
+                <span className="td-submission-label">Requested On</span>
+                <span className="td-submission-value">{formatDateTime(task.abandon_requested_at)}</span>
+              </div>
+            )}
+          </div>
+          {task.abandon_reason && (
+            <div className="td-submission-item" style={{ marginTop: "12px" }}>
+              <span className="td-submission-label">Reason for Abandonment</span>
+              <p className="td-submission-text">{task.abandon_reason}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Abandoned details */}
+      {status === "abandoned" && (
+        <div className="td-card td-submission-card" style={{ borderLeft: "4px solid var(--color-danger, #ef4444)" }}>
+          <h3 className="td-card-title" style={{ color: "var(--color-danger, #dc2626)" }}>Task Abandoned</h3>
+          <div className="td-submission-grid">
+            <div className="td-submission-item">
+              <span className="td-submission-label">Abandoned By</span>
+              <span className="td-submission-value">{(task.abandoned_by || task.abandonedBy)?.name || "—"}</span>
+            </div>
+            {task.abandoned_at && (
+              <div className="td-submission-item">
+                <span className="td-submission-label">Abandoned On</span>
+                <span className="td-submission-value">{formatDateTime(task.abandoned_at)}</span>
+              </div>
+            )}
+          </div>
+          {task.abandon_reason && (
+            <div className="td-submission-item" style={{ marginTop: "12px" }}>
+              <span className="td-submission-label">Reason</span>
+              <p className="td-submission-text">{task.abandon_reason}</p>
+            </div>
+          )}
+        </div>
+      )}
       {/* Reopen details for assignee */}
       {status === "reopened" && (
         <div className="td-card td-submission-card">
@@ -182,10 +288,42 @@ function TaskSubmissionPanel({
               <span className="td-submission-value">{formatDateShort(task.reopen_new_deadline)}</span>
             </div>
           )}
+          {task.reopen_link && (
+            <div className="td-submission-item" style={{ marginTop: "12px" }}>
+              <span className="td-submission-label">Attached Link</span>
+              <a href={task.reopen_link} target="_blank" rel="noopener noreferrer" className="td-submission-value" style={{ color: "#6366f1", textDecoration: "underline", wordBreak: "break-all" }}>
+                {task.reopen_link}
+              </a>
+            </div>
+          )}
           {task.reopen_file_name && (
             <div className="td-submission-item" style={{ marginTop: "12px" }}>
-              <span className="td-submission-label">Attached File</span>
-              <span className="td-submission-value">{task.reopen_file_name}</span>
+              <span className="td-submission-label">Attached File(s) / Screenshots</span>
+              <div className="td-attachments-list" style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                {(() => {
+                  const paths = (task.reopen_file_path || "").split(",").map((p) => p.trim()).filter(Boolean);
+                  const names = (task.reopen_file_name || "").split(",").map((n) => n.trim()).filter(Boolean);
+                  return (names.length ? names : paths).map((name, idx) => {
+                    const path = paths[idx] || paths[0] || name;
+                    const href = downloadUrl(path, name);
+                    return (
+                      <a
+                        key={idx}
+                        className="td-submission-file-link"
+                        href={href}
+                        download={name}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => triggerDownload(e, path, name)}
+                      >
+                        <FileText size={16} />
+                        <span>{name}</span>
+                        <Download size={14} style={{ marginLeft: "auto" }} />
+                      </a>
+                    );
+                  });
+                })()}
+              </div>
             </div>
           )}
         </div>
@@ -230,14 +368,26 @@ function TaskSubmissionPanel({
                   <div className="td-submission-item" style={{ marginTop: "12px" }}>
                     <span className="td-submission-label">Files ({files.length})</span>
                     <div className="td-attachments-list">
-                      {files.map((att) => (
-                        <a key={att.id} className="td-submission-file-link" href={fileUrl(att.full_url)} target="_blank" rel="noopener noreferrer">
-                          <FileText size={16} />
-                          <span>{att.original_name || att.file_name}</span>
-                          {att.file_size && <span style={{ fontSize: "11px", color: "#9CA3AF", marginLeft: "auto" }}>{formatFileSize(att.file_size)}</span>}
-                          <Download size={14} />
-                        </a>
-                      ))}
+                      {files.map((att) => {
+                        const href = downloadUrl(att.full_url, att.original_name || att.file_name);
+                        const name = att.original_name || att.file_name;
+                        return (
+                          <a
+                            key={att.id}
+                            className="td-submission-file-link"
+                            href={href}
+                            download={name}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => triggerDownload(e, att.full_url, name)}
+                          >
+                            <FileText size={16} />
+                            <span>{name}</span>
+                            {att.file_size && <span style={{ fontSize: "11px", color: "#9CA3AF", marginLeft: "auto" }}>{formatFileSize(att.file_size)}</span>}
+                            <Download size={14} />
+                          </a>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -246,11 +396,31 @@ function TaskSubmissionPanel({
                   <div className="td-submission-item" style={{ marginTop: "12px" }}>
                     <span className="td-submission-label">Images ({images.length})</span>
                     <div className="td-image-grid">
-                      {images.map((att) => (
-                        <div key={att.id} className="td-image-thumb" onClick={() => window.open(fileUrl(att.full_url), "_blank")}>
-                          <img src={fileUrl(att.full_url)} alt={att.original_name || att.file_name} />
-                        </div>
-                      ))}
+                      {images.map((att) => {
+                        const name = att.original_name || att.file_name;
+                        const href = downloadUrl(att.full_url, name);
+                        return (
+                          <div key={att.id} className="td-image-thumb" style={{ position: "relative" }}>
+                            <img src={fileUrl(att.full_url)} alt={name} onClick={() => window.open(fileUrl(att.full_url), "_blank")} />
+                            <a
+                              href={href}
+                              download={name}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Download Image"
+                              onClick={(e) => triggerDownload(e, att.full_url, name)}
+                              style={{
+                                position: "absolute", bottom: "4px", right: "4px",
+                                background: "rgba(0,0,0,0.75)", color: "#fff",
+                                padding: "4px 6px", borderRadius: "4px", display: "flex",
+                                alignItems: "center", gap: "4px", fontSize: "11px", cursor: "pointer"
+                              }}
+                            >
+                              <Download size={13} /> Download
+                            </a>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -275,11 +445,13 @@ function TaskSubmissionPanel({
                     <a
                       className="td-submission-file-link"
                       href={`${API_URL}/tasks/submission-file/${latestSubmission.id}`}
+                      download={latestSubmission.file_name}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
                       <FileText size={16} />
                       <span>{latestSubmission.file_name}</span>
+                      <Download size={14} style={{ marginLeft: "auto" }} />
                     </a>
                   </div>
                 )}
@@ -287,36 +459,35 @@ function TaskSubmissionPanel({
             );
           })()}
 
-          {/* Review actions for submitted status */}
-          {canApprove && status === "submitted" && (
-            <div className="td-review-actions">
-              <button
-                className="td-review-btn td-review-btn--approve"
-                disabled={acting}
-                onClick={() => setConfirmDialog({ open: true, type: "approve" })}
-              >
-                Approve
-              </button>
-              <button
-                className="td-review-btn td-review-btn--reject"
-                disabled={acting}
-                onClick={() => setConfirmDialog({ open: true, type: "reject" })}
-              >
-                Decline
-              </button>
-              <button
-                className="td-review-btn td-review-btn--reopen"
-                disabled={acting}
-                onClick={() => setReopenDialog(true)}
-              >
-                Decline & Reopen
-              </button>
-            </div>
-          )}
+          {/* Combined Review & Abandon action buttons */}
+          <div className="td-review-actions" style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginTop: "16px" }}>
+            {canApprove && status === "submitted" && (
+              <>
+                <button
+                  className="td-review-btn td-review-btn--approve"
+                  disabled={acting}
+                  onClick={() => setConfirmDialog({ open: true, type: "approve" })}
+                >
+                  Approve
+                </button>
+                <button
+                  className="td-review-btn td-review-btn--reject"
+                  disabled={acting}
+                  onClick={() => setConfirmDialog({ open: true, type: "reject" })}
+                >
+                  Decline
+                </button>
+                <button
+                  className="td-review-btn td-review-btn--reopen"
+                  disabled={acting}
+                  onClick={() => setReopenDialog(true)}
+                >
+                  Decline & Reopen
+                </button>
+              </>
+            )}
 
-          {/* Reopen action for approved status */}
-          {canApprove && status === "approved" && (
-            <div className="td-review-actions">
+            {canApprove && status === "approved" && (
               <button
                 className="td-review-btn td-review-btn--reopen"
                 disabled={acting}
@@ -324,8 +495,62 @@ function TaskSubmissionPanel({
               >
                 Reopen Task
               </button>
-            </div>
-          )}
+            )}
+
+            {status !== "abandoned" && (
+              <>
+                {isAdminOrManager && status === "abandon_requested" && (
+                  <>
+                    <button
+                      className="td-review-btn td-review-btn--approve"
+                      disabled={acting}
+                      onClick={() => handleAction("approve-abandon")}
+                    >
+                      Approve Abandon
+                    </button>
+                    <button
+                      className="td-review-btn td-review-btn--reject"
+                      disabled={acting}
+                      onClick={() => {
+                        setAbandonAction("decline");
+                        setAbandonModalOpen(true);
+                      }}
+                    >
+                      Decline Abandon
+                    </button>
+                  </>
+                )}
+
+                {isAdminOrManager && status !== "abandon_requested" && (
+                  <button
+                    className="td-review-btn td-review-btn--reject"
+                    style={{ background: "#dc2626", color: "#fff", borderColor: "#dc2626" }}
+                    disabled={acting}
+                    onClick={() => {
+                      setAbandonAction("direct");
+                      setAbandonModalOpen(true);
+                    }}
+                  >
+                    Abandon Task
+                  </button>
+                )}
+
+                {isMemberOrTeamLead && status !== "abandon_requested" && (
+                  <button
+                    className="td-review-btn td-review-btn--reject"
+                    style={{ background: "#f59e0b", color: "#fff", borderColor: "#f59e0b" }}
+                    disabled={acting}
+                    onClick={() => {
+                      setAbandonAction("request");
+                      setAbandonModalOpen(true);
+                    }}
+                  >
+                    Request Abandon
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -434,14 +659,27 @@ function TaskSubmissionPanel({
                 {item.new_deadline && (
                   <p className="td-submission-text"><strong>New Deadline:</strong> {formatDateShort(item.new_deadline)}</p>
                 )}
-                {item.file_name && item.type === "submission" && item.file_path && (
-                  <span className="td-submission-value">{item.file_name}</span>
+                {item.file_name && item.file_path && (
+                  <a
+                    className="td-submission-file-link"
+                    href={downloadUrl(item.file_path, item.file_name)}
+                    download={item.file_name}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ marginTop: "6px" }}
+                  >
+                    <FileText size={14} />
+                    <span>{item.file_name}</span>
+                    <Download size={14} style={{ marginLeft: "auto" }} />
+                  </a>
                 )}
               </li>
             ))}
           </ul>
         </div>
       )}
+
+
 
       <ConfirmationDialog
         isOpen={confirmDialog.open}
@@ -462,6 +700,28 @@ function TaskSubmissionPanel({
         onClose={() => setReopenDialog(false)}
         task={task}
         onReopenSuccess={onTaskUpdate}
+      />
+
+      <AbandonModal
+        isOpen={abandonModalOpen}
+        onClose={() => setAbandonModalOpen(false)}
+        title={
+          abandonAction === "request"
+            ? "Request to Abandon Task"
+            : abandonAction === "decline"
+            ? "Decline Abandon Request"
+            : "Abandon Task"
+        }
+        subtitle={task.title}
+        actionLabel={
+          abandonAction === "request"
+            ? "Submit Request"
+            : abandonAction === "decline"
+            ? "Decline Request"
+            : "Confirm Abandon"
+        }
+        onSubmit={handleAbandonSubmit}
+        loading={acting}
       />
     </div>
   );

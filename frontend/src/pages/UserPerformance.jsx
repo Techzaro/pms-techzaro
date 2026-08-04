@@ -238,7 +238,13 @@ function UserPerformance() {
 
   const filteredItems = baseItems.filter((item) => {
     if (statusFilter === "due_today") {
-      return true;
+      const dateVal = item.end_date || item.due_date || item.start_date;
+      if (!dateVal) return false;
+      const d = new Date(dateVal);
+      const now = new Date();
+      const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+      const isCompleted = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
+      return isToday && !isCompleted;
     }
     if (statusFilter) {
       if (statusFilter === "pending") {

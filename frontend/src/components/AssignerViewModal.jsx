@@ -12,9 +12,54 @@ import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import ConfirmationDialog from "./ConfirmationDialog";
 import ReopenDialog from "./ReopenDialog";
+import AbandonModal from "./AbandonModal";
 import { formatDateTime } from "../utils/formatDateTime";
 import { showSuccessMessage } from "../utils/notify";
+import { getUser } from "../utils/auth";
 import "./AssignerViewModal.css";
+
+const API_BASE = API_URL.replace(/\/api\/?$/, "");
+
+function fileUrl(url) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  return API_BASE + (url.startsWith("/") ? "" : "/storage/") + url;
+}
+
+function downloadUrl(path, filename) {
+  if (!path) return null;
+  const name = filename || path.split("/").pop();
+  return `${API_URL}/files/download?path=${encodeURIComponent(path)}&name=${encodeURIComponent(name)}`;
+}
+
+async function triggerDownload(e, path, filename) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  if (!path) return;
+
+  const name = filename || path.split("/").pop();
+  const downloadApiUrl = `${API_URL}/files/download?path=${encodeURIComponent(path)}&name=${encodeURIComponent(name)}`;
+
+  try {
+    const token = authToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const res = await fetch(downloadApiUrl, { headers });
+    if (!res.ok) throw new Error("Fetch failed");
+    const blob = await res.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(blobUrl);
+  } catch {
+    window.open(downloadApiUrl, "_blank");
+  }
+}
 
 /**
  * Formats a file size in bytes to a human-readable string (B, KB, or MB).
@@ -46,6 +91,40 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
   const [reopenDialog, setReopenDialog] = useState(false);
   const [acting, setActing] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
+  const [abandonModalOpen, setAbandonModalOpen] = useState(false);
+  const [abandonAction, setAbandonAction] = useState("request");
+  const currentUser = getUser();
+  const userRole = currentUser?.role;
+  const isAdminOrManager = userRole === "admin" || userRole === "manager";
+  const isMemberOrTeamLead = userRole === "member" || userRole === "team_lead" || userRole === "teamlead";
+
+  const handleAbandonSubmit = async (reason) => {
+    setAbandonModalOpen(false);
+    let endpoint = "request-abandon";
+    if (abandonAction === "approve") endpoint = "approve-abandon";
+    else if (abandonAction === "decline") endpoint = "decline-abandon";
+    else if (abandonAction === "direct") endpoint = "abandon";
+
+    setActing(true);
+    try {
+      const token = authToken();
+      const res = await fetch(`${API_URL}/deliverables/${subtask.id}/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason }),
+        _notifHandled: true,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onActionSuccess(data.deliverable);
+        onClose();
+      }
+    } catch {
+      // silently handle
+    } finally {
+      setActing(false);
+    }
+  };
 
   // Fetch the latest submission when modal opens or subtask changes
   useEffect(() => {
@@ -235,7 +314,7 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
                     <span className="avm-detail-label">Files ({files.length})</span>
                     <div className="avm-attachments-list">
                       {files.map((att) => (
-                        <a key={att.id} className="avm-file-link" href={attachmentUrl(att.id, "download")} target="_blank" rel="noopener noreferrer">
+                        <a key={att.id} className="avm-file-link" href={attachmentUrl(att.id, "download")} download={att.original_name || att.file_name} target="_blank" rel="noopener noreferrer">
                           <FileText size={16} />
                           <span className="avm-attach-name">{att.original_name || att.file_name}</span>
                           {att.file_size && <span className="avm-attach-size">{formatFileSize(att.file_size)}</span>}
@@ -252,8 +331,23 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
                     <span className="avm-detail-label">Images ({images.length})</span>
                     <div className="avm-image-grid">
                       {images.map((att) => (
-                        <div key={att.id} className="avm-image-thumb" onClick={() => setImagePreview(attachmentUrl(att.id))}>
-                          <img src={attachmentUrl(att.id)} alt={att.original_name || att.file_name} />
+                        <div key={att.id} className="avm-image-thumb" style={{ position: "relative" }}>
+                          <img src={attachmentUrl(att.id)} alt={att.original_name || att.file_name} onClick={() => setImagePreview(attachmentUrl(att.id))} />
+                          <a
+                            href={attachmentUrl(att.id, "download")}
+                            download={att.original_name || att.file_name}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Download Image"
+                            style={{
+                              position: "absolute", bottom: "4px", right: "4px",
+                              background: "rgba(0,0,0,0.75)", color: "#fff",
+                              padding: "4px 6px", borderRadius: "4px", display: "flex",
+                              alignItems: "center", gap: "4px", fontSize: "11px"
+                            }}
+                          >
+                            <Download size={13} /> Download
+                          </a>
                         </div>
                       ))}
                     </div>
@@ -282,11 +376,13 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
                     <a
                       className="avm-file-link"
                       href={`${API_URL}/deliverables/submission-file/${submission.id}`}
+                      download={submission.file_name}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
                       <FileText size={16} />
                       <span>{submission.file_name}</span>
+                      <Download size={14} style={{ marginLeft: "auto" }} />
                     </a>
                   </div>
                 )}
@@ -330,6 +426,95 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
                   <span className="avm-detail-value">{formatDateTime(subtask.reopen_new_deadline)}</span>
                 </div>
               )}
+              {subtask.reopen_link && (
+                <div className="avm-detail-item" style={{ marginTop: "12px" }}>
+                  <span className="avm-detail-label">Attached Link</span>
+                  <a href={subtask.reopen_link} target="_blank" rel="noopener noreferrer" className="avm-detail-value" style={{ color: "#6366f1", textDecoration: "underline", wordBreak: "break-all" }}>
+                    {subtask.reopen_link}
+                  </a>
+                </div>
+              )}
+              {subtask.reopen_file_name && (
+                <div className="avm-detail-item" style={{ marginTop: "12px" }}>
+                  <span className="avm-detail-label">Attached File(s) / Screenshots</span>
+                  <div className="avm-attachments-list" style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {(() => {
+                      const paths = (subtask.reopen_file_path || "").split(",").map((p) => p.trim()).filter(Boolean);
+                      const names = (subtask.reopen_file_name || "").split(",").map((n) => n.trim()).filter(Boolean);
+                      return (names.length ? names : paths).map((name, idx) => {
+                        const path = paths[idx] || paths[0] || name;
+                        const url = downloadUrl(path, name);
+                        return (
+                          <a
+                            key={idx}
+                            className="avm-file-link"
+                            href={url}
+                            download={name}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => triggerDownload(e, path, name)}
+                            style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "#6366f1", fontWeight: 500 }}
+                          >
+                            <FileText size={16} />
+                            <span>{name}</span>
+                            <Download size={14} style={{ marginLeft: "auto" }} />
+                          </a>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Abandon Requested Details */}
+          {subtask.status === "abandon_requested" && (
+            <div className="avm-section" style={{ borderLeft: "4px solid var(--color-warning, #f59e0b)" }}>
+              <h3 className="avm-section-title" style={{ color: "var(--color-warning, #d97706)" }}>Abandon Requested</h3>
+              <div className="avm-submission-grid">
+                <div className="avm-detail-item">
+                  <span className="avm-detail-label">Requested By</span>
+                  <span className="avm-detail-value">{(subtask.abandon_requested_by || subtask.abandonRequestedBy)?.name || "—"}</span>
+                </div>
+                {subtask.abandon_requested_at && (
+                  <div className="avm-detail-item">
+                    <span className="avm-detail-label">Requested On</span>
+                    <span className="avm-detail-value">{formatDateTime(subtask.abandon_requested_at)}</span>
+                  </div>
+                )}
+              </div>
+              {subtask.abandon_reason && (
+                <div className="avm-detail-item" style={{ marginTop: "12px" }}>
+                  <span className="avm-detail-label">Reason</span>
+                  <p className="avm-description-text">{subtask.abandon_reason}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Abandoned Details */}
+          {subtask.status === "abandoned" && (
+            <div className="avm-section" style={{ borderLeft: "4px solid var(--color-danger, #ef4444)" }}>
+              <h3 className="avm-section-title" style={{ color: "var(--color-danger, #dc2626)" }}>Subtask Abandoned</h3>
+              <div className="avm-submission-grid">
+                <div className="avm-detail-item">
+                  <span className="avm-detail-label">Abandoned By</span>
+                  <span className="avm-detail-value">{(subtask.abandoned_by || subtask.abandonedBy)?.name || "—"}</span>
+                </div>
+                {subtask.abandoned_at && (
+                  <div className="avm-detail-item">
+                    <span className="avm-detail-label">Abandoned On</span>
+                    <span className="avm-detail-value">{formatDateTime(subtask.abandoned_at)}</span>
+                  </div>
+                )}
+              </div>
+              {subtask.abandon_reason && (
+                <div className="avm-detail-item" style={{ marginTop: "12px" }}>
+                  <span className="avm-detail-label">Reason</span>
+                  <p className="avm-description-text">{subtask.abandon_reason}</p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -353,6 +538,33 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
               </button>
               <button className="avm-action-btn avm-reopen-btn" disabled={acting} onClick={() => setReopenDialog(true)}>
                 Decline & Reopen
+              </button>
+            </div>
+          )}
+
+          {isAdminOrManager && subtask.status === "abandon_requested" && (
+            <div className="avm-action-btns">
+              <button className="avm-action-btn avm-approve-btn" disabled={acting} onClick={() => handleAbandonSubmit("")}>
+                Approve Abandon
+              </button>
+              <button className="avm-action-btn avm-reject-btn" disabled={acting} onClick={() => { setAbandonAction("decline"); setAbandonModalOpen(true); }}>
+                Decline Abandon
+              </button>
+            </div>
+          )}
+
+          {isAdminOrManager && subtask.status !== "abandon_requested" && subtask.status !== "abandoned" && subtask.status !== "submitted" && (
+            <div className="avm-action-btns">
+              <button className="avm-action-btn avm-reject-btn" style={{ background: "#dc2626", borderColor: "#dc2626", color: "#fff" }} disabled={acting} onClick={() => { setAbandonAction("direct"); setAbandonModalOpen(true); }}>
+                Abandon
+              </button>
+            </div>
+          )}
+
+          {isMemberOrTeamLead && subtask.status !== "abandon_requested" && subtask.status !== "abandoned" && (
+            <div className="avm-action-btns">
+              <button className="avm-action-btn avm-reject-btn" style={{ background: "#f59e0b", borderColor: "#f59e0b", color: "#fff" }} disabled={acting} onClick={() => { setAbandonAction("request"); setAbandonModalOpen(true); }}>
+                Request Abandon
               </button>
             </div>
           )}
@@ -381,6 +593,28 @@ function AssignerViewModal({ isOpen, onClose, subtask, onActionSuccess }) {
           onActionSuccess(updated);
           onClose();
         }}
+      />
+
+      <AbandonModal
+        isOpen={abandonModalOpen}
+        onClose={() => setAbandonModalOpen(false)}
+        title={
+          abandonAction === "request"
+            ? "Request to Abandon Subtask"
+            : abandonAction === "decline"
+            ? "Decline Abandon Request"
+            : "Abandon Subtask"
+        }
+        subtitle={subtask.title}
+        actionLabel={
+          abandonAction === "request"
+            ? "Submit Request"
+            : abandonAction === "decline"
+            ? "Decline Request"
+            : "Confirm Abandon"
+        }
+        onSubmit={handleAbandonSubmit}
+        loading={acting}
       />
     </div>,
     document.body

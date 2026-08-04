@@ -105,7 +105,18 @@ export function getToken(role) {
   if (!finalSid) return "";
 
   const sessions = _getSessions(r);
-  return sessions[finalSid]?.token || "";
+  const sess = sessions[finalSid];
+  if (!sess) return "";
+
+  // Check expiration (24h for rememberMe, 3h default)
+  if (sess.expiresAt && Date.now() > sess.expiresAt) {
+    delete sessions[finalSid];
+    _setSessions(r, sessions);
+    sessionStorage.removeItem("sessionId");
+    return "";
+  }
+
+  return sess.token || "";
 }
 
 export function setToken(role, token) {
@@ -151,7 +162,17 @@ export function getUser(role) {
   if (!finalSid) return null;
 
   const sessions = _getSessions(r);
-  return sessions[finalSid]?.user || null;
+  const sess = sessions[finalSid];
+  if (!sess) return null;
+
+  if (sess.expiresAt && Date.now() > sess.expiresAt) {
+    delete sessions[finalSid];
+    _setSessions(r, sessions);
+    sessionStorage.removeItem("sessionId");
+    return null;
+  }
+
+  return sess.user || null;
 }
 
 export function setUser(role, user) {
@@ -199,14 +220,29 @@ export function authHeaders() {
 
 /**
  * Saves a complete session (role, token, user) for this tab.
- * Claims a slot in the role's session pool.
+ * Stores token in localStorage with 24-hour expiration if rememberMe is true.
+ * @param {string} role
+ * @param {string} token
+ * @param {object} user
+ * @param {boolean} [rememberMe=false]
+ * @param {string|number} [expiresAt=null]
  * @returns {boolean} always true
  */
-export function saveSession(role, token, user) {
+export function saveSession(role, token, user, rememberMe = false, expiresAt = null) {
   const sessions = _getSessions(role);
   const sid = _generateSessionId();
 
-  sessions[sid] = { token, user };
+  // 24 hours (1 day) expiration if rememberMe, else default 3 hours
+  const durationMs = rememberMe ? 24 * 60 * 60 * 1000 : 3 * 60 * 60 * 1000;
+  const calculatedExpiry = expiresAt ? new Date(expiresAt).getTime() : Date.now() + durationMs;
+
+  sessions[sid] = {
+    token,
+    user,
+    rememberMe: Boolean(rememberMe),
+    expiresAt: calculatedExpiry,
+    createdAt: Date.now(),
+  };
   _setSessions(role, sessions);
 
   setCurrentRole(role);
@@ -241,7 +277,7 @@ export function clearSession(role) {
 }
 
 /**
- * Clears all sessions for all roles.
+ * Clears all sessions for all roles and tab state.
  */
 export function clearAllSessions() {
   ROLES.forEach((r) => {
@@ -249,13 +285,47 @@ export function clearAllSessions() {
     localStorage.removeItem(`token_${r}`);
     localStorage.removeItem(`user_${r}`);
   });
-  sessionStorage.removeItem("currentRole");
-  sessionStorage.removeItem("sessionId");
+  sessionStorage.clear();
   localStorage.removeItem("token");
   localStorage.removeItem("role");
   localStorage.removeItem("userId");
   localStorage.removeItem("name");
   localStorage.removeItem("email");
+}
+
+/**
+ * Performs a complete, secure user logout.
+ * Clears storage, invalidates session API-side, and replaces history entry to /logged-out or /login.
+ * @param {string} [reason] - Optional reason code (e.g. "inactivity")
+ */
+export async function logoutUser(reason = "") {
+  const role = getCurrentRole();
+  const sid = getSessionId();
+
+  if (role && sid) {
+    const sessions = _getSessions(role);
+    const token = sessions[sid]?.token;
+    if (token) {
+      try {
+        const rawUrl = import.meta.env.VITE_API_URL || "";
+        const apiUrl = rawUrl.replace(/\/+$/g, "");
+        await fetch(`${apiUrl}/logout`, {
+          method: "POST",
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          cache: "no-store",
+          _notifHandled: true,
+        });
+      } catch { /* ignore network error during logout */ }
+    }
+  }
+
+  clearAllSessions();
+
+  const redirectUrl = reason ? `/logged-out?reason=${encodeURIComponent(reason)}` : "/logged-out";
+  try {
+    window.history.replaceState(null, "", redirectUrl);
+  } catch {}
+  window.location.replace(redirectUrl);
 }
 
 /* ───── multi-tab helpers ───── */

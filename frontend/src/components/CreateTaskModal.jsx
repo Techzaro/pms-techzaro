@@ -140,7 +140,7 @@ function generatePreview(templates, settings, startDate, endDate) {
   };
 }
 
-const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreDraftId = null }) => {
+const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreDraftId = null, prefillData = null, onTaskCreated = null }) => {
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
     draftSaveHandler: () => draftSaveRef.current?.(),
@@ -228,6 +228,25 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
       setDraftId(autoSaveDraftId);
     }
   }, [autoSaveDraftId]);
+
+  // Support prefillData from Templates
+  useEffect(() => {
+    if (!prefillData) return;
+    setForm((prev) => ({
+      ...prev,
+      title: prefillData.title || prev.title,
+      description: prefillData.description || prev.description,
+      priority: prefillData.priority || prev.priority,
+      task_type: prefillData.task_type || prev.task_type,
+      project_id: prefillData.project_id || prev.project_id,
+    }));
+    if (prefillData.subtasks && Array.isArray(prefillData.subtasks)) {
+      setSubtasks(prefillData.subtasks.map((s) => ({ title: typeof s === "string" ? s : s.title, start_date: null, due_date: null, assigned_to: null })));
+    }
+    if (prefillData.requirements && Array.isArray(prefillData.requirements)) {
+      setRequirementsList(prefillData.requirements);
+    }
+  }, [prefillData]);
 
   // Restore draft data when opened from DraftCenter
   useEffect(() => {
@@ -516,23 +535,43 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
   const validateForm = () => {
     const errors = {};
     if (!form.title.trim()) errors.title = "Task Name is required.";
+    if (!projectId && (!form.project_id || (Array.isArray(form.project_id) && form.project_id.length === 0))) {
+      errors.project_id = "Project selection is required.";
+    }
     if (!form.assigned_to || form.assigned_to.length === 0) errors.assigned_to = "Select at least one user.";
     if (!form.priority) errors.priority = "Priority is required.";
+
+    const recStart = form.recurrence_start_date || form.start_date;
+    const recEnd = form.recurrence_end_date || form.end_date;
+
+    if (recStart && recEnd && new Date(recStart) > new Date(recEnd)) {
+      errors.start_date = "Start date cannot be later than the due date.";
+      errors.end_date = "Due date cannot be earlier than the start date.";
+    }
+
     if (form.task_type === "recurring") {
       const validTemplates = recurringTemplates.filter((t) => t.title.trim());
       if (validTemplates.length === 0) errors.recurring_templates = "Add at least one subtask template.";
-      if (!form.start_date) errors.start_date = "Start date is required for recurring tasks.";
-      if (!form.end_date) errors.end_date = "End date (due date) is required for recurring tasks.";
+      if (!recStart) errors.start_date = "Start date is required for recurring tasks.";
+      if (!recEnd) errors.end_date = "End date (due date) is required for recurring tasks.";
+      if (recStart && recEnd && new Date(recEnd) < new Date(recStart)) {
+        errors.recurrence_end_date = "Recurrence End date cannot be before Start date.";
+      }
     }
-    if (form.end_date && projectEndDate) {
-      const taskEnd = new Date(form.end_date);
+    if (recEnd && projectEndDate) {
+      const taskEnd = new Date(recEnd);
       const projEnd = new Date(projectEndDate);
       if (taskEnd > projEnd) {
         errors.end_date = "Task deadline cannot exceed the project deadline.";
       }
     }
     setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    const errorKeys = Object.keys(errors);
+    if (errorKeys.length > 0) {
+      notify.error(errors[errorKeys[0]]);
+      return false;
+    }
+    return true;
   };
 
   const handleSubmit = async (e) => {
@@ -547,16 +586,21 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
           skip_weekends: recurrenceSettings.skip_weekends || false,
         } : undefined;
 
+        const startDateVal = form.recurrence_start_date || form.start_date;
+        const endDateVal = form.recurrence_end_date || form.end_date;
+
         const body = {
           title: form.title.trim(),
           description: form.description || null,
           requirements: requirementsList.length > 0 ? requirementsList : null,
-          start_date: toUTCIso(form.start_date),
-          end_date: toUTCIso(form.end_date),
+          start_date: toUTCIso(startDateVal),
+          end_date: toUTCIso(endDateVal),
           assigned_to: form.assigned_to,
           priority: form.priority,
           task_type: form.task_type,
           recurrence_settings: settings,
+          recurrence_start_date: form.task_type === "recurring" ? toUTCIso(startDateVal) : undefined,
+          recurrence_end_date: form.task_type === "recurring" ? toUTCIso(endDateVal) : undefined,
           deliverable_templates: validTemplates.length > 0 ? validTemplates.map((t) => ({ title: t.title.trim(), description: t.description || null, quantity: t.quantity || 1, combined: t.combined || false })) : undefined,
           deliverables: subtasks.length > 0 ? subtasks.map((d) => ({ title: d.title, start_date: d.start_date || null, due_date: d.due_date || null, assigned_to: d.assigned_to || null })) : undefined,
           allow_transfer: form.allow_transfer === "allow",
@@ -613,6 +657,7 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
         publish("task:created", {});
         publish("data:changed", { type: "task", action: "created" });
         if (restoreDraftId) draftService.delete(restoreDraftId).catch(() => {});
+        if (onTaskCreated) onTaskCreated();
         onClose(true);
       } catch (err) {
         notify.error(err.message);
@@ -651,14 +696,14 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
               <div className="task-grid-2">
                 {!projectId ? (
                   <div className="task-field">
-                    <label>Projects</label>
+                    <label>Projects <span style={{ color: "#ef4444" }}>*</span></label>
                     <MultiSelectDropdown name="project_id" value={form.project_id} onChange={(val) => handleChange({ target: { name: "project_id", value: val } })}
                       placeholder="Select projects" searchPlaceholder="Search projects..." options={projects.map((p) => ({ value: p.id, label: p.title }))} />
                     {formErrors.project_id && <span className="field-error-text">{formErrors.project_id}</span>}
                   </div>
                 ) : (
                   <div className="task-field">
-                    <label>Project</label>
+                    <label>Project <span style={{ color: "#ef4444" }}>*</span></label>
                     <div className="task-project-name">{projectName || "Current Project"}</div>
                   </div>
                 )}
@@ -810,14 +855,14 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                 <div className="task-deadline-grid">
                   <div>
                     <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
-                    <input type="datetime-local" value={form.start_date}
-                      onChange={(e) => { setForm((prev) => ({ ...prev, start_date: e.target.value })); markDirty(); }}
+                    <input type="datetime-local" value={form.start_date || form.recurrence_start_date || ""}
+                      onChange={(e) => { setForm((prev) => ({ ...prev, start_date: e.target.value, recurrence_start_date: e.target.value })); markDirty(); }}
                       min={getNowDatetimeLocal()} />
                   </div>
                   <div>
                     <label style={{ fontSize: 13, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
-                    <input type="datetime-local" value={form.end_date}
-                      onChange={(e) => { setForm((prev) => ({ ...prev, end_date: e.target.value })); markDirty(); }}
+                    <input type="datetime-local" value={form.end_date || form.recurrence_end_date || ""}
+                      onChange={(e) => { setForm((prev) => ({ ...prev, end_date: e.target.value, recurrence_end_date: e.target.value })); markDirty(); }}
                       min={getNowDatetimeLocal()}
                       max={projectEndDate ? toDatetimeLocal(projectEndDate) : undefined} />
                     {projectEndDate && <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, display: "block" }}>Max: {new Date(projectEndDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
@@ -830,8 +875,10 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                 <CustomSelect name="task_type" value={form.task_type}
                   onChange={(val) => {
                     setForm((prev) => ({ ...prev, task_type: val })); markDirty();
-                    if (val === "recurring" && recurringTemplates.length === 0) {
-                      setRecurringTemplates([{ title: "", description: "", quantity: 1, combined: false }]);
+                    if (val === "recurring") {
+                      if (recurringTemplates.length === 0 || !recurringTemplates.some((t) => t.title.trim())) {
+                        setRecurringTemplates([{ title: "{{number}} - Task Deliverable", description: "", quantity: 1, combined: false }]);
+                      }
                     }
                   }}
                   options={[{ value: "standard", label: "Standard" }, { value: "recurring", label: "Recurring" }]} />
@@ -857,6 +904,33 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                       <CustomSelect name="repeat" value={recurrenceSettings.repeat}
                         onChange={(val) => handleRecurringSettingChange("repeat", val)}
                         options={REPEAT_OPTIONS} />
+                    </div>
+
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #e5e7eb" }}>
+                      <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 8 }}>Dates</label>
+                      <div className="task-deadline-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                        <div>
+                          <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
+                          <input
+                            type="datetime-local"
+                            value={form.recurrence_start_date || form.start_date || ""}
+                            onChange={(e) => { setForm((prev) => ({ ...prev, recurrence_start_date: e.target.value, start_date: e.target.value })); markDirty(); }}
+                            min={getNowDatetimeLocal()}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
+                          <input
+                            type="datetime-local"
+                            value={form.recurrence_end_date || form.end_date || ""}
+                            onChange={(e) => { setForm((prev) => ({ ...prev, recurrence_end_date: e.target.value, end_date: e.target.value })); markDirty(); }}
+                            min={form.recurrence_start_date || form.start_date || getNowDatetimeLocal()}
+                          />
+                          {formErrors.recurrence_end_date && (
+                            <span style={{ fontSize: 11, color: "#ef4444", marginTop: 2, display: "block" }}>{formErrors.recurrence_end_date}</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     {(recurrenceSettings.repeat === "daily" || recurrenceSettings.repeat === "custom") && (
@@ -934,35 +1008,6 @@ const CreateTaskModal = ({ onClose, projectId = null, projectName = "", restoreD
                       </p>
                     )}
                   </div>
-
-                  {preview && (
-                    <div className="task-card" style={{ border: "1px solid #c7d2fe", background: "#f8faff" }}>
-                      <div className="task-card-top">
-                        <span>Recurring Preview</span>
-                        <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 600 }}>{preview.totalSubtasks} Total</span>
-                      </div>
-                      <div style={{ maxHeight: 220, overflowY: "auto" }}>
-                        {preview.previewPeriods.map((pd) => (
-                          <div key={pd.period} style={{ marginBottom: 8, padding: "6px 0", borderBottom: "1px solid #eef2ff" }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: "#4338ca", marginBottom: 4 }}>{pd.label} — {pd.date}</div>
-                            {pd.items.map((item, i) => (
-                              <div key={i} style={{ fontSize: 12, color: "#374151", paddingLeft: 16, display: "flex", alignItems: "center", gap: 6 }}>
-                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#6366f1", display: "inline-block", flexShrink: 0 }}></span>
-                                #{item.number} {item.title}
-                                {item.count > 1 && <span style={{ color: "#6366f1", fontWeight: 600, fontSize: 11 }}>(qty {item.count})</span>}
-                                {item.description && <span style={{ color: "#9ca3af" }}>— {item.description}</span>}
-                              </div>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                      {preview.hasMore && (
-                        <p style={{ fontSize: 11, color: "#9ca3af", textAlign: "center", marginTop: 4 }}>
-                          ... and {preview.remainingPeriods} more days · {preview.totalPeriods} days total
-                        </p>
-                      )}
-                    </div>
-                  )}
                 </>
               )}
 

@@ -32,6 +32,10 @@ class User extends Authenticatable
         'password_changed_by',
         'password_changed_at',
         'password_version',
+        'notification_preferences', // for notifications.
+        'slack_webhook_url',
+        'google_chat_webhook_url',
+        'ms_teams_webhook_url',
 
         // Contact
         'contact_no',
@@ -99,6 +103,7 @@ class User extends Authenticatable
         'password_reset_locked' => 'boolean',
         'password_changed_at' => 'datetime',
         'last_login_at' => 'datetime',
+        'notification_preferences' => 'array',
     ];
 
     /**

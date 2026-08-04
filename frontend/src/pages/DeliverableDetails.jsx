@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useLocation, useNavigate, Link } from "react-router-dom";
-import { BarChart3, Calendar, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, ExternalLink, FileText, FolderOpen, Lock, Pause, Pencil, Play, RefreshCw, Timer, Trash2, XCircle } from "lucide-react";
+import { BarChart3, Calendar, Check, CheckCircle2, ChevronLeft, ChevronRight, Copy, Download, ExternalLink, FileText, FolderOpen, Lock, Pause, Pencil, Play, RefreshCw, Timer, Trash2, XCircle } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
@@ -23,6 +23,19 @@ import TaskDiscussion from "../components/TaskDiscussion";
 import FileUploadSection from "../components/FileUploadSection";
 import CreateDeliverableModel from "../components/layout/CreateDeliverableModel";
 import API_URL from "../config/api";
+const API_BASE = API_URL.replace(/\/api\/?$/, "");
+
+function fileUrl(url) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  return API_BASE + (url.startsWith("/") ? "" : "/storage/") + url;
+}
+
+function downloadUrl(path, filename) {
+  if (!path) return null;
+  const name = filename || path.split("/").pop();
+  return `${API_URL}/files/download?path=${encodeURIComponent(path)}&name=${encodeURIComponent(name)}`;
+}
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
@@ -33,13 +46,6 @@ import { useWorkTimer } from "../hooks/useWorkTimer";
 import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
 import "./TaskDetails.css";
 import "./SubtaskDetails.css";
-
-const API_BASE = API_URL.replace(/\/api\/?$/, "");
-function fileUrl(url) {
-  if (!url) return null;
-  if (/^https?:\/\//i.test(url)) return url;
-  return API_BASE + url;
-}
 
 function timeAgo(iso) {
   if (!iso) return "";
@@ -520,6 +526,9 @@ function SubtaskDetails() {
   const isPending = ["pending", "reopened"].includes(subtask.status);
   const timerRunning = timerState === "running";
   const timerPaused = timerState === "paused";
+  const isAdminOrManager = currentUser && ["admin", "manager"].includes(currentUser.role);
+  const canPauseSubtask = !readOnly && (isAssignee || isAdminOrManager) && isInProgress && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation;
+  const canResumeSubtask = !readOnly && (isAssignee || isAdminOrManager) && subtask.status === "paused" && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !hasPendingDelegation;
 
   return (
     <>
@@ -625,10 +634,10 @@ function SubtaskDetails() {
                       {acknowledging ? "Acknowledging..." : "Acknowledge"}
                     </button>
                   )}
-                  {!readOnly && isAssignee && isInProgress && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && (
+                  {canPauseSubtask && (
                     <button className="td-btn-primary" onClick={handlePause} disabled={pausing} style={{ backgroundColor: pausing ? "#9CA3AF" : "#D97706" }}><Pause size={15} />{pausing ? "Pausing..." : "Pause"}</button>
                   )}
-                  {!readOnly && isAssignee && subtask.status === "paused" && !isAssignerLocked && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !hasPendingDelegation && (
+                  {canResumeSubtask && (
                     <button className="td-btn-primary" onClick={handleResume} disabled={resuming}><Play size={15} />{resuming ? "Resuming..." : "Resume"}</button>
                   )}
                   {!readOnly && canSubmit && !showSubmitForm && (!isTransferor || transferorHasApproved) && !subtask?.active_outgoing_delegation && !hasPendingDelegation && (
@@ -1029,16 +1038,22 @@ function SubtaskDetails() {
                       )}
                       {(sub.attachments?.length > 0 || sub.file_name) && (
                         <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                          {(sub.attachments || []).map((att) => (
-                            <a key={att.id} className="td-submission-file-link" href={fileUrl(att.full_url)} target="_blank" rel="noopener noreferrer" style={{ fontSize: "11px", padding: "2px 8px" }}>
-                              {att.attachment_type === "link" ? <ExternalLink size={12} /> : <FileText size={12} />}
-                              <span>{att.original_name || att.file_name}</span>
-                            </a>
-                          ))}
+                          {(sub.attachments || []).map((att) => {
+                            const isLink = att.attachment_type === "link";
+                            const href = isLink ? att.url : downloadUrl(att.full_url, att.original_name || att.file_name);
+                            return (
+                              <a key={att.id} className="td-submission-file-link" href={href} download={isLink ? undefined : (att.original_name || att.file_name)} target="_blank" rel="noopener noreferrer" style={{ fontSize: "11px", padding: "2px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                {isLink ? <ExternalLink size={12} /> : <FileText size={12} />}
+                                <span>{att.original_name || att.file_name}</span>
+                                {!isLink && <Download size={12} style={{ marginLeft: "auto" }} />}
+                              </a>
+                            );
+                          })}
                           {sub.file_name && (!sub.attachments || sub.attachments.length === 0) && (
-                            <a className="td-submission-file-link" href={`${API_URL}/deliverables/submission-file/${sub.id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "11px", padding: "2px 8px" }}>
+                            <a className="td-submission-file-link" href={`${API_URL}/deliverables/submission-file/${sub.id}`} download={sub.file_name} target="_blank" rel="noopener noreferrer" style={{ fontSize: "11px", padding: "2px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
                               <FileText size={12} />
                               <span>{sub.file_name}</span>
+                              <Download size={12} style={{ marginLeft: "auto" }} />
                             </a>
                           )}
                         </div>

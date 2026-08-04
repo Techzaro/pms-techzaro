@@ -15,7 +15,7 @@ import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { ArrowUpRight, CheckCircle2, Lock, Pause, Play, StickyNote } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Lock, Pause, Play, StickyNote, Sliders, XCircle, RotateCcw, AlertOctagon } from "lucide-react";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { publish } from "../utils/eventBus";
@@ -310,8 +310,17 @@ function GuestTasks() {
         return titleMatch || assigneeMatch || assignerMatch;
       })
     : baseItems, [baseItems, debouncedSearch]);
-  const filteredItems = useMemo(() => statusFilter && statusFilter !== "due_today"
+  const filteredItems = useMemo(() => statusFilter
     ? searchFilteredItems.filter((item) => {
+        if (statusFilter === "due_today") {
+          const dateVal = item.end_date || item.due_date || item.start_date;
+          if (!dateVal) return false;
+          const d = new Date(dateVal);
+          const now = new Date();
+          const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+          const isCompleted = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
+          return isToday && !isCompleted;
+        }
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
@@ -502,16 +511,71 @@ function GuestTasks() {
                     </div>
                   </div>
 
-                  <div className="col-action">
+                  <div className="col-action" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <button
+                      className="action-icon-btn action-view action-trigger-lg"
+                      title="View Task"
+                      onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}
+                    >
+                      <IoEyeOutline size={20} />
+                    </button>
                     <ActionPopover
                       trigger={
-                        <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
-                          <IoEyeOutline size={20} />
+                        <button className="action-icon-btn action-manage action-trigger-lg" title="Status Actions" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px", borderRadius: "6px", background: "var(--bg-hover, #f3f4f6)", color: "var(--text-primary, #374151)", border: "1px solid var(--border-color, #e5e7eb)", cursor: "pointer" }}>
+                          <Sliders size={18} />
                         </button>
                       }
-                      onTriggerClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}
                     >
                       <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
+                      {(() => {
+                        const currentUser = getUser();
+                        const isUserAdminOrManager = ["admin", "manager"].includes(currentUser?.role);
+                        const canUserApprove = isUserAdminOrManager || item.created_by === currentUser?.id || item.is_next_approver;
+                        return (
+                          <>
+                            {canUserApprove && (item.status === "submitted" || item.status === "reopened") && (
+                              <button
+                                className="action-icon-btn"
+                                title="Approve Task"
+                                style={{ color: "#16A34A" }}
+                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}
+                              >
+                                <CheckCircle2 size={16} />
+                              </button>
+                            )}
+                            {canUserApprove && (item.status === "submitted" || item.status === "reopened") && (
+                              <button
+                                className="action-icon-btn"
+                                title="Decline Task"
+                                style={{ color: "#DC2626" }}
+                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}
+                              >
+                                <XCircle size={16} />
+                              </button>
+                            )}
+                            {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened") && (
+                              <button
+                                className="action-icon-btn"
+                                title="Reopen Task"
+                                style={{ color: "#2563EB" }}
+                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}
+                              >
+                                <RotateCcw size={16} />
+                              </button>
+                            )}
+                            {item.status !== "abandoned" && (
+                              <button
+                                className="action-icon-btn"
+                                title={isUserAdminOrManager ? "Abandon Task" : "Request Abandon"}
+                                style={{ color: "#F59E0B" }}
+                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'guest-tasks' } })}
+                              >
+                                <AlertOctagon size={16} />
+                              </button>
+                            )}
+                          </>
+                        );
+                      })()}
                       {(() => {
                         const myPivotStatus = item.assignees?.find(a => parseInt(a.id, 10) === parseInt(currentUser?.id, 10))?.pivot?.status;
                         if (item.assigner_paused) {

@@ -115,6 +115,7 @@
 .Transferred,
 .Approved,
 .Rejected,
+.Abandoned,
 .Completed,
 .Failed,
 .Aban,
@@ -147,6 +148,7 @@
 .Transferred.active,
 .Approved.active,
 .Rejected.active,
+.Abandoned.active,
 .Completed.active,
 .Failed.active,
 .Aban.active,
@@ -195,6 +197,10 @@
 
 .Rejected {
   color: #EF4444;
+}
+
+.Abandoned {
+  color: #DC2626;
 }
 
 .Transferred {

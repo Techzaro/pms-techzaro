@@ -2109,7 +2109,29 @@ class UserController extends Controller
             'email_sent' => $emailSent,
         ]);
     }
+/**
+     * FEATURE: Update authenticated user's desktop & email notification preferences.
+     * 
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+   public function updateNotificationPreferences(Request $request)
+{
+    $user = $request->user();
 
+    // Validate and save the preferences array into the JSON column
+    $validated = $request->validate([
+        'notification_preferences' => 'required|array',
+    ]);
+
+    $user->notification_preferences = $validated['notification_preferences'];
+    $user->save();
+
+    return response()->json([
+        'message' => 'Preferences saved successfully',
+        'user' => $user
+    ]);
+}
     /**
      * Toggle a guest's active/inactive status.
      */

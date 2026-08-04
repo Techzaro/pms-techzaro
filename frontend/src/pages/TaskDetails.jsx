@@ -74,7 +74,6 @@ import { useSubmit } from "../hooks/useSubmit";
 import { formatDateTimeShort, formatDateTime } from "../utils/formatDateTime";
 import { useActivityHighlight } from "../hooks/useActivityHighlight";
 import { useWorkTimer } from "../hooks/useWorkTimer";
-import { useIdleDetection } from "../hooks/useIdleDetection";
 import FileUploadSection from "../components/FileUploadSection";
 import "../components/layout/ActivityHighlight.css";
 import "./TaskDetails.css";
@@ -276,7 +275,7 @@ function TaskDetails() {
     "self-tasks": { label: "Self Tasks", path: rolePath("self-tasks") },
     "all-tasks": { label: "All Tasks", path: rolePath("all-tasks") },
   };
-
+  const isDeletingRef = useRef(false);
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -319,7 +318,7 @@ function TaskDetails() {
   const readOnly = location.state?.readOnly === true;
 
   const fetchTask = useCallback(async (refresh = false) => {
-    if (!taskId) return;
+    if (!taskId || isDeletingRef.current) return;
 
     try {
       setLoading(true);
@@ -334,12 +333,16 @@ function TaskDetails() {
         setTask(data.task);
       } else if (res.status === 404) {
         setTask(null);
-        notify.error("This task has been deleted.");
-        setTimeout(() => navigate(rolePath("tasks")), 1500);
+        if (!isDeletingRef.current) {
+          notify.error("This task has been deleted.");
+          setTimeout(() => navigate(rolePath("tasks")), 1500);
+        }
       } else if (res.status === 403) {
         setTask(null);
-        notify.error("You don't have permission to view this task.");
-        setTimeout(() => navigate(rolePath("tasks")), 1500);
+        if (!isDeletingRef.current) {
+          notify.error("You don't have permission to view this task.");
+          setTimeout(() => navigate(rolePath("tasks")), 1500);
+        }
       } else {
         setTask(null);
       }
@@ -392,8 +395,9 @@ function TaskDetails() {
   const canEdit = readOnly ? false : (task?.can_edit ?? (task && currentUser && isCreator && !["approved", "submitted"].includes(task?.status?.toLowerCase())));
   const canSubmitTask = readOnly ? false : (task?.can_submit ?? (task && currentUser && isAssignee && ["in_progress", "reopened", "paused"].includes(task?.status)));
   const canAcknowledge = readOnly ? false : (task && currentUser && isAssignee && ["pending", "reopened"].includes(task?.status));
-  const canPause = readOnly ? false : (task && currentUser && isAssignee && task?.my_status !== "submitted" && task?.status === "in_progress" && !task?.assigner_paused);
-  const canContinue = readOnly ? false : (task && currentUser && isAssignee && task?.my_status !== "submitted" && task?.status === "paused" && !task?.assigner_paused);
+  const isAdminOrManager = currentUser && ["admin", "manager"].includes(currentUser.role);
+  const canPause = readOnly ? false : (task && currentUser && (isAssignee || isAdminOrManager) && task?.my_status !== "submitted" && task?.status === "in_progress" && !task?.assigner_paused);
+  const canContinue = readOnly ? false : (task && currentUser && (isAssignee || isAdminOrManager) && task?.my_status !== "submitted" && task?.status === "paused" && !task?.assigner_paused);
   const isAssignerLocked = !!task?.assigner_paused;
   const canAssignerPause = readOnly ? false : (task && currentUser && isCreator && !task?.assigner_paused && ["pending", "in_progress", "reopened", "paused"].includes(task?.status));
   const canAssignerResume = readOnly ? false : (task && currentUser && isCreator && task?.assigner_paused);
@@ -417,48 +421,6 @@ function TaskDetails() {
   const { submitting: rejectingTask, run: runRejectTask } = useSubmit();
 
   const { workDisplay, workSeconds, elapsedDisplay, elapsedSeconds, pauseDisplay, pauseSeconds, pauseCount, state: timerState } = useWorkTimer(task?.timer);
-
-  const handleAutoPause = useCallback(async () => {
-    if (timerState !== 'running') return;
-    try {
-      const token = authToken();
-      const res = await fetch(`${API_URL}/tasks/${taskId}/pause`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ reason: "auto_paused", reason_detail: "Auto paused due to inactivity" }),
-        _notifHandled: true,
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setTask(data.task);
-        publish('task:updated', { id: taskId, status: 'paused' });
-        publish('data:changed', { type: 'task', action: 'updated' });
-      }
-    } catch {}
-  }, [timerState, taskId]);
-
-  const [idleModalOpen, setIdleModalOpen] = useState(false);
-  const idleTimerRef = useRef(null);
-
-  const handleIdle = useCallback(() => {
-    if (timerState !== 'running') return;
-    setIdleModalOpen(true);
-    idleTimerRef.current = setTimeout(() => {
-      setIdleModalOpen(false);
-      handleAutoPause();
-    }, 60000);
-  }, [timerState, handleAutoPause]);
-
-  const handleIdleResume = useCallback(() => {
-    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    setIdleModalOpen(false);
-  }, []);
-
-  useIdleDetection({
-    timeout: 600000,
-    onIdle: handleIdle,
-    onActivity: handleIdleResume,
-  });
 
   const fetchAccessCredentials = useCallback(async () => {
     if (!task) return;
@@ -837,6 +799,7 @@ function TaskDetails() {
 
   const confirmDeleteTask = async () => {
     setDeleteTaskConfirmOpen(false);
+    isDeletingRef.current = true;
     await runDelete(async () => {
       try {
         const token = authToken();
@@ -845,9 +808,20 @@ function TaskDetails() {
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
           _notifHandled: true,
         });
-        if (res.ok) { publish('task:deleted', { id: taskId }); publish('data:changed', { type: 'task', action: 'deleted' }); showSuccessMessage("Task", "deleted"); setTimeout(() => navigate(rolePath("tasks")), 800); }
-        else notify.error("Failed to delete task.");
-      } catch { notify.error("Failed to delete task."); }
+        if (res.ok) {
+          showSuccessMessage("Task", "deleted");
+          publish('task:deleted', { id: taskId });
+          publish('data:changed', { type: 'task', action: 'deleted' });
+          navigate(rolePath("tasks"), { replace: true });
+        } else {
+          isDeletingRef.current = false;
+          const data = await res.json().catch(() => ({}));
+          notify.error(data.message || "Failed to delete task.");
+        }
+      } catch {
+        isDeletingRef.current = false;
+        notify.error("Failed to delete task.");
+      }
     });
   };
 
@@ -2066,26 +2040,6 @@ function TaskDetails() {
           task={task}
           onReopenSuccess={handleTaskActionSuccess}
         />
-      )}
-
-      {idleModalOpen && (
-        <div className="cm-overlay" onClick={handleIdleResume}>
-          <div className="cm-modal" role="dialog" onClick={e => e.stopPropagation()}>
-            <div className="cm-icon" style={{ background: "rgba(245, 158, 11, 0.08)" }}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="12" y1="8" x2="12" y2="12"/>
-                <line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-            </div>
-            <h3>No Activity Detected</h3>
-            <p style={{ marginBottom: "16px" }}>Are you still working on this task?</p>
-            <div className="cm-actions">
-              <button className="cm-cancel-btn" onClick={handleAutoPause}>Pause Task</button>
-              <button className="cm-confirm-btn" style={{ background: "var(--color-success)" }} onClick={handleIdleResume}>Continue Working</button>
-            </div>
-          </div>
-        </div>
       )}
     </>
   );

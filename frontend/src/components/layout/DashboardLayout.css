@@ -48,7 +48,10 @@ html, body, #root {
   background: transparent;
   min-height: min-content;
   min-width: 0;
+  max-width: 100%;
   width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
   position: relative;
 }
 
@@ -591,5 +594,31 @@ html, body, #root {
   }
   .welcome-box p {
     font-size: 12px;
+  }
+}
+/* Ensure main-layout creates proper space for the 260px fixed sidebar */
+.main-layout {
+  display: flex;
+  position: relative;
+  margin-left: 260px;
+  width: calc(100% - 260px);
+  box-sizing: border-box;
+  margin-top: 14px;
+  min-height: calc(100vh - 96px);
+}
+
+/* Ensure dashboard content takes up the remaining flexible space */
+.dashboard-content {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 1.5rem;
+}
+
+/* Responsive behavior for mobile and tablet screens */
+@media (max-width: 1200px) {
+  .main-layout {
+    margin-left: 0;
+    width: 100%;
   }
 }

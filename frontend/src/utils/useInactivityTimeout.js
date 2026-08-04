@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
-import { getCurrentRole, clearSession } from "./auth";
+import { getCurrentRole, logoutUser } from "./auth";
 
 const INACTIVITY_TIMEOUT = 3 * 60 * 60 * 1000; // 3 hours
 
@@ -7,11 +7,7 @@ export function useInactivityTimeout() {
   const timerRef = useRef(null);
 
   const logout = useCallback(() => {
-    const role = getCurrentRole();
-    if (role) {
-      clearSession(role);
-    }
-    window.location.href = "/logged-out?reason=inactivity";
+    logoutUser("inactivity");
   }, []);
 
   const resetTimer = useCallback(() => {

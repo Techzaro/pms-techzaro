@@ -201,33 +201,37 @@ function MyProfile() {
   /** Validate the password-change form and return an errors object. */
   const validatePasswordForm = () => {
     const errors = {};
-    if (!passwordForm.old_password) errors.old_password = "Current password is required.";
+    if (!passwordForm.old_password) {
+      errors.old_password = "Please enter current password.";
+    }
     if (!passwordForm.new_password) {
-      errors.new_password = "New password is required.";
-    } else if (passwordForm.new_password === passwordForm.old_password) {
-      errors.new_password = "New password must be different from current password.";
+      errors.new_password = "Please enter new password.";
     } else if (!isPasswordValid(passwordForm.new_password)) {
       errors.new_password = "Password does not meet all requirements.";
+    } else if (passwordForm.old_password && passwordForm.new_password === passwordForm.old_password) {
+      errors.new_password = "New password must be different from current password.";
     }
     if (!passwordForm.confirm_password) {
       errors.confirm_password = "Please confirm your password.";
-    } else if (passwordForm.new_password !== passwordForm.confirm_password) {
-      errors.confirm_password = "Passwords do not match.";
     }
     return errors;
   };
 
-  const canSubmitPassword = passwordForm.old_password
-    && isPasswordValid(passwordForm.new_password)
-    && passwordForm.new_password !== passwordForm.old_password
-    && passwordForm.new_password === passwordForm.confirm_password;
+  const canSubmitPassword = Boolean(
+    passwordForm.old_password &&
+    passwordForm.new_password &&
+    passwordForm.confirm_password
+  );
 
   /** Submit the password change to the API. */
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
+
     const errors = validatePasswordForm();
     setPasswordErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).length > 0) {
+      return;
+    }
 
     setSaving(true);
     try {
@@ -237,17 +241,47 @@ function MyProfile() {
         body: JSON.stringify({
           old_password: passwordForm.old_password,
           new_password: passwordForm.new_password,
+          confirm_password: passwordForm.confirm_password,
         }),
         _notifHandled: true,
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to change password");
+      if (!res.ok) {
+        const errObj = {};
+        if (data.errors) {
+          if (data.errors.old_password) errObj.old_password = data.errors.old_password;
+          if (data.errors.confirm_password) errObj.confirm_password = data.errors.confirm_password;
+          if (data.errors.new_password) errObj.new_password = data.errors.new_password;
+        }
+
+        let msg = data.message || "Failed to change password";
+        if (msg.toLowerCase().includes("current password") || msg.toLowerCase().includes("old_password") || msg.toLowerCase().includes("incorrect")) {
+          if (!errObj.old_password) errObj.old_password = "Current password is incorrect.";
+        }
+        if (msg.toLowerCase().includes("confirm") || msg.toLowerCase().includes("match")) {
+          if (!errObj.confirm_password) errObj.confirm_password = "Password confirmation does not match";
+        }
+
+        if (Object.keys(errObj).length > 0) {
+          setPasswordErrors(errObj);
+          return;
+        }
+        throw new Error(msg);
+      }
 
       setIsPasswordModalOpen(false);
       showSuccessMessage("Password", "changed");
     } catch (err) {
-      notify.error(err.message || "Password change failed.");
+      if (err.message) {
+        if (err.message.toLowerCase().includes("current password") || err.message.toLowerCase().includes("incorrect")) {
+          setPasswordErrors((prev) => ({ ...prev, old_password: "Current password is incorrect." }));
+        } else if (err.message.toLowerCase().includes("confirm") || err.message.toLowerCase().includes("match")) {
+          setPasswordErrors((prev) => ({ ...prev, confirm_password: "Password confirmation does not match" }));
+        } else {
+          notify.error(err.message);
+        }
+      }
     } finally {
       setSaving(false);
     }

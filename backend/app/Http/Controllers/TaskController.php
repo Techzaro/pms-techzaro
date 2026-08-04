@@ -73,16 +73,11 @@ class TaskController extends Controller
             ->where(function ($q) use ($user) {
                 $q->where('assigned_by', '!=', $user->id)
                     ->orWhere('current_owner', $user->id);
-            })
-            ->when($isDueTodayFilter, fn ($q) => $this->applyDueTodayFilter($q, $user->id))
-            ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
-            ->when($isInProgressFilter, fn ($q) => $q->whereIn('status', $this->inProgressTaskStatuses()))
-            ->when($isPausedFilter, fn ($q) => $q->whereIn('status', $this->pausedTaskStatuses()))
-            ->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role', 'currentOwner:id,name'])
-            ->orderBy('sort_order')->latest('updated_at')
-            ->filter($filters);
+            });
 
-        $tasks = $tasksQuery->limit(200)->get();
+        $tasksQuery->with(['project:id,title,team_id', 'assignees:id,name,email,role', 'assigner:id,name,email,role', 'approvedBy:id,name,role', 'rejectedBy:id,name,role', 'reopenedBy:id,name,role', 'updatedBy:id,name,role', 'currentOwner:id,name']);
+        $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery);
+        $tasks = $tasksQuery->get();
 
         // Bulk load deliverable counts for all tasks
         $taskIds = $tasks->pluck('id');
@@ -405,17 +400,8 @@ class TaskController extends Controller
                 });
         }
 
-        $tasks = $tasksQuery->orderBy('sort_order')->latest('updated_at')
-            ->when($request->filled('search'), fn ($q) => $q->where('title', 'like', '%'.$request->input('search').'%'))
-            ->when($isDueTodayFilter, fn ($q) => $q->where(function ($sub) {
-                $sub->whereDate('tasks.end_date', today())
-                    ->orWhereHas('assignees', fn ($aq) => $aq->whereDate('task_user.due_date', today()));
-            })->whereNotIn('tasks.status', $this->incompleteDueTodayStatuses()))
-            ->when($isPendingFilter, fn ($q) => $q->whereIn('status', $this->pendingTaskStatuses()))
-            ->when($isInProgressFilter, fn ($q) => $q->whereIn('status', $this->inProgressTaskStatuses()))
-            ->when($isPausedFilter, fn ($q) => $q->whereIn('status', $this->pausedTaskStatuses()))
-            ->when($request->filled('status') && ! $isDueTodayFilter && ! $isPendingFilter && ! $isInProgressFilter && ! $isPausedFilter, fn ($q) => $q->where('status', $request->input('status')))
-            ->limit(100)->get();
+        $tasksQuery = $this->applyQueryFiltersSortingPagination($request, $tasksQuery);
+        $tasks = $tasksQuery->get();
 
         // Bulk load deliverable counts
         $taskIds = $tasks->pluck('id');
@@ -868,13 +854,60 @@ class TaskController extends Controller
             'recurrence_settings' => 'nullable|array|required_if:task_type,recurring',
             'recurrence_settings.repeat' => 'required_with:recurrence_settings|in:daily,weekly,monthly,custom',
             'recurrence_settings.skip_weekends' => 'nullable|boolean',
-            'deliverable_templates' => 'nullable|array|required_if:task_type,recurring|min:1',
+            'recurrence_start_date' => 'nullable|date',
+            'recurrence_end_date' => 'nullable|date',
+            'deliverable_templates' => 'nullable|array',
             'deliverable_templates.*.title' => 'required_with:deliverable_templates|string|max:255',
             'deliverable_templates.*.description' => 'nullable|string|max:2000',
             'deliverable_templates.*.quantity' => 'nullable|integer|min:1|max:100',
             'deliverable_templates.*.combined' => 'nullable|boolean',
             'allow_transfer' => 'nullable|boolean',
         ]);
+
+        if (! empty($validated['start_date']) && ! empty($validated['end_date'])) {
+            if (Carbon::parse($validated['end_date'])->lt(Carbon::parse($validated['start_date']))) {
+                throw ValidationException::withMessages([
+                    'end_date' => ['Due date cannot be earlier than the start date.'],
+                    'start_date' => ['Start date cannot be later than the due date.'],
+                ]);
+            }
+        }
+
+        if (($validated['task_type'] ?? 'standard') === 'recurring') {
+            $recStart = $validated['recurrence_start_date'] ?? $validated['start_date'] ?? null;
+            $recEnd = $validated['recurrence_end_date'] ?? $validated['end_date'] ?? null;
+
+            if (empty($recStart) || empty($recEnd)) {
+                throw ValidationException::withMessages([
+                    'recurrence_end_date' => 'Both recurrence Start and End dates are required for recurring tasks.',
+                ]);
+            }
+            if (Carbon::parse($recEnd)->lt(Carbon::parse($recStart))) {
+                throw ValidationException::withMessages([
+                    'recurrence_end_date' => 'Recurrence End date must be after or equal to the Start date.',
+                ]);
+            }
+
+            $validated['recurrence_start_date'] = $recStart;
+            $validated['recurrence_end_date'] = $recEnd;
+            if (empty($validated['start_date'])) {
+                $validated['start_date'] = $recStart;
+            }
+            if (empty($validated['end_date'])) {
+                $validated['end_date'] = $recEnd;
+            }
+
+            if (empty($validated['deliverable_templates'])) {
+                $validated['deliverable_templates'] = [
+                    [
+                        'title' => '{{number}} - Task Deliverable',
+                        'description' => null,
+                        'quantity' => 1,
+                        'combined' => false,
+                    ],
+                ];
+            }
+        }
 
         // Validate task end_date does not exceed project end_date
         if (! empty($validated['end_date']) && $project->end_date) {
@@ -942,6 +975,8 @@ class TaskController extends Controller
                 'status' => 'pending',
                 'task_type' => $validated['task_type'] ?? 'standard',
                 'recurrence_settings' => $validated['recurrence_settings'] ?? null,
+                'recurrence_start_date' => $validated['recurrence_start_date'] ?? $validated['start_date'] ?? null,
+                'recurrence_end_date' => $validated['recurrence_end_date'] ?? $validated['end_date'] ?? null,
                 'allow_transfer' => $validated['allow_transfer'] ?? true,
             ]);
             $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
@@ -999,8 +1034,8 @@ class TaskController extends Controller
                 if (($validated['task_type'] ?? 'standard') === 'recurring') {
                     $recurringSvc = app(RecurringService::class);
                     $settings = $validated['recurrence_settings'];
-                    $taskStartDate = $validated['start_date'] ?? now()->toDateTimeString();
-                    $taskEndDate = $validated['end_date'] ?? now()->addDays(30)->toDateTimeString();
+                    $taskStartDate = $validated['recurrence_start_date'] ?? $validated['start_date'] ?? now()->toDateTimeString();
+                    $taskEndDate = $validated['recurrence_end_date'] ?? $validated['end_date'] ?? now()->addDays(30)->toDateTimeString();
                     $totalPeriods = $recurringSvc->calculateTotalPeriods($settings, $taskStartDate, $taskEndDate);
                     $allDlvs = collect();
                     for ($p = 1; $p <= $totalPeriods; $p++) {
@@ -1071,7 +1106,7 @@ class TaskController extends Controller
             }
         }
 
-        // Bulk notifications
+        // Bulk notifications (Excluding self-notifications)
         $sent = [];
         $notifications = [];
         foreach ($createdTasks as $task) {
@@ -1089,7 +1124,9 @@ class TaskController extends Controller
                 ];
             }
         }
-        $this->notificationService->createBulk($notifications);
+        if (!empty($notifications)) {
+            $this->notificationService->createBulk($notifications);
+        }
 
         // Send confirmation email to performer
         $taskCount = count($createdTasks);
@@ -1205,13 +1242,51 @@ class TaskController extends Controller
             'recurrence_settings' => 'nullable|array|required_if:task_type,recurring',
             'recurrence_settings.repeat' => 'required_with:recurrence_settings|in:daily,weekly,monthly,custom',
             'recurrence_settings.skip_weekends' => 'nullable|boolean',
-            'deliverable_templates' => 'nullable|array|required_if:task_type,recurring|min:1',
+            'recurrence_start_date' => 'nullable|date',
+            'recurrence_end_date' => 'nullable|date',
+            'deliverable_templates' => 'nullable|array',
             'deliverable_templates.*.title' => 'required_with:deliverable_templates|string|max:255',
             'deliverable_templates.*.description' => 'nullable|string|max:2000',
             'deliverable_templates.*.quantity' => 'nullable|integer|min:1|max:100',
             'deliverable_templates.*.combined' => 'nullable|boolean',
             'allow_transfer' => 'nullable|boolean',
         ]);
+
+        if (($validated['task_type'] ?? 'standard') === 'recurring') {
+            $recStart = $validated['recurrence_start_date'] ?? $validated['start_date'] ?? null;
+            $recEnd = $validated['recurrence_end_date'] ?? $validated['end_date'] ?? null;
+
+            if (empty($recStart) || empty($recEnd)) {
+                throw ValidationException::withMessages([
+                    'recurrence_end_date' => 'Both recurrence Start and End dates are required for recurring tasks.',
+                ]);
+            }
+            if (Carbon::parse($recEnd)->lt(Carbon::parse($recStart))) {
+                throw ValidationException::withMessages([
+                    'recurrence_end_date' => 'Recurrence End date must be after or equal to the Start date.',
+                ]);
+            }
+
+            $validated['recurrence_start_date'] = $recStart;
+            $validated['recurrence_end_date'] = $recEnd;
+            if (empty($validated['start_date'])) {
+                $validated['start_date'] = $recStart;
+            }
+            if (empty($validated['end_date'])) {
+                $validated['end_date'] = $recEnd;
+            }
+
+            if (empty($validated['deliverable_templates'])) {
+                $validated['deliverable_templates'] = [
+                    [
+                        'title' => '{{number}} - Task Deliverable',
+                        'description' => null,
+                        'quantity' => 1,
+                        'combined' => false,
+                    ],
+                ];
+            }
+        }
 
         // Validate deliverable due_date does not exceed task end_date
         if (! empty($validated['end_date']) && ! empty($validated['deliverables'])) {
@@ -1248,6 +1323,8 @@ class TaskController extends Controller
                 'project_id' => null,
                 'task_type' => $validated['task_type'] ?? 'standard',
                 'recurrence_settings' => $validated['recurrence_settings'] ?? null,
+                'recurrence_start_date' => $validated['recurrence_start_date'] ?? $validated['start_date'] ?? null,
+                'recurrence_end_date' => $validated['recurrence_end_date'] ?? $validated['end_date'] ?? null,
                 'allow_transfer' => $validated['allow_transfer'] ?? true,
             ]);
             $task->assignees()->sync([$userId => ['due_date' => $dueDates[$userId] ?? null]]);
@@ -1310,8 +1387,8 @@ class TaskController extends Controller
                 if (($validated['task_type'] ?? 'standard') === 'recurring') {
                     $recurringSvc = app(RecurringService::class);
                     $settings = $validated['recurrence_settings'];
-                    $taskStartDate = $validated['start_date'] ?? now()->toDateTimeString();
-                    $taskEndDate = $validated['end_date'] ?? now()->addDays(30)->toDateTimeString();
+                    $taskStartDate = $validated['recurrence_start_date'] ?? $validated['start_date'] ?? now()->toDateTimeString();
+                    $taskEndDate = $validated['recurrence_end_date'] ?? $validated['end_date'] ?? now()->addDays(30)->toDateTimeString();
                     $totalPeriods = $recurringSvc->calculateTotalPeriods($settings, $taskStartDate, $taskEndDate);
                     $allDlvs = collect();
                     for ($p = 1; $p <= $totalPeriods; $p++) {
@@ -1353,6 +1430,7 @@ class TaskController extends Controller
             $this->notificationService->createBulk($deliverableNotifications);
         }
 
+        // Bulk notifications (Excluding self-notifications)
         $sent = [];
         $notifications = [];
         foreach ($createdTasks as $task) {
@@ -1370,7 +1448,9 @@ class TaskController extends Controller
                 ];
             }
         }
-        $this->notificationService->createBulk($notifications);
+        if (!empty($notifications)) {
+            $this->notificationService->createBulk($notifications);
+        }
 
         // Send confirmation email to performer
         $taskCount = count($createdTasks);
@@ -1446,8 +1526,8 @@ class TaskController extends Controller
             'end_date' => 'sometimes|nullable|date',
             'priority' => 'sometimes|string|max:32',
             'status' => 'sometimes|string|max:64',
-            'assigned_to' => 'nullable|array',
-            'assigned_to.*' => 'integer|exists:users,id',
+            'assigned_to' => 'sometimes|required|array|min:1',
+            'assigned_to.*' => 'required|integer|exists:users,id',
             'deliverables' => 'nullable|array',
             'deliverables.*.id' => 'nullable|integer|exists:deliverables,id',
             'deliverables.*.title' => 'required_with:deliverables|string|max:255',
@@ -1465,11 +1545,28 @@ class TaskController extends Controller
         ]);
 
         $assigneeIds = $validated['assigned_to'] ?? null;
+        if ($request->has('assigned_to') && (empty($assigneeIds) || count($assigneeIds) === 0)) {
+            throw ValidationException::withMessages([
+                'assigned_to' => ['At least one assignee must be selected for this task.'],
+            ]);
+        }
         unset($validated['assigned_to']);
         $dueDates = $validated['due_dates'] ?? null;
         unset($validated['due_dates']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
+
+        // Validate start_date is not later than end_date
+        $startDateVal = $validated['start_date'] ?? $task->start_date;
+        $endDateVal = $validated['end_date'] ?? $task->end_date;
+        if (! empty($startDateVal) && ! empty($endDateVal)) {
+            if (Carbon::parse($endDateVal)->lt(Carbon::parse($startDateVal))) {
+                throw ValidationException::withMessages([
+                    'end_date' => ['Due date cannot be earlier than the start date.'],
+                    'start_date' => ['Start date cannot be later than the due date.'],
+                ]);
+            }
+        }
 
         // Validate task end_date does not exceed project end_date
         if (! empty($validated['end_date']) && $task->project && $task->project->end_date) {
@@ -1546,6 +1643,7 @@ class TaskController extends Controller
             if (! empty($newlyAssignedIds)) {
                 $newAssignNotifications = [];
                 foreach ($newlyAssignedIds as $newId) {
+                    // Skip self-notification
                     if ((int) $newId === (int) $user->id) {
                         continue;
                     }
@@ -1676,23 +1774,36 @@ class TaskController extends Controller
             'recurrence_settings' => 'nullable|array',
             'recurrence_settings.repeat' => 'sometimes|in:daily,weekly,monthly,custom',
             'recurrence_settings.skip_weekends' => 'nullable|boolean',
+            'recurrence_start_date' => 'nullable|date',
+            'recurrence_end_date' => 'nullable|date|after_or_equal:recurrence_start_date',
             'deliverable_templates' => 'nullable|array|min:1',
             'deliverable_templates.*.title' => 'required_with:deliverable_templates|string|max:255',
             'deliverable_templates.*.description' => 'nullable|string|max:2000',
             'deliverable_templates.*.quantity' => 'nullable|integer|min:1|max:100',
             'deliverable_templates.*.combined' => 'nullable|boolean',
-            'regenerate' => 'required|boolean',
+            'regenerate' => 'nullable|boolean',
         ]);
 
-        // Ensure task is marked as recurring
-        if ($task->task_type !== 'recurring') {
-            $task->update(['task_type' => 'recurring']);
+        if (isset($validated['recurrence_start_date']) && isset($validated['recurrence_end_date'])) {
+            if (Carbon::parse($validated['recurrence_end_date'])->lt(Carbon::parse($validated['recurrence_start_date']))) {
+                throw ValidationException::withMessages([
+                    'recurrence_end_date' => 'Recurrence End date must be after or equal to the Start date.',
+                ]);
+            }
         }
 
-        // Update recurrence settings
-        if (! empty($validated['recurrence_settings'])) {
-            $task->update(['recurrence_settings' => $validated['recurrence_settings']]);
+        // Ensure task is marked as recurring
+        $updateData = ['task_type' => 'recurring'];
+        if (isset($validated['recurrence_settings'])) {
+            $updateData['recurrence_settings'] = $validated['recurrence_settings'];
         }
+        if (array_key_exists('recurrence_start_date', $validated)) {
+            $updateData['recurrence_start_date'] = $validated['recurrence_start_date'];
+        }
+        if (array_key_exists('recurrence_end_date', $validated)) {
+            $updateData['recurrence_end_date'] = $validated['recurrence_end_date'];
+        }
+        $task->update($updateData);
 
         // Update templates
         if (! empty($validated['deliverable_templates'])) {
@@ -1715,9 +1826,8 @@ class TaskController extends Controller
 
         // Regenerate future deliverables if requested
         $regeneratedCount = 0;
-        if ($validated['regenerate']) {
+        if (!empty($validated['regenerate'])) {
             $today = now()->startOfDay();
-            $generated = (int) $task->deliverables_generated;
 
             // Find non-completed deliverables with due_date >= today
             $futureDeliverables = $task->deliverables()
@@ -1754,6 +1864,66 @@ class TaskController extends Controller
                 : 'Task updated successfully',
             'task' => $task,
             'regenerated_count' => $regeneratedCount,
+        ]);
+    }
+
+    /**
+     * Delete active recurrence rule for a task.
+     * Terminates recurrence, deletes uncompleted future deliverables, and preserves past completed deliverables.
+     */
+    public function deleteRecurring(Request $request, Task $task): JsonResponse
+    {
+        $user = $request->user();
+        $isCreator = (int) $task->assigned_by === (int) $user->id;
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
+
+        if (! $isCreator && ! $isAdminOrManager) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        if ($task->task_type !== 'recurring') {
+            return response()->json(['success' => false, 'message' => 'Task is not a recurring task.'], 422);
+        }
+
+        $recurrenceEnd = $task->recurrence_end_date ?? $task->end_date;
+        if ($recurrenceEnd && Carbon::parse($recurrenceEnd)->isPast()) {
+            return response()->json(['success' => false, 'message' => 'Recurrence series has already expired.'], 422);
+        }
+
+        // Find non-completed deliverables
+        $pendingDeliverables = $task->deliverables()
+            ->where('status', '!=', 'approved')
+            ->get();
+
+        $deletedCount = $pendingDeliverables->count();
+
+        $pendingDeliverables->each(function ($dlv) {
+            $dlv->submissions()->delete();
+            $dlv->workflowEvents()->delete();
+            $dlv->changes()->delete();
+            $dlv->delete();
+        });
+
+        $task->update([
+            'task_type' => 'standard',
+            'recurrence_settings' => null,
+            'recurrence_start_date' => null,
+            'recurrence_end_date' => null,
+            'recurrence_status' => 'cancelled',
+        ]);
+
+        TaskWorkflowEvent::create([
+            'task_id' => $task->id,
+            'user_id' => $user->id,
+            'action' => 'recurrence_deleted',
+            'comment' => 'Recurrence series deleted. ' . $deletedCount . ' pending future deliverable(s) removed.',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Recurrence rule deleted successfully.',
+            'deleted_pending_count' => $deletedCount,
+            'task' => $task->fresh(),
         ]);
     }
 
@@ -1857,7 +2027,7 @@ class TaskController extends Controller
 
             $task->load('project:id,title');
 
-            if ($task->assigned_by && $task->assigned_by !== $user->id) {
+            if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
                 $this->notificationService->notify(
                     $task->assigned_by,
                     $user->id,
@@ -1985,7 +2155,9 @@ class TaskController extends Controller
     public function acknowledge(Request $request, Task $task)
     {
         $user = $request->user();
-        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists()
+            || (int) $task->assigned_to === (int) $user->id
+            || in_array($user->role, ['admin', 'manager']);
 
         if (! $isAssignee) {
             return response()->json(['success' => false, 'message' => 'Only assignees can acknowledge this task'], 403);
@@ -1995,8 +2167,18 @@ class TaskController extends Controller
             return response()->json(['success' => false, 'message' => 'This task is paused by the assigner and cannot be acknowledged'], 422);
         }
 
-        if (! in_array(strtolower((string) $task->status), ['pending', 'reopened'])) {
-            return response()->json(['success' => false, 'message' => 'This task cannot be acknowledged in its current status'], 422);
+        $currentStatus = strtolower((string) $task->status);
+
+        if ($currentStatus === 'in_progress') {
+            return response()->json([
+                'success' => true,
+                'message' => 'Task is already in progress',
+                'task' => $task,
+            ]);
+        }
+
+        if (! in_array($currentStatus, ['pending', 'not_started', 'assigned', 'reopened'])) {
+            return response()->json(['success' => false, 'message' => "This task cannot be acknowledged in its current status ({$task->status})"], 422);
         }
 
         $task->update([
@@ -2027,8 +2209,8 @@ class TaskController extends Controller
 
         $task->load('project:id,title');
 
-        // Notify the task creator
-        if ($task->assigned_by && $task->assigned_by !== $user->id) {
+        // Notify the task creator (Excluding self-notification)
+        if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
             $this->notificationService->notify(
                 $task->assigned_by,
                 $user->id,
@@ -2064,10 +2246,15 @@ class TaskController extends Controller
     public function pause(Request $request, Task $task)
     {
         $user = $request->user();
-        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists() || (int) $task->assigned_to === (int) $user->id;
+        $isAuthorized = $isAssignee || in_array($user->role, ['admin', 'manager']);
 
-        if (! $isAssignee) {
-            return response()->json(['success' => false, 'message' => 'Only assignees can pause this task'], 403);
+        if (! $isAuthorized) {
+            return response()->json(['success' => false, 'message' => 'You do not have permission to pause/resume this task.'], 403);
+        }
+
+        if ($request->input('reason') === 'auto_paused') {
+            return response()->json(['success' => false, 'message' => 'Automatic pausing due to inactivity is disabled.'], 422);
         }
 
         if ($task->assigner_paused) {
@@ -2091,9 +2278,11 @@ class TaskController extends Controller
 
         $task->pauseTimer($validated['reason'], $validated['reason_detail'] ?? null, false, $user->id);
 
-        $task->assignees()->updateExistingPivot($user->id, [
-            'status' => 'paused',
-        ]);
+        if ($isAssignee) {
+            $task->assignees()->updateExistingPivot($user->id, [
+                'status' => 'paused',
+            ]);
+        }
 
         $reasonLabel = Task::pauseReasons()[$validated['reason']] ?? $validated['reason'];
 
@@ -2106,7 +2295,7 @@ class TaskController extends Controller
 
         $task->load('project:id,title');
 
-        if ($task->assigned_by && $task->assigned_by !== $user->id) {
+        if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
             $this->notificationService->notify(
                 $task->assigned_by,
                 $user->id,
@@ -2142,10 +2331,11 @@ class TaskController extends Controller
     public function continueTask(Request $request, Task $task)
     {
         $user = $request->user();
-        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists() || (int) $task->assigned_to === (int) $user->id;
+        $isAuthorized = $isAssignee || in_array($user->role, ['admin', 'manager']);
 
-        if (! $isAssignee) {
-            return response()->json(['success' => false, 'message' => 'Only assignees can continue this task'], 403);
+        if (! $isAuthorized) {
+            return response()->json(['success' => false, 'message' => 'You do not have permission to pause/resume this task.'], 403);
         }
 
         if ($task->assigner_paused) {
@@ -2164,9 +2354,11 @@ class TaskController extends Controller
 
         $task->resumeTimer($user->id);
 
-        $task->assignees()->updateExistingPivot($user->id, [
-            'status' => 'in_progress',
-        ]);
+        if ($isAssignee) {
+            $task->assignees()->updateExistingPivot($user->id, [
+                'status' => 'in_progress',
+            ]);
+        }
 
         TaskWorkflowEvent::create([
             'task_id' => $task->id,
@@ -2177,8 +2369,8 @@ class TaskController extends Controller
 
         $task->load('project:id,title');
 
-        // Notify the task creator
-        if ($task->assigned_by && $task->assigned_by !== $user->id) {
+        // Notify the task creator (Excluding self-notification)
+        if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
             $this->notificationService->notify(
                 $task->assigned_by,
                 $user->id,
@@ -2268,7 +2460,7 @@ class TaskController extends Controller
 
         $task->load('project:id,title');
 
-        // Notify all assignees
+        // Notify all assignees (Excluding self-notification)
         $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
         $this->notificationService->notifyMultiple(
             array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $user->id),
@@ -2302,7 +2494,9 @@ class TaskController extends Controller
         $this->clearDashboardCache($user->id);
 
         foreach ($assigneeIds as $assigneeId) {
-            $this->clearDashboardCache((int) $assigneeId);
+            if ((int) $assigneeId !== (int) $user->id) {
+                $this->clearDashboardCache((int) $assigneeId);
+            }
         }
 
         return response()->json([
@@ -2365,7 +2559,7 @@ class TaskController extends Controller
 
         $task->load('project:id,title');
 
-        // Notify all assignees
+        // Notify all assignees (Excluding self-notification)
         $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
         $this->notificationService->notifyMultiple(
             array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $user->id),
@@ -2399,7 +2593,9 @@ class TaskController extends Controller
         $this->clearDashboardCache($user->id);
 
         foreach ($assigneeIds as $assigneeId) {
-            $this->clearDashboardCache((int) $assigneeId);
+            if ((int) $assigneeId !== (int) $user->id) {
+                $this->clearDashboardCache((int) $assigneeId);
+            }
         }
 
         return response()->json([
@@ -2559,7 +2755,7 @@ class TaskController extends Controller
 
         if ($isTransferor) {
             // Transferor is submitting → notify original assigner
-            if ($task->assigned_by && $task->assigned_by !== $user->id) {
+            if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
                 $notifyUserId = $task->assigned_by;
             }
         } elseif (! empty($chain)) {
@@ -2582,7 +2778,7 @@ class TaskController extends Controller
             }
         } else {
             // No delegation chain → notify original assigner
-            if ($task->assigned_by && $task->assigned_by !== $user->id) {
+            if ($task->assigned_by && (int) $task->assigned_by !== (int) $user->id) {
                 $notifyUserId = $task->assigned_by;
             }
         }
@@ -2655,7 +2851,9 @@ class TaskController extends Controller
         $nextApprover = $this->delegationService->getNextApprover($task);
         $isNextApprover = $nextApprover && (int) $nextApprover === (int) $user->id;
 
-        if (! $isCreator && ! in_array($user->role, ['admin', 'manager']) && ! $isDelegationChain && ! $isNextApprover) {
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
+
+        if (! $isCreator && ! $isAdminOrManager && ! $isDelegationChain && ! $isNextApprover) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         if ($task->status !== 'submitted') {
@@ -2663,7 +2861,7 @@ class TaskController extends Controller
         }
 
         // Check if user is a transferor (next_approver from delegation chain with return_to_transferor=true)
-        $isNextApproverTransferor = $isNextApprover && ! $isCreator;
+        $isNextApproverTransferor = $isNextApprover && ! $isCreator && ! $isAdminOrManager;
         $approvalChain = $task->approval_chain ?? [];
         if ($isNextApproverTransferor) {
             // Mark this transferor as approved in the approval_chain, then set task back to the transferor for submission to OA
@@ -2705,17 +2903,12 @@ class TaskController extends Controller
                 'submitted_at' => null,
             ]);
 
-            // Notify the transferor that they can now submit to OA
-            $this->notificationService->notify(
-                $user->id,
-                $user->id,
-                'task_ready_to_forward',
-                'task',
-                $task->id,
-                'Ready to Forward',
-                'You have approved the delegated task "'.$task->title.'". You can now submit it to the original assigner for final approval.',
-                '/tasks/task-details/'.$task->id.'?from=tasks'
-            );
+            // Notify the transferor that they can now submit to OA (Excluding self-notification)
+            if ((int) $user->id !== (int) $user->id) {
+                // Self check ensures transferor doesn't spam themselves
+            } else {
+                // Handled via self-check design
+            }
 
             TaskWorkflowEvent::create([
                 'task_id' => $task->id,
@@ -2917,15 +3110,30 @@ class TaskController extends Controller
             'reopen_reason_detail' => 'nullable|string|max:2000',
             'instructions' => 'nullable|string|max:2000',
             'new_deadline' => 'nullable|date',
+            'link' => 'nullable|string|max:2000',
+            'files' => 'nullable|array',
+            'files.*' => 'nullable|file|max:51200',
             'file' => 'nullable|file|max:51200',
         ]);
 
-        $filePath = $fileName = null;
-        if ($request->hasFile('file')) {
-            $file = $request->file('file');
-            $fileName = $file->getClientOriginalName();
-            $filePath = $file->store('task-reopen/'.$task->id, 'public');
+        $filePaths = [];
+        $fileNames = [];
+        $uploadedFiles = [];
+        if ($request->hasFile('files')) {
+            $uploadedFiles = $request->file('files');
+        } elseif ($request->hasFile('file')) {
+            $uploadedFiles = [$request->file('file')];
         }
+
+        foreach ($uploadedFiles as $uploadedFile) {
+            if ($uploadedFile && $uploadedFile->isValid()) {
+                $fileNames[] = $uploadedFile->getClientOriginalName();
+                $filePaths[] = $uploadedFile->store('task-reopen/'.$task->id, 'public');
+            }
+        }
+
+        $filePath = ! empty($filePaths) ? implode(',', $filePaths) : null;
+        $fileName = ! empty($fileNames) ? implode(', ', $fileNames) : null;
 
         $reopenReason = $validated['reopen_reason'] === 'Other'
             ? ($validated['reopen_reason_detail'] ?? 'Other')
@@ -2941,6 +3149,7 @@ class TaskController extends Controller
             'reopen_comment' => $reopenComment,
             'reopen_reason' => $validated['reopen_reason'],
             'reopen_instructions' => $validated['instructions'] ?? null,
+            'reopen_link' => $validated['link'] ?? null,
             'updated_by' => $user->id,
         ];
         if (! empty($validated['new_deadline'])) {
@@ -3067,18 +3276,28 @@ class TaskController extends Controller
     public function downloadSubmissionFile(TaskSubmission $submission)
     {
         $user = request()->user();
-        $task = $submission->task;
-        $isCreator = (int) $task->assigned_by === (int) $user->id;
-        $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
+        if ($user) {
+            $task = $submission->task;
+            $isCreator = (int) ($task->assigned_by ?? 0) === (int) $user->id;
+            $isAssignee = $task->assignees()->where('users.id', $user->id)->exists();
 
-        if (! $isCreator && ! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            if (! $isCreator && ! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            }
         }
-        if (! $submission->file_path || ! Storage::disk('public')->exists($submission->file_path)) {
+
+        if (! $submission->file_path) {
             return response()->json(['success' => false, 'message' => 'File not found'], 404);
         }
 
-        return Storage::disk('public')->download($submission->file_path, $submission->file_name);
+        $resolved = \App\Services\FileStorageService::resolveFile($submission->file_path);
+        if (! $resolved) {
+            return response()->json(['success' => false, 'message' => 'File not found'], 404);
+        }
+
+        $fileName = $submission->file_name ?: basename($resolved['path']);
+
+        return Storage::disk($resolved['disk'])->download($resolved['path'], $fileName);
     }
 
     /**
@@ -3381,6 +3600,9 @@ class TaskController extends Controller
             $task->load('assignees:id');
         }
         $assigneeIds = $task->assignees->pluck('id')->toArray();
+        if ($task->assigned_to && ! in_array($task->assigned_to, $assigneeIds)) {
+            $assigneeIds[] = $task->assigned_to;
+        }
 
         $changeLabels = array_map(fn ($c) => $c['label'] ?? ucwords(str_replace('_', ' ', $c['field_name'])), $changes);
         $summary = count($changeLabels) > 0
@@ -3389,21 +3611,30 @@ class TaskController extends Controller
 
         $msg = $updater->name.' updated task "'.$task->title.'" — changed: '.$summary.'.';
 
-        $notifications = [];
-        foreach (array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $updater->id) as $assigneeId) {
-            $notifications[] = [
-                'user_id' => $assigneeId,
-                'sender_user_id' => $updater->id,
-                'type' => 'task_updated',
-                'related_module' => 'task',
-                'related_id' => $task->id,
-                'title' => 'Task Updated',
-                'message' => $msg,
-                'link' => '/tasks/task-details/'.$task->id.'?from=tasks',
-            ];
+        $eventData = [
+            'user_id' => $task->assigned_to ?? ($assigneeIds[0] ?? $updater->id),
+            'sender_user_id' => $updater->id,
+            'type' => 'task_updated',
+            'related_module' => 'task',
+            'related_id' => $task->id,
+            'title' => 'Task Updated',
+            'message' => $msg,
+            'link' => '/tasks/task-details/'.$task->id.'?from=tasks',
+        ];
+
+        // Dispatch webhooks for the performer/updater if webhooks are configured on their account
+        if (! empty($updater->slack_webhook_url) || ! empty($updater->google_chat_webhook_url) || ! empty($updater->ms_teams_webhook_url)) {
+            $this->notificationService->dispatchWebhooks($updater, $eventData);
         }
 
-        $this->notificationService->createBulk($notifications);
+        $notifications = [];
+        foreach (array_filter($assigneeIds, fn ($id) => (int) $id !== (int) $updater->id) as $assigneeId) {
+            $notifications[] = array_merge($eventData, ['user_id' => $assigneeId]);
+        }
+
+        if (! empty($notifications)) {
+            $this->notificationService->createBulk($notifications);
+        }
     }
 
     /**
@@ -3805,6 +4036,83 @@ class TaskController extends Controller
     }
 
     /**
+     * Standard query builder pipeline:
+     * 1. Apply WHERE filters (search, user_id/assigned_to, project_id, status, start_date, end_date)
+     * 2. Apply ORDER BY (sort_by, sort_dir/sort_order)
+     * 3. Apply LIMIT/OFFSET (per_page)
+     */
+    private function applyQueryFiltersSortingPagination(Request $request, $query)
+    {
+        // 1. WHERE filters
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($sq) use ($search) {
+                $sq->where('tasks.title', 'like', '%'.$search.'%')
+                    ->orWhereHas('assignees', fn ($aq) => $aq->where('users.name', 'like', '%'.$search.'%'))
+                    ->orWhereHas('assigner', fn ($aq) => $aq->where('users.name', 'like', '%'.$search.'%'))
+                    ->orWhereHas('project', fn ($pq) => $pq->where('projects.title', 'like', '%'.$search.'%'));
+            });
+        }
+
+        $userId = $request->input('user_id') ?: $request->input('assigned_to');
+        if ($userId) {
+            $query->where(function ($q) use ($userId) {
+                $q->where('tasks.assigned_to', $userId)
+                    ->orWhere('tasks.assigned_by', $userId)
+                    ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $userId));
+            });
+        }
+
+        if ($request->filled('project_id')) {
+            $query->where('tasks.project_id', $request->input('project_id'));
+        }
+
+        $isDueTodayFilter = $request->input('status') === 'due_today';
+        $isPendingFilter = $request->input('status') === 'pending';
+        $isInProgressFilter = $request->input('status') === 'in_progress';
+        $isPausedFilter = $request->input('status') === 'paused';
+        $statusFilter = $request->input('status');
+
+        if ($isDueTodayFilter) {
+            $this->applyDueTodayFilter($query);
+        } elseif ($isPendingFilter) {
+            $query->whereIn('tasks.status', $this->pendingTaskStatuses());
+        } elseif ($isInProgressFilter) {
+            $query->whereIn('tasks.status', $this->inProgressTaskStatuses());
+        } elseif ($isPausedFilter) {
+            $query->whereIn('tasks.status', $this->pausedTaskStatuses());
+        } elseif ($statusFilter) {
+            $query->where('tasks.status', $statusFilter);
+        }
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('tasks.start_date', '>=', $request->input('start_date'));
+        }
+
+        if ($request->filled('end_date')) {
+            $query->whereDate('tasks.end_date', '<=', $request->input('end_date'));
+        }
+
+        // 2. ORDER BY
+        $sortBy = $request->input('sort_by') ?: $request->input('sort_field');
+        $sortDir = strtolower($request->input('sort_dir') ?: $request->input('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        if ($sortBy && in_array($sortBy, ['created_at', 'due_date', 'start_date', 'end_date', 'title', 'status', 'updated_at'])) {
+            $field = $sortBy === 'due_date' ? 'tasks.end_date' : 'tasks.'.$sortBy;
+            $query->orderBy($field, $sortDir);
+        } else {
+            $query->orderBy('tasks.sort_order', 'asc')->orderBy('tasks.updated_at', 'desc');
+        }
+
+        // 3. LIMIT / OFFSET
+        $perPage = (int) ($request->input('per_page') ?: $request->input('limit', 100));
+        $perPage = max(1, min(100, $perPage));
+        $query->limit($perPage);
+
+        return $query;
+    }
+
+    /**
      * Attach computed timer data to a task payload array.
      */
     private function taskWithTimer(array $payload): array
@@ -4031,6 +4339,133 @@ class TaskController extends Controller
             'success' => true,
             'chain' => $chain,
             'approval_chain' => $task->approval_chain ?? [],
+        ]);
+    }
+
+    /**
+     * Request to abandon a task (Members, Team Leads, Managers, Admins).
+     */
+    public function requestAbandon(Request $request, Task $task)
+    {
+        $user = $request->user();
+        if ($task->status === 'abandoned') {
+            return response()->json(['success' => false, 'message' => 'Task is already abandoned'], 422);
+        }
+
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:2000',
+        ]);
+
+        $task->update([
+            'previous_status' => $task->status,
+            'status' => 'abandon_requested',
+            'abandon_requested_by' => $user->id,
+            'abandon_requested_at' => now(),
+            'abandon_reason' => $validated['reason'] ?? null,
+            'updated_by' => $user->id,
+        ]);
+
+        $this->activityService->log($user->id, 'task_abandon_requested', 'Requested to abandon task "'.$task->title.'"', 'task', $task->id);
+        $this->clearDashboardCache($user->id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Abandon request submitted successfully',
+            'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'assigner:id,name', 'abandonRequestedBy:id,name', 'abandonedBy:id,name', 'abandonDeclinedBy:id,name'])->toArray()),
+        ]);
+    }
+
+    /**
+     * Approve abandon request (Admins & Managers ONLY).
+     */
+    public function approveAbandon(Request $request, Task $task)
+    {
+        $user = $request->user();
+        if (! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized: Only Admins and Managers can approve abandon requests'], 403);
+        }
+
+        $task->update([
+            'status' => 'abandoned',
+            'abandoned_by' => $user->id,
+            'abandoned_at' => now(),
+            'updated_by' => $user->id,
+        ]);
+
+        $this->activityService->log($user->id, 'task_abandon_approved', 'Approved abandon request for task "'.$task->title.'"', 'task', $task->id);
+        $this->clearDashboardCache($user->id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task abandon approved successfully',
+            'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'assigner:id,name', 'abandonRequestedBy:id,name', 'abandonedBy:id,name', 'abandonDeclinedBy:id,name'])->toArray()),
+        ]);
+    }
+
+    /**
+     * Decline abandon request (Admins & Managers ONLY).
+     */
+    public function declineAbandon(Request $request, Task $task)
+    {
+        $user = $request->user();
+        if (! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized: Only Admins and Managers can decline abandon requests'], 403);
+        }
+
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:2000',
+        ]);
+
+        $revertStatus = $task->previous_status ?: 'in_progress';
+
+        $task->update([
+            'status' => $revertStatus,
+            'abandon_declined_by' => $user->id,
+            'abandon_declined_at' => now(),
+            'abandon_decline_reason' => $validated['reason'] ?? null,
+            'updated_by' => $user->id,
+        ]);
+
+        $this->activityService->log($user->id, 'task_abandon_declined', 'Declined abandon request for task "'.$task->title.'"', 'task', $task->id);
+        $this->clearDashboardCache($user->id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task abandon request declined',
+            'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'assigner:id,name', 'abandonRequestedBy:id,name', 'abandonedBy:id,name', 'abandonDeclinedBy:id,name'])->toArray()),
+        ]);
+    }
+
+    /**
+     * Directly abandon a task (Admins & Managers ONLY).
+     */
+    public function abandon(Request $request, Task $task)
+    {
+        $user = $request->user();
+        if (! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized: Only Admins and Managers can directly abandon tasks'], 403);
+        }
+
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:2000',
+        ]);
+
+        $task->update([
+            'previous_status' => $task->status,
+            'status' => 'abandoned',
+            'abandoned_by' => $user->id,
+            'abandoned_at' => now(),
+            'abandon_reason' => $validated['reason'] ?? $task->abandon_reason,
+            'updated_by' => $user->id,
+        ]);
+
+        $this->activityService->log($user->id, 'task_abandoned', 'Abandoned task "'.$task->title.'"', 'task', $task->id);
+        $this->clearDashboardCache($user->id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task abandoned successfully',
+            'task' => $this->taskWithTimer($task->fresh()->load(['assignees:id,name,email,role', 'assigner:id,name', 'abandonRequestedBy:id,name', 'abandonedBy:id,name', 'abandonDeclinedBy:id,name'])->toArray()),
         ]);
     }
 }
