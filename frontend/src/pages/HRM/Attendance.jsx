@@ -1135,7 +1135,7 @@ export default function Attendance() {
                       {wfh && wfh.status === "Pending" && (
                         <>
                           <button style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "700", background: "#10b981", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }} onClick={() => handleApproveWfh(wfh.id)}>✔ WFH</button>
-                          <button style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "700", background: "#ef4444", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }} onClick={() => { setRejectWfhTarget(wfh); setRejectionReason(""); }}>❌ Reject</button>
+                          <button style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "700", background: "#ef4444", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }} onClick={() => { setRejectWfhTarget(wfh); setRejectionReason(""); }}>Not Approved</button>
                         </>
                       )}
 
@@ -1351,7 +1351,7 @@ export default function Attendance() {
                         {(req.status === "Rejected" || req.status === "Declined") && (
                           <div>
                             <span style={{ padding: "3px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", background: "#fee2e2", color: "#991b1b" }}>
-                              ❌ Rejected
+                              Not Approved
                             </span>
                             {req.rejection_reason && (
                               <div style={{ fontSize: "10.5px", color: "#991b1b", marginTop: "2px" }}>
@@ -1368,7 +1368,7 @@ export default function Attendance() {
                             {req.type === "leave" && (
                               <>
                                 <button style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "700", background: "#10b981", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }} onClick={() => handleRespondLeave(req.rawId, "Approved")}>✔ Approve</button>
-                                <button style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "700", background: "#ef4444", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }} onClick={() => handleRespondLeave(req.rawId, "Rejected")}>❌ Reject</button>
+                                <button style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "700", background: "#ef4444", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }} onClick={() => handleRespondLeave(req.rawId, "Rejected")}>Not Approved</button>
                               </>
                             )}
                             {req.type === "wfh" && (

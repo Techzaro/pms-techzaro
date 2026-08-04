@@ -933,60 +933,58 @@ export default function MemberHrmDashboard() {
       {/* SUB-MODULE CONTENT */}
       {activeTab === "overview" && (
         <section className="mem-card" id="section-member-summary">
-          <h2 className="mem-card-title"><Calendar size={20} color="#0082ff" /> Monthly Working Summary ({summary.month_name})</h2>
-          
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px", marginBottom: "20px" }}>
-            <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-              <span style={{ fontSize: "11px", color: "#64748b" }}>Present Days</span>
-              <h3 style={{ margin: "2px 0 0", fontSize: "20px", color: "#166534" }}>{summary.present_days} Days</h3>
+          <div className="mem-card-header">
+            <h2 className="mem-card-title"><Calendar size={19} /> Monthly Working Summary ({summary.month_name})</h2>
+            <p className="mem-card-desc">Your attendance and work hour overview for the current month.</p>
+          </div>
+
+          <div className="mem-stat-grid">
+            <div className="mem-stat-card">
+              <span className="mem-stat-label">Present Days</span>
+              <span className="mem-stat-value mem-stat-value--green">{summary.present_days}</span>
+              <span style={{ fontSize: "11.5px", color: "var(--text-secondary)" }}>Days this month</span>
             </div>
-            <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-              <span style={{ fontSize: "11px", color: "#64748b" }}>Work From Home (WFH)</span>
-              <h3 style={{ margin: "2px 0 0", fontSize: "20px", color: "#1d4ed8" }}>{summary.wfh_days} Days</h3>
+            <div className="mem-stat-card">
+              <span className="mem-stat-label">Work From Home</span>
+              <span className="mem-stat-value mem-stat-value--blue">{summary.wfh_days}</span>
+              <span style={{ fontSize: "11.5px", color: "var(--text-secondary)" }}>WFH days logged</span>
             </div>
-            <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-              <span style={{ fontSize: "11px", color: "#64748b" }}>Approved Leaves</span>
-              <h3 style={{ margin: "2px 0 0", fontSize: "20px", color: "#0284c7" }}>{summary.leave_days} Days</h3>
+            <div className="mem-stat-card">
+              <span className="mem-stat-label">Approved Leaves</span>
+              <span className="mem-stat-value mem-stat-value--indigo">{summary.leave_days}</span>
+              <span style={{ fontSize: "11.5px", color: "var(--text-secondary)" }}>Days approved</span>
             </div>
-            <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-              <span style={{ fontSize: "11px", color: "#64748b" }}>Total Work Hours Logged</span>
-              <h3 style={{ margin: "2px 0 0", fontSize: "20px", color: "#0f172a" }}>{summary.total_work_hours} Hours</h3>
+            <div className="mem-stat-card">
+              <span className="mem-stat-label">Total Work Hours</span>
+              <span className="mem-stat-value">{summary.total_work_hours}</span>
+              <span style={{ fontSize: "11.5px", color: "var(--text-secondary)" }}>Hours logged</span>
             </div>
           </div>
 
-          {/* DETAILED DAILY & WEEKLY BREAKDOWN */}
-          <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px", padding: "16px", marginBottom: "20px" }}>
-            <h3 style={{ margin: "0 0 10px", fontSize: "14px", color: "#1d4ed8", display: "flex", alignItems: "center", gap: "6px" }}>
-              <Clock size={18} /> Implemented Policy Details ({activePolicy.name || "Policy Template"})
-            </h3>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", fontSize: "13px" }}>
-              <div>
-                <span style={{ color: "#475569" }}>Active Shift Model:</span>
-                <div style={{ fontWeight: "800", color: "#0f172a", fontSize: "15px", marginTop: "2px" }}>
-                  {activePolicy.shift_type || "Fixed"} ({activePolicy.shift_start?.substring(0, 5)} - {activePolicy.shift_end?.substring(0, 5)})
-                </div>
+          <div className="mem-info-banner">
+            <h3><Clock size={16} /> Active Policy — {activePolicy.name || "Policy Template"}</h3>
+            <div className="mem-info-grid">
+              <div className="mem-info-grid-item">
+                <span>Active Shift Model</span>
+                <strong>{activePolicy.shift_type || "Fixed"} ({activePolicy.shift_start?.substring(0, 5)} – {activePolicy.shift_end?.substring(0, 5)})</strong>
               </div>
-              <div>
-                <span style={{ color: "#475569" }}>Weekly Target Hours:</span>
-                <div style={{ fontWeight: "800", color: "#0f172a", fontSize: "15px", marginTop: "2px" }}>
-                  {activePolicy.weekly_hours || 40.0} Hours/Week
-                </div>
+              <div className="mem-info-grid-item">
+                <span>Weekly Target Hours</span>
+                <strong>{activePolicy.weekly_hours || 40.0} hrs / week</strong>
               </div>
-              <div>
-                <span style={{ color: "#475569" }}>Grace Period &amp; Late Threshold:</span>
-                <div style={{ fontWeight: "800", color: "#b45309", fontSize: "15px", marginTop: "2px" }}>
-                  {activePolicy.grace_minutes || 15} Mins ({activePolicy.late_threshold?.substring(0, 5) || "09:15"})
-                </div>
+              <div className="mem-info-grid-item">
+                <span>Grace Period & Late Threshold</span>
+                <strong style={{ color: "var(--color-warning)" }}>{activePolicy.grace_minutes || 15} min ({activePolicy.late_threshold?.substring(0, 5) || "09:15"})</strong>
               </div>
             </div>
           </div>
 
-          <h3 style={{ fontSize: "14px", color: "#0f172a", margin: "0 0 8px" }}>📅 Public Holidays Calendar (2026)</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
+          <p className="mem-section-sub"><Calendar size={15} /> Public Holidays Calendar (2026)</p>
+          <div className="mem-holiday-grid">
             {upcomingHolidays.map((h, i) => (
-              <div key={i} style={{ background: "#f1f5f9", padding: "10px 12px", borderRadius: "6px", fontSize: "12.5px" }}>
+              <div key={i} className="mem-holiday-chip">
                 <strong>🎉 {h.title}</strong>
-                <div style={{ fontSize: "11px", color: "#64748b" }}>{h.date} ({h.day})</div>
+                <span>{h.date} ({h.day})</span>
               </div>
             ))}
           </div>
@@ -1179,28 +1177,27 @@ export default function MemberHrmDashboard() {
 
       {activeTab === "pms" && (
         <section className="mem-card" id="section-pms-hours">
-          <h2 className="mem-card-title"><Briefcase size={20} color="#0082ff" /> PMS Projects &amp; Task Hours Breakdown</h2>
-          <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 16px" }}>
-            Hours tracked directly from PMS tasks assigned to you.
-          </p>
+          <div className="mem-card-header">
+            <h2 className="mem-card-title"><Briefcase size={19} /> PMS Projects &amp; Task Hours Breakdown</h2>
+            <p className="mem-card-desc">Hours tracked directly from PMS tasks assigned to you.</p>
+          </div>
 
           {pmsBreakdown.length === 0 ? (
-            <p style={{ fontSize: "13px", color: "#94a3b8" }}>No active PMS task hours recorded yet.</p>
+            <p style={{ fontSize: "13.5px", color: "var(--text-muted)", padding: "20px 0" }}>No active PMS task hours recorded yet.</p>
           ) : (
             pmsBreakdown.map((p) => (
-              <div key={p.project_id} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "14px", marginBottom: "12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                  <h3 style={{ margin: 0, fontSize: "15px", color: "#0f172a" }}>📁 {p.project_name}</h3>
-                  <span style={{ fontSize: "13px", fontWeight: "700", color: "#0082ff" }}>
+              <div key={p.project_id} className="mem-project-card">
+                <div className="mem-project-header">
+                  <h3 className="mem-project-name">📁 {p.project_name}</h3>
+                  <span className="mem-project-hours">
                     {formatDetailedTime(p.total_seconds !== undefined ? p.total_seconds : Math.round((p.total_hours || 0) * 3600))} Logged
                   </span>
                 </div>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <div className="mem-task-list">
                   {p.tasks.map((t) => (
-                    <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12.5px", padding: "6px 10px", background: "#fff", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
-                      <span>• {t.title} <span style={{ fontSize: "11px", color: "#64748b" }}>({t.status})</span></span>
-                      <strong style={{ color: "#0f172a" }}>
+                    <div key={t.id} className="mem-task-row">
+                      <span>• {t.title} <span className="mem-task-status">({t.status})</span></span>
+                      <strong className="mem-task-hours">
                         {formatDetailedTime(t.seconds !== undefined ? t.seconds : Math.round((t.hours || 0) * 3600))}
                       </strong>
                     </div>
@@ -1214,127 +1211,142 @@ export default function MemberHrmDashboard() {
 
       {activeTab === "workmode" && (
         <section className="mem-card" id="section-workmode-wfh">
-          <h2 className="mem-card-title"><Laptop size={20} color="#0082ff" /> Work From Home (WFH) Request Module</h2>
-          <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 16px" }}>
-            Submit an official Work From Home request to HR. Approved WFH requests grant remote clock-in authorization.
-          </p>
+          <div className="mem-card-header">
+            <h2 className="mem-card-title"><Laptop size={19} /> Work From Home (WFH) Request</h2>
+            <p className="mem-card-desc">
+              Submit an official Work From Home request to HR. Approved WFH requests grant remote clock-in authorization.
+            </p>
+          </div>
 
-          <form onSubmit={handleSubmitWfhRequest} style={{ display: "flex", flexDirection: "column", gap: "12px", maxWidth: "600px" }}>
-            <div>
-              <label style={{ fontSize: "12px", fontWeight: "600", color: "#475569" }}>Target WFH Date</label>
+          <form onSubmit={handleSubmitWfhRequest} className="mem-form">
+            <div className="mem-form-group">
+              <label className="mem-form-label">Target WFH Date</label>
               <input type="date" className="mem-input" value={wfhDate} onChange={(e) => setWfhDate(e.target.value)} required />
             </div>
-            <div>
-              <label style={{ fontSize: "12px", fontWeight: "600", color: "#475569" }}>Reason / Remote Details</label>
-              <textarea className="mem-input" rows="3" placeholder="Provide reason for remote work request..." value={wfhReason} onChange={(e) => setWfhReason(e.target.value)} required />
+            <div className="mem-form-group">
+              <label className="mem-form-label">Reason / Remote Work Details</label>
+              <textarea className="mem-input" rows="4" placeholder="Provide reason for remote work request..." value={wfhReason} onChange={(e) => setWfhReason(e.target.value)} required />
             </div>
-            <button type="submit" className="mem-btn mem-btn--primary" disabled={submittingWfh}>
-              {submittingWfh ? "Submitting Request..." : "Submit WFH Request to HR"}
-            </button>
+            <div className="mem-form-actions">
+              <button type="submit" className="mem-btn mem-btn--primary" disabled={submittingWfh}>
+                {submittingWfh ? "Submitting Request..." : "Submit WFH Request to HR"}
+              </button>
+            </div>
           </form>
         </section>
       )}
 
       {activeTab === "corrections" && (
         <section className="mem-card" id="section-attendance-corrections">
-          <h2 className="mem-card-title"><AlertTriangle size={20} color="#0082ff" /> Submit Attendance Correction</h2>
-          <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 16px" }}>
-            Missed a clock-in or clock-out punch? Submit a correction request for HR review.
-          </p>
+          <div className="mem-card-header">
+            <h2 className="mem-card-title"><AlertTriangle size={19} /> Submit Attendance Correction</h2>
+            <p className="mem-card-desc">
+              Missed a clock-in or clock-out punch? Submit a correction request for HR review.
+            </p>
+          </div>
 
-          <form onSubmit={handleSubmitCorrection} style={{ display: "flex", flexDirection: "column", gap: "12px", maxWidth: "600px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
-              <div>
-                <label style={{ fontSize: "12px", color: "#475569" }}>Target Date</label>
+          <form onSubmit={handleSubmitCorrection} className="mem-form">
+            <div className="mem-form-grid mem-form-grid--3">
+              <div className="mem-form-group">
+                <label className="mem-form-label">Target Date</label>
                 <input type="date" className="mem-input" value={corrDate} onChange={(e) => setCorrDate(e.target.value)} required />
               </div>
-              <div>
-                <label style={{ fontSize: "12px", color: "#475569" }}>Clock In</label>
+              <div className="mem-form-group">
+                <label className="mem-form-label">Clock In Time</label>
                 <input type="time" className="mem-input" value={corrIn} onChange={(e) => setCorrIn(e.target.value)} required />
               </div>
-              <div>
-                <label style={{ fontSize: "12px", color: "#475569" }}>Clock Out</label>
+              <div className="mem-form-group">
+                <label className="mem-form-label">Clock Out Time</label>
                 <input type="time" className="mem-input" value={corrOut} onChange={(e) => setCorrOut(e.target.value)} required />
               </div>
             </div>
 
-            <div>
-              <label style={{ fontSize: "12px", color: "#475569" }}>Reason for Correction</label>
-              <textarea className="mem-input" rows="2" placeholder="e.g. Internet power outage prevented clock-in at 9:00 AM..." value={corrReason} onChange={(e) => setCorrReason(e.target.value)} required />
+            <div className="mem-form-group">
+              <label className="mem-form-label">Reason for Correction</label>
+              <textarea className="mem-input" rows="3" placeholder="e.g. Internet / power outage prevented clock-in at 9:00 AM..." value={corrReason} onChange={(e) => setCorrReason(e.target.value)} required />
             </div>
 
-            <button type="submit" className="mem-btn mem-btn--primary" disabled={submittingCorr}>
-              {submittingCorr ? "Submitting..." : "Submit Correction Request"}
-            </button>
+            <div className="mem-form-actions">
+              <button type="submit" className="mem-btn mem-btn--primary" disabled={submittingCorr}>
+                {submittingCorr ? "Submitting..." : "Submit Correction Request"}
+              </button>
+            </div>
           </form>
         </section>
       )}
 
       {activeTab === "offer" && (
         <section className="mem-card" id="section-offer-salary">
-          <h2 className="mem-card-title"><FileText size={20} color="#0082ff" /> Accepted Offer Letter &amp; Salary Slips</h2>
+          <div className="mem-card-header">
+            <h2 className="mem-card-title"><FileText size={19} /> Accepted Offer Letter &amp; Salary Slips</h2>
+            <p className="mem-card-desc">Your official employment offer details and monthly salary slip records.</p>
+          </div>
 
           {offerLetter ? (
-            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "14px", borderRadius: "8px", marginBottom: "16px" }}>
-              <h3 style={{ margin: "0 0 6px", fontSize: "15px", color: "#166534" }}>✔ Official Offer Letter Confirmed</h3>
-              <p style={{ margin: "0 0 4px", fontSize: "13px" }}>• Accepted Monthly Base Salary / Stipend: <strong>PKR/USD {offerLetter.base_salary?.toLocaleString()}</strong></p>
-              <p style={{ margin: 0, fontSize: "13px" }}>• Employment Type: <strong>{offerLetter.employment_type || "Full-Time Enterprise"}</strong></p>
+            <div className="mem-offer-banner">
+              <h3>✔ Official Offer Letter Confirmed</h3>
+              <p>Monthly Base Salary / Stipend: <strong>PKR/USD {offerLetter.base_salary?.toLocaleString()}</strong></p>
+              <p>Employment Type: <strong>{offerLetter.employment_type || "Full-Time Enterprise"}</strong></p>
             </div>
           ) : (
-            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "12px", borderRadius: "8px", marginBottom: "16px", fontSize: "13px", color: "#64748b" }}>
+            <div className="mem-offer-fallback">
               Monthly Base Salary / Stipend: <strong>PKR/USD {summary.accepted_stipend?.toLocaleString()}</strong> (Policy Standard)
             </div>
           )}
 
-          <h3 style={{ fontSize: "14px", color: "#0f172a", margin: "16px 0 8px" }}>📄 Salary Slips Directory</h3>
+          <p className="mem-section-sub"><FileText size={15} /> Salary Slips Directory</p>
           {salarySlips.length === 0 ? (
-            <p style={{ fontSize: "13px", color: "#94a3b8" }}>No salary slips generated yet.</p>
+            <p style={{ fontSize: "13.5px", color: "var(--text-muted)", padding: "12px 0" }}>No salary slips generated yet.</p>
           ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-              <thead>
-                <tr style={{ background: "#f8fafc", textAlign: "left", borderBottom: "2px solid #e2e8f0" }}>
-                  <th style={{ padding: "8px 12px" }}>Pay Period</th>
-                  <th style={{ padding: "8px 12px" }}>Basic Salary</th>
-                  <th style={{ padding: "8px 12px" }}>Net Paid</th>
-                  <th style={{ padding: "8px 12px" }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {salarySlips.map((s) => (
-                  <tr key={s.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                    <td style={{ padding: "8px 12px", fontWeight: "600" }}>{s.month_year}</td>
-                    <td style={{ padding: "8px 12px" }}>PKR/USD {s.basic_salary?.toLocaleString()}</td>
-                    <td style={{ padding: "8px 12px", fontWeight: "700", color: "#166534" }}>PKR/USD {s.net_salary?.toLocaleString()}</td>
-                    <td style={{ padding: "8px 12px" }}>
-                      <span style={{ padding: "3px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: "700", background: "#f0fdf4", color: "#166534" }}>{s.status}</span>
-                    </td>
+            <div className="mem-table-wrap">
+              <table className="mem-table">
+                <thead>
+                  <tr>
+                    <th>Pay Period</th>
+                    <th>Basic Salary</th>
+                    <th>Net Paid</th>
+                    <th>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {salarySlips.map((s) => (
+                    <tr key={s.id}>
+                      <td style={{ fontWeight: "600", color: "var(--text-heading)" }}>{s.month_year}</td>
+                      <td>PKR/USD {s.basic_salary?.toLocaleString()}</td>
+                      <td style={{ fontWeight: "700", color: "#15803d" }}>PKR/USD {s.net_salary?.toLocaleString()}</td>
+                      <td>
+                        <span className="mem-badge mem-badge--success">{s.status}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
       )}
 
       {activeTab === "requests" && (
         <section className="mem-card" id="section-hr-forms">
-          <h2 className="mem-card-title"><FileText size={20} color="#0082ff" /> HR Forms &amp; Custom Documents</h2>
-          <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 16px" }}>
-            Access corporate HR policies, CNIC verification copies, and employment documents.
-          </p>
+          <div className="mem-card-header">
+            <h2 className="mem-card-title"><FileText size={19} /> HR Forms &amp; Corporate Documents</h2>
+            <p className="mem-card-desc">
+              Access corporate HR policies, CNIC verification copies, and employment documents.
+            </p>
+          </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
-            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "12px", borderRadius: "8px", fontSize: "13px" }}>
-              <strong>📄 Corporate Code of Conduct</strong>
-              <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>PDF Document • Verified</div>
+          <div className="mem-doc-grid">
+            <div className="mem-doc-card">
+              <div className="mem-doc-title">📄 Corporate Code of Conduct</div>
+              <div className="mem-doc-meta">PDF Document • Verified</div>
             </div>
-            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "12px", borderRadius: "8px", fontSize: "13px" }}>
-              <strong>📄 NDA &amp; Intellectual Property</strong>
-              <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>Signed &amp; Archival Verified</div>
+            <div className="mem-doc-card">
+              <div className="mem-doc-title">📄 NDA &amp; Intellectual Property</div>
+              <div className="mem-doc-meta">Signed &amp; Archival Verified</div>
             </div>
-            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "12px", borderRadius: "8px", fontSize: "13px" }}>
-              <strong>📄 Health Insurance Policy 2026</strong>
-              <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>Active Standard Coverage</div>
+            <div className="mem-doc-card">
+              <div className="mem-doc-title">📄 Health Insurance Policy 2026</div>
+              <div className="mem-doc-meta">Active Standard Coverage</div>
             </div>
           </div>
         </section>
