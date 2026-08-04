@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { MdClose, MdSend } from "react-icons/md";
+import { X, Send } from "lucide-react";
 
 export default function ScheduleInterviewModal({ open, candidate, onClose, onSubmit, submitting }) {
   const [form, setForm] = useState({
@@ -19,7 +19,7 @@ export default function ScheduleInterviewModal({ open, candidate, onClose, onSub
       <div className="r-modal-panel r-modal-panel--md" onClick={(e) => e.stopPropagation()}>
         <div className="r-modal-header">
           <h3>Schedule Interview &amp; Send Message</h3>
-          <button className="r-icon-btn" onClick={onClose} aria-label="Close modal"><MdClose size={20} /></button>
+          <button className="r-icon-btn" onClick={onClose} aria-label="Close modal"><X size={20} /></button>
         </div>
         <form className="r-modal-form" onSubmit={(e) => { e.preventDefault(); onSubmit(form); }}>
           <div className="r-modal-body">
@@ -53,7 +53,7 @@ export default function ScheduleInterviewModal({ open, candidate, onClose, onSub
           <div className="r-modal-footer">
             <button type="button" className="r-btn r-btn--ghost" onClick={onClose}>Cancel</button>
             <button type="submit" className="r-btn r-btn--primary" disabled={submitting}>
-              <MdSend size={16} /> {submitting ? "Sending Message..." : "Send Interview Message"}
+              <Send size={16} /> {submitting ? "Sending Message..." : "Send Interview Message"}
             </button>
           </div>
         </form>

@@ -65,6 +65,7 @@ const Workforce=lazy(()=>import("./pages/HRM/Workforce"))
 const EmployeeDocuments=lazy(()=>import("./pages/HRM/EmployeeDocuments"))
 const Attendance=lazy(()=>import("./pages/HRM/Attendance"))
 const MemberHrmDashboard=lazy(()=>import("./pages/HRM/MemberHrmDashboard"))
+const HrmPerformance=lazy(()=>import("./pages/HRM/HrmPerformance"))
 // =======================================================================================
 // =======================================================================================
 class ErrorBoundary extends Component {
@@ -174,6 +175,8 @@ function App() {
             <Route path="/:role/hrm/documents" element={<EmployeeDocuments/>} />
             <Route path="/:role/hrm/attendance" element={<Attendance/>} />
             <Route path="/:role/attendance" element={<Attendance/>} />
+            <Route path="/:role/hrm/performance" element={<HrmPerformance/>} />
+            <Route path="/:role/performance" element={<HrmPerformance/>} />
             <Route path="/:role/hrm/member-dashboard" element={<MemberHrmDashboard/>} />
             <Route path="/member/hrm" element={<MemberHrmDashboard/>} />
           </Route>

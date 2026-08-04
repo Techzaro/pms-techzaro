@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { MdClose } from "react-icons/md";
+import React, { useState, useEffect } from "react";
+import { X } from "lucide-react";
 
 export default function JobFormModal({ open, initialData, onClose, onSubmit }) {
   const [form, setForm] = useState({
@@ -20,7 +20,7 @@ export default function JobFormModal({ open, initialData, onClose, onSubmit }) {
       <div className="r-modal-panel r-modal-panel--md" onClick={(e) => e.stopPropagation()}>
         <div className="r-modal-header">
           <h3>{initialData ? "Edit Job Posting" : "Post Vacancy"}</h3>
-          <button className="r-icon-btn" onClick={onClose} aria-label="Close modal"><MdClose size={20} /></button>
+          <button className="r-icon-btn" onClick={onClose} aria-label="Close modal"><X size={20} /></button>
         </div>
         <form className="r-modal-form" onSubmit={(e) => { e.preventDefault(); onSubmit(form); }}>
           <div className="r-modal-body">

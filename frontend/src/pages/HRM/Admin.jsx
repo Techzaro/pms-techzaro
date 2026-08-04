@@ -25,21 +25,18 @@ import API_URL from "../../config/api";
 import { authToken, rolePath, getUser } from "../../utils/auth";
 
 import {
-  MdWork,
-  MdDescription,
-  MdOutlineDescription,
-  MdEventAvailable,
-  MdAccountBalanceWallet,
-  MdTrendingUp,
-  MdCampaign,
-  MdInventory2,
-  MdAnalytics,
-  MdSchool,
-  MdGroups,
-  MdArrowForward,
-  MdCake,
-  MdNotifications,
-} from "react-icons/md";
+  Briefcase,
+  Users,
+  FileText,
+  Calendar,
+  CreditCard,
+  TrendingUp,
+  Bell,
+  Award,
+  ChevronRight,
+  Gift,
+  Plus,
+} from "lucide-react";
 
 import "./Admin.css";
 
@@ -52,36 +49,36 @@ const DASHBOARD_SECTIONS = [
   {
     label: "Hiring",
     cards: [
-      { key: "open_positions", label: "Open Positions", icon: MdWork, page: "hrm/recruitment", tone: "indigo" },
-      { key: "applicants_in_pipeline", label: "Applicants in Pipeline", icon: MdGroups, page: "hrm/recruitment", tone: "indigo" },
-      { key: "offer_letters_pending", label: "Offer Letters Pending", icon: MdDescription, page: "hrm/offer-letters", tone: "indigo" },
+      { key: "open_positions", label: "Open Positions", icon: Briefcase, page: "hrm/recruitment", tone: "indigo" },
+      { key: "applicants_in_pipeline", label: "Applicants in Pipeline", icon: Users, page: "hrm/recruitment", tone: "indigo" },
+      { key: "offer_letters_pending", label: "Offer Letters Pending", icon: FileText, page: "hrm/offer-letters", tone: "indigo" },
     ],
   },
   {
     label: "Workforce",
     cards: [
-      { key: "total_employees", label: "Total Employees", icon: MdGroups, page: "hrm/documents", tone: "emerald" },
-      { key: "present_today", label: "Present Today", icon: MdEventAvailable, page: "hrm/attendance", tone: "emerald" },
-      { key: "on_leave_today", label: "On Leave Today", icon: MdEventAvailable, page: "hrm/attendance", tone: "amber" },
-      { key: "reviews_due", label: "Performance Reviews Due", icon: MdTrendingUp, page: "hrm/performance", tone: "emerald" },
-      { key: "assets_issued", label: "Assets Issued", icon: MdInventory2, page: "hrm/assets", tone: "emerald" },
-      { key: "documents_pending", label: "Documents Pending", icon: MdOutlineDescription, page: "hrm/documents", tone: "amber" },
+      { key: "total_employees", label: "Total Employees", icon: Users, page: "hrm/documents", tone: "emerald" },
+      { key: "present_today", label: "Present Today", icon: Calendar, page: "hrm/attendance", tone: "emerald" },
+      { key: "on_leave_today", label: "On Leave Today", icon: Calendar, page: "hrm/attendance", tone: "amber" },
+      { key: "reviews_due", label: "Performance Reviews Due", icon: TrendingUp, page: "hrm/performance", tone: "emerald" },
+      { key: "assets_issued", label: "Assets Issued", icon: Briefcase, page: "hrm/assets", tone: "emerald" },
+      { key: "documents_pending", label: "Documents Pending", icon: FileText, page: "hrm/documents", tone: "amber" },
     ],
   },
   {
     label: "Payroll",
     cards: [
-      { key: "payroll_processed", label: "Payroll Processed", icon: MdAccountBalanceWallet, page: "hrm/payroll", tone: "violet", isCount: true },
-      { key: "payroll_total", label: "This Month's Payroll", icon: MdAccountBalanceWallet, page: "hrm/payroll", tone: "violet", isCurrency: true },
-      { key: "payslips_pending", label: "Payslips Pending", icon: MdAccountBalanceWallet, page: "hrm/payroll", tone: "amber" },
+      { key: "payroll_processed", label: "Payroll Processed", icon: CreditCard, page: "hrm/payroll", tone: "violet", isCount: true },
+      { key: "payroll_total", label: "This Month's Payroll", icon: CreditCard, page: "hrm/payroll", tone: "violet", isCurrency: true },
+      { key: "payslips_pending", label: "Payslips Pending", icon: CreditCard, page: "hrm/payroll", tone: "amber" },
     ],
   },
   {
     label: "Engagement",
     cards: [
-      { key: "active_notices", label: "Active Notices", icon: MdCampaign, page: "hrm/notice-board", tone: "sky" },
-      { key: "ongoing_trainings", label: "Ongoing Trainings", icon: MdSchool, page: "hrm/training", tone: "sky" },
-      { key: "training_enrollments", label: "Training Enrollments", icon: MdSchool, page: "hrm/training", tone: "sky" },
+      { key: "active_notices", label: "Active Notices", icon: Bell, page: "hrm/notice-board", tone: "sky" },
+      { key: "ongoing_trainings", label: "Ongoing Trainings", icon: Award, page: "hrm/training", tone: "sky" },
+      { key: "training_enrollments", label: "Training Enrollments", icon: Award, page: "hrm/training", tone: "sky" },
     ],
   },
 ];
@@ -108,96 +105,83 @@ function HRMAdmin() {
   const firstName = (user.name || "there").split(" ")[0];
 
   const greeting = (() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 17) return "Good afternoon";
+    const hr = new Date().getHours();
+    if (hr < 12) return "Good morning";
+    if (hr < 18) return "Good afternoon";
     return "Good evening";
   })();
 
-  const today = new Date().toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-
   useEffect(() => {
     const token = authToken();
-    if (!token) {
-      setLoading(false);
-      return;
-    }
     const headers = { Accept: "application/json", Authorization: `Bearer ${token}` };
 
-    // Expected shape: GET /dashboard/hrm-stats -> { ...card keys above }
-    fetch(`${API_URL}/dashboard/hrm-stats`, { headers, skipLoader: true })
-      .then((res) => (res.ok ? res.json() : {}))
-      .then((data) => setStats(data || {}))
-      .catch(() => setStats({}))
+    Promise.all([
+      fetch(`${API_URL}/dashboard/hrm-stats`, { headers }).then((r) => (r.ok ? r.json() : null)),
+      fetch(`${API_URL}/hrm/notices`, { headers }).then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([statsRes, noticesRes]) => {
+        if (statsRes?.data) setStats(statsRes.data);
+        if (noticesRes?.data) setNotices(Array.isArray(noticesRes.data) ? noticesRes.data : []);
+      })
+      .catch(() => {})
       .finally(() => setLoading(false));
-
-    // Expected shape: GET /hrm/notice-board?limit=4 -> { data: [{id, title, posted_at}] }
-    fetch(`${API_URL}/hrm/notice-board?limit=4`, { headers, skipLoader: true })
-      .then((res) => (res.ok ? res.json() : { data: [] }))
-      .then((data) => setNotices(data?.data || data || []))
-      .catch(() => setNotices([]));
-
-    // Expected shape: GET /hrm/employees/upcoming-birthdays -> { data: [{id, name, date}] }
-    fetch(`${API_URL}/hrm/employees/upcoming-birthdays`, { headers, skipLoader: true })
-      .then((res) => (res.ok ? res.json() : { data: [] }))
-      .then((data) => setBirthdays(data?.data || data || []))
-      .catch(() => setBirthdays([]));
   }, []);
 
-  /** Renders the value for a card: currency, count, or "—" while loading. */
-  const renderValue = (card) => {
-    if (loading) return <span className="stat-card-skeleton" />;
-    const raw = stats?.[card.key];
-    if (raw === undefined || raw === null) return "—";
-    if (card.isCurrency) return formatCurrency(raw);
-    return raw;
-  };
-
   return (
-    <div className="hrm-dashboard">
-
-      {/* ── Greeting header ── */}
-      <div className="dashboard-header">
-        <div>
-          <h1>{greeting}, {firstName} 👋</h1>
-          <p>{today} · Here's what's happening across your workforce today.</p>
+    <div className="hrm-dashboard-page">
+      {/* ── Header ── */}
+      <div className="dashboard-hero">
+        <div className="dashboard-hero-main">
+          <h1>
+            {greeting}, {firstName} 👋
+          </h1>
+          <p>Here's what's happening across your HR operations today.</p>
         </div>
-        <div className="dashboard-header-actions">
-          <Link to={rolePath("hrm/recruitment")} className="dashboard-action-btn">
-            <MdWork /> New Job Opening
+
+        <div className="dashboard-hero-actions">
+          <Link to={rolePath("hrm/recruitment")} className="hero-btn hero-btn--primary">
+            + Post Job
           </Link>
-          <Link to={rolePath("hrm/notice-board")} className="dashboard-action-btn dashboard-action-btn--secondary">
-            <MdCampaign /> Post Notice
+          <Link to={rolePath("hrm/attendance")} className="hero-btn hero-btn--secondary">
+            View Punch Logs
           </Link>
         </div>
       </div>
 
-      {/* ── Sections mirroring the sidebar's HR groups ── */}
-      {DASHBOARD_SECTIONS.map((section) => (
-        <div className="dashboard-section" key={section.label}>
-          <div className="dashboard-section-title">{section.label}</div>
-          <div className="dashboard-stat-grid">
-            {section.cards.map((card) => (
-              <Link
-                key={card.key}
-                to={rolePath(card.page)}
-                className={`stat-card ${TONE_CLASS[card.tone]}`}
-              >
-                <div className="stat-card-icon">
-                  <card.icon />
-                </div>
-                <div className="stat-card-body">
-                  <span className="stat-card-value">{renderValue(card)}</span>
-                  <span className="stat-card-label">{card.label}</span>
-                </div>
-                <MdArrowForward className="stat-card-arrow" />
-              </Link>
-            ))}
+      {/* ── Sectioned Stat Grid ── */}
+      {DASHBOARD_SECTIONS.map((sec) => (
+        <div key={sec.label} className="dashboard-section">
+          <div className="dashboard-section-title">{sec.label}</div>
+          <div className="dashboard-card-grid">
+            {sec.cards.map((card) => {
+              const IconComp = card.icon;
+              const rawVal = stats ? stats[card.key] : null;
+              let displayVal = "—";
+              if (!loading && rawVal !== null && rawVal !== undefined) {
+                if (card.isCurrency) displayVal = formatCurrency(rawVal);
+                else displayVal = String(rawVal);
+              }
+
+              return (
+                <Link
+                  key={card.key}
+                  to={rolePath(card.page)}
+                  className={`stat-card ${TONE_CLASS[card.tone] || ""}`}
+                >
+                  <div className="stat-card-header">
+                    <span className="stat-card-label">{card.label}</span>
+                    <span className="stat-card-icon">
+                      <IconComp />
+                    </span>
+                  </div>
+                  <div className="stat-card-value">{loading ? "…" : displayVal}</div>
+                  <div className="stat-card-footer">
+                    <span>View details</span>
+                    <ChevronRight />
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </div>
       ))}
@@ -209,16 +193,16 @@ function HRMAdmin() {
 
           <Link to={rolePath("hrm/reports")} className="insights-card insights-card--link">
             <div className="insights-card-header">
-              <MdAnalytics />
+              <TrendingUp />
               <h4>HR Reports & Analytics</h4>
             </div>
             <p>Headcount trends, attrition, attendance and payroll summaries in one place.</p>
-            <span className="insights-card-cta">Open reports <MdArrowForward /></span>
+            <span className="insights-card-cta">Open reports <ChevronRight /></span>
           </Link>
 
           <div className="insights-card">
             <div className="insights-card-header">
-              <MdCampaign />
+              <Bell />
               <h4>Latest Notices</h4>
             </div>
             {notices.length === 0 ? (
@@ -227,7 +211,7 @@ function HRMAdmin() {
               <ul className="insights-list">
                 {notices.slice(0, 4).map((n) => (
                   <li key={n.id}>
-                    <MdNotifications className="insights-list-icon" />
+                    <Bell className="insights-list-icon" />
                     <span>{n.title}</span>
                   </li>
                 ))}
@@ -237,7 +221,7 @@ function HRMAdmin() {
 
           <div className="insights-card">
             <div className="insights-card-header">
-              <MdCake />
+              <Gift />
               <h4>Upcoming Birthdays</h4>
             </div>
             {birthdays.length === 0 ? (
@@ -246,7 +230,7 @@ function HRMAdmin() {
               <ul className="insights-list">
                 {birthdays.slice(0, 4).map((b) => (
                   <li key={b.id}>
-                    <MdCake className="insights-list-icon" />
+                    <Gift className="insights-list-icon" />
                     <span>{b.name}</span>
                     <span className="insights-list-meta">{b.date}</span>
                   </li>
@@ -257,10 +241,8 @@ function HRMAdmin() {
 
         </div>
       </div>
-
     </div>
   );
 }
-
 
 export default HRMAdmin;

@@ -17,8 +17,19 @@
  * from the HRM portal to the PMS portal at /.
  */
 
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { MdKeyboardArrowDown, MdNotifications, MdPerson, MdHistory, MdLogout, MdLock, MdDarkMode, MdLightMode, MdWork, MdCampaign, MdBusinessCenter, MdApps } from "react-icons/md";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import {
+  ChevronDown,
+  Bell,
+  User,
+  Clock,
+  LogOut,
+  Lock,
+  Moon,
+  Sun,
+  Briefcase,
+  Grid,
+} from "lucide-react";
 import { useNavigate, Link } from "react-router-dom";
 
 import API_URL from "../../../../config/api.js";
@@ -590,7 +601,7 @@ function Header() {
               <span>HRM Portal</span>
             </div>
 
-            <MdKeyboardArrowDown
+            <ChevronDown
               fontSize="16px"
               style={{
                 marginLeft: 2,
@@ -637,7 +648,7 @@ function Header() {
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-primary-bg, #eef2ff)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
-                  <MdApps fontSize="18px" style={{ color: "var(--color-primary, #6366f1)" }} />
+                  <Grid size={18} style={{ color: "var(--color-primary, #6366f1)" }} />
                   <span>
                     Project Management
                     <br />
@@ -660,7 +671,7 @@ function Header() {
                     background: "var(--color-primary-bg, #eef2ff)",
                   }}
                 >
-                  <MdBusinessCenter fontSize="18px" style={{ color: "var(--color-primary, #6366f1)" }} />
+                  <Briefcase size={18} style={{ color: "var(--color-primary, #6366f1)" }} />
                   <span>
                     HR Management
                     <br />
@@ -777,7 +788,7 @@ function Header() {
             className="task-btn1"
             onClick={() => setShowJobOpeningModal(true)}
           >
-            <MdWork style={{ marginRight: 4, verticalAlign: -2 }} /> + Job Opening
+            <Briefcase size={16} style={{ marginRight: 4, verticalAlign: -2 }} /> + Job Opening
           </button>
           )}
 
@@ -798,7 +809,7 @@ function Header() {
             className="project-btn"
             onClick={() => setShowNoticeModal(true)}
           >
-            <MdCampaign style={{ marginRight: 4, verticalAlign: -2 }} /> + Notice
+            <Bell size={16} style={{ marginRight: 4, verticalAlign: -2 }} /> + Notice
           </button>
           )}
 
@@ -832,7 +843,7 @@ function Header() {
           <div className="header-notif" ref={notifRef}>
             <button className="header-notif-link" onClick={openNotifications} onKeyDown={handleNotifKeyDown}>
               <div className="header-notif-icon-wrap">
-                <MdNotifications fontSize={"22px"} color={unreadCount > 0 ? "#ef4444" : "#6b7280"} />
+                <Bell size={22} color={unreadCount > 0 ? "#ef4444" : "#6b7280"} />
                 {unreadCount > 0 && (
                   <span className="header-notif-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
                 )}
@@ -877,7 +888,7 @@ function Header() {
 
           {/* Theme toggle button */}
           <button className="theme-toggle-btn" onClick={toggleTheme} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
-            {theme === "dark" ? <MdLightMode fontSize="20px" /> : <MdDarkMode fontSize="20px" />}
+            {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
           </button>
 
           <hr />
@@ -909,8 +920,8 @@ function Header() {
             </div>
 
             <div className="arrow-icon">
-              <MdKeyboardArrowDown
-                fontSize={"25px"}
+              <ChevronDown
+                size={25}
               />
             </div>
 
@@ -942,15 +953,15 @@ function Header() {
 
                 {/* Menu items */}
                 <button className={`hmc-menu-item${profileHighlightIndex === 0 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); navigate(rolePath("my-profile")); }} onMouseEnter={() => setProfileHighlightIndex(0)}>
-                  <MdPerson size={20} />
+                  <User size={20} />
                   <span>My Profile</span>
                 </button>
                 <button className={`hmc-menu-item${profileHighlightIndex === 1 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); navigate(`${rolePath("my-profile")}?openPassword=true`); }} onMouseEnter={() => setProfileHighlightIndex(1)}>
-                  <MdLock size={20} />
+                  <Lock size={20} />
                   <span>Change Password</span>
                 </button>
                 <button className={`hmc-menu-item${profileHighlightIndex === 2 ? ' hmc-menu-item--highlighted' : ''}`} onClick={() => { setIsProfileOpen(false); navigate(rolePath("history")); }} onMouseEnter={() => setProfileHighlightIndex(2)}>
-                  <MdHistory size={20} />
+                  <Clock size={20} />
                   <span>My Activity</span>
                 </button>
                 <div className="hmc-logout-wrap">
@@ -970,7 +981,7 @@ function Header() {
                     clearSession(role);
                     window.location.href = "/logged-out";
                   }}>
-                    <MdLogout size={18} />
+                    <LogOut size={18} />
                     <span>Logout</span>
                   </button>
                 </div>

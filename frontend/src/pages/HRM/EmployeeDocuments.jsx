@@ -1,11 +1,25 @@
 import React, { useState, useEffect, useCallback } from "react";
 import API_URL from "../../config/api";
 import { authToken } from "../../utils/auth";
+import Breadcrumb from "../../components/Breadcrumb";
 import {
-  MdOutlineDescription, MdSearch, MdAdd, MdShield, MdCheckCircle,
-  MdWarning, MdCloudUpload, MdDownload, MdClose, MdPerson, MdVerifiedUser,
-  MdBadge, MdSchool, MdAssignmentTurnedIn, MdFolderZip, MdPhone, MdMail, MdDescription
-} from "react-icons/md";
+  FileText,
+  Search,
+  Plus,
+  ShieldAlert,
+  CheckCircle2,
+  AlertTriangle,
+  Upload,
+  Download,
+  X,
+  Users,
+  Phone,
+  Mail,
+  Award,
+  Briefcase,
+  Eye,
+  Trash2,
+} from "lucide-react";
 import "./EmployeeDocuments.css";
 
 async function apiRequest(path, options = {}) {
@@ -215,25 +229,28 @@ export default function EmployeeDocuments() {
     <div className="ed-page">
       {toast && <div className={`ed-toast ed-toast--${toast.kind}`}>{toast.message}</div>}
 
+      {/* BREADCRUMB */}
+      <Breadcrumb items={[{ label: "Enterprise HRM", path: "/admin/hrm/documents" }, { label: "Employee Documents Vault" }]} />
+
       {/* HEADER */}
       <div className="ed-header">
         <div>
           <div className="ed-title-row">
             <h1>Employee Document Vault &amp; User Records</h1>
-            <span className="ed-live-pill"><MdVerifiedUser size={14} /> Integrated PMS, HRM &amp; Offer Letter Vault</span>
+            <span className="ed-live-pill"><CheckCircle2 size={14} /> Integrated PMS, HRM &amp; Offer Letter Vault</span>
           </div>
           <p>Centralized employee compliance matrix fetching phone, CNIC, educational degrees, police checks, and contract offer letters.</p>
         </div>
 
         <button className="ed-btn ed-btn--primary" onClick={() => openUploadModal()}>
-          <MdCloudUpload size={18} /> Upload User Document
+          <Upload size={18} /> Upload User Document
         </button>
       </div>
 
       {/* COMPLIANCE MATRIX TABLE */}
       <div style={{ background: "#ffffff", borderRadius: "12px", border: "1px solid #e2e8f0", padding: "20px", marginBottom: "24px" }}>
         <h3 style={{ margin: "0 0 14px", fontSize: "16px", color: "#1e293b", display: "flex", alignItems: "center", gap: "8px" }}>
-          <MdAssignmentTurnedIn size={20} color="#0082ff" /> Employee Required Compliance Document Matrix
+          <FileText size={20} color="#0082ff" /> Employee Required Compliance Document Matrix
         </h3>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
@@ -298,7 +315,7 @@ export default function EmployeeDocuments() {
                         style={{ padding: "5px 12px", fontSize: "11.5px", fontWeight: "600", background: "#0082ff", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}
                         onClick={() => openUploadModal(u.id, !isPoliceCleared ? "criminal_record_file" : !hasCnic ? "cnic_front_image" : "employment_contract")}
                       >
-                        <MdCloudUpload size={14} /> + Upload Doc
+                        <Upload size={14} /> + Upload Doc
                       </button>
                     </td>
                   </tr>
@@ -312,7 +329,7 @@ export default function EmployeeDocuments() {
       {/* SEARCH TOOLBAR */}
       <div className="ed-toolbar">
         <div className="ed-search-box">
-          <MdSearch size={18} />
+          <Search size={18} />
           <input
             type="text"
             placeholder="Search employee document vault by name, CNIC, phone, or email..."
@@ -330,7 +347,7 @@ export default function EmployeeDocuments() {
         </div>
       ) : filteredUsers.length === 0 ? (
         <div className="ed-empty-card">
-          <MdOutlineDescription size={48} color="#94a3b8" />
+          <FileText size={48} color="#94a3b8" />
           <h3>No Employee Profiles Found</h3>
           <p>Try searching for a different employee name or email address.</p>
         </div>
@@ -364,7 +381,7 @@ export default function EmployeeDocuments() {
                     <span className="ed-category-badge">{u.department || "Engineering"}</span>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                       <span className={`ed-pill ed-pill--${isPoliceCleared ? "success" : "warning"}`}>
-                        <MdShield size={12} /> Police Check: {isPoliceCleared ? "Cleared ✔" : "Pending"}
+                        <ShieldAlert size={12} /> Police Check: {isPoliceCleared ? "Cleared ✔" : "Pending"}
                       </span>
                       {!isPoliceCleared && (
                         <button
@@ -379,7 +396,7 @@ export default function EmployeeDocuments() {
 
                   <h3 className="ed-doc-title" style={{ fontSize: "16px", marginBottom: "4px" }}>{u.name}</h3>
                   <div className="ed-user-meta" style={{ marginBottom: "14px" }}>
-                    <MdPerson size={16} color="#0082ff" />
+                    <Users size={16} color="#0082ff" />
                     <div>
                       <strong>{u.designation || u.role || "Staff Specialist"}</strong>
                       <span>{u.email}</span>
@@ -387,8 +404,8 @@ export default function EmployeeDocuments() {
                   </div>
 
                   <div style={{ fontSize: "12px", color: "#475569", background: "#f8fafc", padding: "10px 12px", borderRadius: "8px", marginBottom: "14px" }}>
-                    <p style={{ margin: "0 0 4px" }}><MdBadge size={13} color="#64748b" /> CNIC: <strong>{cnicVal}</strong></p>
-                    <p style={{ margin: 0 }}><MdPhone size={13} color="#64748b" /> Phone: <strong>{phoneVal}</strong></p>
+                    <p style={{ margin: "0 0 4px" }}><FileText size={13} color="#64748b" /> CNIC: <strong>{cnicVal}</strong></p>
+                    <p style={{ margin: 0 }}><Phone size={13} color="#64748b" /> Phone: <strong>{phoneVal}</strong></p>
                   </div>
 
                   {offer && (
@@ -416,7 +433,7 @@ export default function EmployeeDocuments() {
                               className="ed-download-btn"
                               style={{ fontSize: "11px", padding: "4px 10px", background: "#0082ff", color: "#fff", textDecoration: "none", borderRadius: "5px", display: "inline-flex", alignItems: "center", gap: "4px" }}
                             >
-                              <MdDownload size={13} /> View / Download File
+                              <Download size={13} /> View / Download File
                             </a>
                           </div>
                         ))}
@@ -428,7 +445,7 @@ export default function EmployeeDocuments() {
                 <div className="ed-card-footer" style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid #f1f5f9" }}>
                   <small style={{ color: "#64748b" }}>Role: {u.role}</small>
                   <button className="ed-download-btn" style={{ background: "#0082ff", color: "#fff", border: "none" }} onClick={() => openUploadModal(u.id)}>
-                    <MdCloudUpload size={14} /> Upload New File
+                    <Upload size={14} /> Upload New File
                   </button>
                 </div>
               </div>
@@ -443,7 +460,7 @@ export default function EmployeeDocuments() {
           <div className="ed-modal-panel" onClick={(e) => e.stopPropagation()}>
             <div className="ed-modal-header">
               <h3>Upload Document Directly To User Record</h3>
-              <button className="ed-close-btn" onClick={() => setModalOpen(false)}><MdClose size={20} /></button>
+              <button className="ed-close-btn" onClick={() => setModalOpen(false)}><X size={20} /></button>
             </div>
 
             <form onSubmit={handleUploadToUserTable}>
@@ -470,7 +487,7 @@ export default function EmployeeDocuments() {
                   <label>Attach File Document (PDF / JPG / PNG)</label>
                   <div className="ed-upload-box">
                     <input type="file" onChange={(e) => setSelectedFile(e.target.files[0])} required />
-                    <span><MdCloudUpload size={18} /> {selectedFile ? `Selected: ${selectedFile.name}` : "Click to Browse File"}</span>
+                    <span><Upload size={18} /> {selectedFile ? `Selected: ${selectedFile.name}` : "Click to Browse File"}</span>
                   </div>
                 </div>
               </div>

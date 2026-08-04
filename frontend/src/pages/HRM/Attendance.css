@@ -1,15 +1,21 @@
+/* TechXaro Enterprise HRM 2.0 - Standardized PMS Enterprise UI/UX System */
+
 .att-page {
   padding: 24px;
   background-color: #f8fafc;
   min-height: 100vh;
   font-family: inherit;
+  color: #0f172a;
 }
 
+/* Page Header & Breadcrumbs */
 .att-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 
 .att-title-row {
@@ -17,6 +23,7 @@
   align-items: center;
   gap: 12px;
   margin-bottom: 6px;
+  flex-wrap: wrap;
 }
 
 .att-title-row h1 {
@@ -24,32 +31,39 @@
   font-weight: 700;
   color: #0f172a;
   margin: 0;
+  letter-spacing: -0.025em;
 }
 
 .att-live-pill {
-  padding: 4px 10px;
+  padding: 4px 12px;
   background: #f0fdf4;
   color: #166534;
-  border-radius: 999px;
+  border: 1px solid #bbf7d0;
+  border-radius: 9999px;
   font-size: 11.5px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
 .att-header p {
   margin: 0;
   color: #64748b;
   font-size: 13.5px;
+  line-height: 1.5;
 }
 
+/* Tabs Navigation Bar (PMS Consistent) */
 .att-tabs-nav {
   display: flex;
-  gap: 8px;
-  margin-bottom: 24px;
-  border-bottom: 2px solid #e2e8f0;
-  padding-bottom: 4px;
+  gap: 6px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
 .att-tab-btn {
@@ -59,42 +73,50 @@
   color: #64748b;
   background: transparent;
   border: none;
-  border-bottom: 3px solid transparent;
+  border-bottom: 2px solid transparent;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  transition: all 0.2s ease;
-}
-
-.att-tab-btn:hover {
-  color: #0082ff;
-}
-
-.att-tab-btn.active {
-  color: #0082ff;
-  border-bottom-color: #0082ff;
-  background: #eff6ff;
+  gap: 8px;
+  white-space: nowrap;
+  transition: all 0.15s ease-in-out;
   border-radius: 6px 6px 0 0;
 }
 
-.att-tab-badge {
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  background: #ef4444;
-  color: #fff;
-  font-weight: 700;
+.att-tab-btn:hover {
+  color: #2563eb;
+  background: #f1f5f9;
 }
 
+.att-tab-btn.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+  background: #eff6ff;
+}
+
+.att-tab-badge {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  background: #ef4444;
+  color: #ffffff;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+/* Toolbar & View Mode Switcher */
 .att-toolbar {
   display: flex;
   gap: 16px;
   margin-bottom: 20px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
 }
 
 .att-search-box {
   flex: 1;
+  min-width: 260px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -102,103 +124,196 @@
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   padding: 8px 14px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.att-search-box:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .att-search-box input {
   border: none;
   outline: none;
   width: 100%;
-  font-size: 13px;
+  font-size: 13.5px;
   background: transparent;
+  color: #0f172a;
 }
 
+.att-view-toggle {
+  display: flex;
+  background: #f1f5f9;
+  padding: 3px;
+  border-radius: 8px;
+  gap: 2px;
+  border: 1px solid #e2e8f0;
+}
+
+.att-view-btn {
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.att-view-btn.active {
+  background: #ffffff;
+  color: #2563eb;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* Cards & Components (PMS Consistent) */
 .att-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
 }
 
 .att-card-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: #0f172a;
   margin: 0 0 16px;
   display: flex;
   align-items: center;
   gap: 8px;
+  letter-spacing: -0.01em;
 }
 
+/* Buttons (PMS Standard) */
 .att-btn {
-  padding: 8px 14px;
-  border-radius: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  border: none;
+  border: 1px solid transparent;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: opacity 0.2s ease;
+  transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .att-btn:hover {
-  opacity: 0.9;
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.att-btn:active {
+  transform: translateY(0);
 }
 
 .att-btn--primary {
-  background: #0082ff;
+  background: #2563eb;
   color: #ffffff;
+  box-shadow: 0 1px 2px 0 rgba(37, 99, 235, 0.2);
 }
 
-.att-toast {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  padding: 12px 20px;
-  border-radius: 8px;
-  color: #ffffff;
-  font-size: 13.5px;
-  font-weight: 600;
-  z-index: 9999;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+.att-btn--primary:hover {
+  background: #1d4ed8;
 }
 
-.att-toast--success {
-  background: #10b981;
+/* Analytics Stats Grid */
+.att-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
 }
 
-.att-toast--error {
-  background: #ef4444;
+/* Kanban Cards Grid */
+.att-kanban-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
 }
 
-.att-spinner {
-  width: 24px;
-  height: 24px;
-  border: 3px solid #e2e8f0;
-  border-top-color: #0082ff;
+.att-kanban-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+}
+
+.att-kanban-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  border-color: #cbd5e1;
+}
+
+.att-avatar-circle {
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  animation: att-spin 0.8s linear infinite;
-  margin: 0 auto 12px;
+  background: linear-gradient(135deg, #2563eb 0%, #0284c7 100%);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
 }
 
-@keyframes att-spin {
-  to { transform: rotate(360deg); }
+/* Pulse indicator for live users */
+.att-pulse-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
 }
 
+.att-pulse-dot--live {
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: att-pulse-green 1.5s infinite;
+}
+
+.att-pulse-dot--paused {
+  background: #f59e0b;
+}
+
+.att-pulse-dot--off {
+  background: #94a3b8;
+}
+
+@keyframes att-pulse-green {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+/* Modals & Backdrop (PMS Enterprise Standard) */
 .att-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(15, 23, 42, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
   backdrop-filter: blur(4px);
+  padding: 16px;
 }
 
 .att-modal-panel {
@@ -206,8 +321,11 @@
   border-radius: 12px;
   width: 100%;
   max-width: 600px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
 }
 
 .att-modal-header {
@@ -225,16 +343,104 @@
   color: #0f172a;
 }
 
+/* Inputs & Forms (PMS Consistent) */
 .att-input {
   width: 100%;
-  padding: 8px 12px;
+  padding: 9px 12px;
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: 8px;
+  font-size: 13.5px;
   outline: none;
-  background: #fff;
+  background: #ffffff;
+  color: #0f172a;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .att-input:focus {
-  border-color: #0082ff;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Toast Notifications */
+.att-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 600;
+  z-index: 99999;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.att-toast--success {
+  background: #10b981;
+}
+
+.att-toast--error {
+  background: #ef4444;
+}
+
+.att-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: att-spin 0.8s linear infinite;
+  margin: 0 auto 12px;
+}
+
+@keyframes att-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 100% Mobile & Tablet Responsiveness */
+@media (max-width: 1024px) {
+  .att-page {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .att-page {
+    padding: 16px;
+  }
+
+  .att-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .att-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .att-search-box {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .att-modal-panel {
+    max-width: 100%;
+    margin: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .att-page {
+    padding: 12px;
+  }
+
+  .att-title-row h1 {
+    font-size: 18px;
+  }
+
+  .att-tab-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
 }

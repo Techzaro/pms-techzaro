@@ -24,26 +24,24 @@
  *   - Mobile (≤768px): overlay drawer toggled via hamburger menu
  */
 
+import React, { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
 import API_URL from "../../../../config/api";
 import { authToken, getCurrentRole, getUser, setUser, rolePath, getUrlRole } from "../../../../utils/auth";
 
 import {
-  MdDashboard,
-  MdPeople,
-  // HR Management icons
-  MdWork,
-  MdDescription,
-  MdOutlineDescription,
-  MdEventAvailable,
-  MdAccountBalanceWallet,
-  MdTrendingUp,
-  MdCampaign,
-  MdInventory2,
-  MdAnalytics,
-  MdSchool,
-} from "react-icons/md";
+  LayoutDashboard,
+  Users,
+  Briefcase,
+  FileText,
+  Calendar,
+  CreditCard,
+  TrendingUp,
+  Bell,
+  Layers,
+  BarChart2,
+  Award,
+} from "lucide-react";
 
 import "./Sidebar.css";
 
@@ -55,37 +53,37 @@ const HR_SECTIONS = [
   {
     label: "Hiring",
     items: [
-      { page: "hrm/recruitment", label: "Recruitment & Onboarding", icon: MdWork },
-      { page: "hrm/offer-letters", label: "Offer Letters", icon: MdDescription },
+      { page: "hrm/recruitment", label: "Recruitment & Onboarding", icon: Briefcase },
+      { page: "hrm/offer-letters", label: "Offer Letters", icon: FileText },
     ],
   },
   {
     label: "Workforce",
     items: [
-      { page: "hrm/workforce", label: "Workforce Directory", icon: MdPeople },
-      { page: "hrm/documents", label: "Employee Documents", icon: MdOutlineDescription },
-      { page: "hrm/attendance", label: "Attendance & Leave", icon: MdEventAvailable },
-      { page: "hrm/performance", label: "Performance & Evaluation", icon: MdTrendingUp },
-      { page: "hrm/assets", label: "Assets / Items Issued", icon: MdInventory2 },
+      { page: "hrm/workforce", label: "Workforce Directory", icon: Users },
+      { page: "hrm/documents", label: "Employee Documents", icon: FileText },
+      { page: "hrm/attendance", label: "Attendance & Leave", icon: Calendar },
+      { page: "hrm/performance", label: "Performance & Evaluation", icon: TrendingUp },
+      { page: "hrm/assets", label: "Assets / Items Issued", icon: Layers },
     ],
   },
   {
     label: "Payroll",
     items: [
-      { page: "hrm/payroll", label: "Payroll & Salary", icon: MdAccountBalanceWallet },
+      { page: "hrm/payroll", label: "Payroll & Salary", icon: CreditCard },
     ],
   },
   {
     label: "Engagement",
     items: [
-      { page: "hrm/notice-board", label: "Notice Board", icon: MdCampaign },
-      { page: "hrm/training", label: "Training & Learning", icon: MdSchool },
+      { page: "hrm/notice-board", label: "Notice Board", icon: Bell },
+      { page: "hrm/training", label: "Training & Learning", icon: Award },
     ],
   },
   {
     label: "Insights",
     items: [
-      { page: "hrm/reports", label: "HR Reports & Analytics", icon: MdAnalytics },
+      { page: "hrm/reports", label: "HR Reports & Analytics", icon: BarChart2 },
     ],
   },
 ];
@@ -227,7 +225,7 @@ function Sidebar() {
             aria-current={isActive("HRM") || isActive("hrm") || isActive("hrm/member-dashboard") ? "page" : undefined}
             onClick={(e) => e.stopPropagation()}
           >
-            <MdDashboard />
+            <LayoutDashboard />
             <span>{user?.role?.toLowerCase() === "member" ? "My Member Hub" : "Dashboard"}</span>
           </Link>
 
@@ -236,7 +234,7 @@ function Sidebar() {
             {
               label: "My Member Portal",
               items: [
-                { page: "hrm/member-dashboard", label: "My HRM Dashboard", icon: MdDashboard },
+                { page: "hrm/member-dashboard", label: "My HRM Dashboard", icon: LayoutDashboard },
               ],
             },
           ] : HR_SECTIONS).map((section) => (

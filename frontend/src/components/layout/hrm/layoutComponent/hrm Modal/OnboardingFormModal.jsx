@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { MdClose } from "react-icons/md";
+import { X } from "lucide-react";
 
 export default function OnboardingFormModal({ open, candidates, initialCandidateId, onClose, onSubmit }) {
   const [form, setForm] = useState({
@@ -16,7 +16,7 @@ export default function OnboardingFormModal({ open, candidates, initialCandidate
       <div className="r-modal-panel r-modal-panel--md" onClick={(e) => e.stopPropagation()}>
         <div className="r-modal-header">
           <h3>Initialize Candidate Onboarding</h3>
-          <button className="r-icon-btn" onClick={onClose} aria-label="Close modal"><MdClose size={20} /></button>
+          <button className="r-icon-btn" onClick={onClose} aria-label="Close modal"><X size={20} /></button>
         </div>
         <form className="r-modal-form" onSubmit={(e) => { e.preventDefault(); onSubmit(form); }}>
           <div className="r-modal-body">

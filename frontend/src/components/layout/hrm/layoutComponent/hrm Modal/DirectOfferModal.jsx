@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { MdClose, MdSend } from "react-icons/md";
+import { X, Send } from "lucide-react";
 
 const TECHXARO_PRESETS = {
   Internship: {
@@ -79,7 +79,7 @@ export default function DirectOfferModal({ open, candidate, onClose, onSubmit, s
       <div className="r-modal-panel r-modal-panel--lg" onClick={(e) => e.stopPropagation()}>
         <div className="r-modal-header">
           <h3>Issue Official Offer Letter: {candidate?.name}</h3>
-          <button className="r-icon-btn" onClick={onClose} aria-label="Close modal"><MdClose size={20} /></button>
+          <button className="r-icon-btn" onClick={onClose} aria-label="Close modal"><X size={20} /></button>
         </div>
         <form className="r-modal-form" onSubmit={(e) => { e.preventDefault(); onSubmit(form); }}>
           <div className="r-modal-body">
@@ -94,45 +94,52 @@ export default function DirectOfferModal({ open, candidate, onClose, onSubmit, s
 
             <div className="r-form-row r-form-row--2">
               <div className="r-field">
-                <span className="r-field-label">Candidate Name</span>
-                <input className="r-input" value={form.candidateName} onChange={set('candidateName')} required />
-              </div>
-              <div className="r-field">
-                <span className="r-field-label">Candidate Email</span>
-                <input type="email" className="r-input" value={form.candidateEmail} onChange={set('candidateEmail')} required />
-              </div>
-            </div>
-
-            <div className="r-form-row r-form-row--3">
-              <div className="r-field">
                 <span className="r-field-label">Job Title</span>
-                <input className="r-input" value={form.jobTitle} onChange={set('jobTitle')} required />
+                <input className="r-input" value={form.jobTitle} onChange={set("jobTitle")} required />
               </div>
               <div className="r-field">
-                <span className="r-field-label">Base Monthly Stipend / Salary (PKR)</span>
-                <input type="number" className="r-input" value={form.baseSalary} onChange={set('baseSalary')} required />
+                <span className="r-field-label">Employment Type</span>
+                <input className="r-input" value={form.employmentType} onChange={set("employmentType")} required />
+              </div>
+            </div>
+
+            <div className="r-form-row r-form-row--2">
+              <div className="r-field">
+                <span className="r-field-label">Monthly Base Salary / Stipend (PKR)</span>
+                <input type="number" className="r-input" value={form.baseSalary} onChange={set("baseSalary")} required />
               </div>
               <div className="r-field">
-                <span className="r-field-label">Offer Expiry Date</span>
-                <input type="date" className="r-input" value={form.expiryDate} onChange={set('expiryDate')} required />
+                <span className="r-field-label">Reporting Manager</span>
+                <input className="r-input" value={form.reportingManager} onChange={set("reportingManager")} />
+              </div>
+            </div>
+
+            <div className="r-form-row r-form-row--2">
+              <div className="r-field">
+                <span className="r-field-label">Joining / Start Date</span>
+                <input type="date" className="r-input" value={form.startDate} onChange={set("startDate")} required />
+              </div>
+              <div className="r-field">
+                <span className="r-field-label">Offer Acceptance Expiry Date</span>
+                <input type="date" className="r-input" value={form.expiryDate} onChange={set("expiryDate")} required />
               </div>
             </div>
 
             <div className="r-field">
-              <span className="r-field-label">Contract Benefits Package</span>
-              <textarea className="r-textarea" rows={2} value={form.benefits} onChange={set('benefits')} />
+              <span className="r-field-label">Benefits &amp; Perks Package</span>
+              <input className="r-input" value={form.benefits} onChange={set("benefits")} />
             </div>
 
             <div className="r-field">
-              <span className="r-field-label">Strict Regulations &amp; Terms (TechXaro PDF Contract)</span>
-              <textarea className="r-textarea" rows={4} value={form.customClauses} onChange={set('customClauses')} />
+              <span className="r-field-label">Custom Clauses &amp; Terms</span>
+              <textarea className="r-input" rows="3" value={form.customClauses} onChange={set("customClauses")} />
             </div>
           </div>
 
           <div className="r-modal-footer">
             <button type="button" className="r-btn r-btn--ghost" onClick={onClose}>Cancel</button>
             <button type="submit" className="r-btn r-btn--primary" disabled={submitting}>
-              <MdSend size={16} /> {submitting ? "Sending Offer..." : "Issue & Send Offer Email"}
+              <Send size={16} /> {submitting ? "Sending Offer..." : "Issue & Send Offer Email"}
             </button>
           </div>
         </form>

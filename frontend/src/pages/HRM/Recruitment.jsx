@@ -2,15 +2,36 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import API_URL from "../../config/api";
 import { authToken } from "../../utils/auth";
 
+import Breadcrumb from "../../components/Breadcrumb";
 import {
-  MdWork, MdGroups, MdSearch, MdAdd, MdClose, MdChevronRight, MdArrowForward,
-  MdMailOutline, MdPhone, MdStar, MdStarBorder, MdCalendarToday, MdLocationOn,
-  MdLink, MdEdit, MdDeleteOutline, MdThumbDownAlt, MdRefresh, MdFilterList,
-  MdKeyboardArrowDown, MdFiberNew, MdWifi, MdWifiOff, MdAssignmentTurnedIn,
-  MdPersonAddAlt1, MdWarningAmber, MdCheckCircle, MdAccessTime, MdFileUpload,
-  MdPsychology, MdSend, MdDescription, MdBadge, MdOutlineCloudUpload, MdVideoCall,
-  MdEvent, MdNotifications, MdVpnKey
-} from "react-icons/md";
+  Briefcase,
+  Users,
+  Search,
+  Plus,
+  X,
+  ChevronRight,
+  ArrowRight,
+  Mail,
+  Phone,
+  Award,
+  Calendar,
+  MapPin,
+  Link as LinkIcon,
+  Edit3,
+  Trash2,
+  RefreshCw,
+  Filter,
+  ChevronDown,
+  CheckCircle2,
+  Clock,
+  Upload,
+  Send,
+  FileText,
+  Video,
+  Bell,
+  Key,
+  AlertTriangle,
+} from "lucide-react";
 
 /* Modularized HRM Modal Components */
 import JobFormModal from "../../components/layout/hrm/layoutComponent/hrm Modal/JobFormModal";
@@ -463,13 +484,16 @@ export default function RecruitmentOnboarding() {
         <div className={`r-toast r-toast--${toast.kind}`}>{toast.message}</div>
       )}
 
+      {/* BREADCRUMB */}
+      <Breadcrumb items={[{ label: "Enterprise HRM", path: "/admin/hrm/recruitment" }, { label: "Recruitment & Talent Acquisition" }]} />
+
       {/* HEADER */}
       <div className="r-header">
         <div className="r-header-text">
           <div className="r-header-title-row">
             <h1>Recruitment &amp; Talent Acquisition</h1>
             <span className="r-status-pill r-status-pill--live">
-              <MdWifi size={13} /> Live System
+              <CheckCircle2 size={13} /> Live System
             </span>
           </div>
           <p>Manage job requisitions, schedule interviews, evaluate AI CV match scores, and issue offer letters.</p>
@@ -478,12 +502,12 @@ export default function RecruitmentOnboarding() {
         <div className="r-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {activeTab === "Open Roles" && (
             <button className="r-btn r-btn--ghost" onClick={() => { setEditJob(null); setModalJobOpen(true); }}>
-              <MdAdd size={18} /> Post Vacancy
+              <Plus size={18} /> Post Vacancy
             </button>
           )}
           
           <button className="r-btn r-btn--primary" onClick={() => setModalCandidateOpen(true)}>
-            <MdPersonAddAlt1 size={18} /> Add New Candidate
+            <Users size={18} /> Add New Candidate
           </button>
 
           {/* Real-time Notification Bell on the RIGHT side of Add New Candidate */}
@@ -497,7 +521,7 @@ export default function RecruitmentOnboarding() {
                 if (unreadNotifications > 0) handleMarkNotificationsRead();
               }}
             >
-              <MdNotifications size={20} />
+              <Bell size={20} />
               {unreadNotifications > 0 && (
                 <span style={{
                   position: "absolute",
@@ -531,7 +555,7 @@ export default function RecruitmentOnboarding() {
                 <div style={{ padding: "12px 16px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", fontWeight: "700", fontSize: "13px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span>Offer Letter Alerts</span>
                   <button style={{ background: "none", border: "none", cursor: "pointer" }} onClick={() => setShowNotificationDropdown(false)}>
-                    <MdClose size={16} />
+                    <X size={16} />
                   </button>
                 </div>
                 <div style={{ maxHeight: "300px", overflowY: "auto" }}>
@@ -555,7 +579,7 @@ export default function RecruitmentOnboarding() {
 
           {activeTab === "Onboarding" && (
             <button className="r-btn r-btn--ghost" onClick={() => setModalOnboardingOpen(true)}>
-              <MdAdd size={18} /> Initialize Onboarding
+              <Plus size={18} /> Initialize Onboarding
             </button>
           )}
         </div>
@@ -568,28 +592,28 @@ export default function RecruitmentOnboarding() {
             <span className="r-stat-label">Active Job Openings</span>
             <span className="r-stat-value">{stats.openRoles}</span>
           </div>
-          <div className="r-stat-icon r-stat-icon--violet"><MdWork size={22} /></div>
+          <div className="r-stat-icon r-stat-icon--violet"><Briefcase size={22} /></div>
         </div>
         <div className="r-stat-card">
           <div className="r-stat-info">
             <span className="r-stat-label">Active Pipeline</span>
             <span className="r-stat-value">{stats.activeCandidates}</span>
           </div>
-          <div className="r-stat-icon r-stat-icon--sky"><MdGroups size={22} /></div>
+          <div className="r-stat-icon r-stat-icon--sky"><Users size={22} /></div>
         </div>
         <div className="r-stat-card">
           <div className="r-stat-info">
             <span className="r-stat-label">Hired Candidates</span>
             <span className="r-stat-value">{stats.hiredCount}</span>
           </div>
-          <div className="r-stat-icon r-stat-icon--success"><MdCheckCircle size={22} /></div>
+          <div className="r-stat-icon r-stat-icon--success"><CheckCircle2 size={22} /></div>
         </div>
         <div className="r-stat-card">
           <div className="r-stat-info">
             <span className="r-stat-label">Onboarding Pending</span>
             <span className="r-stat-value">{stats.onboardingPending}</span>
           </div>
-          <div className="r-stat-icon r-stat-icon--warning"><MdAccessTime size={22} /></div>
+          <div className="r-stat-icon r-stat-icon--warning"><Clock size={22} /></div>
         </div>
       </div>
 
@@ -623,7 +647,7 @@ export default function RecruitmentOnboarding() {
 
       {/* SEARCH BAR */}
       <div className="recruitment-search">
-        <MdSearch size={18} />
+        <Search size={18} />
         <input
           type="text"
           placeholder={`Search ${activeTab.toLowerCase()}...`}
@@ -639,7 +663,7 @@ export default function RecruitmentOnboarding() {
           <div className="r-card-grid r-card-grid--jobs">
             {filteredJobs.length === 0 ? (
               <div className="r-empty-state">
-                <div className="r-empty-state-icon"><MdWork size={24} /></div>
+                <div className="r-empty-state-icon"><Briefcase size={24} /></div>
                 <h3 className="r-empty-state-title">No Job Openings</h3>
                 <p className="r-empty-state-message">Click "Post Vacancy" to list a new job opening.</p>
               </div>
@@ -650,22 +674,22 @@ export default function RecruitmentOnboarding() {
                     <h3 className="r-job-card-title">{j.title}</h3>
                     <div className="r-job-card-actions">
                       <button className="r-icon-btn" title="Edit Job" onClick={() => { setEditJob(j); setModalJobOpen(true); }}>
-                        <MdEdit size={16} />
+                        <Edit3 size={16} />
                       </button>
                       <button className="r-icon-btn r-icon-btn--danger" title="Delete Job" onClick={() => handleDeleteJob(j.id)}>
-                        <MdDeleteOutline size={16} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
                   <div className="r-job-card-meta">
-                    <span><MdWork size={14} /> {j.department}</span>
-                    <span><MdLocationOn size={14} /> {j.location}</span>
+                    <span><Briefcase size={14} /> {j.department}</span>
+                    <span><MapPin size={14} /> {j.location}</span>
                     <span className={`r-pill r-pill--${j.status === "Open" ? "success" : "neutral"}`}>{j.status}</span>
                   </div>
                   <p className="r-job-card-desc">{j.description || "No description provided."}</p>
                   <div className="r-job-card-footer">
                     <span>{j.type} ({j.openings} opening{j.openings > 1 ? "s" : ""})</span>
-                    <span className="r-job-card-applicants"><MdGroups size={16} /> {candidates.filter(c => c.jobId === j.id).length} candidates</span>
+                    <span className="r-job-card-applicants"><Users size={16} /> {candidates.filter(c => c.jobId === j.id).length} candidates</span>
                   </div>
                 </div>
               ))
@@ -678,7 +702,7 @@ export default function RecruitmentOnboarding() {
           <div className="r-card-grid">
             {filteredCandidatesForStage(activeTab).length === 0 ? (
               <div className="r-empty-state">
-                <div className="r-empty-state-icon"><MdGroups size={24} /></div>
+                <div className="r-empty-state-icon"><Users size={24} /></div>
                 <h3 className="r-empty-state-title">No Candidates in {activeTab}</h3>
                 <p className="r-empty-state-message">Click "+ Add New Candidate" to register a candidate into the pipeline.</p>
               </div>
@@ -699,7 +723,7 @@ export default function RecruitmentOnboarding() {
                       <h4 className="r-candidate-card-name">{c.name}</h4>
                       {c.aiScore > 0 && (
                         <span className={`r-ai-badge ${c.aiScore >= 85 ? 'r-ai-badge--high' : 'r-ai-badge--mid'}`}>
-                          <MdPsychology size={14} /> {c.aiScore}% Match
+                          <Award size={14} /> {c.aiScore}% Match
                         </span>
                       )}
                     </div>
@@ -708,7 +732,7 @@ export default function RecruitmentOnboarding() {
                     <div className="r-rating-row" onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '4px', margin: '4px 0' }}>
                       {[1, 2, 3, 4, 5].map((star) => (
                         <span key={star} onClick={() => handleUpdateCandidateRating(c.id, star)} style={{ cursor: 'pointer' }}>
-                          {star <= c.rating ? <MdStar size={16} color="#f59e0b" /> : <MdStarBorder size={16} color="#94a3b8" />}
+                          {star <= c.rating ? <Award size={16} color="#f59e0b" /> : <Award size={16} color="#94a3b8" />}
                         </span>
                       ))}
                     </div>
@@ -719,7 +743,7 @@ export default function RecruitmentOnboarding() {
                         {candOnboarding ? (
                           isAllOnboarded ? (
                             <span className="r-pill r-pill--success" title="All Onboarding Checklist Tasks Completed">
-                              <MdCheckCircle size={12} /> Onboarding Done
+                              <CheckCircle2 size={12} /> Onboarding Done
                             </span>
                           ) : (
                             <span className="r-pill r-pill--warning" title={`${remainingTasks} tasks remaining`}>
@@ -738,13 +762,13 @@ export default function RecruitmentOnboarding() {
                               className="r-btn r-btn--xs r-btn--ghost"
                               onClick={() => handleRunAICVScreening(c.id)}
                             >
-                              <MdPsychology size={14} /> AI Review
+                              <Award size={14} /> AI Review
                             </button>
                             <button
                               className="r-btn r-btn--xs r-btn--primary"
                               onClick={() => handleUpdateCandidateStage(c.id, "Screening")}
                             >
-                              <MdArrowForward size={14} /> Screening
+                              <ArrowRight size={14} /> Screening
                             </button>
                           </>
                         )}
@@ -756,13 +780,13 @@ export default function RecruitmentOnboarding() {
                               className="r-btn r-btn--xs r-btn--ghost"
                               onClick={() => setInterviewCandidate(c)}
                             >
-                              <MdEvent size={14} /> Schedule Interview
+                              <Calendar size={14} /> Schedule Interview
                             </button>
                             <button
                               className="r-btn r-btn--xs r-btn--primary"
                               onClick={() => handleUpdateCandidateStage(c.id, "Interview")}
                             >
-                              <MdArrowForward size={14} /> To Interview
+                              <ArrowRight size={14} /> To Interview
                             </button>
                           </>
                         )}
@@ -775,14 +799,14 @@ export default function RecruitmentOnboarding() {
                               title="Schedule & Send Interview Email"
                               onClick={() => setInterviewCandidate(c)}
                             >
-                              <MdEvent size={14} /> Schedule Interview
+                              <Calendar size={14} /> Schedule Interview
                             </button>
                             <button
                               className="r-btn r-btn--xs r-btn--primary"
                               title="Issue Official Offer Letter"
                               onClick={() => setDirectOfferCandidate(c)}
                             >
-                              <MdSend size={14} /> Send Offer
+                              <Send size={14} /> Send Offer
                             </button>
                           </>
                         )}
@@ -794,13 +818,13 @@ export default function RecruitmentOnboarding() {
                               className="r-btn r-btn--xs r-btn--primary"
                               onClick={() => setDirectOfferCandidate(c)}
                             >
-                              <MdSend size={14} /> Send Offer
+                              <Send size={14} /> Send Offer
                             </button>
                             <button
                               className="r-btn r-btn--xs r-btn--ghost"
                               onClick={() => handleUpdateCandidateStage(c.id, "Hired")}
                             >
-                              <MdCheckCircle size={14} /> Mark Hired
+                              <CheckCircle2 size={14} /> Mark Hired
                             </button>
                           </>
                         )}
@@ -815,7 +839,7 @@ export default function RecruitmentOnboarding() {
                               setModalOnboardingOpen(true);
                             }}
                           >
-                            <MdAssignmentTurnedIn size={14} /> Start Onboarding
+                            <FileText size={14} /> Start Onboarding
                           </button>
                         )}
 
@@ -826,7 +850,7 @@ export default function RecruitmentOnboarding() {
                             style={{ width: "100%" }}
                             onClick={() => handleUpdateCandidateStage(c.id, "Applied")}
                           >
-                            <MdRefresh size={14} /> Re-evaluate
+                            <RefreshCw size={14} /> Re-evaluate
                           </button>
                         )}
                       </div>
@@ -843,7 +867,7 @@ export default function RecruitmentOnboarding() {
           <div className="r-onboarding-list">
             {onboarding.length === 0 ? (
               <div className="r-empty-state">
-                <div className="r-empty-state-icon"><MdAssignmentTurnedIn size={24} /></div>
+                <div className="r-empty-state-icon"><FileText size={24} /></div>
                 <h3 className="r-empty-state-title">No Onboarding Records</h3>
                 <p className="r-empty-state-message">Initialize onboarding when a candidate is hired.</p>
               </div>
@@ -896,12 +920,12 @@ export default function RecruitmentOnboarding() {
                         style={{ background: "#0082ff", borderRadius: "8px" }}
                         onClick={() => handleConvertToUser(o.candidate_id || o.id)}
                       >
-                        <MdVpnKey size={16} /> Email Sign-In Credentials to Candidate
+                        <Key size={16} /> Email Sign-In Credentials to Candidate
                       </button>
 
                       {oDoneAll ? (
                         <span style={{ color: "#166534", fontSize: "12.5px", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px" }}>
-                          <MdCheckCircle size={16} color="#166534" /> Account &amp; Docs Ready
+                          <CheckCircle2 size={16} color="#166534" /> Account &amp; Docs Ready
                         </span>
                       ) : (
                         <span style={{ fontSize: "12px", color: "#64748b" }}>

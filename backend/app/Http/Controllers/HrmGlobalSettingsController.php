@@ -12,10 +12,41 @@ class HrmGlobalSettingsController extends Controller
         return $request->user();
     }
 
-    // 1. Fetch Global Settings
+    // 1. Fetch Global Settings (Auto-fetches United States Defaults if not set)
     public function getSettings(Request $request)
     {
+        $defaults = [
+            'country' => 'United States',
+            'state' => 'New York',
+            'currency' => 'USD',
+            'currency_symbol' => '$',
+            'time_zone' => 'America/New_York',
+            'payroll_frequency' => 'Monthly',
+            'working_days_per_week' => '5',
+            'work_week_pattern' => 'Monday to Friday',
+            'daily_working_hours' => '8.0',
+            'weekly_target_hours' => '40.0',
+            'grace_period_minutes' => '15',
+            'late_threshold_time' => '09:15:00',
+            'max_late_allowed_days' => '3',
+            'overtime_allowed' => '1',
+            'screenshot_verification' => '1',
+        ];
+
+        foreach ($defaults as $k => $v) {
+            $exists = DB::table('hrm_global_settings')->where('key', $k)->exists();
+            if (!$exists) {
+                DB::table('hrm_global_settings')->insert([
+                    'key' => $k,
+                    'value' => $v,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+
         $settings = DB::table('hrm_global_settings')->pluck('value', 'key');
+
         return response()->json([
             'success' => true,
             'settings' => $settings
@@ -39,9 +70,12 @@ class HrmGlobalSettingsController extends Controller
             );
         }
 
+        $settings = DB::table('hrm_global_settings')->pluck('value', 'key');
+
         return response()->json([
             'success' => true,
-            'message' => 'Global HRM Settings updated successfully ✔'
+            'message' => 'Global Enterprise HR & System Settings updated successfully ✔',
+            'settings' => $settings
         ]);
     }
 

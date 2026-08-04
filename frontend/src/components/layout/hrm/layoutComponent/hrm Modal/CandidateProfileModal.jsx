@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { MdClose, MdDescription, MdPsychology, MdEvent, MdSend, MdNoteAlt, MdSave } from "react-icons/md";
+import { X, FileText, Award, Calendar, Send, Edit3, Save } from "lucide-react";
 
 const STAGE_TABS = ["Applied", "Screening", "Interview", "Offer", "Hired", "Rejected"];
 
@@ -29,7 +29,7 @@ export default function CandidateProfileModal({
       <div className="r-modal-panel r-modal-panel--lg" onClick={(e) => e.stopPropagation()}>
         <div className="r-modal-header">
           <h3>Candidate Profile: {candidate.name}</h3>
-          <button className="r-icon-btn" onClick={onClose} aria-label="Close modal"><MdClose size={20} /></button>
+          <button className="r-icon-btn" onClick={onClose} aria-label="Close modal"><X size={20} /></button>
         </div>
 
         <div className="r-modal-body">
@@ -47,7 +47,7 @@ export default function CandidateProfileModal({
                 <strong>Resume / Document:</strong>{" "}
                 {candidate.resumeFile ? (
                   <a href={candidate.resumeUrl || '#'} target="_blank" rel="noreferrer" className="r-file-chip">
-                    <MdDescription size={14} /> {candidate.resumeFile}
+                    <FileText size={14} /> {candidate.resumeFile}
                   </a>
                 ) : (
                   <span>No file uploaded</span>
@@ -84,7 +84,7 @@ export default function CandidateProfileModal({
           <div className="r-hr-notes-box" style={{ marginTop: '16px', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <strong style={{ fontSize: '13.5px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <MdNoteAlt size={18} color="#0082ff" /> HR Candidate Notes &amp; Related Data
+                <Edit3 size={18} color="#0082ff" /> HR Candidate Notes &amp; Related Data
               </strong>
               {onSaveNotes && (
                 <button
@@ -96,7 +96,7 @@ export default function CandidateProfileModal({
                     setSavingNotes(false);
                   }}
                 >
-                  <MdSave size={14} /> {savingNotes ? "Saving..." : "Save HR Notes"}
+                  <Save size={14} /> {savingNotes ? "Saving..." : "Save HR Notes"}
                 </button>
               )}
             </div>
@@ -113,7 +113,7 @@ export default function CandidateProfileModal({
           <div className="r-ai-box" style={{ marginTop: '16px' }}>
             <div className="r-ai-box-header">
               <div className="r-ai-title">
-                <MdPsychology size={22} className="text-primary" />
+                <Award size={22} className="text-primary" />
                 <h4>AI CV Screening &amp; Match Engine</h4>
               </div>
               <button
@@ -165,10 +165,10 @@ export default function CandidateProfileModal({
 
         <div className="r-modal-footer">
           <button className="r-btn r-btn--ghost" onClick={() => onOpenScheduleInterview(candidate)}>
-            <MdEvent size={16} /> Schedule Interview
+            <Calendar size={16} /> Schedule Interview
           </button>
           <button className="r-btn r-btn--primary" onClick={() => onOpenDirectOffer(candidate)}>
-            <MdSend size={16} /> Issue Offer Letter
+            <Send size={16} /> Issue Offer Letter
           </button>
           <button className="r-btn r-btn--ghost" onClick={onClose}>Close</button>
         </div>

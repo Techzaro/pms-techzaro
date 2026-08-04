@@ -1,5 +1,6 @@
 import React from "react";
-import { MdClose, MdSecurity, MdCloudUpload, MdBadge, MdSchool, MdDescription } from "react-icons/md";
+import { useState, useEffect } from "react";
+import { X, Shield, Upload, FileText, Award } from "lucide-react";
 
 export default function WorkforceEmployeeModal({
   open,
@@ -18,7 +19,7 @@ export default function WorkforceEmployeeModal({
         <div className="wf-modal-header">
           <h3>Workforce Profile &amp; Document Verification</h3>
           <button className="wf-close-btn" onClick={onClose} aria-label="Close Modal">
-            <MdClose size={22} />
+            <X size={22} />
           </button>
         </div>
 
@@ -38,18 +39,6 @@ export default function WorkforceEmployeeModal({
                   />
                 </div>
                 <div className="wf-field">
-                  <label>Father's Name</label>
-                  <input
-                    className="wf-input"
-                    value={editForm.father_name || ""}
-                    onChange={(e) => setEditForm({ ...editForm, father_name: e.target.value })}
-                    placeholder="Father Name"
-                  />
-                </div>
-              </div>
-
-              <div className="wf-form-row">
-                <div className="wf-field">
                   <label>Email Address</label>
                   <input
                     className="wf-input"
@@ -59,25 +48,37 @@ export default function WorkforceEmployeeModal({
                     required
                   />
                 </div>
+              </div>
+
+              <div className="wf-form-row">
                 <div className="wf-field">
-                  <label>Contact Phone Number</label>
+                  <label>Phone / WhatsApp Number</label>
                   <input
                     className="wf-input"
-                    value={editForm.phone_number || editForm.contact_no || ""}
-                    onChange={(e) => setEditForm({ ...editForm, phone_number: e.target.value, contact_no: e.target.value })}
-                    placeholder="+923119121134"
+                    value={editForm.phone_number || editForm.contact_no || editForm.phone || ""}
+                    onChange={(e) => setEditForm({ ...editForm, phone_number: e.target.value, phone: e.target.value })}
+                    placeholder="+92 300 1234567"
+                  />
+                </div>
+                <div className="wf-field">
+                  <label>CNIC Number (13 Digits)</label>
+                  <input
+                    className="wf-input"
+                    value={editForm.id_card_number || editForm.cnic || ""}
+                    onChange={(e) => setEditForm({ ...editForm, id_card_number: e.target.value, cnic: e.target.value })}
+                    placeholder="35202-1234567-1"
                   />
                 </div>
               </div>
 
               <div className="wf-form-row">
                 <div className="wf-field">
-                  <label>CNIC Number</label>
+                  <label>Official Designation</label>
                   <input
                     className="wf-input"
-                    value={editForm.id_card_number || ""}
-                    onChange={(e) => setEditForm({ ...editForm, id_card_number: e.target.value })}
-                    placeholder="12101-1234567-1"
+                    value={editForm.designation || ""}
+                    onChange={(e) => setEditForm({ ...editForm, designation: e.target.value })}
+                    placeholder="e.g. Senior Frontend Engineer"
                   />
                 </div>
                 <div className="wf-field">
@@ -86,34 +87,15 @@ export default function WorkforceEmployeeModal({
                     className="wf-input"
                     value={editForm.department || ""}
                     onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="wf-form-row">
-                <div className="wf-field">
-                  <label>Designation / Title</label>
-                  <input
-                    className="wf-input"
-                    value={editForm.designation || ""}
-                    onChange={(e) => setEditForm({ ...editForm, designation: e.target.value })}
-                  />
-                </div>
-                <div className="wf-field">
-                  <label>Employee Code</label>
-                  <input
-                    className="wf-input"
-                    value={editForm.employee_code || ""}
-                    onChange={(e) => setEditForm({ ...editForm, employee_code: e.target.value })}
-                    placeholder="EMP-1001"
+                    placeholder="e.g. Engineering"
                   />
                 </div>
               </div>
             </div>
 
-            {/* Emergency Contact & Addresses */}
+            {/* Emergency Contacts & Permanent Address */}
             <div className="wf-form-section">
-              <h4>Emergency Contact &amp; Addresses</h4>
+              <h4>Emergency Contacts &amp; Residence</h4>
               <div className="wf-form-row">
                 <div className="wf-field">
                   <label>Emergency Contact Person</label>
@@ -121,30 +103,23 @@ export default function WorkforceEmployeeModal({
                     className="wf-input"
                     value={editForm.emergency_contact_name || ""}
                     onChange={(e) => setEditForm({ ...editForm, emergency_contact_name: e.target.value })}
+                    placeholder="e.g. Guardian / Next of Kin"
                   />
                 </div>
                 <div className="wf-field">
-                  <label>Emergency Contact Phone</label>
+                  <label>Emergency Contact Number</label>
                   <input
                     className="wf-input"
                     value={editForm.emergency_contact_phone || ""}
                     onChange={(e) => setEditForm({ ...editForm, emergency_contact_phone: e.target.value })}
+                    placeholder="+92 312 9876543"
                   />
                 </div>
               </div>
 
               <div className="wf-form-row">
-                <div className="wf-field">
-                  <label>Present Address</label>
-                  <input
-                    className="wf-input"
-                    value={editForm.present_address || editForm.address || ""}
-                    onChange={(e) => setEditForm({ ...editForm, present_address: e.target.value, address: e.target.value })}
-                    placeholder="Lahore, Pakistan"
-                  />
-                </div>
-                <div className="wf-field">
-                  <label>Permanent Address</label>
+                <div className="wf-field wf-field--full">
+                  <label>Permanent Residential Address</label>
                   <input
                     className="wf-input"
                     value={editForm.permanent_address || ""}
@@ -157,14 +132,14 @@ export default function WorkforceEmployeeModal({
 
             {/* Complete Document Upload & Compliance Vault Section */}
             <div className="wf-form-section wf-form-section--highlight">
-              <h4><MdBadge size={18} /> Employee Compliance Documents &amp; Certificates</h4>
+              <h4><FileText size={18} /> Employee Compliance Documents &amp; Certificates</h4>
 
               <div className="wf-form-row">
                 <div className="wf-field">
                   <label>🪪 CNIC Front Image Copy</label>
                   <div className="wf-upload-box">
                     <input type="file" onChange={(e) => handleFileUpload(e, "cnic_front_image")} />
-                    <span><MdCloudUpload size={16} /> {editForm.cnic_front_image ? "Uploaded ✔ (Click to Replace)" : "Upload CNIC Front Copy"}</span>
+                    <span><Upload size={16} /> {editForm.cnic_front_image ? "Uploaded ✔ (Click to Replace)" : "Upload CNIC Front Copy"}</span>
                   </div>
                 </div>
 
@@ -172,7 +147,7 @@ export default function WorkforceEmployeeModal({
                   <label>🪪 CNIC Back Image Copy</label>
                   <div className="wf-upload-box">
                     <input type="file" onChange={(e) => handleFileUpload(e, "cnic_back_image")} />
-                    <span><MdCloudUpload size={16} /> {editForm.cnic_back_image ? "Uploaded ✔ (Click to Replace)" : "Upload CNIC Back Copy"}</span>
+                    <span><Upload size={16} /> {editForm.cnic_back_image ? "Uploaded ✔ (Click to Replace)" : "Upload CNIC Back Copy"}</span>
                   </div>
                 </div>
               </div>
@@ -195,7 +170,7 @@ export default function WorkforceEmployeeModal({
                   <label>👮 Police Clearance Certificate File</label>
                   <div className="wf-upload-box">
                     <input type="file" onChange={(e) => handleFileUpload(e, "criminal_record_file")} />
-                    <span><MdCloudUpload size={16} /> {editForm.criminal_record_file ? "Uploaded ✔ (Click to Replace)" : "Upload Certificate PDF/Image"}</span>
+                    <span><Upload size={16} /> {editForm.criminal_record_file ? "Uploaded ✔ (Click to Replace)" : "Upload Certificate PDF/Image"}</span>
                   </div>
                 </div>
               </div>
@@ -205,7 +180,7 @@ export default function WorkforceEmployeeModal({
                   <label>🎓 Educational Degrees &amp; Certificates</label>
                   <div className="wf-upload-box">
                     <input type="file" onChange={(e) => handleFileUpload(e, "educational_documents")} />
-                    <span><MdCloudUpload size={16} /> {editForm.educational_documents ? "Uploaded ✔ (Click to Replace)" : "Upload Degree PDF/Image"}</span>
+                    <span><Upload size={16} /> {editForm.educational_documents ? "Uploaded ✔ (Click to Replace)" : "Upload Degree PDF/Image"}</span>
                   </div>
                 </div>
 
@@ -213,7 +188,7 @@ export default function WorkforceEmployeeModal({
                   <label>💼 Experience &amp; Other Documents</label>
                   <div className="wf-upload-box">
                     <input type="file" onChange={(e) => handleFileUpload(e, "other_document")} />
-                    <span><MdCloudUpload size={16} /> {editForm.other_document ? "Uploaded ✔ (Click to Replace)" : "Upload Experience Document"}</span>
+                    <span><Upload size={16} /> {editForm.other_document ? "Uploaded ✔ (Click to Replace)" : "Upload Experience Document"}</span>
                   </div>
                 </div>
               </div>

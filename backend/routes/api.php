@@ -28,6 +28,9 @@ use App\Http\Controllers\HrmRecruitmentController;
 use App\Http\Controllers\HrmAttendanceController;
 use App\Http\Controllers\HrmMemberPortalController;
 use App\Http\Controllers\HrmGlobalSettingsController;
+use App\Http\Controllers\HrmShiftController;
+use App\Http\Controllers\HrmWarningController;
+use App\Http\Controllers\HrmPerformanceController;
 
 /*
 | Public Routes
@@ -621,11 +624,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/hrm/attendance/corrections', [HrmAttendanceController::class, 'getCorrections']);
     Route::post('/hrm/attendance/corrections', [HrmAttendanceController::class, 'submitCorrection']);
     Route::patch('/hrm/attendance/corrections/{id}', [HrmAttendanceController::class, 'respondCorrection']);
+    Route::get('/hrm/requests-history', [HrmAttendanceController::class, 'getRequestsHistory']);
+    Route::post('/hrm/attendance/manual', [HrmAttendanceController::class, 'markManualAttendance']);
 
     // Leaves Management Routes
     Route::get('/hrm/leaves', [HrmAttendanceController::class, 'getLeaves']);
     Route::post('/hrm/leaves', [HrmAttendanceController::class, 'storeLeaveRequest']);
     Route::patch('/hrm/leaves/{id}', [HrmAttendanceController::class, 'respondLeaveRequest']);
+    Route::post('/hrm/leaves/{id}', [HrmAttendanceController::class, 'respondLeaveRequest']);
 
     // Member Self-Service Portal Routes
     Route::get('/hrm/member/summary', [HrmMemberPortalController::class, 'getMemberDashboardSummary']);
@@ -637,6 +643,32 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/hrm/timesheets', [HrmGlobalSettingsController::class, 'getTimesheets']);
     Route::post('/hrm/timesheets/generate', [HrmGlobalSettingsController::class, 'generateTimesheet']);
     Route::patch('/hrm/timesheets/{id}', [HrmGlobalSettingsController::class, 'respondTimesheet']);
+
+    // Working Models & Shift Templates Routes
+    Route::get('/hrm/shifts', [HrmShiftController::class, 'getShifts']);
+    Route::post('/hrm/shifts', [HrmShiftController::class, 'storeShift']);
+    Route::post('/hrm/shifts/{id}/activate', [HrmShiftController::class, 'activateShift']);
+    Route::put('/hrm/shifts/{id}', [HrmShiftController::class, 'updateShift']);
+    Route::delete('/hrm/shifts/{id}', [HrmShiftController::class, 'deleteShift']);
+
+    // Real-Time Admin Screen Verification Requests
+    Route::post('/hrm/screen-requests', [HrmShiftController::class, 'createScreenRequest']);
+    Route::post('/hrm/screen-requests/{id}/respond', [HrmShiftController::class, 'respondScreenRequest']);
+    Route::get('/hrm/screen-requests/active', [HrmShiftController::class, 'getActiveScreenRequest']);
+
+    // Corporate Policy Warnings & Department Sync Routes
+    Route::get('/hrm/warnings', [HrmWarningController::class, 'getWarnings']);
+    Route::post('/hrm/warnings/{id}/submit-reason', [HrmWarningController::class, 'submitRemovalReason']);
+    Route::post('/hrm/warnings/{id}/remove', [HrmWarningController::class, 'removeWarning']);
+    Route::post('/hrm/warnings/{id}/reject', [HrmWarningController::class, 'rejectRemoval']);
+    Route::post('/hrm/departments/sync-policy', [HrmWarningController::class, 'syncDepartmentSettings']);
+    Route::get('/hrm/departments/settings', [HrmWarningController::class, 'getDepartmentSettings']);
+
+    // Performance & Evaluation Routes
+    Route::get('/hrm/performance/summary', [HrmPerformanceController::class, 'getPerformanceSummary']);
+    Route::post('/hrm/performance/goals', [HrmPerformanceController::class, 'storeGoal']);
+    Route::patch('/hrm/performance/goals/{id}', [HrmPerformanceController::class, 'updateGoal']);
+    Route::post('/hrm/performance/appraisals', [HrmPerformanceController::class, 'storeAppraisal']);
 });
 
 /*

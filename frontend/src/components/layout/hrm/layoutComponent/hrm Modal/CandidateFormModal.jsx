@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { MdClose, MdOutlineCloudUpload } from "react-icons/md";
+import { X, Upload } from "lucide-react";
 import API_URL from "../../../../../config/api";
 import { authToken } from "../../../../../utils/auth";
 
@@ -54,7 +54,7 @@ export default function CandidateFormModal({ open, jobs, onClose, onSubmit }) {
       <div className="r-modal-panel r-modal-panel--md" onClick={(e) => e.stopPropagation()}>
         <div className="r-modal-header">
           <h3>Add New Candidate</h3>
-          <button className="r-icon-btn" onClick={onClose} aria-label="Close modal"><MdClose size={20} /></button>
+          <button className="r-icon-btn" onClick={onClose} aria-label="Close modal"><X size={20} /></button>
         </div>
         <form className="r-modal-form" onSubmit={(e) => { e.preventDefault(); onSubmit(form); }}>
           <div className="r-modal-body">
@@ -102,7 +102,7 @@ export default function CandidateFormModal({ open, jobs, onClose, onSubmit }) {
               <div className="r-file-upload-box">
                 <input type="file" accept=".pdf,.doc,.docx,.txt" onChange={handleFileUpload} id="cv-upload-input" style={{ display: 'none' }} />
                 <label htmlFor="cv-upload-input" className="r-file-upload-label">
-                  <MdOutlineCloudUpload size={24} />
+                  <Upload size={24} />
                   <span>{uploading ? "Uploading Document..." : form.resumeFile ? `Selected: ${form.resumeFile}` : "Click to Browse & Upload Resume File"}</span>
                 </label>
               </div>

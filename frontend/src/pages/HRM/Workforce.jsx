@@ -1,11 +1,22 @@
 import React, { useState, useEffect, useCallback } from "react";
 import API_URL from "../../config/api";
 import { authToken } from "../../utils/auth";
+import Breadcrumb from "../../components/Breadcrumb";
 import {
-  MdPeople, MdSearch, MdShield, MdCheckCircle, MdWarning,
-  MdPhone, MdMail, MdBadge, MdLocationOn, MdFilterList, MdEdit,
-  MdSecurity, MdDescription, MdSchool
-} from "react-icons/md";
+  Users,
+  Search,
+  ShieldAlert,
+  CheckCircle2,
+  AlertTriangle,
+  Phone,
+  Mail,
+  FileText,
+  MapPin,
+  Filter,
+  Edit3,
+  Shield,
+  Award,
+} from "lucide-react";
 import WorkforceEmployeeModal from "../../components/layout/hrm/layoutComponent/hrm Modal/WorkforceEmployeeModal";
 import "./Workforce.css";
 
@@ -196,12 +207,15 @@ export default function Workforce() {
     <div className="wf-page">
       {toast && <div className={`wf-toast wf-toast--${toast.kind}`}>{toast.message}</div>}
 
+      {/* BREADCRUMB */}
+      <Breadcrumb items={[{ label: "Enterprise HRM", path: "/admin/hrm/workforce" }, { label: "Workforce Directory" }]} />
+
       {/* HEADER */}
       <div className="wf-header">
         <div>
           <div className="wf-title-row">
             <h1>Workforce &amp; Employee Directory</h1>
-            <span className="wf-live-pill"><MdShield size={14} /> Verified Enterprise Directory</span>
+            <span className="wf-live-pill"><ShieldAlert size={14} /> Verified Enterprise Directory</span>
           </div>
           <p>Manage official employee records, CNIC documentation, background checks, and emergency contacts.</p>
         </div>
@@ -214,7 +228,7 @@ export default function Workforce() {
             <span className="wf-stat-label">Total Active Workforce</span>
             <span className="wf-stat-value">{totalEmployees}</span>
           </div>
-          <div className="wf-stat-icon wf-stat-icon--blue"><MdPeople size={24} /></div>
+          <div className="wf-stat-icon wf-stat-icon--blue"><Users size={24} /></div>
         </div>
 
         <div className="wf-stat-card">
@@ -222,7 +236,7 @@ export default function Workforce() {
             <span className="wf-stat-label">Active Staff Status</span>
             <span className="wf-stat-value">{activeCount}</span>
           </div>
-          <div className="wf-stat-icon wf-stat-icon--green"><MdCheckCircle size={24} /></div>
+          <div className="wf-stat-icon wf-stat-icon--green"><CheckCircle2 size={24} /></div>
         </div>
 
         <div className="wf-stat-card">
@@ -230,7 +244,7 @@ export default function Workforce() {
             <span className="wf-stat-label">Background Check Cleared</span>
             <span className="wf-stat-value">{clearedCheckCount}</span>
           </div>
-          <div className="wf-stat-icon wf-stat-icon--sky"><MdSecurity size={24} /></div>
+          <div className="wf-stat-icon wf-stat-icon--sky"><Shield size={24} /></div>
         </div>
 
         <div className="wf-stat-card">
@@ -238,14 +252,14 @@ export default function Workforce() {
             <span className="wf-stat-label">Verification Pending</span>
             <span className="wf-stat-value">{pendingCheckCount}</span>
           </div>
-          <div className="wf-stat-icon wf-stat-icon--amber"><MdWarning size={24} /></div>
+          <div className="wf-stat-icon wf-stat-icon--amber"><AlertTriangle size={24} /></div>
         </div>
       </div>
 
       {/* TOOLBAR & SEARCH */}
       <div className="wf-toolbar">
         <div className="wf-search-box">
-          <MdSearch size={18} />
+          <Search size={18} />
           <input
             type="text"
             placeholder="Search employee by name, CNIC, phone, email, designation..."
@@ -256,7 +270,7 @@ export default function Workforce() {
 
         <div className="wf-filters">
           <div className="wf-filter-item">
-            <MdFilterList size={16} />
+            <Filter size={16} />
             <select value={selectedDept} onChange={(e) => setSelectedDept(e.target.value)}>
               <option value="All">All Departments</option>
               {departments.filter((d) => d !== "All").map((d) => (
@@ -284,7 +298,7 @@ export default function Workforce() {
         </div>
       ) : filteredUsers.length === 0 ? (
         <div className="wf-empty-card">
-          <MdPeople size={48} color="#94a3b8" />
+          <Users size={48} color="#94a3b8" />
           <h3>No Employee Records Found</h3>
           <p>Try adjusting your search query or department filters.</p>
         </div>
@@ -308,18 +322,18 @@ export default function Workforce() {
                 </div>
 
                 <div className="wf-card-details">
-                  <p><MdMail size={14} /> {u.email}</p>
-                  <p><MdPhone size={14} /> Phone: <strong>{phoneVal}</strong></p>
-                  <p><MdBadge size={14} /> CNIC: <strong>{cnicVal}</strong></p>
-                  <p><MdLocationOn size={14} /> Dept: {u.department || "Engineering"}</p>
+                  <p><Mail size={14} /> {u.email}</p>
+                  <p><Phone size={14} /> Phone: <strong>{phoneVal}</strong></p>
+                  <p><FileText size={14} /> CNIC: <strong>{cnicVal}</strong></p>
+                  <p><MapPin size={14} /> Dept: {u.department || "Engineering"}</p>
                 </div>
 
                 <div className="wf-card-footer">
                   <span className={`wf-pill wf-pill--${checkStatus === "Cleared" ? "success" : checkStatus === "Flagged" ? "danger" : "warning"}`}>
-                    <MdSecurity size={12} /> Police Check: {checkStatus}
+                    <Shield size={12} /> Police Check: {checkStatus}
                   </span>
                   <button className="wf-edit-btn" onClick={(e) => { e.stopPropagation(); handleOpenEdit(u); }}>
-                    <MdEdit size={14} /> Profile &amp; Docs
+                    <Edit3 size={14} /> Profile &amp; Docs
                   </button>
                 </div>
               </div>
