@@ -24,6 +24,8 @@ window.fetch = async function (...args) {
 
     // Handle session expiration (401 Unauthorized)
     if (res.status === 401) {
+      const url = typeof resource === "string" ? resource : resource?.url || "";
+      if (url.includes("/super-admin")) return res;
       const tokenNow = getToken(role);
       const isTokenExpired = tokenNow && tokenNow === tokenAtRequest;
       const isZombieTab = !tokenAtRequest && !tokenNow && role;

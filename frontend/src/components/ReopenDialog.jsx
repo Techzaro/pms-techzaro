@@ -5,12 +5,12 @@
  * Optionally includes instructions, new deadline, and file attachment.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import { notify } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "./LoadingButton";
@@ -29,9 +29,6 @@ const REOPEN_REASONS = [
 ];
 
 function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
-  useEscapeKey(isOpen, handleClose);
-
   const [reopenReason, setReopenReason] = useState("");
   const [reopenReasonDetail, setReopenReasonDetail] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -40,6 +37,11 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
   const [files, setFiles] = useState([]);
   const { submitting, run } = useSubmit();
   const fileInputRef = useRef(null);
+
+  const initialValues = useMemo(() => ({ reopenReason: "", reopenReasonDetail: "", instructions: "", newDeadline: "", link: "", files: [] }), []);
+  const currentValues = useMemo(() => ({ reopenReason, reopenReasonDetail, instructions, newDeadline, link, files }), [reopenReason, reopenReasonDetail, instructions, newDeadline, link, files]);
+  const { isDirty, handleClose, markSaved, resetBaseline, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
+  useEscapeKey(isOpen, handleClose);
 
   useEffect(() => {
     if (isOpen) {
@@ -90,6 +92,7 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
 
         const data = await res.json();
         if (res.ok) {
+          markSaved();
           onReopenSuccess(data.deliverable);
           onClose();
         } else {
@@ -119,7 +122,7 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
             <select
               className="rd-input"
               value={reopenReason}
-              onChange={(e) => { setReopenReason(e.target.value); setIsDirty(true); }}
+              onChange={(e) => { setReopenReason(e.target.value); }}
             >
               <option value="">Select a reason...</option>
               {REOPEN_REASONS.map((r) => (
@@ -137,7 +140,7 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
                 className="rd-textarea"
                 placeholder={reopenReason === "Other" ? "Please describe the reason..." : "Provide more details (optional)..."}
                 value={reopenReasonDetail}
-                onChange={(e) => { setReopenReasonDetail(e.target.value); setIsDirty(true); }}
+                onChange={(e) => { setReopenReasonDetail(e.target.value); }}
                 rows={3}
               />
             </div>
@@ -149,7 +152,7 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
               className="rd-textarea"
               placeholder="Provide specific instructions for resubmission..."
               value={instructions}
-              onChange={(e) => { setInstructions(e.target.value); setIsDirty(true); }}
+              onChange={(e) => { setInstructions(e.target.value); }}
               rows={3}
             />
           </div>
@@ -161,7 +164,7 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
               className="rd-input"
               placeholder="https://example.com/ref-link"
               value={link}
-              onChange={(e) => { setLink(e.target.value); setIsDirty(true); }}
+              onChange={(e) => { setLink(e.target.value); }}
             />
           </div>
 
@@ -172,7 +175,7 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
               className="rd-input"
               value={newDeadline}
               min={new Date().toISOString().slice(0, 16)}
-              onChange={(e) => { setNewDeadline(e.target.value); setIsDirty(true); }}
+              onChange={(e) => { setNewDeadline(e.target.value); }}
             />
           </div>
 
@@ -182,7 +185,7 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
               className="rd-dropzone"
               onClick={() => fileInputRef.current?.click()}
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) { setFiles((prev) => [...prev, ...Array.from(e.dataTransfer.files)]); setIsDirty(true); } }}
+              onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) { setFiles((prev) => [...prev, ...Array.from(e.dataTransfer.files)]); } }}
             >
               {files.length > 0 ? (
                 <div className="rd-files-list" style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
@@ -203,7 +206,7 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
               ref={fileInputRef}
               multiple
               style={{ display: "none" }}
-              onChange={(e) => { if (e.target.files.length) { setFiles((prev) => [...prev, ...Array.from(e.target.files)]); setIsDirty(true); } }}
+              onChange={(e) => { if (e.target.files.length) { setFiles((prev) => [...prev, ...Array.from(e.target.files)]); } }}
             />
           </div>
         </div>

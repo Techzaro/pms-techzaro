@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { notify, showSuccessMessage } from "../utils/notify";
@@ -15,9 +15,6 @@ const REQUIREMENTS = [
 ];
 
 export default function ChangePasswordModal({ onClose }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
-  useEscapeKey(true, handleClose);
-
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -26,6 +23,11 @@ export default function ChangePasswordModal({ onClose }) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({ currentPassword: "", confirmPassword: "" });
+
+  const initialValues = useMemo(() => ({ currentPassword: "", newPassword: "", confirmPassword: "" }), []);
+  const currentValues = useMemo(() => ({ currentPassword, newPassword, confirmPassword }), [currentPassword, newPassword, confirmPassword]);
+  const { isDirty, handleClose, markSaved, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
+  useEscapeKey(true, handleClose);
 
   const allValid = REQUIREMENTS.every((r) => r.test(newPassword));
 
@@ -75,6 +77,7 @@ export default function ChangePasswordModal({ onClose }) {
         throw new Error(msg);
       }
       showSuccessMessage("Password", "changed");
+      markSaved();
       onClose();
     } catch (err) {
       notify.error(err.message || "Failed to change password.");
@@ -106,7 +109,7 @@ export default function ChangePasswordModal({ onClose }) {
             <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 14 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             </span>
-            <input type={showCurrent ? "text" : "password"} value={currentPassword} onChange={(e) => { setCurrentPassword(e.target.value); setIsDirty(true); setErrors((prev) => ({ ...prev, currentPassword: "" })); }} placeholder="Enter current password" style={{ width: "100%", padding: "10px 40px 10px 36px", border: errors.currentPassword ? "1px solid #ef4444" : "var(--border-color)", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }} />
+            <input type={showCurrent ? "text" : "password"} value={currentPassword} onChange={(e) => { setCurrentPassword(e.target.value); setErrors((prev) => ({ ...prev, currentPassword: "" })); }} placeholder="Enter current password" style={{ width: "100%", padding: "10px 40px 10px 36px", border: errors.currentPassword ? "1px solid #ef4444" : "var(--border-color)", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }} />
             <button type="button" onClick={() => setShowCurrent(!showCurrent)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2 }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{showCurrent ? (<><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>) : (<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>)}</svg>
             </button>
@@ -118,7 +121,7 @@ export default function ChangePasswordModal({ onClose }) {
         <div style={{ marginBottom: 10 }}>
           <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--text-heading)", marginBottom: 6 }}>New Password</label>
           <div style={{ position: "relative" }}>
-            <input type={showNew ? "text" : "password"} value={newPassword} onChange={(e) => { setNewPassword(e.target.value); setIsDirty(true); }} placeholder="Enter new password" style={{ width: "100%", padding: "10px 40px 10px 12px", border: "var(--border-color)", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }} />
+            <input type={showNew ? "text" : "password"} value={newPassword} onChange={(e) => { setNewPassword(e.target.value); }} placeholder="Enter new password" style={{ width: "100%", padding: "10px 40px 10px 12px", border: "var(--border-color)", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }} />
             <button type="button" onClick={() => setShowNew(!showNew)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2 }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{showNew ? (<><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>) : (<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>)}</svg>
             </button>
@@ -139,7 +142,7 @@ export default function ChangePasswordModal({ onClose }) {
         <div style={{ marginBottom: 24 }}>
           <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--text-heading)", marginBottom: 6 }}>Confirm New Password</label>
           <div style={{ position: "relative" }}>
-            <input type={showConfirm ? "text" : "password"} value={confirmPassword} onChange={(e) => { setConfirmPassword(e.target.value); setIsDirty(true); setErrors((prev) => ({ ...prev, confirmPassword: "" })); }} placeholder="Confirm new password" style={{ width: "100%", padding: "10px 40px 10px 12px", border: errors.confirmPassword ? "1px solid #ef4444" : "var(--border-color)", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }} />
+            <input type={showConfirm ? "text" : "password"} value={confirmPassword} onChange={(e) => { setConfirmPassword(e.target.value); setErrors((prev) => ({ ...prev, confirmPassword: "" })); }} placeholder="Confirm new password" style={{ width: "100%", padding: "10px 40px 10px 12px", border: errors.confirmPassword ? "1px solid #ef4444" : "var(--border-color)", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box", color: "var(--text-heading)" }} />
             <button type="button" onClick={() => setShowConfirm(!showConfirm)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2 }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{showConfirm ? (<><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>) : (<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>)}</svg>
             </button>

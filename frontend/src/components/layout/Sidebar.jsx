@@ -13,7 +13,8 @@
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import API_URL from "../../config/api";
-import { authToken, getCurrentRole, getUser, setUser, rolePath, getUrlRole } from "../../utils/auth";
+import { authToken, getCurrentRole, getUser, setUser, rolePath, getUrlRole, getTenantSlug } from "../../utils/auth";
+import { useOrgBranding } from "../../hooks/useOrgBranding";
 
 import {
   MdDashboard,
@@ -30,6 +31,7 @@ import {
   MdEditNote,
   MdDifference,
   MdMenuBook,
+  MdOpenInNew,
 } from "react-icons/md";
 
 import "./Sidebar.css";
@@ -38,6 +40,7 @@ import "./Sidebar.css";
  * Sidebar navigation component.
  */
 function Sidebar() {
+  const { data: branding } = useOrgBranding();
 
   // ── Viewport mode state ──
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -190,7 +193,9 @@ function Sidebar() {
 
     const isSettingsRoute =
       isActive("audit-logs") ||
-      isActive("settings/notifications");
+      isActive("settings/notifications") ||
+      isActive("branding") ||
+      isActive("subscription");
 
     if (isSettingsRoute) {
       setSettingsOpen(true);
@@ -511,8 +516,22 @@ function Sidebar() {
             </Link>
           )}
 
+          {/* Super Admin link – only for the platform owner tenant */}
+          {getTenantSlug() === import.meta.env.VITE_SUPER_ADMIN_TENANT && user.role === "admin" && (
+            <a
+              href="/super-admin"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="sidebar-link"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MdOpenInNew />
+              <span>Organization</span>
+            </a>
+          )}
+
           {/* Settings dropdown – click to toggle like Tasks */}
-          <div className={`sidebar-dropdown-group ${settingsOpen || isActive("audit-logs") || isActive("settings/notifications") ? "open active" : ""}`}>
+          <div className={`sidebar-dropdown-group ${settingsOpen || isActive("audit-logs") || isActive("settings/notifications") || isActive("branding") || isActive("subscription") ? "open active" : ""}`}>
             <div
               className="sidebar-dropdown-header"
               onClick={() => setSettingsOpen((p) => !p)}
@@ -545,6 +564,24 @@ function Sidebar() {
                 >
                   Notification Preferences
                 </Link>
+                {getTenantSlug() !== import.meta.env.VITE_SUPER_ADMIN_TENANT && (
+                  <Link
+                    to={rolePath("subscription")}
+                    className={`sidebar-sub-link ${isActive("subscription") ? "active" : ""}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Subscription
+                  </Link>
+                )}
+                {(user.role === "admin") && (
+                  <Link
+                    to={rolePath("branding")}
+                    className={`sidebar-sub-link ${isActive("branding") ? "active" : ""}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Branding
+                  </Link>
+                )}
               </div>
             )}
           </div>

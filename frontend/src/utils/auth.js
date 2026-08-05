@@ -293,6 +293,24 @@ export function clearAllSessions() {
   localStorage.removeItem("email");
 }
 
+export function getTenantSlug() {
+  return localStorage.getItem("tenant_slug") || "";
+}
+
+export function clearTenantSlug() {
+  localStorage.removeItem("tenant_slug");
+}
+
+/* ───── stored email fallback (for super-admin / cross-role use) ── */
+
+export function setStoredEmail(role, email) {
+  if (role && email) localStorage.setItem(`stored_email_${role}`, email);
+}
+
+export function getStoredEmail(role) {
+  return localStorage.getItem(`stored_email_${role}`) || "";
+}
+
 /**
  * Performs a complete, secure user logout.
  * Clears storage, invalidates session API-side, and replaces history entry to /logged-out or /login.

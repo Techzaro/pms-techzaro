@@ -25,6 +25,7 @@ use App\Http\Controllers\TaskCommentController;
 use App\Http\Controllers\DraftController;
 use App\Http\Controllers\CredentialController;
 use App\Http\Controllers\NotificationSettingController;
+use App\Http\Controllers\OrganizationSettingsController;
 
 /*
 | Public Routes
@@ -85,6 +86,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/notification-settings', [NotificationSettingController::class, 'update']);
     Route::post('/notification-settings', [NotificationSettingController::class, 'update']);
     Route::post('/notification-settings/test-webhook', [NotificationSettingController::class, 'testWebhook']);
+
+    // Organization settings (branding, subscription, email policy)
+    Route::get('/organization-settings/email-policy', [OrganizationSettingsController::class, 'getEmailPolicy']);
+    Route::put('/organization-settings/email-policy', [OrganizationSettingsController::class, 'updateEmailPolicy']);
+    Route::get('/organization-settings/branding', [OrganizationSettingsController::class, 'getBranding']);
+    Route::put('/organization-settings/branding', [OrganizationSettingsController::class, 'updateBranding']);
+    Route::get('/organization-settings/subscription', [OrganizationSettingsController::class, 'getSubscription']);
+    Route::get('/organization-settings/subscription-history', [OrganizationSettingsController::class, 'getSubscriptionHistory']);
 
     // Self-service document management
     Route::put('/auth/my-document/rename', [\App\Http\Controllers\UserController::class, 'renameMyDocument']);

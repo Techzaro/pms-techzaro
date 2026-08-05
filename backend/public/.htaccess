@@ -1,3 +1,16 @@
+<IfModule mod_headers.c>
+    # CORS Headers for all API requests
+    Header set Access-Control-Allow-Origin "https://pmsv2.techxaro.com"
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "Authorization, Content-Type, Accept, X-Tenant-ID, X-Requested-With, X-XSRF-TOKEN"
+    Header set Access-Control-Allow-Credentials "true"
+
+    # Handle preflight OPTIONS requests - return 204 with headers
+    RewriteEngine On
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^(.*)$ $1 [R=204,L]
+</IfModule>
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes
