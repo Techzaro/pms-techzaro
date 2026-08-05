@@ -42,6 +42,8 @@ const STATUS_COLORS = {
   approved: "#DCFCE7",
   rejected: "#FEE2E2",
   rework_required: "#FEF3C7",
+  abandon_requested: "#FEF3C7",
+  abandoned: "#FEE2E2",
 };
 
 const STATUS_TEXT_COLORS = {
@@ -53,6 +55,8 @@ const STATUS_TEXT_COLORS = {
   approved: "#166534",
   rejected: "#991B1B",
   rework_required: "#92400E",
+  abandon_requested: "#92400E",
+  abandoned: "#991B1B",
 };
 
 /** Main Self Subtasks page — fetches and renders the user's own subtasks. */
@@ -234,6 +238,8 @@ function SelfDeliveries() {
       approved: "Approved",
       rejected: "Declined",
       rework_required: "Rework Required",
+      abandon_requested: "Abandon Requested",
+      abandoned: "Abandoned",
     };
     return map[status] || status;
   };

@@ -593,3 +593,21 @@ html, body, #root {
     font-size: 12px;
   }
 }
+
+/* Responsive container safety for HRM layout */
+.hrm-layout .dashboard-content {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .hrm-layout .dashboard-content {
+    padding: 12px 8px !important;
+  }
+  .hrm-layout .main-layout {
+    padding: 0 0 10px !important;
+    gap: 0 !important;
+  }
+}

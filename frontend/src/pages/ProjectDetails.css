@@ -140,7 +140,12 @@
   font-size: 14px;
   line-height: 1.55;
   color: #475569;
-  max-width: 900px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .pd-desc-tx.pd-rich,
@@ -148,10 +153,19 @@
   font-size: 14px;
   line-height: 1.6;
   color: var(--text-dark);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .pd-rich p {
   margin: 0 0 0.65em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .pd-rich p:last-child {

@@ -1520,3 +1520,65 @@
   color: var(--color-text-secondary, #64748b);
   font-weight: 600;
 }
+
+/* ── RESPONSIVE MEDIA QUERIES ── */
+@media (max-width: 1024px) {
+  .recruitment-page {
+    padding: 18px;
+  }
+}
+
+@media (max-width: 768px) {
+  .recruitment-page {
+    padding: 12px;
+  }
+  .recruitment-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .recruitment-header-text h1 {
+    font-size: 20px;
+  }
+  .recruitment-header-actions {
+    width: 100%;
+  }
+  .recruitment-header-actions button {
+    flex: 1;
+    justify-content: center;
+  }
+  .r-stat-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+  }
+  .r-job-grid {
+    grid-template-columns: 1fr;
+  }
+  .r-kanban-board {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-x: auto;
+  }
+  .r-kanban-col {
+    min-width: 100%;
+  }
+  .r-form-row {
+    grid-template-columns: 1fr;
+  }
+  .r-modal-panel {
+    max-width: calc(100vw - 20px);
+    max-height: 90vh;
+    border-radius: 14px;
+    margin: auto;
+  }
+  .r-skills-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .r-stat-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

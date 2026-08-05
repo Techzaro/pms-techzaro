@@ -69,7 +69,7 @@ function DashboardLayout({ hideRightSidebar = false }) {
   }, []);
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page hrm-layout">
       <svg className="dashboard-wave-bg" viewBox="0 0 1440 500" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMin slice">
         <path d="M0 0H1440V140C1440 140 1100 60 800 130C500 200 350 320 100 260C-50 220 0 340 0 340V0Z" fill="url(#wave1)" />
         <path d="M0 0H1440V180C1440 180 1000 90 720 170C440 250 280 360 50 290C-100 240 0 380 0 380V0Z" fill="url(#wave2)" />

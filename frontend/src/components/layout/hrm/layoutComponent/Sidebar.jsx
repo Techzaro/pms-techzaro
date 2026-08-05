@@ -35,6 +35,14 @@ function Sidebar() {
     setAttendanceOpen((prev) => {
       const next = !prev;
       sessionStorage.setItem("hrm_attendanceOpen", next);
+      if (next) {
+        setPerformanceOpen(false);
+        sessionStorage.setItem("hrm_performanceOpen", "false");
+        setRecruitmentOpen(false);
+        sessionStorage.setItem("hrm_recruitmentOpen", "false");
+        setWorkforceOpen(false);
+        sessionStorage.setItem("hrm_workforceOpen", "false");
+      }
       return next;
     });
   };
@@ -46,6 +54,14 @@ function Sidebar() {
     setPerformanceOpen((prev) => {
       const next = !prev;
       sessionStorage.setItem("hrm_performanceOpen", next);
+      if (next) {
+        setAttendanceOpen(false);
+        sessionStorage.setItem("hrm_attendanceOpen", "false");
+        setRecruitmentOpen(false);
+        sessionStorage.setItem("hrm_recruitmentOpen", "false");
+        setWorkforceOpen(false);
+        sessionStorage.setItem("hrm_workforceOpen", "false");
+      }
       return next;
     });
   };
@@ -57,6 +73,14 @@ function Sidebar() {
     setRecruitmentOpen((prev) => {
       const next = !prev;
       sessionStorage.setItem("hrm_recruitmentOpen", next);
+      if (next) {
+        setAttendanceOpen(false);
+        sessionStorage.setItem("hrm_attendanceOpen", "false");
+        setPerformanceOpen(false);
+        sessionStorage.setItem("hrm_performanceOpen", "false");
+        setWorkforceOpen(false);
+        sessionStorage.setItem("hrm_workforceOpen", "false");
+      }
       return next;
     });
   };
@@ -68,6 +92,14 @@ function Sidebar() {
     setWorkforceOpen((prev) => {
       const next = !prev;
       sessionStorage.setItem("hrm_workforceOpen", next);
+      if (next) {
+        setAttendanceOpen(false);
+        sessionStorage.setItem("hrm_attendanceOpen", "false");
+        setPerformanceOpen(false);
+        sessionStorage.setItem("hrm_performanceOpen", "false");
+        setRecruitmentOpen(false);
+        sessionStorage.setItem("hrm_recruitmentOpen", "false");
+      }
       return next;
     });
   };
@@ -113,13 +145,45 @@ function Sidebar() {
 
   // Auto expand dropdowns based on current route
   useEffect(() => {
+    const isRecruitmentRoute = isActiveOrStart("hrm/recruitment") || isActiveOrStart("hrm/offer-letters");
+    const isWorkforceRoute = isActiveOrStart("hrm/workforce") || isActiveOrStart("hrm/documents");
+
     if (isAttendanceRoute) {
       setAttendanceOpen(true);
       sessionStorage.setItem("hrm_attendanceOpen", "true");
-    }
-    if (isPerformanceRoute) {
+      setPerformanceOpen(false);
+      sessionStorage.setItem("hrm_performanceOpen", "false");
+      setRecruitmentOpen(false);
+      sessionStorage.setItem("hrm_recruitmentOpen", "false");
+      setWorkforceOpen(false);
+      sessionStorage.setItem("hrm_workforceOpen", "false");
+    } else if (isPerformanceRoute) {
       setPerformanceOpen(true);
       sessionStorage.setItem("hrm_performanceOpen", "true");
+      setAttendanceOpen(false);
+      sessionStorage.setItem("hrm_attendanceOpen", "false");
+      setRecruitmentOpen(false);
+      sessionStorage.setItem("hrm_recruitmentOpen", "false");
+      setWorkforceOpen(false);
+      sessionStorage.setItem("hrm_workforceOpen", "false");
+    } else if (isRecruitmentRoute) {
+      setRecruitmentOpen(true);
+      sessionStorage.setItem("hrm_recruitmentOpen", "true");
+      setAttendanceOpen(false);
+      sessionStorage.setItem("hrm_attendanceOpen", "false");
+      setPerformanceOpen(false);
+      sessionStorage.setItem("hrm_performanceOpen", "false");
+      setWorkforceOpen(false);
+      sessionStorage.setItem("hrm_workforceOpen", "false");
+    } else if (isWorkforceRoute) {
+      setWorkforceOpen(true);
+      sessionStorage.setItem("hrm_workforceOpen", "true");
+      setAttendanceOpen(false);
+      sessionStorage.setItem("hrm_attendanceOpen", "false");
+      setPerformanceOpen(false);
+      sessionStorage.setItem("hrm_performanceOpen", "false");
+      setRecruitmentOpen(false);
+      sessionStorage.setItem("hrm_recruitmentOpen", "false");
     }
   }, [location.pathname, location.search]);
 
@@ -191,12 +255,11 @@ function Sidebar() {
             <>
               {/* Recruitment & Hiring Dropdown */}
               <div
-                className={`sidebar-link ${isActiveOrStart("hrm/recruitment") || isActiveOrStart("hrm/offer-letters") ? "active" : ""}`}
-                style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}
+                className={`sidebar-dropdown-group ${recruitmentOpen ? "open" : ""} ${isActiveOrStart("hrm/recruitment") || isActiveOrStart("hrm/offer-letters") ? "active" : ""}`}
               >
                 <div
+                  className="sidebar-dropdown-header"
                   onClick={toggleRecruitment}
-                  style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
                 >
                   <MdWork />
                   <span style={{ flex: 1 }}>Hiring &amp; Onboarding</span>
@@ -230,12 +293,11 @@ function Sidebar() {
 
               {/* Workforce & Documents Dropdown */}
               <div
-                className={`sidebar-link ${isActiveOrStart("hrm/workforce") || isActiveOrStart("hrm/documents") ? "active" : ""}`}
-                style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}
+                className={`sidebar-dropdown-group ${workforceOpen ? "open" : ""} ${isActiveOrStart("hrm/workforce") || isActiveOrStart("hrm/documents") ? "active" : ""}`}
               >
                 <div
+                  className="sidebar-dropdown-header"
                   onClick={toggleWorkforce}
-                  style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
                 >
                   <MdPeople />
                   <span style={{ flex: 1 }}>Workforce &amp; Directory</span>
@@ -269,12 +331,11 @@ function Sidebar() {
 
               {/* Attendance & Leave Dropdown */}
               <div
-                className={`sidebar-link ${isAttendanceRoute ? "active" : ""}`}
-                style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}
+                className={`sidebar-dropdown-group ${attendanceOpen ? "open" : ""} ${isAttendanceRoute ? "active" : ""}`}
               >
                 <div
+                  className="sidebar-dropdown-header"
                   onClick={toggleAttendance}
-                  style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
                 >
                   <MdCalendarToday />
                   <span style={{ flex: 1 }}>Attendance &amp; Leave</span>
@@ -336,12 +397,11 @@ function Sidebar() {
 
               {/* Performance & Evaluation Dropdown */}
               <div
-                className={`sidebar-link ${isPerformanceRoute ? "active" : ""}`}
-                style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}
+                className={`sidebar-dropdown-group ${performanceOpen ? "open" : ""} ${isPerformanceRoute ? "active" : ""}`}
               >
                 <div
+                  className="sidebar-dropdown-header"
                   onClick={togglePerformance}
-                  style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
                 >
                   <MdBarChart />
                   <span style={{ flex: 1 }}>Performance &amp; Evaluation</span>
@@ -435,7 +495,7 @@ function Sidebar() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <MdCalendarToday />
-                <span>Attendance &amp; Punch</span>
+                <span>Attendance</span>
               </Link>
 
               <Link

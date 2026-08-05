@@ -6,7 +6,10 @@
  * sidebar toggle) and real-time notification polling.
  *
  * Also renders a hover dropdown on the logo/text ("app switcher") that
- * lets the user jump from the PMS portal into the HRM portal at /hrm.
+ * lets the user jump from the PMS portal into the HRM portal. The HRM
+ * target is role-aware: members/team leads go straight to their limited
+ * HRM dashboard (/:role/hrm/member-dashboard), everyone else goes to the
+ * full HRM app (/:role/hrm). See utils/hrmNavigation.js for the mapping.
  */
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
@@ -14,7 +17,8 @@ import { MdKeyboardArrowDown, MdNotifications, MdPerson, MdHistory, MdLogout, Md
 import { useNavigate, Link } from "react-router-dom";
 
 import API_URL from "../../config/api";
-import { authToken, getCurrentRole, getUser, setUser, clearSession, getToken, rolePath, normalizeRole } from "../../utils/auth";
+import { authToken, getCurrentRole, getUser, setUser, clearSession, logoutUser, getToken, rolePath, normalizeRole } from "../../utils/auth";
+import { getHrmLandingPath } from "../../utils/hrmNavigation";
 import { subscribe } from "../../utils/eventBus";
 import { requestNotificationPermissionAsync, showDesktopNotification, getNotificationPermission } from "../../utils/browserNotification";
 import { initFirebase } from "../../utils/firebase";
@@ -34,12 +38,18 @@ function Header() {
   const navigate = useNavigate();
   const searchRef = useRef(null);
   const notifRef = useRef(null);
+  const notifPanelRef = useRef(null);
   const profileRef = useRef(null);
   const searchDropdownRef = useRef(null);
   const notifListRef = useRef(null);
   const profileMenuRef = useRef(null);
   const logoSwitcherRef = useRef(null);
   const { theme, toggleTheme } = useTheme();
+
+  // ── HRM navigation target (role-aware) ──
+  // Members/team leads → /:role/hrm/member-dashboard
+  // Admin/manager/etc  → /:role/hrm
+  const hrmTarget = getHrmLandingPath();
 
   // ── State ──
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -498,10 +508,12 @@ function Header() {
     window.dispatchEvent(new Event("notification-read"));
   };
 
-  // Close notification panel when clicking outside
+  // Close notification panel when clicking outside (checking both bell icon & notification panel)
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (notifRef.current && !notifRef.current.contains(e.target)) {
+      const isOutsideBell = !notifRef.current || !notifRef.current.contains(e.target);
+      const isOutsidePanel = !notifPanelRef.current || !notifPanelRef.current.contains(e.target);
+      if (isOutsideBell && isOutsidePanel) {
         setShowNotifications(false);
       }
     };
@@ -585,7 +597,8 @@ function Header() {
           </button>
 
           {/* Logo + text – hovering (desktop) or tapping (mobile/tablet) opens
-              a portal switcher that lets the user jump to the HRM app at /hrm. */}
+              a portal switcher that lets the user jump to the HRM app. The
+              destination is role-aware (see hrmTarget above). */}
           <div
             className="header-logo-switcher"
             ref={logoSwitcherRef}
@@ -637,8 +650,8 @@ function Header() {
                   Switch Portal
                 </div>
 
-                <Link
-                  to="/hrm"
+                <a
+                  href={hrmTarget}
                   onClick={(e) => { e.stopPropagation(); setShowAppSwitcher(false); }}
                   style={{
                     display: "flex",
@@ -663,7 +676,7 @@ function Header() {
                       Employees, payroll, recruitment
                     </span>
                   </span>
-                </Link>
+                </a>
 
                 <div
                   style={{
@@ -702,7 +715,7 @@ function Header() {
           <input
             type="text"
             className="form-control"
-            placeholder="Search projects, tasks or employees..."
+            placeholder="Search projects, tasks or team members..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => searchQuery.length >= 2 && setShowSearchDropdown(true)}
@@ -793,7 +806,7 @@ function Header() {
         </div>
 
         {/* ── Right: Create buttons, notifications, user menu ── */}
-        <div className="header-right">
+        <div className="header-right" style={{ position: "relative" }}>
 
           {/* Quick-create task button – not for guests */}
 
@@ -822,17 +835,7 @@ function Header() {
 
           {/* Quick-create project button – visible to admin/manager only */}
 
-          {["admin", "manager"].includes(getCurrentRole()) && (
-          <button
-            className="project-btn"
-            onClick={() =>
-              setShowProjectModal(true)
-            }
-          >
-            + Project
-          </button>
-          )}
-
+        
           {/* Enable desktop notifications button - only shows when permission not granted */}
           {notifPermission !== 'granted' && 'Notification' in window && (
             <button
@@ -869,41 +872,6 @@ function Header() {
                 )}
               </div>
             </button>
-
-            {showNotifications && (
-              <div className="notif-panel">
-                <div className="notif-panel-header">
-                  <button className="notif-view-all-sm" onClick={() => { setShowNotifications(false); navigate(rolePath("notifications")); }}>
-                    View All
-                  </button>
-                  <h4>Notifications</h4>
-                  {unreadCount > 0 && (
-                    <button className="notif-mark-all" onClick={markAllAsRead}>Mark all read</button>
-                  )}
-                </div>
-                <div className="notif-panel-list" ref={notifListRef}>
-                  {notifications.length === 0 ? (
-                    <div className="notif-panel-empty">No notifications</div>
-                  ) : (
-                    notifications.slice(0, 7).map((n, idx) => (
-                      <div
-                        key={n.id}
-                        className={`notif-panel-item ${!n.is_read ? "notif-panel-item--unread" : "notif-panel-item--read"}${notifHighlightIndex === idx ? ' notif-panel-item--highlighted' : ''}`}
-                        onClick={() => { markAsRead(n.id); setShowNotifications(false); navigate(getNotificationDestination(n)); }}
-                        onMouseEnter={() => setNotifHighlightIndex(idx)}
-                      >
-                        <div className={`notif-panel-dot ${!n.is_read ? "notif-panel-dot--unread" : ""}`} />
-                        <div className="notif-panel-content">
-                          <p className={`notif-panel-title ${!n.is_read ? "notif-panel-title--unread" : ""}`}>{n.title || n.type}</p>
-                          <p className="notif-panel-msg">{n.message}</p>
-                          <span className="notif-panel-time">{formatDateTimeInline(n.created_at)}</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Theme toggle button */}
@@ -985,22 +953,7 @@ function Header() {
                   <span>My Activity</span>
                 </button>
                 <div className="hmc-logout-wrap">
-                  <button className={`hmc-logout-btn${profileHighlightIndex === 3 ? ' hmc-menu-item--highlighted' : ''}`} onMouseEnter={() => setProfileHighlightIndex(3)} onClick={async () => {
-                    const role = getCurrentRole();
-                    const token = getToken(role);
-                    if (token) {
-                      try {
-                        await fetch(`${API_URL}/logout`, {
-                          method: "POST",
-                          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-                          skipLoader: true,
-                          _notifHandled: true,
-                        });
-                      } catch { /* ignore */ }
-                    }
-                    clearSession(role);
-                    window.location.href = "/logged-out";
-                  }}>
+                  <button className={`hmc-logout-btn${profileHighlightIndex === 3 ? ' hmc-menu-item--highlighted' : ''}`} onMouseEnter={() => setProfileHighlightIndex(3)} onClick={() => logoutUser()}>
                     <MdLogout size={18} />
                     <span>Logout</span>
                   </button>
@@ -1010,6 +963,42 @@ function Header() {
             )}
 
           </div>
+
+          {/* Floating Notification Panel aligned to far right of header-right */}
+          {showNotifications && (
+            <div className="notif-panel" ref={notifPanelRef}>
+              <div className="notif-panel-header">
+                <button className="notif-view-all-sm" onClick={() => { setShowNotifications(false); navigate(rolePath("notifications")); }}>
+                  View All
+                </button>
+                <h4>Notifications</h4>
+                {unreadCount > 0 && (
+                  <button className="notif-mark-all" onClick={markAllAsRead}>Mark all read</button>
+                )}
+              </div>
+              <div className="notif-panel-list" ref={notifListRef}>
+                {notifications.length === 0 ? (
+                  <div className="notif-panel-empty">No notifications</div>
+                ) : (
+                  notifications.slice(0, 7).map((n, idx) => (
+                    <div
+                      key={n.id}
+                      className={`notif-panel-item ${!n.is_read ? "notif-panel-item--unread" : "notif-panel-item--read"}${notifHighlightIndex === idx ? ' notif-panel-item--highlighted' : ''}`}
+                      onClick={() => { markAsRead(n.id); setShowNotifications(false); navigate(getNotificationDestination(n)); }}
+                      onMouseEnter={() => setNotifHighlightIndex(idx)}
+                    >
+                      <div className={`notif-panel-dot ${!n.is_read ? "notif-panel-dot--unread" : ""}`} />
+                      <div className="notif-panel-content">
+                        <p className={`notif-panel-title ${!n.is_read ? "notif-panel-title--unread" : ""}`}>{n.title || n.type}</p>
+                        <p className="notif-panel-msg">{n.message}</p>
+                        <span className="notif-panel-time">{formatDateTimeInline(n.created_at)}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
 
         </div>
 

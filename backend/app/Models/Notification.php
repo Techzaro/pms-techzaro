@@ -51,34 +51,13 @@ class Notification extends Model
      */
     public static function wantsChannel(self $notification, string $channel): bool
     {
-        $preference = $notification->user->emailPreference;
-
-        if (!$preference) {
+        $user = $notification->user;
+        if (!$user) {
             return true;
         }
 
-        $moduleField = [
-            'task' => 'task_notifications',
-            'deliverable' => 'deliverable_notifications',
-            'project' => 'project_notifications',
-            'event' => 'event_notifications',
-            'team' => 'team_notifications',
-        ];
-        $typeField = $moduleField[$notification->related_module] ?? 'system_notifications';
-
-        if (!$preference->{$typeField}) {
-            return false;
-        }
-
-        if ($channel === 'email') {
-            return true;
-        }
-
-        if ($channel === 'mobile_push') {
-            return (bool) $preference->mobile_push_notifications;
-        }
-
-        return true;
+        $service = app(\App\Services\NotificationService::class);
+        return $service->shouldSendNotification($user, $notification->type ?? '', $channel);
     }
 
     /** The user receiving this notification. */

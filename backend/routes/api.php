@@ -31,6 +31,7 @@ use App\Http\Controllers\HrmGlobalSettingsController;
 use App\Http\Controllers\HrmShiftController;
 use App\Http\Controllers\HrmWarningController;
 use App\Http\Controllers\HrmPerformanceController;
+use App\Http\Controllers\NotificationSettingController;
 
 /*
 | Public Routes
@@ -43,6 +44,22 @@ Route::post('/login', [AuthController::class, 'login']);
 // Password reset (no auth required)
 Route::post('/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'forgotPassword']);
 Route::post('/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'resetPassword']);
+
+// Public File Download Proxy (No auth required so browser download links work cleanly)
+Route::get('/files/download', function (Illuminate\Http\Request $request) {
+    $path = $request->query('path');
+    $name = $request->query('name') ?: basename($path);
+    if (! $path) {
+        return response()->json(['success' => false, 'message' => 'File path required'], 400);
+    }
+    $resolved = \App\Services\FileStorageService::resolveFile($path);
+    if (! $resolved) {
+        return response()->json(['success' => false, 'message' => 'File not found'], 404);
+    }
+    return \Illuminate\Support\Facades\Storage::disk($resolved['disk'])->download($resolved['path'], $name);
+});
+Route::get('/tasks/submission-file/{submission}', [TaskController::class, 'downloadSubmissionFile']);
+Route::get('/deliverables/submission-file/{submission}', [DeliverableController::class, 'downloadSubmissionFile']);
 
 
 /*
@@ -68,6 +85,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // View own profile
     Route::get('/auth/my-profile', [AuthController::class, 'myProfile']);
     Route::get('/auth/my-changes', [AuthController::class, 'myChanges']);
+    
+    // FEATURE: Route to save user's category-based desktop and email notification preferences
+    Route::post('/user/notification-preferences', [UserController::class, 'updateNotificationPreferences']);
+    Route::get('/notification-settings', [NotificationSettingController::class, 'index']);
+    Route::put('/notification-settings', [NotificationSettingController::class, 'update']);
+    Route::post('/notification-settings', [NotificationSettingController::class, 'update']);
+    Route::post('/notification-settings/test-webhook', [NotificationSettingController::class, 'testWebhook']);
 
     // Self-service document management
     Route::put('/auth/my-document/rename', [\App\Http\Controllers\UserController::class, 'renameMyDocument']);
@@ -113,13 +137,14 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::get('/dashboard', [DashboardController::class, 'index']);
 
+    // List all users (available to all authenticated users for search, mentions, and task assignees)
+    Route::get('/users', [UserController::class, 'index']);
+
     /*
     | User Management Routes
     | Admin and manager only: CRUD operations for managing users.
     */
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager')->group(function () {
-        // List all users
-        Route::get('/users', [UserController::class, 'index']);
         // Create new user
         Route::post('/users', [UserController::class, 'store']);
         // View user details
@@ -294,6 +319,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/complete', [TaskController::class, 'completeTask'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Mark task as complete
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete task
     Route::post('/tasks/{task}/update-recurring', [TaskController::class, 'updateRecurring'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update recurring task with confirmation
+    Route::put('/tasks/{task}/update-recurring', [TaskController::class, 'updateRecurring'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::delete('/tasks/{task}/recurrence', [TaskController::class, 'deleteRecurring'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete active recurrence rule
 
     // Task submission workflow (submit for review, approve, reject, reopen)
     Route::post('/tasks/{task}/acknowledge', [TaskController::class, 'acknowledge']); // Acknowledge task assignment
@@ -305,10 +332,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/tasks/{task}/timer', [TaskController::class, 'timer']); // Get live timer state
     Route::get('/tasks/{task}/timer-sessions', [TaskController::class, 'timerSessions']); // Get pause session history
     Route::get('/tasks/{task}/latest-submission', [TaskController::class, 'latestSubmission']); // Get latest submission
-    Route::get('/tasks/submission-file/{submission}', [TaskController::class, 'downloadSubmissionFile']); // Download submission file
     Route::post('/tasks/{task}/approve', [TaskController::class, 'approve'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Approve submitted task
     Route::post('/tasks/{task}/reject', [TaskController::class, 'reject'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reject submitted task
     Route::post('/tasks/{task}/reopen', [TaskController::class, 'reopen'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Reopen rejected task
+    Route::post('/tasks/{task}/request-abandon', [TaskController::class, 'requestAbandon'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::post('/tasks/{task}/approve-abandon', [TaskController::class, 'approveAbandon'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::post('/tasks/{task}/decline-abandon', [TaskController::class, 'declineAbandon'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::post('/tasks/{task}/abandon', [TaskController::class, 'abandon'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
 
     // Task delegation workflow
     Route::post('/tasks/{task}/delegate', [TaskController::class, 'delegate'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delegate task to another user
@@ -401,10 +431,16 @@ Route::middleware('auth:sanctum')->group(function () {
     // Deliverable submission workflow
     Route::post('/deliverables/{deliverable}/submit', [DeliverableController::class, 'submit'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Submit deliverable for review
     Route::get('/deliverables/{deliverable}/latest-submission', [DeliverableController::class, 'latestSubmission']); // Get latest submission
+    Route::match(['put', 'post'], '/deliveries/submissions/{submission}', [DeliverableController::class, 'updateSubmission']); // Edit submission
+    Route::match(['put', 'post'], '/deliverables/submissions/{submission}', [DeliverableController::class, 'updateSubmission']); // Edit submission
 
     // Self-deliverable review actions (assignee reviews their own work)
     Route::post('/deliverables/{deliverable}/self-approve', [DeliverableController::class, 'selfApprove'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Self-approve deliverable
     Route::post('/deliverables/{deliverable}/self-rework', [DeliverableController::class, 'selfRework'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Mark for rework
+    Route::post('/deliverables/{deliverable}/request-abandon', [DeliverableController::class, 'requestAbandon'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::post('/deliverables/{deliverable}/approve-abandon', [DeliverableController::class, 'approveAbandon'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::post('/deliverables/{deliverable}/decline-abandon', [DeliverableController::class, 'declineAbandon'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
+    Route::post('/deliverables/{deliverable}/abandon', [DeliverableController::class, 'abandon'])->middleware(\App\Http\Middleware\EnsureNotGuest::class);
 
     // Deliverable delegation workflow
     Route::post('/deliverables/{deliverable}/delegate', [DeliverableController::class, 'delegate'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delegate deliverable to another user
@@ -529,21 +565,42 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     /*
+    | Template Management Routes
+    | Universal template system with visibility categories (private, project_team, department_team, organization).
+    */
+    Route::get('/templates', [\App\Http\Controllers\TemplateController::class, 'index']); // List visible templates
+    Route::post('/templates', [\App\Http\Controllers\TemplateController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Create/upload template
+    Route::match(['put', 'post'], '/templates/{template}', [\App\Http\Controllers\TemplateController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update template
+    Route::delete('/templates/{template}', [\App\Http\Controllers\TemplateController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete template
+
+    /*
+    | Knowledge Base Management Routes
+    | Tiered visibility knowledge sharing system for articles, documentation, and resources.
+    */
+    Route::get('/knowledge-base', [\App\Http\Controllers\KnowledgeBaseController::class, 'index']); // List visible knowledge base items
+    Route::get('/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'show']); // View article details
+    Route::post('/knowledge-base', [\App\Http\Controllers\KnowledgeBaseController::class, 'store'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Create article
+    Route::match(['put', 'post'], '/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'update'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Update article
+    Route::delete('/knowledge-base/{knowledgeBase}', [\App\Http\Controllers\KnowledgeBaseController::class, 'destroy'])->middleware(\App\Http\Middleware\EnsureNotGuest::class); // Delete article
+
+    /*
     | Report Routes
     | Various reporting endpoints for analytics and performance tracking.
     */
-    Route::get('/reports/team-performance', [ReportController::class, 'teamPerformance']); // Team performance report
-    Route::get('/reports/summary', [ReportController::class, 'summaryReport']); // Summary report
-    Route::get('/reports/detailed', [ReportController::class, 'detailedReport']); // Detailed report
-    Route::get('/reports/performance', [ReportController::class, 'performanceReport']); // Performance report
-    Route::get('/reports/progress', [ReportController::class, 'progressReport']); // Progress report
-    Route::get('/reports/user/me', [ReportController::class, 'myPerformance']); // User performance report (own)
-    Route::get('/reports/user/{user}', [ReportController::class, 'userPerformance'])->where('user', '[0-9]+'); // User performance report
-    Route::get('/reports/project/{project}', [ReportController::class, 'projectReport']); // Project report
-    Route::get('/reports/summary-cards', [ReportController::class, 'summaryCards']); // Summary cards data
-    Route::get('/reports/user-performance-table', [ReportController::class, 'userPerformanceTable']); // User performance table
-    Route::get('/reports/company-employees', [ReportController::class, 'companyEmployeesReport']); // Company employees report
-    Route::get('/reports/teams-overview', [ReportController::class, 'teamsOverview']); // Teams overview for reports page
+    Route::middleware(\App\Http\Middleware\EnsureNotGuest::class)->group(function () {
+        Route::get('/reports/team-performance', [ReportController::class, 'teamPerformance']); // Team performance report
+        Route::get('/reports/summary', [ReportController::class, 'summaryReport']); // Summary report
+        Route::get('/reports/detailed', [ReportController::class, 'detailedReport']); // Detailed report
+        Route::get('/reports/performance', [ReportController::class, 'performanceReport']); // Performance report
+        Route::get('/reports/progress', [ReportController::class, 'progressReport']); // Progress report
+        Route::get('/reports/user/me', [ReportController::class, 'myPerformance']); // User performance report (own)
+        Route::get('/reports/user/{user}', [ReportController::class, 'userPerformance'])->where('user', '[0-9]+'); // User performance report
+        Route::get('/reports/project/{project}', [ReportController::class, 'projectReport']); // Project report
+        Route::get('/reports/summary-cards', [ReportController::class, 'summaryCards']); // Summary cards data
+        Route::get('/reports/user-performance-table', [ReportController::class, 'userPerformanceTable']); // User performance table
+        Route::get('/reports/company-employees', [ReportController::class, 'companyEmployeesReport']); // Company employees report
+        Route::get('/reports/teams-overview', [ReportController::class, 'teamsOverview']); // Teams overview for reports page
+    });
 
     /*
     | Role-Based Dashboard Routes

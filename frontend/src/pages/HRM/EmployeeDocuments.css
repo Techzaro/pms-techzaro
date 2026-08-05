@@ -384,6 +384,15 @@
 }
 
 @media (max-width: 768px) {
-  .ed-page { padding: 16px; }
+  .ed-page { padding: 12px; }
   .ed-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .ed-title-row h1 { font-size: 20px; }
+  .ed-stats-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .ed-grid { grid-template-columns: 1fr; }
+  .ed-modal-panel { max-width: calc(100vw - 20px); max-height: 90vh; border-radius: 14px; margin: auto; }
 }
+
+@media (max-width: 480px) {
+  .ed-stats-grid { grid-template-columns: 1fr 1fr; }
+}
+

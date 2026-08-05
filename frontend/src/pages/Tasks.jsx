@@ -14,7 +14,7 @@ import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
 import { LuSend } from "react-icons/lu";
-import { CheckCircle2, Lock, Pause, Play, StickyNote, Users, ArrowUpRight } from "lucide-react";
+import { CheckCircle2, Lock, Pause, Play, StickyNote, Users, ArrowUpRight, ChevronDown, XCircle, RotateCcw, AlertOctagon, Sliders } from "lucide-react";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { publish } from "../utils/eventBus";
@@ -27,11 +27,24 @@ import ActionPopover from "../components/ActionPopover";
 import TaskNotesPopover from "../components/TaskNotesPopover";
 import AddNoteModal from "../components/AddNoteModal";
 import TransferTaskDialog from "../components/TransferTaskDialog";
+import TaskFilterBar from "../components/TaskFilterBar";
 import API_URL from "../config/api";
 import { authToken, getUser, rolePath } from "../utils/auth";
 import { formatDateTimeInline } from "../utils/formatDateTime";
 import "../components/ActionPopover.css";
 import "../pages/Task.css";
+
+function canUserPauseResume(item, currentUser) {
+  if (!item || !currentUser) return false;
+  if (["admin", "manager"].includes(currentUser.role)) return true;
+  const uid = parseInt(currentUser.id, 10);
+  if (item.assigned_to && parseInt(item.assigned_to, 10) === uid) return true;
+  if (item.assignedTo?.id && parseInt(item.assignedTo.id, 10) === uid) return true;
+  if (item.assignee?.id && parseInt(item.assignee.id, 10) === uid) return true;
+  if (Array.isArray(item.assignees) && item.assignees.some((a) => parseInt(a.id, 10) === uid)) return true;
+  if (item.is_assignee) return true;
+  return false;
+}
 
 const STATUS_COLORS = {
   pending: "#FEF3C7",
@@ -41,6 +54,8 @@ const STATUS_COLORS = {
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
   rejected: "#FEE2E2",
+  abandon_requested: "#FEF3C7",
+  abandoned: "#FEE2E2",
 };
 
 const STATUS_TEXT_COLORS = {
@@ -51,6 +66,8 @@ const STATUS_TEXT_COLORS = {
   reopened: "#5B21B6",
   approved: "#166534",
   rejected: "#991B1B",
+  abandon_requested: "#92400E",
+  abandoned: "#991B1B",
 };
 
 const PRIORITY_COLORS = {
@@ -92,7 +109,18 @@ function Tasks() {
 
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const [advancedFilters, setAdvancedFilters] = useState({
+    user_id: "",
+    project_id: "",
+    status: "",
+    start_date: "",
+    end_date: "",
+  });
+
+  const [sortBy, setSortBy] = useState("due_date");
+  const [sortOrder, setSortOrder] = useState("asc");
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -104,6 +132,15 @@ function Tasks() {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
+    params.append("per_page", itemsPerPage);
+    if (debouncedSearch) params.append("search", debouncedSearch);
+    if (advancedFilters.user_id) params.append("user_id", advancedFilters.user_id);
+    if (advancedFilters.project_id) params.append("project_id", advancedFilters.project_id);
+    if (advancedFilters.status) params.append("status", advancedFilters.status);
+    if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
+    if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
+    if (sortBy) params.append("sort_by", sortBy);
+    if (sortOrder) params.append("sort_order", sortOrder);
 
     fetch(`${API_URL}/my-tasks?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -120,7 +157,7 @@ function Tasks() {
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch]);
+  }, [debouncedSearch, itemsPerPage, advancedFilters, sortBy, sortOrder]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -213,6 +250,8 @@ function Tasks() {
       reopened: "Reopened",
       approved: "Approved",
       rejected: "Declined",
+      abandon_requested: "Abandon Requested",
+      abandoned: "Abandoned",
     };
     return map[status] || status;
   };
@@ -235,21 +274,23 @@ function Tasks() {
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setItems((prev) =>
           prev.map((item) =>
-            item.id === taskId ? { ...item, status: "in_progress", ...data.task } : item
+            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
           )
         );
         publish('task:updated', { id: taskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "acknowledged");
       } else {
-        notify.error(data.message || "Failed to acknowledge task.");
+        const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || "Failed to acknowledge task.";
+        notify.error(errorMsg);
       }
-    } catch {
-      notify.error("Failed to acknowledge task.");
+    } catch (err) {
+      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to acknowledge task.";
+      notify.error(errorMsg);
     }
   };
 
@@ -261,21 +302,23 @@ function Tasks() {
         headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
         _notifHandled: true,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setItems((prev) =>
           prev.map((item) =>
-            item.id === taskId ? { ...item, status: "in_progress", ...data.task } : item
+            item.id === taskId ? { ...item, status: "in_progress", ...(data.task || {}) } : item
           )
         );
         publish('task:updated', { id: taskId, status: 'in_progress' });
         publish('data:changed', { type: 'task', action: 'updated' });
         showSuccessMessage("Task", "resumed");
       } else {
-        notify.error(data.message || "Failed to continue task.");
+        const errorMsg = data?.message || data?.error || (data?.errors ? Object.values(data.errors).flat().join(", ") : null) || "Failed to continue task.";
+        notify.error(errorMsg);
       }
-    } catch {
-      notify.error("Failed to continue task.");
+    } catch (err) {
+      const errorMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to continue task.";
+      notify.error(errorMsg);
     }
   };
 
@@ -320,6 +363,7 @@ function Tasks() {
   const transferredCount = baseItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length;
   const approvedCount = baseItems.filter((i) => i.status === "approved").length;
   const rejectedCount = baseItems.filter((i) => i.status === "rejected").length;
+  const abandonedCount = baseItems.filter((i) => i.status === "abandoned" || i.status === "abandon_requested").length;
   const searchFilteredItems = debouncedSearch
     ? baseItems.filter((item) => {
         const q = debouncedSearch.toLowerCase();
@@ -329,13 +373,25 @@ function Tasks() {
         return titleMatch || assigneeMatch || assignerMatch;
       })
     : baseItems;
-  const filteredItems = statusFilter && statusFilter !== "due_today"
+  const filteredItems = statusFilter
     ? searchFilteredItems.filter((item) => {
+        if (statusFilter === "due_today") {
+          const dateVal = item.end_date || item.due_date || item.start_date;
+          if (!dateVal) return false;
+          const d = new Date(dateVal);
+          const now = new Date();
+          const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+          const isCompleted = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
+          return isToday && !isCompleted;
+        }
         if (statusFilter === "pending") {
           return pendingStatuses.includes(item.status);
         }
         if (statusFilter === "transferred") {
           return item.delegation_chain && item.delegation_chain.length > 0;
+        }
+        if (statusFilter === "abandoned") {
+          return item.status === "abandoned" || item.status === "abandon_requested";
         }
         return item.status === statusFilter;
       })
@@ -343,8 +399,8 @@ function Tasks() {
 
   const taskIdList = filteredItems.map((i) => i.id);
 
-  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
-  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / itemsPerPage);
+  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const breadcrumbs = [
     { label: "Tasks", path: rolePath("tasks") },
@@ -412,19 +468,23 @@ function Tasks() {
         <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Declined ({rejectedCount})
         </p>
+        <p className={`Abandoned ${statusFilter === "abandoned" ? "active" : ""}`} onClick={() => selectStatusFilter("abandoned")} style={{ cursor: "pointer" }}>
+          <GoDotFill color="#DC2626" /> Abandoned ({abandonedCount})
+        </p>
         <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
       </div>
 
-      {/* SEARCH BAR */}
-      <div className="tasks-search-bar">
-        <IoSearchOutline fontSize={"20px"} />
-        <input
-          type="text"
-          placeholder="Search by task name or user name"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+      {/* DEDICATED ACTION BAR & FILTERS */}
+      <TaskFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        filters={advancedFilters}
+        onFilterChange={(key, val) => setAdvancedFilters((prev) => ({ ...prev, [key]: val }))}
+        onReset={() => {
+          setSearch("");
+          setAdvancedFilters({ user_id: "", project_id: "", status: "", start_date: "", end_date: "" });
+        }}
+      />
 
       {/* TABLE */}
       <div className="container">
@@ -435,7 +495,17 @@ function Tasks() {
           <div className="status-column">Status</div>
           <div>Progress</div>
           <div className="priority-column">Priority</div>
-          <div className="date-column">Start & Due Date</div>
+          <div
+            className="date-column"
+            style={{ cursor: "pointer", userSelect: "none", display: "flex", alignItems: "center", gap: 4 }}
+            onClick={() => {
+              setSortBy("due_date");
+              setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+            }}
+            title="Click to toggle date sort (Oldest / Newest)"
+          >
+            Start & Due Date {sortBy === "due_date" ? (sortOrder === "asc" ? "▲ (Oldest)" : "▼ (Newest)") : "↕"}
+          </div>
           <div>Action</div>
         </div>
 
@@ -535,16 +605,70 @@ function Tasks() {
                     </div>
                   </div>
                   
-                  <div className="col-action">
+                  <div className="col-action" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <button
+                      className="action-icon-btn action-view action-trigger-lg"
+                      title="View Task"
+                      onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}
+                    >
+                      <IoEyeOutline size={20} />
+                    </button>
                     <ActionPopover
                       trigger={
-                        <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
-                          <IoEyeOutline size={20} />
+                        <button className="action-icon-btn action-manage action-trigger-lg" title="Status Actions" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px", borderRadius: "6px", background: "var(--bg-hover, #f3f4f6)", color: "var(--text-primary, #374151)", border: "1px solid var(--border-color, #e5e7eb)", cursor: "pointer" }}>
+                          <Sliders size={18} />
                         </button>
                       }
-                      onTriggerClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}
                     >
                       <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
+                      {(() => {
+                        const isUserAdminOrManager = ["admin", "manager"].includes(currentUser?.role);
+                        const canUserApprove = isUserAdminOrManager || item.created_by === currentUser?.id || item.is_next_approver;
+                        return (
+                          <>
+                            {canUserApprove && (item.status === "submitted" || item.status === "reopened") && (
+                              <button
+                                className="action-icon-btn"
+                                title="Approve Task"
+                                style={{ color: "#16A34A" }}
+                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}
+                              >
+                                <CheckCircle2 size={16} />
+                              </button>
+                            )}
+                            {canUserApprove && (item.status === "submitted" || item.status === "reopened") && (
+                              <button
+                                className="action-icon-btn"
+                                title="Decline Task"
+                                style={{ color: "#DC2626" }}
+                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}
+                              >
+                                <XCircle size={16} />
+                              </button>
+                            )}
+                            {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened") && (
+                              <button
+                                className="action-icon-btn"
+                                title="Reopen Task"
+                                style={{ color: "#2563EB" }}
+                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}
+                              >
+                                <RotateCcw size={16} />
+                              </button>
+                            )}
+                            {item.status !== "abandoned" && (
+                              <button
+                                className="action-icon-btn"
+                                title={isUserAdminOrManager ? "Abandon Task" : "Request Abandon"}
+                                style={{ color: "#F59E0B" }}
+                                onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'tasks' } })}
+                              >
+                                <AlertOctagon size={16} />
+                              </button>
+                            )}
+                          </>
+                        );
+                      })()}
                       {(() => {
                         if (item.is_transferor) {
                           return (
@@ -569,14 +693,14 @@ function Tasks() {
                             </button>
                           );
                         }
-                        if (item.status === "paused") {
+                        if (item.status === "paused" && canUserPauseResume(item, currentUser)) {
                           return (
                             <button className="action-icon-btn action-submit" title="Continue Task" onClick={() => handleContinue(item.id)}>
                               <Play size={16} />
                             </button>
                           );
                         }
-                        if (item.status === "in_progress" && !item.assigner_paused) {
+                        if (item.status === "in_progress" && !item.assigner_paused && canUserPauseResume(item, currentUser)) {
                           return (
                             <button className="action-icon-btn action-submit" title="Pause Task" onClick={() => handlePause(item.id)} style={{ color: "#D97706" }}>
                               <Pause size={16} />
@@ -619,8 +743,14 @@ function Tasks() {
         )}
       </div>
 
-      {!showAll && totalPages > 1 && (
-        <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+      {!showAll && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
+        />
       )}
 
       <SubmitTaskModal

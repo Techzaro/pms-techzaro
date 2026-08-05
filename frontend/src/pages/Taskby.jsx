@@ -16,9 +16,10 @@ import { IoIosArrowDown } from "react-icons/io";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline, IoCheckmarkCircle } from "react-icons/io5";
-import { ArrowUpRight, Lock, Pencil, StickyNote, Trash2 } from "lucide-react";
+import { ArrowUpRight, Lock, Pencil, StickyNote, Trash2, Sliders, CheckCircle2, XCircle, RotateCcw, AlertOctagon } from "lucide-react";
 import CreateTaskModal from "../components/CreateTaskModal";
 import EditTaskModal from "../components/EditTaskModal";
+import DeleteRecurrenceModal from "../components/DeleteRecurrenceModal";
 import PauseReasonModal from "../components/PauseReasonModal";
 import SortableTableWrapper from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
@@ -27,6 +28,7 @@ import ActionPopover from "../components/ActionPopover";
 import TaskNotesPopover from "../components/TaskNotesPopover";
 import AddNoteModal from "../components/AddNoteModal";
 import ConfirmModal from "../components/ConfirmModal";
+import TaskFilterBar from "../components/TaskFilterBar";
 import API_URL from "../config/api";
 import { authToken, rolePath, getUser } from "../utils/auth";
 import { formatDateTimeInline } from "../utils/formatDateTime";
@@ -42,6 +44,8 @@ const STATUS_COLORS = {
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
   rejected: "#FEE2E2",
+  abandon_requested: "#FEF3C7",
+  abandoned: "#FEE2E2",
 };
 
 const STATUS_TEXT_COLORS = {
@@ -52,6 +56,8 @@ const STATUS_TEXT_COLORS = {
   reopened: "#5B21B6",
   approved: "#166534",
   rejected: "#991B1B",
+  abandon_requested: "#92400E",
+  abandoned: "#991B1B",
 };
 
 const PRIORITY_COLORS = {
@@ -94,20 +100,40 @@ const Taskby = () => {
   const [noteModal, setNoteModal] = useState({ open: false, itemId: null });
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [deleteRecurrenceTask, setDeleteRecurrenceTask] = useState(null);
 
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [advancedFilters, setAdvancedFilters] = useState({
+    user_id: "",
+    project_id: "",
+    status: "",
+    start_date: "",
+    end_date: "",
+  });
+
+  const [sortBy, setSortBy] = useState("due_date");
+  const [sortOrder, setSortOrder] = useState("asc");
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
   }, [search]);
 
-  /** Fetch tasks assigned by the current user from the API — always fetch ALL for accurate counts. */
+  /** Fetch tasks assigned by the current user from the API. */
   const fetchTasks = () => {
     setLoading(true);
     const token = authToken();
     const params = new URLSearchParams();
+    params.append("per_page", itemsPerPage);
+    if (debouncedSearch) params.append("search", debouncedSearch);
     if (timeFilter) params.append("time_filter", timeFilter);
+    if (advancedFilters.user_id) params.append("user_id", advancedFilters.user_id);
+    if (advancedFilters.project_id) params.append("project_id", advancedFilters.project_id);
+    if (advancedFilters.status) params.append("status", advancedFilters.status);
+    if (advancedFilters.start_date) params.append("start_date", advancedFilters.start_date);
+    if (advancedFilters.end_date) params.append("end_date", advancedFilters.end_date);
+    if (sortBy) params.append("sort_by", sortBy);
+    if (sortOrder) params.append("sort_order", sortOrder);
 
     fetch(`${API_URL}/assigned-tasks?${params.toString()}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -124,7 +150,7 @@ const Taskby = () => {
 
   useEffect(() => {
     fetchTasks();
-  }, [debouncedSearch, timeFilter]);
+  }, [debouncedSearch, timeFilter, itemsPerPage, advancedFilters, sortBy, sortOrder]);
 
   useAutoRefresh(fetchTasks, {
     events: ['task:created', 'task:updated', 'task:deleted', 'data:changed'],
@@ -278,6 +304,8 @@ const Taskby = () => {
       reopened: "Reopened",
       approved: "Approved",
       rejected: "Declined",
+      abandon_requested: "Abandon Requested",
+      abandoned: "Abandoned",
     };
     return map[status] || status;
   };
@@ -296,6 +324,7 @@ const Taskby = () => {
   const transferredCount = useMemo(() => baseItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length, [baseItems]);
   const approvedCount = useMemo(() => baseItems.filter((i) => i.status === "approved").length, [baseItems]);
   const rejectedCount = useMemo(() => baseItems.filter((i) => i.status === "rejected").length, [baseItems]);
+  const abandonedCount = useMemo(() => baseItems.filter((i) => i.status === "abandoned" || i.status === "abandon_requested").length, [baseItems]);
 
   const filteredItems = useMemo(() => baseItems.filter((item) => {
     if (debouncedSearch) {
@@ -306,7 +335,13 @@ const Taskby = () => {
       if (!titleMatch && !assigneeMatch && !assignerMatch) return false;
     }
     if (statusFilter === "due_today") {
-      return true;
+      const dateVal = item.end_date || item.due_date || item.start_date;
+      if (!dateVal) return false;
+      const d = new Date(dateVal);
+      const now = new Date();
+      const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+      const isCompleted = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
+      return isToday && !isCompleted;
     }
     if (statusFilter) {
       if (statusFilter === "pending") {
@@ -314,6 +349,9 @@ const Taskby = () => {
       }
       if (statusFilter === "transferred") {
         return item.delegation_chain && item.delegation_chain.length > 0;
+      }
+      if (statusFilter === "abandoned") {
+        return item.status === "abandoned" || item.status === "abandon_requested";
       }
       return item.status === statusFilter;
     }
@@ -323,8 +361,8 @@ const Taskby = () => {
   const taskIdList = filteredItems.map((i) => i.id);
 
   const showAllItems = showAll;
-  const totalPages = showAllItems ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
-  const paginatedItems = showAllItems ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const totalPages = showAllItems ? 1 : Math.ceil(filteredItems.length / itemsPerPage);
+  const paginatedItems = showAllItems ? filteredItems : filteredItems.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const breadcrumbs = [
     { label: "Tasks", path: rolePath("tasks") },
@@ -392,23 +430,26 @@ const Taskby = () => {
         <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Declined ({rejectedCount})
         </p>
+        <p className={`Abandoned ${statusFilter === "abandoned" ? "active" : ""}`} onClick={() => selectStatusFilter("abandoned")} style={{ cursor: "pointer" }}>
+          <GoDotFill color="#DC2626" /> Abandoned ({abandonedCount})
+        </p>
         <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
       </div>
 
-      <div className="tasks-search-bar">
-        <IoSearchOutline fontSize={"20px"} />
-        <input
-          type="text"
-          placeholder="Search by task name or user name"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+      {/* DEDICATED ACTION BAR & FILTERS */}
+      <TaskFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        filters={advancedFilters}
+        onFilterChange={(key, val) => setAdvancedFilters((prev) => ({ ...prev, [key]: val }))}
+        onReset={() => {
+          setSearch("");
+          setAdvancedFilters({ user_id: "", project_id: "", status: "", start_date: "", end_date: "" });
+        }}
+      />
 
       <div className="container">
         {/* Header Table */}
-
-
         <div className="table-header1">
           <div style={{ fontSize: 12, fontWeight: 600 }}>ID</div>
           <div>Assigned To</div>
@@ -416,7 +457,17 @@ const Taskby = () => {
           <div className="status-column">Status</div>
           <div>Progress</div>
           <div className="priority-column">Priority</div>
-          <div className="date-column">Start & Due Date</div>
+          <div
+            className="date-column"
+            style={{ cursor: "pointer", userSelect: "none", display: "flex", alignItems: "center", gap: 4 }}
+            onClick={() => {
+              setSortBy("due_date");
+              setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+            }}
+            title="Click to toggle date sort (Oldest / Newest)"
+          >
+            Start & Due Date {sortBy === "due_date" ? (sortOrder === "asc" ? "▲ (Oldest)" : "▼ (Newest)") : "↕"}
+          </div>
           <div>Action</div>
         </div>
 
@@ -529,49 +580,122 @@ const Taskby = () => {
                       </div>
                     </div>
 
-                    <div className="col-action">
-                    <ActionPopover
-                      trigger={
-                        <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
-                          <IoEyeOutline size={20} />
-                        </button>
-                      }
-                      onTriggerClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
-                    >
-                      <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
-                        {item.status?.toLowerCase() !== "approved" && (
-                          <button
-                            className="action-icon-btn action-edit"
-                            title="Edit Task"
-                            onClick={async () => {
-                              try {
-                                const token = authToken();
-                                const res = await fetch(`${API_URL}/tasks/${item.id}`, {
-                                  headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
-                                });
-                                if (res.ok) {
-                                  const data = await res.json();
-                                  setEditingTask(data.task || item);
-                                } else {
-                                  setEditingTask(item);
-                                }
-                              } catch {
-                                setEditingTask(item);
-                              }
-                            }}
-                          >
-                            <Pencil size={16} />
+                    <div className="col-action" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <button
+                        className="action-icon-btn action-view action-trigger-lg"
+                        title="View Task"
+                        onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
+                      >
+                        <IoEyeOutline size={20} />
+                      </button>
+                      <ActionPopover
+                        trigger={
+                          <button className="action-icon-btn action-manage action-trigger-lg" title="Status Actions" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px", borderRadius: "6px", background: "var(--bg-hover, #f3f4f6)", color: "var(--text-primary, #374151)", border: "1px solid var(--border-color, #e5e7eb)", cursor: "pointer" }}>
+                            <Sliders size={18} />
                           </button>
-                        )}
-                        {item.status?.toLowerCase() !== "approved" && (
-                          <button
-                            className="action-icon-btn action-delete"
-                            title="Delete Task"
-                            onClick={() => handleDelete(item.id)}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
+                        }
+                      >
+                        <button className="action-icon-btn action-note" title="Add Note" onClick={() => setNoteModal({ open: true, itemId: item.id })}><StickyNote size={14} /></button>
+                        {(() => {
+                          const isRecurrence = item.task_type === "recurring" || !!item.recurrence_settings;
+                          const recEnd = item.recurrence_end_date || item.end_date;
+                          const isRecurrenceActive = isRecurrence ? (!recEnd || new Date(recEnd) > new Date()) : true;
+                          if (isRecurrence && !isRecurrenceActive) {
+                            return null;
+                          }
+                          return (
+                            <>
+                              {item.status?.toLowerCase() !== "approved" && (
+                                <button
+                                  className="action-icon-btn action-edit"
+                                  title="Edit"
+                                  onClick={async () => {
+                                    try {
+                                      const token = authToken();
+                                      const res = await fetch(`${API_URL}/tasks/${item.id}`, {
+                                        headers: { Accept: "application/json", Authorization: token ? `Bearer ${token}` : "" },
+                                      });
+                                      if (res.ok) {
+                                        const data = await res.json();
+                                        setEditingTask(data.task || item);
+                                      } else {
+                                        setEditingTask(item);
+                                      }
+                                    } catch {
+                                      setEditingTask(item);
+                                    }
+                                  }}
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                              )}
+                              {item.status?.toLowerCase() !== "approved" && (
+                                <button
+                                  className="action-icon-btn action-delete"
+                                  title="Delete"
+                                  onClick={() => {
+                                    if (isRecurrence) {
+                                      setDeleteRecurrenceTask(item);
+                                    } else {
+                                      handleDelete(item.id);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
+                        {(() => {
+                          const currentUser = getUser();
+                          const isUserAdminOrManager = ["admin", "manager"].includes(currentUser?.role);
+                          const canUserApprove = isUserAdminOrManager || item.created_by === currentUser?.id || item.is_next_approver;
+                          return (
+                            <>
+                              {canUserApprove && (item.status === "submitted" || item.status === "reopened") && (
+                                <button
+                                  className="action-icon-btn"
+                                  title="Approve Task"
+                                  style={{ color: "#16A34A" }}
+                                  onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
+                                >
+                                  <CheckCircle2 size={16} />
+                                </button>
+                              )}
+                              {canUserApprove && (item.status === "submitted" || item.status === "reopened") && (
+                                <button
+                                  className="action-icon-btn"
+                                  title="Decline Task"
+                                  style={{ color: "#DC2626" }}
+                                  onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
+                                >
+                                  <XCircle size={16} />
+                                </button>
+                              )}
+                              {canUserApprove && (item.status === "approved" || item.status === "submitted" || item.status === "reopened") && (
+                                <button
+                                  className="action-icon-btn"
+                                  title="Reopen Task"
+                                  style={{ color: "#2563EB" }}
+                                  onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
+                                >
+                                  <RotateCcw size={16} />
+                                </button>
+                              )}
+                              {item.status !== "abandoned" && (
+                                <button
+                                  className="action-icon-btn"
+                                  title={isUserAdminOrManager ? "Abandon Task" : "Request Abandon"}
+                                  style={{ color: "#F59E0B" }}
+                                  onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'taskby' } })}
+                                >
+                                  <AlertOctagon size={16} />
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
                         {["pending", "in_progress", "reopened", "paused"].includes(item.status) && !item.assigner_paused && (
                           <button
                             className="action-icon-btn"
@@ -603,8 +727,14 @@ const Taskby = () => {
           </div>
         )}
 
-        {!showAllItems && totalPages > 1 && (
-          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+        {!showAllItems && (
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            itemsPerPage={itemsPerPage}
+            onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
+          />
         )}
       </div>
 
@@ -639,6 +769,13 @@ const Taskby = () => {
         confirmText="Delete"
         cancelText="Cancel"
         danger
+      />
+
+      <DeleteRecurrenceModal
+        isOpen={!!deleteRecurrenceTask}
+        onClose={() => setDeleteRecurrenceTask(null)}
+        task={deleteRecurrenceTask}
+        onSuccess={fetchTasks}
       />
 
     </DashboardLayout>

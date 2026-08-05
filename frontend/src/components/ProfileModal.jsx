@@ -53,9 +53,7 @@ function ProfileModal({
     }
 
     if (newPassword !== confirmPassword) {
-
-      notify.error("Passwords do not match.");
-
+      notify.error("Password confirmation does not match");
       return;
     }
 

@@ -66,7 +66,7 @@ function ResetPassword() {
       errors.confirmPassword = "Please confirm your password.";
       valid = false;
     } else if (password !== confirmPassword) {
-      errors.confirmPassword = "Passwords do not match.";
+      errors.confirmPassword = "Password confirmation does not match";
       valid = false;
     }
 

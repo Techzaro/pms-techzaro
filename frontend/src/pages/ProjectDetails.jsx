@@ -88,6 +88,8 @@ const STATUS_COLORS = {
   reopened: "var(--color-primary-bg)",
   approved: "var(--color-success-bg)",
   rejected: "var(--color-danger-bg)",
+  abandon_requested: "var(--color-warning-bg)",
+  abandoned: "var(--color-danger-bg)",
 };
 
 const STATUS_TEXT_COLORS = {
@@ -98,6 +100,8 @@ const STATUS_TEXT_COLORS = {
   reopened: "var(--color-primary)",
   approved: "var(--color-success)",
   rejected: "var(--color-danger)",
+  abandon_requested: "var(--color-warning)",
+  abandoned: "var(--color-danger)",
 };
 
 const PRIORITY_COLORS = {
@@ -121,6 +125,8 @@ function formatStatus(status) {
     reopened: "Reopened",
     approved: "Approved",
     rejected: "Declined",
+    abandon_requested: "Abandon Requested",
+    abandoned: "Abandoned",
   };
   return map[status] || status;
 }
@@ -1312,7 +1318,7 @@ function ProjectDetails() {
                 <div className="td-trio-item">
                   <div className="td-stat-ic td-stat-ic--green"><CalendarDays size={18} /></div>
                   <div>
-                    <span className="td-stat-big td-stat-big--sm">{formatDateTimeShort(project.end_date)}</span>
+                    <span className="td-stat-big td-stat-big--sm">{project?.end_date ? formatDateTimeShort(project.end_date) : "No Deadline"}</span>
                     <span className="td-stat-label">Deadline</span>
                   </div>
                 </div>
@@ -1616,22 +1622,28 @@ function ProjectDetails() {
                                         <SmartDragHandle listeners={dndProps?.listeners} attributes={dndProps?.attributes} id={f.id} businessId={f.business_id} color="#16a34a" />
                                       </div>
                                       <div className="pd-file-box__content">
-                                        <div className="pd-file-box__name">
-                                          <FolderOpen size={18} />
-                                          <span>{f.name}</span>
-                                        </div>
-                                        {f.url && (
-                                          <a
-                                            href={fileUrl(f.url)}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="pd-file-box__link"
-                                            style={{ color: "var(--color-primary)" }}
-                                          >
-                                            {f.url}
-                                          </a>
-                                        )}
-                                      </div>
+                                         <a
+                                           href={fileUrl(f.url || f.file_path || f.path)}
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           className="pd-file-box__name"
+                                           style={{ textDecoration: "none", color: "inherit", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                                         >
+                                           <FolderOpen size={18} />
+                                           <span style={{ fontWeight: 600, color: "var(--color-primary)" }}>{f.name}</span>
+                                         </a>
+                                         {f.url && (
+                                           <a
+                                             href={fileUrl(f.url)}
+                                             target="_blank"
+                                             rel="noopener noreferrer"
+                                             className="pd-file-box__link"
+                                             style={{ color: "var(--color-primary)", marginTop: "4px", display: "block" }}
+                                           >
+                                             {f.url}
+                                           </a>
+                                         )}
+                                       </div>
                                     </div>
                                   );
                                 }}
@@ -1652,10 +1664,15 @@ function ProjectDetails() {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                               <input type="text" placeholder="Search by member name or role..." value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} />
                             </div>
-                            {currentUser?.role !== "guest" && (
-                              <Link to={rolePath("manage-team")} className="pd-link-manage">
+                            {isAdminOrManager && (
+                              <button
+                                type="button"
+                                onClick={() => setShowEditModal(true)}
+                                className="pd-link-manage"
+                                style={{ background: "none", border: "none", cursor: "pointer" }}
+                              >
                                 Manage
-                              </Link>
+                              </button>
                             )}
                           </div>
                           {project.creator && (

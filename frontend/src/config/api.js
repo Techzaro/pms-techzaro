@@ -32,17 +32,19 @@ window.fetch = async function (...args) {
         const reason = isZombieTab
           ? "Your session is no longer valid. Please login again."
           : "Your session has expired. Please login again.";
+        let targetMsg = reason;
         try {
           const clone = res.clone();
           const data = await clone.json();
           if (data?.message === "resigned") {
-            window.location.href = "/?message=" + encodeURIComponent("Your account has been resigned. You no longer have access.");
-          } else {
-            window.location.href = "/?message=" + encodeURIComponent(reason);
+            targetMsg = "Your account has been resigned. You no longer have access.";
           }
-        } catch {
-          window.location.href = "/?message=" + encodeURIComponent(reason);
-        }
+        } catch {}
+
+        try {
+          window.history.replaceState(null, "", "/");
+        } catch {}
+        window.location.replace("/?message=" + encodeURIComponent(targetMsg));
       }
     }
 
@@ -97,13 +99,19 @@ window.addEventListener("storage", (e) => {
         // Our session was removed by another tab
         _sessionConflictHandled = true;
         clearSession(role);
-        window.location.href = "/?message=" + encodeURIComponent("You have been logged in from another tab.");
+        try {
+          window.history.replaceState(null, "", "/");
+        } catch {}
+        window.location.replace("/?message=" + encodeURIComponent("You have been logged in from another tab."));
       }
     } catch {
       // Parse error — treat as session lost
       _sessionConflictHandled = true;
       clearSession(role);
-      window.location.href = "/?message=" + encodeURIComponent("Your session has been interrupted. Please login again.");
+      try {
+        window.history.replaceState(null, "", "/");
+      } catch {}
+      window.location.replace("/?message=" + encodeURIComponent("Your session has been interrupted. Please login again."));
     }
   }
 });

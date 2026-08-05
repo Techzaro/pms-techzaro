@@ -9,7 +9,7 @@
  * This replaces 20+ independent page polls with ONE app-level poll.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import RightSidebar from "./RightSidebar";
@@ -29,6 +29,16 @@ function DashboardLayout({ children, hideRightSidebar = false }) {
   const [rightOpen, setRightOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const prevCountRef = useRef(null);
+
+  // Immediate layout check: if no token exists, immediately redirect to login & replace history
+  useLayoutEffect(() => {
+    if (!authToken()) {
+      try {
+        window.history.replaceState(null, "", "/");
+      } catch {}
+      window.location.replace("/?message=" + encodeURIComponent("Session expired. Please log in."));
+    }
+  }, []);
 
   // Sync modal-open state from child modals (e.g., CreateSubtaskTask)
   useEffect(() => {
@@ -68,7 +78,7 @@ function DashboardLayout({ children, hideRightSidebar = false }) {
   }, []);
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page pms-layout">
       <svg className="dashboard-wave-bg" viewBox="0 0 1440 500" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMin slice">
         <path d="M0 0H1440V140C1440 140 1100 60 800 130C500 200 350 320 100 260C-50 220 0 340 0 340V0Z" fill="url(#wave1)" />
         <path d="M0 0H1440V180C1440 180 1000 90 720 170C440 250 280 360 50 290C-100 240 0 380 0 380V0Z" fill="url(#wave2)" />

@@ -233,6 +233,7 @@ const CreateSubtaskModal = ({
     const errors = {};
     if (!form.title.trim()) errors.title = "Subtask title is required";
     if (!form.task_id) errors.task_id = "Parent task is required";
+    if (!form.assigned_to || form.assigned_to.length === 0) errors.assigned_to = "Please select at least one person to assign this subtask to.";
     if (form.due_date && selectedTaskEndDate && new Date(form.due_date) > new Date(selectedTaskEndDate)) {
       errors.due_date = `Subtask deadline cannot exceed the task deadline (${new Date(selectedTaskEndDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}).`;
     }
@@ -522,7 +523,9 @@ const CreateSubtaskModal = ({
                 selectedIds={form.assigned_to}
                 onChange={(ids) => updateForm("assigned_to", ids)}
                 placeholder="Click to select members"
+                error={!!formErrors.assigned_to}
               />
+              {formErrors.assigned_to && <span className="field-error-text" style={{ color: "#EF4444", fontSize: "12px", marginTop: "4px", display: "block" }}>{formErrors.assigned_to}</span>}
             </div>
 
             {/* Priority */}

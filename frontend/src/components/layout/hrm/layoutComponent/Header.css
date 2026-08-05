@@ -19,6 +19,8 @@
   position: sticky;
   top: 0;
   z-index: 1000;
+
+  gap: 10px;
 }
 
 /* LEFT */
@@ -27,6 +29,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
+  min-width: 0;
 }
 
 .header-menu-btn {
@@ -41,6 +45,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: background 0.15s ease;
 }
 
 .header-menu-btn:hover {
@@ -50,6 +55,7 @@
 .logo-box {
   width: 46px;
   height: 46px;
+  flex-shrink: 0;
 
   border-radius: 14px;
 
@@ -64,16 +70,28 @@
   font-weight: 700;
 }
 
+.logo-text {
+  min-width: 0;
+  overflow: hidden;
+}
+
 .logo-text h3 {
   margin: 0;
   font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .logo-text span {
   font-size: 12px;
   color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
 }
 
 .logo-text--hidden {
@@ -84,6 +102,8 @@
 
 .header-search {
   width: 420px;
+  flex: 1 1 420px;
+  min-width: 0;
   position: relative;
 }
 
@@ -98,6 +118,7 @@
   color: var(--text-muted);
 
   font-size: 14px;
+  pointer-events: none;
 }
 
 .header-search input {
@@ -111,6 +132,7 @@
   background: var(--bg-input);
 
   padding-left: 42px;
+  padding-right: 12px;
 
   font-size: 14px;
 
@@ -194,25 +216,29 @@
   flex-shrink: 0;
 }
 
-/* RIGHT */
-
+/* RIGHT — never allowed to shrink below what it needs; this is what
+   was letting the profile avatar get squeezed to invisible width */
 .header-right {
   display: flex;
   align-items: center;
   gap: 14px;
+  flex-shrink: 0;
+  min-width: max-content;
 }
 
 /* BUTTONS */
 
-.task-btn1{
+.task-btn1 {
   display: flex;
   align-items: center;
   justify-content: center;
 
   text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
 
   background: var(--color-primary);
-  color:white;
+  color: white;
 
   padding: 10px 18px;
 
@@ -221,14 +247,19 @@
   font-size: 14px;
   font-weight: 600;
 
+  border: none;
+  cursor: pointer;
   transition: 0.2s;
 }
+
 .project-btn {
   display: flex;
   align-items: center;
   justify-content: center;
 
   text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
 
   background: var(--bg-hover);
   color: var(--text-dark);
@@ -240,16 +271,18 @@
   font-size: 14px;
   font-weight: 600;
 
+  border: none;
+  cursor: pointer;
   transition: 0.2s;
 }
 
-.task-btn:hover,
+.task-btn1:hover,
 .project-btn:hover {
   background: var(--color-primary-dark);
   color: white;
 }
 
-.task-btn:active,
+.task-btn1:active,
 .project-btn:active {
   transform: scale(0.97);
 }
@@ -258,44 +291,20 @@
 
 .user-info {
   position: relative;
-  display: inline-flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  justify-content: flex-start !important;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
   cursor: pointer;
   width: auto;
-  gap: 25px; /* yahan se gap control hoga */
-}
-.user-avatar,
-.user-text,
-.arrow-icon {
-  display: flex;
-  align-items: center;
-}
-.user-text {
-  display: flex;
-  flex-direction: column;
-  margin-right: 6px;
-
-}
-
-.user-text h6 {
-  margin: 0;
-
-  font-size: 17px;
-  font-weight: 700;
-
-  color: var(--text-primary);
-}
-
-.user-text span {
-  font-size: 12px;
-  color: var(--text-secondary);
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .user-avatar {
   width: 42px;
   height: 42px;
+  flex-shrink: 0;
 
   border-radius: 50%;
 
@@ -310,11 +319,42 @@
   font-weight: 700;
   overflow: hidden;
 }
+
+.user-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 160px;
+}
+
+.user-text h6 {
+  margin: 0;
+
+  font-size: 17px;
+  font-weight: 700;
+
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-text span {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .arrow-icon {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-secondary);
 }
+
 /* MODAL */
 
 .header-modal-card {
@@ -324,6 +364,7 @@
   right: 0;
 
   width: 400px;
+  max-width: calc(100vw - 20px);
 
   background: var(--bg-card);
 
@@ -408,7 +449,7 @@
 
 .hmc-avatar {
   width: 64px;
-  height: 74px;
+  height: 64px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.2);
   border: 3px solid rgba(255, 255, 255, 0.4);
@@ -440,7 +481,7 @@
 }
 
 .hmc-email {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
@@ -553,6 +594,7 @@
   height: 40px;
   border-radius: 12px;
   transition: background 0.15s;
+  flex-shrink: 0;
 }
 
 .header-notif-icon-wrap:hover {
@@ -587,6 +629,7 @@
 /* NOTIFICATION PANEL - Right Sidebar */
 .header-notif {
   position: relative;
+  flex-shrink: 0;
 }
 
 .notif-panel {
@@ -594,6 +637,7 @@
   top: 90px;
   right: 0;
   width: 380px;
+  max-width: 100vw;
   height: calc(100vh - 90px);
   background: var(--bg-card);
   box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
@@ -614,6 +658,7 @@
   border-bottom: 1px solid var(--border-light);
   background: var(--bg-card-alt);
   flex-shrink: 0;
+  gap: 8px;
 }
 
 .notif-panel-header h4 {
@@ -657,7 +702,7 @@
 
 .notif-panel-list {
   flex: 1;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .notif-panel-empty {
@@ -770,33 +815,18 @@
 
   background: var(--border-color);
 
-  margin: 0 10px;
+  margin: 0 6px;
+  flex-shrink: 0;
 }
 
-.user-info {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
+/* ============================================================
+   RESPONSIVE — search bar shrinks first, header-right never does
+   ============================================================ */
 
-.user-avatar {
-  margin-right: 12px;
-}
-
-.user-text {
-  margin-right: 10px;
-}
-
-.arrow-icon {
-  display: flex;
-  align-items: center;
-}
-
-/* RESPONSIVE */
-
-@media (max-width: 768px) {
-  .header-menu-btn {
-    display: flex;
+@media (max-width: 1200px) {
+  .header-search {
+    flex: 1 1 220px;
+    min-width: 120px;
   }
 }
 
@@ -805,14 +835,10 @@
     padding: 0 20px;
     height: 72px;
   }
-  .header-search {
-    max-width: 220px;
-    min-width: 120px;
-  }
   .header-right {
     gap: 10px;
   }
-  .task-btn,
+  .task-btn1,
   .project-btn {
     padding: 9px 16px;
     font-size: 13px;
@@ -839,12 +865,8 @@
     border-right: none;
   }
 
-  .header-left {
-    min-width: auto;
-  }
-
   .header-search {
-    max-width: 200px;
+    flex: 1 1 160px;
     min-width: 100px;
   }
 
@@ -852,17 +874,11 @@
     gap: 8px;
   }
 
-  .task-btn span,
-  .project-btn span {
-    display: none;
-  }
-
   .header-modal-card {
     right: 0;
-    transform: none;
   }
 
-  .task-btn,
+  .task-btn1,
   .project-btn {
     padding: 8px 14px;
     font-size: 13px;
@@ -884,46 +900,51 @@
 }
 
 @media (max-width: 768px) {
+  .header-menu-btn {
+    display: flex;
+  }
+
   .header-container {
     padding: 0 12px;
     height: 60px;
     border-radius: 0;
+    gap: 6px;
   }
 
-  .task-btn,
   .task-btn1,
   .project-btn {
     display: none;
   }
 
   .header-right {
-    gap: 4px;
-    padding-right: 8px;
-  }
-
-  .user-avatar {
-    margin-right: 0;
+    gap: 6px;
   }
 
   .header-search {
-    max-width: 160px;
-    min-width: 80px;
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .header-search input {
-    height: 36px;
-    font-size: 12px;
-    padding-left: 32px;
+    height: 38px;
+    font-size: 13px;
+    padding-left: 34px;
   }
 
   .search-icon {
-    left: 10px;
-    font-size: 12px;
+    left: 11px;
+    font-size: 13px;
+  }
+
+  .user-avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 15px;
   }
 
   .header-modal-card {
-    width: 260px;
-    right: -10px;
+    width: min(280px, calc(100vw - 20px));
+    right: -8px;
   }
 
   .user-text {
@@ -942,35 +963,38 @@
 @media (max-width: 480px) {
   .header-container {
     padding: 0 8px;
-    height: 52px;
+    height: 54px;
+    gap: 4px;
   }
 
-  .header-search {
-    max-width: 120px;
-    min-width: 60px;
+  .header-left {
+    gap: 6px;
+  }
+
+  .header-right {
+    gap: 4px;
   }
 
   .header-search input {
-    height: 32px;
-    font-size: 11px;
-    padding-left: 28px;
+    height: 34px;
+    font-size: 12px;
+    padding-left: 30px;
   }
 
   .search-icon {
-    left: 8px;
-    font-size: 10px;
+    left: 9px;
+    font-size: 11px;
   }
 
   .user-avatar {
-    width: 30px;
-    height: 30px;
-    font-size: 13px;
-    margin-right: 0;
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
   }
 
   .header-modal-card {
-    width: 220px;
-    padding: 16px;
+    width: calc(100vw - 16px);
+    padding: 0 14px 14px;
   }
 
   .logo-box {
@@ -987,10 +1011,6 @@
     font-size: 10px;
   }
 
-  .header-left {
-    gap: 6px;
-  }
-
   .header-menu-btn {
     width: 30px;
     height: 30px;
@@ -1000,6 +1020,17 @@
     width: 16px;
     height: 16px;
   }
+
+  .theme-toggle-btn,
+  .header-notif-icon-wrap {
+    width: 34px;
+    height: 34px;
+  }
+
+  /* Least essential control drops first, profile avatar stays put */
+  .theme-toggle-btn {
+    display: none;
+  }
 }
 
 .search-dropdown-item--highlighted { background: #4a4a4a !important; color: #fff !important; }
@@ -1007,3 +1038,206 @@
 .hmc-menu-item--highlighted { background: #4a4a4a !important; color: #fff !important; }
 .search-dropdown-item--highlighted *, .notif-panel-item--highlighted *, .hmc-menu-item--highlighted * { color: #fff !important; }
 .search-dropdown-item--highlighted span[style] { background: rgba(255,255,255,0.2) !important; }
+
+/* ============================================================
+   HRM-scoped header overrides to prevent PMS CSS bleed
+   ============================================================ */
+
+.hrm-layout .header-container {
+  width: 100%;
+  height: 80px;
+  margin: 0;
+  background: var(--bg-card);
+  padding: 0 30px;
+  position: sticky;
+  top: 0;
+  border-radius: 18px;
+  z-index: 1000;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+
+.hrm-layout .header-search {
+  width: 420px;
+  max-width: 420px;
+  flex: 1 1 260px;
+  min-width: 0;
+  position: relative;
+  margin: 0;
+}
+
+.hrm-layout .header-search input {
+  width: 100%;
+  height: 46px;
+  border-radius: 14px;
+  padding-left: 42px;
+  font-size: 14px;
+  background: var(--bg-input);
+}
+
+.hrm-layout .task-btn1 {
+  display: flex;
+  align-items: center;
+  background: var(--color-primary);
+  color: white;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.hrm-layout .project-btn {
+  display: flex;
+  align-items: center;
+  background: var(--bg-hover);
+  color: var(--text-dark);
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* header-right + all children locked so they never shrink to
+   invisible width — this is the actual fix for the missing avatar */
+.hrm-layout .header-right {
+  gap: 14px;
+  flex-shrink: 0;
+  min-width: max-content;
+}
+
+.hrm-layout .user-info {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  width: auto;
+  flex-shrink: 0;
+}
+
+.hrm-layout .user-text {
+  display: flex;
+  flex-direction: column;
+  margin-right: 0;
+}
+
+.hrm-layout .user-text h6 {
+  font-size: 17px;
+}
+
+.hrm-layout .user-avatar {
+  width: 42px;
+  height: 42px;
+  margin-right: 0;
+  flex-shrink: 0;
+}
+
+.hrm-layout .header-notif {
+  flex-shrink: 0;
+}
+
+.hrm-layout .header-notif-icon-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.hrm-layout .theme-toggle-btn {
+  flex-shrink: 0;
+}
+
+@media (max-width: 1200px) {
+  .hrm-layout .header-search {
+    flex: 1 1 180px;
+    min-width: 100px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .hrm-layout .header-container {
+    padding: 0 16px;
+    height: 70px;
+  }
+  .hrm-layout .header-search {
+    width: 100%;
+    max-width: 300px;
+  }
+}
+
+@media (max-width: 768px) {
+  .hrm-layout .header-container {
+    padding: 0 10px;
+    height: 60px;
+    border-radius: 12px;
+    gap: 6px;
+  }
+  .hrm-layout .header-menu-btn {
+    display: flex !important;
+  }
+  .hrm-layout .logo-text {
+    display: none !important;
+  }
+  .hrm-layout .header-search {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    width: auto;
+    margin: 0;
+  }
+  .hrm-layout .header-search input {
+    height: 38px;
+    font-size: 13px;
+    padding-left: 36px;
+  }
+  .hrm-layout .search-icon {
+    left: 10px;
+    font-size: 13px;
+  }
+  .hrm-layout .task-btn1,
+  .hrm-layout .project-btn {
+    display: none !important;
+  }
+  .hrm-layout .header-right {
+    gap: 6px;
+  }
+  .hrm-layout .user-text {
+    display: none !important;
+  }
+  .hrm-layout .arrow-icon {
+    display: none !important;
+  }
+  .hrm-layout .user-avatar {
+    width: 34px;
+    height: 34px;
+    margin-right: 0;
+  }
+  .hrm-layout .header-notif-icon-wrap {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hrm-layout .header-container {
+    height: 54px;
+    padding: 0 8px;
+    gap: 4px;
+  }
+  .hrm-layout .header-right {
+    gap: 4px;
+  }
+  .hrm-layout .user-avatar {
+    width: 32px;
+    height: 32px;
+  }
+  .hrm-layout .header-notif-icon-wrap {
+    width: 32px;
+    height: 32px;
+  }
+  /* Same rule as PMS header: theme toggle drops before profile ever does */
+  .hrm-layout .theme-toggle-btn {
+    display: none;
+  }
+}

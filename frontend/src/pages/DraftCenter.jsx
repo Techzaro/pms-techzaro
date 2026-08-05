@@ -372,8 +372,11 @@ function DraftCenter() {
                                 : (MODULE_CREATE_LABELS[draft.module_type] || "Create New")}
                             </span>
                             {draft.is_returned && (
-                              <div className="dc-returned-info">
+                              <div className="dc-returned-info" style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginTop: "4px" }}>
                                 <span className="dc-returned-badge">Returned from Resignation</span>
+                                <span className="dc-assignee-required-badge" style={{ backgroundColor: "#FEE2E2", color: "#991B1B", border: "1px solid #F87171", padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                  <MdPersonAdd size={13} /> Assignee Required
+                                </span>
                                 {draft.returned_from_user && (
                                   <span className="dc-returned-user">Former assignee: {draft.returned_from_user.name}</span>
                                 )}

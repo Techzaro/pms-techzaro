@@ -1456,7 +1456,7 @@ function ManageUsers() {
         <div className="manage-users-header">
           <div>
             <h1>User Management</h1>
-            <p>Manage employees, clients (guests), roles and access permissions.</p>
+            <p>Manage team members, clients (guests), roles and access permissions.</p>
           </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             {activeTab === "employees" && (
@@ -1479,7 +1479,7 @@ function ManageUsers() {
         {/* Tab Toggle */}
         <div className="manage-users-tabs">
           <button className={`tab-button ${activeTab === "employees" ? "tab-active" : ""}`} onClick={() => { setActiveTab("employees"); setPage(1); }}>
-            <span className="tab-icon">👤</span> Employees
+            <span className="tab-icon">👤</span> Team Members
             <span className="tab-count">{localUsers.filter((u) => u.role !== "guest").length || ""}</span>
           </button>
           <button className={`tab-button ${activeTab === "guests" ? "tab-active" : ""}`} onClick={() => { setActiveTab("guests"); setGuestPage(1); }}>

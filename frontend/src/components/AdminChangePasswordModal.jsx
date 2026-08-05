@@ -38,7 +38,7 @@ export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
       return;
     }
     if (newPassword !== confirmPassword) {
-      notify.error("Passwords do not match.");
+      notify.error("Password confirmation does not match");
       return;
     }
     if (!allValid) {

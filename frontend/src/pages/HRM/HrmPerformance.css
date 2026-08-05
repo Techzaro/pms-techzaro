@@ -379,3 +379,70 @@
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
 }
+
+/* ── RESPONSIVE MEDIA QUERIES ── */
+@media (max-width: 1024px) {
+  .perf-page {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .perf-page {
+    padding: 12px;
+  }
+  .perf-header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px;
+    gap: 12px;
+  }
+  .perf-header p {
+    font-size: 12.5px;
+  }
+  .perf-kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+  }
+  .perf-kpi-card {
+    padding: 14px;
+  }
+  .perf-kpi-val {
+    font-size: 20px;
+  }
+  .perf-tabs-bar {
+    padding: 4px;
+    gap: 4px;
+  }
+  .perf-tab-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  .perf-content-card {
+    padding: 14px;
+    border-radius: 12px;
+  }
+  .perf-goal-grid {
+    grid-template-columns: 1fr;
+  }
+  .perf-table th,
+  .perf-table td {
+    padding: 10px 8px;
+    white-space: nowrap;
+  }
+  .perf-modal-panel {
+    max-width: calc(100vw - 20px);
+    max-height: 90vh;
+    border-radius: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .perf-kpi-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .perf-header-title h1 {
+    font-size: 18px;
+  }
+}
+

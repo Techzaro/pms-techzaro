@@ -22,6 +22,7 @@ import { getActivityDestination, getActivityFrom } from "../utils/navigation";
 import API_URL from "../config/api";
 import { timeAgo, formatDateTime } from "../utils/formatDateTime";
 import { useApiQuery } from "../hooks/useApi";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRelativeTime } from "../hooks/useRelativeTime";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { IoPerson, IoPeople } from "react-icons/io5";
@@ -352,6 +353,8 @@ function Admin() {
   // For all roles: My Dashboard = incoming (mode=my), User Dashboard = outgoing (mode=user)
   const apiMode = dashboardMode;
 
+  const queryClient = useQueryClient();
+
   // Fetch dashboard summary data (active projects, tasks due today, etc.)
   const { data: dashboard, isLoading, refetch: refetchDashboard } = useApiQuery(
     ["dashboard", apiMode],
@@ -361,7 +364,10 @@ function Admin() {
   );
 
   // Auto-refresh dashboard when tasks, projects, or subtasks change
-  useAutoRefresh(() => refetchDashboard(), {
+  useAutoRefresh(() => {
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    refetchDashboard();
+  }, {
     events: ["task:created", "task:updated", "task:deleted", "project:created", "project:updated", "project:deleted", "deliverable:updated", "data:changed"],
   });
 

@@ -12,6 +12,7 @@
  */
 import { useState, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
+import { MdVisibility, MdVisibilityOff } from "react-icons/md";
 import API_URL from "../config/api";
 import { saveSession, clearAllSessions, authToken } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
@@ -32,9 +33,12 @@ function Login() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({ email: "", password: "", form: "" });
   const { submitting, run } = useSubmit();
+
+  const [showPassword, setShowPassword] = useState(false);
 
   // Display URL message (e.g. from logout redirect) as error notification
   useEffect(() => {
@@ -84,7 +88,8 @@ function Login() {
         _notifHandled: true,
         body: JSON.stringify({
           email,
-          password
+          password,
+          remember_me: rememberMe
         })
       });
 
@@ -99,7 +104,9 @@ function Login() {
 
       if (!res.ok) {
         let msg = "";
-        if (res.status === 401) {
+        if (res.status === 429) {
+          msg = data.message || "Too many failed login attempts. Please try again in 15 minutes.";
+        } else if (res.status === 401) {
           msg = "Incorrect email or password. Please try again.";
         } else if (res.status === 403) {
           msg = data.message || "Your account has been deactivated. Please contact admin.";
@@ -113,7 +120,7 @@ function Login() {
       }
 
       if (data.success) {
-        saveSession(data.role, data.token, data.user || {});
+        saveSession(data.role, data.token, data.user || {}, rememberMe, data.expires_at);
 
         if (data.must_change_password) {
           setMustChangePassword(true);
@@ -161,7 +168,7 @@ function Login() {
     }
 
     if (newPassword !== confirmPassword) {
-      notify.error("Passwords do not match. Please re-enter.");
+      notify.error("Password confirmation does not match");
       return;
     }
 
@@ -254,7 +261,7 @@ function Login() {
             <div className="button-area">
               <button
                 onClick={handleFirstTimePasswordChange}
-                disabled={changingPassword || !isPasswordValid(newPassword) || newPassword !== confirmPassword}
+                disabled={changingPassword || !newPassword || !confirmPassword}
               >
                 {changingPassword ? "Changing..." : "Change Password & Login"}
               </button>
@@ -296,21 +303,59 @@ function Login() {
           />
           {fieldErrors.email && <span className="field-error-text">{fieldErrors.email}</span>}
 
-          <input
-            id="login-password"
-            type="password"
-            placeholder="Enter Password"
-            value={password}
-            onChange={(e) => { setPassword(e.target.value); setFieldErrors(prev => ({ ...prev, password: "", form: "" })); }}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleLogin(); } }}
-            className={fieldErrors.password ? "field-error" : ""}
-          />
+          {/* Hardened Password Field Wrapper */}
+          <div style={{ position: "relative", width: "100%", display: "block", marginBottom: "6px" }}>
+            <input
+              id="login-password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Enter Password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setFieldErrors(prev => ({ ...prev, password: "", form: "" })); }}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleLogin(); } }}
+              className={fieldErrors.password ? "field-error" : ""}
+              style={{
+                width: "100%",
+                paddingRight: "45px",
+                margin: 0, 
+                boxSizing: "border-box",
+                display: "block"
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              title={showPassword ? "Hide password" : "Show password"}
+              style={{
+                position: "absolute",
+                right: "4px", // Fixed to the right corner
+                top: "0",
+                bottom: "0", 
+                width: "40px", // OVERRIDES the 100% width from Login.css
+                minWidth: "auto", 
+                height: "100%",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: "0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#64748b"
+              }}
+            >
+              {showPassword ? <MdVisibilityOff size={20} /> : <MdVisibility size={20} />}
+            </button>
+          </div>
           {fieldErrors.password && <span className="field-error-text">{fieldErrors.password}</span>}
 
           <div className="bottom-area">
             <div className="options">
               <label className="remember-box">
-                <input type="checkbox" />
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
                 Remember Me
               </label>
               <Link to="/forgot-password" className="forgot-password">Forgot Password?</Link>

@@ -39,6 +39,7 @@ const SubtaskDetails = lazy(() => import("./pages/DeliverableDetails"));
 const SelfDeliveries = lazy(() => import("./pages/SelfDeliveries"));
 const Calender = lazy(() => import("./pages/Calender"));
 const Notifications = lazy(() => import("./pages/Notifications"));
+const NotificationSettings = lazy(() => import("./pages/NotificationSettings"));
 const AuditLogs = lazy(() => import("./pages/AuditLogs"));
 const UserPerformance = lazy(() => import("./pages/UserPerformance"));
 const TeamMembersReport = lazy(() => import("./pages/TeamMembersReport"));
@@ -47,6 +48,10 @@ const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const LoggedOut = lazy(() => import("./pages/LoggedOut"));
 const Chat = lazy(() => import("./pages/Chat"));
 const DraftCenter = lazy(() => import("./pages/DraftCenter"));
+const Templates = lazy(() => import("./pages/Templates"));
+const KnowledgeBase = lazy(() => import("./pages/KnowledgeBase"));
+
+import { authToken } from "./utils/auth";
 
 // Route protection components
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -96,23 +101,83 @@ function ScrollToTop() {
   return null;
 }
 
+/**
+ * AuthSecurityGuard - Global session & history security monitor.
+ * Detects browser Back button, BFCache restoration, popstate, and visibility changes.
+ * Immediately ejects unauthenticated sessions and replaces history to prevent back-navigation.
+ */
+function AuthSecurityGuard({ children }) {
+  const location = useLocation();
+
+  useEffect(() => {
+    const verifySession = () => {
+      const currentPath = window.location.pathname;
+      const publicPaths = ["/", "/login", "/logged-out", "/forgot-password", "/reset-password"];
+      const isPublic = publicPaths.includes(currentPath);
+
+      if (!isPublic && !authToken()) {
+        try {
+          window.history.replaceState(null, "", "/");
+        } catch {}
+        window.location.replace("/?message=" + encodeURIComponent("Session expired. Please log in."));
+      }
+    };
+
+    // 1. Check BFCache (pageshow event when restored via browser Back/Forward button)
+    const handlePageShow = (e) => {
+      if (e.persisted || (window.performance && window.performance.getEntriesByType("navigation")[0]?.type === "back_forward")) {
+        verifySession();
+      }
+    };
+
+    // 2. Check history popstate navigation
+    const handlePopState = () => {
+      verifySession();
+    };
+
+    // 3. Check visibility change (tab focus)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        verifySession();
+      }
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("popstate", handlePopState);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Initial route check
+    verifySession();
+
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("popstate", handlePopState);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [location.pathname]);
+
+  return children;
+}
+
 function App() {
   useInactivityTimeout();
 
   return (
     <BrowserRouter>
-      <ScrollToTop />
-      <ErrorBoundary>
-        <Suspense fallback={<LoadingSpinner />}>
-          <Routes>
-            {/* Public routes */}
-            <Route path="/" element={<Login />} />
-            <Route path="/logged-out" element={<LoggedOut />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
+      <AuthSecurityGuard>
+        <ScrollToTop />
+        <ErrorBoundary>
+          <Suspense fallback={<LoadingSpinner />}>
+            <Routes>
+              {/* Public routes */}
+              <Route path="/" element={<Login />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/logged-out" element={<LoggedOut />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
 
-            {/* Dashboard routes - role-specific */}
-            <Route path="/:role/dashboard" element={<RoleProtectedRoute><Admin /></RoleProtectedRoute>} />
+              {/* Dashboard routes - role-specific */}
+              <Route path="/:role/dashboard" element={<RoleProtectedRoute><Admin /></RoleProtectedRoute>} />
 
             {/* Task routes */}
             <Route path="/:role/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
@@ -149,7 +214,10 @@ function App() {
             <Route path="/:role/my-profile" element={<ProtectedRoute><MyProfile /></ProtectedRoute>} />
             <Route path="/:role/calender" element={<ProtectedRoute><Calender /></ProtectedRoute>} />
             <Route path="/:role/drafts" element={<ProtectedRoute><DraftCenter /></ProtectedRoute>} />
+            <Route path="/:role/templates" element={<ProtectedRoute><Templates /></ProtectedRoute>} />
+            <Route path="/:role/knowledge-base" element={<ProtectedRoute><KnowledgeBase /></ProtectedRoute>} />
             <Route path="/:role/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+            <Route path="/:role/settings/notifications" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
             <Route path="/:role/audit-logs" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><AuditLogs /></RoleProtectedRoute>} />
             <Route path="/:role/reports/user-performance/:userId" element={<ProtectedRoute><UserPerformance /></ProtectedRoute>} />
             <Route path="/:role/reports/team-members/:teamId" element={<ProtectedRoute><TeamMembersReport /></ProtectedRoute>} />
@@ -196,7 +264,8 @@ function App() {
           </Suspense>
         
       </ErrorBoundary>
-    </BrowserRouter>
+    </AuthSecurityGuard>
+  </BrowserRouter>
   );
 }
 

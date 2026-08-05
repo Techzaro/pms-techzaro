@@ -579,6 +579,23 @@ export default function EditTaskModal({ task, onClose }) {
    */
   const handleSubmit = async (e) => {
     if (e?.preventDefault) e.preventDefault();
+    if (!form.project_id || (Array.isArray(form.project_id) && form.project_id.length === 0)) {
+      notify.error("Project selection is required.");
+      return;
+    }
+    if (form.task_type !== "recurring" && (!selectedAssigneeIds || selectedAssigneeIds.length === 0)) {
+      notify.error("Please select a person to assign this task to.");
+      return;
+    }
+    // Validate start date is not later than due date
+    if (form.start_date && form.end_date) {
+      const taskStart = new Date(form.start_date);
+      const taskEnd = new Date(form.end_date);
+      if (taskStart > taskEnd) {
+        notify.error("Start date cannot be later than the due date.");
+        return;
+      }
+    }
     // Validate deadline against project deadline
     if (form.end_date && task.project?.end_date) {
       const taskEnd = new Date(form.end_date);
@@ -595,12 +612,20 @@ export default function EditTaskModal({ task, onClose }) {
         const token = authToken();
 
         if (form.task_type === "recurring") {
+          const recStart = form.recurrence_start_date || form.start_date;
+          const recEnd = form.recurrence_end_date || form.end_date;
+          if (recStart && recEnd && new Date(recEnd) < new Date(recStart)) {
+            notify.error("Recurrence End date cannot be before Start date.");
+            return;
+          }
           const validTemplates = recurringTemplates.filter((t) => t.title.trim());
           body = {
             recurrence_settings: {
               repeat: recurrenceSettings.repeat,
               skip_weekends: recurrenceSettings.skip_weekends || false,
             },
+            recurrence_start_date: toUTCIso(recStart),
+            recurrence_end_date: toUTCIso(recEnd),
             deliverable_templates: validTemplates.length > 0 ? validTemplates.map((t) => ({ title: t.title.trim(), description: t.description || null, quantity: t.quantity || 1, combined: t.combined || false })) : undefined,
             regenerate: true,
           };
@@ -608,6 +633,7 @@ export default function EditTaskModal({ task, onClose }) {
         } else {
           body = {
             ...form,
+            requirements: requirementsList,
             allow_transfer: form.allow_transfer === "allow",
             project_id: form.project_id?.[0] || null,
             start_date: toUTCIso(form.start_date),
@@ -689,7 +715,7 @@ export default function EditTaskModal({ task, onClose }) {
 
             <div className="task-grid-2">
               <div className="task-field">
-                <label>Project</label>
+                <label>Project <span style={{ color: "#ef4444" }}>*</span></label>
                 <MultiSelectDropdown
                   name="project_id"
                   value={form.project_id}
@@ -700,7 +726,7 @@ export default function EditTaskModal({ task, onClose }) {
                 />
               </div>
               <div className="task-field">
-                <label>Assign To {!isSelfTask && <span>*</span>}</label>
+                <label>Assign To <span>*</span></label>
                 {isSelfTask ? (
                   <div className="task-project-name">
                     {task.assignees?.map((a) => a.name).join(", ") || "—"}
@@ -1057,6 +1083,30 @@ export default function EditTaskModal({ task, onClose }) {
                       </label>
                     </div>
                   )}
+
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #e5e7eb" }}>
+                    <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 8 }}>Dates</label>
+                    <div className="task-deadline-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <div>
+                        <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 4 }}>Start</label>
+                        <input
+                          type="datetime-local"
+                          value={form.recurrence_start_date || form.start_date || ""}
+                          onChange={(e) => { setForm((prev) => ({ ...prev, recurrence_start_date: e.target.value })); markDirty(); }}
+                          min={getNowDatetimeLocal()}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 4 }}>End</label>
+                        <input
+                          type="datetime-local"
+                          value={form.recurrence_end_date || form.end_date || ""}
+                          onChange={(e) => { setForm((prev) => ({ ...prev, recurrence_end_date: e.target.value })); markDirty(); }}
+                          min={form.recurrence_start_date || form.start_date || getNowDatetimeLocal()}
+                        />
+                      </div>
+                    </div>
+                  </div>
                   <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>
                     Subtasks auto-distribute between <strong>Start Date</strong> and <strong>Due Date</strong>.
                   </p>
@@ -1114,35 +1164,6 @@ export default function EditTaskModal({ task, onClose }) {
                     </div>
                   ))}
                 </div>
-
-                {preview && (
-                  <div className="task-card" style={{ border: "1px solid #c7d2fe", background: "#f8faff" }}>
-                    <div className="task-card-top">
-                      <span>Recurring Preview</span>
-                      <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 600 }}>{preview.totalSubtasks} Total</span>
-                    </div>
-                    <div style={{ maxHeight: 220, overflowY: "auto" }}>
-                      {preview.previewPeriods.map((pd) => (
-                        <div key={pd.period} style={{ marginBottom: 8, padding: "6px 0", borderBottom: "1px solid #eef2ff" }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: "#4338ca", marginBottom: 4 }}>{pd.label} — {pd.date}</div>
-                          {pd.items.map((item, i) => (
-                            <div key={i} style={{ fontSize: 12, color: "#374151", paddingLeft: 16, display: "flex", alignItems: "center", gap: 6 }}>
-                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#6366f1", display: "inline-block", flexShrink: 0 }}></span>
-                              #{item.number} {item.title}
-                              {item.count > 1 && <span style={{ color: "#6366f1", fontWeight: 600, fontSize: 11 }}>(qty {item.count})</span>}
-                              {item.description && <span style={{ color: "#9ca3af" }}>— {item.description}</span>}
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                    {preview.hasMore && (
-                      <p style={{ fontSize: 11, color: "#9ca3af", textAlign: "center", marginTop: 4 }}>
-                        ... and {preview.remainingPeriods} more days · {preview.totalPeriods} days total
-                      </p>
-                    )}
-                  </div>
-                )}
               </>
             )}
 

@@ -12,8 +12,8 @@ import React from "react";
  * @param {number} totalPages - Total number of pages.
  * @param {Function} onPageChange - Callback invoked with the target page number.
  */
-export default function Pagination({ currentPage, totalPages, onPageChange }) {
-  if (totalPages <= 1) return null;
+export default function Pagination({ currentPage, totalPages, onPageChange, itemsPerPage, onItemsPerPageChange }) {
+  if (totalPages <= 1 && !onItemsPerPageChange) return null;
 
   /** Generate array of all page numbers */
   const pages = [];
@@ -23,8 +23,6 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
 
   /**
    * Determine which page numbers to display.
-   * Shows all pages if <= 7, otherwise shows a window around the current page
-   * with ellipsis markers for skipped ranges.
    */
   const getVisiblePages = () => {
     if (totalPages <= 7) return pages;
@@ -48,73 +46,101 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
   return (
     <div style={{
       display: "flex",
-      justifyContent: "center",
+      justify: "space-between",
       alignItems: "center",
-      gap: "6px",
+      gap: "12px",
       padding: "16px 0",
       flexWrap: "wrap",
+      width: "100%",
     }}>
-      <button
-        disabled={currentPage <= 1}
-        onClick={() => onPageChange(currentPage - 1)}
-        style={{
-          padding: "6px 14px",
-          border: "var(--border-color)",
-          borderRadius: "6px",
-          background: currentPage <= 1 ? "var(--bg-hover)" : "var(--bg-card)",
-          color: currentPage <= 1 ? "var(--text-muted)" : "var(--text-primary)",
-          cursor: currentPage <= 1 ? "not-allowed" : "pointer",
-          fontSize: "13px",
-          fontWeight: 500,
-        }}
-      >
-        Previous
-      </button>
-
-      {getVisiblePages().map((page, idx) =>
-        page === "..." ? (
-          /* Ellipsis marker for skipped page ranges */
-          <span key={`dots-${idx}`} style={{ padding: "0 4px", color: "var(--text-muted)", fontSize: "13px" }}>
-            ...
-          </span>
-        ) : (
-          <button
-            key={page}
-            onClick={() => onPageChange(page)}
+      {onItemsPerPageChange ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "13px", color: "var(--text-secondary)" }}>
+          <span>Rows per page:</span>
+          <select
+            value={itemsPerPage || 10}
+            onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
             style={{
-              padding: "6px 12px",
-              border: "1px solid",
-              borderColor: page === currentPage ? "var(--color-primary)" : "var(--border-color)",
+              padding: "4px 8px",
               borderRadius: "6px",
-              background: page === currentPage ? "var(--color-primary)" : "var(--bg-card)",
-              color: page === currentPage ? "#fff" : "var(--text-primary)",
-              cursor: "pointer",
+              border: "1px solid var(--border-color)",
+              background: "var(--bg-card)",
+              color: "var(--text-primary)",
               fontSize: "13px",
-              fontWeight: page === currentPage ? 600 : 500,
-              minWidth: "36px",
+              cursor: "pointer",
             }}
           >
-            {page}
-          </button>
-        )
-      )}
+            <option value={10}>10</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </div>
+      ) : <div />}
 
-      <button
-        disabled={currentPage >= totalPages}
-        onClick={() => onPageChange(currentPage + 1)}
-        style={{
-          padding: "6px 14px",
-          border: "var(--border-color)",
-          borderRadius: "6px",
-          background: currentPage >= totalPages ? "var(--bg-hover)" : "var(--bg-card)",
-          color: currentPage >= totalPages ? "var(--text-muted)" : "var(--text-primary)",
-          cursor: currentPage >= totalPages ? "not-allowed" : "pointer",
-          fontSize: "13px",
-          fontWeight: 500,
-        }}
-      >
-        Next
-      </button>
+      {totalPages > 1 && (
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <button
+            disabled={currentPage <= 1}
+            onClick={() => onPageChange(currentPage - 1)}
+            style={{
+              padding: "6px 14px",
+              border: "var(--border-color)",
+              borderRadius: "6px",
+              background: currentPage <= 1 ? "var(--bg-hover)" : "var(--bg-card)",
+              color: currentPage <= 1 ? "var(--text-muted)" : "var(--text-primary)",
+              cursor: currentPage <= 1 ? "not-allowed" : "pointer",
+              fontSize: "13px",
+              fontWeight: 500,
+            }}
+          >
+            Previous
+          </button>
+
+          {getVisiblePages().map((page, idx) =>
+            page === "..." ? (
+              <span key={`dots-${idx}`} style={{ padding: "0 4px", color: "var(--text-muted)", fontSize: "13px" }}>
+                ...
+              </span>
+            ) : (
+              <button
+                key={page}
+                onClick={() => onPageChange(page)}
+                style={{
+                  padding: "6px 12px",
+                  border: "1px solid",
+                  borderColor: page === currentPage ? "var(--color-primary)" : "var(--border-color)",
+                  borderRadius: "6px",
+                  background: page === currentPage ? "var(--color-primary)" : "var(--bg-card)",
+                  color: page === currentPage ? "#fff" : "var(--text-primary)",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                  fontWeight: page === currentPage ? 600 : 500,
+                  minWidth: "36px",
+                }}
+              >
+                {page}
+              </button>
+            )
+          )}
+
+          <button
+            disabled={currentPage >= totalPages}
+            onClick={() => onPageChange(currentPage + 1)}
+            style={{
+              padding: "6px 14px",
+              border: "var(--border-color)",
+              borderRadius: "6px",
+              background: currentPage >= totalPages ? "var(--bg-hover)" : "var(--bg-card)",
+              color: currentPage >= totalPages ? "var(--text-muted)" : "var(--text-primary)",
+              cursor: currentPage >= totalPages ? "not-allowed" : "pointer",
+              fontSize: "13px",
+              fontWeight: 500,
+            }}
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }

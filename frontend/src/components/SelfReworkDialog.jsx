@@ -31,13 +31,19 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
   const [comment, setComment] = useState("");
   const [instructions, setInstructions] = useState("");
   const [newDeadline, setNewDeadline] = useState("");
-  const [file, setFile] = useState(null);
+  const [link, setLink] = useState("");
+  const [files, setFiles] = useState([]);
   const { submitting, run } = useSubmit();
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
+      setComment("");
+      setInstructions("");
+      setNewDeadline("");
+      setLink("");
+      setFiles([]);
     } else {
       document.body.style.overflow = "";
     }
@@ -57,7 +63,11 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
         if (comment.trim()) formData.append("comment", comment.trim());
         if (instructions.trim()) formData.append("instructions", instructions.trim());
         if (newDeadline) formData.append("new_deadline", toUTCIso(newDeadline));
-        if (file) formData.append("file", file);
+        if (link.trim()) formData.append("link", link.trim());
+        if (files && files.length > 0) {
+          files.forEach((f) => formData.append("files[]", f));
+          formData.append("file", files[0]);
+        }
 
         const res = await fetch(`${API_URL}/deliverables/${deliverable.id}/self-rework`, {
           method: "POST",
@@ -113,6 +123,17 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
           </div>
 
           <div className="rd-field">
+            <label className="rd-label">Attach Link / Reference URL</label>
+            <input
+              type="url"
+              className="rd-input"
+              placeholder="https://example.com/ref-link"
+              value={link}
+              onChange={(e) => { setLink(e.target.value); setIsDirty(true); }}
+            />
+          </div>
+
+          <div className="rd-field">
             <label className="rd-label">New Target Date & Time (optional)</label>
             <input
               type="datetime-local"
@@ -129,22 +150,28 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
               className="rd-dropzone"
               onClick={() => fileInputRef.current?.click()}
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]); }}
+              onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) { setFiles((prev) => [...prev, ...Array.from(e.dataTransfer.files)]); setIsDirty(true); } }}
             >
-              {file ? (
-                <div className="rd-file-info">
-                  <span className="rd-file-name">{file.name}</span>
-                  <button className="rd-file-remove" onClick={(e) => { e.stopPropagation(); setFile(null); }}>Remove</button>
+              {files.length > 0 ? (
+                <div className="rd-files-list" style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
+                  {files.map((f, idx) => (
+                    <div key={idx} className="rd-file-info" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg-card-alt, #f9fafb)", padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border-color, #e5e7eb)" }}>
+                      <span className="rd-file-name" style={{ fontSize: 13, fontWeight: 500, color: "var(--text-dark)" }}>{f.name}</span>
+                      <button type="button" className="rd-file-remove" onClick={(e) => { e.stopPropagation(); setFiles((prev) => prev.filter((_, i) => i !== idx)); }}>Remove</button>
+                    </div>
+                  ))}
+                  <button type="button" className="rd-browse" style={{ alignSelf: "flex-end", fontSize: 12, marginTop: 4, background: "none", border: "none" }} onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>+ Add more files</button>
                 </div>
               ) : (
-                <p className="rd-dropzone-text">Drag & drop a file or <span className="rd-browse">browse</span></p>
+                <p className="rd-dropzone-text">Drag & drop files or <span className="rd-browse">browse</span></p>
               )}
             </div>
             <input
               type="file"
               ref={fileInputRef}
+              multiple
               style={{ display: "none" }}
-              onChange={(e) => { if (e.target.files.length) { setFile(e.target.files[0]); setIsDirty(true); } }}
+              onChange={(e) => { if (e.target.files.length) { setFiles((prev) => [...prev, ...Array.from(e.target.files)]); setIsDirty(true); } }}
             />
           </div>
         </div>

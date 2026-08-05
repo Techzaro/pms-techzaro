@@ -5,7 +5,8 @@
  * session role and optionally checks against an allowed roles list.
  */
 
-import { Navigate, useParams } from "react-router-dom";
+import { useLayoutEffect } from "react";
+import { Navigate, useParams, useNavigate, useLocation } from "react-router-dom";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 
 /** Maps URL-friendly role names to internal session role names */
@@ -35,19 +36,34 @@ function RoleProtectedRoute({ allowedRoles, children }) {
   const { role: urlRole } = useParams();
   const token = authToken();
   const sessionRole = getCurrentRole();
+  const navigate = useNavigate();
+  const location = useLocation();
   // Convert session role (e.g. "team_lead") to URL format (e.g. "teamlead") for comparison
   const sessionUrlRole = SESSION_ROLE_TO_URL[sessionRole] || "";
 
+  useLayoutEffect(() => {
+    if (!authToken()) {
+      try {
+        window.history.replaceState(null, "", "/");
+      } catch {}
+      navigate("/", { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
   if (!token) {
-    return <Navigate to="/" />;
+    return <Navigate to="/" replace />;
   }
 
   if (urlRole !== sessionUrlRole) {
     return <Navigate to={rolePath("dashboard")} replace />;
   }
 
+  if (sessionRole === "guest" && (location.pathname.includes("/reports") || location.pathname.includes("/manage-users") || location.pathname.includes("/manage-team") || location.pathname.includes("/audit-logs"))) {
+    return <Navigate to={rolePath("guest-tasks")} replace />;
+  }
+
   if (allowedRoles && !allowedRoles.includes(sessionRole)) {
-    return <Navigate to={rolePath("dashboard")} replace />;
+    return <Navigate to={rolePath(sessionRole === "guest" ? "guest-tasks" : "dashboard")} replace />;
   }
 
   return children;
