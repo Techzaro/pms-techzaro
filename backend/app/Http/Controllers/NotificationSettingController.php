@@ -96,9 +96,9 @@ class NotificationSettingController extends Controller
         $user->notification_preferences = $cleanPreferences; // Assigned directly as PHP array (Eloquent array cast auto-serializes)
 
         if (isset($validated['webhooks'])) {
-            $user->slack_webhook_url = $validated['webhooks']['slack_webhook_url'] ?? null;
-            $user->google_chat_webhook_url = $validated['webhooks']['google_chat_webhook_url'] ?? null;
-            $user->ms_teams_webhook_url = $validated['webhooks']['ms_teams_webhook_url'] ?? null;
+            $user->slack_webhook_url = !empty($validated['webhooks']['slack_webhook_url']) ? trim($validated['webhooks']['slack_webhook_url']) : null;
+            $user->google_chat_webhook_url = !empty($validated['webhooks']['google_chat_webhook_url']) ? trim($validated['webhooks']['google_chat_webhook_url']) : null;
+            $user->ms_teams_webhook_url = !empty($validated['webhooks']['ms_teams_webhook_url']) ? trim($validated['webhooks']['ms_teams_webhook_url']) : null;
         }
 
         $user->save();
@@ -122,17 +122,17 @@ class NotificationSettingController extends Controller
     {
         $validated = $request->validate([
             'channel' => 'required|string|in:slack,google_chat,teams',
-            'url' => 'nullable|string|url',
+            'url' => 'nullable|string',
         ]);
 
         $user = $request->user();
         $channel = $validated['channel'];
-        $url = $validated['url'];
+        $url = $validated['url'] ? trim($validated['url']) : null;
 
         if (!$url) {
-            if ($channel === 'slack') $url = $user->slack_webhook_url;
-            else if ($channel === 'google_chat') $url = $user->google_chat_webhook_url;
-            else if ($channel === 'teams') $url = $user->ms_teams_webhook_url;
+            if ($channel === 'slack') $url = trim((string) $user->slack_webhook_url);
+            else if ($channel === 'google_chat') $url = trim((string) $user->google_chat_webhook_url);
+            else if ($channel === 'teams') $url = trim((string) $user->ms_teams_webhook_url);
         }
 
         if (empty($url)) {
@@ -161,24 +161,30 @@ class NotificationSettingController extends Controller
                 ];
             }
 
-            $response = \Illuminate\Support\Facades\Http::withHeaders([
+            $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
             ])->post($url, $payload);
 
             if ($response->failed() && $channel === 'teams') {
                 // Fallback for Teams Power Automate
-                $response = \Illuminate\Support\Facades\Http::withHeaders([
+                $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
                     'Content-Type' => 'application/json',
                     'Accept' => 'application/json',
                 ])->post($url, ['text' => "*{$title}*\n{$message}"]);
             }
 
             if ($response->failed()) {
+                \Illuminate\Support\Facades\Log::error('Test webhook dispatch failed', [
+                    'channel' => $channel,
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                    'url' => $url,
+                ]);
                 return response()->json([
                     'success' => false,
-                    'message' => 'Webhook call failed with HTTP status ' . $response->status(),
-                    'error' => $response->body(),
+                    'message' => 'Webhook call failed with HTTP status ' . $response->status() . ': ' . $response->body(),
+                    'response_body' => $response->body(),
                 ], 400);
             }
 

@@ -4,7 +4,7 @@
   color: #1e293b;
   height: calc(100vh - 108px); 
   position: fixed;
-  top: 94px; 
+  top: 85px; 
   left: 1px;
   z-index: 900;
   display: flex;
@@ -40,6 +40,7 @@
     height: 100vh;
     border-radius: 0;
     transform: translateX(-100%);
+    z-index: 10005;
   }
   .sidebar.sidebar--open {
     transform: translateX(0);
@@ -55,7 +56,7 @@
     width: 100vw;
     height: 100vh;
     background-color: rgba(0, 0, 0, 0.4);
-    z-index: 999;
+    z-index: 10004;
   }
 }
 

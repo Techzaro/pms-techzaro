@@ -31,6 +31,12 @@ class NotificationService
         $category = $mapping[$eventType] ?? 'task'; // Default to 'task' if unmapped
 
         $preferences = $user->notification_preferences;
+        if (empty($preferences)) {
+            $freshPrefs = \App\Models\User::where('id', $user->id)->value('notification_preferences');
+            if (!empty($freshPrefs)) {
+                $preferences = $freshPrefs;
+            }
+        }
 
         if (is_string($preferences)) {
             $preferences = json_decode($preferences, true);
@@ -42,8 +48,20 @@ class NotificationService
             $preferences = [];
         }
 
-        // If preferences are entirely empty or missing this specific category/channel
-        if (empty($preferences) || !isset($preferences[$category][$channel])) {
+        // Global toggle check if present
+        if ($channel === 'slack' && isset($preferences['slack_enabled'])) {
+            if (!filter_var($preferences['slack_enabled'], FILTER_VALIDATE_BOOLEAN)) {
+                return false;
+            }
+        }
+        if ($channel === 'slack' && isset($preferences['is_slack_enabled'])) {
+            if (!filter_var($preferences['is_slack_enabled'], FILTER_VALIDATE_BOOLEAN)) {
+                return false;
+            }
+        }
+
+        // Category Matrix toggle check
+        if (!isset($preferences[$category][$channel])) {
             // Self-actions & draft default to FALSE. Everything else defaults to TRUE.
             return in_array($category, ['self_actions', 'draft']) ? false : true;
         }
@@ -373,29 +391,30 @@ class NotificationService
         $link = $notificationData['link'] ?? null;
 
         $cleanMessage = strip_tags($message);
-        $textPayload = "🔔 *{$title}*\n{$cleanMessage}";
-        if ($link) {
-            $baseUrl = rtrim(config('app.url', 'http://localhost:5173'), '/');
-            $fullLink = $baseUrl . '/' . ltrim($link, '/');
-            $textPayload .= "\n🔗 <{$fullLink}|View Details>";
-        }
+        $baseUrl = rtrim(config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:5173')), '/');
+        $fullLink = $link ? $baseUrl . '/' . ltrim($link, '/') : null;
 
-        // 1. Slack Webhook (Strictly requires Content-Type: application/json and "text" key)
+        // 1. Slack Webhook (Requires {"text": "..."} payload, Slack mrkdwn formatting *bold* and <url|link>)
         if (!empty($user->slack_webhook_url)) {
+            $slackUrl = trim($user->slack_webhook_url);
             $shouldSend = $this->shouldSendNotification($user, $eventType, 'slack');
             if ($shouldSend) {
+                $slackText = "🔔 *{$title}*\n{$cleanMessage}";
+                if ($fullLink) {
+                    $slackText .= "\n🔗 <{$fullLink}|View Details>";
+                }
                 Log::info('Attempting Slack webhook dispatch', [
                     'user_id' => $user->id,
                     'event_type' => $eventType,
-                    'url' => $user->slack_webhook_url,
-                    'payload' => ['text' => $textPayload],
+                    'url' => $slackUrl,
+                    'payload' => ['text' => $slackText],
                 ]);
                 try {
-                    $response = \Illuminate\Support\Facades\Http::withHeaders([
+                    $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
                         'Content-Type' => 'application/json',
                         'Accept' => 'application/json',
-                    ])->post($user->slack_webhook_url, [
-                        'text' => $textPayload,
+                    ])->post($slackUrl, [
+                        'text' => $slackText,
                     ]);
 
                     if ($response->failed()) {
@@ -403,37 +422,46 @@ class NotificationService
                             'status' => $response->status(),
                             'response' => $response->body(),
                             'user_id' => $user->id,
-                            'url' => $user->slack_webhook_url,
+                            'url' => $slackUrl,
                         ]);
                     } else {
-                        Log::info('Slack webhook sent successfully', ['user_id' => $user->id, 'status' => $response->status()]);
+                        Log::info('Slack webhook sent successfully', [
+                            'user_id' => $user->id,
+                            'status' => $response->status(),
+                            'body' => $response->body(),
+                        ]);
                     }
                 } catch (\Throwable $e) {
                     Log::error('Slack webhook dispatch exception', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
                 }
             } else {
-                Log::info('Slack webhook skipped due to category preference settings', [
+                Log::info('Slack webhook skipped due to Category Matrix Toggle OFF', [
                     'user_id' => $user->id,
                     'event_type' => $eventType,
                 ]);
             }
         }
 
-        // 2. Google Chat Webhook (Requires URL + Category Matrix Toggle ON)
+        // 2. Google Chat Webhook (Requires {"text": "..."} payload, Google Chat formatting *bold* and <url|link>)
         if (!empty($user->google_chat_webhook_url)) {
+            $gchatUrl = trim($user->google_chat_webhook_url);
             $shouldSend = $this->shouldSendNotification($user, $eventType, 'google_chat');
             if ($shouldSend) {
+                $gchatText = "🔔 *{$title}*\n{$cleanMessage}";
+                if ($fullLink) {
+                    $gchatText .= "\n🔗 <{$fullLink}|View Details>";
+                }
                 Log::info('Attempting Google Chat webhook dispatch', [
                     'user_id' => $user->id,
                     'event_type' => $eventType,
-                    'url' => $user->google_chat_webhook_url,
+                    'url' => $gchatUrl,
                 ]);
                 try {
-                    $response = \Illuminate\Support\Facades\Http::withHeaders([
+                    $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
                         'Content-Type' => 'application/json',
                         'Accept' => 'application/json',
-                    ])->post($user->google_chat_webhook_url, [
-                        'text' => $textPayload,
+                    ])->post($gchatUrl, [
+                        'text' => $gchatText,
                     ]);
 
                     if ($response->failed()) {
@@ -441,10 +469,10 @@ class NotificationService
                             'status' => $response->status(),
                             'response' => $response->body(),
                             'user_id' => $user->id,
-                            'url' => $user->google_chat_webhook_url,
+                            'url' => $gchatUrl,
                         ]);
                     } else {
-                        Log::info('Google Chat webhook sent successfully', ['user_id' => $user->id, 'status' => $response->status()]);
+                        Log::info('Google Chat webhook sent successfully', ['user_id' => $user->id, 'status' => $response->status(), 'body' => $response->body()]);
                     }
                 } catch (\Throwable $e) {
                     Log::error('Google Chat webhook dispatch exception', ['error' => $e->getMessage()]);
@@ -457,40 +485,57 @@ class NotificationService
             }
         }
 
-        // 3. Microsoft Teams Webhook (Requires URL + Category Matrix Toggle ON)
+        // 3. Microsoft Teams Webhook (Requires MessageCard schema; falls back to text for Power Automate / Workflows)
         if (!empty($user->ms_teams_webhook_url)) {
+            $teamsUrl = trim($user->ms_teams_webhook_url);
             $shouldSend = $this->shouldSendNotification($user, $eventType, 'teams_channel');
             if ($shouldSend) {
                 Log::info('Attempting MS Teams webhook dispatch', [
                     'user_id' => $user->id,
                     'event_type' => $eventType,
-                    'url' => $user->ms_teams_webhook_url,
+                    'url' => $teamsUrl,
                 ]);
                 try {
-                    $baseUrl = rtrim(config('app.url', 'http://localhost:5173'), '/');
-                    $fullLink = $link ? $baseUrl . '/' . ltrim($link, '/') : null;
-
                     $teamsPayload = [
                         '@type' => 'MessageCard',
                         '@context' => 'http://schema.org/extensions',
                         'summary' => $title,
                         'themeColor' => '6366F1',
                         'title' => '🔔 ' . $title,
-                        'text' => $cleanMessage . ($fullLink ? "\n\n[View Details](" . $fullLink . ")" : ""),
+                        'sections' => [
+                            [
+                                'activityTitle' => $title,
+                                'text' => $cleanMessage,
+                                'markdown' => true,
+                            ],
+                        ],
+                        'potentialAction' => $fullLink ? [
+                            [
+                                '@type' => 'OpenUri',
+                                'name' => 'View Details',
+                                'targets' => [
+                                    ['os' => 'default', 'uri' => $fullLink],
+                                ],
+                            ],
+                        ] : [],
                     ];
 
-                    $response = \Illuminate\Support\Facades\Http::withHeaders([
+                    $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
                         'Content-Type' => 'application/json',
                         'Accept' => 'application/json',
-                    ])->post($user->ms_teams_webhook_url, $teamsPayload);
+                    ])->post($teamsUrl, $teamsPayload);
 
                     if ($response->failed()) {
                         // Fallback to simple text payload for Power Automate / Workflows
-                        $fallbackResponse = \Illuminate\Support\Facades\Http::withHeaders([
+                        $fallbackText = "🔔 **{$title}**\n{$cleanMessage}";
+                        if ($fullLink) {
+                            $fallbackText .= "\n\n[View Details]({$fullLink})";
+                        }
+                        $fallbackResponse = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
                             'Content-Type' => 'application/json',
                             'Accept' => 'application/json',
-                        ])->post($user->ms_teams_webhook_url, [
-                            'text' => $textPayload,
+                        ])->post($teamsUrl, [
+                            'text' => $fallbackText,
                         ]);
 
                         if ($fallbackResponse->failed()) {
@@ -498,13 +543,13 @@ class NotificationService
                                 'status' => $fallbackResponse->status(),
                                 'response' => $fallbackResponse->body(),
                                 'user_id' => $user->id,
-                                'url' => $user->ms_teams_webhook_url,
+                                'url' => $teamsUrl,
                             ]);
                         } else {
-                            Log::info('MS Teams fallback webhook sent successfully', ['user_id' => $user->id]);
+                            Log::info('MS Teams fallback webhook sent successfully', ['user_id' => $user->id, 'body' => $fallbackResponse->body()]);
                         }
                     } else {
-                        Log::info('MS Teams webhook sent successfully', ['user_id' => $user->id, 'status' => $response->status()]);
+                        Log::info('MS Teams webhook sent successfully', ['user_id' => $user->id, 'status' => $response->status(), 'body' => $response->body()]);
                     }
                 } catch (\Throwable $e) {
                     Log::error('MS Teams webhook dispatch exception', ['error' => $e->getMessage()]);

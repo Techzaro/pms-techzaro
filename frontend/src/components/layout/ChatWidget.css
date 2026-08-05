@@ -778,13 +778,39 @@
 
 /* --- Responsive --- */
 @media (max-width: 768px) {
+  .chat-widget {
+    bottom: 20px;
+    right: 16px;
+  }
+
   .chat-widget-panel {
-    width: calc(100vw - 32px);
-    height: calc(100vh - 100px);
-    right: -12px;
+    position: fixed;
+    top: 60px;
+    bottom: 84px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    height: auto;
+    max-width: calc(100vw - 24px);
+    border-radius: 14px;
   }
 
   .cw-sidebar {
-    width: 180px;
+    width: 140px;
+    min-width: 140px;
+  }
+}
+
+@media (max-width: 480px) {
+  .chat-widget-container {
+    flex-direction: column;
+  }
+
+  .cw-sidebar {
+    width: 100%;
+    min-width: 100%;
+    max-height: 140px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
   }
 }

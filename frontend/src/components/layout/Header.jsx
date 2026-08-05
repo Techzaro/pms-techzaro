@@ -652,11 +652,13 @@ function Header() {
           {getCurrentRole() !== "guest" && (
           <button
             className="task-btn1"
+            title="Create Task"
             onClick={() =>
               setShowTaskModal(true)
             }
           >
-            + Task
+            <span className="quick-btn-full">+ Task</span>
+            <span className="quick-btn-short">+T</span>
           </button>
           )}
 
@@ -664,11 +666,13 @@ function Header() {
           <button
             className="task-btn1"
             style={{ background: "#7c3aed" }}
+            title="Create Subtask"
             onClick={() =>
               setShowSubtaskModal(true)
             }
           >
-            + Subtask
+            <span className="quick-btn-full">+ Subtask</span>
+            <span className="quick-btn-short">+S</span>
           </button>
           )}
 
@@ -677,11 +681,13 @@ function Header() {
           {["admin", "manager"].includes(getCurrentRole()) && (
           <button
             className="project-btn"
+            title="Create Project"
             onClick={() =>
               setShowProjectModal(true)
             }
           >
-            + Project
+            <span className="quick-btn-full">+ Project</span>
+            <span className="quick-btn-short">+P</span>
           </button>
           )}
 
