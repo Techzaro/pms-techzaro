@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import DashboardLayout from "../../components/layout/hrm/DashboardLayout";
 import Breadcrumb from "../../components/Breadcrumb";
 import {
@@ -40,9 +41,19 @@ async function apiRequest(path, options = {}) {
 }
 
 export default function HrmPerformance() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get("tab") || "utilization";
+  const [activeTab, setActiveTab] = useState(tabFromUrl);
+
+  useEffect(() => {
+    const currentTab = searchParams.get("tab");
+    if (currentTab) {
+      setActiveTab(currentTab);
+    }
+  }, [searchParams]);
+
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
-  const [activeTab, setActiveTab] = useState("utilization");
 
   // Data States
   const [userMatrix, setUserMatrix] = useState([]);
@@ -344,44 +355,6 @@ export default function HrmPerformance() {
             <span style={{ fontSize: "10.5px", color: "#94a3b8" }}>Tier &amp; Salary Increase</span>
           </div>
         </section>
-
-        {/* MULTI-TAB NAVIGATION BAR (MATCHING ATTENDANCE PAGE) */}
-        <nav className="att-tabs-nav">
-          <button
-            className={`att-tab-btn ${activeTab === "utilization" ? "active" : ""}`}
-            onClick={() => setActiveTab("utilization")}
-          >
-            <TrendingUp size={18} /> Stipend &amp; Utilization Intelligence
-          </button>
-
-          <button
-            className={`att-tab-btn ${activeTab === "okrs" ? "active" : ""}`}
-            onClick={() => setActiveTab("okrs")}
-          >
-            <Award size={18} /> OKRs &amp; Performance Goals ({goals.length})
-          </button>
-
-          <button
-            className={`att-tab-btn ${activeTab === "appraisals" ? "active" : ""}`}
-            onClick={() => setActiveTab("appraisals")}
-          >
-            <Award size={18} /> 360° Appraisals ({appraisals.length})
-          </button>
-
-          <button
-            className={`att-tab-btn ${activeTab === "radar" ? "active" : ""}`}
-            onClick={() => setActiveTab("radar")}
-          >
-            <Award size={18} /> Org Competency Radar
-          </button>
-
-          <button
-            className={`att-tab-btn ${activeTab === "top" ? "active" : ""}`}
-            onClick={() => setActiveTab("top")}
-          >
-            <Award size={18} /> Top Performer Leaderboard
-          </button>
-        </nav>
 
         {/* TAB 1: STIPEND-BASED COST UTILIZATION INTELLIGENCE */}
         {activeTab === "utilization" && (

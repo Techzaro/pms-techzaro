@@ -623,6 +623,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/hrm/attendance/wfh-request/{id}', [HrmAttendanceController::class, 'respondWfhRequest']);
     Route::post('/hrm/attendance/work-snapshot', [HrmAttendanceController::class, 'uploadWorkSnapshot']);
     Route::get('/hrm/attendance/today', [HrmAttendanceController::class, 'getTodayAttendance']);
+    Route::get('/hrm/attendance/monthly-summary', [HrmAttendanceController::class, 'getMonthlySummary']);
     Route::get('/hrm/attendance/corrections', [HrmAttendanceController::class, 'getCorrections']);
     Route::post('/hrm/attendance/corrections', [HrmAttendanceController::class, 'submitCorrection']);
     Route::patch('/hrm/attendance/corrections/{id}', [HrmAttendanceController::class, 'respondCorrection']);
@@ -637,7 +638,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Member Self-Service Portal Routes
     Route::get('/hrm/member/summary', [HrmMemberPortalController::class, 'getMemberDashboardSummary']);
-    Route::post('/hrm/member/request-form', [HrmMemberPortalController::class, 'submitHrForm']);
+    Route::post('/hrm/member/request-form', [HrmMemberPortalController::class, 'submitMemberRequest']);
+    Route::patch('/hrm/member/requests/{id}', [HrmAttendanceController::class, 'respondMemberRequest']);
+    Route::post('/hrm/member/requests/{id}', [HrmAttendanceController::class, 'respondMemberRequest']);
 
     // Global HRM Settings & Timesheets Routes
     Route::get('/hrm/settings', [HrmGlobalSettingsController::class, 'getSettings']);

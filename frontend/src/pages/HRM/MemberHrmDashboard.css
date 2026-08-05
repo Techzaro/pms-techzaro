@@ -181,105 +181,416 @@
   color: #ffffff;
 }
 
-/* CARDS */
+/* CARDS & HEADERS */
 .mem-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 20px;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 16px;
+  padding: 24px;
   margin-bottom: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.02));
 }
 
 .mem-card-title {
   font-size: 16px;
   font-weight: 700;
-  color: #0f172a;
-  margin: 0 0 14px;
+  color: var(--text-heading, #0f172a);
+  margin: 0 0 4px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 
-/* TABS NAVIGATION */
-.mem-tabs-nav {
+.mem-card-desc {
+  font-size: 13.5px;
+  color: var(--text-secondary, #64748b);
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.mem-card-header {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+}
+
+/* FORM STRUCTURE */
+.mem-form {
   display: flex;
-  gap: 8px;
-  border-bottom: 2px solid #e2e8f0;
-  margin-bottom: 24px;
-  overflow-x: auto;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 640px;
 }
 
-.mem-tab-btn {
-  padding: 10px 16px;
+.mem-form-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.mem-form-grid--3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.mem-form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.mem-form-label {
+  display: block;
   font-size: 13px;
   font-weight: 600;
-  color: #64748b;
-  background: transparent;
-  border: none;
-  border-bottom: 3px solid transparent;
-  cursor: pointer;
+  color: var(--text-dark, #334155);
+  margin-bottom: 6px;
+}
+
+.mem-form-actions {
+  display: flex;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+/* SECTION SUB-HEADING */
+.mem-section-sub {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-heading, #0f172a);
+  margin: 20px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* STAT CARDS GRID */
+.mem-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.mem-stat-card {
+  background: var(--bg-card-alt, #f8fafc);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mem-stat-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mem-stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-heading, #0f172a);
+  line-height: 1.2;
+}
+
+.mem-stat-value--green  { color: var(--color-success, #166534); }
+.mem-stat-value--blue   { color: var(--color-blue, #2563eb); }
+.mem-stat-value--indigo { color: var(--color-primary, #4f46e5); }
+.mem-stat-value--warn   { color: var(--color-warning, #f59e0b); }
+
+/* INFO BANNER */
+.mem-info-banner {
+  background: var(--color-primary-bg, #eff6ff);
+  border: 1px solid var(--color-primary-ring, #bfdbfe);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 20px;
+}
+
+.mem-info-banner h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-primary, #4f46e5);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mem-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  font-size: 13px;
+}
+
+.mem-info-grid-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mem-info-grid-item span {
+  color: var(--text-secondary, #64748b);
+  font-size: 12px;
+}
+
+.mem-info-grid-item strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-heading, #0f172a);
+}
+
+/* HOLIDAY CHIPS */
+.mem-holiday-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.mem-holiday-chip {
+  background: var(--bg-card-alt, #f8fafc);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+}
+
+.mem-holiday-chip strong {
+  display: block;
+  color: var(--text-heading, #0f172a);
+  font-weight: 600;
+}
+
+.mem-holiday-chip span {
+  font-size: 11.5px;
+  color: var(--text-secondary, #64748b);
+  margin-top: 2px;
+  display: block;
+}
+
+/* PMS PROJECT CARDS */
+.mem-project-card {
+  background: var(--bg-card-alt, #f8fafc);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.mem-project-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.mem-project-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-heading, #0f172a);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.mem-project-hours {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-primary, #4f46e5);
+  background: var(--color-primary-bg, #eef2ff);
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--color-primary-ring, rgba(99, 91, 255, 0.12));
+}
+
+.mem-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mem-task-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  padding: 8px 12px;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+}
+
+.mem-task-row span {
+  color: var(--text-dark, #374151);
+}
+
+.mem-task-status {
+  font-size: 11px;
+  color: var(--text-secondary, #64748b);
+  margin-left: 5px;
+}
+
+.mem-task-hours {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-heading, #0f172a);
+}
+
+/* OFFER LETTER BANNER */
+.mem-offer-banner {
+  background: var(--color-success-bg, #f0fdf4);
+  border: 1px solid var(--color-success, #22c55e);
+  padding: 16px 18px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.mem-offer-banner h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #15803d;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mem-offer-banner p {
+  margin: 0 0 4px;
+  font-size: 13.5px;
+  color: var(--text-dark, #374151);
+}
+
+.mem-offer-fallback {
+  background: var(--bg-card-alt, #f8fafc);
+  border: 1px solid var(--border-color, #e2e8f0);
+  padding: 14px 16px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  font-size: 13.5px;
+  color: var(--text-secondary, #64748b);
+}
+
+/* PMS-STYLE TABLE */
+.mem-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 12px;
+}
+
+.mem-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.mem-table thead tr {
+  background: var(--color-table-header, #f8fafc);
+  border-bottom: 1.5px solid var(--color-table-border, #e5e7eb);
+}
+
+.mem-table th {
+  padding: 11px 14px;
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-secondary, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.mem-table td {
+  padding: 12px 14px;
+  color: var(--text-dark, #374151);
+  border-bottom: 1px solid var(--color-table-row-border, #f1f5f9);
+  vertical-align: middle;
+}
+
+.mem-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.mem-table tbody tr:hover td {
+  background: var(--color-table-row-hover, #f9fafb);
+}
+
+.mem-table-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted, #9ca3af);
+  font-size: 13.5px;
+}
+
+/* STATUS BADGES */
+.mem-badge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 700;
   white-space: nowrap;
-  transition: all 0.2s ease;
 }
 
-.mem-tab-btn:hover {
-  color: #0f172a;
+.mem-badge--success {
+  background: var(--color-success-bg, #dcfce7);
+  color: #15803d;
 }
 
-.mem-tab-btn.active {
-  color: #0082ff;
-  border-bottom-color: #0082ff;
+.mem-badge--danger {
+  background: var(--color-danger-bg, #fef2f2);
+  color: var(--color-danger, #ef4444);
 }
 
-/* TOAST NOTIFICATION */
-.mem-toast {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  padding: 12px 20px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #fff;
-  z-index: 10000;
-  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2);
+.mem-badge--warning {
+  background: var(--color-warning-bg, #fef3c7);
+  color: #92400e;
 }
 
-.mem-toast--success {
-  background: #10b981;
+.mem-badge--info {
+  background: var(--color-primary-bg, #eef2ff);
+  color: var(--color-primary, #4f46e5);
 }
 
-.mem-toast--error {
-  background: #ef4444;
+/* HR DOCUMENT GRID */
+.mem-doc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
 }
 
-.mem-toast--warning {
-  background: #f59e0b;
+.mem-doc-card {
+  background: var(--bg-card-alt, #f8fafc);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 12px;
+  padding: 16px;
+  transition: box-shadow 0.18s, border-color 0.18s;
+  cursor: default;
 }
 
-/* MODALS */
-.mem-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(4px);
+.mem-doc-card:hover {
+  box-shadow: var(--shadow-md, 0 2px 18px rgba(15, 23, 42, 0.06));
+  border-color: var(--color-primary-ring, rgba(99, 91, 255, 0.12));
+}
+
+.mem-doc-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-heading, #0f172a);
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 20px;
+  gap: 8px;
 }
 
-.mem-modal-panel {
-  background: #ffffff;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 500px;
-  padding: 24px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+.mem-doc-meta {
+  font-size: 11.5px;
+  color: var(--text-secondary, #64748b);
+  margin-top: 5px;
 }
 
 /* RESPONSIVE DESIGN */
@@ -306,4 +617,39 @@
   .mem-timer-box {
     align-items: flex-start;
   }
+
+  .mem-stat-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .mem-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mem-holiday-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .mem-doc-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mem-form-grid--3 {
+    grid-template-columns: 1fr;
+  }
 }
+
+@media (max-width: 480px) {
+  .mem-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mem-holiday-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mem-card {
+    padding: 16px;
+  }
+}
+

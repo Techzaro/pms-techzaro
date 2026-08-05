@@ -53,9 +53,11 @@ function Header() {
   const initialPollDoneRef = useRef(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifPermission, setNotifPermission] = useState(() => getNotificationPermission());
-  /** Hover-triggered "switch portal" dropdown anchored on the logo/text. */
+  /** Click / hover-triggered "switch portal" dropdown anchored on the logo/text. */
   const [showAppSwitcher, setShowAppSwitcher] = useState(false);
   const appSwitcherCloseTimer = useRef(null);
+  /** True when the current primary input is a touch/pen (mobile/tablet). */
+  const isTouchDevice = useRef(typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches);
 
   // Initialise Firebase on mount
   useEffect(() => {
@@ -518,16 +520,20 @@ function Header() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Close the logo app-switcher dropdown when clicking outside (covers touch
-  // devices, where there's no hover to leave from).
+  // Close the logo app-switcher dropdown when clicking/touching outside.
   useEffect(() => {
-    const handleClickOutside = (e) => {
+    const handleOutside = (e) => {
       if (logoSwitcherRef.current && !logoSwitcherRef.current.contains(e.target)) {
         setShowAppSwitcher(false);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    // Use both mousedown and touchstart so it works on all devices.
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('touchstart', handleOutside, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
+    };
   }, []);
 
   /** Opens the app-switcher dropdown immediately, cancelling any pending close. */
@@ -539,10 +545,22 @@ function Header() {
     setShowAppSwitcher(true);
   };
 
-  /** Closes the app-switcher dropdown after a short delay, so moving the
-   * mouse from the logo into the dropdown itself doesn't close it. */
+  /** Closes the app-switcher dropdown after a short delay (desktop hover), so
+   * moving the mouse from the logo into the dropdown itself doesn't close it. */
   const closeAppSwitcherSoon = () => {
-    appSwitcherCloseTimer.current = setTimeout(() => setShowAppSwitcher(false), 150);
+    appSwitcherCloseTimer.current = setTimeout(() => setShowAppSwitcher(false), 200);
+  };
+
+  /** Toggle open/close on click — works for both mouse and touch. */
+  const toggleAppSwitcher = (e) => {
+    // Prevent the event from reaching the document-level outside-click handler
+    // which would immediately close the dropdown we just opened.
+    e.stopPropagation();
+    if (appSwitcherCloseTimer.current) {
+      clearTimeout(appSwitcherCloseTimer.current);
+      appSwitcherCloseTimer.current = null;
+    }
+    setShowAppSwitcher((prev) => !prev);
   };
 
   return (
@@ -566,14 +584,15 @@ function Header() {
             </svg>
           </button>
 
-          {/* Logo + text – hovering (or tapping, on touch devices) opens a
-              portal switcher that jumps to the HRM app at /hrm. */}
+          {/* Logo + text – hovering (desktop) or tapping (mobile/tablet) opens
+              a portal switcher that lets the user jump to the HRM app at /hrm. */}
           <div
             className="header-logo-switcher"
             ref={logoSwitcherRef}
             onMouseEnter={openAppSwitcher}
             onMouseLeave={closeAppSwitcherSoon}
-            style={{ position: "relative", display: "flex", alignItems: "center", cursor: "pointer" }}
+            onClick={toggleAppSwitcher}
+            style={{ position: "relative", display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none", WebkitTapHighlightColor: "transparent" }}
           >
             <div className="logo-box">
               <b>TX</b>
@@ -591,51 +610,56 @@ function Header() {
                 color: "var(--color-text-secondary, #6b7280)",
                 transform: showAppSwitcher ? "rotate(180deg)" : "rotate(0deg)",
                 transition: "transform 0.15s ease",
+                flexShrink: 0,
               }}
             />
 
             {showAppSwitcher && (
               <div
                 className="header-app-switcher-dropdown"
+                onMouseEnter={openAppSwitcher}
+                onMouseLeave={closeAppSwitcherSoon}
+                onClick={(e) => e.stopPropagation()}
                 style={{
                   position: "absolute",
                   top: "calc(100% + 10px)",
                   left: 0,
-                  minWidth: 220,
-                  background: "var(--color-surface, #fff)",
-                  border: "1px solid var(--color-border, #e5e7eb)",
-                  borderRadius: 10,
-                  boxShadow: "0 10px 30px rgba(15, 23, 42, 0.12)",
+                  minWidth: 240,
+                  background: "var(--bg-card, #fff)",
+                  border: "1px solid var(--border-color, #e5e7eb)",
+                  borderRadius: 12,
+                  boxShadow: "0 12px 36px rgba(15, 23, 42, 0.14)",
                   padding: 6,
-                  zIndex: 50,
+                  zIndex: 10010,
                 }}
               >
-                <div style={{ padding: "6px 10px 8px", fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--color-text-secondary, #6b7280)" }}>
+                <div style={{ padding: "6px 10px 8px", fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-secondary, #6b7280)" }}>
                   Switch Portal
                 </div>
 
                 <Link
                   to="/hrm"
-                  onClick={() => setShowAppSwitcher(false)}
+                  onClick={(e) => { e.stopPropagation(); setShowAppSwitcher(false); }}
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 10,
-                    padding: "8px 10px",
+                    padding: "10px 10px",
                     borderRadius: 8,
                     textDecoration: "none",
-                    color: "var(--color-text, #111827)",
+                    color: "var(--text-primary, #111827)",
                     fontSize: 13,
                     fontWeight: 600,
+                    transition: "background 0.15s",
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-primary-bg, #eef2ff)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
-                  <MdBusinessCenter fontSize="18px" style={{ color: "var(--color-primary, #6366f1)" }} />
+                  <MdBusinessCenter fontSize="18px" style={{ color: "var(--color-primary, #6366f1)", flexShrink: 0 }} />
                   <span>
                     HR Management
                     <br />
-                    <span style={{ fontWeight: 400, fontSize: 11.5, color: "var(--color-text-secondary, #6b7280)" }}>
+                    <span style={{ fontWeight: 400, fontSize: 11.5, color: "var(--text-secondary, #6b7280)" }}>
                       Employees, payroll, recruitment
                     </span>
                   </span>
@@ -646,19 +670,20 @@ function Header() {
                     display: "flex",
                     alignItems: "center",
                     gap: 10,
-                    padding: "8px 10px",
+                    padding: "10px 10px",
                     borderRadius: 8,
                     fontSize: 13,
                     fontWeight: 600,
-                    color: "var(--color-text, #111827)",
+                    color: "var(--text-primary, #111827)",
                     background: "var(--color-primary-bg, #eef2ff)",
+                    cursor: "default",
                   }}
                 >
-                  <MdApps fontSize="18px" style={{ color: "var(--color-primary, #6366f1)" }} />
+                  <MdApps fontSize="18px" style={{ color: "var(--color-primary, #6366f1)", flexShrink: 0 }} />
                   <span>
                     Project Management
                     <br />
-                    <span style={{ fontWeight: 400, fontSize: 11.5, color: "var(--color-text-secondary, #6b7280)" }}>
+                    <span style={{ fontWeight: 400, fontSize: 11.5, color: "var(--text-secondary, #6b7280)" }}>
                       You're here
                     </span>
                   </span>

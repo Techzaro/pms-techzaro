@@ -315,16 +315,21 @@ class HrmMemberPortalController extends Controller
             'details' => 'required|string',
         ]);
 
-        $id = DB::table('hrm_member_requests')->insertGetId([
+        $payload = [
             'user_id' => $user->id,
-            'user_email' => $user->email,
             'category' => $request->category,
             'subject' => $request->subject,
             'details' => $request->details,
             'status' => 'Pending',
             'created_at' => now(),
             'updated_at' => now(),
-        ]);
+        ];
+
+        if (Schema::hasColumn('hrm_member_requests', 'user_email')) {
+            $payload['user_email'] = $user->email;
+        }
+
+        $id = DB::table('hrm_member_requests')->insertGetId($payload);
 
         return response()->json([
             'success' => true,

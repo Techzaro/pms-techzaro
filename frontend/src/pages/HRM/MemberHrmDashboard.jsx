@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import API_URL from "../../config/api";
 import { authToken, getUser } from "../../utils/auth";
 import Breadcrumb from "../../components/Breadcrumb";
@@ -34,6 +35,7 @@ import {
   Camera,
   Layers,
   LayoutGrid,
+  CreditCard,
   List,
   ChevronRight,
   TrendingUp,
@@ -80,8 +82,28 @@ export default function MemberHrmDashboard() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
 
-  // Active Navigation Tab State
-  const [activeTab, setActiveTab] = useState("overview");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTabFromUrl = searchParams.get("tab") || "overview";
+  const [activeTab, setActiveTab] = useState(currentTabFromUrl);
+
+  useEffect(() => {
+    const tabFromUrl = searchParams.get("tab");
+    if (tabFromUrl) {
+      setActiveTab(tabFromUrl);
+      if (tabFromUrl === "advance") {
+        setClaimsSubTab("advance");
+      } else if (tabFromUrl === "reimbursement") {
+        setClaimsSubTab("expense");
+      }
+    } else {
+      setActiveTab("overview");
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (tabName) => {
+    setActiveTab(tabName);
+    setSearchParams({ tab: tabName });
+  };
 
   // Web Clock & Active Duty Session State
   const [isWorking, setIsWorking] = useState(false);
@@ -125,6 +147,22 @@ export default function MemberHrmDashboard() {
   const [corrOut, setCorrOut] = useState("17:00");
   const [corrReason, setCorrReason] = useState("");
   const [submittingCorr, setSubmittingCorr] = useState(false);
+
+  // Financial Claims Sub-tab State (Advance Salary vs Expense Reimbursement)
+  const [claimsSubTab, setClaimsSubTab] = useState("advance");
+
+  // Advance Salary & Emergency Loan State
+  const [advanceAmount, setAdvanceAmount] = useState("");
+  const [advanceDeductionMonth, setAdvanceDeductionMonth] = useState("Next Month Payroll");
+  const [advanceReason, setAdvanceReason] = useState("");
+  const [submittingAdvance, setSubmittingAdvance] = useState(false);
+
+  // Expense Reimbursement Claim State
+  const [expenseCategory, setExpenseCategory] = useState("Travel & Fuel");
+  const [expenseAmount, setExpenseAmount] = useState("");
+  const [expenseDate, setExpenseDate] = useState(dateToday());
+  const [expenseNotes, setExpenseNotes] = useState("");
+  const [submittingExpense, setSubmittingExpense] = useState(false);
 
   // Corporate Policy Warning State
   const [warningModalOpen, setWarningModalOpen] = useState(false);
@@ -376,7 +414,7 @@ export default function MemberHrmDashboard() {
       await apiRequest(`/hrm/screen-requests/${reqId}/respond`, {
         method: "POST",
         body: JSON.stringify({
-          status: "Rejected",
+          status: "Not Approved",
           reason: rejectReasonText || "User declined screen capture request",
         }),
       });
@@ -567,9 +605,62 @@ export default function MemberHrmDashboard() {
         }),
       });
       notify(res.message || "Attendance Correction submitted to HR for approval ✔");
+      setCorrReason("");
+      await loadMemberSummary(false);
+    } catch (err) {
       notify(err.message || "Failed to submit attendance correction.", "error");
     } finally {
       setSubmittingCorr(false);
+    }
+  };
+
+  // Submit Advance Salary / Loan Request
+  const handleSubmitAdvance = async (e) => {
+    e.preventDefault();
+    if (!advanceAmount || !advanceReason) return;
+    setSubmittingAdvance(true);
+    try {
+      const res = await apiRequest("/hrm/member/request-form", {
+        method: "POST",
+        body: JSON.stringify({
+          category: "Advance Salary Request",
+          subject: `Advance Salary Request - PKR/USD ${Number(advanceAmount).toLocaleString()}`,
+          details: `Requested Amount: PKR/USD ${advanceAmount}\nDeduction Plan: ${advanceDeductionMonth}\nReason: ${advanceReason}`,
+        }),
+      });
+      notify(res.message || "Advance Salary Request submitted to HR Payroll for review ✔");
+      setAdvanceAmount("");
+      setAdvanceReason("");
+      await loadMemberSummary(false);
+    } catch (err) {
+      notify(err.message || "Failed to submit advance salary request.", "error");
+    } finally {
+      setSubmittingAdvance(false);
+    }
+  };
+
+  // Submit Expense Reimbursement Claim
+  const handleSubmitExpense = async (e) => {
+    e.preventDefault();
+    if (!expenseAmount || !expenseNotes) return;
+    setSubmittingExpense(true);
+    try {
+      const res = await apiRequest("/hrm/member/request-form", {
+        method: "POST",
+        body: JSON.stringify({
+          category: "Expense Reimbursement Claim",
+          subject: `Expense Reimbursement - ${expenseCategory} (PKR/USD ${Number(expenseAmount).toLocaleString()})`,
+          details: `Expense Date: ${expenseDate}\nCategory: ${expenseCategory}\nClaim Amount: PKR/USD ${expenseAmount}\nNotes: ${expenseNotes}`,
+        }),
+      });
+      notify(res.message || "Expense Reimbursement Claim submitted to HR Finance ✔");
+      setExpenseAmount("");
+      setExpenseNotes("");
+      await loadMemberSummary(false);
+    } catch (err) {
+      notify(err.message || "Failed to submit expense claim.", "error");
+    } finally {
+      setSubmittingExpense(false);
     }
   };
 
@@ -794,7 +885,7 @@ export default function MemberHrmDashboard() {
               <div style={{ fontSize: "12.5px", color: "#475569", marginTop: "2px" }}>
                 {latestLeaveDecision.status === "Approved"
                   ? `Approved by ${latestLeaveDecision.reviewer_name || "HR Management"}`
-                  : `Declined by ${latestLeaveDecision.reviewer_name || "HR Management"} — Reason: ${latestLeaveDecision.rejection_reason || "Not specified"}`}
+                  : `Not Accepted by ${latestLeaveDecision.reviewer_name || "HR Management"} — Reason: ${latestLeaveDecision.rejection_reason || "Not specified"}`}
               </div>
             </div>
           </div>
@@ -806,7 +897,7 @@ export default function MemberHrmDashboard() {
             background: latestLeaveDecision.status === "Approved" ? "#dcfce7" : "#fee2e2",
             color: latestLeaveDecision.status === "Approved" ? "#15803d" : "#b91c1c"
           }}>
-            {latestLeaveDecision.status === "Approved" ? "✔ APPROVED" : "❌ REJECTED"}
+            {latestLeaveDecision.status === "Approved" ? "✔ APPROVED" : "❌ Not Appreved"}
           </span>
         </div>
       )}
@@ -905,30 +996,7 @@ export default function MemberHrmDashboard() {
         </div>
       </section>
 
-      {/* SUB-MODULE NAVIGATION TABS */}
-      <nav className="mem-tabs-nav">
-        <button className={`mem-tab-btn ${activeTab === "overview" ? "active" : ""}`} onClick={() => setActiveTab("overview")}>
-          <Calendar size={18} /> Overview &amp; Summary
-        </button>
-        <button className={`mem-tab-btn ${activeTab === "leaves" ? "active" : ""}`} onClick={() => setActiveTab("leaves")}>
-          <Calendar size={18} /> Leave Application Form
-        </button>
-        <button className={`mem-tab-btn ${activeTab === "pms" ? "active" : ""}`} onClick={() => setActiveTab("pms")}>
-          <Briefcase size={18} /> PMS Project &amp; Task Hours
-        </button>
-        <button className={`mem-tab-btn ${activeTab === "workmode" ? "active" : ""}`} onClick={() => setActiveTab("workmode")}>
-          <Laptop size={18} /> WFH &amp; Work Mode Module
-        </button>
-        <button className={`mem-tab-btn ${activeTab === "corrections" ? "active" : ""}`} onClick={() => setActiveTab("corrections")}>
-          <AlertTriangle size={18} /> Attendance Corrections &amp; Log
-        </button>
-        <button className={`mem-tab-btn ${activeTab === "offer" ? "active" : ""}`} onClick={() => setActiveTab("offer")}>
-          <FileText size={18} /> Offer Letter &amp; Salary Slips
-        </button>
-        <button className={`mem-tab-btn ${activeTab === "requests" ? "active" : ""}`} onClick={() => setActiveTab("requests")}>
-          <FileText size={18} /> HR Forms &amp; Documents
-        </button>
-      </nav>
+
 
       {/* SUB-MODULE CONTENT */}
       {activeTab === "overview" && (
@@ -993,31 +1061,26 @@ export default function MemberHrmDashboard() {
 
       {activeTab === "leaves" && (
         <section className="mem-card" id="section-leave-application">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
-            <div>
-              <h2 className="mem-card-title" style={{ margin: 0 }}>
-                <Calendar size={20} color="#2563eb" /> Real-Time Leave Application Form &amp; History
-              </h2>
-              <p style={{ fontSize: "13.5px", color: "#64748b", margin: "4px 0 0" }}>
-                Submit formal leave applications directly to HR Management for review. Track decision status audit logs in real-time.
-              </p>
-            </div>
+          <div className="mem-card-header">
+            <h2 className="mem-card-title"><Calendar size={19} /> Leave Application Form &amp; History</h2>
+            <p className="mem-card-desc">
+              Submit formal leave applications directly to HR Management for review. Track decision status audit logs in real-time.
+            </p>
           </div>
 
-          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "20px", marginBottom: "28px" }}>
-            <h3 style={{ margin: "0 0 16px", fontSize: "15px", fontWeight: "700", color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
-              <FileText size={18} color="#2563eb" /> New Leave Application Request
-            </h3>
+          <div style={{ background: "var(--bg-card-alt)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "20px", marginBottom: "28px" }}>
+            <p className="mem-section-sub" style={{ margin: "0 0 16px" }}>
+              <FileText size={16} /> New Leave Application Request
+            </p>
 
-            <form onSubmit={handleSubmitLeaveApplication} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
-                    Leave Category <span style={{ color: "#ef4444" }}>*</span>
+            <form onSubmit={handleSubmitLeaveApplication} className="mem-form" style={{ maxWidth: "100%" }}>
+              <div className="mem-form-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                <div className="mem-form-group" style={{ gridColumn: "1 / -1" }}>
+                  <label className="mem-form-label">
+                    Leave Category <span style={{ color: "var(--color-danger)" }}>*</span>
                   </label>
                   <select
                     className="mem-input"
-                    style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", fontSize: "13.5px", background: "#ffffff", border: "1px solid #cbd5e1" }}
                     value={leaveType}
                     onChange={(e) => setLeaveType(e.target.value)}
                   >
@@ -1038,28 +1101,26 @@ export default function MemberHrmDashboard() {
                   </select>
                 </div>
 
-                <div>
-                  <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
-                    Start Date <span style={{ color: "#ef4444" }}>*</span>
+                <div className="mem-form-group">
+                  <label className="mem-form-label">
+                    Start Date <span style={{ color: "var(--color-danger)" }}>*</span>
                   </label>
                   <input
                     type="date"
                     className="mem-input"
-                    style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", fontSize: "13.5px", border: "1px solid #cbd5e1" }}
                     value={leaveStartDate}
                     onChange={(e) => setLeaveStartDate(e.target.value)}
                     required
                   />
                 </div>
 
-                <div>
-                  <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
-                    End Date <span style={{ color: "#ef4444" }}>*</span>
+                <div className="mem-form-group">
+                  <label className="mem-form-label">
+                    End Date <span style={{ color: "var(--color-danger)" }}>*</span>
                   </label>
                   <input
                     type="date"
                     className="mem-input"
-                    style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", fontSize: "13.5px", border: "1px solid #cbd5e1" }}
                     value={leaveEndDate}
                     onChange={(e) => setLeaveEndDate(e.target.value)}
                     required
@@ -1069,48 +1130,48 @@ export default function MemberHrmDashboard() {
 
               {/* LIVE LEAVE DURATION SUMMARY CALCULATOR */}
               {leaveStartDate && leaveEndDate && (
-                <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <Clock size={16} color="#1d4ed8" />
-                    <span style={{ fontSize: "13px", fontWeight: "600", color: "#1e40af" }}>
-                      Calculated Requested Duration: <strong>{(() => {
-                        const start = new Date(leaveStartDate);
-                        const end = new Date(leaveEndDate);
-                        if (isNaN(start) || isNaN(end)) return 1;
-                        const diffTime = Math.abs(end - start);
-                        return Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
-                      })()} Day(s)</strong> ({leaveStartDate} to {leaveEndDate})
+                <div className="mem-info-banner" style={{ marginBottom: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <Clock size={16} />
+                      <span style={{ fontSize: "13px", fontWeight: "600" }}>
+                        Calculated Requested Duration: <strong>{(() => {
+                          const start = new Date(leaveStartDate);
+                          const end = new Date(leaveEndDate);
+                          if (isNaN(start) || isNaN(end)) return 1;
+                          const diffTime = Math.abs(end - start);
+                          return Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
+                        })()} Day(s)</strong> ({leaveStartDate} to {leaveEndDate})
+                      </span>
+                    </div>
+                    <span className="mem-badge mem-badge--info">
+                      {leaveType}
                     </span>
                   </div>
-                  <span style={{ fontSize: "11.5px", background: "#dbeafe", color: "#1e40af", padding: "2px 10px", borderRadius: "9999px", fontWeight: "700" }}>
-                    {leaveType}
-                  </span>
                 </div>
               )}
 
-              <div>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
-                  Detailed Reason for Leave Application <span style={{ color: "#ef4444" }}>*</span>
+              <div className="mem-form-group">
+                <label className="mem-form-label">
+                  Detailed Reason for Leave Application <span style={{ color: "var(--color-danger)" }}>*</span>
                 </label>
                 <textarea
                   className="mem-input"
                   rows="3"
-                  style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", fontSize: "13.5px", border: "1px solid #cbd5e1", resize: "vertical" }}
                   placeholder="Provide detailed reason for leave request and work coverage details..."
                   value={leaveReason}
                   onChange={(e) => setLeaveReason(e.target.value)}
                   required
                 />
-                <span style={{ fontSize: "11.5px", color: "#64748b", display: "block", marginTop: "4px" }}>
+                <span style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "4px" }}>
                   HR Management will be notified in real-time upon submission.
                 </span>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", borderTop: "1px solid #e2e8f0", paddingTop: "14px" }}>
+              <div className="mem-form-actions" style={{ justifyContent: "flex-end", borderTop: "1px solid var(--border-color)", paddingTop: "14px" }}>
                 <button
                   type="submit"
                   className="mem-btn mem-btn--primary"
-                  style={{ padding: "10px 20px", fontSize: "13.5px", fontWeight: "600", display: "inline-flex", alignItems: "center", gap: "8px", borderRadius: "8px" }}
                   disabled={submittingLeave}
                 >
                   <Send size={16} /> {submittingLeave ? "Submitting to HR..." : "Submit Real-Time Leave Application"}
@@ -1121,49 +1182,49 @@ export default function MemberHrmDashboard() {
 
           {/* MEMBER LEAVE HISTORY & DECISION AUDIT LOG TABLE */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-            <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-              <FileText size={18} color="#2563eb" /> Your Leave History &amp; Decision Audit Log
-            </h3>
-            <span style={{ fontSize: "12px", color: "#64748b" }}>
+            <p className="mem-section-sub" style={{ margin: 0 }}>
+              <FileText size={16} /> Leave History &amp; Decision Audit Log
+            </p>
+            <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
               Total Applications Logged: <strong>{leaveHistory.length}</strong>
             </span>
           </div>
 
           {leaveHistory.length === 0 ? (
-            <div style={{ background: "#f8fafc", border: "1px border #e2e8f0", borderRadius: "8px", padding: "24px", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
+            <div className="mem-table-empty">
               No leave applications submitted yet.
             </div>
           ) : (
-            <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: "8px" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+            <div className="mem-table-wrap">
+              <table className="mem-table">
                 <thead>
-                  <tr style={{ background: "#f8fafc", textAlign: "left", borderBottom: "2px solid #e2e8f0" }}>
-                    <th style={{ padding: "10px 14px", color: "#475569", fontSize: "11.5px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>Leave Type</th>
-                    <th style={{ padding: "10px 14px", color: "#475569", fontSize: "11.5px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>Dates &amp; Duration</th>
-                    <th style={{ padding: "10px 14px", color: "#475569", fontSize: "11.5px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>Reason</th>
-                    <th style={{ padding: "10px 14px", color: "#475569", fontSize: "11.5px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>Status</th>
-                    <th style={{ padding: "10px 14px", color: "#475569", fontSize: "11.5px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>Reviewed By / Reason</th>
-                    <th style={{ padding: "10px 14px", color: "#475569", fontSize: "11.5px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>Applied On</th>
+                  <tr>
+                    <th>Leave Type</th>
+                    <th>Dates &amp; Duration</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    <th>Reviewed By / Reason</th>
+                    <th>Applied On</th>
                   </tr>
                 </thead>
                 <tbody>
                   {leaveHistory.map((l) => (
-                    <tr key={l.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                      <td style={{ padding: "12px 14px", fontWeight: "600", color: "#0f172a" }}>{l.leave_type}</td>
-                      <td style={{ padding: "12px 14px", color: "#334155" }}>
+                    <tr key={l.id}>
+                      <td style={{ fontWeight: "600", color: "var(--text-heading)" }}>{l.leave_type}</td>
+                      <td>
                         {l.start_date} to {l.end_date} (<strong>{l.total_days} Day(s)</strong>)
                       </td>
-                      <td style={{ padding: "12px 14px", color: "#475569", maxWidth: "250px" }}>{l.reason}</td>
-                      <td style={{ padding: "12px 14px" }}>
-                        <span className={`mem-status-badge ${l.status === "Approved" ? "mem-status-badge--live" : l.status === "Rejected" ? "mem-status-badge--off" : "mem-status-badge--paused"}`}>
-                          {l.status === "Approved" ? "✔ Approved" : l.status === "Rejected" ? "❌ Rejected" : "⏳ Pending HR"}
+                      <td style={{ maxWidth: "250px" }}>{l.reason}</td>
+                      <td>
+                        <span className={`mem-badge ${l.status === "Approved" ? "mem-badge--success" : l.status === "Rejected" ? "mem-badge--danger" : "mem-badge--warning"}`}>
+                          {l.status === "Approved" ? "✔ Approved" : l.status === "Rejected" ? "❌ Not Approved" : "⏳ Pending HR"}
                         </span>
                       </td>
-                      <td style={{ padding: "12px 14px", fontSize: "12px", color: "#64748b" }}>
+                      <td style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
                         {l.reviewer_name ? `By: ${l.reviewer_name}` : "Awaiting HR Decision"}
-                        {l.rejection_reason && <div style={{ color: "#ef4444", marginTop: "2px", fontWeight: "600" }}>Reason: {l.rejection_reason}</div>}
+                        {l.rejection_reason && <div style={{ color: "var(--color-danger)", marginTop: "2px", fontWeight: "600" }}>Reason: {l.rejection_reason}</div>}
                       </td>
-                      <td style={{ padding: "12px 14px", fontSize: "11.5px", color: "#94a3b8" }}>
+                      <td style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
                         {l.created_at ? new Date(l.created_at).toLocaleDateString() : "-"}
                       </td>
                     </tr>
@@ -1272,6 +1333,206 @@ export default function MemberHrmDashboard() {
               </button>
             </div>
           </form>
+        </section>
+      )}
+
+      {(activeTab === "claims" || activeTab === "advance" || activeTab === "reimbursement") && (
+        <section className="mem-card" id="section-financial-claims">
+          <div className="mem-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
+            <div>
+              <h2 className="mem-card-title"><CreditCard size={19} /> Advance Salary &amp; Expense Claims</h2>
+              <p className="mem-card-desc" style={{ margin: "4px 0 0" }}>
+                Submit requests for salary advances, emergency loans, or out-of-pocket business expense reimbursements.
+              </p>
+            </div>
+
+            {/* SUB TOGGLE BUTTONS FOR FINANCIAL CLAIMS */}
+            <div style={{ display: "flex", gap: "6px", background: "var(--bg-card-alt)", padding: "4px", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
+              <button
+                type="button"
+                className={`mem-btn ${claimsSubTab === "advance" ? "mem-btn--primary" : ""}`}
+                style={{ padding: "6px 14px", fontSize: "12.5px", background: claimsSubTab === "advance" ? "var(--color-primary)" : "transparent", color: claimsSubTab === "advance" ? "#fff" : "var(--text-dark)" }}
+                onClick={() => setClaimsSubTab("advance")}
+              >
+                💵 Advance Salary &amp; Loan
+              </button>
+              <button
+                type="button"
+                className={`mem-btn ${claimsSubTab === "expense" ? "mem-btn--primary" : ""}`}
+                style={{ padding: "6px 14px", fontSize: "12.5px", background: claimsSubTab === "expense" ? "var(--color-primary)" : "transparent", color: claimsSubTab === "expense" ? "#fff" : "var(--text-dark)" }}
+                onClick={() => setClaimsSubTab("expense")}
+              >
+                🧾 Expense Reimbursement
+              </button>
+            </div>
+          </div>
+
+          {claimsSubTab === "advance" ? (
+            <form onSubmit={handleSubmitAdvance} className="mem-form">
+              <div className="mem-form-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                <div className="mem-form-group">
+                  <label className="mem-form-label">
+                    Requested Advance Amount (PKR / USD) <span style={{ color: "var(--color-danger)" }}>*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="500"
+                    step="100"
+                    className="mem-input"
+                    placeholder="e.g. 25000"
+                    value={advanceAmount}
+                    onChange={(e) => setAdvanceAmount(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="mem-form-group">
+                  <label className="mem-form-label">Target Payroll Deduction</label>
+                  <select
+                    className="mem-input"
+                    value={advanceDeductionMonth}
+                    onChange={(e) => setAdvanceDeductionMonth(e.target.value)}
+                  >
+                    <option value="Next Month Payroll">Deduct 100% in Next Month's Payroll</option>
+                    <option value="2 Months Installments">Split in 2 Monthly Installments (50% / 50%)</option>
+                    <option value="3 Months Installments">Split in 3 Monthly Installments (33% / 33% / 34%)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mem-form-group">
+                <label className="mem-form-label">
+                  Reason &amp; Emergency Details <span style={{ color: "var(--color-danger)" }}>*</span>
+                </label>
+                <textarea
+                  className="mem-input"
+                  rows="4"
+                  placeholder="State the reason for requesting an advance salary / emergency loan..."
+                  value={advanceReason}
+                  onChange={(e) => setAdvanceReason(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="mem-form-actions">
+                <button type="submit" className="mem-btn mem-btn--primary" disabled={submittingAdvance}>
+                  <Send size={16} /> {submittingAdvance ? "Submitting Request..." : "Submit Advance Salary Request"}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleSubmitExpense} className="mem-form">
+              <div className="mem-form-grid mem-form-grid--3">
+                <div className="mem-form-group">
+                  <label className="mem-form-label">Expense Category</label>
+                  <select
+                    className="mem-input"
+                    value={expenseCategory}
+                    onChange={(e) => setExpenseCategory(e.target.value)}
+                  >
+                    <option value="Travel & Fuel">🚗 Travel, Fuel &amp; Conveyance</option>
+                    <option value="Client Meeting & Meals">🍽 Client Meeting &amp; Meals</option>
+                    <option value="Office Supplies & Stationary">📝 Office Supplies &amp; Stationary</option>
+                    <option value="Software & Tools Subscriptions">💻 Software &amp; Tool Subscriptions</option>
+                    <option value="Hardware & Equipment">🖥 Hardware &amp; Peripherals</option>
+                    <option value="Medical & Health">🏥 Medical Expense</option>
+                    <option value="Other Business Expense">📦 Other Business Expense</option>
+                  </select>
+                </div>
+
+                <div className="mem-form-group">
+                  <label className="mem-form-label">
+                    Claim Amount (PKR / USD) <span style={{ color: "var(--color-danger)" }}>*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="0.01"
+                    className="mem-input"
+                    placeholder="e.g. 4500"
+                    value={expenseAmount}
+                    onChange={(e) => setExpenseAmount(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="mem-form-group">
+                  <label className="mem-form-label">Date Expense Incurred</label>
+                  <input
+                    type="date"
+                    className="mem-input"
+                    value={expenseDate}
+                    onChange={(e) => setExpenseDate(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="mem-form-group">
+                <label className="mem-form-label">
+                  Expense Description &amp; Receipt Notes <span style={{ color: "var(--color-danger)" }}>*</span>
+                </label>
+                <textarea
+                  className="mem-input"
+                  rows="4"
+                  placeholder="Provide detailed description of expense incurred, vendor name, invoice/receipt reference..."
+                  value={expenseNotes}
+                  onChange={(e) => setExpenseNotes(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="mem-form-actions">
+                <button type="submit" className="mem-btn mem-btn--primary" disabled={submittingExpense}>
+                  <Send size={16} /> {submittingExpense ? "Submitting Claim..." : "Submit Expense Claim"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* SUBMITTED FINANCIAL REQUESTS HISTORY TABLE */}
+          <div style={{ marginTop: "28px", paddingTop: "20px", borderTop: "1px solid var(--border-color)" }}>
+            <p className="mem-section-sub" style={{ margin: "0 0 12px" }}>
+              <FileText size={16} /> Submitted Financial Requests &amp; Approval History
+            </p>
+
+            {memberRequests.length === 0 ? (
+              <div className="mem-table-empty">
+                No financial requests or expense claims submitted yet.
+              </div>
+            ) : (
+              <div className="mem-table-wrap">
+                <table className="mem-table">
+                  <thead>
+                    <tr>
+                      <th>Request Type</th>
+                      <th>Subject / Amount</th>
+                      <th>Details</th>
+                      <th>Status</th>
+                      <th>Submitted Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {memberRequests.map((r) => (
+                      <tr key={r.id}>
+                        <td style={{ fontWeight: "600", color: "var(--text-heading)" }}>{r.category}</td>
+                        <td style={{ fontWeight: "600", color: "var(--text-dark)" }}>{r.subject}</td>
+                        <td style={{ fontSize: "12px", color: "var(--text-secondary)", whiteSpace: "pre-line", maxWidth: "300px" }}>{r.details}</td>
+                        <td>
+                          <span className={`mem-badge ${r.status === "Approved" ? "mem-badge--success" : r.status === "Rejected" ? "mem-badge--danger" : "mem-badge--warning"}`}>
+                            {r.status === "Approved" ? "✔ Approved" : r.status === "Rejected" ? "❌ Rejected" : "⏳ Pending Review"}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
+                          {r.created_at ? new Date(r.created_at).toLocaleDateString() : "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </section>
       )}
 

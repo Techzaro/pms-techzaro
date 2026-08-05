@@ -1,103 +1,77 @@
-/**
- * Sidebar - HR Management navigation sidebar.
- * Dedicated HRM sidebar: a single "Dashboard" entry point followed by
- * the HR modules, grouped into labeled sections (Hiring, Workforce,
- * Payroll, Engagement, Insights) instead of a single collapsed dropdown.
- *
- * Design rationale (HCI):
- *  - Recognition over recall: section labels let a user scan and find a
- *    module by category instead of remembering it's inside "HR Management".
- *  - Hick's Law / fewer clicks: with only HR content left in this sidebar,
- *    hiding all 10 modules behind one extra click added friction for no
- *    benefit — items are now exposed directly.
- *  - Chunking (Miller's Law): 10 flat items are split into 5 groups of
- *    1-4, which is easier to scan than one long undifferentiated list.
- *  - Visibility of system status: the active route gets both a background
- *    fill and an aria-current flag (not color alone), so state is legible
- *    to screen readers and not dependent on color perception.
- *  - Fitts's Law: full-width, generously padded row targets, not just the
- *    icon/text glyphs, since this is used as a touch target on mobile too.
- *
- * Supports three viewport modes:
- *   - Desktop (>1200px): always visible, icon+text
- *   - Tablet (769-1200px): collapsible on hover/click
- *   - Mobile (≤768px): overlay drawer toggled via hamburger menu
- */
-
-import React, { useEffect, useState } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
 import API_URL from "../../../../config/api";
-import { authToken, getCurrentRole, getUser, setUser, rolePath, getUrlRole } from "../../../../utils/auth";
+import { authToken, getUser, rolePath } from "../../../../utils/auth";
 
 import {
-  LayoutDashboard,
-  Users,
-  Briefcase,
-  FileText,
-  Calendar,
-  CreditCard,
-  TrendingUp,
-  Bell,
-  Layers,
-  BarChart2,
-  Award,
-} from "lucide-react";
+  MdDashboard,
+  MdWork,
+  MdPeople,
+  MdCalendarToday,
+  MdBarChart,
+  MdKeyboardArrowDown,
+  MdNotifications,
+  MdSchool,
+  MdCardMembership,
+  MdBadge,
+  MdWorkHistory,
+  MdCorporateFare,
+  MdAttachMoney,
+  MdReceiptLong,
+  MdFactCheck,
+} from "react-icons/md";
 
 import "./Sidebar.css";
 
-/**
- * HR modules grouped into scannable sections. Each item's `page` is the
- * slug used for route matching and Link target (rolePath("hrm/<page>")).
- */
-const HR_SECTIONS = [
-  {
-    label: "Hiring",
-    items: [
-      { page: "hrm/recruitment", label: "Recruitment & Onboarding", icon: Briefcase },
-      { page: "hrm/offer-letters", label: "Offer Letters", icon: FileText },
-    ],
-  },
-  {
-    label: "Workforce",
-    items: [
-      { page: "hrm/workforce", label: "Workforce Directory", icon: Users },
-      { page: "hrm/documents", label: "Employee Documents", icon: FileText },
-      { page: "hrm/attendance", label: "Attendance & Leave", icon: Calendar },
-      { page: "hrm/performance", label: "Performance & Evaluation", icon: TrendingUp },
-      { page: "hrm/assets", label: "Assets / Items Issued", icon: Layers },
-    ],
-  },
-  {
-    label: "Payroll",
-    items: [
-      { page: "hrm/payroll", label: "Payroll & Salary", icon: CreditCard },
-    ],
-  },
-  {
-    label: "Engagement",
-    items: [
-      { page: "hrm/notice-board", label: "Notice Board", icon: Bell },
-      { page: "hrm/training", label: "Training & Learning", icon: Award },
-    ],
-  },
-  {
-    label: "Insights",
-    items: [
-      { page: "hrm/reports", label: "HR Reports & Analytics", icon: BarChart2 },
-    ],
-  },
-];
-
-/**
- * Sidebar navigation component.
- */
 function Sidebar() {
-
-  // ── Viewport mode state ──
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isTabletExpanded, setIsTabletExpanded] = useState(false);
 
-  /** Current user info – initialised from local storage. */
+  // Dropdown open states persisted in sessionStorage
+  const [attendanceOpen, setAttendanceOpen] = useState(
+    () => sessionStorage.getItem("hrm_attendanceOpen") === "true"
+  );
+  const toggleAttendance = () => {
+    setAttendanceOpen((prev) => {
+      const next = !prev;
+      sessionStorage.setItem("hrm_attendanceOpen", next);
+      return next;
+    });
+  };
+
+  const [performanceOpen, setPerformanceOpen] = useState(
+    () => sessionStorage.getItem("hrm_performanceOpen") === "true"
+  );
+  const togglePerformance = () => {
+    setPerformanceOpen((prev) => {
+      const next = !prev;
+      sessionStorage.setItem("hrm_performanceOpen", next);
+      return next;
+    });
+  };
+
+  const [recruitmentOpen, setRecruitmentOpen] = useState(
+    () => sessionStorage.getItem("hrm_recruitmentOpen") === "true"
+  );
+  const toggleRecruitment = () => {
+    setRecruitmentOpen((prev) => {
+      const next = !prev;
+      sessionStorage.setItem("hrm_recruitmentOpen", next);
+      return next;
+    });
+  };
+
+  const [workforceOpen, setWorkforceOpen] = useState(
+    () => sessionStorage.getItem("hrm_workforceOpen") === "true"
+  );
+  const toggleWorkforce = () => {
+    setWorkforceOpen((prev) => {
+      const next = !prev;
+      sessionStorage.setItem("hrm_workforceOpen", next);
+      return next;
+    });
+  };
+
   const [user, setUserState] = useState(() => {
     const stored = getUser();
     return {
@@ -108,82 +82,68 @@ function Sidebar() {
   });
 
   const location = useLocation();
-  const { role: urlRole } = useParams();
-  const rolePrefix = `/${urlRole}`;
 
-  // ── Route-matching helpers ──
-  /** Exact match for a given page slug. */
-  const isActive = (page) => {
-    const current = location.pathname.toLowerCase();
-    const target = `${rolePrefix}/${page}`.toLowerCase();
-    return current === target || (page.toLowerCase() === "hrm" && (current.endsWith("/hrm") || current.endsWith("/hrm/")));
+  const isMemberRole =
+    user?.role?.toLowerCase() === "member" ||
+    location.pathname.toLowerCase().includes("hrm/member-dashboard");
+
+  const isActive = (page) => location.pathname.toLowerCase().endsWith(page.toLowerCase());
+  const isActiveOrStart = (page) => location.pathname.toLowerCase().includes(page.toLowerCase());
+
+  const isAttendanceRoute = location.pathname.toLowerCase().includes("hrm/attendance");
+  const isAttendanceTabActive = (tabVal) => {
+    if (!isAttendanceRoute) return false;
+    const currentTab = new URLSearchParams(location.search).get("tab") || "attendance";
+    return currentTab === tabVal;
   };
 
-  /** Exact or prefix match (for detail pages). */
-  const isActiveOrStart = (page) => {
-    const current = location.pathname.toLowerCase();
-    const target = `${rolePrefix}/${page}`.toLowerCase();
-    if (current === target || current.startsWith(`${target}/`)) return true;
-    if (page.includes("recruitment") || page === "RecruitmentOnboarding") {
-      return current.includes("recruitment") || current.includes("onboarding");
-    }
-    if (page.includes("offer") || page === "offerletters") {
-      return current.includes("offer");
-    }
-    return false;
+  const isPerformanceRoute = location.pathname.toLowerCase().includes("hrm/performance");
+  const isPerformanceTabActive = (tabVal) => {
+    if (!isPerformanceRoute) return false;
+    const currentTab = new URLSearchParams(location.search).get("tab") || "utilization";
+    return currentTab === tabVal;
   };
 
-  // Fetch user data from API on mount
+  const isMemberDashboardRoute = location.pathname.toLowerCase().includes("hrm/member-dashboard");
+  const isMemberTabActive = (tabVal) => {
+    if (!isMemberDashboardRoute) return false;
+    const currentTab = new URLSearchParams(location.search).get("tab") || "attendance";
+    return currentTab === tabVal;
+  };
+
+  // Auto expand dropdowns based on current route
   useEffect(() => {
-    const token = authToken();
-    if (!token) return;
-
-    fetch(`${API_URL}/user`, {
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      skipLoader: true,
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && data.name) {
-          setUserState({ name: data.name, email: data.email, role: data.role, avatar: data.avatar || null });
-          const role = getCurrentRole();
-          setUser(role, { id: data.id, name: data.name, email: data.email, role: data.role, avatar: data.avatar || null });
-        }
-      })
-      .catch(() => {});
-  }, []);
+    if (isAttendanceRoute) {
+      setAttendanceOpen(true);
+      sessionStorage.setItem("hrm_attendanceOpen", "true");
+    }
+    if (isPerformanceRoute) {
+      setPerformanceOpen(true);
+      sessionStorage.setItem("hrm_performanceOpen", "true");
+    }
+  }, [location.pathname, location.search]);
 
   // Auto-close mobile sidebar on route change
   useEffect(() => {
     setIsMobileOpen(false);
   }, [location.pathname]);
 
-  // Broadcast sidebar open/close state to the Header for logo visibility
+  // Listen for toggle-sidebar event
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent("sidebar-state", { detail: { open: isMobileOpen } }));
-  }, [isMobileOpen]);
-
-  // Listen for toggle-sidebar events dispatched by the Header hamburger button
-  useEffect(() => {
-    const handler = () => setIsMobileOpen(prev => !prev);
+    const handler = () => setIsMobileOpen((prev) => !prev);
     window.addEventListener("toggle-sidebar", handler);
     return () => window.removeEventListener("toggle-sidebar", handler);
   }, []);
 
-  const toggleMobile = () => setIsMobileOpen(prev => !prev);
-  const toggleTablet = () => setIsTabletExpanded(prev => !prev);
+  const toggleMobile = () => setIsMobileOpen((prev) => !prev);
+  const toggleTablet = () => setIsTabletExpanded((prev) => !prev);
 
-  /** Collapse tablet sidebar when the mouse leaves (tablet viewport only). */
   const handleMouseLeave = () => {
     if (window.innerWidth <= 1200 && window.innerWidth >= 769) {
       setIsTabletExpanded(false);
     }
   };
 
-  /** Expand tablet sidebar when clicking inside it (tablet viewport only). */
   const handleSidebarClick = (e) => {
     if (window.innerWidth <= 1200 && window.innerWidth >= 769) {
       e.stopPropagation();
@@ -198,8 +158,7 @@ function Sidebar() {
         onMouseLeave={handleMouseLeave}
         onClick={handleSidebarClick}
       >
-
-        {/* Mobile-only header with close button and logo */}
+        {/* Mobile header */}
         <div className="sidebar-mobile-header">
           <button className="sidebar-close-btn" onClick={toggleMobile} aria-label="Close sidebar">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -216,55 +175,319 @@ function Sidebar() {
           </div>
         </div>
 
-        <nav aria-label="HR Management navigation">
-
-          {/* Dashboard link – overview / landing page */}
+        <div>
+          {/* Main Landing Link */}
           <Link
-            to={user?.role?.toLowerCase() === "member" ? rolePath("hrm/member-dashboard") : rolePath("HRM")}
-            className={`sidebar-link ${isActive("HRM") || isActive("hrm") || isActive("hrm/member-dashboard") ? "active" : ""}`}
-            aria-current={isActive("HRM") || isActive("hrm") || isActive("hrm/member-dashboard") ? "page" : undefined}
+            to={isMemberRole ? rolePath("hrm/member-dashboard") : rolePath("HRM")}
+            className={`sidebar-link ${!isMemberRole && (isActive("HRM") || isActive("hrm")) ? "active" : ""}`}
             onClick={(e) => e.stopPropagation()}
           >
-            <LayoutDashboard />
-            <span>{user?.role?.toLowerCase() === "member" ? "My Member Hub" : "Dashboard"}</span>
+            <MdDashboard />
+            <span>{isMemberRole ? "My Member Hub" : "Dashboard"}</span>
           </Link>
 
-          {/* HR modules, grouped into labeled sections for scannability */}
-          {(user?.role?.toLowerCase() === "member" ? [
-            {
-              label: "My Member Portal",
-              items: [
-                { page: "hrm/member-dashboard", label: "My HRM Dashboard", icon: LayoutDashboard },
-              ],
-            },
-          ] : HR_SECTIONS).map((section) => (
-            <div className="sidebar-section" key={section.label}>
-              <div className="sidebar-section-title">{section.label}</div>
-              {section.items.map(({ page, label, icon: Icon }) => {
-                const active = isActiveOrStart(page);
-                return (
-                  <Link
-                    key={page}
-                    to={rolePath(page)}
-                    className={`sidebar-link ${active ? "active" : ""}`}
-                    aria-current={active ? "page" : undefined}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Icon />
-                    <span>{label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
+          {!isMemberRole ? (
+            /* ADMIN / MANAGER HR SIDEBAR NAVIGATION */
+            <>
+              {/* Recruitment & Hiring Dropdown */}
+              <div
+                className={`sidebar-link ${isActiveOrStart("hrm/recruitment") || isActiveOrStart("hrm/offer-letters") ? "active" : ""}`}
+                style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}
+              >
+                <div
+                  onClick={toggleRecruitment}
+                  style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
+                >
+                  <MdWork />
+                  <span style={{ flex: 1 }}>Hiring &amp; Onboarding</span>
+                  <MdKeyboardArrowDown
+                    size={18}
+                    style={{
+                      transition: "transform 0.2s",
+                      transform: recruitmentOpen ? "rotate(180deg)" : "rotate(0deg)",
+                    }}
+                  />
+                </div>
+                {recruitmentOpen && (
+                  <div className="sidebar-sub-links">
+                    <Link
+                      to={rolePath("hrm/recruitment")}
+                      className={`sidebar-sub-link ${isActiveOrStart("hrm/recruitment") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Job Openings &amp; Candidates
+                    </Link>
+                    <Link
+                      to={rolePath("hrm/offer-letters")}
+                      className={`sidebar-sub-link ${isActiveOrStart("hrm/offer-letters") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Offer Letters
+                    </Link>
+                  </div>
+                )}
+              </div>
 
-        </nav>
+              {/* Workforce & Documents Dropdown */}
+              <div
+                className={`sidebar-link ${isActiveOrStart("hrm/workforce") || isActiveOrStart("hrm/documents") ? "active" : ""}`}
+                style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}
+              >
+                <div
+                  onClick={toggleWorkforce}
+                  style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
+                >
+                  <MdPeople />
+                  <span style={{ flex: 1 }}>Workforce &amp; Directory</span>
+                  <MdKeyboardArrowDown
+                    size={18}
+                    style={{
+                      transition: "transform 0.2s",
+                      transform: workforceOpen ? "rotate(180deg)" : "rotate(0deg)",
+                    }}
+                  />
+                </div>
+                {workforceOpen && (
+                  <div className="sidebar-sub-links">
+                    <Link
+                      to={rolePath("hrm/workforce")}
+                      className={`sidebar-sub-link ${isActiveOrStart("hrm/workforce") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Employee Directory
+                    </Link>
+                    <Link
+                      to={rolePath("hrm/documents")}
+                      className={`sidebar-sub-link ${isActiveOrStart("hrm/documents") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Employee Documents
+                    </Link>
+                  </div>
+                )}
+              </div>
 
+              {/* Attendance & Leave Dropdown */}
+              <div
+                className={`sidebar-link ${isAttendanceRoute ? "active" : ""}`}
+                style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}
+              >
+                <div
+                  onClick={toggleAttendance}
+                  style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
+                >
+                  <MdCalendarToday />
+                  <span style={{ flex: 1 }}>Attendance &amp; Leave</span>
+                  <MdKeyboardArrowDown
+                    size={18}
+                    style={{
+                      transition: "transform 0.2s",
+                      transform: attendanceOpen ? "rotate(180deg)" : "rotate(0deg)",
+                    }}
+                  />
+                </div>
+                {attendanceOpen && (
+                  <div className="sidebar-sub-links">
+                    <Link
+                      to={rolePath("hrm/attendance?tab=attendance")}
+                      className={`sidebar-sub-link ${isAttendanceTabActive("attendance") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Punch Logs &amp; Attendance
+                    </Link>
+                    <Link
+                      to={rolePath("hrm/attendance?tab=pending")}
+                      className={`sidebar-sub-link ${isAttendanceTabActive("pending") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Member Requests &amp; Approvals
+                    </Link>
+                    <Link
+                      to={rolePath("hrm/attendance?tab=manual")}
+                      className={`sidebar-sub-link ${isAttendanceTabActive("manual") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Manual HR Entry &amp; Roster
+                    </Link>
+                    <Link
+                      to={rolePath("hrm/attendance?tab=shifts")}
+                      className={`sidebar-sub-link ${isAttendanceTabActive("shifts") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Working Policies &amp; Shifts
+                    </Link>
+                    <Link
+                      to={rolePath("hrm/attendance?tab=warnings")}
+                      className={`sidebar-sub-link ${isAttendanceTabActive("warnings") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Attendance Warnings &amp; Policy
+                    </Link>
+                    <Link
+                      to={rolePath("hrm/attendance?tab=departments")}
+                      className={`sidebar-sub-link ${isAttendanceTabActive("departments") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Department Summary
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              {/* Performance & Evaluation Dropdown */}
+              <div
+                className={`sidebar-link ${isPerformanceRoute ? "active" : ""}`}
+                style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}
+              >
+                <div
+                  onClick={togglePerformance}
+                  style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
+                >
+                  <MdBarChart />
+                  <span style={{ flex: 1 }}>Performance &amp; Evaluation</span>
+                  <MdKeyboardArrowDown
+                    size={18}
+                    style={{
+                      transition: "transform 0.2s",
+                      transform: performanceOpen ? "rotate(180deg)" : "rotate(0deg)",
+                    }}
+                  />
+                </div>
+                {performanceOpen && (
+                  <div className="sidebar-sub-links">
+                    <Link
+                      to={rolePath("hrm/performance?tab=utilization")}
+                      className={`sidebar-sub-link ${isPerformanceTabActive("utilization") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Utilization &amp; Intelligence
+                    </Link>
+                    <Link
+                      to={rolePath("hrm/performance?tab=okrs")}
+                      className={`sidebar-sub-link ${isPerformanceTabActive("okrs") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      OKRs &amp; Goals
+                    </Link>
+                    <Link
+                      to={rolePath("hrm/performance?tab=appraisals")}
+                      className={`sidebar-sub-link ${isPerformanceTabActive("appraisals") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      360° Appraisals
+                    </Link>
+                    <Link
+                      to={rolePath("hrm/performance?tab=radar")}
+                      className={`sidebar-sub-link ${isPerformanceTabActive("radar") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Competency Radar
+                    </Link>
+                    <Link
+                      to={rolePath("hrm/performance?tab=top")}
+                      className={`sidebar-sub-link ${isPerformanceTabActive("top") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Top Leaderboard
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              {/* Notice Board */}
+              <Link
+                to={rolePath("hrm/notice-board")}
+                className={`sidebar-link ${isActiveOrStart("hrm/notice-board") ? "active" : ""}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MdNotifications />
+                <span>Notice Board</span>
+              </Link>
+
+              {/* Training & Learning */}
+              <Link
+                to={rolePath("hrm/training")}
+                className={`sidebar-link ${isActiveOrStart("hrm/training") ? "active" : ""}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MdSchool />
+                <span>Training &amp; Learning</span>
+              </Link>
+
+              <hr />
+
+              {/* HR Reports & Analytics */}
+              <Link
+                to={rolePath("hrm/reports")}
+                className={`sidebar-link ${isActiveOrStart("hrm/reports") ? "active" : ""}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MdBarChart />
+                <span>HR Reports &amp; Analytics</span>
+              </Link>
+            </>
+          ) : (
+            /* MEMBER HUB NAVIGATION LINKS */
+            <>
+              <Link
+                to={rolePath("hrm/member-dashboard?tab=attendance")}
+                className={`sidebar-link ${isMemberTabActive("attendance") ? "active" : ""}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MdCalendarToday />
+                <span>Attendance &amp; Punch</span>
+              </Link>
+
+              <Link
+                to={rolePath("hrm/member-dashboard?tab=leaves")}
+                className={`sidebar-link ${isMemberTabActive("leaves") ? "active" : ""}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MdWorkHistory />
+                <span>Leave Requests</span>
+              </Link>
+
+              <Link
+                to={rolePath("hrm/member-dashboard?tab=wfh")}
+                className={`sidebar-link ${isMemberTabActive("wfh") ? "active" : ""}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MdCorporateFare />
+                <span>WFH Applications</span>
+              </Link>
+
+              <Link
+                to={rolePath("hrm/member-dashboard?tab=claims")}
+                className={`sidebar-link ${isMemberTabActive("claims") ? "active" : ""}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MdAttachMoney />
+                <span>Advance Salary &amp; Expenses</span>
+              </Link>
+
+              <Link
+                to={rolePath("hrm/member-dashboard?tab=corrections")}
+                className={`sidebar-link ${isMemberTabActive("corrections") ? "active" : ""}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MdReceiptLong />
+                <span>Attendance Corrections</span>
+              </Link>
+
+              <Link
+                to={rolePath("hrm/notice-board")}
+                className={`sidebar-link ${isActiveOrStart("hrm/notice-board") ? "active" : ""}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MdNotifications />
+                <span>Notice Board</span>
+              </Link>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Mobile backdrop – clicking closes the sidebar */}
       {isMobileOpen && <div className="sidebar-backdrop" onClick={toggleMobile} />}
-      {/* Tablet backdrop – clicking collapses the sidebar */}
       {isTabletExpanded && <div className="sidebar-tablet-backdrop" onClick={toggleTablet} />}
     </>
   );
