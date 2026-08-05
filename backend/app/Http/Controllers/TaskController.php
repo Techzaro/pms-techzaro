@@ -3806,35 +3806,8 @@ class TaskController extends Controller
         // ── Role-based visibility ──
         switch ($role) {
             case 'admin':
-                // Admin sees everything — no scope filter
-                break;
-
             case 'manager':
-                // Manager sees tasks where any participant (creator or assignee) is in the same team(s)
-                $teamIds = $user->teams()->pluck('teams.id');
-                $ledTeamIds = $user->ledTeams()->pluck('teams.id');
-                $allTeamIds = $teamIds->merge($ledTeamIds)->unique();
-
-                if ($allTeamIds->isNotEmpty()) {
-                    $scopeUserIds = DB::table('team_user')
-                        ->whereIn('team_id', $allTeamIds)
-                        ->pluck('user_id')
-                        ->push($user->id)
-                        ->unique();
-
-                    $tasksQuery->where(function ($q) use ($scopeUserIds) {
-                        $q->whereIn('assigned_by', $scopeUserIds)
-                            ->orWhereIn('assigned_to', $scopeUserIds)
-                            ->orWhereHas('assignees', fn ($aq) => $aq->whereIn('users.id', $scopeUserIds));
-                    });
-                } else {
-                    // No teams — only own tasks
-                    $tasksQuery->where(function ($q) use ($user) {
-                        $q->where('assigned_by', $user->id)
-                            ->orWhere('assigned_to', $user->id)
-                            ->orWhereHas('assignees', fn ($aq) => $aq->where('users.id', $user->id));
-                    });
-                }
+                // Admin and Manager see everything — no scope filter
                 break;
 
             case 'team_lead':

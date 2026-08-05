@@ -31,7 +31,7 @@ class SendBulkNotificationEmails
 
         foreach ($notifications as $notification) {
             if (!$notification->user) continue;
-            $recipientEmail = $notification->user->professional_email ?: $notification->user->personal_email ?: $notification->user->email;
+            $recipientEmail = $notification->user->notification_email;
             if (empty($recipientEmail)) continue;
             if ($notification->type === 'user_updated') continue;
             if ($notification->related_module === 'chat') continue;
@@ -39,8 +39,8 @@ class SendBulkNotificationEmails
             try {
                 if (!Notification::wantsChannel($notification, 'email')) continue;
 
-                $senderEmail = $notification->sender?->professional_email ?? $notification->sender?->personal_email ?? $notification->sender?->email ?? '';
-                $senderName = $notification->sender?->name ?? config('mail.from.name', 'PMS Techxaro');
+                $senderEmail = $notification->sender?->notification_email ?? '';
+                $senderName = $notification->sender?->name ?? config('mail.from.name', 'PMS');
                 $mail = new NotificationMail($notification, $senderEmail, $senderName);
                 Mail::to($recipientEmail)->send($mail);
             } catch (\Throwable $e) {

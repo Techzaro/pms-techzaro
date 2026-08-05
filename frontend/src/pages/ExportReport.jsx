@@ -8,13 +8,13 @@
  * - PDF export using jsPDF with branded header/footer and auto-generated tables
  * - Rendered via React portal to body
  */
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import "../pages/ExportReport.css";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 
 /** Color palette for user avatar backgrounds */
 const AVATAR_COLORS = ["#f59e0b", "#3b82f6", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
@@ -55,13 +55,15 @@ function formatStatus(status) {
  * report preview, and PDF generation.
  */
 function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
-  useEscapeKey(true, handleClose);
-  const [showReview, setShowReview] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const initialValues = useMemo(() => ({ timeRange: "all", customStart: "", customEnd: "" }), []);
   const [timeRange, setTimeRange] = useState("all");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
+  const currentValues = useMemo(() => ({ timeRange, customStart, customEnd }), [timeRange, customStart, customEnd]);
+  const { isDirty, handleClose, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
+  useEscapeKey(true, handleClose);
+  const [showReview, setShowReview] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const now = new Date();
   const genDate = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
@@ -218,16 +220,16 @@ function ExportReport({ isOpen, onClose, summary = {}, users = [] }) {
                   { value: "month", label: "This Month" },
                   { value: "custom", label: "Custom Range" },
                 ].map((opt) => (
-                  <button key={opt.value} className={`er-date-btn ${timeRange === opt.value ? "active" : ""}`} onClick={() => { setTimeRange(opt.value); setIsDirty(true); }}>
+                  <button key={opt.value} className={`er-date-btn ${timeRange === opt.value ? "active" : ""}`} onClick={() => setTimeRange(opt.value)}>
                     {opt.label}
                   </button>
                 ))}
               </div>
               {timeRange === "custom" && (
                 <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-                  <input type="date" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setIsDirty(true); }}
+                  <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
-                  <input type="date" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setIsDirty(true); }}
+                  <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
                 </div>
               )}

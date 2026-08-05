@@ -5,7 +5,7 @@
  */
 
 import API_URL from "../config/api";
-import { authToken } from "../utils/auth";
+import { authToken, getTenantSlug } from "../utils/auth";
 import { notify } from "../utils/notify";
 
 /**
@@ -73,9 +73,9 @@ export const api = {
    * @param {Object} [params] - Query parameters
    * @returns {Promise<Object>} Response data
    */
-  get: (path, params) => {
+  get: (path, params, options) => {
     const qs = params ? "?" + new URLSearchParams(params).toString() : "";
-    return apiFetch(`${path}${qs}`);
+    return apiFetch(`${path}${qs}`, options);
   },
   /**
    * Sends a POST request.

@@ -7,11 +7,15 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\UserChange;
+use App\Models\Master\Organization as MasterOrganization;
 use App\Services\ActivityService;
 use App\Services\AuditService;
+use App\Services\EmailPolicyService;
+use App\Services\Saas\SubscriptionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
@@ -98,6 +102,32 @@ class AuthController extends Controller
 
             // logged in user
 
+            $email = $request->email;
+            $organization = $request->attributes->get('currentOrganization');
+            $tenantSlug = $organization?->slug;
+
+            // Step 1: Look up in current tenant DB (default or resolved tenant)
+            $user = User::where('professional_email', $email)
+                ->orWhere('email', $email)
+                ->orWhere('personal_email', $email)
+                ->first();
+
+            // Step 2: Verify password — if user not found or password wrong, search across all tenant DBs
+            if (! $user || ! Hash::check($request->password, $user->password ?? '')) {
+                $defaultDb = config('database.connections.mysql.database');
+                $result = $this->findUserAcrossTenants($email, $defaultDb, $request->password);
+                if ($result) {
+                    $user = $result['user'];
+                    $tenantSlug = $result['slug'];
+                    $organization = $result['organization'];
+                } elseif (! $user || ! Hash::check($request->password, $user->password ?? '')) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Invalid Email or Password',
+                    ], 401);
+                }
+            }
+
             if ($user->active === false && ! $user->must_change_password) {
                 return response()->json([
                     'success' => false,
@@ -105,7 +135,14 @@ class AuthController extends Controller
                 ], 403);
             }
 
-            // New users (inactive + must_change_password) login allowed
+            // ── Organization status & subscription check ──────────────────────
+            // Resolve the master organization record to check status and subscription
+            $masterOrg = null;
+            if ($organization && isset($organization->id)) {
+                $masterOrg = MasterOrganization::find($organization->id);
+            } elseif ($tenantSlug) {
+                $masterOrg = MasterOrganization::where('slug', $tenantSlug)->first();
+            }
 
             // Handle remember_me flag (24 hours / 1 day if true, 3 hours default if false)
             $rememberMe = $request->boolean('remember_me');
@@ -114,14 +151,30 @@ class AuthController extends Controller
             // generate Sanctum token with explicit expiration
             $tokenResult = $user->createToken('auth_token', ['*'], $expiresAt);
             $token = $tokenResult->plainTextToken;
+            if ($masterOrg) {
+                // Block suspended / archived organizations
+                if (in_array($masterOrg->status, ['suspended', 'archived'])) {
+                    $statusMessages = [
+                        'suspended' => 'Your organization has been suspended. Please contact TechXaro support team for assistance.',
+                        'archived'  => 'Your organization has been archived. Please contact TechXaro support team for assistance.',
+                    ];
+                    return response()->json([
+                        'success' => false,
+                        'message' => $statusMessages[$masterOrg->status] ?? 'Your organization is not active. Please contact TechXaro support team.',
+                    ], 403);
+                }
 
-            // Track last login
+                // Auto-renew expired subscriptions
+                $subscriptionService = app(SubscriptionService::class);
+                $subscriptionService->renewExpiredSubscription($masterOrg);
+            }
+
+            $token = $user->createToken('auth_token')->plainTextToken;
             $user->update(['last_login_at' => now()]);
 
-            // Normalize role (teamlead → team_lead)
             $role = $user->role === 'teamlead' ? 'team_lead' : $user->role;
 
-            return response()->json([
+            $response = [
                 'success' => true,
                 'message' => 'Login successful',
                 'token' => $token,
@@ -132,13 +185,20 @@ class AuthController extends Controller
                 'user' => [
                     'id' => $user->id,
                     'name' => $user->name,
-                    'avatar' => $user->avatar,
-                    'email' => $user->professional_email,
+                    'avatar' => $user->avatar ?? null,
+                    'email' => $user->login_email ?: $user->email ?: $user->professional_email ?: $user->personal_email ?: $email,
                     'role' => $role,
-                    'active' => $user->active,
-                    'must_change_password' => $user->must_change_password,
+                    'active' => (bool) $user->active,
+                    'must_change_password' => (bool) $user->must_change_password,
                 ],
-            ]);
+            ];
+
+            // Include tenant slug for cross-tenant users so frontend can send X-Tenant-ID header
+            if ($tenantSlug) {
+                $response['tenant_slug'] = $tenantSlug;
+            }
+
+            return response()->json($response);
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
@@ -200,7 +260,88 @@ class AuthController extends Controller
                 ],
             ]);
 
-            $user = $request->user();
+            $token = $request->bearerToken();
+            if (! $token) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized.'], 401);
+            }
+
+            // Sanctum hashes only the token part (after the pipe), not the full id|token string
+            $tokenValue = str_contains($token, '|') ? substr($token, strpos($token, '|') + 1) : $token;
+            $hashedToken = hash('sha256', $tokenValue);
+
+            $organization = $request->attributes->get('currentOrganization');
+            $user = null;
+            $dsn = null;
+            $dbUsername = null;
+            $dbPassword = null;
+
+            if ($organization) {
+                // Tenant user — use direct PDO to tenant DB
+                $dsn = sprintf(
+                    'mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4',
+                    $organization->database_host,
+                    (int) $organization->database_port,
+                    $organization->database_name
+                );
+                $dbUsername = $organization->database_username;
+                $dbPassword = $organization->database_password ?? '';
+
+                $pdo = new \PDO($dsn, $dbUsername, $dbPassword, [
+                    \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                    \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_OBJ,
+                ]);
+
+                $stmt = $pdo->prepare('SELECT tokenable_id FROM `personal_access_tokens` WHERE token = ? LIMIT 1');
+                $stmt->execute([$hashedToken]);
+                $tokenRow = $stmt->fetch();
+
+                if ($tokenRow) {
+                    config()->set('database.connections.first_time_tenant', [
+                        'driver'   => 'mysql',
+                        'host'     => $organization->database_host,
+                        'port'     => $organization->database_port,
+                        'database' => $organization->database_name,
+                        'username' => $organization->database_username,
+                        'password' => $organization->database_password ?? '',
+                        'charset'  => 'utf8mb4',
+                        'collation'=> 'utf8mb4_unicode_ci',
+                    ]);
+                    DB::purge('first_time_tenant');
+                    DB::reconnect('first_time_tenant');
+
+                    $user = User::on('first_time_tenant')->where('id', $tokenRow->tokenable_id)->first();
+                }
+
+                $pdo = null;
+            } else {
+                // Owner/default DB user (no tenant context) — use the default mysql connection
+                $pdo = new \PDO(
+                    'mysql:host=' . config('database.connections.mysql.host')
+                        . ';port=' . config('database.connections.mysql.port')
+                        . ';dbname=' . config('database.connections.mysql.database')
+                        . ';charset=utf8mb4',
+                    config('database.connections.mysql.username'),
+                    config('database.connections.mysql.password') ?? '',
+                    [
+                        \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                        \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_OBJ,
+                    ]
+                );
+
+                $stmt = $pdo->prepare('SELECT tokenable_id FROM `personal_access_tokens` WHERE token = ? LIMIT 1');
+                $stmt->execute([$hashedToken]);
+                $tokenRow = $stmt->fetch();
+
+                if ($tokenRow) {
+                    $user = User::on('mysql')->where('id', $tokenRow->tokenable_id)->first();
+                }
+
+                $pdo = null;
+            }
+
+            if (! $user) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized.'], 401);
+            }
 
             if (Hash::check($request->new_password, $user->password)) {
                 return response()->json([
@@ -216,6 +357,42 @@ class AuthController extends Controller
             $user->password_changed_at = now();
             $user->save();
 
+            // Revoke the token
+            if ($dsn) {
+                $revokePdo = new \PDO($dsn, $dbUsername, $dbPassword, [
+                    \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                ]);
+                $revokeStmt = $revokePdo->prepare('DELETE FROM `personal_access_tokens` WHERE token = ?');
+                $revokeStmt->execute([$hashedToken]);
+                $revokePdo = null;
+
+                // Also revoke ALL other tokens for this user to prevent stale sessions
+                $cleanupPdo = new \PDO($dsn, $dbUsername, $dbPassword, [
+                    \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                ]);
+                $cleanupStmt = $cleanupPdo->prepare('DELETE FROM `personal_access_tokens` WHERE tokenable_id = ?');
+                $cleanupStmt->execute([$user->id]);
+                $cleanupPdo = null;
+            } else {
+                // Owner DB — use direct PDO on the default connection
+                $pdo = new \PDO(
+                    'mysql:host=' . config('database.connections.mysql.host')
+                        . ';port=' . config('database.connections.mysql.port')
+                        . ';dbname=' . config('database.connections.mysql.database')
+                        . ';charset=utf8mb4',
+                    config('database.connections.mysql.username'),
+                    config('database.connections.mysql.password') ?? '',
+                    [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+                );
+                $revokeStmt = $pdo->prepare('DELETE FROM `personal_access_tokens` WHERE token = ?');
+                $revokeStmt->execute([$hashedToken]);
+
+                // Also revoke ALL other tokens for this user to prevent stale sessions
+                $cleanupStmt = $pdo->prepare('DELETE FROM `personal_access_tokens` WHERE tokenable_id = ?');
+                $cleanupStmt->execute([$user->id]);
+                $pdo = null;
+            }
+
             try {
                 $this->auditService->log(
                     module: 'auth',
@@ -228,10 +405,15 @@ class AuthController extends Controller
                 \Log::error('Failed to log audit', ['error' => $e->getMessage()]);
             }
 
-            return response()->json([
+            $responseData = [
                 'success' => true,
                 'message' => 'Password changed successfully. Please login with your new password.',
-            ]);
+            ];
+            if ($organization) {
+                $responseData['tenant_slug'] = $organization->slug;
+            }
+
+            return response()->json($responseData);
         } catch (ValidationException $e) {
             return response()->json([
                 'success' => false,
@@ -239,6 +421,10 @@ class AuthController extends Controller
                 'errors' => $e->errors(),
             ], 422);
         } catch (\Throwable $e) {
+            \Log::error('firstTimeChangePassword error', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage() ?: 'Server Error',
@@ -298,7 +484,7 @@ class AuthController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'avatar' => $user->avatar,
-                'email' => $user->email,
+                'email' => $user->login_email,
                 'role' => $user->role,
                 'active' => $user->active,
                 'contact_no' => $user->contact_no,
@@ -318,6 +504,8 @@ class AuthController extends Controller
                 'personal_email' => $user->personal_email,
                 'professional_email' => $user->professional_email,
                 'recovery_email' => $user->recovery_email,
+                'login_email' => $user->login_email,
+                'notification_email' => $user->notification_email,
                 'hired_for' => $user->hired_for,
                 'job_started_date' => $user->job_started_date,
                 'job_ended_date' => $user->job_ended_date,
@@ -713,10 +901,11 @@ class AuthController extends Controller
             // Revoke all other tokens on password change for security
             $user->tokens()->where('id', '!=', $request->user()->currentAccessToken()->id)->delete();
 
-            // Send confirmation email to professional email
-            if ($user->professional_email) {
+            // Send confirmation email to notification email
+            $notifEmail = $user->notification_email;
+            if ($notifEmail) {
                 try {
-                    Mail::to($user->professional_email)->queue(new PasswordChangedMail($user));
+                    Mail::to($notifEmail)->queue(new PasswordChangedMail($user));
                 } catch (\Throwable $e) {
                     \Log::error('Failed to send password changed email', ['user_id' => $user->id, 'error' => $e->getMessage()]);
                 }
@@ -791,5 +980,82 @@ class AuthController extends Controller
 
         // Legacy single file path
         return [['path' => $value, 'name' => null]];
+    }
+
+    /**
+     * Search for a user across all tenant databases.
+     * Returns ['user' => User, 'slug' => string] or null.
+     */
+    private function findUserAcrossTenants(string $email, ?string $skipDbName = null, ?string $plainPassword = null): ?array
+    {
+        $orgs = MasterOrganization::where('status', '!=', 'deleted')
+            ->whereNotIn('status', ['suspended', 'archived'])
+            ->get();
+
+        foreach ($orgs as $org) {
+            try {
+                $dbName = $org->database_name;
+
+                // Skip the default database — it was already searched in the initial query
+                if ($skipDbName && $dbName === $skipDbName) {
+                    continue;
+                }
+
+                $host = $org->database_host ?: config('database.connections.mysql_master.host', '127.0.0.1');
+                $port = (int) ($org->database_port ?: config('database.connections.mysql_master.port', 3306));
+                $username = $org->database_username ?: config('database.connections.mysql_master.username', 'root');
+                $dbPassword = $org->database_password ?? config('database.connections.mysql_master.password', '');
+
+                // Test connection directly via isolated PDO to prevent polluting global 'mysql' state
+                $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $host, $port, $dbName);
+                $pdo = new \PDO($dsn, $username, $dbPassword, [
+                    \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                    \PDO::ATTR_TIMEOUT => 2,
+                ]);
+
+                $stmt = $pdo->prepare(
+                    "SELECT id, password FROM `users` WHERE professional_email = ? OR email = ? OR personal_email = ? LIMIT 1"
+                );
+                $stmt->execute([$email, $email, $email]);
+                $foundUserRow = $stmt->fetch(\PDO::FETCH_OBJ);
+
+                if (! $foundUserRow) {
+                    $pdo = null;
+                    continue;
+                }
+
+                // If password provided, verify it matches before claiming this user
+                if ($plainPassword !== null && !\Hash::check($plainPassword, $foundUserRow->password)) {
+                    $pdo = null;
+                    continue;
+                }
+
+                $pdo = null;
+
+                // Reconfigure 'mysql' connection to this tenant's DB so createToken() stores it here
+                config()->set('database.connections.mysql.host', $host);
+                config()->set('database.connections.mysql.port', $port);
+                config()->set('database.connections.mysql.database', $dbName);
+                config()->set('database.connections.mysql.username', $username);
+                config()->set('database.connections.mysql.password', $dbPassword);
+                DB::purge('mysql');
+                DB::reconnect('mysql');
+
+                $user = \App\Models\User::on('mysql')
+                    ->where('professional_email', $email)
+                    ->orWhere('email', $email)
+                    ->orWhere('personal_email', $email)
+                    ->first();
+
+                if ($user) {
+                    return ['user' => $user, 'slug' => $org->slug, 'organization' => $org];
+                }
+            } catch (\Throwable $e) {
+                \Log::warning("Tenant search failed for {$org->slug}: " . $e->getMessage());
+                continue;
+            }
+        }
+
+        return null;
     }
 }

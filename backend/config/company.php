@@ -38,7 +38,7 @@ return [
     */
 
     'document_labels' => [
-        'company_logo' => 'TechXaro Company Logo',
+        'company_logo' => env('APP_NAME', 'PMS') . ' Company Logo',
         'qr_code' => 'Company QR Code',
         'other_documents' => 'Other Documents',
     ],

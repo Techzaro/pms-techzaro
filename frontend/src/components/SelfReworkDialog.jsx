@@ -5,12 +5,12 @@
  * and requests improvements before final approval.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import { notify } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "./LoadingButton";
@@ -25,14 +25,30 @@ import { toDatetimeLocal, toUTCIso } from "../utils/formatDateTime";
  * @param {Function} onReworkSuccess - Callback after successful rework, receives updated deliverable.
  */
 function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
-  useEscapeKey(isOpen, handleClose);
+  const initialValues = useMemo(() => ({
+    comment: '',
+    instructions: '',
+    newDeadline: '',
+    file: null,
+  }), []);
 
   const [comment, setComment] = useState("");
   const [instructions, setInstructions] = useState("");
   const [newDeadline, setNewDeadline] = useState("");
   const [link, setLink] = useState("");
   const [files, setFiles] = useState([]);
+  const [file, setFile] = useState(null);
+
+  const currentValues = useMemo(() => ({
+    comment,
+    instructions,
+    newDeadline,
+    file,
+  }), [comment, instructions, newDeadline, file]);
+
+  const { isDirty, handleClose, markSaved, resetBaseline, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
+  useEscapeKey(isOpen, handleClose);
+
   const { submitting, run } = useSubmit();
   const fileInputRef = useRef(null);
 
@@ -44,6 +60,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
       setNewDeadline("");
       setLink("");
       setFiles([]);
+      resetBaseline(initialValues);
     } else {
       document.body.style.overflow = "";
     }
@@ -78,6 +95,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
 
         const data = await res.json();
         if (res.ok) {
+          markSaved();
           onReworkSuccess(data.deliverable);
           onClose();
         } else {
@@ -106,7 +124,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
               className="rd-textarea"
               placeholder="Explain what needs to be improved..."
               value={comment}
-              onChange={(e) => { setComment(e.target.value); setIsDirty(true); }}
+              onChange={(e) => { setComment(e.target.value); }}
               rows={3}
             />
           </div>
@@ -117,7 +135,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
               className="rd-textarea"
               placeholder="Provide specific instructions for resubmission..."
               value={instructions}
-              onChange={(e) => { setInstructions(e.target.value); setIsDirty(true); }}
+              onChange={(e) => { setInstructions(e.target.value); }}
               rows={3}
             />
           </div>
@@ -140,7 +158,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
               className="rd-input"
               value={newDeadline}
               min={new Date().toISOString().slice(0, 16)}
-              onChange={(e) => { setNewDeadline(e.target.value); setIsDirty(true); }}
+              onChange={(e) => { setNewDeadline(e.target.value); }}
             />
           </div>
 
@@ -172,6 +190,7 @@ function SelfReworkDialog({ isOpen, onClose, deliverable, onReworkSuccess }) {
               multiple
               style={{ display: "none" }}
               onChange={(e) => { if (e.target.files.length) { setFiles((prev) => [...prev, ...Array.from(e.target.files)]); setIsDirty(true); } }}
+              onChange={(e) => { if (e.target.files.length) { setFile(e.target.files[0]); } }}
             />
           </div>
         </div>

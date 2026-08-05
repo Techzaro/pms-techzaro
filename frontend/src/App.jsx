@@ -5,14 +5,32 @@
  */
 
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Suspense, lazy, useEffect, Component } from "react";
+import { Suspense, lazy, useEffect, useState, Component } from "react";
 import { useLocation } from "react-router-dom";
 import LoadingSpinner from "./components/LoadingSpinner";
 import { useInactivityTimeout } from "./utils/useInactivityTimeout";
+import { useTheme } from "./context/ThemeContext";
 
 // Lazy-loaded page components for code splitting
 const Login = lazy(() => import("./pages/Login"));
 const Admin = lazy(() => import("./pages/Admin"));
+
+// Super Admin lazy-loaded pages
+const SuperAdminLayout = lazy(() => import("./pages/super-admin/layouts/SuperAdminLayout"));
+const SuperDashboard = lazy(() => import("./pages/super-admin/DashboardPage"));
+const SuperOrganizations = lazy(() => import("./pages/super-admin/OrganizationsPage"));
+const SuperOrganizationDetail = lazy(() => import("./pages/super-admin/OrganizationDetailPage"));
+const SuperPlans = lazy(() => import("./pages/super-admin/PlansPage"));
+const SuperModules = lazy(() => import("./pages/super-admin/ModulesPage"));
+const SuperDomains = lazy(() => import("./pages/super-admin/DomainsPage"));
+const SuperHealth = lazy(() => import("./pages/super-admin/SystemHealthPage"));
+const SuperActivity = lazy(() => import("./pages/super-admin/ActivityLogsPage"));
+const SuperSettings = lazy(() => import("./pages/super-admin/SettingsPage"));
+const SuperMyProfile = lazy(() => import("./pages/super-admin/SuperAdminMyProfile"));
+const SuperNotifications = lazy(() => import("./pages/super-admin/SuperAdminNotifications"));
+const BrandingPage = lazy(() => import("./pages/BrandingPage"));
+const SubscriptionPage = lazy(() => import("./pages/SubscriptionPage"));
+const RegisterOrganization = lazy(() => import("./pages/super-admin/RegisterOrganization"));
 const Manager = lazy(() => import("./pages/Manager"));
 const TeamLead = lazy(() => import("./pages/TeamLead"));
 const Member = lazy(() => import("./pages/Member"));
@@ -141,6 +159,10 @@ function AuthSecurityGuard({ children }) {
   }, [location.pathname]);
 
   return children;
+function SuperAdminWrapper() {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
+  return <SuperAdminLayout isDark={isDark} toggleTheme={toggleTheme} />;
 }
 
 function App() {
@@ -162,6 +184,19 @@ function App() {
 
               {/* Dashboard routes - role-specific */}
               <Route path="/:role/dashboard" element={<RoleProtectedRoute><Admin /></RoleProtectedRoute>} />
+      <ScrollToTop />
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingSpinner />}>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<Login />} />
+            <Route path="/logged-out" element={<LoggedOut />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            {/* <Route path="/register-organization" element={<RegisterOrganization />} /> */}
+
+            {/* Dashboard routes - role-specific */}
+            <Route path="/:role/dashboard" element={<RoleProtectedRoute><Admin /></RoleProtectedRoute>} />
 
             {/* Task routes */}
             <Route path="/:role/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
@@ -203,10 +238,27 @@ function App() {
             <Route path="/:role/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
             <Route path="/:role/settings/notifications" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
             <Route path="/:role/audit-logs" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><AuditLogs /></RoleProtectedRoute>} />
+            <Route path="/:role/branding" element={<RoleProtectedRoute allowedRoles={["admin"]}><BrandingPage /></RoleProtectedRoute>} />
+            <Route path="/:role/subscription" element={<RoleProtectedRoute allowedRoles={["admin"]}><SubscriptionPage /></RoleProtectedRoute>} />
             <Route path="/:role/reports/user-performance/:userId" element={<ProtectedRoute><UserPerformance /></ProtectedRoute>} />
             <Route path="/:role/reports/team-members/:teamId" element={<ProtectedRoute><TeamMembersReport /></ProtectedRoute>} />
             <Route path="/:role/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
             <Route path="/:role/chat/:conversationId" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+
+            {/* Super Admin routes */}
+            <Route path="/super-admin" element={<SuperAdminWrapper />}>
+              <Route index element={<SuperDashboard />} />
+              <Route path="organizations" element={<SuperOrganizations />} />
+              <Route path="organizations/:id" element={<SuperOrganizationDetail />} />
+              <Route path="plans" element={<SuperPlans />} />
+              <Route path="modules" element={<SuperModules />} />
+              <Route path="domains" element={<SuperDomains />} />
+              <Route path="health" element={<SuperHealth />} />
+              <Route path="activity" element={<SuperActivity />} />
+              <Route path="notifications" element={<SuperNotifications />} />
+              <Route path="settings" element={<SuperSettings />} />
+              <Route path="my-profile" element={<SuperMyProfile />} />
+            </Route>
 
             {/* Catch-all redirect */}
             <Route path="*" element={<Navigate to="/" replace />} />

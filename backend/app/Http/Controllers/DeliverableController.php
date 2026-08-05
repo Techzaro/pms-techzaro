@@ -2309,33 +2309,8 @@ class DeliverableController extends Controller
         // ── Role-based visibility ──
         switch ($role) {
             case 'admin':
-                // Admin sees everything — no scope filter
-                break;
-
             case 'manager':
-                // Manager sees deliverables where any participant (assignee/creator) is in the same team(s)
-                $teamIds = $user->teams()->pluck('teams.id');
-                $ledTeamIds = $user->ledTeams()->pluck('teams.id');
-                $allTeamIds = $teamIds->merge($ledTeamIds)->unique();
-
-                if ($allTeamIds->isNotEmpty()) {
-                    $scopeUserIds = DB::table('team_user')
-                        ->whereIn('team_id', $allTeamIds)
-                        ->pluck('user_id')
-                        ->push($user->id)
-                        ->unique();
-
-                    $query->where(function ($q) use ($scopeUserIds) {
-                        $q->whereIn('assigned_to', $scopeUserIds)
-                            ->orWhereIn('created_by', $scopeUserIds);
-                    });
-                } else {
-                    // No teams — only own deliverables
-                    $query->where(function ($q) use ($user) {
-                        $q->where('assigned_to', $user->id)
-                            ->orWhere('created_by', $user->id);
-                    });
-                }
+                // Admin and Manager see everything — no scope filter
                 break;
 
             case 'team_lead':

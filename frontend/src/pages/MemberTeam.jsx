@@ -131,7 +131,7 @@ function TeamCard({ team, search }) {
   const teamNameMatch = q && team.name.toLowerCase().includes(q);
 
   const memberNameMatch = q && members.some((m) => {
-    const haystack = [m.name, m.professional_email].filter(Boolean).join(" ").toLowerCase();
+    const haystack = [m.name, m.professional_email, m.email].filter(Boolean).join(" ").toLowerCase();
     return haystack.includes(q);
   });
 
@@ -139,7 +139,7 @@ function TeamCard({ team, search }) {
 
   const filteredMembers = q
     ? members.filter((m) => {
-        const haystack = [m.name, m.professional_email].filter(Boolean).join(" ").toLowerCase();
+        const haystack = [m.name, m.professional_email, m.email].filter(Boolean).join(" ").toLowerCase();
         return haystack.includes(q);
       })
     : members;
@@ -243,10 +243,10 @@ function TeamCard({ team, search }) {
                         <span className="mt-detail-label">Dept:</span> {member.department}
                       </span>
                     )}
-                    {member.professional_email && (
+                    {(member.professional_email || member.email) && (
                       <span className="mt-member-detail mt-member-email">
                         <MdEmail size={14} />
-                        {member.professional_email}
+                        {member.professional_email || member.email}
                       </span>
                     )}
                   </div>

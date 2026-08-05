@@ -62,6 +62,9 @@
 
   font-size: 16px;
   font-weight: 700;
+
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 .logo-text h3 {

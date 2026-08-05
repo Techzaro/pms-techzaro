@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import DonutChart from "../components/DonutChart";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import "../components/Charts.css";
 import "../pages/ExportReport.css";
@@ -55,13 +55,14 @@ function getPriStyle(p) {
 }
 
 function TeamExportReport({ isOpen, onClose, team }) {
+  const initialValues = useMemo(() => ({ dateRange: "all", customStart: "", customEnd: "" }), []);
   const [dateRange, setDateRange] = useState("all");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
+  const currentValues = useMemo(() => ({ dateRange, customStart, customEnd }), [dateRange, customStart, customEnd]);
+  const { isDirty: configIsDirty, handleClose: handleConfigClose, ConfirmDialog: ConfigConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
   const [generating, setGenerating] = useState(false);
   const [showReview, setShowReview] = useState(false);
-
-  const { isDirty: configIsDirty, setIsDirty: setConfigIsDirty, handleClose: handleConfigClose, ConfirmDialog: ConfigConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(isOpen && !showReview, handleConfigClose);
 
   if (!isOpen || !team) return null;
@@ -415,16 +416,16 @@ function TeamExportReport({ isOpen, onClose, team }) {
                   { value: "month", label: "This Month" },
                   { value: "custom", label: "Custom Range" },
                 ].map((opt) => (
-                  <button key={opt.value} className={`er-date-btn ${dateRange === opt.value ? "active" : ""}`} onClick={() => { setDateRange(opt.value); setConfigIsDirty(true); }}>
+                  <button key={opt.value} className={`er-date-btn ${dateRange === opt.value ? "active" : ""}`} onClick={() => setDateRange(opt.value)}>
                     {opt.label}
                   </button>
                 ))}
               </div>
               {dateRange === "custom" && (
                 <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-                  <input type="date" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setConfigIsDirty(true); }}
+                  <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
-                  <input type="date" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setConfigIsDirty(true); }}
+                  <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
                 </div>
               )}

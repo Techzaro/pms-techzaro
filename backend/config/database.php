@@ -121,6 +121,37 @@ return [
             // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
 
+        /*
+        |--------------------------------------------------------------------------
+        | Master (Central) Database Connection
+        |--------------------------------------------------------------------------
+        |
+        | This connection is used exclusively for the SaaS master database
+        | that stores organizations, plans, modules, and subscriptions.
+        | It is NEVER used for tenant data.
+        |
+        */
+
+        'mysql_master' => [
+            'driver' => 'mysql',
+            'url' => env('MASTER_DB_URL'),
+            'host' => env('MASTER_DB_HOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('MASTER_DB_PORT', env('DB_PORT', '3306')),
+            'database' => env('MASTER_DB_DATABASE', 'saas_master'),
+            'username' => env('MASTER_DB_USERNAME', env('DB_USERNAME', 'root')),
+            'password' => env('MASTER_DB_PASSWORD', env('DB_PASSWORD', '')),
+            'unix_socket' => env('MASTER_DB_SOCKET', env('DB_SOCKET', '')),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
     ],
 
     /*

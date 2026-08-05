@@ -134,7 +134,8 @@ try {
             echo '<h2>🔒 Preview Mode</h2>';
             echo '<p class="warning">Abhi sirf preview hai - kuch run nahi hoga.</p>';
             echo '<p>Run karne ke liye ye URL open karein:</p>';
-            echo '<pre>https://pmsv2.api.techxaro.com/run-migrations.php?run=1</pre>';
+            $currentHost = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
+            echo '<pre>' . htmlspecialchars($currentHost . '/run-migrations.php?run=1') . '</pre>';
             echo '<br>';
             echo '<a href="?run=1" class="btn btn-danger">🚀 RUN MIGRATIONS NOW</a>';
             echo '</div>';
@@ -243,7 +244,7 @@ try {
         <h2>📝 Instructions</h2>
         <ol>
             <li>Ye file cPanel File Manager mein upload karein: <code>backend/public/run-migrations.php</code></li>
-            <li>Browser mein open karein: <code>https://pmsv2.api.techxaro.com/run-migrations.php</code></li>
+            <li>Browser mein open karein: <code>&lt;?php echo htmlspecialchars((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . '/run-migrations.php'); ?&gt;</code></li>
             <li>Pending migrations dekhein</li>
             <li>"RUN MIGRATIONS NOW" button click karein</li>
             <li><strong>TURANT DELETE karein ye file!</strong></li>

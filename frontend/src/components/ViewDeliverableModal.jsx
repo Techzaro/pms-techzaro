@@ -5,13 +5,13 @@
  * allows resubmission when the subtask is in reopened status.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { FileText, Download, ExternalLink } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import { formatDateTime } from "../utils/formatDateTime";
 import { notify, showSuccessMessage } from "../utils/notify";
 import SubmitDeliverableModal from "./SubmitDeliverableModal";
@@ -48,8 +48,11 @@ function formatFileSize(bytes) {
  * @param {Function} onSubmitSuccess - Callback after successful resubmission.
  */
 function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
-  useEscapeKey(isOpen, handleClose);
+  const initialValues = useMemo(() => ({
+    comment: '',
+    files: [],
+    links: [],
+  }), []);
 
   const [submission, setSubmission] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -60,9 +63,19 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
   const [imagePreview, setImagePreview] = useState(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
 
+  const currentValues = useMemo(() => ({
+    comment,
+    files,
+    links,
+  }), [comment, files, links]);
+
+  const { isDirty, handleClose, markSaved, resetBaseline, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
+  useEscapeKey(isOpen, handleClose);
+
   useEffect(() => {
     if (!isOpen || !subtask) return;
     document.body.style.overflow = "hidden";
+    resetBaseline(initialValues);
 
     const token = authToken();
     fetch(`${API_URL}/deliverables/${subtask.id}/latest-submission`, {
@@ -113,6 +126,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
       if (res.ok) {
         showSuccessMessage("Subtask", "resubmitted");
         if (onSubmitSuccess) onSubmitSuccess(data.deliverable);
+        markSaved();
         onClose();
       } else {
         notify.error(data.message || "Failed to resubmit subtask.");
@@ -305,7 +319,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                       className="vd-textarea"
                       placeholder="Describe your revised submission..."
                       value={comment}
-                      onChange={(e) => { setIsDirty(true); setComment(e.target.value); }}
+                      onChange={(e) => { setComment(e.target.value); }}
                       rows={3}
                     />
                   </div>
@@ -315,7 +329,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                       className="vd-dropzone"
                       onClick={() => document.getElementById(`vd-file-${subtask.id}`)?.click()}
                       onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) { setIsDirty(true); setFiles(Array.from(e.dataTransfer.files)); } }}
+                      onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) { setFiles(Array.from(e.dataTransfer.files)); } }}
                     >
                       <p className="vd-dropzone-text">Drag & drop files or <span className="vd-browse">browse</span></p>
                     </div>
@@ -324,7 +338,7 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                       multiple
                       id={`vd-file-${subtask.id}`}
                       style={{ display: "none" }}
-                      onChange={(e) => { setIsDirty(true); setFiles(Array.from(e.target.files || [])); }}
+                      onChange={(e) => { setFiles(Array.from(e.target.files || [])); }}
                     />
                     <div className="vd-field">
                       <label className="vd-label">Links</label>
@@ -335,10 +349,10 @@ function ViewDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
                             style={{ flex: 1, padding: "8px 10px", border: "1px solid #E5E7EB", borderRadius: "8px", fontSize: "13px" }}
                             placeholder="https://example.com"
                             value={link}
-                            onChange={(e) => { setIsDirty(true); setLinks(links.map((l, j) => (j === i ? e.target.value : l))); }}
+                            onChange={(e) => { setLinks(links.map((l, j) => (j === i ? e.target.value : l))); }}
                           />
                           {i === links.length - 1 && (
-                            <button type="button" style={{ padding: "4px 10px", background: "var(--color-success-bg)", border: "1px solid var(--color-success)", borderRadius: "6px", color: "var(--color-success)", cursor: "pointer" }} onClick={() => { setIsDirty(true); setLinks([...links, ""]); }}>+</button>
+                            <button type="button" style={{ padding: "4px 10px", background: "var(--color-success-bg)", border: "1px solid var(--color-success)", borderRadius: "6px", color: "var(--color-success)", cursor: "pointer" }} onClick={() => { setLinks([...links, ""]); }}>+</button>
                           )}
                         </div>
                       ))}

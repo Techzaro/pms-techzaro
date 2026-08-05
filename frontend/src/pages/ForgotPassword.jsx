@@ -1,17 +1,52 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import API_URL from "../config/api";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "../components/LoadingButton";
 import "./ForgotPassword.css";
 
 function ForgotPassword() {
+  const [searchParams] = useSearchParams();
+  const [emailPolicy, setEmailPolicy] = useState(null);
+  const [orgName, setOrgName] = useState("");
+  const [policyLoading, setPolicyLoading] = useState(true);
   const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [fieldError, setFieldError] = useState("");
   const [isLocked, setIsLocked] = useState(false);
   const { submitting, run } = useSubmit();
+
+  useEffect(() => {
+    const detectAndFetchPolicy = async () => {
+      let orgSlug = searchParams.get("org");
+
+      if (!orgSlug) {
+        const hostname = window.location.hostname;
+        const parts = hostname.split(".");
+        if (parts.length > 2) {
+          orgSlug = parts[0];
+        }
+      }
+
+      if (orgSlug) {
+        try {
+          const res = await fetch(`${API_URL}/email-policy/${orgSlug}`);
+          const data = await res.json();
+          if (data.success) {
+            setEmailPolicy(data.data.email_policy);
+            setOrgName(data.data.organization_name);
+          }
+        } catch {
+          setEmailPolicy(null);
+        }
+      } else {
+        setEmailPolicy("standard");
+      }
+      setPolicyLoading(false);
+    };
+
+    detectAndFetchPolicy();
+  }, [searchParams]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -66,21 +101,35 @@ function ForgotPassword() {
     });
   };
 
+  if (policyLoading) {
+    return (
+      <div className="forgot-page">
+        <div className="forgot-left">
+          <div className="forgot-left-overlay">
+            <img src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png" alt="PMS Logo" className="forgot-left-logo" />
+            <h1>TECHXARO PMS</h1>
+            <p>Manage Projects, Teams & Tasks Professionally</p>
+          </div>
+        </div>
+        <div className="forgot-right">
+          <div className="forgot-box" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 200 }}>
+            <p style={{ color: "#6b7280" }}>Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (sent) {
     return (
       <div className="forgot-page">
         <div className="forgot-left">
           <div className="forgot-left-overlay">
-            <img
-              src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png"
-              alt="PMS Logo"
-              className="forgot-left-logo"
-            />
+            <img src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png" alt="PMS Logo" className="forgot-left-logo" />
             <h1>TECHXARO PMS</h1>
             <p>Manage Projects, Teams & Tasks Professionally</p>
           </div>
         </div>
-
         <div className="forgot-right">
           <div className="forgot-box">
             <div className="forgot-success-icon">
@@ -115,15 +164,13 @@ function ForgotPassword() {
     );
   }
 
+  const isCompanyRequired = emailPolicy === "company_required";
+
   return (
     <div className="forgot-page">
       <div className="forgot-left">
         <div className="forgot-left-overlay">
-          <img
-            src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png"
-            alt="PMS Logo"
-            className="forgot-left-logo"
-          />
+          <img src="https://cdn-icons-png.flaticon.com/512/5968/5968705.png" alt="PMS Logo" className="forgot-left-logo" />
           <h1>TECHXARO PMS</h1>
           <p>Manage Projects, Teams & Tasks Professionally</p>
         </div>
@@ -143,7 +190,10 @@ function ForgotPassword() {
 
           <h2>Forgot Password?</h2>
           <p className="forgot-subtitle">
-            No worries! Enter your email address and we will send you a link to reset your password.
+            {isCompanyRequired
+              ? "Enter your company email address and we will send you a link to reset your password."
+              : "No worries! Enter your email address and we will send you a link to reset your password."
+            }
           </p>
 
           {isLocked && (
@@ -175,32 +225,63 @@ function ForgotPassword() {
           {fieldError && !isLocked && <div className="forgot-error-box">{fieldError}</div>}
 
           <form onSubmit={handleSubmit}>
-            <label className="forgot-label">Professional Email Address</label>
-            <div className="forgot-input-wrapper">
-              <svg className="forgot-input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="4" width="20" height="16" rx="2"/>
-                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-              </svg>
-              <input
-                type="email"
-                placeholder="Enter your professional email address"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setFieldError(""); }}
-                className={fieldError ? "field-error" : ""}
-              />
-            </div>
-
-            <div className="forgot-info-box">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="12" y1="16" x2="12" y2="12"/>
-                <line x1="12" y1="8" x2="12.01" y2="8"/>
-              </svg>
-              <div>
-                <strong>Use your professional email</strong>
-                <span>Enter the same professional email address you use to access your PMS account.</span>
-              </div>
-            </div>
+            {isCompanyRequired ? (
+              <>
+                <label className="forgot-label">Company Email Address</label>
+                <div className="forgot-input-wrapper">
+                  <svg className="forgot-input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="4" width="20" height="16" rx="2"/>
+                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                  </svg>
+                  <input
+                    type="email"
+                    placeholder="Enter your company email address"
+                    value={email}
+                    onChange={(e) => { setEmail(e.target.value); setFieldError(""); }}
+                    className={fieldError ? "field-error" : ""}
+                  />
+                </div>
+                <div className="forgot-info-box">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="16" x2="12" y2="12"/>
+                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                  </svg>
+                  <div>
+                    <strong>Use your company email</strong>
+                    <span>Enter the professional email address you use to access your PMS account.</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <label className="forgot-label">Personal Email Address</label>
+                <div className="forgot-input-wrapper">
+                  <svg className="forgot-input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                  <input
+                    type="email"
+                    placeholder="Enter your personal email address"
+                    value={email}
+                    onChange={(e) => { setEmail(e.target.value); setFieldError(""); }}
+                    className={fieldError ? "field-error" : ""}
+                  />
+                </div>
+                <div className="forgot-info-box">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="16" x2="12" y2="12"/>
+                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                  </svg>
+                  <div>
+                    <strong>Use your personal email</strong>
+                    <span>Enter the personal email address you use to log in to your PMS account.</span>
+                  </div>
+                </div>
+              </>
+            )}
 
             <LoadingButton type="submit" className="forgot-submit-btn" loading={submitting}>
               {submitting ? (

@@ -6,6 +6,8 @@
 @layer theme, base, components, utilities;
 @config "../tailwind.config.js";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --bg-page: #f5f7fb;
   --bg-card: #ffffff;

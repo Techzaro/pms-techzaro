@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Mail\PasswordResetMail;
 use App\Models\User;
+use App\Models\Master\Organization;
 use Carbon\Carbon;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
@@ -15,6 +16,36 @@ use Illuminate\Validation\ValidationException;
 
 class PasswordResetController extends Controller
 {
+    /**
+     * Get the email policy for an organization by slug.
+     * Public endpoint used by the forgot password page to determine UI.
+     */
+    public function getEmailPolicy(string $slug): JsonResponse
+    {
+        try {
+            $org = Organization::where('slug', $slug)->first();
+            if (!$org) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Organization not found.',
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'email_policy' => $org->email_policy ?? 'standard',
+                    'organization_name' => $org->name,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to fetch organization policy.',
+            ], 500);
+        }
+    }
+
     /**
      * Handle a password reset request.
      *
@@ -37,12 +68,10 @@ class PasswordResetController extends Controller
 
             \Log::info('Password reset requested', ['email' => $inputEmail]);
 
-            $user = User::where('professional_email', $inputEmail)
-                ->orWhere('email', $inputEmail)
-                ->orWhere('personal_email', $inputEmail)
-                ->first();
+            // Search across all tenant databases
+            $result = $this->findUserAcrossTenants($inputEmail);
 
-            if (! $user) {
+            if (!$result) {
                 \Log::info('Password reset: user not found', ['email' => $inputEmail]);
 
                 return response()->json([
@@ -51,6 +80,8 @@ class PasswordResetController extends Controller
                     'message' => 'This email is not registered in our system or has been removed. Please contact our support team for assistance.',
                 ], 404);
             }
+
+            $user = $result['user'];
 
             // Check if user account is inactive/deactivated
             if (isset($user->active) && ! $user->active) {
@@ -74,7 +105,7 @@ class PasswordResetController extends Controller
                 ], 403);
             }
 
-            if (empty($user->professional_email) && empty($user->personal_email) && empty($user->email)) {
+            if (empty($user->professional_email) && empty($user->email) && empty($user->personal_email)) {
                 \Log::error('Password reset: user has no email address', ['user_id' => $user->id]);
 
                 return response()->json([
@@ -83,7 +114,8 @@ class PasswordResetController extends Controller
                 ], 422);
             }
 
-            $sendTo = $user->professional_email ?: $user->personal_email ?: $user->email;
+            // Determine the best email to send to
+            $sendTo = $user->professional_email ?? $user->email ?? $user->personal_email;
 
             $token = Str::random(64);
 
@@ -140,6 +172,54 @@ class PasswordResetController extends Controller
     }
 
     /**
+     * Search for a user across all tenant databases.
+     */
+    private function findUserAcrossTenants(string $email): ?array
+    {
+        $orgs = Organization::where('status', '!=', 'deleted')->get();
+
+        foreach ($orgs as $org) {
+            try {
+                $dbName = $org->database_name;
+                $escaped = str_replace('`', '``', $dbName);
+                $pdo = \DB::connection('mysql_master')->getPdo();
+                $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+                $stmt = $pdo->prepare("SELECT id, name, email, professional_email, personal_email, phone_number, role, active, password, password_reset_locked 
+                     FROM `{$escaped}`.`users` 
+                     WHERE (email = ? OR professional_email = ? OR personal_email = ?) 
+                     AND active = 1 
+                     LIMIT 1");
+                $stmt->execute([$email, $email, $email]);
+                $result = $stmt->fetchAll(\PDO::FETCH_OBJ);
+
+                if (!empty($result)) {
+                    $userData = $result[0];
+                    // Create a simple object with the user data
+                    $user = new \stdClass();
+                    $user->id = $userData->id;
+                    $user->name = $userData->name;
+                    $user->email = $userData->email;
+                    $user->professional_email = $userData->professional_email;
+                    $user->personal_email = $userData->personal_email;
+                    $user->phone_number = $userData->phone_number;
+                    $user->role = $userData->role;
+                    $user->active = $userData->active;
+                    $user->password = $userData->password;
+                    $user->password_reset_locked = $userData->password_reset_locked;
+                    $user->tenant_slug = $org->slug;
+
+                    return ['user' => $user, 'organization' => $org];
+                }
+            } catch (\Throwable $e) {
+                \Log::warning("Failed to search tenant DB {$org->database_name}: " . $e->getMessage());
+                continue;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Reset the user's password using the provided token.
      *
      * Validates the token against the stored hash, enforces strong
@@ -162,7 +242,7 @@ class PasswordResetController extends Controller
             $token = $request->input('token');
             $password = $request->input('password');
 
-            // Look up by professional_email (login email)
+            // Look up by login_email (policy-aware primary email)
             $record = \DB::table('password_reset_tokens')
                 ->where('email', $email)
                 ->first();
@@ -191,17 +271,17 @@ class PasswordResetController extends Controller
                 ], 422);
             }
 
-            $user = User::where('professional_email', $email)
-                ->orWhere('email', $email)
-                ->orWhere('personal_email', $email)
-                ->first();
+            $result = $this->findUserAcrossTenants($email);
 
-            if (! $user) {
+            if (!$result) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Invalid or expired reset token. Please request a new one.',
                 ], 422);
             }
+
+            $user = $result['user'];
+            $organization = $result['organization'];
 
             // Check if password recovery is locked by admin
             if ($user->password_reset_locked) {
@@ -212,15 +292,14 @@ class PasswordResetController extends Controller
                 ], 403);
             }
 
-            $user->password = bcrypt($password);
-            $user->must_change_password = false;
-            $user->password_changed_at = now();
-            $user->password_version = ($user->password_version ?? 1) + 1;
-            $user->save();
-
-            event(new PasswordReset($user));
-
-            $user->tokens()->delete();
+            // Update password in the tenant database
+            $dbName = $organization->database_name;
+            $hashedPassword = bcrypt($password);
+            $escaped = str_replace('`', '``', $dbName);
+            $pdo = \DB::connection('mysql_master')->getPdo();
+            $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+            $stmt = $pdo->prepare("UPDATE `{$escaped}`.`users` SET password = ?, must_change_password = 0, password_changed_at = NOW(), updated_at = NOW() WHERE (email = ? OR professional_email = ? OR personal_email = ?)");
+            $stmt->execute([$hashedPassword, $email, $email, $email]);
 
             \DB::table('password_reset_tokens')->where('email', $email)->delete();
 

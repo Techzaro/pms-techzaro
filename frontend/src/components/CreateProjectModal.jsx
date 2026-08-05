@@ -23,10 +23,12 @@ import { formatDateTime, toUTCIso, getNowDatetimeLocal } from "../utils/formatDa
 import { publish } from "../utils/eventBus";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
+import { usePlanLimits } from "../hooks/useOrgSubscription";
 import RichTextEditor from "./RichTextEditor";
 import "./layout/CreateProjectModal.css";
 
 const CreateProjectModal = ({ onClose, restoreDraftId = null }) => {
+  const { canCreateProject, getLimitMessage } = usePlanLimits();
   const draftSaveRef = useRef(null);
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useDraftGuard(onClose, {
     draftSaveHandler: () => draftSaveRef.current?.(),
@@ -527,7 +529,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null }) => {
    * uploads attachments, and publishes events on success.
    */
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    e?.preventDefault();
 
     if (!validateForm()) return;
 
@@ -612,7 +614,13 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null }) => {
             <button className="cp-save-draft-btn" onClick={handleSaveDraft} type="button" disabled={!form.title.trim()}>
               Save Draft
             </button>
-            <LoadingButton className="cp-create-btn" onClick={handleSubmit} loading={submitting}>
+            <LoadingButton className="cp-create-btn" onClick={() => {
+              if (!canCreateProject) {
+                notify.warning(getLimitMessage('project'));
+                return;
+              }
+              handleSubmit();
+            }} loading={submitting} disabled={!canCreateProject} style={!canCreateProject ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
               + Create Project
             </LoadingButton>
             <button className="cp-close-btn" onClick={handleClose}>✕</button>

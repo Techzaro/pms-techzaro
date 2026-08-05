@@ -13,7 +13,8 @@
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import API_URL from "../../config/api";
-import { authToken, getCurrentRole, getUser, setUser, rolePath, getUrlRole } from "../../utils/auth";
+import { authToken, getCurrentRole, getUser, setUser, rolePath, getUrlRole, getTenantSlug } from "../../utils/auth";
+import { useOrgBranding } from "../../hooks/useOrgBranding";
 
 import {
   MdDashboard,
@@ -30,6 +31,7 @@ import {
   MdEditNote,
   MdDifference,
   MdMenuBook,
+  MdOpenInNew,
 } from "react-icons/md";
 
 import "./Sidebar.css";
@@ -38,6 +40,7 @@ import "./Sidebar.css";
  * Sidebar navigation component.
  */
 function Sidebar() {
+  const { data: branding } = useOrgBranding();
 
   // ── Viewport mode state ──
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -193,6 +196,8 @@ function Sidebar() {
       isActive("settings/notifications");
 
     if (isSettingsRoute) {
+    // Settings dropdown
+    if (isActive("audit-logs") || isActive("branding") || isActive("subscription")) {
       setSettingsOpen(true);
     }
   }, [location.pathname, location.state]);
@@ -237,6 +242,26 @@ function Sidebar() {
       >
 
 
+        {/* Mobile-only header with close button and logo */}
+        <div className="sidebar-mobile-header">
+          <button className="sidebar-close-btn" onClick={toggleMobile} aria-label="Close sidebar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M18 6L6 18" />
+              <path d="M6 6L18 18" />
+            </svg>
+          </button>
+          <div className="sidebar-logo-box">
+            {branding?.logo_url ? (
+              <img src={branding.logo_url} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "10px" }} />
+            ) : (
+              <b>{(branding?.subtitle || 'TX').substring(0, 2).toUpperCase()}</b>
+            )}
+          </div>
+          <div className="sidebar-logo-text">
+            <h3>{branding?.subtitle || 'PMS Portal'}</h3>
+            <span>{branding?.org_name || 'Organization'}</span>
+          </div>
+        </div>
 
         <div>
 
@@ -530,6 +555,48 @@ function Sidebar() {
             {settingsOpen && (
               <div className="sidebar-sub-links">
                 {(user.role === "admin" || user.role === "manager") && (
+          {/* Super Admin link – only for the platform owner tenant */}
+          {getTenantSlug() === import.meta.env.VITE_SUPER_ADMIN_TENANT && user.role === "admin" && (
+            <a
+              href="/super-admin"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="sidebar-link"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MdOpenInNew />
+              <span>Organization</span>
+            </a>
+          )}
+
+          {/* Settings dropdown – admin only */}
+          {(user.role === "admin" || user.role === "manager") && (
+            <div className={`sidebar-link ${isActive("audit-logs") || isActive("branding") || isActive("subscription") ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+              <div
+                onClick={() => setSettingsOpen((p) => !p)}
+                style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
+              >
+                <MdSettings fontSize={22} />
+                <span style={{ flex: 1 }}>Settings</span>
+                <MdKeyboardArrowDown
+                  size={18}
+                  style={{
+                    transition: "transform 0.2s",
+                    transform: settingsOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  }}
+                />
+              </div>
+              {settingsOpen && (
+                <div className="sidebar-sub-links">
+                  {getTenantSlug() !== import.meta.env.VITE_SUPER_ADMIN_TENANT && (
+                    <Link
+                      to={rolePath("subscription")}
+                      className={`sidebar-sub-link ${isActive("subscription") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Subscription
+                    </Link>
+                  )}
                   <Link
                     to={rolePath("audit-logs")}
                     className={`sidebar-sub-link ${isActive("audit-logs") ? "active" : ""}`}
@@ -548,6 +615,20 @@ function Sidebar() {
               </div>
             )}
           </div>
+                  {user.role === "admin" && (
+                    <Link
+                      to={rolePath("branding")}
+                      className={`sidebar-sub-link ${isActive("branding") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Branding
+                    </Link>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
 
         </div>
 

@@ -37,6 +37,10 @@ Route::post('/login', [AuthController::class, 'login']);
 // Password reset (no auth required)
 Route::post('/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'forgotPassword']);
 Route::post('/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'resetPassword']);
+Route::get('/email-policy/{slug}', [\App\Http\Controllers\PasswordResetController::class, 'getEmailPolicy']);
+
+// First-time password change (token-based auth, NOT auth:sanctum — avoids multi-tenant connection issues)
+Route::put('/user/first-time-change-password', [AuthController::class, 'firstTimeChangePassword']);
 
 // Public File Download Proxy (No auth required so browser download links work cleanly)
 Route::get('/files/download', function (Illuminate\Http\Request $request) {
@@ -96,9 +100,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Change password (requires old password)
     Route::put('/user/change-password', [AuthController::class, 'changePassword']);
-
-    // First-time password change (no old password required)
-    Route::put('/user/first-time-change-password', [AuthController::class, 'firstTimeChangePassword']);
 
     // Activity view tracking
     Route::post('/activity-views/check', [\App\Http\Controllers\ActivityviewController::class, 'check']);
@@ -407,10 +408,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/self-deliverables', [DeliverableController::class, 'mySelfDeliverables']); // Deliverables I created for myself
     Route::post('/deliverables/reorder', [DeliverableController::class, 'reorder']); // Reorder deliverables
 
+    // Create routes (all authenticated users)
+    Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']); // Create deliverable (project-scoped)
+    Route::post('/deliverables', [DeliverableController::class, 'storeStandalone']); // Create deliverable (no project, task_id required)
+
     // Write routes (admin, manager, team lead only)
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin,manager,team_lead')->group(function () {
-        Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store']); // Create deliverable (project-scoped)
-        Route::post('/deliverables', [DeliverableController::class, 'storeStandalone']); // Create deliverable (no project, task_id required)
         Route::put('/deliverables/{deliverable}', [DeliverableController::class, 'update']); // Update deliverable
         Route::delete('/deliverables/{deliverable}', [DeliverableController::class, 'destroy']); // Delete deliverable
         Route::post('/deliverables/{deliverable}/approve', [DeliverableController::class, 'approve']); // Approve deliverable
@@ -514,6 +517,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/audit-logs/users', [AuditLogController::class, 'users']);
         Route::post('/audit-logs/export', [AuditLogController::class, 'export']);
         Route::get('/audit-logs/{auditLog}', [AuditLogController::class, 'show']);
+    });
+
+    /*
+    | Organization Settings Routes
+    | Admin only: manage organization-level settings like email policy.
+    */
+    Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin')->group(function () {
+        Route::get('/organization-settings/email-policy', [\App\Http\Controllers\OrganizationSettingsController::class, 'getEmailPolicy']);
+        Route::put('/organization-settings/email-policy', [\App\Http\Controllers\OrganizationSettingsController::class, 'updateEmailPolicy']);
+        Route::get('/organization-settings/branding', [\App\Http\Controllers\OrganizationSettingsController::class, 'getBranding']);
+        Route::put('/organization-settings/branding', [\App\Http\Controllers\OrganizationSettingsController::class, 'updateBranding']);
+        Route::get('/organization-settings/subscription', [\App\Http\Controllers\OrganizationSettingsController::class, 'getSubscription']);
+        Route::get('/organization-settings/subscription-history', [\App\Http\Controllers\OrganizationSettingsController::class, 'getSubscriptionHistory']);
     });
 
     /*

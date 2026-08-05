@@ -33,24 +33,44 @@ class SendUserCreatedEmails
     public function handle(): void
     {
         if ($this->personalEmail) {
-            try {
-                Mail::to($this->personalEmail)->send(
-                    new UserCreated($this->user, $this->plainPassword, $this->profEmail, $this->profPassword, $this->loginUrl, $this->emailAttachments, false, '', $this->adderEmail, $this->adderName)
-                );
-                Log::info("Welcome email sent to personal email {$this->personalEmail} for user ID {$this->user->id}");
-            } catch (\Throwable $e) {
-                Log::error("Failed to send welcome email to personal email {$this->personalEmail}: " . $e->getMessage());
+            $tries = 0;
+            $maxTries = 3;
+            $sent = false;
+            while (!$sent && $tries < $maxTries) {
+                $tries++;
+                try {
+                    Mail::to($this->personalEmail)->send(
+                        new UserCreated($this->user, $this->plainPassword, $this->profEmail, $this->profPassword, $this->loginUrl, $this->emailAttachments, false, '', $this->adderEmail, $this->adderName)
+                    );
+                    $sent = true;
+                    Log::info("Welcome email sent to personal email {$this->personalEmail} for user ID {$this->user->id}");
+                } catch (\Throwable $e) {
+                    Log::error("Welcome email attempt {$tries}/{$maxTries} failed for {$this->personalEmail}: " . $e->getMessage());
+                    if (!$sent && $tries < $maxTries) {
+                        sleep(2);
+                    }
+                }
             }
         }
 
         if ($this->adderEmail) {
-            try {
-                Mail::to($this->adderEmail)->send(
-                    new UserCreated($this->user, $this->plainPassword, $this->profEmail, $this->profPassword, $this->loginUrl, $this->emailAttachments, true, $this->adderName, $this->adderEmail, $this->adderName)
-                );
-                Log::info("Confirmation email sent to {$this->adderEmail} for user ID {$this->user->id}");
-            } catch (\Throwable $e) {
-                Log::error("Failed to send confirmation email to {$this->adderEmail}: " . $e->getMessage());
+            $tries = 0;
+            $maxTries = 3;
+            $sent = false;
+            while (!$sent && $tries < $maxTries) {
+                $tries++;
+                try {
+                    Mail::to($this->adderEmail)->send(
+                        new UserCreated($this->user, $this->plainPassword, $this->profEmail, $this->profPassword, $this->loginUrl, $this->emailAttachments, true, $this->adderName, $this->adderEmail, $this->adderName)
+                    );
+                    $sent = true;
+                    Log::info("Confirmation email sent to {$this->adderEmail} for user ID {$this->user->id}");
+                } catch (\Throwable $e) {
+                    Log::error("Confirmation email attempt {$tries}/{$maxTries} failed for {$this->adderEmail}: " . $e->getMessage());
+                    if (!$sent && $tries < $maxTries) {
+                        sleep(2);
+                    }
+                }
             }
         }
     }

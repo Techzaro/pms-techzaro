@@ -29,6 +29,7 @@ import API_URL from "../config/api";
 import { authToken, getCurrentRole, rolePath, getUser } from "../utils/auth";
 import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
+import { usePlanLimits } from "../hooks/useOrgSubscription";
 import { showSuccessMessage } from "../utils/notify";
 import "./Projects.css";
 import "../components/ActionPopover.css";
@@ -81,6 +82,7 @@ function Projects() {
   const navigate = useNavigate();
   const location = useLocation();
   const notify = useNotification();
+  const { canCreateProject, getLimitMessage } = usePlanLimits();
   const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -425,7 +427,14 @@ function Projects() {
             {isAdminOrManager && (
               <button
                 className="create-btn"
-                onClick={() => setShowModal(true)}
+                onClick={() => {
+                  if (!canCreateProject) {
+                    notify.warning(getLimitMessage('project'));
+                    return;
+                  }
+                  setShowModal(true);
+                }}
+                style={!canCreateProject ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
               >
                 + Create Project
               </button>

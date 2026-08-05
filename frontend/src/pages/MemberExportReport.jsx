@@ -12,7 +12,7 @@
  * summary and a manager-remarks section.
  */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -20,7 +20,7 @@ import DonutChart from "../components/DonutChart";
 import "../components/Charts.css";
 import "../pages/ExportReport.css";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 
 /** Mapping of status strings to RGB colour triples used when drawing PDF cells. */
 const STATUS_COLORS_PDF = {
@@ -88,12 +88,14 @@ function getPriStyle(p) {
  * @param {boolean}  isOwnPage  - True when the logged-in user is viewing their own report.
  */
 function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
-  useEscapeKey(true, handleClose);
-
+  const initialValues = useMemo(() => ({ dateRange: "all", customStart: "", customEnd: "" }), []);
   const [dateRange, setDateRange] = useState("all");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
+  const currentValues = useMemo(() => ({ dateRange, customStart, customEnd }), [dateRange, customStart, customEnd]);
+  const { isDirty, handleClose, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
+  useEscapeKey(true, handleClose);
+
   const [generating, setGenerating] = useState(false);
   const [showReview, setShowReview] = useState(false);
 
@@ -507,16 +509,16 @@ function MemberExportReport({ isOpen, onClose, userData, isOwnPage = false }) {
                   { value: "month", label: "This Month" },
                   { value: "custom", label: "Custom Range" },
                 ].map((opt) => (
-                  <button key={opt.value} className={`er-date-btn ${dateRange === opt.value ? "active" : ""}`} onClick={() => { setDateRange(opt.value); setIsDirty(true); }}>
+                  <button key={opt.value} className={`er-date-btn ${dateRange === opt.value ? "active" : ""}`} onClick={() => setDateRange(opt.value)}>
                     {opt.label}
                   </button>
                 ))}
               </div>
               {dateRange === "custom" && (
                 <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-                  <input type="date" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setIsDirty(true); }}
+                  <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
-                  <input type="date" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setIsDirty(true); }}
+                  <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)}
                     style={{ flex: 1, padding: "10px 14px", border: "1px solid var(--border-color)", borderRadius: 10, fontSize: 13, color: "var(--text-dark)", outline: "none" }} />
                 </div>
               )}

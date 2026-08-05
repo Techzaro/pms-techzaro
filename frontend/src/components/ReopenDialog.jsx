@@ -5,12 +5,12 @@
  * Optionally includes instructions, new deadline, and file attachment.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import { notify } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "./LoadingButton";
@@ -29,8 +29,13 @@ const REOPEN_REASONS = [
 ];
 
 function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
-  useEscapeKey(isOpen, handleClose);
+  const initialValues = useMemo(() => ({
+    reopenReason: '',
+    reopenReasonDetail: '',
+    instructions: '',
+    newDeadline: subtask?.due_date ? toDatetimeLocal(subtask.due_date) : '',
+    file: null,
+  }), [subtask?.due_date]);
 
   const [reopenReason, setReopenReason] = useState("");
   const [reopenReasonDetail, setReopenReasonDetail] = useState("");
@@ -38,12 +43,26 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
   const [newDeadline, setNewDeadline] = useState("");
   const [link, setLink] = useState("");
   const [files, setFiles] = useState([]);
+  const [file, setFile] = useState(null);
+
+  const currentValues = useMemo(() => ({
+    reopenReason,
+    reopenReasonDetail,
+    instructions,
+    newDeadline,
+    file,
+  }), [reopenReason, reopenReasonDetail, instructions, newDeadline, file]);
+
+  const { isDirty, handleClose, markSaved, resetBaseline, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
+  useEscapeKey(isOpen, handleClose);
+
   const { submitting, run } = useSubmit();
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
+      resetBaseline(initialValues);
       setReopenReason("");
       setReopenReasonDetail("");
       setInstructions("");
@@ -90,6 +109,7 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
 
         const data = await res.json();
         if (res.ok) {
+          markSaved();
           onReopenSuccess(data.deliverable);
           onClose();
         } else {
@@ -119,7 +139,7 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
             <select
               className="rd-input"
               value={reopenReason}
-              onChange={(e) => { setReopenReason(e.target.value); setIsDirty(true); }}
+              onChange={(e) => { setReopenReason(e.target.value); }}
             >
               <option value="">Select a reason...</option>
               {REOPEN_REASONS.map((r) => (
@@ -137,7 +157,7 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
                 className="rd-textarea"
                 placeholder={reopenReason === "Other" ? "Please describe the reason..." : "Provide more details (optional)..."}
                 value={reopenReasonDetail}
-                onChange={(e) => { setReopenReasonDetail(e.target.value); setIsDirty(true); }}
+                onChange={(e) => { setReopenReasonDetail(e.target.value); }}
                 rows={3}
               />
             </div>
@@ -149,7 +169,7 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
               className="rd-textarea"
               placeholder="Provide specific instructions for resubmission..."
               value={instructions}
-              onChange={(e) => { setInstructions(e.target.value); setIsDirty(true); }}
+              onChange={(e) => { setInstructions(e.target.value); }}
               rows={3}
             />
           </div>
@@ -172,7 +192,7 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
               className="rd-input"
               value={newDeadline}
               min={new Date().toISOString().slice(0, 16)}
-              onChange={(e) => { setNewDeadline(e.target.value); setIsDirty(true); }}
+              onChange={(e) => { setNewDeadline(e.target.value); }}
             />
           </div>
 
@@ -204,6 +224,7 @@ function ReopenDialog({ isOpen, onClose, subtask, onReopenSuccess }) {
               multiple
               style={{ display: "none" }}
               onChange={(e) => { if (e.target.files.length) { setFiles((prev) => [...prev, ...Array.from(e.target.files)]); setIsDirty(true); } }}
+              onChange={(e) => { if (e.target.files.length) { setFile(e.target.files[0]); } }}
             />
           </div>
         </div>

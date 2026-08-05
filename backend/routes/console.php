@@ -29,6 +29,9 @@ Schedule::command('deliverables:generate-daily')->dailyAt('00:01');
 // Cleanup and archive old drafts daily at 3:00 AM
 Schedule::job(new \App\Jobs\CleanupDraftsJob)->dailyAt('03:00');
 
+// Example: Tenant-aware scheduled task (runs for every active tenant)
+// Schedule::command('tenant:run-per-tenant daily-report')->dailyAt('06:00');
+
 /*
 | Artisan Commands
 | Custom Artisan commands for the application.

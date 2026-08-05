@@ -158,8 +158,8 @@ class ResignationWorkflowService
             );
 
             try {
-                $sendTo = $user->professional_email ?: $user->personal_email ?: $user->email;
-                $senderEmail = $admin->professional_email ?: $admin->personal_email ?: $admin->email;
+                $sendTo = $user->notification_email;
+                $senderEmail = $admin->notification_email;
                 Mail::to($sendTo)->queue(
                     new \App\Mail\UserResigned($user, $admin->name, $senderEmail, $admin->name)
                 );
@@ -168,7 +168,7 @@ class ResignationWorkflowService
             }
 
             $this->notificationService->confirmAction($admin, 'Resigned', 'user', $user->name, [
-                'User Email' => $user->professional_email ?? $user->email,
+                'User Email' => $user->notification_email,
                 'Role' => ucfirst($user->role),
                 'Drafts Created' => count($draftsCreated),
                 'Notifications Sent' => $notificationsSent,

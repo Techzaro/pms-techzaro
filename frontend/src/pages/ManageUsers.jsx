@@ -15,7 +15,7 @@
  *
  * Access restricted to admin and manager roles.
  */
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { MdVisibility, MdEdit } from "react-icons/md";
 import { IoSearchOutline } from "react-icons/io5";
@@ -30,7 +30,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import ResignationConfirmModal from "../components/ResignationConfirmModal";
 import API_URL from "../config/api";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import useDraftGuard from "../hooks/useDraftGuard";
 import useAutoSave from "../hooks/useAutoSave";
 import AutoSaveIndicator from "../components/AutoSaveIndicator";
@@ -38,6 +38,7 @@ import { authToken, getCurrentRole, getUser, setUser, rolePath, normalizeRole } 
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import { publish } from "../utils/eventBus";
 import { useNotification } from "../context/NotificationContext";
+import { usePlanLimits } from "../hooks/useOrgSubscription";
 import { showSuccessMessage } from "../utils/notify";
 import Pagination from "../components/Pagination";
 import { useSubmit } from "../hooks/useSubmit";
@@ -69,6 +70,7 @@ const stripDashes = (value) => value.replace(/-/g, "");
  */
 function ManageUsers() {
   const notify = useNotification();
+  const { canCreateUser, getLimitMessage } = usePlanLimits();
   const [users, setUsers] = useState([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -83,6 +85,7 @@ function ManageUsers() {
   const deptOptionsRef = useRef(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState({ type: "", value: "" });
+  const [emailPolicy, setEmailPolicy] = useState("standard");
   const [avatarRemoveConfirmOpen, setAvatarRemoveConfirmOpen] = useState(false);
   const [newUser, setNewUser] = useState({
     fullName: "",
@@ -299,6 +302,18 @@ function ManageUsers() {
       fetchCurrentUser();
     }
     fetchUsers();
+
+    // Fetch organization email policy
+    fetch(`${API_URL}/organization-settings/email-policy`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.email_policy) {
+          setEmailPolicy(data.email_policy);
+        }
+      })
+      .catch(() => {});
   }, [navigate]);
 
   useAutoRefresh(fetchUsers, { events: ["data:changed"] });
@@ -456,7 +471,10 @@ function ManageUsers() {
       emergencyContactRelation: fullUser.emergency_contact_relation || "",
       emergencyContactPhone: formatPhone(fullUser.emergency_contact_phone || ""),
       email: fullUser.email || "",
-      personalEmail: fullUser.personal_email || "",
+      personalEmail:
+        emailPolicy === "company_required"
+          ? fullUser.personal_email || ""
+          : fullUser.email || "",
       professionalEmail: fullUser.professional_email || "",
       professionalEmailPassword: fullUser.professional_email_password || "",
       department: isCustomDept ? "__custom__" : deptVal,
@@ -580,20 +598,23 @@ function ManageUsers() {
   // ── Guest Management Functions ──
   const openGuestModal = (guest = null) => {
     setGuestErrors({});
-    setGuestIsDirty(false);
     if (guest) {
       setEditingGuest(guest);
-      setNewGuest({
+      const guestValues = {
         name: guest.name || "",
         personal_email: guest.personal_email || guest.email || "",
         phone_number: guest.phone_number || guest.contact_no || "",
         company_name: guest.company_name || "",
         avatar: null,
         _existingAvatar: guest.avatar || null,
-      });
+      };
+      setNewGuest(guestValues);
+      resetGuestBaseline(guestValues);
     } else {
       setEditingGuest(null);
-      setNewGuest({ name: "", personal_email: "", phone_number: "", company_name: "", avatar: null, _existingAvatar: null });
+      const emptyGuest = { name: "", personal_email: "", phone_number: "", company_name: "", avatar: null, _existingAvatar: null };
+      setNewGuest(emptyGuest);
+      resetGuestBaseline(emptyGuest);
     }
     setIsGuestModalOpen(true);
   };
@@ -605,7 +626,8 @@ function ManageUsers() {
     setGuestErrors({});
   };
 
-  const { isDirty: guestIsDirty, setIsDirty: setGuestIsDirty, handleClose: handleGuestClose, ConfirmDialog: GuestConfirmDialog } = useConfirmOnClose(closeGuestModal);
+  const guestInitialValues = useMemo(() => ({ name: "", personal_email: "", phone_number: "", company_name: "", avatar: null, _existingAvatar: null }), []);
+  const { isDirty: guestIsDirty, handleClose: handleGuestClose, markSaved: markGuestSaved, resetBaseline: resetGuestBaseline, ConfirmDialog: GuestConfirmDialog } = useUnsavedChanges(guestInitialValues, newGuest, closeGuestModal);
   useEscapeKey(isGuestModalOpen, handleGuestClose);
 
   const validateGuestForm = () => {
@@ -681,6 +703,7 @@ function ManageUsers() {
         }
       }
       publish("data:changed", { type: "guest", action: isEdit ? "updated" : "created" });
+      markGuestSaved();
       closeGuestModal();
     } catch (err) {
       notify.error(err.message || "An error occurred");
@@ -778,17 +801,27 @@ function ManageUsers() {
     if (newUser.emergencyContactPhone.trim() && !/^0\d{3}-\d{7}$/.test(newUser.emergencyContactPhone.trim())) {
       errors.emergencyContactPhone = "Emergency Phone must be in format 03XX-XXXXXXX.";
     }
-    if (!newUser.personalEmail.trim()) {
-      errors.personalEmail = "Personal Email Address is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.personalEmail.trim())) {
-      errors.personalEmail = "Please enter a valid personal email address.";
-    }
-    if (newUser.professionalEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.professionalEmail.trim())) {
-      errors.professionalEmail = "Please enter a valid professional email address.";
-    }
-    const isExistingProEmail = editingUser && newUser.professionalEmail.trim() === (editingUser.professional_email || "").trim();
-    if (newUser.professionalEmail.trim() && !newUser.professionalEmailPassword.trim() && !isExistingProEmail) {
-      errors.professionalEmailPassword = "Password is required when professional email is provided.";
+    if (emailPolicy === "standard") {
+      // Standard policy: email is the single required email
+      if (!newUser.personalEmail.trim()) {
+        errors.personalEmail = "Email Address is required.";
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.personalEmail.trim())) {
+        errors.personalEmail = "Please enter a valid email address.";
+      }
+    } else {
+      // Company required policy: personal email is required, professional email is optional
+      if (!newUser.personalEmail.trim()) {
+        errors.personalEmail = "Personal Email Address is required.";
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.personalEmail.trim())) {
+        errors.personalEmail = "Please enter a valid personal email address.";
+      }
+      if (newUser.professionalEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.professionalEmail.trim())) {
+        errors.professionalEmail = "Please enter a valid professional email address.";
+      }
+      const isExistingProEmail = editingUser && newUser.professionalEmail.trim() === (editingUser.professional_email || "").trim();
+      if (newUser.professionalEmail.trim() && !newUser.professionalEmailPassword.trim() && !isExistingProEmail) {
+        errors.professionalEmailPassword = "Password is required when professional email is provided.";
+      }
     }
     if (!newUser.department) {
       errors.department = "Department is required.";
@@ -967,7 +1000,7 @@ function ManageUsers() {
             </span>
             <div className="user-details">
               <span className="user-name">{user.name}</span>
-              <span className="user-email">{user.professional_email || "—"}</span>
+              <span className="user-email">{emailPolicy === "company_required" ? user.professional_email || "—" : user.email || "—"}</span>
             </div>
           </div>
         </td>
@@ -1007,7 +1040,7 @@ function ManageUsers() {
     if (user.role === "guest") return false;
     const matchesSearch =
       (user.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (user.professional_email || "").toLowerCase().includes(searchQuery.toLowerCase());
+      (user.professional_email || user.email || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = roleFilter === "" || user.role === roleFilter;
     const matchesStatus =
       statusFilter === "" ||
@@ -1053,7 +1086,7 @@ function ManageUsers() {
             </span>
             <div className="user-details">
               <span className="user-name">{user.name}</span>
-              <span className="user-email">{user.professional_email || "—"}</span>
+              <span className="user-email">{emailPolicy === "company_required" ? user.professional_email || "—" : user.email || "—"}</span>
             </div>
           </div>
         </td>
@@ -1292,7 +1325,17 @@ function ManageUsers() {
 
     const formData = new FormData();
     formData.append("name", newUser.fullName.trim());
-    formData.append("email", (newUser.personalEmail || newUser.email || "").trim());
+    if (emailPolicy === "standard") {
+      formData.append("email", (newUser.personalEmail || "").trim());
+      formData.append("personal_email", "");
+    } else {
+      formData.append("email", (newUser.personalEmail || "").trim());
+      formData.append("personal_email", newUser.personalEmail || "");
+      formData.append("professional_email", newUser.professionalEmail || "");
+      if (!editingUser || newUser.professionalEmailPassword) {
+        formData.append("professional_email_password", newUser.professionalEmailPassword || "");
+      }
+    }
     formData.append("father_name", newUser.fatherName);
     formData.append("id_card_number", newUser.idCardNumber);
     formData.append("present_address", newUser.presentAddress);
@@ -1301,11 +1344,6 @@ function ManageUsers() {
     formData.append("emergency_contact_name", newUser.emergencyContactName);
     formData.append("emergency_contact_relation", newUser.emergencyContactRelation);
     formData.append("emergency_contact_phone", newUser.emergencyContactPhone);
-    formData.append("personal_email", newUser.personalEmail || "");
-    formData.append("professional_email", newUser.professionalEmail || "");
-    if (!editingUser || newUser.professionalEmailPassword) {
-      formData.append("professional_email_password", newUser.professionalEmailPassword || "");
-    }
     formData.append("department", finalDepartment || "");
     formData.append("designation", finalDesignation || "");
     formData.append("hired_for", newUser.hiredFor);
@@ -1465,11 +1503,23 @@ function ManageUsers() {
               </button>
             )}
             {activeTab === "employees" ? (
-              <button className="primary-button add-user-button" onClick={openModal}>
+              <button className="primary-button add-user-button" onClick={() => {
+                if (!canCreateUser) {
+                  notify.warning(getLimitMessage('user'));
+                  return;
+                }
+                openModal();
+              }} style={!canCreateUser ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
                 <CiCirclePlus fontSize={"21px"} /> Add User
               </button>
             ) : (
-              <button className="primary-button add-user-button" onClick={() => openGuestModal()}>
+              <button className="primary-button add-user-button" onClick={() => {
+                if (!canCreateUser) {
+                  notify.warning(getLimitMessage('user'));
+                  return;
+                }
+                openGuestModal();
+              }} style={!canCreateUser ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
                 <CiCirclePlus fontSize={"21px"} /> Add Guest
               </button>
             )}
@@ -1670,7 +1720,13 @@ function ManageUsers() {
                   <button type="button" className="task-save-draft-btn" onClick={handleSaveDraft} disabled={!newUser.fullName.trim() && !newUser.email.trim()}>
                     Save Draft
                   </button>
-                  <LoadingButton type="button" className="primary-button" loading={submitting} onClick={handleSubmit}>
+                  <LoadingButton type="button" className="primary-button" loading={submitting} onClick={() => {
+                    if (!editingUser && !canCreateUser) {
+                      notify.warning(getLimitMessage('user'));
+                      return;
+                    }
+                    handleSubmit();
+                  }} disabled={!canCreateUser && !editingUser} style={!canCreateUser && !editingUser ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
                     {submitting ? (editingUser ? "Updating User..." : "Creating User...") : (editingUser ? "Update User" : "Create User")}
                   </LoadingButton>
                   <button className="user-modal-close" onClick={handleAddClose}>
@@ -1774,27 +1830,33 @@ function ManageUsers() {
                 <h3 className="form-section-title">Email Accounts</h3>
                 <div className="user-form-grid">
                   <div className="form-row">
-                    <label htmlFor="personalEmail">Personal Email Address *</label>
-                    <input type="email" id="personalEmail" name="personalEmail" value={newUser.personalEmail} onChange={handleChange} placeholder="Enter personal email address" className={addErrors.personalEmail ? "field-error" : ""} />
+                    <label htmlFor="personalEmail">
+                      {emailPolicy === "standard" ? "Email Address *" : "Personal Email Address *"}
+                    </label>
+                    <input type="email" id="personalEmail" name="personalEmail" value={newUser.personalEmail} onChange={handleChange} placeholder={emailPolicy === "standard" ? "Enter email address" : "Enter personal email address"} className={addErrors.personalEmail ? "field-error" : ""} />
                     {addErrors.personalEmail && <span className="field-error-text">{addErrors.personalEmail}</span>}
                   </div>
-                  <div className="form-row">
-                    <label htmlFor="professionalEmail">Professional Email *</label>
-                    <input type="email" id="professionalEmail" name="professionalEmail" value={newUser.professionalEmail} onChange={handleChange} placeholder="Enter professional email address" className={addErrors.professionalEmail ? "field-error" : ""} />
-                    {addErrors.professionalEmail && <span className="field-error-text">{addErrors.professionalEmail}</span>}
-                  </div>
-                  <div className="form-row">
-                    <label htmlFor="professionalEmailPassword">Password of Professional Email {editingUser ? "" : "*"}</label>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <input type={showProfPassword ? "text" : "password"} id="professionalEmailPassword" name="professionalEmailPassword" value={newUser.professionalEmailPassword} onChange={handleChange} placeholder={editingUser ? "Leave blank to keep current" : "Enter professional email password"} className={addErrors.professionalEmailPassword ? "field-error" : ""} style={{ flex: 1 }} />
-                      {editingUser && newUser.professionalEmailPassword && (
-                        <button type="button" onClick={() => setShowProfPassword(!showProfPassword)} style={{ background: "none", border: "1px solid var(--border-color)", borderRadius: "6px", padding: "6px 10px", cursor: "pointer", fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
-                          {showProfPassword ? "Hide" : "Show"}
-                        </button>
-                      )}
-                    </div>
-                    {addErrors.professionalEmailPassword && <span className="field-error-text">{addErrors.professionalEmailPassword}</span>}
-                  </div>
+                  {emailPolicy === "company_required" && (
+                    <>
+                      <div className="form-row">
+                        <label htmlFor="professionalEmail">Professional Email</label>
+                        <input type="email" id="professionalEmail" name="professionalEmail" value={newUser.professionalEmail} onChange={handleChange} placeholder="Enter professional email address" className={addErrors.professionalEmail ? "field-error" : ""} />
+                        {addErrors.professionalEmail && <span className="field-error-text">{addErrors.professionalEmail}</span>}
+                      </div>
+                      <div className="form-row">
+                        <label htmlFor="professionalEmailPassword">Password of Professional Email</label>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <input type={showProfPassword ? "text" : "password"} id="professionalEmailPassword" name="professionalEmailPassword" value={newUser.professionalEmailPassword} onChange={handleChange} placeholder={editingUser ? "Leave blank to keep current" : "Enter professional email password"} className={addErrors.professionalEmailPassword ? "field-error" : ""} style={{ flex: 1 }} />
+                          {editingUser && newUser.professionalEmailPassword && (
+                            <button type="button" onClick={() => setShowProfPassword(!showProfPassword)} style={{ background: "none", border: "1px solid var(--border-color)", borderRadius: "6px", padding: "6px 10px", cursor: "pointer", fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+                              {showProfPassword ? "Hide" : "Show"}
+                            </button>
+                          )}
+                        </div>
+                        {addErrors.professionalEmailPassword && <span className="field-error-text">{addErrors.professionalEmailPassword}</span>}
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* ===== Employment Details ===== */}
@@ -2298,7 +2360,13 @@ function ManageUsers() {
               </div>
             </div>
             <div className="user-header-actions">
-              <LoadingButton type="button" className="primary-button" loading={guestSubmitting} onClick={handleGuestSubmit}>
+              <LoadingButton type="button" className="primary-button" loading={guestSubmitting} onClick={() => {
+                if (!editingGuest && !canCreateUser) {
+                  notify.warning(getLimitMessage('user'));
+                  return;
+                }
+                handleGuestSubmit();
+              }} disabled={!canCreateUser && !editingGuest} style={!canCreateUser && !editingGuest ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
                 {guestSubmitting ? (editingGuest ? "Updating..." : "Creating...") : (editingGuest ? "Update Guest" : "Create Guest")}
               </LoadingButton>
               <button className="user-modal-close" onClick={handleGuestClose}>&#10005;</button>
@@ -2324,7 +2392,7 @@ function ManageUsers() {
                     </>
                   )}
                 </div>
-                <input id="guest-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) { setNewGuest((prev) => ({ ...prev, avatar: file })); setGuestIsDirty(true); } }} />
+                <input id="guest-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) { setNewGuest((prev) => ({ ...prev, avatar: file })); } }} />
                 {(newGuest.avatar || newGuest._existingAvatar) && (
                   <button type="button" className="avatar-remove-btn" onClick={() => setNewGuest((prev) => ({ ...prev, avatar: null, _existingAvatar: null }))}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -2338,21 +2406,21 @@ function ManageUsers() {
             <div className="user-form-grid">
               <div className="form-row">
                 <label htmlFor="guest-name">Guest Name *</label>
-                <input type="text" id="guest-name" value={newGuest.name} onChange={(e) => { setNewGuest((p) => ({ ...p, name: e.target.value })); setGuestIsDirty(true); if (guestErrors.name) setGuestErrors((p) => { const n = { ...p }; delete n.name; return n; }); }} placeholder="Enter guest / company name" className={guestErrors.name ? "field-error" : ""} />
+                <input type="text" id="guest-name" value={newGuest.name} onChange={(e) => { setNewGuest((p) => ({ ...p, name: e.target.value })); if (guestErrors.name) setGuestErrors((p) => { const n = { ...p }; delete n.name; return n; }); }} placeholder="Enter guest / company name" className={guestErrors.name ? "field-error" : ""} />
                 {guestErrors.name && <span className="field-error-text">{guestErrors.name}</span>}
               </div>
               <div className="form-row">
                 <label htmlFor="guest-email">Personal Email *</label>
-                <input type="email" id="guest-email" value={newGuest.personal_email} onChange={(e) => { setNewGuest((p) => ({ ...p, personal_email: e.target.value })); setGuestIsDirty(true); if (guestErrors.personal_email) setGuestErrors((p) => { const n = { ...p }; delete n.personal_email; return n; }); }} placeholder="guest@example.com" className={guestErrors.personal_email ? "field-error" : ""} />
+                <input type="email" id="guest-email" value={newGuest.personal_email} onChange={(e) => { setNewGuest((p) => ({ ...p, personal_email: e.target.value })); if (guestErrors.personal_email) setGuestErrors((p) => { const n = { ...p }; delete n.personal_email; return n; }); }} placeholder="guest@example.com" className={guestErrors.personal_email ? "field-error" : ""} />
                 {guestErrors.personal_email && <span className="field-error-text">{guestErrors.personal_email}</span>}
               </div>
               <div className="form-row">
                 <label htmlFor="guest-phone">Phone Number</label>
-                <input type="text" id="guest-phone" value={newGuest.phone_number} onChange={(e) => { setNewGuest((p) => ({ ...p, phone_number: e.target.value })); setGuestIsDirty(true); }} placeholder="03XX-XXXXXXX" />
+                <input type="text" id="guest-phone" value={newGuest.phone_number} onChange={(e) => { setNewGuest((p) => ({ ...p, phone_number: e.target.value })); }} placeholder="03XX-XXXXXXX" />
               </div>
               <div className="form-row">
                 <label htmlFor="guest-company">Company Name</label>
-                <input type="text" id="guest-company" value={newGuest.company_name} onChange={(e) => { setNewGuest((p) => ({ ...p, company_name: e.target.value })); setGuestIsDirty(true); }} placeholder="Enter company name (optional)" />
+                <input type="text" id="guest-company" value={newGuest.company_name} onChange={(e) => { setNewGuest((p) => ({ ...p, company_name: e.target.value })); }} placeholder="Enter company name (optional)" />
               </div>
             </div>
           </form>

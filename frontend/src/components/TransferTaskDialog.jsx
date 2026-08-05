@@ -4,12 +4,12 @@
  * Allows selecting a user, specifying reason, return preference, and optional notes.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import API_URL from "../config/api";
 import { authToken, getUser } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import { notify } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import "./TransferTaskDialog.css";
@@ -26,10 +26,14 @@ const TRANSFER_REASONS = [
 ];
 
 function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSuccess }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
-  useEscapeKey(isOpen, handleClose);
+  const initialValues = useMemo(() => ({
+    delegatedTo: '',
+    reason: '',
+    reasonDetail: '',
+    returnToTransferor: true,
+    notes: '',
+  }), []);
 
-  const currentUser = getUser();
   const [reason, setReason] = useState("");
   const [reasonDetail, setReasonDetail] = useState("");
   const [notes, setNotes] = useState("");
@@ -37,11 +41,25 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
   const [returnToTransferor, setReturnToTransferor] = useState(true);
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+
+  const currentValues = useMemo(() => ({
+    delegatedTo,
+    reason,
+    reasonDetail,
+    returnToTransferor,
+    notes,
+  }), [delegatedTo, reason, reasonDetail, returnToTransferor, notes]);
+
+  const { isDirty, handleClose, markSaved, resetBaseline, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
+  useEscapeKey(isOpen, handleClose);
+
+  const currentUser = getUser();
   const { submitting, run } = useSubmit();
 
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
+      resetBaseline(initialValues);
       setReason("");
       setReasonDetail("");
       setNotes("");
@@ -115,7 +133,7 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
 
         const data = await res.json();
         if (res.ok && data.success) {
-          setIsDirty(false);
+          markSaved();
           onTransferSuccess?.(data.task || data.deliverable, { isTransfer: true });
           onClose();
         } else {
@@ -149,7 +167,7 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
                 <select
                   className="tt-input"
                   value={delegatedTo}
-                  onChange={(e) => { setDelegatedTo(e.target.value); setIsDirty(true); }}
+                  onChange={(e) => { setDelegatedTo(e.target.value); }}
                 >
                   <option value="">Select a user...</option>
                   {users.map((u) => (
@@ -164,7 +182,7 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
               <select
                 className="tt-input"
                 value={reason}
-                onChange={(e) => { setReason(e.target.value); setIsDirty(true); }}
+                onChange={(e) => { setReason(e.target.value); }}
               >
                 <option value="">Select a reason...</option>
                 {TRANSFER_REASONS.map((r) => (
@@ -181,7 +199,7 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
                 <textarea
                   className="tt-textarea"
                   value={reasonDetail}
-                  onChange={(e) => { setReasonDetail(e.target.value); setIsDirty(true); }}
+                  onChange={(e) => { setReasonDetail(e.target.value); }}
                   placeholder="Provide additional details..."
                   rows={3}
                 />
@@ -196,7 +214,7 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
                     type="radio"
                     name="returnPreference"
                     checked={returnToTransferor === true}
-                    onChange={() => { setReturnToTransferor(true); setIsDirty(true); }}
+                    onChange={() => { setReturnToTransferor(true); }}
                   />
                   <span className="tt-radio-label">
                     <strong>Submit back to me first</strong>
@@ -208,7 +226,7 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
                     type="radio"
                     name="returnPreference"
                     checked={returnToTransferor === false}
-                    onChange={() => { setReturnToTransferor(false); setIsDirty(true); }}
+                    onChange={() => { setReturnToTransferor(false); }}
                   />
                   <span className="tt-radio-label">
                     <strong>Submit directly to original assigner</strong>
@@ -223,7 +241,7 @@ function TransferTaskDialog({ isOpen, onClose, task, entityType, onTransferSucce
               <textarea
                 className="tt-textarea"
                 value={notes}
-                onChange={(e) => { setNotes(e.target.value); setIsDirty(true); }}
+                onChange={(e) => { setNotes(e.target.value); }}
                 placeholder="Any additional notes for the new owner..."
                 rows={2}
               />

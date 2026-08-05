@@ -5,13 +5,13 @@
  * resubmissions for rework-required status.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { FileText, Upload, X, Image } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import { formatDateTimeShort } from "../utils/formatDateTime";
 import { notify, showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
@@ -32,12 +32,18 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
   const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
   useEscapeKey(isOpen, handleClose);
 
+function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
   const [comment, setComment] = useState("");
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const { submitting, run } = useSubmit();
   const [fileRemoveConfirmOpen, setFileRemoveConfirmOpen] = useState(false);
   const [pendingFileIndex, setPendingFileIndex] = useState(-1);
+
+  const initialValues = useMemo(() => ({ comment: "", files: [], links: [] }), []);
+  const currentValues = useMemo(() => ({ comment, files, links }), [comment, files, links]);
+  const { isDirty, handleClose, markSaved, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
+  useEscapeKey(isOpen, handleClose);
 
   // Lock body scroll and reset form state when modal opens/closes
   useEffect(() => {
@@ -55,17 +61,15 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
   /** Appends newly selected files to the existing file list */
   const handleFileSelect = (e) => {
     const selected = Array.from(e.target.files || []);
-    setIsDirty(true);
     setFiles((prev) => [...prev, ...selected]);
     e.target.value = "";
   };
 
-  const removeFile = (index) => { setIsDirty(true); setFiles((prev) => prev.filter((_, i) => i !== index)); };
+  const removeFile = (index) => { setFiles((prev) => prev.filter((_, i) => i !== index)); };
 
   /** Handles file drops onto the dropzone area */
   const handleDrop = (e) => {
     e.preventDefault();
-    setIsDirty(true);
     setFiles((prev) => [...prev, ...Array.from(e.dataTransfer.files || [])]);
   };
 
@@ -101,6 +105,9 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
         if (res.ok) {
           showSuccessMessage("Submission", submissionToEdit ? "updated" : "submitted");
           onSubmitSuccess(data.deliverable || subtask);
+          showSuccessMessage("Subtask", "submitted");
+          markSaved();
+          onSubmitSuccess(data.deliverable);
           onClose();
         } else {
           notify.error(data.message || "Failed to submit.");
@@ -141,7 +148,7 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
               className="sd-textarea"
               placeholder="Describe your submission..."
               value={comment}
-              onChange={(e) => { setIsDirty(true); setComment(e.target.value); }}
+              onChange={(e) => { setComment(e.target.value); }}
               rows={3}
             />
           </div>
@@ -188,7 +195,7 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, sub
           </div>
 
           <SubmissionLinkSection
-            onLinksChange={(val) => { setIsDirty(true); setLinks(val); }}
+            onLinksChange={(val) => { setLinks(val); }}
           />
         </div>
 

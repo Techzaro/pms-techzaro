@@ -209,11 +209,14 @@ export function authToken() {
 
 export function authHeaders() {
   const t = authToken();
-  if (!t) return { "Content-Type": "application/json" };
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${t}`,
-  };
+  const headers = { "Content-Type": "application/json" };
+  if (t) headers.Authorization = `Bearer ${t}`;
+
+  // Include tenant slug for cross-tenant users
+  const tenantSlug = localStorage.getItem("tenant_slug");
+  if (tenantSlug) headers["X-Tenant-ID"] = tenantSlug;
+
+  return headers;
 }
 
 /* ───── session management ───── */
@@ -251,6 +254,20 @@ export function saveSession(role, token, user, rememberMe = false, expiresAt = n
   return true;
 }
 
+/* ───── tenant slug (for cross-tenant users) ───── */
+
+export function setTenantSlug(slug) {
+  if (slug) localStorage.setItem("tenant_slug", slug);
+}
+
+export function getTenantSlug() {
+  return localStorage.getItem("tenant_slug") || "";
+}
+
+export function clearTenantSlug() {
+  localStorage.removeItem("tenant_slug");
+}
+
 /**
  * Clears the session for this tab only.
  * Other tabs with the same role remain unaffected.
@@ -277,9 +294,10 @@ export function clearSession(role) {
 }
 
 /**
- * Clears all sessions for all roles and tab state.
+ * Clears all sessions for all roles.
+ * @param {boolean} [preserveTenantSlug=false] If true, keeps tenant_slug in localStorage.
  */
-export function clearAllSessions() {
+export function clearAllSessions(preserveTenantSlug = false) {
   ROLES.forEach((r) => {
     localStorage.removeItem(`sessions_${r}`);
     localStorage.removeItem(`token_${r}`);
@@ -291,6 +309,9 @@ export function clearAllSessions() {
   localStorage.removeItem("userId");
   localStorage.removeItem("name");
   localStorage.removeItem("email");
+  if (!preserveTenantSlug) {
+    localStorage.removeItem("tenant_slug");
+  }
 }
 
 /**
@@ -355,6 +376,16 @@ export function getDisplayUser() {
     role: user.role || role,
     avatar: user.avatar || null,
   };
+}
+
+/* ───── stored email fallback (for super-admin / cross-role use) ── */
+
+export function setStoredEmail(role, email) {
+  if (role && email) localStorage.setItem(`stored_email_${role}`, email);
+}
+
+export function getStoredEmail(role) {
+  return localStorage.getItem(`stored_email_${role}`) || "";
 }
 
 /* ───── role-prefixed path helper ───── */

@@ -5,13 +5,13 @@
  * password change form with validation.
  */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import { notify, showSuccessMessage } from "../utils/notify";
 import "../components/ProfileModal.css";
 
@@ -24,9 +24,6 @@ function ProfileModal({
   user,
   onClose,
 }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
-  useEscapeKey(true, handleClose);
-
   const [newPassword, setNewPassword] =
     useState("");
 
@@ -34,6 +31,11 @@ function ProfileModal({
     useState("");
 
   const [saving, setSaving] = useState(false);
+
+  const initialValues = useMemo(() => ({ newPassword: "", confirmPassword: "" }), []);
+  const currentValues = useMemo(() => ({ newPassword, confirmPassword }), [newPassword, confirmPassword]);
+  const { isDirty, handleClose, markSaved, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
+  useEscapeKey(true, handleClose);
 
   /**
    * CHANGE PASSWORD
@@ -97,7 +99,7 @@ function ProfileModal({
       }
 
       showSuccessMessage("Password", "changed");
-
+      markSaved();
       onClose();
 
     } catch (error) {
@@ -197,7 +199,6 @@ function ProfileModal({
               value={newPassword}
               onChange={(e) => {
                 setNewPassword(e.target.value);
-                setIsDirty(true);
               }}
               placeholder="Enter new password"
             />
@@ -215,7 +216,6 @@ function ProfileModal({
               value={confirmPassword}
               onChange={(e) => {
                 setConfirmPassword(e.target.value);
-                setIsDirty(true);
               }}
               placeholder="Confirm password"
             />

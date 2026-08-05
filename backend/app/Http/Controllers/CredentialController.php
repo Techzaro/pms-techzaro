@@ -135,9 +135,10 @@ class CredentialController extends Controller
             );
 
             // Send email notification to the user
-            if ($user->professional_email) {
+            $notifEmail = $user->notification_email;
+            if ($notifEmail) {
                 try {
-                    Mail::to($user->professional_email)->queue(new PasswordChangedMail($user));
+                    Mail::to($notifEmail)->queue(new PasswordChangedMail($user));
                 } catch (\Throwable $e) {
                     \Log::error('Failed to send password changed email', [
                         'user_id' => $user->id,
@@ -153,7 +154,7 @@ class CredentialController extends Controller
                 'user',
                 $user->name,
                 [
-                    'User Email' => $user->professional_email ?? $user->email,
+                    'User Email' => $user->notification_email,
                     'Recovery Disabled' => $disableRecovery ? 'Yes' : 'No',
                     'Sessions Terminated' => $sessionsTerminated,
                 ]

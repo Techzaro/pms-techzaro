@@ -2,15 +2,34 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Master\Organization;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class CompanyDocumentController extends Controller
 {
+    private function getCurrentOrganization(): ?Organization
+    {
+        return request()->attributes->get('currentOrganization')
+            ?? app()->has('currentOrganization') ? app('currentOrganization') : null;
+    }
+
+    private function getUploadDir(): string
+    {
+        $org = $this->getCurrentOrganization();
+        $baseDir = config('company.upload_dir', 'company_docs');
+
+        if ($org) {
+            return $baseDir . '/' . $org->slug;
+        }
+
+        return $baseDir;
+    }
+
     private function findExistingFile(string $type): ?string
     {
         $disk = config('company.disk', 'public');
-        $uploadDir = config('company.upload_dir', 'company_docs');
+        $uploadDir = $this->getUploadDir();
         $validExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
 
         $files = Storage::disk($disk)->files($uploadDir);
@@ -29,7 +48,7 @@ class CompanyDocumentController extends Controller
     private function findOtherDocumentFiles(): array
     {
         $disk = config('company.disk', 'public');
-        $uploadDir = config('company.upload_dir', 'company_docs');
+        $uploadDir = $this->getUploadDir();
         $validExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
         $prefix = 'other_document_';
 
@@ -92,9 +111,13 @@ class CompanyDocumentController extends Controller
         ]);
 
         $disk = config('company.disk', 'public');
-        $uploadDir = config('company.upload_dir', 'company_docs');
+        $uploadDir = $this->getUploadDir();
         $type = $request->input('type');
         $file = $request->file('file');
+
+        if (!Storage::disk($disk)->exists($uploadDir)) {
+            Storage::disk($disk)->makeDirectory($uploadDir);
+        }
 
         if ($type === 'other_documents') {
             $extension = $file->getClientOriginalExtension();
@@ -150,7 +173,7 @@ class CompanyDocumentController extends Controller
                 return response()->json(['success' => false, 'message' => 'Invalid filename'], 422);
             }
 
-            $uploadDir = config('company.upload_dir', 'company_docs');
+            $uploadDir = $this->getUploadDir();
             $path = $uploadDir.'/'.$filename;
 
             if (Storage::disk($disk)->exists($path)) {
