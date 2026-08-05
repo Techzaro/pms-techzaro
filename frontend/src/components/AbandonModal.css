@@ -1,0 +1,115 @@
+.abm-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-modal-overlay, rgba(0, 0, 0, 0.5));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
+  padding: 16px;
+}
+
+.abm-modal {
+  background: var(--bg-card, #ffffff);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+.abm-header {
+  padding: 24px 24px 0;
+}
+
+.abm-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary, #111827);
+  margin: 0 0 6px;
+}
+
+.abm-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+  margin: 0;
+}
+
+.abm-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.abm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.abm-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dark, #374151);
+}
+
+.abm-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--text-primary, #111827);
+  background: var(--bg-card, #ffffff);
+  resize: vertical;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.abm-textarea:focus {
+  outline: none;
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+.abm-footer {
+  padding: 0 24px 24px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.abm-cancel-btn {
+  padding: 10px 20px;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 10px;
+  background: var(--bg-card, #ffffff);
+  color: var(--text-dark, #374151);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.abm-cancel-btn:hover {
+  background: var(--bg-card-alt, #f9fafb);
+}
+
+.abm-submit-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 10px;
+  background: #dc2626;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.abm-submit-btn:hover {
+  background: #b91c1c;
+}

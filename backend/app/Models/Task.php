@@ -65,6 +65,8 @@ class Task extends Model
         'sort_order',
         'task_type',
         'recurrence_settings',
+        'recurrence_start_date',
+        'recurrence_end_date',
         'recurrence_status',
         'deliverables_generated',
         'current_owner',
@@ -139,6 +141,8 @@ class Task extends Model
         'reopened_at' => 'datetime:Y-m-d\TH:i:s',
         'reopen_new_deadline' => 'datetime:Y-m-d\TH:i:s',
         'recurrence_settings' => 'array',
+        'recurrence_start_date' => 'datetime:Y-m-d\TH:i:s',
+        'recurrence_end_date' => 'datetime:Y-m-d\TH:i:s',
         'deliverables_generated' => 'integer',
         'reopen_count' => 'integer',
         'submission_count' => 'integer',
@@ -270,6 +274,24 @@ class Task extends Model
     public function reopenedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reopened_by');
+    }
+
+    /** The user who requested to abandon this task. */
+    public function abandonRequestedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'abandon_requested_by');
+    }
+
+    /** The user who approved/abandoned this task. */
+    public function abandonedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'abandoned_by');
+    }
+
+    /** The user who declined the abandon request. */
+    public function abandonDeclinedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'abandon_declined_by');
     }
 
     /** The user who acknowledged this task. */

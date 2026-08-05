@@ -291,6 +291,24 @@ class Deliverable extends Model
         return $this->belongsTo(User::class, 'reopened_by');
     }
 
+    /** The user who requested to abandon this deliverable. */
+    public function abandonRequestedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'abandon_requested_by');
+    }
+
+    /** The user who approved/abandoned this deliverable. */
+    public function abandonedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'abandoned_by');
+    }
+
+    /** The user who declined the abandon request. */
+    public function abandonDeclinedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'abandon_declined_by');
+    }
+
     /** The user who acknowledged this deliverable. */
     public function acknowledgedBy(): BelongsTo
     {

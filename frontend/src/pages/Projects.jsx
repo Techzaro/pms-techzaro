@@ -89,6 +89,8 @@ function Projects() {
   const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get("filter") === "active" ? "active" : "");
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
@@ -102,7 +104,7 @@ function Projects() {
   const [viewMode, setViewMode] = useState("card");
   const [orderedProjects, setOrderedProjects] = useState([]);
   const [restoreDraftId, setRestoreDraftId] = useState(null);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     setOrderedProjects(projects);
@@ -325,27 +327,47 @@ function Projects() {
       if (!titleMatch && !creatorMatch && !updatedMatch) return false;
     }
     if (statusFilter) {
-      if (statusFilter === "active") return true;
-      if (statusFilter === "In-progress") {
+      if (statusFilter === "active") {
+        // active status matches all
+      } else if (statusFilter === "In-progress") {
         const s = (project.status || "").toLowerCase();
-        return s === "in-progress" || s === "in_progress" || s === "pending" || s === "planned";
-      }
-      if (statusFilter === "Planning") {
+        if (!(s === "in-progress" || s === "in_progress" || s === "pending" || s === "planned")) return false;
+      } else if (statusFilter === "Planning") {
         const s = (project.status || "").toLowerCase();
-        return s === "planning" || s === "planned";
-      }
-      if (statusFilter === "Pause") {
+        if (!(s === "planning" || s === "planned")) return false;
+      } else if (statusFilter === "Pause") {
         const s = (project.status || "").toLowerCase();
-        return s === "pause" || s === "paused" || s === "rejected";
-      }
-      if (statusFilter === "Completed") {
+        if (!(s === "pause" || s === "paused" || s === "rejected")) return false;
+      } else if (statusFilter === "Completed") {
         const s = (project.status || "").toLowerCase();
-        return s === "completed" || s === "approved";
+        if (!(s === "completed" || s === "approved")) return false;
+      } else if (project.status !== statusFilter) return false;
+    }
+
+    // Timeframe / Days & Custom Date range filtering
+    if (timeFilter) {
+      const createdTime = project.created_at ? new Date(project.created_at).getTime() : (project.start_date ? new Date(project.start_date).getTime() : null);
+      if (!createdTime) return false;
+
+      if (timeFilter === "custom") {
+        if (startDate) {
+          const startMs = new Date(startDate).setHours(0, 0, 0, 0);
+          if (createdTime < startMs) return false;
+        }
+        if (endDate) {
+          const endMs = new Date(endDate).setHours(23, 59, 59, 999);
+          if (createdTime > endMs) return false;
+        }
+      } else {
+        const days = parseInt(timeFilter, 10);
+        if (!isNaN(days) && days > 0) {
+          const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+          if (createdTime < cutoff) return false;
+        }
       }
-      if (project.status !== statusFilter) return false;
     }
     return true;
-  }), [orderedProjects, searchQuery, statusFilter]);
+  }), [orderedProjects, searchQuery, statusFilter, timeFilter, startDate, endDate]);
 
   const allCount = useMemo(() => orderedProjects.length, [orderedProjects]);
   const dueTodayCount = useMemo(() => orderedProjects.filter((p) => { if (!p.active_deadline) return false; const d = new Date(p.active_deadline); const t = new Date(); return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate(); }).length, [orderedProjects]);
@@ -355,8 +377,8 @@ function Projects() {
   const pauseCount = useMemo(() => orderedProjects.filter((p) => { const s = (p.status || "").toLowerCase(); return s === "pause" || s === "paused" || s === "rejected"; }).length, [orderedProjects]);
   const completedCount = useMemo(() => orderedProjects.filter((p) => { const s = (p.status || "").toLowerCase(); return s === "completed" || s === "approved"; }).length, [orderedProjects]);
 
-  const totalPages = showAll ? 1 : Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
-  const paginatedProjects = showAll ? filteredProjects : filteredProjects.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const totalPages = showAll ? 1 : Math.ceil(filteredProjects.length / itemsPerPage);
+  const paginatedProjects = showAll ? filteredProjects : filteredProjects.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const breadcrumbs = [
     { label: "Projects" },
@@ -375,13 +397,31 @@ function Projects() {
         </div>
 
           <div className="header-actions">
-            <div className="all-time">
+            <div className="all-time" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <select value={timeFilter} onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}>
                 <option value="">All Time</option>
                 <option value="7">Last 7 Days</option>
                 <option value="30">Last 30 Days</option>
                 <option value="180">Last 6 Months</option>
+                <option value="custom">Custom Date Range</option>
               </select>
+              {timeFilter === "custom" && (
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+                    style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '13px' }}
+                  />
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>to</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+                    style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '13px' }}
+                  />
+                </div>
+              )}
             </div>
 
             {isAdminOrManager && (
@@ -737,8 +777,14 @@ function Projects() {
           </div>
         )}
 
-        {!showAll && totalPages > 1 && (
-          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+        {!showAll && (
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            itemsPerPage={itemsPerPage}
+            onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
+          />
         )}
       </div>
 

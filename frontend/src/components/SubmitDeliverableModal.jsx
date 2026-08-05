@@ -28,6 +28,10 @@ import "./layout/CreateTaskModal.css";
  * @param {Object} subtask - The subtask being submitted.
  * @param {Function} onSubmitSuccess - Callback after successful submission, receives updated subtask.
  */
+function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess, submissionToEdit = null }) {
+  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
+  useEscapeKey(isOpen, handleClose);
+
 function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
   const [comment, setComment] = useState("");
   const [files, setFiles] = useState([]);
@@ -45,14 +49,14 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
-      setComment("");
+      setComment(submissionToEdit ? submissionToEdit.comment || "" : "");
       setFiles([]);
       setLinks([]);
     } else {
       document.body.style.overflow = "";
     }
     return () => { document.body.style.overflow = ""; };
-  }, [isOpen]);
+  }, [isOpen, submissionToEdit]);
 
   /** Appends newly selected files to the existing file list */
   const handleFileSelect = (e) => {
@@ -70,12 +74,11 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
   };
 
   /**
-   * Validates form data and submits the subtask with files, links, and notes.
-   * Shows error if no content (comment, files, or links) is provided.
+   * Validates form data and submits or edits the subtask submission.
    */
   const handleSubmit = async () => {
     const validLinks = links.map((l) => l.url);
-    if (!comment.trim() && files.length === 0 && validLinks.length === 0) {
+    if (!comment.trim() && files.length === 0 && validLinks.length === 0 && !submissionToEdit) {
       notify.error("Please add a comment, attach files, or add links.");
       return;
     }
@@ -87,7 +90,11 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
         files.forEach((f) => formData.append("files[]", f));
         validLinks.forEach((l) => formData.append("links[]", l));
 
-        const res = await fetch(`${API_URL}/deliverables/${subtask.id}/submit`, {
+        const endpoint = submissionToEdit
+          ? `${API_URL}/deliveries/submissions/${submissionToEdit.id}`
+          : `${API_URL}/deliverables/${subtask.id}/submit`;
+
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
           body: formData,
@@ -96,12 +103,14 @@ function SubmitDeliverableModal({ isOpen, onClose, subtask, onSubmitSuccess }) {
 
         const data = await res.json();
         if (res.ok) {
+          showSuccessMessage("Submission", submissionToEdit ? "updated" : "submitted");
+          onSubmitSuccess(data.deliverable || subtask);
           showSuccessMessage("Subtask", "submitted");
           markSaved();
           onSubmitSuccess(data.deliverable);
           onClose();
         } else {
-          notify.error(data.message || "Failed to submit subtask.");
+          notify.error(data.message || "Failed to submit.");
         }
       } catch {
         notify.error("An error occurred. Please try again.");

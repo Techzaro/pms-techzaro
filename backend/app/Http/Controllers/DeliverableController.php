@@ -447,6 +447,12 @@ class DeliverableController extends Controller
             'allow_transfer' => 'nullable|boolean',
         ]);
 
+        if (empty($request->input('assignees')) && empty($request->input('assigned_to'))) {
+            throw ValidationException::withMessages([
+                'assigned_to' => ['Please select at least one person to assign this subtask to.'],
+            ]);
+        }
+
         // Validate deliverable due_date does not exceed parent task end_date
         if (! empty($validated['due_date']) && ! empty($validated['task_id'])) {
             $task = Task::find($validated['task_id']);
@@ -607,6 +613,12 @@ class DeliverableController extends Controller
             'allow_transfer' => 'nullable|boolean',
         ]);
 
+        if (empty($request->input('assignees')) && empty($request->input('assigned_to'))) {
+            throw ValidationException::withMessages([
+                'assigned_to' => ['Please select at least one person to assign this subtask to.'],
+            ]);
+        }
+
         // Resolve project: from task, from body, or null
         $project = null;
         $task = null;
@@ -731,6 +743,15 @@ class DeliverableController extends Controller
             'assignees' => 'sometimes|nullable|array', 'assignees.*' => 'exists:users,id',
             'allow_transfer' => 'sometimes|boolean',
         ]);
+
+        if ($request->has('assigned_to') || $request->has('assignees')) {
+            $assignees = $request->input('assignees') ?? ($request->input('assigned_to') ? [$request->input('assigned_to')] : []);
+            if (empty($assignees)) {
+                throw ValidationException::withMessages([
+                    'assigned_to' => ['Please select at least one person to assign this subtask to.'],
+                ]);
+            }
+        }
 
         // Validate deliverable due_date does not exceed parent task end_date
         if (! empty($validated['due_date']) && $deliverable->task_id) {
@@ -1079,7 +1100,8 @@ class DeliverableController extends Controller
         $isDelegationChain = $this->delegationService->isInDeliverableDelegationChain($deliverable, $user);
         $nextApprover = $this->delegationService->getDeliverableApprover($deliverable);
         $isNextApprover = $nextApprover && (int) $nextApprover === (int) $user->id;
-        if (! $isCreator && ! in_array($user->role, ['admin', 'manager', 'team_lead']) && ! $isDelegationChain && ! $isNextApprover) {
+        $isAdminOrManager = in_array($user->role, ['admin', 'manager']);
+        if (! $isCreator && ! $isAdminOrManager && ! in_array($user->role, ['team_lead']) && ! $isDelegationChain && ! $isNextApprover) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         if ($deliverable->status !== 'submitted') {
@@ -1087,7 +1109,7 @@ class DeliverableController extends Controller
         }
 
         // Check if user is a transferor (next_approver from delegation chain with return_to_transferor=true)
-        $isNextApproverTransferor = $isNextApprover && ! $isCreator;
+        $isNextApproverTransferor = $isNextApprover && ! $isCreator && ! $isAdminOrManager;
         if ($isNextApproverTransferor) {
             $approvalChain = $deliverable->approval_chain ?? [];
             // If approval_chain is empty (legacy data), rebuild it from the delegation chain first
@@ -1317,15 +1339,30 @@ class DeliverableController extends Controller
             'reopen_reason_detail' => 'nullable|string|max:2000',
             'instructions' => 'nullable|string|max:2000',
             'new_deadline' => 'nullable|date',
+            'link' => 'nullable|string|max:2000',
+            'files' => 'nullable|array',
+            'files.*' => 'nullable|file|max:51200',
             'file' => 'nullable|file|max:51200',
         ]);
 
-        $filePath = $fileName = null;
-        if ($request->hasFile('file')) {
-            $file = $request->file('file');
-            $fileName = $file->getClientOriginalName();
-            $filePath = $file->store('deliverable-reopen/'.$deliverable->id, 'public');
+        $filePaths = [];
+        $fileNames = [];
+        $uploadedFiles = [];
+        if ($request->hasFile('files')) {
+            $uploadedFiles = $request->file('files');
+        } elseif ($request->hasFile('file')) {
+            $uploadedFiles = [$request->file('file')];
         }
+
+        foreach ($uploadedFiles as $uploadedFile) {
+            if ($uploadedFile && $uploadedFile->isValid()) {
+                $fileNames[] = $uploadedFile->getClientOriginalName();
+                $filePaths[] = $uploadedFile->store('deliverable-reopen/'.$deliverable->id, 'public');
+            }
+        }
+
+        $filePath = ! empty($filePaths) ? implode(',', $filePaths) : null;
+        $fileName = ! empty($fileNames) ? implode(', ', $fileNames) : null;
 
         $reopenReason = $validated['reopen_reason'] === 'Other'
             ? ($validated['reopen_reason_detail'] ?? 'Other')
@@ -1341,6 +1378,7 @@ class DeliverableController extends Controller
             'reopen_comment' => $reopenComment,
             'reopen_reason' => $validated['reopen_reason'],
             'reopen_instructions' => $validated['instructions'] ?? null,
+            'reopen_link' => $validated['link'] ?? null,
             'updated_by' => $user->id,
         ];
         if (! empty($validated['new_deadline'])) {
@@ -1493,20 +1531,38 @@ class DeliverableController extends Controller
         }
 
         $validated = $request->validate([
-            'comment' => 'nullable|string|max:2000', 'instructions' => 'nullable|string|max:2000',
-            'new_deadline' => 'nullable|date', 'file' => 'nullable|file|max:51200',
+            'comment' => 'nullable|string|max:2000',
+            'instructions' => 'nullable|string|max:2000',
+            'new_deadline' => 'nullable|date',
+            'link' => 'nullable|string|max:2000',
+            'files' => 'nullable|array',
+            'files.*' => 'nullable|file|max:51200',
+            'file' => 'nullable|file|max:51200',
         ]);
 
-        $filePath = $fileName = null;
-        if ($request->hasFile('file')) {
-            $file = $request->file('file');
-            $fileName = $file->getClientOriginalName();
-            $filePath = $file->store('deliverable-rework/'.$deliverable->id, 'public');
+        $filePaths = [];
+        $fileNames = [];
+        $uploadedFiles = [];
+        if ($request->hasFile('files')) {
+            $uploadedFiles = $request->file('files');
+        } elseif ($request->hasFile('file')) {
+            $uploadedFiles = [$request->file('file')];
         }
+
+        foreach ($uploadedFiles as $uploadedFile) {
+            if ($uploadedFile && $uploadedFile->isValid()) {
+                $fileNames[] = $uploadedFile->getClientOriginalName();
+                $filePaths[] = $uploadedFile->store('deliverable-rework/'.$deliverable->id, 'public');
+            }
+        }
+
+        $filePath = ! empty($filePaths) ? implode(',', $filePaths) : null;
+        $fileName = ! empty($fileNames) ? implode(', ', $fileNames) : null;
 
         $updateData = [
             'status' => 'rework_required', 'rework_comment' => $validated['comment'] ?? null,
             'rework_instructions' => $validated['instructions'] ?? null,
+            'rework_link' => $validated['link'] ?? null,
         ];
         if (! empty($validated['new_deadline'])) {
             $updateData['rework_new_deadline'] = $validated['new_deadline'];
@@ -1539,18 +1595,28 @@ class DeliverableController extends Controller
     public function downloadSubmissionFile(DeliverableSubmission $submission)
     {
         $user = request()->user();
-        $deliverable = $submission->deliverable;
-        $isCreator = (int) $deliverable->created_by === (int) $user->id;
-        $isAssignee = (int) $deliverable->assigned_to === (int) $user->id;
+        if ($user) {
+            $deliverable = $submission->deliverable;
+            $isCreator = (int) ($deliverable->created_by ?? 0) === (int) $user->id;
+            $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
 
-        if (! $isCreator && ! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            if (! $isCreator && ! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            }
         }
-        if (! $submission->file_path || ! Storage::disk('public')->exists($submission->file_path)) {
+
+        if (! $submission->file_path) {
             return response()->json(['success' => false, 'message' => 'File not found'], 404);
         }
 
-        return Storage::disk('public')->download($submission->file_path, $submission->file_name);
+        $resolved = \App\Services\FileStorageService::resolveFile($submission->file_path);
+        if (! $resolved) {
+            return response()->json(['success' => false, 'message' => 'File not found'], 404);
+        }
+
+        $fileName = $submission->file_name ?: basename($resolved['path']);
+
+        return Storage::disk($resolved['disk'])->download($resolved['path'], $fileName);
     }
 
     /**
@@ -1566,6 +1632,98 @@ class DeliverableController extends Controller
             ->with(['submittedBy:id,name,email', 'attachments'])->latest()->first();
 
         return response()->json(['success' => true, 'submission' => $submission]);
+    }
+
+    /**
+     * Update an existing deliverable submission (notes, files, links).
+     */
+    public function updateSubmission(Request $request, DeliverableSubmission $submission)
+    {
+        $user = $request->user();
+        $deliverable = $submission->deliverable;
+
+        $isSubmitter = (int) $submission->submitted_by === (int) $user->id;
+        $isAuthorizedRole = in_array($user->role, ['admin', 'manager', 'team_lead']);
+
+        if (! $isSubmitter && ! $isAuthorizedRole) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized to edit this submission.'], 403);
+        }
+
+        $validated = $request->validate([
+            'comment' => 'nullable|string|max:2000',
+            'file' => 'nullable|file|max:51200',
+            'files' => 'nullable|array',
+            'files.*' => 'file|max:51200',
+            'links' => 'nullable|array',
+            'links.*' => 'string|max:2048',
+        ]);
+
+        if (array_key_exists('comment', $validated)) {
+            $submission->comment = $validated['comment'];
+        }
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $submission->file_name = $file->getClientOriginalName();
+            $submission->file_path = $file->store('deliverable-submissions/'.$deliverable->id, 'public');
+        }
+
+        $submission->save();
+
+        if ($request->hasFile('files')) {
+            $submission->attachments()->createMany(
+                collect($request->file('files'))->map(fn ($file) => [
+                    'submission_type' => 'deliverable',
+                    'file_name' => basename($path = $file->store('deliverable-submissions/'.$deliverable->id, 'public')),
+                    'original_name' => $file->getClientOriginalName(),
+                    'file_path' => $path,
+                    'file_type' => $file->getMimeType(),
+                    'file_size' => $file->getSize(),
+                    'attachment_type' => str_starts_with($file->getMimeType(), 'image/') ? 'image' : 'file',
+                    'url' => '/storage/'.$path,
+                ])->toArray()
+            );
+        }
+
+        if (! empty($validated['links'])) {
+            $submission->attachments()->createMany(
+                collect($validated['links'])->map(fn ($url) => [
+                    'submission_type' => 'deliverable',
+                    'file_name' => $url,
+                    'original_name' => $url,
+                    'attachment_type' => 'link',
+                    'url' => $url,
+                ])->toArray()
+            );
+        }
+
+        // Trigger Notification to Stakeholders
+        $stakeholderIds = array_unique(array_filter([
+            $deliverable->assigned_to,
+            $deliverable->created_by,
+            $deliverable->task?->assigned_by,
+        ]));
+
+        foreach ($stakeholderIds as $targetUserId) {
+            if ((int) $targetUserId !== (int) $user->id) {
+                Notification::create([
+                    'user_id' => $targetUserId,
+                    'sender_user_id' => $user->id,
+                    'type' => 'deliverable_updated',
+                    'related_module' => 'deliverable',
+                    'related_id' => $deliverable->id,
+                    'title' => 'Delivery Submission Updated',
+                    'message' => "{$user->name} updated the delivery submission for \"{$deliverable->title}\".",
+                    'link' => '/deliveries?selectedDeliverable=' . $deliverable->id,
+                ]);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Delivery submission updated successfully',
+            'submission' => $submission->fresh(['submittedBy:id,name,email', 'attachments']),
+        ]);
     }
 
     /**
@@ -1598,28 +1756,24 @@ class DeliverableController extends Controller
         if ($attachment->attachment_type === 'link') {
             return redirect($attachment->url);
         }
-        if (! $attachment->file_path) {
-            return response()->json(['success' => false, 'message' => 'File not found'], 404);
-        }
-
-        if (! Storage::disk('public')->exists($attachment->file_path)) {
+        $resolved = \App\Services\FileStorageService::resolveFile($attachment->file_path);
+        if (! $resolved) {
             \Log::error('Attachment file not found on disk', [
                 'file_path' => $attachment->file_path,
                 'disk_root' => storage_path('app/public'),
-                'full_path' => storage_path('app/public').'/'.$attachment->file_path,
                 'attachment_id' => $attachment->id,
             ]);
 
             return response()->json(['success' => false, 'message' => 'File not found on disk'], 404);
         }
 
-        $filename = $attachment->original_name ?? basename($attachment->file_path);
+        $filename = $attachment->original_name ?? basename($resolved['path']);
 
         if ($request->query('action') === 'download') {
-            return Storage::disk('public')->download($attachment->file_path, $filename);
+            return Storage::disk($resolved['disk'])->download($resolved['path'], $filename);
         }
 
-        return Storage::disk('public')->response($attachment->file_path, ['Cache-Control' => 'public, max-age=3600']);
+        return Storage::disk($resolved['disk'])->response($resolved['path'], ['Cache-Control' => 'public, max-age=3600']);
     }
 
     /**
@@ -1699,8 +1853,8 @@ class DeliverableController extends Controller
     {
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
-        if (! $isAssignee && ! in_array($user->role, ['admin', 'manager', 'team_lead'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        if (! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'You do not have permission to pause/resume this subtask.'], 403);
         }
         if ($deliverable->timer_state !== 'running') {
             return response()->json(['success' => false, 'message' => 'Timer is not running'], 422);
@@ -1735,8 +1889,8 @@ class DeliverableController extends Controller
     {
         $user = $request->user();
         $isAssignee = (int) ($deliverable->assigned_to ?? 0) === (int) $user->id;
-        if (! $isAssignee && ! in_array($user->role, ['admin', 'manager', 'team_lead'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        if (! $isAssignee && ! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'You do not have permission to pause/resume this subtask.'], 403);
         }
         if ($deliverable->timer_state !== 'paused') {
             return response()->json(['success' => false, 'message' => 'Timer is not paused'], 422);
@@ -2468,6 +2622,129 @@ class DeliverableController extends Controller
             'success' => true,
             'chain' => $chain,
             'approval_chain' => $deliverable->approval_chain ?? [],
+        ]);
+    }
+
+    /**
+     * Request to abandon a deliverable/subtask (Members, Team Leads, Managers, Admins).
+     */
+    public function requestAbandon(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+        if ($deliverable->status === 'abandoned') {
+            return response()->json(['success' => false, 'message' => 'Subtask is already abandoned'], 422);
+        }
+
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:2000',
+        ]);
+
+        $deliverable->update([
+            'previous_status' => $deliverable->status,
+            'status' => 'abandon_requested',
+            'abandon_requested_by' => $user->id,
+            'abandon_requested_at' => now(),
+            'abandon_reason' => $validated['reason'] ?? null,
+            'updated_by' => $user->id,
+        ]);
+
+        $this->activityService->log($user->id, 'deliverable_abandon_requested', 'Requested to abandon subtask "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Abandon request submitted successfully',
+            'deliverable' => $deliverable->fresh()->load(['assignee:id,name,email,role', 'creator:id,name', 'abandonRequestedBy:id,name', 'abandonedBy:id,name', 'abandonDeclinedBy:id,name']),
+        ]);
+    }
+
+    /**
+     * Approve abandon request (Admins & Managers ONLY).
+     */
+    public function approveAbandon(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+        if (! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized: Only Admins and Managers can approve abandon requests'], 403);
+        }
+
+        $deliverable->update([
+            'status' => 'abandoned',
+            'abandoned_by' => $user->id,
+            'abandoned_at' => now(),
+            'updated_by' => $user->id,
+        ]);
+
+        $this->activityService->log($user->id, 'deliverable_abandon_approved', 'Approved abandon request for subtask "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Subtask abandon approved successfully',
+            'deliverable' => $deliverable->fresh()->load(['assignee:id,name,email,role', 'creator:id,name', 'abandonRequestedBy:id,name', 'abandonedBy:id,name', 'abandonDeclinedBy:id,name']),
+        ]);
+    }
+
+    /**
+     * Decline abandon request (Admins & Managers ONLY).
+     */
+    public function declineAbandon(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+        if (! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized: Only Admins and Managers can decline abandon requests'], 403);
+        }
+
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:2000',
+        ]);
+
+        $revertStatus = $deliverable->previous_status ?: 'in_progress';
+
+        $deliverable->update([
+            'status' => $revertStatus,
+            'abandon_declined_by' => $user->id,
+            'abandon_declined_at' => now(),
+            'abandon_decline_reason' => $validated['reason'] ?? null,
+            'updated_by' => $user->id,
+        ]);
+
+        $this->activityService->log($user->id, 'deliverable_abandon_declined', 'Declined abandon request for subtask "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Subtask abandon request declined',
+            'deliverable' => $deliverable->fresh()->load(['assignee:id,name,email,role', 'creator:id,name', 'abandonRequestedBy:id,name', 'abandonedBy:id,name', 'abandonDeclinedBy:id,name']),
+        ]);
+    }
+
+    /**
+     * Directly abandon a deliverable/subtask (Admins & Managers ONLY).
+     */
+    public function abandon(Request $request, Deliverable $deliverable)
+    {
+        $user = $request->user();
+        if (! in_array($user->role, ['admin', 'manager'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized: Only Admins and Managers can directly abandon subtasks'], 403);
+        }
+
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:2000',
+        ]);
+
+        $deliverable->update([
+            'previous_status' => $deliverable->status,
+            'status' => 'abandoned',
+            'abandoned_by' => $user->id,
+            'abandoned_at' => now(),
+            'abandon_reason' => $validated['reason'] ?? $deliverable->abandon_reason,
+            'updated_by' => $user->id,
+        ]);
+
+        $this->activityService->log($user->id, 'deliverable_abandoned', 'Abandoned subtask "'.$deliverable->title.'"', 'deliverable', $deliverable->id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Subtask abandoned successfully',
+            'deliverable' => $deliverable->fresh()->load(['assignee:id,name,email,role', 'creator:id,name', 'abandonRequestedBy:id,name', 'abandonedBy:id,name', 'abandonDeclinedBy:id,name']),
         ]);
     }
 }

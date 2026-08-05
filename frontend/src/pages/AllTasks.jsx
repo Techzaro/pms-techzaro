@@ -17,7 +17,7 @@ import Breadcrumb from "../components/Breadcrumb";
 import { GoDotFill } from "react-icons/go";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoSearchOutline, IoEyeOutline } from "react-icons/io5";
-import { ArrowUpRight, StickyNote } from "lucide-react";
+import { ArrowUpRight, StickyNote, Sliders } from "lucide-react";
 import SortableTableWrapper, { DragHandle } from "../components/SortableTableWrapper";
 import SmartDragHandle from "../components/SmartDragHandle";
 import Pagination from "../components/Pagination";
@@ -38,6 +38,8 @@ const STATUS_COLORS = {
   reopened: "#EDE9FE",
   approved: "#DCFCE7",
   rejected: "#FEE2E2",
+  abandon_requested: "#FEF3C7",
+  abandoned: "#FEE2E2",
 };
 
 const STATUS_TEXT_COLORS = {
@@ -48,6 +50,8 @@ const STATUS_TEXT_COLORS = {
   reopened: "#5B21B6",
   approved: "#166534",
   rejected: "#991B1B",
+  abandon_requested: "#92400E",
+  abandoned: "#991B1B",
 };
 
 const PRIORITY_COLORS = {
@@ -83,7 +87,7 @@ function AllTasks() {
 
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -172,6 +176,8 @@ function AllTasks() {
       reopened: "Reopened",
       approved: "Approved",
       rejected: "Declined",
+      abandon_requested: "Abandon Requested",
+      abandoned: "Abandoned",
     };
     return map[status] || status;
   };
@@ -190,6 +196,7 @@ function AllTasks() {
   const transferredCount = useMemo(() => baseItems.filter((i) => i.delegation_chain && i.delegation_chain.length > 0).length, [baseItems]);
   const approvedCount = useMemo(() => baseItems.filter((i) => i.status === "approved").length, [baseItems]);
   const rejectedCount = useMemo(() => baseItems.filter((i) => i.status === "rejected").length, [baseItems]);
+  const abandonedCount = useMemo(() => baseItems.filter((i) => i.status === "abandoned" || i.status === "abandon_requested").length, [baseItems]);
 
   const filteredItems = useMemo(() => baseItems.filter((item) => {
     if (debouncedSearch) {
@@ -200,7 +207,13 @@ function AllTasks() {
       if (!titleMatch && !assigneeMatch && !assignerMatch) return false;
     }
     if (statusFilter === "due_today") {
-      return true;
+      const dateVal = item.end_date || item.due_date || item.start_date;
+      if (!dateVal) return false;
+      const d = new Date(dateVal);
+      const now = new Date();
+      const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+      const isCompleted = ["approved", "completed", "done"].includes((item.status || "").toLowerCase());
+      return isToday && !isCompleted;
     }
     if (statusFilter) {
       if (statusFilter === "pending") {
@@ -209,6 +222,9 @@ function AllTasks() {
       if (statusFilter === "transferred") {
         return item.delegation_chain && item.delegation_chain.length > 0;
       }
+      if (statusFilter === "abandoned") {
+        return item.status === "abandoned" || item.status === "abandon_requested";
+      }
       return item.status === statusFilter;
     }
     return true;
@@ -216,8 +232,8 @@ function AllTasks() {
 
   const taskIdList = filteredItems.map((i) => i.id);
 
-  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
-  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const totalPages = showAll ? 1 : Math.ceil(filteredItems.length / itemsPerPage);
+  const paginatedItems = showAll ? filteredItems : filteredItems.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const breadcrumbs = [
     { label: "Tasks", path: rolePath("tasks") },
@@ -273,6 +289,9 @@ function AllTasks() {
         </p>
         <p className={`Rejected ${statusFilter === "rejected" ? "active" : ""}`} onClick={() => selectStatusFilter("rejected")} style={{ cursor: "pointer" }}>
           <GoDotFill /> Declined ({rejectedCount})
+        </p>
+        <p className={`Abandoned ${statusFilter === "abandoned" ? "active" : ""}`} onClick={() => selectStatusFilter("abandoned")} style={{ cursor: "pointer" }}>
+          <GoDotFill color="#DC2626" /> Abandoned ({abandonedCount})
         </p>
         <p className={`All ${!statusFilter ? "active" : ""}`} onClick={() => selectStatusFilter("")} style={{ cursor: "pointer" }}>All ({allCount})</p>
       </div>
@@ -422,23 +441,29 @@ function AllTasks() {
                   </div>
 
                   {/* Action — View only */}
-                  <div className="col-action">
-                      <ActionPopover
-                        trigger={
-                          <button className="action-icon-btn action-view action-trigger-lg" title="Actions">
-                            <IoEyeOutline size={20} />
-                          </button>
-                        }
-                        onTriggerClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'all-tasks', readOnly: true } })}
-                      >
-                        <button
-                          className="action-icon-btn action-note"
-                          title="Add Note"
-                          onClick={() => setNoteModal({ open: true, itemId: item.id })}
-                        >
-                          <StickyNote size={16} />
+                  <div className="col-action" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <button
+                      className="action-icon-btn action-view action-trigger-lg"
+                      title="View Task"
+                      onClick={() => navigate(rolePath(`tasks/task-details/${item.id}`), { state: { taskIds: taskIdList, from: 'all-tasks', readOnly: true } })}
+                    >
+                      <IoEyeOutline size={20} />
+                    </button>
+                    <ActionPopover
+                      trigger={
+                        <button className="action-icon-btn action-manage action-trigger-lg" title="Status Actions" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px", borderRadius: "6px", background: "var(--bg-hover, #f3f4f6)", color: "var(--text-primary, #374151)", border: "1px solid var(--border-color, #e5e7eb)", cursor: "pointer" }}>
+                          <Sliders size={18} />
                         </button>
-                      </ActionPopover>
+                      }
+                    >
+                      <button
+                        className="action-icon-btn action-note"
+                        title="Add Note"
+                        onClick={() => setNoteModal({ open: true, itemId: item.id })}
+                      >
+                        <StickyNote size={16} />
+                      </button>
+                    </ActionPopover>
                   </div>
                 </div>
               );
@@ -447,8 +472,14 @@ function AllTasks() {
         )}
       </div>
 
-      {!showAll && totalPages > 1 && (
-        <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+      {!showAll && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={(val) => { setItemsPerPage(val); setPage(1); }}
+        />
       )}
 
       <AddNoteModal

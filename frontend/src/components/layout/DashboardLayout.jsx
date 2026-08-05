@@ -9,7 +9,7 @@
  * This replaces 20+ independent page polls with ONE app-level poll.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import RightSidebar from "./RightSidebar";
@@ -29,6 +29,16 @@ function DashboardLayout({ children, hideRightSidebar = false }) {
   const [rightOpen, setRightOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const prevCountRef = useRef(null);
+
+  // Immediate layout check: if no token exists, immediately redirect to login & replace history
+  useLayoutEffect(() => {
+    if (!authToken()) {
+      try {
+        window.history.replaceState(null, "", "/");
+      } catch {}
+      window.location.replace("/?message=" + encodeURIComponent("Session expired. Please log in."));
+    }
+  }, []);
 
   // Sync modal-open state from child modals (e.g., CreateSubtaskTask)
   useEffect(() => {

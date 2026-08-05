@@ -180,9 +180,11 @@ class ProjectController extends Controller
             'status' => 'nullable|string|max:64',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
+            'project_deadline' => 'nullable|date',
             'milestones' => 'nullable|array',
             'milestones.*.title' => 'nullable|string|max:255',
             'milestones.*.due_date' => 'nullable|date',
+            'milestones.*.milestone_deadline' => 'nullable|date',
             'milestones.*.status' => 'nullable|string|max:32',
         ]);
 
@@ -227,11 +229,14 @@ class ProjectController extends Controller
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
 
+        if ($request->has('project_deadline') && ! $request->has('end_date')) {
+            $validated['end_date'] = $request->input('project_deadline') ? date('Y-m-d H:i:s', strtotime($request->input('project_deadline'))) : null;
+        }
+
         $validated['created_by'] = $request->user()->id;
         $validated['updated_by'] = $request->user()->id;
         $validated['priority'] = $validated['priority'] ?? 'Medium';
         $validated['status'] = $validated['status'] ?? 'in_progress';
-        $validated['start_date'] = $validated['start_date'] ?? now()->toDateTimeString();
 
         if (! empty($validated['team_id']) && empty($validated['assigned_users'])) {
             $team = Team::with('leader:id')->find($validated['team_id']);
@@ -246,7 +251,6 @@ class ProjectController extends Controller
 
         $project = Project::create($validated);
         $this->replaceProjectMilestones($project, $milestones);
-        $project->syncDatesFromMilestones();
 
         $assigneeNames = ! empty($validated['assigned_users'])
             ? User::whereIn('id', $validated['assigned_users'])->pluck('name')->implode(', ')
@@ -287,7 +291,32 @@ class ProjectController extends Controller
             ? 'You created project "'.$project->title.'" and assigned it to '.$assigneeNames
             : 'You created project "'.$project->title.'"';
         $this->activityService->log($request->user()->id, 'project_created', $activityDesc, 'project', $project->id);
+
+        // Clear dashboard cache for creator and all assigned members
         $this->clearDashboardCache($request->user()->id);
+        $assignedUserIds = ! empty($validated['assigned_users']) ? (array) $validated['assigned_users'] : [];
+        foreach ($assignedUserIds as $uid) {
+            $this->clearDashboardCache((int) $uid);
+        }
+
+        // Strictly dispatch "New Project Created" notification ONLY to members assigned to that project (excluding performer)
+        $recipientIds = array_filter(array_unique(array_map('intval', $assignedUserIds)), fn ($id) => $id !== (int) $request->user()->id);
+        if (! empty($recipientIds)) {
+            $notifications = [];
+            foreach ($recipientIds as $recipientId) {
+                $notifications[] = [
+                    'user_id' => $recipientId,
+                    'sender_user_id' => $request->user()->id,
+                    'type' => 'project_created',
+                    'related_module' => 'project',
+                    'related_id' => $project->id,
+                    'title' => 'Assigned to New Project',
+                    'message' => $request->user()->name.' created project "'.$project->title.'" and assigned you to it.',
+                    'link' => '/projects/project-details/'.$project->id,
+                ];
+            }
+            $this->notificationService->createBulk($notifications);
+        }
 
         try {
             $this->auditService->log(
@@ -485,9 +514,11 @@ class ProjectController extends Controller
             'status' => 'sometimes|nullable|string|max:64',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
+            'project_deadline' => 'nullable|date',
             'milestones' => 'nullable|array',
             'milestones.*.title' => 'nullable|string|max:255',
             'milestones.*.due_date' => 'nullable|date',
+            'milestones.*.milestone_deadline' => 'nullable|date',
             'milestones.*.status' => 'nullable|string|max:32',
             'existing_file_names' => 'nullable|array',
             'existing_file_names.*.id' => 'required_with:existing_file_names|exists:project_files,id',
@@ -498,6 +529,12 @@ class ProjectController extends Controller
         unset($validated['milestones']);
         $existingFileNames = $validated['existing_file_names'] ?? null;
         unset($validated['existing_file_names']);
+
+        if ($request->has('project_deadline')) {
+            $validated['end_date'] = $request->input('project_deadline') ? date('Y-m-d H:i:s', strtotime($request->input('project_deadline'))) : null;
+        } elseif ($request->has('end_date')) {
+            $validated['end_date'] = $request->input('end_date') ? date('Y-m-d H:i:s', strtotime($request->input('end_date'))) : null;
+        }
 
         $oldValues = [];
         $fieldLabels = ['title' => 'Title', 'description' => 'Description', 'start_date' => 'Start Date', 'end_date' => 'End Date', 'priority' => 'Priority', 'status' => 'Status', 'budget' => 'Budget', 'category' => 'Category', 'guest_ids' => 'Guests', 'website_name' => 'Website Name', 'website_link' => 'Website Link', 'team_id' => 'Team', 'sheets_documents' => 'Documents'];
@@ -551,7 +588,6 @@ class ProjectController extends Controller
 
         if ($request->has('milestones')) {
             $this->replaceProjectMilestones($project, $milestones);
-            $project->syncDatesFromMilestones();
         }
 
         $changeRecords = array_map(fn ($c) => [
@@ -1142,9 +1178,13 @@ class ProjectController extends Controller
             if ($title === '') {
                 continue;
             }
+            $rawDate = $row['due_date'] ?? $row['milestone_deadline'] ?? null;
+            $dueDate = (! empty($rawDate) && $rawDate !== 'null') ? date('Y-m-d H:i:s', strtotime($rawDate)) : null;
             $milestones[] = [
-                'title' => $title, 'due_date' => ! empty($row['due_date']) ? $row['due_date'] : null,
-                'status' => $row['status'] ?? 'planned', 'sort_order' => $index,
+                'title' => $title,
+                'due_date' => $dueDate,
+                'status' => $row['status'] ?? 'planned',
+                'sort_order' => $index,
             ];
         }
         if (! empty($milestones)) {

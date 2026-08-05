@@ -366,19 +366,20 @@
 }
 
 .field-error {
-  border-color: var(--text-primary) !important;
-  background: var(--bg-hover) !important;
+  border-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.05) !important;
 }
 
 .field-error:focus {
-  border-color: var(--text-primary) !important;
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
 }
 
 .field-error-text {
   display: block;
-  color: var(--text-primary);
+  color: #ef4444 !important;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   margin-top: 4px;
 }
 

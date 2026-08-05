@@ -59,6 +59,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null }) => {
   const [form, setForm] = useState({
     title: "",
     description: "",
+    end_date: "",
     team_id: "",
     team_ids: [],
     assigned_users: [],
@@ -540,6 +541,8 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null }) => {
         const body = {
           title: form.title.trim(),
           description: form.description || null,
+          end_date: form.end_date ? toUTCIso(form.end_date) : null,
+          project_deadline: form.end_date ? toUTCIso(form.end_date) : null,
           category: categoriesList.length > 0 ? JSON.stringify(categoriesList) : null,
           team_id: form.team_id ? parseInt(form.team_id) : null,
           team_ids: form.team_ids,
@@ -549,7 +552,12 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null }) => {
           priority: form.priority,
           status: form.status,
           budget: form.budget ? parseFloat(form.budget) : null,
-          milestones: milestones.length > 0 ? milestones : [],
+          milestones: milestones.map((m) => ({
+            title: m.title,
+            due_date: m.due_date ? toUTCIso(m.due_date) : null,
+            milestone_deadline: m.due_date ? toUTCIso(m.due_date) : null,
+            status: m.status || "planned",
+          })),
           team_roles: form.team_roles,
         };
 
@@ -647,6 +655,28 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null }) => {
               />
             </div>
 
+            {/* PROJECT DEADLINE */}
+            <div className="cp-field">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                <label style={{ margin: 0 }}>Project Deadline (Optional)</label>
+                {form.end_date && (
+                  <button
+                    type="button"
+                    style={{ background: "none", border: "none", color: "#ef4444", fontSize: "12px", cursor: "pointer", fontWeight: 600 }}
+                    onClick={() => { markDirty(); setForm((prev) => ({ ...prev, end_date: "" })); }}
+                  >
+                    Clear Deadline ✕
+                  </button>
+                )}
+              </div>
+              <input
+                type="datetime-local"
+                name="end_date"
+                value={form.end_date || ""}
+                onChange={(e) => { markDirty(); setForm((prev) => ({ ...prev, end_date: e.target.value })); }}
+              />
+            </div>
+
             {/* PROJECT MILESTONES */}
             <div className="cp-card">
               <div className="cp-card-top">
@@ -695,7 +725,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null }) => {
                   )}
                 </div>
                 <div className="cp-field">
-                  <label style={{ fontSize: "13px" }}>Due Date & Time</label>
+                  <label style={{ fontSize: "13px" }}>Due Date & Time (Optional)</label>
                   <input
                     type="datetime-local"
                     value={phaseDate}
@@ -709,7 +739,7 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null }) => {
                 type="button"
                 className="cp-add-phase-btn"
                 onClick={handleAddPhase}
-                disabled={!phaseName.trim() || !phaseDate}
+                disabled={!phaseName.trim()}
               >
                 + Add Phase
               </button>
@@ -721,8 +751,21 @@ const CreateProjectModal = ({ onClose, restoreDraftId = null }) => {
                       <div className="cp-phase-item-dot" />
                       <div className="cp-phase-item-info">
                         <div className="cp-phase-item-title">{m.title}</div>
-                        <div className="cp-phase-item-date">{formatDateDisplay(m.due_date)}</div>
+                        <div className="cp-phase-item-date">{m.due_date ? formatDateDisplay(m.due_date) : "No Date"}</div>
                       </div>
+                      {m.due_date && (
+                        <button
+                          type="button"
+                          title="Clear Milestone Date"
+                          style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: "12px", marginRight: "8px", fontWeight: 600 }}
+                          onClick={() => {
+                            markDirty();
+                            setMilestones((prev) => prev.map((item, idx) => idx === index ? { ...item, due_date: "" } : item));
+                          }}
+                        >
+                          Clear Date
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="cp-phase-item-remove"

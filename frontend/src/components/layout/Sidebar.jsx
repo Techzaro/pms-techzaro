@@ -29,6 +29,8 @@ import {
   MdHistory,
   MdSettings,
   MdEditNote,
+  MdDifference,
+  MdMenuBook,
   MdOpenInNew,
 } from "react-icons/md";
 
@@ -189,6 +191,11 @@ function Sidebar() {
       sessionStorage.setItem("reportsOpen", false);
     }
 
+    const isSettingsRoute =
+      isActive("audit-logs") ||
+      isActive("settings/notifications");
+
+    if (isSettingsRoute) {
     // Settings dropdown
     if (isActive("audit-logs") || isActive("branding") || isActive("subscription")) {
       setSettingsOpen(true);
@@ -233,6 +240,7 @@ function Sidebar() {
         onMouseLeave={handleMouseLeave}
         onClick={handleSidebarClick}
       >
+
 
         {/* Mobile-only header with close button and logo */}
         <div className="sidebar-mobile-header">
@@ -291,10 +299,10 @@ function Sidebar() {
 
           {/* Tasks dropdown – sub-links for assigned/by-you/self/all; hidden for guest */}
           {user.role !== "guest" && (
-          <div className={`sidebar-link ${isActive("tasks") || isActive("taskby") || isActive("self-tasks") || isActive("all-tasks") || location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+          <div className={`sidebar-dropdown-group ${tasksOpen || isActive("tasks") || isActive("taskby") || isActive("self-tasks") || isActive("all-tasks") || location.pathname.startsWith(`${rolePrefix}/tasks/task-details/`) ? "open active" : ""}`}>
             <div
+              className="sidebar-dropdown-header"
               onClick={toggleTasks}
-              style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
             >
               <MdTask />
               <span style={{ flex: 1 }}>Tasks</span>
@@ -347,10 +355,10 @@ function Sidebar() {
 
           {/* Subtasks dropdown – sub-links for assigned/by-you/self; hidden for guest */}
           {user.role !== "guest" && (
-          <div className={`sidebar-link ${isActive("deliveries") || isActive("deliveries-by-you") || isActive("self-deliveries") || isActive("all-deliverables") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+          <div className={`sidebar-dropdown-group ${subtasksOpen || isActive("deliveries") || isActive("deliveries-by-you") || isActive("self-deliveries") || isActive("all-deliverables") || location.pathname.startsWith(`${rolePrefix}/deliveries/deliverable-details/`) ? "open active" : ""}`}>
             <div
+              className="sidebar-dropdown-header"
               onClick={toggleSubtasks}
-              style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
             >
               <MdAssignment />
               <span style={{ flex: 1 }}>Subtasks</span>
@@ -420,6 +428,16 @@ function Sidebar() {
             <span>Drafts</span>
           </Link>
 
+          {/* Templates link */}
+          <Link
+            to={rolePath("templates")}
+            className={`sidebar-link ${isActiveOrStart("templates") ? "active" : ""}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MdDifference />
+            <span>Templates</span>
+          </Link>
+
           <hr />
 
           {/* Admin/Manager only – Users link */}
@@ -460,10 +478,10 @@ function Sidebar() {
 
           {/* Reports – dropdown for team_lead, simple link for others; hidden for guest */}
           {user.role !== "guest" && (user.role === "team_lead" || user.role === "teamlead") && (
-            <div className={`sidebar-link ${isActive("reports") || isActive("team-members-report") || location.pathname.startsWith(`${rolePrefix}/reports/team-members/`) || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`) ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+            <div className={`sidebar-dropdown-group ${reportsOpen || isActive("reports") || isActive("team-members-report") || location.pathname.startsWith(`${rolePrefix}/reports/team-members/`) || location.pathname.startsWith(`${rolePrefix}/reports/user-performance/`) ? "open active" : ""}`}>
               <div
+                className="sidebar-dropdown-header"
                 onClick={toggleReports}
-                style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
               >
                 <MdBarChart />
                 <span style={{ flex: 1 }}>Reports</span>
@@ -506,6 +524,37 @@ function Sidebar() {
             </Link>
           )}
 
+          {/* Knowledge Base link – positioned directly underneath Reports */}
+          {user.role !== "guest" && (
+            <Link
+              to={rolePath("knowledge-base")}
+              className={`sidebar-link ${isActiveOrStart("knowledge-base") ? "active" : ""}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MdMenuBook />
+              <span>Knowledge Base</span>
+            </Link>
+          )}
+
+          {/* Settings dropdown – click to toggle like Tasks */}
+          <div className={`sidebar-dropdown-group ${settingsOpen || isActive("audit-logs") || isActive("settings/notifications") ? "open active" : ""}`}>
+            <div
+              className="sidebar-dropdown-header"
+              onClick={() => setSettingsOpen((p) => !p)}
+            >
+              <MdSettings fontSize={22} />
+              <span style={{ flex: 1 }}>Settings</span>
+              <MdKeyboardArrowDown
+                size={18}
+                style={{
+                  transition: "transform 0.2s",
+                  transform: settingsOpen ? "rotate(180deg)" : "rotate(0deg)",
+                }}
+              />
+            </div>
+            {settingsOpen && (
+              <div className="sidebar-sub-links">
+                {(user.role === "admin" || user.role === "manager") && (
           {/* Super Admin link – only for the platform owner tenant */}
           {getTenantSlug() === import.meta.env.VITE_SUPER_ADMIN_TENANT && user.role === "admin" && (
             <a
@@ -555,6 +604,17 @@ function Sidebar() {
                   >
                     Application Logs
                   </Link>
+                )}
+                <Link
+                  to={rolePath("settings/notifications")}
+                  className={`sidebar-sub-link ${isActive("settings/notifications") ? "active" : ""}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Notification Preferences
+                </Link>
+              </div>
+            )}
+          </div>
                   {user.role === "admin" && (
                     <Link
                       to={rolePath("branding")}

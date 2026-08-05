@@ -254,6 +254,19 @@ class ResignationWorkflowService
     {
         $project = Project::findOrFail($projectId);
 
+        if (! in_array(strtolower((string) $project->status), ['completed', 'approved', 'cancelled', 'archived'])) {
+            $assignedUsers = $project->assigned_users ?? [];
+            $assignedUsers = array_values(array_filter($assignedUsers, fn ($id) => (int) $id !== (int) $resignedUser->id));
+            $updateData = ['assigned_users' => $assignedUsers, 'updated_by' => $admin->id];
+            if ((int) ($project->manager_id ?? 0) === (int) $resignedUser->id) {
+                $updateData['manager_id'] = null;
+            }
+            if (empty($assignedUsers) || (int) ($project->manager_id ?? 0) === (int) $resignedUser->id) {
+                $updateData['status'] = 'draft';
+            }
+            $project->update($updateData);
+        }
+
         return Draft::create([
             'module_type' => 'project',
             'original_record_id' => $project->id,
@@ -274,6 +287,30 @@ class ResignationWorkflowService
     {
         $task = Task::findOrFail($taskId);
 
+        if (! in_array(strtolower((string) $task->status), ['approved', 'completed'])) {
+            $task->update([
+                'status' => 'draft',
+                'assigned_to' => null,
+                'updated_by' => $admin->id,
+            ]);
+            $task->assignees()->detach($resignedUser->id);
+
+            \App\Models\TaskWorkflowEvent::create([
+                'task_id' => $task->id,
+                'user_id' => $admin->id,
+                'action' => 'shifted_to_draft',
+                'comment' => "Shifted to drafts due to assignee ({$resignedUser->name}) resignation. Requires new assignee.",
+            ]);
+
+            $this->activityService->log(
+                $admin->id,
+                'task_shifted_to_draft',
+                "Shifted task \"{$task->title}\" to drafts due to {$resignedUser->name}'s resignation. Requires new assignee.",
+                'task',
+                $task->id
+            );
+        }
+
         return Draft::create([
             'module_type' => 'task',
             'original_record_id' => $task->id,
@@ -293,6 +330,30 @@ class ResignationWorkflowService
     private function createDraftFromDeliverable(int $deliverableId, int $ownerId, User $admin, User $resignedUser): Draft
     {
         $deliverable = Deliverable::findOrFail($deliverableId);
+
+        if (! in_array(strtolower((string) $deliverable->status), ['approved', 'completed'])) {
+            $deliverable->update([
+                'status' => 'draft',
+                'assigned_to' => null,
+                'updated_by' => $admin->id,
+            ]);
+            $deliverable->assignees()->detach($resignedUser->id);
+
+            \App\Models\DeliverableWorkflowEvent::create([
+                'deliverable_id' => $deliverable->id,
+                'user_id' => $admin->id,
+                'event_type' => 'shifted_to_draft',
+                'comment' => "Shifted to drafts due to assignee ({$resignedUser->name}) resignation. Requires new assignee.",
+            ]);
+
+            $this->activityService->log(
+                $admin->id,
+                'deliverable_shifted_to_draft',
+                "Shifted subtask \"{$deliverable->title}\" to drafts due to {$resignedUser->name}'s resignation. Requires new assignee.",
+                'deliverable',
+                $deliverable->id
+            );
+        }
 
         return Draft::create([
             'module_type' => 'deliverable',

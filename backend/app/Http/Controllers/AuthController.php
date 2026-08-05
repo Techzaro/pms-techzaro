@@ -18,7 +18,9 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -39,6 +41,7 @@ class AuthController extends Controller
      *
      * Validates credentials, checks account active status, generates a token,
      * tracks last login time, and normalizes the role format.
+     * Enforces brute-force protection (5 failed attempts = 15 min lockout).
      *
      * @param  Request  $request  Input: email (required), password (required).
      * @return JsonResponse JSON response with token, role, and user data on success.
@@ -51,6 +54,53 @@ class AuthController extends Controller
                 'email' => 'required|email',
                 'password' => 'required',
             ]);
+
+            // Rate limiting key per normalized email & IP
+            $throttleKey = Str::lower(trim($request->email)) . '|' . $request->ip();
+
+            // Check if account is locked out (max 5 failed attempts)
+            if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
+                $seconds = RateLimiter::availableIn($throttleKey);
+                $minutes = max(1, (int) ceil($seconds / 60));
+                $unit = $minutes === 1 ? 'minute' : 'minutes';
+
+                return response()->json([
+                    'success' => false,
+                    'message' => "Too many failed login attempts. Please try again in {$minutes} {$unit}.",
+                ], 429);
+            }
+
+            // Look up user by email — guests use personal_email, employees use professional_email
+            $user = User::where('professional_email', $request->email)
+                ->orWhere('email', $request->email)
+                ->orWhere('personal_email', $request->email)
+                ->first();
+
+            if (! $user || ! Hash::check($request->password, $user->password)) {
+                // Track failed attempt with 15-minute decay window (900 seconds)
+                RateLimiter::hit($throttleKey, 900);
+
+                if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
+                    $seconds = RateLimiter::availableIn($throttleKey);
+                    $minutes = max(1, (int) ceil($seconds / 60));
+                    $unit = $minutes === 1 ? 'minute' : 'minutes';
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Too many failed login attempts. Please try again in {$minutes} {$unit}.",
+                    ], 429);
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid Email or Password',
+                ], 401);
+            }
+
+            // Successful login — reset rate limiter counter to 0
+            RateLimiter::clear($throttleKey);
+
+            // logged in user
 
             $email = $request->email;
             $organization = $request->attributes->get('currentOrganization');
@@ -94,6 +144,13 @@ class AuthController extends Controller
                 $masterOrg = MasterOrganization::where('slug', $tenantSlug)->first();
             }
 
+            // Handle remember_me flag (24 hours / 1 day if true, 3 hours default if false)
+            $rememberMe = $request->boolean('remember_me');
+            $expiresAt = $rememberMe ? now()->addDays(1) : now()->addHours(3);
+
+            // generate Sanctum token with explicit expiration
+            $tokenResult = $user->createToken('auth_token', ['*'], $expiresAt);
+            $token = $tokenResult->plainTextToken;
             if ($masterOrg) {
                 // Block suspended / archived organizations
                 if (in_array($masterOrg->status, ['suspended', 'archived'])) {
@@ -123,6 +180,8 @@ class AuthController extends Controller
                 'token' => $token,
                 'role' => $role,
                 'must_change_password' => $user->must_change_password,
+                'remember_me' => $rememberMe,
+                'expires_at' => $expiresAt->toISOString(),
                 'user' => [
                     'id' => $user->id,
                     'name' => $user->name,
@@ -799,11 +858,22 @@ class AuthController extends Controller
             ]);
 
             $user = $request->user();
+            $errors = [];
 
             if (! Hash::check($request->old_password, $user->password)) {
+                $errors['old_password'] = 'Current password is incorrect.';
+            }
+
+            $confirmPw = $request->input('confirm_password') ?? $request->input('password_confirmation');
+            if ($confirmPw !== null && $request->input('new_password') !== $confirmPw) {
+                $errors['confirm_password'] = 'Password confirmation does not match';
+            }
+
+            if (! empty($errors)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Current password is incorrect.',
+                    'message' => reset($errors),
+                    'errors' => $errors,
                 ], 422);
             }
 
