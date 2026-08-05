@@ -6,6 +6,7 @@ use App\Models\Master\Organization;
 use App\Models\Master\OrganizationDomain;
 use App\Models\Master\OrganizationPlan;
 use App\Models\Master\OrganizationSubscription;
+use App\Services\Saas\SubscriptionHistoryService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -97,7 +98,16 @@ class OrganizationService
             'status'          => $data['status'] ?? 'active',
             'timezone'        => $data['timezone'] ?? 'Asia/Karachi',
             'settings'        => $data['settings'] ?? null,
-            'trial_ends_at'   => $data['trial_ends_at'] ?? now()->addDays(14),
+            'trial_ends_at'   => $data['trial_ends_at'] ?? now()->addMinutes(
+                isset($data['trial_duration'], $data['trial_duration_unit'])
+                    ? match ($data['trial_duration_unit']) {
+                        'minutes' => $data['trial_duration'],
+                        'hours'   => $data['trial_duration'] * 60,
+                        'days'    => $data['trial_duration'] * 24 * 60,
+                        default   => $data['trial_duration'] * 24 * 60,
+                    }
+                    : 14 * 24 * 60
+            ),
         ]);
 
         // 3. Register domain
@@ -148,6 +158,14 @@ class OrganizationService
             'status'       => 'suspended',
             'suspended_at' => now(),
         ]);
+
+        // Record suspension history
+        try {
+            app(SubscriptionHistoryService::class)->recordSuspended($organization);
+        } catch (\Throwable $e) {
+            \Log::warning("Failed to record suspension history: " . $e->getMessage());
+        }
+
         return $organization->fresh();
     }
 
@@ -158,6 +176,14 @@ class OrganizationService
             'status'       => 'active',
             'suspended_at' => null,
         ]);
+
+        // Record reactivation history
+        try {
+            app(SubscriptionHistoryService::class)->recordReactivated($organization);
+        } catch (\Throwable $e) {
+            \Log::warning("Failed to record reactivation history: " . $e->getMessage());
+        }
+
         return $organization->fresh();
     }
 
@@ -193,12 +219,14 @@ class OrganizationService
     /** Get platform-wide statistics. */
     public function getStats(): array
     {
+        $activeQuery = Organization::where('status', '!=', 'deleted');
+
         return [
-            'total_organizations'     => Organization::count(),
-            'active_organizations'    => Organization::where('status', 'active')->count(),
-            'trial_organizations'     => Organization::where('status', 'trial')->count(),
-            'suspended_organizations' => Organization::where('status', 'suspended')->count(),
-            'owner_organizations'     => Organization::where('type', 'owner')->count(),
+            'total_organizations'     => (clone $activeQuery)->count(),
+            'active_organizations'    => (clone $activeQuery)->where('status', 'active')->count(),
+            'trial_organizations'     => (clone $activeQuery)->where('status', 'trial')->count(),
+            'suspended_organizations' => (clone $activeQuery)->where('status', 'suspended')->count(),
+            'owner_organizations'     => Organization::where('type', 'owner')->where('status', '!=', 'deleted')->count(),
         ];
     }
 }

@@ -259,8 +259,9 @@ export function clearSession(role) {
 
 /**
  * Clears all sessions for all roles.
+ * @param {boolean} [preserveTenantSlug=false] If true, keeps tenant_slug in localStorage.
  */
-export function clearAllSessions() {
+export function clearAllSessions(preserveTenantSlug = false) {
   ROLES.forEach((r) => {
     localStorage.removeItem(`sessions_${r}`);
     localStorage.removeItem(`token_${r}`);
@@ -273,7 +274,9 @@ export function clearAllSessions() {
   localStorage.removeItem("userId");
   localStorage.removeItem("name");
   localStorage.removeItem("email");
-  localStorage.removeItem("tenant_slug");
+  if (!preserveTenantSlug) {
+    localStorage.removeItem("tenant_slug");
+  }
 }
 
 /* ───── multi-tab helpers ───── */
@@ -303,6 +306,16 @@ export function getDisplayUser() {
     role: user.role || role,
     avatar: user.avatar || null,
   };
+}
+
+/* ───── stored email fallback (for super-admin / cross-role use) ── */
+
+export function setStoredEmail(role, email) {
+  if (role && email) localStorage.setItem(`stored_email_${role}`, email);
+}
+
+export function getStoredEmail(role) {
+  return localStorage.getItem(`stored_email_${role}`) || "";
 }
 
 /* ───── role-prefixed path helper ───── */

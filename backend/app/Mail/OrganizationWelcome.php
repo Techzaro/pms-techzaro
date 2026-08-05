@@ -56,7 +56,38 @@ class OrganizationWelcome extends Mailable
         $password = e($this->plainPassword);
         $loginUrl = e($this->loginUrl);
         $orgName = e($this->organization->name);
-        $trialEnds = e($this->organization->trial_ends_at?->format('M d, Y') ?? '14 days');
+        $currentYear = date('Y');
+
+        $subscription = $this->organization->subscription;
+        if ($subscription && $subscription->plan) {
+            $planName = e($subscription->plan->name);
+            if ($subscription->plan->slug === 'trial') {
+                $trialLabel = e($subscription->plan->getTrialLabel());
+                $trialEnds = e($this->organization->trial_ends_at?->format('M d, Y') ?? $trialLabel);
+                $planLine1 = "Plan: {$planName}";
+                $planLine2 = "Free {$trialLabel} trial";
+                $planLine3 = "Trial Expires: {$trialEnds}";
+            } else {
+                $billingPeriod = e(ucfirst($subscription->billing_period));
+                $amount = e($subscription->amount ?? '0');
+                $currency = e($subscription->currency ?? 'USD');
+                $periodShort = $subscription->billing_period === 'monthly' ? 'mo' : 'yr';
+                $maxUsers = $subscription->plan->max_users == 9999 ? 'Unlimited' : $subscription->plan->max_users;
+                $maxProjects = $subscription->plan->max_projects == 9999 ? 'Unlimited' : $subscription->plan->max_projects;
+                $planLine1 = "Plan: {$planName}";
+                $planLine2 = "{$billingPeriod} billing — {$currency} {$amount}/{$periodShort}";
+                $planLine3 = "Limits: {$maxUsers} users, {$maxProjects} projects, {$subscription->plan->max_storage_gb} GB storage";
+            }
+        } else {
+            $trialEnds = e($this->organization->trial_ends_at?->format('M d, Y') ?? '14 days');
+            $planLine1 = "Plan: Trial";
+            $planLine2 = "Free 14-day trial";
+            $planLine3 = "Trial Expires: {$trialEnds}";
+        }
+
+        $planRow3 = $planLine3
+            ? "<tr><td style='padding:5px 0;color:#6b7280;font-size:13px;font-weight:600;'></td><td style='padding:5px 0;color:#6b7280;font-size:13px;'>{$planLine3}</td></tr>"
+            : '';
 
         return <<<HTML
         <!DOCTYPE html>
@@ -93,7 +124,8 @@ class OrganizationWelcome extends Mailable
                                             <tr><td style="padding:5px 0;color:#6b7280;font-size:13px;font-weight:600;">Email:</td><td style="padding:5px 0;color:#111827;font-size:14px;font-weight:600;">{$email}</td></tr>
                                             <tr><td style="padding:5px 0;color:#6b7280;font-size:13px;font-weight:600;">Temporary Password:</td><td style="padding:5px 0;"><span style="font-family:monospace;background:#e5e7eb;padding:4px 10px;border-radius:6px;font-size:14px;color:#111827;">{$password}</span></td></tr>
                                             <tr><td style="padding:5px 0;color:#6b7280;font-size:13px;font-weight:600;">Organization:</td><td style="padding:5px 0;color:#111827;font-size:14px;font-weight:600;">{$orgName}</td></tr>
-                                            <tr><td style="padding:5px 0;color:#6b7280;font-size:13px;font-weight:600;">Trial Expires:</td><td style="padding:5px 0;color:#111827;font-size:14px;font-weight:600;">{$trialEnds}</td></tr>
+                                            <tr><td style="padding:5px 0;color:#6b7280;font-size:13px;font-weight:600;">{$planLine1}</td><td style="padding:5px 0;color:#111827;font-size:14px;font-weight:600;">{$planLine2}</td></tr>
+                                            {$planRow3}
                                         </table>
                                     </td></tr>
                                 </table>
@@ -147,7 +179,7 @@ class OrganizationWelcome extends Mailable
                         <!-- Footer -->
                         <tr>
                             <td style="background-color:#f9fafb;padding:18px 30px;text-align:center;border-top:1px solid #e5e7eb;">
-                                <p style="color:#9ca3af;font-size:12px;margin:0;">&copy; ' . date('Y') . ' TechXaro. All rights reserved.</p>
+                                <p style="color:#9ca3af;font-size:12px;margin:0;">&copy; {$currentYear} TechXaro. All rights reserved.</p>
                             </td>
                         </tr>
 

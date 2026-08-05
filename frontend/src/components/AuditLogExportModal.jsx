@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
 import { jsPDF } from "jspdf";
@@ -9,10 +9,13 @@ import autoTable from "jspdf-autotable";
 import "./AuditLogExportModal.css";
 
 function AuditLogExportModal({ onClose }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
-  useEscapeKey(true, handleClose);
   const [format, setFormat] = useState("pdf");
   const [exporting, setExporting] = useState(false);
+
+  const initialValues = useMemo(() => ({ format: 'pdf' }), []);
+  const currentValues = useMemo(() => ({ format }), [format]);
+  const { isDirty, handleClose, markSaved, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
+  useEscapeKey(true, handleClose);
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("modal-state", { detail: { open: true } }));
@@ -142,6 +145,7 @@ function AuditLogExportModal({ onClose }) {
       await exportExcel();
     }
     setExporting(false);
+    markSaved();
     onClose();
   };
 
@@ -179,7 +183,7 @@ function AuditLogExportModal({ onClose }) {
                   name="export-format"
                   value="pdf"
                   checked={format === "pdf"}
-                  onChange={() => { setFormat("pdf"); setIsDirty(true); }}
+                  onChange={() => setFormat("pdf")}
                 />
                 <span className="ael-radio-mark" />
                 <div className="ael-radio-content">
@@ -193,7 +197,7 @@ function AuditLogExportModal({ onClose }) {
                   name="export-format"
                   value="xlsx"
                   checked={format === "xlsx"}
-                  onChange={() => { setFormat("xlsx"); setIsDirty(true); }}
+                  onChange={() => setFormat("xlsx")}
                 />
                 <span className="ael-radio-mark" />
                 <div className="ael-radio-content">

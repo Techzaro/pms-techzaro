@@ -146,10 +146,47 @@ class UserController extends Controller
             throw $e;
         }
 
+        $authUser = $request->user();
+
+        // Enforce plan user limits
+        $org = $request->attributes->get('currentOrganization');
+        if ($org && !$org->isOwner()) {
+            $subscription = \App\Models\Master\OrganizationSubscription::on('mysql_master')
+                ->where('organization_id', $org->id)
+                ->with('plan')
+                ->latest()
+                ->first();
+
+            if ($subscription && $subscription->plan) {
+                $maxUsers = $subscription->plan->max_users;
+
+                // Check for trial config override
+                if ($subscription->plan->slug === 'trial') {
+                    $trialSetting = \App\Models\Master\OrganizationTrialSetting::on('mysql_master')
+                        ->where('organization_id', $org->id)
+                        ->first();
+                    if ($trialSetting) {
+                        $maxUsers = $trialSetting->max_users;
+                    }
+                }
+
+                if ($maxUsers < 9999) {
+                    // Count users created within current subscription period only (resets on renewal)
+                    $currentUserCount = User::where('created_at', '>=', $subscription->starts_at)
+                        ->where('created_at', '<=', $subscription->ends_at)
+                        ->count();
+                    if ($currentUserCount >= $maxUsers) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "User limit reached ({$currentUserCount}/{$maxUsers}). Please upgrade your plan to add more users.",
+                        ], 403);
+                    }
+                }
+            }
+        }
+
         $plainPassword = Str::random(10);
         $role = $request->input('role') === 'teamlead' ? 'team_lead' : $request->input('role');
-
-        $authUser = $request->user();
 
         if ($authUser->role === 'manager' && in_array($role, ['admin', 'manager'])) {
             return response()->json([
@@ -184,9 +221,9 @@ class UserController extends Controller
             'emergency_contact_relation' => $request->input('emergency_contact_relation'),
             'emergency_contact_phone' => $request->input('emergency_contact_phone'),
 
-            // Emails
-            'personal_email' => $request->input('personal_email'),
-            'professional_email' => $request->input('professional_email'),
+            // Emails — in standard policy, email IS the personal + professional email
+            'personal_email' => $request->input('personal_email') ?: $loginEmail,
+            'professional_email' => $request->input('professional_email') ?: $loginEmail,
             'professional_email_password' => $request->input('professional_email_password') ?: null,
             'recovery_email' => $request->input('recovery_email'),
 
@@ -268,9 +305,11 @@ class UserController extends Controller
         $emailSent = false;
         $emailError = null;
 
-        $profEmail = $request->input('professional_email') ?: $user->professional_email;
+        $profEmail = $request->input('professional_email') ?: $loginEmail;
         $profPassword = $request->input('professional_email_password') ?: '';
-        $personalEmail = $request->input('personal_email');
+        // In "standard" email policy there is no separate personal_email field, so
+        // the welcome email must go to the user's primary email column instead.
+        $personalEmail = $request->input('personal_email') ?: $loginEmail;
         $adderEmail = $authUser->notification_email;
 
         $message = $personalEmail
@@ -283,18 +322,22 @@ class UserController extends Controller
                 $user, $plainPassword, $profEmail, $profPassword, $loginUrl, $emailAttachments,
                 $personalEmail, $adderEmail, $authUser->name
             );
+            $emailSent = true;
         } catch (\Throwable $e) {
             Log::error('Failed to send user created emails', [
                 'user_id' => $user->id,
                 'error' => $e->getMessage(),
             ]);
+            $emailError = $e->getMessage();
         }
 
         return response()->json([
             'success' => true,
-            'message' => $message,
+            'message' => $emailSent
+                ? ($message ?: 'User created successfully.')
+                : 'User created successfully but welcome email could not be sent.',
             'user' => $user,
-            'email_sent' => false,
+            'email_sent' => $emailSent,
         ], 201);
     }
 

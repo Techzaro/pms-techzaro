@@ -8,7 +8,7 @@
  * non-admin roles unless editing their own profile.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import { MdEdit, MdArrowBack } from "react-icons/md";
@@ -20,7 +20,7 @@ import ResignationConfirmModal from "../components/ResignationConfirmModal";
 import { publish } from "../utils/eventBus";
 import API_URL from "../config/api";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import { authToken, getCurrentRole, rolePath, getUser, normalizeRole } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
@@ -193,7 +193,36 @@ function UserProfile() {
     markViewed: markUserViewed,
   } = useActivityHighlight("user", userId, profileData?.activity_max_id || 0, changes);
 
-  const { isDirty: editIsDirty, setIsDirty: setEditIsDirty, handleClose: handleEditClose, ConfirmDialog: EditConfirmDialog } = useConfirmOnClose(() => { setIsEditModalOpen(false); setExistingOtherDocs([]); });
+  const editInitialRef = useRef({});
+  const editCurrentValues = useMemo(() => ({
+    name: editUser.name,
+    father_name: editUser.father_name,
+    id_card_number: editUser.id_card_number,
+    present_address: editUser.present_address,
+    permanent_address: editUser.permanent_address,
+    phone_number: editUser.phone_number,
+    emergency_contact_name: editUser.emergency_contact_name,
+    emergency_contact_relation: editUser.emergency_contact_relation,
+    emergency_contact_phone: editUser.emergency_contact_phone,
+    personal_email: editUser.personal_email,
+    professional_email: editUser.professional_email,
+    professional_email_password: editUser.professional_email_password,
+    department: editUser.department,
+    departmentCustom: editUser.departmentCustom,
+    designation: editUser.designation,
+    designationCustom: editUser.designationCustom,
+    hired_for: editUser.hired_for,
+    employee_code: editUser.employee_code,
+    job_started_date: editUser.job_started_date,
+    job_ended_date: editUser.job_ended_date,
+    role: editUser.role,
+    gross_salary: editUser.gross_salary,
+    applied_via: editUser.applied_via,
+    bank_name: editUser.bank_name,
+    bank_account_number: editUser.bank_account_number,
+    bank_account_title: editUser.bank_account_title,
+  }), [editUser]);
+  const { isDirty: editIsDirty, handleClose: handleEditClose, markSaved: markEditSaved, ConfirmDialog: EditConfirmDialog } = useUnsavedChanges(editInitialRef.current, editCurrentValues, () => { setIsEditModalOpen(false); setExistingOtherDocs([]); });
   useEscapeKey(isEditModalOpen, handleEditClose);
 
   useEffect(() => {
@@ -332,22 +361,22 @@ function UserProfile() {
     }
   };
 
-  const { isDirty: guestIsDirty, setIsDirty: setGuestIsDirty, handleClose: handleGuestEditClose, ConfirmDialog: GuestEditConfirmDialog } = useConfirmOnClose(() => {
-    setGuestEditModal(false);
-    setGuestIsDirty(false);
-  });
+  const guestInitialRef = useRef({ name: "", personal_email: "", phone_number: "", company_name: "", avatar: null, _existingAvatar: null });
+  const { isDirty: guestIsDirty, handleClose: handleGuestEditClose, markSaved: markGuestSaved, resetBaseline: resetGuestBaseline, ConfirmDialog: GuestEditConfirmDialog } = useUnsavedChanges(guestInitialRef.current, guestEditData, () => { setGuestEditModal(false); });
   useEscapeKey(guestEditModal, handleGuestEditClose);
 
   const openGuestEditModal = () => {
-    setGuestEditData({
+    const initialValues = {
       name: user.name || "",
       personal_email: user.personal_email || user.email || "",
       phone_number: user.phone_number || user.contact_no || "",
       company_name: user.company_name || "",
       avatar: null,
       _existingAvatar: user.avatar || null,
-    });
-    setGuestIsDirty(false);
+    };
+    setGuestEditData(initialValues);
+    guestInitialRef.current = initialValues;
+    resetGuestBaseline(initialValues);
     setGuestEditModal(true);
   };
 
@@ -380,6 +409,7 @@ function UserProfile() {
       setProfileData((prev) => ({ ...prev, user: { ...prev.user, ...data.user } }));
       showSuccessMessage("Guest", "updated");
       publish("data:changed", { type: "guest", action: "updated" });
+      markGuestSaved();
       setGuestEditModal(false);
     } catch (err) {
       notify.error(err.message);
@@ -530,6 +560,34 @@ function UserProfile() {
     setEditErrors({});
     setEditFiles({});
     setFilePreviews({});
+    editInitialRef.current = {
+      name: u.name || "",
+      father_name: u.father_name || "",
+      id_card_number: formatCNIC(u.id_card_number || ""),
+      present_address: u.present_address || u.address || "",
+      permanent_address: u.permanent_address || "",
+      phone_number: formatPhone(u.phone_number || u.contact_no || ""),
+      emergency_contact_name: u.emergency_contact_name || "",
+      emergency_contact_relation: u.emergency_contact_relation || "",
+      emergency_contact_phone: formatPhone(u.emergency_contact_phone || ""),
+      personal_email: u.personal_email || "",
+      professional_email: u.professional_email || "",
+      professional_email_password: u.professional_email_password || "",
+      department: isCustomDept ? "__custom__" : deptVal,
+      departmentCustom: isCustomDept ? deptVal : "",
+      designation: isCustomDesg ? "__custom__" : desgVal,
+      designationCustom: isCustomDesg ? desgVal : "",
+      hired_for: u.hired_for || "",
+      employee_code: u.employee_code || "",
+      job_started_date: u.job_started_date ? u.job_started_date.substring(0, 10) : "",
+      job_ended_date: u.job_ended_date ? u.job_ended_date.substring(0, 10) : "",
+      role: u.role || "member",
+      gross_salary: u.gross_salary || "",
+      applied_via: u.applied_via || "",
+      bank_name: u.bank_name || "",
+      bank_account_number: u.bank_account_number || "",
+      bank_account_title: u.bank_account_title || "",
+    };
     // Initialize existing other docs with rename state
     const docs = typeof u.other_document === "string" ? (() => { try { return JSON.parse(u.other_document); } catch { return []; } })() : (u.other_document || []);
     setExistingOtherDocs((Array.isArray(docs) ? docs : []).filter(d => d).map((doc) => {
@@ -547,7 +605,6 @@ function UserProfile() {
     if (name === "id_card_number") formattedValue = formatCNIC(value);
     if (name === "phone_number" || name === "emergency_contact_phone") formattedValue = formatPhone(value);
     setEditUser((prev) => ({ ...prev, [name]: formattedValue }));
-    setEditIsDirty(true);
     if (editErrors[name]) {
       setEditErrors((prev) => {
         const next = { ...prev };
@@ -560,7 +617,6 @@ function UserProfile() {
   const handleCustomRevert = (field) => {
     const customField = field === "department" ? "departmentCustom" : "designationCustom";
     setEditUser((prev) => ({ ...prev, [field]: "", [customField]: "" }));
-    setEditIsDirty(true);
   };
 
   const deleteDesignation = (val) => {
@@ -992,6 +1048,7 @@ function UserProfile() {
       if (!res.ok) throw new Error(data.message || "Unable to update user");
 
       setIsEditModalOpen(false);
+      markEditSaved();
       setEditFiles({});
       setFilePreviews({});
       setEditOtherDocs([]);
@@ -1755,7 +1812,6 @@ function UserProfile() {
                           } else {
                             setEditUser((prev) => ({ ...prev, designation: "__custom__" }));
                           }
-                          setEditIsDirty(true);
                           setDesgDropdownOpen(false);
                         } else if (e.key === "Escape" && desgDropdownOpen) {
                           e.preventDefault();
@@ -1766,16 +1822,16 @@ function UserProfile() {
                       </button>
                       {desgDropdownOpen && (
                         <div className="category-dropdown-options" ref={desgOptionsRef}>
-                          <div className={`category-dropdown-option ${desgHighlightedIndex === 0 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, designation: "" })); setEditIsDirty(true); setDesgDropdownOpen(false); }} onMouseEnter={() => setDesgHighlightedIndex(0)} style={{ fontWeight: !editUser.designation ? "600" : "400", background: !editUser.designation ? "var(--color-primary-bg)" : "transparent" }}>
+                          <div className={`category-dropdown-option ${desgHighlightedIndex === 0 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, designation: "" })); setDesgDropdownOpen(false); }} onMouseEnter={() => setDesgHighlightedIndex(0)} style={{ fontWeight: !editUser.designation ? "600" : "400", background: !editUser.designation ? "var(--color-primary-bg)" : "transparent" }}>
                             Select Designation
                           </div>
                           {designations.map((d, idx) => (
-                            <div key={d} className={`category-dropdown-option ${desgHighlightedIndex === idx + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, designation: d })); setEditIsDirty(true); setDesgDropdownOpen(false); }} onMouseEnter={() => setDesgHighlightedIndex(idx + 1)} style={{ fontWeight: editUser.designation === d ? "600" : "400", background: editUser.designation === d ? "var(--color-primary-bg)" : "transparent" }}>
+                            <div key={d} className={`category-dropdown-option ${desgHighlightedIndex === idx + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, designation: d })); setDesgDropdownOpen(false); }} onMouseEnter={() => setDesgHighlightedIndex(idx + 1)} style={{ fontWeight: editUser.designation === d ? "600" : "400", background: editUser.designation === d ? "var(--color-primary-bg)" : "transparent" }}>
                               {d}
                               <span className="category-option-delete" onClick={(e) => { e.stopPropagation(); deleteDesignation(d); }} title="Delete">&times;</span>
                             </div>
                           ))}
-                          <div className={`category-dropdown-option category-dropdown-custom ${desgHighlightedIndex === designations.length + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, designation: "__custom__" })); setEditIsDirty(true); setDesgDropdownOpen(false); }} onMouseEnter={() => setDesgHighlightedIndex(designations.length + 1)}>Custom / Type Here</div>
+                          <div className={`category-dropdown-option category-dropdown-custom ${desgHighlightedIndex === designations.length + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, designation: "__custom__" })); setDesgDropdownOpen(false); }} onMouseEnter={() => setDesgHighlightedIndex(designations.length + 1)}>Custom / Type Here</div>
                         </div>
                       )}
                     </div>
@@ -1808,7 +1864,6 @@ function UserProfile() {
                           } else {
                             setEditUser((prev) => ({ ...prev, department: "__custom__" }));
                           }
-                          setEditIsDirty(true);
                           setDeptDropdownOpen(false);
                         } else if (e.key === "Escape" && deptDropdownOpen) {
                           e.preventDefault();
@@ -1819,16 +1874,16 @@ function UserProfile() {
                       </button>
                       {deptDropdownOpen && (
                         <div className="category-dropdown-options" ref={deptOptionsRef}>
-                          <div className={`category-dropdown-option ${deptHighlightedIndex === 0 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, department: "" })); setEditIsDirty(true); setDeptDropdownOpen(false); }} onMouseEnter={() => setDeptHighlightedIndex(0)} style={{ fontWeight: !editUser.department ? "600" : "400", background: !editUser.department ? "var(--color-primary-bg)" : "transparent" }}>
+                          <div className={`category-dropdown-option ${deptHighlightedIndex === 0 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, department: "" })); setDeptDropdownOpen(false); }} onMouseEnter={() => setDeptHighlightedIndex(0)} style={{ fontWeight: !editUser.department ? "600" : "400", background: !editUser.department ? "var(--color-primary-bg)" : "transparent" }}>
                             Select Department
                           </div>
                           {departments.map((d, idx) => (
-                            <div key={d} className={`category-dropdown-option ${deptHighlightedIndex === idx + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, department: d })); setEditIsDirty(true); setDeptDropdownOpen(false); }} onMouseEnter={() => setDeptHighlightedIndex(idx + 1)} style={{ fontWeight: editUser.department === d ? "600" : "400", background: editUser.department === d ? "var(--color-primary-bg)" : "transparent" }}>
+                            <div key={d} className={`category-dropdown-option ${deptHighlightedIndex === idx + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, department: d })); setDeptDropdownOpen(false); }} onMouseEnter={() => setDeptHighlightedIndex(idx + 1)} style={{ fontWeight: editUser.department === d ? "600" : "400", background: editUser.department === d ? "var(--color-primary-bg)" : "transparent" }}>
                               {d}
                               <span className="category-option-delete" onClick={(e) => { e.stopPropagation(); deleteDepartment(d); }} title="Delete">&times;</span>
                             </div>
                           ))}
-                          <div className={`category-dropdown-option category-dropdown-custom ${deptHighlightedIndex === departments.length + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, department: "__custom__" })); setEditIsDirty(true); setDeptDropdownOpen(false); }} onMouseEnter={() => setDeptHighlightedIndex(departments.length + 1)}>Custom / Type Here</div>
+                          <div className={`category-dropdown-option category-dropdown-custom ${deptHighlightedIndex === departments.length + 1 ? "category-dropdown-option--highlighted" : ""}`} onClick={() => { setEditUser((prev) => ({ ...prev, department: "__custom__" })); setDeptDropdownOpen(false); }} onMouseEnter={() => setDeptHighlightedIndex(departments.length + 1)}>Custom / Type Here</div>
                         </div>
                       )}
                     </div>
@@ -2240,7 +2295,7 @@ function UserProfile() {
                       </>
                     )}
                   </div>
-                  <input id="guest-profile-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) { setGuestEditData((prev) => ({ ...prev, avatar: file })); setGuestIsDirty(true); } }} />
+                  <input id="guest-profile-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if (file) { setGuestEditData((prev) => ({ ...prev, avatar: file })); } }} />
                   {(guestEditData.avatar || guestEditData._existingAvatar) && (
                     <button type="button" className="avatar-remove-btn" onClick={() => setGuestEditData((prev) => ({ ...prev, avatar: null, _existingAvatar: null }))}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -2254,19 +2309,19 @@ function UserProfile() {
               <div className="user-form-grid">
                 <div className="form-row">
                   <label>Guest Name *</label>
-                  <input type="text" value={guestEditData.name} onChange={(e) => { setGuestEditData((p) => ({ ...p, name: e.target.value })); setGuestIsDirty(true); }} placeholder="Enter guest / company name" />
+                  <input type="text" value={guestEditData.name} onChange={(e) => { setGuestEditData((p) => ({ ...p, name: e.target.value })); }} placeholder="Enter guest / company name" />
                 </div>
                 <div className="form-row">
                   <label>Personal Email *</label>
-                  <input type="email" value={guestEditData.personal_email} onChange={(e) => { setGuestEditData((p) => ({ ...p, personal_email: e.target.value })); setGuestIsDirty(true); }} placeholder="guest@example.com" />
+                  <input type="email" value={guestEditData.personal_email} onChange={(e) => { setGuestEditData((p) => ({ ...p, personal_email: e.target.value })); }} placeholder="guest@example.com" />
                 </div>
                 <div className="form-row">
                   <label>Phone Number</label>
-                  <input type="text" value={guestEditData.phone_number} onChange={(e) => { setGuestEditData((p) => ({ ...p, phone_number: e.target.value })); setGuestIsDirty(true); }} placeholder="03XX-XXXXXXX" />
+                  <input type="text" value={guestEditData.phone_number} onChange={(e) => { setGuestEditData((p) => ({ ...p, phone_number: e.target.value })); }} placeholder="03XX-XXXXXXX" />
                 </div>
                 <div className="form-row">
                   <label>Company Name</label>
-                  <input type="text" value={guestEditData.company_name} onChange={(e) => { setGuestEditData((p) => ({ ...p, company_name: e.target.value })); setGuestIsDirty(true); }} placeholder="Enter company name (optional)" />
+                  <input type="text" value={guestEditData.company_name} onChange={(e) => { setGuestEditData((p) => ({ ...p, company_name: e.target.value })); }} placeholder="Enter company name (optional)" />
                 </div>
               </div>
             </form>

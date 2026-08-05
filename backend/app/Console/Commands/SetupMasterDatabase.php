@@ -97,7 +97,7 @@ class SetupMasterDatabase extends Command
         $this->info('Connection name: mysql_master');
         $this->newLine();
         $this->info('Registered entities:');
-        $this->line('  - 3 Plans (Starter, Professional, Enterprise)');
+        $this->line('  - 3 Plans (Starter, Standard, Enterprise)');
         $this->line('  - 17 Modules (projects, tasks, deliverables, etc.)');
         $this->line('  - 1 Organization (TechXaro - Tenant #1)');
         $this->newLine();

@@ -49,8 +49,8 @@ class TeamController extends Controller
             $q->where('users.id', $user->id);
         })
             ->with([
-                'leader:id,name,role,department,designation,professional_email',
-                'members:id,name,role,department,designation,professional_email',
+                'leader:id,name,role,department,designation,professional_email,email,personal_email',
+                'members:id,name,role,department,designation,professional_email,email,personal_email',
             ])
             ->orderBy('created_at', 'desc')
             ->get();

@@ -23,6 +23,9 @@ import "./Header.css";
 import CreateTaskModal from "../CreateTaskModal";
 import CreateProjectModal from "../CreateProjectModal";
 import CreateDeliverableModel from "./CreateDeliverableModel";
+import { useOrgBranding } from "../../hooks/useOrgBranding";
+import { usePlanLimits } from "../../hooks/useOrgSubscription";
+import { useNotification } from "../../context/NotificationContext";
 
 /**
  * Header component – renders the top navigation bar.
@@ -36,6 +39,9 @@ function Header() {
   const notifListRef = useRef(null);
   const profileMenuRef = useRef(null);
   const { theme, toggleTheme } = useTheme();
+  const { canCreateProject, getLimitMessage } = usePlanLimits();
+  const notify = useNotification();
+  const { data: branding } = useOrgBranding();
 
   // ── State ──
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -533,12 +539,16 @@ function Header() {
           </button>
 
           <div className="logo-box">
-            <b>TX</b>
+            {branding?.logo_url ? (
+              <img src={branding.logo_url} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "14px" }} />
+            ) : (
+              <b>{(branding?.subtitle || 'TX').substring(0, 2).toUpperCase()}</b>
+            )}
           </div>
 
           <div className={"logo-text" + (showFullLogo || isSmallScreen ? "" : " logo-text--hidden")}>
-            <h3>Techxaro</h3>
-            <span>PMS Portal</span>
+            <h3>{branding?.subtitle || 'PMS Portal'}</h3>
+            <span>{branding?.org_name || 'Organization'}</span>
           </div>
 
         </div>
@@ -674,9 +684,14 @@ function Header() {
           {["admin", "manager"].includes(getCurrentRole()) && (
           <button
             className="project-btn"
-            onClick={() =>
-              setShowProjectModal(true)
-            }
+            onClick={() => {
+              if (!canCreateProject) {
+                notify.warning(getLimitMessage('project'));
+                return;
+              }
+              setShowProjectModal(true);
+            }}
+            style={!canCreateProject ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
           >
             + Project
           </button>

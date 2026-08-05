@@ -134,8 +134,8 @@ class PasswordChangedMail extends Mailable
                             <!-- Signature -->
                             <tr>
                                 <td style="padding:20px 34px 0;">
-                                    <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0;">With Regards,<br><strong style="color:#111827;">TechXaro Pvt. Ltd.</strong><br>
-                                    <a href="https://www.techxaro.com" style="color:#2563eb;text-decoration:none;">www.techxaro.com</a></p>
+                                    <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0;">With Regards,<br><strong style="color:#111827;">{{ config('app.name', 'PMS') }}</strong><br>
+                                    <a href="{{ config('app.url') }}" style="color:#2563eb;text-decoration:none;">{{ config('app.url') }}</a></p>
                                 </td>
                             </tr>
 

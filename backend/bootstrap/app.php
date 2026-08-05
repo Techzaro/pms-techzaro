@@ -26,6 +26,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'not.guest' => \App\Http\Middleware\EnsureNotGuest::class,
             'tenant.resolve' => \App\Http\Middleware\ResolveTenantDatabase::class,
         ]);
+        $middleware->prependToPriorityList(
+            \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class,
+            \App\Http\Middleware\ResolveTenantDatabase::class
+        );
         if (env('APP_ENV') === 'local') {
             $middleware->api(prepend: [
                 \App\Http\Middleware\QueryLogMiddleware::class,

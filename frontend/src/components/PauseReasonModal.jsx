@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 
 const PAUSE_REASONS = [
   { value: "waiting_client", label: "Waiting for Client" },
@@ -15,11 +15,14 @@ const PAUSE_REASONS = [
 ];
 
 function PauseReasonModal({ isOpen, onClose, onConfirm, isAssigner = false }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
-  useEscapeKey(isOpen, handleClose);
   const [reason, setReason] = useState("");
   const [reasonDetail, setReasonDetail] = useState("");
   const [processing, setProcessing] = useState(false);
+
+  const initialValues = useMemo(() => ({ reason: '', reasonDetail: '' }), []);
+  const currentValues = useMemo(() => ({ reason, reasonDetail }), [reason, reasonDetail]);
+  const { isDirty, handleClose, markSaved, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
+  useEscapeKey(isOpen, handleClose);
 
   useEffect(() => {
     if (isOpen) {
@@ -27,29 +30,20 @@ function PauseReasonModal({ isOpen, onClose, onConfirm, isAssigner = false }) {
       setReason("");
       setReasonDetail("");
       setProcessing(false);
-      setIsDirty(false);
     } else {
       document.body.style.overflow = "";
     }
     return () => { document.body.style.overflow = ""; };
-  }, [isOpen, setIsDirty]);
-
-  useEffect(() => {
-    if (isOpen && (reason || reasonDetail.trim())) {
-      setIsDirty(true);
-    } else if (isOpen) {
-      setIsDirty(false);
-    }
-  }, [reason, reasonDetail, isOpen, setIsDirty]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const handleConfirm = async () => {
     if (!reason || processing) return;
     setProcessing(true);
-    setIsDirty(false);
     try {
       await onConfirm({ reason, reason_detail: reasonDetail || null });
+      markSaved();
     } catch {
       setProcessing(false);
     }

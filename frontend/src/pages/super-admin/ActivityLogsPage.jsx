@@ -31,33 +31,51 @@ export default function ActivityLogsPage() {
   const getStatusIcon = (status) => {
     if (status === 'success') return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
     if (status === 'warning') return <AlertTriangle className="w-4 h-4 text-amber-500" />;
-    return <Info className="w-4 h-4 text-blue-500" />;
+    return <Info className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />;
+  };
+
+  const formatTime = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
+
+  const s = {
+    card: { background: 'var(--bg-card)', border: '1px solid var(--border-light)', borderRadius: '16px' },
+    text: { color: 'var(--text-dark)' },
+    textSecondary: { color: 'var(--text-secondary)' },
+    textMuted: { color: 'var(--text-muted)' },
+    textHeading: { color: 'var(--text-heading)' },
+    input: { background: 'var(--bg-hover)', color: 'var(--text-dark)', border: 'none' },
+    divider: { borderTop: '1px solid var(--border-light)' },
   };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Activity Logs</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Platform activity history</p>
+          <h1 className="text-2xl font-bold" style={s.textHeading}>Activity Logs</h1>
+          <p className="text-sm mt-1" style={s.textSecondary}>Platform activity history</p>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row gap-3">
+      <div className="rounded-xl" style={s.card}>
+        <div className="p-4 flex flex-col sm:flex-row gap-3" style={s.divider}>
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={s.textMuted} />
             <input type="text" placeholder="Search logs..." value={search}
               onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-              className="w-full pl-9 pr-4 py-2 text-sm bg-gray-100 dark:bg-gray-700 border-0 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white placeholder-gray-400" />
+              className="w-full pl-9 pr-4 py-2 text-sm rounded-lg focus:ring-2 focus:ring-blue-500" style={s.input} />
           </div>
           <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-400" />
-            {['all', 'success', 'warning', 'info'].map((s) => (
-              <button key={s} onClick={() => { setStatusFilter(s); setCurrentPage(1); }}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg capitalize transition-colors ${
-                  statusFilter === s ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}>{s}</button>
+            <Filter className="w-4 h-4" style={s.textMuted} />
+            {['all', 'success', 'warning', 'info'].map((f) => (
+              <button key={f} onClick={() => { setStatusFilter(f); setCurrentPage(1); }}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg capitalize transition-colors"
+                style={{
+                  background: statusFilter === f ? 'var(--color-primary-bg)' : 'transparent',
+                  color: statusFilter === f ? 'var(--color-primary)' : 'var(--text-muted)',
+                }}>{f}</button>
             ))}
           </div>
         </div>
@@ -67,37 +85,47 @@ export default function ActivityLogsPage() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden sm:table-cell">Target</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">IP</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Time</th>
+                  <tr style={s.divider}>
+                    {['User', 'Action', 'Target', 'IP', 'Status', 'Time'].map((h) => (
+                      <th key={h} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider"
+                        style={s.textMuted}>{h}</th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
+                <tbody>
                   {logs.map((log) => (
-                    <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                      <td className="px-4 py-3"><span className="text-sm font-medium text-gray-900 dark:text-white">{log.user}</span></td>
-                      <td className="px-4 py-3"><span className="text-sm text-gray-700 dark:text-gray-300">{log.action}</span></td>
-                      <td className="px-4 py-3 hidden sm:table-cell"><span className="text-sm text-gray-600 dark:text-gray-400">{log.target || '—'}</span></td>
-                      <td className="px-4 py-3 hidden md:table-cell"><code className="text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">{log.ip || '—'}</code></td>
+                    <tr key={log.id} style={s.divider}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                      <td className="px-4 py-3"><span className="text-sm font-medium" style={s.text}>{log.user}</span></td>
+                      <td className="px-4 py-3"><span className="text-sm" style={s.textSecondary}>{log.action}</span></td>
+                      <td className="px-4 py-3"><span className="text-sm" style={s.textSecondary}>{log.target || '—'}</span></td>
+                      <td className="px-4 py-3"><code className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-hover)', color: 'var(--text)' }}>{log.ip || '—'}</code></td>
                       <td className="px-4 py-3"><div className="flex items-center gap-1.5">{getStatusIcon(log.status)}<StatusBadge status={log.status} size="sm" /></div></td>
-                      <td className="px-4 py-3 hidden lg:table-cell"><span className="text-sm text-gray-500">{log.created_at}</span></td>
+                      <td className="px-4 py-3"><span className="text-sm" style={s.textSecondary}>{formatTime(log.created_at)}</span></td>
                     </tr>
                   ))}
-                  {logs.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">No logs found</td></tr>}
+                  {logs.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-sm" style={s.textMuted}>No logs found</td></tr>}
                 </tbody>
               </table>
             </div>
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
-              <p className="text-sm text-gray-500">Page {currentPage} of {lastPage}</p>
+            <div className="flex items-center justify-between px-4 py-3" style={s.divider}>
+              <p className="text-sm" style={s.textSecondary}>Page {currentPage} of {lastPage}</p>
               <div className="flex items-center gap-1">
                 <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                  className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
+                  className="p-1.5 rounded-lg disabled:opacity-30 transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
                 <button onClick={() => setCurrentPage(p => Math.min(lastPage, p + 1))} disabled={currentPage === lastPage}
-                  className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
+                  className="p-1.5 rounded-lg disabled:opacity-30 transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </>

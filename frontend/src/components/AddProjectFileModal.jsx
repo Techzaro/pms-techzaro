@@ -1,14 +1,12 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { X, Upload, Link, FileUp } from "lucide-react";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import ConfirmModal from "./ConfirmModal";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 
 export default function AddProjectFileModal({ isOpen, onClose, projectId, onSuccess }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
-  useEscapeKey(isOpen, handleClose);
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const [linkInput, setLinkInput] = useState("");
@@ -18,18 +16,21 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [pendingRemoveItem, setPendingRemoveItem] = useState({ type: "", index: -1 });
 
+  const initialValues = useMemo(() => ({ files: [], links: [] }), []);
+  const currentValues = useMemo(() => ({ files, links }), [files, links]);
+  const { isDirty, handleClose, markSaved, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
+  useEscapeKey(isOpen, handleClose);
+
   if (!isOpen) return null;
 
   const handleFileSelect = (e) => {
     const selected = Array.from(e.target.files);
     setFiles((prev) => [...prev, ...selected.map((f) => ({ file: f, customName: f.name.replace(/\.[^.]+$/, ""), renaming: false }))]);
-    setIsDirty(true);
     e.target.value = "";
   };
 
   const handleRemoveFile = (index) => {
     setFiles((prev) => prev.filter((_, i) => i !== index));
-    setIsDirty(true);
   };
 
   const handleAddLink = () => {
@@ -40,12 +41,10 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
     setLinks((prev) => [...prev, { url, name, renaming: false }]);
     setLinkInput("");
     setLinkTitleInput("");
-    setIsDirty(true);
   };
 
   const handleRemoveLink = (index) => {
     setLinks((prev) => prev.filter((_, i) => i !== index));
-    setIsDirty(true);
   };
 
   const handleLinkKeyDown = (e) => {
@@ -89,6 +88,7 @@ export default function AddProjectFileModal({ isOpen, onClose, projectId, onSucc
       setLinks([]);
       setLinkInput("");
       setLinkTitleInput("");
+      markSaved();
       onSuccess?.();
       onClose();
     } catch {

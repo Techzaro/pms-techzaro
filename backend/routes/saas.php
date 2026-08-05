@@ -18,8 +18,15 @@ $ctrl = SuperAdminController::class;
 // ─── Public Organization Registration (no auth required) ──────
 Route::post('/organizations/register', [$ctrl, 'register']);
 
+// ─── Public Plans (no auth required — for registration page) ──
+Route::get('/public/plans', [$ctrl, 'plans']);
+
 // ─── Dashboard ─────────────────────────────────────────────────
 Route::get('/stats', [$ctrl, 'stats']);
+
+// ─── Super Admin Profile ────────────────────────────────────────
+Route::match(['get', 'post'], '/my-profile', [$ctrl, 'myProfile']);
+Route::post('/change-password', [$ctrl, 'changePassword']);
 
 // ─── Organizations CRUD ────────────────────────────────────────
 Route::get('/organizations', [$ctrl, 'organizations']);
@@ -29,11 +36,28 @@ Route::put('/organizations/{id}', [$ctrl, 'updateOrganization']);
 Route::delete('/organizations/{id}', [$ctrl, 'destroyOrganization']);
 Route::post('/organizations/{id}/suspend', [$ctrl, 'suspendOrganization']);
 Route::post('/organizations/{id}/activate', [$ctrl, 'activateOrganization']);
+Route::post('/organizations/{id}/change-plan', [$ctrl, 'changePlan']);
+Route::get('/organizations/{id}/subscription-history', [$ctrl, 'subscriptionHistory']);
+Route::get('/organizations/{id}/subscription-summary', [$ctrl, 'subscriptionSummary']);
+
+// ─── Organization Trial Settings ────────────────────────────────
+Route::get('/organizations/{id}/trial-settings', [$ctrl, 'getTrialSettings']);
+Route::put('/organizations/{id}/trial-settings', [$ctrl, 'updateTrialSettings']);
+Route::delete('/organizations/{id}/trial-settings', [$ctrl, 'resetTrialSettings']);
+Route::get('/trial-defaults', [$ctrl, 'getGlobalTrialDefaults']);
 
 // ─── Plans & Modules ───────────────────────────────────────────
 Route::get('/plans', [$ctrl, 'plans']);
+Route::put('/plans/{id}', [$ctrl, 'updatePlan']);
 Route::get('/modules', [$ctrl, 'modules']);
 Route::get('/domains', [$ctrl, 'domains']);
+
+// ─── Notifications ─────────────────────────────────────────────
+Route::get('/notifications', [$ctrl, 'notifications']);
+Route::get('/notifications/unread-count', [$ctrl, 'notificationUnreadCount']);
+Route::get('/notifications/latest', [$ctrl, 'notificationLatest']);
+Route::post('/notifications/{id}/read', [$ctrl, 'notificationMarkAsRead']);
+Route::post('/notifications/read-all', [$ctrl, 'notificationMarkAllAsRead']);
 
 // ─── Activity Logs ─────────────────────────────────────────────
 Route::get('/activity-logs', [$ctrl, 'activityLogs']);

@@ -1,44 +1,37 @@
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 const colorMap = {
-  blue: 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
-  green: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400',
-  purple: 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
-  amber: 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
-  red: 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400',
-  cyan: 'bg-cyan-50 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400',
-};
-
-const iconColorMap = {
-  blue: 'text-blue-500 dark:text-blue-400',
-  green: 'text-emerald-500 dark:text-emerald-400',
-  purple: 'text-purple-500 dark:text-purple-400',
-  amber: 'text-amber-500 dark:text-amber-400',
-  red: 'text-red-500 dark:text-red-400',
-  cyan: 'text-cyan-500 dark:text-cyan-400',
+  blue: { bg: 'var(--color-primary-bg)', text: 'var(--color-primary)' },
+  green: { bg: 'rgba(16,185,129,0.1)', text: '#10b981' },
+  purple: { bg: 'rgba(147,51,234,0.1)', text: '#9333ea' },
+  amber: { bg: 'rgba(245,158,11,0.1)', text: '#f59e0b' },
+  red: { bg: 'rgba(220,38,38,0.1)', text: '#dc2626' },
+  cyan: { bg: 'rgba(6,182,212,0.1)', text: '#06b6d4' },
 };
 
 export default function StatCard({ title, value, icon: Icon, color = 'blue', change, changeLabel }) {
   const TrendIcon = change > 0 ? TrendingUp : change < 0 ? TrendingDown : Minus;
+  const c = colorMap[color] || colorMap.blue;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-md transition-shadow">
+    <div className="rounded-xl p-5 hover:shadow-md transition-shadow"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{value}</p>
+          <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{title}</p>
+          <p className="text-2xl font-bold mt-1" style={{ color: 'var(--text-heading)' }}>{value}</p>
         </div>
-        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${colorMap[color]}`}>
-          <Icon className={`w-6 h-6 ${iconColorMap[color]}`} />
+        <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ background: c.bg }}>
+          <Icon className="w-6 h-6" style={{ color: c.text }} />
         </div>
       </div>
       {change !== undefined && (
         <div className="mt-3 flex items-center gap-1.5">
-          <TrendIcon className={`w-4 h-4 ${change > 0 ? 'text-emerald-500' : change < 0 ? 'text-red-500' : 'text-gray-400'}`} />
-          <span className={`text-sm font-medium ${change > 0 ? 'text-emerald-600 dark:text-emerald-400' : change < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+          <TrendIcon className="w-4 h-4" style={{ color: change > 0 ? '#10b981' : change < 0 ? '#dc2626' : 'var(--text-muted)' }} />
+          <span className="text-sm font-medium" style={{ color: change > 0 ? '#10b981' : change < 0 ? '#dc2626' : 'var(--text-secondary)' }}>
             {Math.abs(change)}%
           </span>
-          {changeLabel && <span className="text-sm text-gray-400 dark:text-gray-500">{changeLabel}</span>}
+          {changeLabel && <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{changeLabel}</span>}
         </div>
       )}
     </div>

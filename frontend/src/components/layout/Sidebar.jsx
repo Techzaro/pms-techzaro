@@ -13,7 +13,8 @@
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import API_URL from "../../config/api";
-import { authToken, getCurrentRole, getUser, setUser, rolePath, getUrlRole } from "../../utils/auth";
+import { authToken, getCurrentRole, getUser, setUser, rolePath, getUrlRole, getTenantSlug } from "../../utils/auth";
+import { useOrgBranding } from "../../hooks/useOrgBranding";
 
 import {
   MdDashboard,
@@ -28,6 +29,7 @@ import {
   MdHistory,
   MdSettings,
   MdEditNote,
+  MdOpenInNew,
 } from "react-icons/md";
 
 import "./Sidebar.css";
@@ -36,6 +38,7 @@ import "./Sidebar.css";
  * Sidebar navigation component.
  */
 function Sidebar() {
+  const { data: branding } = useOrgBranding();
 
   // ── Viewport mode state ──
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -185,6 +188,11 @@ function Sidebar() {
       setReportsOpen(false);
       sessionStorage.setItem("reportsOpen", false);
     }
+
+    // Settings dropdown
+    if (isActive("audit-logs") || isActive("branding") || isActive("subscription")) {
+      setSettingsOpen(true);
+    }
   }, [location.pathname, location.state]);
 
   // Broadcast sidebar open/close state to the Header for logo visibility
@@ -235,11 +243,15 @@ function Sidebar() {
             </svg>
           </button>
           <div className="sidebar-logo-box">
-            <b>TX</b>
+            {branding?.logo_url ? (
+              <img src={branding.logo_url} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "10px" }} />
+            ) : (
+              <b>{(branding?.subtitle || 'TX').substring(0, 2).toUpperCase()}</b>
+            )}
           </div>
           <div className="sidebar-logo-text">
-            <h3>Techxaro</h3>
-            <span>PMS Portal</span>
+            <h3>{branding?.subtitle || 'PMS Portal'}</h3>
+            <span>{branding?.org_name || 'Organization'}</span>
           </div>
         </div>
 
@@ -494,9 +506,23 @@ function Sidebar() {
             </Link>
           )}
 
-          {/* Settings dropdown – click to toggle like Tasks */}
+          {/* Super Admin link – only for the platform owner tenant */}
+          {getTenantSlug() === import.meta.env.VITE_SUPER_ADMIN_TENANT && user.role === "admin" && (
+            <a
+              href="/super-admin"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="sidebar-link"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MdOpenInNew />
+              <span>Organization</span>
+            </a>
+          )}
+
+          {/* Settings dropdown – admin only */}
           {(user.role === "admin" || user.role === "manager") && (
-            <div className={`sidebar-link ${isActive("audit-logs") ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
+            <div className={`sidebar-link ${isActive("audit-logs") || isActive("branding") || isActive("subscription") ? "active" : ""}`} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch" }}>
               <div
                 onClick={() => setSettingsOpen((p) => !p)}
                 style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 0" }}
@@ -513,6 +539,15 @@ function Sidebar() {
               </div>
               {settingsOpen && (
                 <div className="sidebar-sub-links">
+                  {getTenantSlug() !== import.meta.env.VITE_SUPER_ADMIN_TENANT && (
+                    <Link
+                      to={rolePath("subscription")}
+                      className={`sidebar-sub-link ${isActive("subscription") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Subscription
+                    </Link>
+                  )}
                   <Link
                     to={rolePath("audit-logs")}
                     className={`sidebar-sub-link ${isActive("audit-logs") ? "active" : ""}`}
@@ -520,10 +555,20 @@ function Sidebar() {
                   >
                     Application Logs
                   </Link>
+                  {user.role === "admin" && (
+                    <Link
+                      to={rolePath("branding")}
+                      className={`sidebar-sub-link ${isActive("branding") ? "active" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Branding
+                    </Link>
+                  )}
                 </div>
               )}
             </div>
           )}
+
 
         </div>
 

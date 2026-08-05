@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Services\Saas\TenantResolver;
 use App\Services\Saas\TenantDatabaseManager;
+use App\Services\Saas\SubscriptionService;
 use App\Services\Saas\Lifecycle\OrganizationStateMachine;
 use App\Services\Saas\Infrastructure\TenantCacheManager;
 use App\Services\Saas\Infrastructure\TenantSessionManager;
@@ -90,6 +91,16 @@ class ResolveTenantDatabase
                 'message' => $message,
                 'status'  => $organization->status,
             ], $statusCode);
+        }
+
+        // Auto-renew expired subscriptions (non-blocking, best-effort)
+        try {
+            $subscriptionService = app(SubscriptionService::class);
+            $subscriptionService->renewExpiredSubscription($organization);
+        } catch (\Throwable $e) {
+            \Log::warning("Failed to auto-renew subscription for org: {$organization->slug}", [
+                'error' => $e->getMessage(),
+            ]);
         }
 
         // Switch the database connection to this tenant's database

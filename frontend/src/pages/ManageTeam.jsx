@@ -33,12 +33,13 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import ConfirmModal from "../components/ConfirmModal";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import { authToken, getCurrentRole, rolePath } from "../utils/auth";
 import { useAutoRefresh } from "../utils/useAutoRefresh";
 import API_URL from "../config/api";
 import Pagination from "../components/Pagination";
 import { useNotification } from "../context/NotificationContext";
+import { usePlanLimits } from "../hooks/useOrgSubscription";
 import { showSuccessMessage } from "../utils/notify";
 import { useSubmit } from "../hooks/useSubmit";
 import LoadingButton from "../components/LoadingButton";
@@ -84,6 +85,7 @@ function getAvatarColor(name) {
  */
 function ManageTeam() {
   const notify = useNotification();
+  const { canCreateProject, getLimitMessage } = usePlanLimits();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [users, setUsers] = useState([]);
@@ -308,6 +310,7 @@ function ManageTeam() {
     setSelectedLeaderId(null);
     setIsMemberDropdownOpen(false);
     setIsUserDropdownOpen(false);
+    resetTeamBaseline({ name: "", description: "", memberIds: [], leaderId: null });
     setIsModalOpen(true);
   };
 
@@ -332,11 +335,12 @@ function ManageTeam() {
     setIsUserDropdownOpen(false);
   };
 
-  const { isDirty: teamIsDirty, setIsDirty: setTeamIsDirty, handleClose: handleTeamClose, ConfirmDialog: TeamConfirmDialog } = useConfirmOnClose(closeModal);
+  const teamInitialValues = useMemo(() => ({ name: "", description: "", memberIds: [], leaderId: null }), []);
+  const currentTeamValues = useMemo(() => ({ name: teamName, description: teamDescription, memberIds: selectedMemberIds, leaderId: selectedLeaderId }), [teamName, teamDescription, selectedMemberIds, selectedLeaderId]);
+  const { isDirty: teamIsDirty, handleClose: handleTeamClose, markSaved: markTeamSaved, resetBaseline: resetTeamBaseline, ConfirmDialog: TeamConfirmDialog } = useUnsavedChanges(teamInitialValues, currentTeamValues, closeModal);
   useEscapeKey(isModalOpen, handleTeamClose);
 
   const toggleMemberSelection = (userId) => {
-    setTeamIsDirty(true);
     setSelectedMemberIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
     );
@@ -349,7 +353,6 @@ function ManageTeam() {
   };
 
   const toggleSelectAllMembers = () => {
-    setTeamIsDirty(true);
     if (selectedMemberIds.length === users.length) {
       setSelectedMemberIds([]);
     } else {
@@ -385,6 +388,7 @@ function ManageTeam() {
       if (!response.ok) throw new Error(data.message || "Failed to create team");
       showSuccessMessage("Team", "created");
       fetchTeams();
+      markTeamSaved();
       closeModal();
     });
   };
@@ -424,6 +428,7 @@ function ManageTeam() {
     setAddMemberTeamId(null);
     setIsMemberDropdownOpen(false);
     setIsUserDropdownOpen(false);
+    resetTeamBaseline({ name: team.name, description: team.description || "", memberIds: team.members.map((m) => m.id), leaderId: null });
     setIsModalOpen(true);
   };
 
@@ -446,6 +451,7 @@ function ManageTeam() {
       if (!response.ok) throw new Error(data.message || "Failed to update team");
       showSuccessMessage("Team", "updated");
       fetchTeams();
+      markTeamSaved();
       closeModal();
     });
   };
@@ -662,7 +668,14 @@ function ManageTeam() {
                     </button>
                     <button
                       className="mt-project-btn"
-                      onClick={() => handleProjectForTeam(team.id)}
+                      onClick={() => {
+                        if (!canCreateProject) {
+                          notify.warning(getLimitMessage('project'));
+                          return;
+                        }
+                        handleProjectForTeam(team.id);
+                      }}
+                      style={!canCreateProject ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                     >
                       <MdCreateNewFolder size={18} />
                       Create Project for this Team
@@ -847,7 +860,7 @@ function ManageTeam() {
                       }}
                       type="text"
                       value={teamName}
-                      onChange={(e) => { setTeamIsDirty(true); setTeamName(e.target.value); }}
+                      onChange={(e) => setTeamName(e.target.value)}
                       placeholder="Enter Team Name"
                       required
                     />
@@ -857,7 +870,7 @@ function ManageTeam() {
                     <label className="mt-field-label">Description</label>
                     <RichTextEditor
                       value={teamDescription}
-                      onChange={(val) => { setTeamIsDirty(true); setTeamDescription(val); }}
+                      onChange={(val) => setTeamDescription(val)}
                       placeholder="Enter team description (optional)"
                     />
                   </div>
@@ -998,7 +1011,7 @@ function ManageTeam() {
                           cursor: "pointer",
                         }}
                         value={selectedLeaderId || ""}
-                        onChange={(e) => { setTeamIsDirty(true); setSelectedLeaderId(e.target.value ? Number(e.target.value) : null); }}
+                        onChange={(e) => setSelectedLeaderId(e.target.value ? Number(e.target.value) : null)}
                       >
                         <option value="">No leader selected</option>
                         {users

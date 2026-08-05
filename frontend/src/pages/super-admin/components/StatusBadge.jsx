@@ -1,15 +1,15 @@
 const statusStyles = {
-  active: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800',
-  trial: 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800',
-  suspended: 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800',
-  archived: 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700',
-  pending: 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800',
-  healthy: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800',
-  warning: 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800',
-  error: 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800',
-  info: 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800',
-  not_configured: 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700',
-  configured: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800',
+  active: { bg: 'rgba(16,185,129,0.1)', color: '#10b981', border: 'rgba(16,185,129,0.3)' },
+  trial: { bg: 'var(--color-primary-bg)', color: 'var(--color-primary)', border: 'var(--color-primary)' },
+  suspended: { bg: 'rgba(220,38,38,0.1)', color: '#dc2626', border: 'rgba(220,38,38,0.3)' },
+  archived: { bg: 'var(--bg-hover)', color: 'var(--text-muted)', border: 'var(--border-light)' },
+  pending: { bg: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: 'rgba(245,158,11,0.3)' },
+  healthy: { bg: 'rgba(16,185,129,0.1)', color: '#10b981', border: 'rgba(16,185,129,0.3)' },
+  warning: { bg: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: 'rgba(245,158,11,0.3)' },
+  error: { bg: 'rgba(220,38,38,0.1)', color: '#dc2626', border: 'rgba(220,38,38,0.3)' },
+  info: { bg: 'var(--color-primary-bg)', color: 'var(--color-primary)', border: 'var(--color-primary)' },
+  not_configured: { bg: 'var(--bg-hover)', color: 'var(--text-muted)', border: 'var(--border-light)' },
+  configured: { bg: 'rgba(16,185,129,0.1)', color: '#10b981', border: 'rgba(16,185,129,0.3)' },
 };
 
 const sizeStyles = {
@@ -18,19 +18,21 @@ const sizeStyles = {
   lg: 'px-3 py-1 text-sm',
 };
 
+const dotColor = {
+  active: '#10b981', healthy: '#10b981', configured: '#10b981',
+  suspended: '#dc2626', error: '#dc2626',
+  trial: 'var(--color-primary)', info: 'var(--color-primary)',
+  pending: '#f59e0b', warning: '#f59e0b',
+};
+
 export default function StatusBadge({ status, size = 'md', className = '' }) {
   const style = statusStyles[status] || statusStyles.pending;
   const sizeStyle = sizeStyles[size];
 
   return (
-    <span className={`inline-flex items-center font-medium rounded-full capitalize ${sizeStyle} ${style} ${className}`}>
-      <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
-        status === 'active' || status === 'healthy' || status === 'configured' ? 'bg-emerald-500' :
-        status === 'suspended' || status === 'error' ? 'bg-red-500' :
-        status === 'trial' || status === 'info' ? 'bg-blue-500' :
-        status === 'pending' || status === 'warning' ? 'bg-amber-500' :
-        'bg-gray-400'
-      }`} />
+    <span className={`inline-flex items-center font-medium rounded-full capitalize ${sizeStyle} ${className}`}
+      style={{ background: style.bg, color: style.color, border: `1px solid ${style.border}` }}>
+      <span className="w-1.5 h-1.5 rounded-full mr-1.5" style={{ background: dotColor[status] || 'var(--text-muted)' }} />
       {status}
     </span>
   );

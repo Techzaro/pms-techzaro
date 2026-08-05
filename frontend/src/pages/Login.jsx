@@ -10,10 +10,10 @@
  * - URL message parameter support for post-logout messages
  * - Session persistence via saveSession utility
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import API_URL from "../config/api";
-import { saveSession, clearAllSessions, authToken, authHeaders, setTenantSlug } from "../utils/auth";
+import { saveSession, authToken, authHeaders, setTenantSlug, getTenantSlug, clearSession, setStoredEmail } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { PasswordInput, isPasswordValid } from "../components/PasswordInput";
@@ -36,11 +36,13 @@ function Login() {
   const [fieldErrors, setFieldErrors] = useState({ email: "", password: "", form: "" });
   const { submitting, run } = useSubmit();
 
-  // Display URL message (e.g. from logout redirect) as error notification
+  // Display URL message (e.g. from password change redirect) as success notification
+  const _messageShownRef = useRef(false);
   useEffect(() => {
     const urlMessage = searchParams.get("message");
-    if (urlMessage) {
-      notify.error(urlMessage);
+    if (urlMessage && !_messageShownRef.current) {
+      _messageShownRef.current = true;
+      notify.success(urlMessage);
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
@@ -115,6 +117,12 @@ function Login() {
       if (data.success) {
         saveSession(data.role, data.token, data.user || {});
 
+        // Store email as fallback for profile pages — use form input email as ultimate fallback
+        const loginEmail = data.user?.email || email;
+        if (loginEmail) {
+          setStoredEmail(data.role, loginEmail);
+        }
+
         // Store tenant slug for cross-tenant users
         if (data.tenant_slug) {
           setTenantSlug(data.tenant_slug);
@@ -152,7 +160,7 @@ function Login() {
 
   /**
    * handleFirstTimePasswordChange — Validates and submits new password for first-time login.
-   * Clears all sessions after successful change and prompts user to login again.
+   * Clears old sessions while retaining tenant context, auto-logins with new password and redirects.
    */
   const handleFirstTimePasswordChange = async () => {
     if (!newPassword.trim()) {
@@ -188,32 +196,27 @@ function Login() {
         throw new Error(data.message || "Failed to change password. Please try again.");
       }
 
-      clearAllSessions();
+      const currentTenantSlug = data.tenant_slug || getTenantSlug();
 
-      // Auto-login with new password so user doesn't have to re-enter credentials
-      const loginRes = await fetch(`${API_URL}/login`, {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json"
-        },
-        _notifHandled: true,
-        body: JSON.stringify({ email, password: newPassword })
-      });
-
-      const loginData = await loginRes.json();
-
-      if (!loginRes.ok || !loginData.success) {
-        throw new Error(loginData.message || "Password changed but login failed. Please login manually.");
-      }
-
-      saveSession(loginData.role, loginData.token, loginData.user || {});
-      if (loginData.tenant_slug) {
-        setTenantSlug(loginData.tenant_slug);
+      if (currentTenantSlug) {
+        setTenantSlug(currentTenantSlug);
       }
 
       showSuccessMessage("Password", "changed");
-      redirectToDashboard(loginData.role);
+
+      setMustChangePassword(false);
+      setEmail("");
+      setPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setFieldErrors({ email: "", password: "", form: "" });
+
+      // Redirect via full page reload to ensure completely clean state
+      // (clears all React state, sessionStorage, and event listeners)
+      // tenant_slug is already saved to localStorage above
+      clearSession();
+      const msg = encodeURIComponent("Password changed successfully. Please login with your new password.");
+      window.location.href = "/?message=" + msg;
 
     } catch (error) {
       notify.error(error.message || "Failed to change password. Please try again.");
@@ -273,7 +276,7 @@ function Login() {
                 onClick={handleFirstTimePasswordChange}
                 disabled={changingPassword || !isPasswordValid(newPassword) || newPassword !== confirmPassword}
               >
-                {changingPassword ? "Changing..." : "Change Password & Login"}
+                {changingPassword ? "Changing..." : "Change Password"}
               </button>
             </div>
           </div>
@@ -339,13 +342,6 @@ function Login() {
               </LoadingButton>
             </div>
           </div>
-
-          <p style={{ textAlign: "center", marginTop: 20, fontSize: 14, color: "#747d8c" }}>
-            Want your own organization?{" "}
-            <Link to="/register-organization" style={{ color: "#1e90ff", textDecoration: "none", fontWeight: 600 }}>
-              Register here
-            </Link>
-          </p>
         </div>
       </div>
     </div>

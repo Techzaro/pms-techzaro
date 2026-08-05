@@ -13,17 +13,20 @@ const rawApiUrl = import.meta.env.VITE_API_URL || "";
 const API_URL = rawApiUrl.replace(/\/+$/g, "");
 
 // Global fetch interceptor for session management and notifications
+let _401Handled = false;
 const originalFetch = window.fetch;
 window.fetch = async function (...args) {
   try {
     const [resource, config = {}] = args;
     const noCacheConfig = { ...config, cache: 'no-store' };
 
-    // Inject X-Tenant-ID header only for authenticated requests (not login/register)
+    // Inject X-Tenant-ID header when tenantSlug is present in localStorage
+    // Skip for login and public auth routes — they don't need tenant resolution
+    // and a stale slug from a deleted org would cause errors.
     const tenantSlug = getTenantSlug();
     const url = typeof resource === "string" ? resource : resource?.url || "";
-    const isPublicAuth = url.includes("/api/login") || url.includes("/api/forgot-password") || url.includes("/api/reset-password") || url.includes("/organizations/register");
-    if (tenantSlug && !isPublicAuth) {
+    const isPublicAuthRoute = url.includes("login") || url.includes("forgot-password") || url.includes("reset-password") || url.includes("register");
+    if (tenantSlug && !isPublicAuthRoute) {
       noCacheConfig.headers = { ...noCacheConfig.headers, "X-Tenant-ID": tenantSlug };
     }
 
@@ -32,14 +35,18 @@ window.fetch = async function (...args) {
     const res = await originalFetch.apply(this, [resource, noCacheConfig]);
 
     // Handle session expiration (401 Unauthorized)
-    // Skip for first-time-change-password (uses its own token verification)
-    const url = typeof resource === "string" ? resource : resource?.url || "";
-    const isPasswordChange = url.includes("/first-time-change-password");
-    if (res.status === 401 && !isPasswordChange) {
+    // Skip for public auth endpoints (login, password change, etc.) and when on the login page
+    const isPasswordChange = url.includes("first-time-change-password") || url.includes("change-password");
+    const isLoginPage = typeof window !== "undefined" && (window.location.pathname === "/" || window.location.pathname === "/login");
+    const isSuperAdminApi = url.includes("/super-admin/");
+
+    if (res.status === 401 && !_401Handled && !isPasswordChange && !isPublicAuthRoute && !isLoginPage && !isSuperAdminApi) {
       const tokenNow = getToken(role);
       const isTokenExpired = tokenNow && tokenNow === tokenAtRequest;
       const isZombieTab = !tokenAtRequest && !tokenNow && role;
       if (isTokenExpired || isZombieTab) {
+        _401Handled = true;
+        _sessionConflictHandled = true;
         clearSession(role);
         const reason = isZombieTab
           ? "Your session is no longer valid. Please login again."
@@ -56,6 +63,20 @@ window.fetch = async function (...args) {
           window.location.href = "/?message=" + encodeURIComponent(reason);
         }
       }
+    }
+
+    // Handle 403 Forbidden — organization suspended/archived
+    if (res.status === 403 && !_401Handled && !isPublicAuthRoute && !isLoginPage) {
+      try {
+        const clone = res.clone();
+        const data = await clone.json();
+        if (data?.status === 'suspended' || data?.status === 'archived') {
+          _401Handled = true;
+          _sessionConflictHandled = true;
+          clearSession(role);
+          window.location.href = "/?message=" + encodeURIComponent(data.message || "Your organization is not active. Please contact TechXaro support team.");
+        }
+      } catch {}
     }
 
     // Auto-show notifications for API responses (unless disabled via _notifHandled)
@@ -96,6 +117,11 @@ export function onMutation() {}
 let _sessionConflictHandled = false;
 window.addEventListener("storage", (e) => {
   if (!e.key || _sessionConflictHandled) return;
+
+  // Skip on login/public pages — those are already handled or don't need session conflict logic
+  const pathname = typeof window !== "undefined" ? window.location.pathname : "";
+  if (pathname === "/" || pathname === "/login" || pathname === "/forgot-password" || pathname === "/reset-password" || pathname === "/register-organization") return;
+
   const role = getCurrentRole();
   if (!role) return;
   const sid = getSessionId();
@@ -108,12 +134,14 @@ window.addEventListener("storage", (e) => {
       if (!sessions[sid]) {
         // Our session was removed by another tab
         _sessionConflictHandled = true;
+        _401Handled = true;
         clearSession(role);
         window.location.href = "/?message=" + encodeURIComponent("You have been logged in from another tab.");
       }
     } catch {
       // Parse error — treat as session lost
       _sessionConflictHandled = true;
+      _401Handled = true;
       clearSession(role);
       window.location.href = "/?message=" + encodeURIComponent("Your session has been interrupted. Please login again.");
     }

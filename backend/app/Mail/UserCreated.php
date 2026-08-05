@@ -61,9 +61,14 @@ class UserCreated extends Mailable
     private function resolveAttachments(): void
     {
         $disk = config('company.disk', 'public');
-        $uploadDir = config('company.upload_dir', 'company_docs');
+        $baseUploadDir = config('company.upload_dir', 'company_docs');
         $validExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
         $singleTypes = ['company_logo', 'qr_code'];
+
+        $org = request()->attributes->get('currentOrganization')
+            ?? (app()->has('currentOrganization') ? app('currentOrganization') : null);
+
+        $uploadDir = $org ? $baseUploadDir . '/' . $org->slug : $baseUploadDir;
 
         $allFiles = Storage::disk($disk)->files($uploadDir);
         $found = [];
@@ -231,7 +236,7 @@ class UserCreated extends Mailable
     {
         return <<<HTML
             <!-- PMS Login Credentials Box -->
-            <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#eff6ff;border:2px solid #3b82f6;border-radius:12px;margin-bottom:20px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#eff6ff;border:2px solid #3b82f6;border-radius:12px;margin-bottom:24px;">
                 <tr>
                     <td style="padding:6px 24px;background-color:#3b82f6;">
                         <p style="color:#ffffff;font-size:14px;font-weight:700;margin:8px 0;">PMS LOGIN CREDENTIALS</p>
@@ -256,63 +261,22 @@ class UserCreated extends Mailable
                     </td>
                 </tr>
             </table>
-
-            <!-- Outlook Login Credentials Box -->
-            <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0fdf4;border:2px solid #22c55e;border-radius:12px;margin-bottom:24px;">
-                <tr>
-                    <td style="padding:6px 24px;background-color:#22c55e;">
-                        <p style="color:#ffffff;font-size:14px;font-weight:700;margin:8px 0;">OUTLOOK / OFFICE 365 LOGIN CREDENTIALS</p>
-                    </td>
-                </tr>
-                <tr>
-                    <td style="padding:18px 24px;">
-                        <table width="100%" cellpadding="0" cellspacing="0">
-                            <tr>
-                                <td style="padding:5px 0;color:#6b7280;font-size:13px;font-weight:600;width:130px;">Email:</td>
-                                <td style="padding:5px 0;color:#111827;font-size:14px;font-weight:600;">{$profEmail}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding:5px 0;color:#6b7280;font-size:13px;font-weight:600;">Password:</td>
-                                <td style="padding:5px 0;"><span style="font-family:monospace;background:#e5e7eb;padding:4px 10px;border-radius:6px;font-size:14px;color:#111827;">{$profPassword}</span></td>
-                            </tr>
-                        </table>
-                    </td>
-                </tr>
-            </table>
         HTML;
     }
 
     private function buildStepsHtml(string $profEmail, string $employeeCode, bool $isWelcome = false): string
     {
-        $codeLabel = $isWelcome ? 'The Employee Code is' : 'Your Employee Code is';
-        return <<<HTML
-            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-                <tr>
-                    <td style="padding:10px 0;color:#111827;font-size:14px;line-height:1.7;vertical-align:top;">
-                        <strong>1.</strong> {$codeLabel} <strong>{$employeeCode}</strong>.
-                    </td>
-                </tr>
-                <tr>
-                    <td style="padding:10px 0;color:#111827;font-size:14px;line-height:1.7;vertical-align:top;">
-                        <strong>2.</strong> The invitation to join Slack has been shared on <a href="mailto:{$profEmail}" style="color:#2563eb;text-decoration:none;font-weight:600;">{$profEmail}</a>. Join the Slack workspace using the invitation address.
-                    </td>
-                </tr>
-                <tr>
-                    <td style="padding:10px 0;color:#111827;font-size:14px;line-height:1.7;vertical-align:top;">
-                        <strong>3.</strong> Create a Google Account and Chrome Profile on the same email <a href="mailto:{$profEmail}" style="color:#2563eb;text-decoration:none;font-weight:600;">{$profEmail}</a>.
-                    </td>
-                </tr>
-            </table>
-        HTML;
+        return '';
     }
 
     private function buildAdminConfirmationHtml(string $name, string $profEmail, string $password, string $loginUrl, string $designation, string $sharedCredentials, string $sharedSteps, string $sharedAttachments): string
     {
-        $personalEmail = e($this->user->personal_email ?? 'N/A');
         $role = e(ucfirst($this->user->role ?? 'N/A'));
         $department = e($this->user->department ?? 'N/A');
         $createdBy = e($this->createdBy ?: 'N/A');
         $dateTime = e(now()->format('d M Y, h:i A'));
+        $fromEmail = e(config('mail.from.address', 'hr@yourdomain.com'));
+        $appUrl = e(config('app.url', ''));
 
         return <<<HTML
         <!DOCTYPE html>
@@ -363,12 +327,8 @@ class UserCreated extends Mailable
                                             <td style="background-color:#ffffff;padding:10px 20px;border-bottom:1px solid #e5e7eb;color:#111827;font-size:14px;font-weight:600;">{$name}</td>
                                         </tr>
                                         <tr>
-                                            <td style="background-color:#f9fafb;padding:10px 20px;border-bottom:1px solid #e5e7eb;width:170px;color:#6b7280;font-size:13px;font-weight:600;">Professional Email</td>
+                                            <td style="background-color:#f9fafb;padding:10px 20px;border-bottom:1px solid #e5e7eb;width:170px;color:#6b7280;font-size:13px;font-weight:600;">Email</td>
                                             <td style="background-color:#ffffff;padding:10px 20px;border-bottom:1px solid #e5e7eb;color:#111827;font-size:14px;">{$profEmail}</td>
-                                        </tr>
-                                        <tr>
-                                            <td style="background-color:#f9fafb;padding:10px 20px;border-bottom:1px solid #e5e7eb;width:170px;color:#6b7280;font-size:13px;font-weight:600;">Personal Email</td>
-                                            <td style="background-color:#ffffff;padding:10px 20px;border-bottom:1px solid #e5e7eb;color:#111827;font-size:14px;">{$personalEmail}</td>
                                         </tr>
                                         <tr>
                                             <td style="background-color:#f9fafb;padding:10px 20px;border-bottom:1px solid #e5e7eb;width:170px;color:#6b7280;font-size:13px;font-weight:600;">Assigned Role</td>
@@ -383,7 +343,7 @@ class UserCreated extends Mailable
                                             <td style="background-color:#ffffff;padding:10px 20px;border-bottom:1px solid #e5e7eb;color:#111827;font-size:14px;">{$designation}</td>
                                         </tr>
                                         <tr>
-                                            <td style="background-color:#f9fafb;padding:10px 20px;border-bottom:1px solid #e5e7eb;width:170px;color:#6b7280;font-size:13px;font-weight:600;">Temp. Login Password</td>
+                                            <td style="background-color:#f9fafb;padding:10px 20px;border-bottom:1px solid #e5e7eb;width:170px;color:#6b7280;font-size:13px;font-weight:600;">Temp. Password</td>
                                             <td style="background-color:#ffffff;padding:10px 20px;border-bottom:1px solid #e5e7eb;"><span style="font-family:monospace;background:#e5e7eb;padding:4px 10px;border-radius:6px;font-size:14px;color:#111827;">{$password}</span></td>
                                         </tr>
                                         <tr>
@@ -396,14 +356,7 @@ class UserCreated extends Mailable
                                         </tr>
                                     </table>
 
-                                    <!-- Steps -->
-                                    <p style="color:#111827;font-size:15px;font-weight:600;margin:0 0 10px;">Next Steps</p>
-                                    {$sharedSteps}
-
-                                    <!-- Credentials -->
-                                    {$sharedCredentials}
-
-                                    <p style="color:#111827;font-size:15px;line-height:1.7;margin:0 0 20px;">The above credentials will be shared with the new user. Kindly ensure the account is activated after the user logs in.</p>
+                                    {$sharedAttachments}
 
                                     <!-- Warning Box -->
                                     <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef3c7;border:1px solid #f59e0b;border-radius:12px;margin-bottom:24px;">
@@ -411,17 +364,12 @@ class UserCreated extends Mailable
                                             <td style="padding:18px 24px;">
                                                 <p style="color:#92400e;font-size:14px;font-weight:700;margin:0 0 8px;">&#9888; Important Notes:</p>
                                                 <ul style="color:#92400e;font-size:14px;line-height:1.8;margin:0;padding-left:20px;">
-                                                    <li><strong>PMS Password</strong> is for logging into the PMS platform only.</li>
-                                                    <li><strong>Outlook Password</strong> is for accessing the official email on Outlook/Office 365.</li>
+                                                    <li>The above credentials will be shared with the new user.</li>
                                                     <li>The user will be required to change their password on first login.</li>
                                                 </ul>
                                             </td>
                                         </tr>
                                     </table>
-
-                                    {$sharedAttachments}
-
-                                    <p style="color:#6b7280;font-size:14px;line-height:1.7;margin:0 0 20px;">If you have any questions or need to make changes to this user, please get in touch with us.</p>
 
                                     <!-- Signature -->
                                     <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e5e7eb;padding-top:20px;">
@@ -433,7 +381,7 @@ class UserCreated extends Mailable
                                                         <td style="padding:3px 8px 3px 0;vertical-align:middle;">
                                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
                                                         </td>
-                                                        <td style="padding:3px 0;vertical-align:middle;"><a href="mailto:hr@techxaro.com" style="color:#2563eb;text-decoration:none;font-size:13px;">hr@techxaro.com</a></td>
+                                                        <td style="padding:3px 0;vertical-align:middle;"><a href="mailto:{$fromEmail}" style="color:#2563eb;text-decoration:none;font-size:13px;">{$fromEmail}</a></td>
                                                     </tr>
                                                     <tr>
                                                         <td style="padding:3px 8px 3px 0;vertical-align:middle;">
@@ -445,7 +393,7 @@ class UserCreated extends Mailable
                                                         <td style="padding:3px 8px 3px 0;vertical-align:middle;">
                                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                                                         </td>
-                                                        <td style="padding:3px 0;vertical-align:middle;"><a href="https://www.techxaro.com" style="color:#2563eb;text-decoration:none;font-size:13px;">www.techxaro.com</a></td>
+                                                        <td style="padding:3px 0;vertical-align:middle;"><a href="{$appUrl}" style="color:#2563eb;text-decoration:none;font-size:13px;">{$appUrl}</a></td>
                                                     </tr>
                                                 </table>
                                             </td>
@@ -473,6 +421,9 @@ class UserCreated extends Mailable
 
     private function buildUserWelcomeHtml(string $name, string $profEmail, string $password, string $loginUrl, string $designation, string $employeeCode, string $sharedCredentials, string $sharedSteps, string $sharedAttachments): string
     {
+        $fromEmail = e(config('mail.from.address', 'hr@yourdomain.com'));
+        $appUrl = e(config('app.url', ''));
+
         return <<<HTML
         <!DOCTYPE html>
         <html>
@@ -503,10 +454,6 @@ class UserCreated extends Mailable
 
                                     <p style="color:#111827;font-size:15px;line-height:1.7;margin:0 0 6px;">We are excited to have you officially join our team as a <strong>{$designation}</strong>. We hope your first day will be informative and enjoyable.</p>
 
-                                    <p style="color:#111827;font-size:15px;line-height:1.7;margin:20px 0 12px;font-weight:600;">Please note the following:</p>
-
-                                    {$sharedSteps}
-
                                     {$sharedCredentials}
 
                                     <p style="color:#111827;font-size:15px;line-height:1.7;margin:0 0 20px;">Kindly log in and explore the platform.</p>
@@ -518,8 +465,7 @@ class UserCreated extends Mailable
                                                 <p style="color:#92400e;font-size:14px;font-weight:700;margin:0 0 8px;">&#9888; Note:</p>
                                                 <ul style="color:#92400e;font-size:14px;line-height:1.8;margin:0;padding-left:20px;">
                                                     <li>Please do not share your credentials with anyone and change your password.</li>
-                                                    <li><strong>PMS Password</strong> is for logging into the PMS platform only.</li>
-                                                    <li><strong>Outlook Password</strong> is for accessing your official email on Outlook/Office 365.</li>
+                                                    <li>You will be required to change your password on first login.</li>
                                                 </ul>
                                             </td>
                                         </tr>
@@ -528,8 +474,6 @@ class UserCreated extends Mailable
                                     <p style="color:#6b7280;font-size:14px;line-height:1.7;margin:0 0 8px;">If you face any issues while logging in, feel free to reach out to me.</p>
 
                                     {$sharedAttachments}
-
-                                    <p style="color:#6b7280;font-size:14px;line-height:1.7;margin:0 0 20px;">Should you have any questions or need assistance, please get in touch with us.</p>
 
                                     <p style="color:#111827;font-size:15px;line-height:1.7;margin:0 0 24px;">Once again, welcome to TechXaro Pvt. Ltd. We are thrilled to have you as part of our team and look forward to achieving great things together.</p>
 
@@ -543,7 +487,7 @@ class UserCreated extends Mailable
                                                         <td style="padding:3px 8px 3px 0;vertical-align:middle;">
                                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
                                                         </td>
-                                                        <td style="padding:3px 0;vertical-align:middle;"><a href="mailto:hr@techxaro.com" style="color:#2563eb;text-decoration:none;font-size:13px;">hr@techxaro.com</a></td>
+                                                        <td style="padding:3px 0;vertical-align:middle;"><a href="mailto:{$fromEmail}" style="color:#2563eb;text-decoration:none;font-size:13px;">{$fromEmail}</a></td>
                                                     </tr>
                                                     <tr>
                                                         <td style="padding:3px 8px 3px 0;vertical-align:middle;">
@@ -555,7 +499,7 @@ class UserCreated extends Mailable
                                                         <td style="padding:3px 8px 3px 0;vertical-align:middle;">
                                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                                                         </td>
-                                                        <td style="padding:3px 0;vertical-align:middle;"><a href="https://www.techxaro.com" style="color:#2563eb;text-decoration:none;font-size:13px;">www.techxaro.com</a></td>
+                                                        <td style="padding:3px 0;vertical-align:middle;"><a href="{$appUrl}" style="color:#2563eb;text-decoration:none;font-size:13px;">{$appUrl}</a></td>
                                                     </tr>
                                                 </table>
                                             </td>

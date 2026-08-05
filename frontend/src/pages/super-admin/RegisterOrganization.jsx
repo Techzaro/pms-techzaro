@@ -4,7 +4,7 @@
  * Allows anyone to register their organization on the platform.
  * Flow: Fill form → Auto-generate password → Send welcome email → Show success
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import API_URL from "../../config/api";
 import "../Login.css";
@@ -14,6 +14,14 @@ function RegisterOrganization() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
+  const [trialPlan, setTrialPlan] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API_URL}/public/plans`).then(r => r.json()).then(res => {
+      const trial = (res.data || []).find(p => p.slug === 'trial');
+      if (trial) setTrialPlan(trial);
+    }).catch(() => {});
+  }, []);
 
   const [form, setForm] = useState({
     company_name: "",
@@ -277,7 +285,7 @@ function RegisterOrganization() {
               }}
             >
               <p style={{ color: "#166534", fontSize: 13, margin: 0, lineHeight: 1.6 }}>
-                <strong>14-day free trial</strong> — No credit card required. Your
+                <strong>{trialPlan ? `${trialPlan.trial_duration || 14} ${(trialPlan.trial_duration_unit || 'days').replace(/s$/, '')}` : '14-day'} free trial</strong> — No credit card required. Your
                 password will be sent to your email.
               </p>
             </div>

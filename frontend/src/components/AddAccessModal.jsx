@@ -1,15 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { X, Globe, User, Lock, Users, ChevronDown, Check } from "lucide-react";
 import { authToken } from "../utils/auth";
 import API_URL from "../config/api";
 import { showSuccessMessage } from "../utils/notify";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 
 export default function AddAccessModal({ isOpen, onClose, projectId, taskId, projectName, onSuccess, files = [], credential }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
-  useEscapeKey(isOpen, handleClose);
-
   const [websiteName, setWebsiteName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -26,6 +23,22 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
   const [pendingRemoveUser, setPendingRemoveUser] = useState(null);
 
   const isEdit = !!credential;
+
+  const initialValues = useMemo(() => {
+    if (credential) {
+      return {
+        websiteName: credential.website_name || '',
+        username: credential.username || '',
+        password: credential.password || '',
+        assignedUserIds: (credential.assigned_users || []).map(u => u.id),
+      };
+    }
+    return { websiteName: '', username: '', password: '', assignedUserIds: [] };
+  }, [credential]);
+
+  const currentValues = useMemo(() => ({ websiteName, username, password, assignedUserIds }), [websiteName, username, password, assignedUserIds]);
+  const { isDirty, handleClose, markSaved, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
+  useEscapeKey(isOpen, handleClose);
 
   useEffect(() => {
     if (isOpen) {
@@ -78,7 +91,6 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
   };
 
   const toggleUser = (userId) => {
-    setIsDirty(true);
     setAssignedUserIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
     );
@@ -145,6 +157,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
 
       onSuccess?.();
       showSuccessMessage("Access credential", isEdit ? "updated" : "created");
+      markSaved();
       onClose();
     } catch (err) {
       setError(err.message);
@@ -176,7 +189,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
             <select
               className="aam-select"
               value={websiteName}
-              onChange={(e) => { setIsDirty(true); setWebsiteName(e.target.value); }}
+              onChange={(e) => setWebsiteName(e.target.value)}
               required
             >
               <option value="">Select website</option>
@@ -198,7 +211,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
               type="text"
               placeholder="Enter username or email"
               value={username}
-              onChange={(e) => { setIsDirty(true); setUsername(e.target.value); }}
+              onChange={(e) => setUsername(e.target.value)}
               required
             />
           </div>
@@ -212,7 +225,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
                 type="password"
                 placeholder="Enter password"
                 value={password}
-                onChange={(e) => { setIsDirty(true); setPassword(e.target.value); }}
+                onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </div>
@@ -246,10 +259,8 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
                       else if (e.key === "Enter") {
                         e.preventDefault();
                         if (aamHighlightedIndex === 0) {
-                          setIsDirty(true);
                           if (assignedUserIds.length === users.length) { setAssignedUserIds([]); } else { setAssignedUserIds(users.map((u) => u.id)); }
                         } else if (aamFilteredUsers[aamHighlightedIndex - 1]) {
-                          setIsDirty(true);
                           toggleUser(aamFilteredUsers[aamHighlightedIndex - 1].id);
                         }
                       }
@@ -283,7 +294,6 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
                         type="checkbox"
                         checked={assignedUserIds.length === users.length && users.length > 0}
                         onChange={() => {
-                          setIsDirty(true);
                           if (assignedUserIds.length === users.length) {
                             setAssignedUserIds([]);
                           } else {
@@ -300,7 +310,7 @@ export default function AddAccessModal({ isOpen, onClose, projectId, taskId, pro
                         <input
                           type="checkbox"
                           checked={assignedUserIds.includes(u.id)}
-                          onChange={() => { setIsDirty(true); toggleUser(u.id); }}
+                          onChange={() => toggleUser(u.id)}
                         />
                         <span className="aam-multiselect-check">
                           {assignedUserIds.includes(u.id) && <Check size={12} />}

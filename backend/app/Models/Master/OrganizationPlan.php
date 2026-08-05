@@ -21,6 +21,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int    $max_users
  * @property int    $max_projects
  * @property int    $max_storage_gb
+ * @property int    $trial_duration
+ * @property string $trial_duration_unit
  * @property bool   $is_active
  * @property bool   $is_default
  * @property int    $sort_order
@@ -38,6 +40,8 @@ class OrganizationPlan extends Model
         'max_users',
         'max_projects',
         'max_storage_gb',
+        'trial_duration',
+        'trial_duration_unit',
         'is_active',
         'is_default',
         'sort_order',
@@ -49,6 +53,7 @@ class OrganizationPlan extends Model
         'max_users'     => 'integer',
         'max_projects'  => 'integer',
         'max_storage_gb' => 'integer',
+        'trial_duration' => 'integer',
         'is_active'     => 'boolean',
         'is_default'    => 'boolean',
     ];
@@ -99,5 +104,27 @@ class OrganizationPlan extends Model
     public function getPrice(string $period = 'monthly'): float
     {
         return $period === 'yearly' ? $this->price_yearly : $this->price_monthly;
+    }
+
+    /** Get trial duration converted to minutes. */
+    public function getTrialMinutes(): int
+    {
+        return match ($this->trial_duration_unit) {
+            'minutes' => $this->trial_duration,
+            'hours'   => $this->trial_duration * 60,
+            'days'    => $this->trial_duration * 24 * 60,
+            default   => $this->trial_duration * 24 * 60,
+        };
+    }
+
+    /** Get human-readable trial duration label. */
+    public function getTrialLabel(): string
+    {
+        $unit = $this->trial_duration_unit === 'days' && $this->trial_duration === 1
+            ? 'day' : rtrim($this->trial_duration_unit, 's');
+        if ($this->trial_duration !== 1) {
+            $unit = $this->trial_duration_unit;
+        }
+        return "{$this->trial_duration} {$unit}";
     }
 }

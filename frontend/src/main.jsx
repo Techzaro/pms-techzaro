@@ -38,18 +38,19 @@ window.fetch = async function (...args) {
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
         queryClient.invalidateQueries({ queryKey: ['activities'] });
         window.dispatchEvent(new CustomEvent('calendar-sync'));
-        publish('data:changed', { url, method });
+        const type = url.includes('/projects') ? 'project' : url.includes('/tasks') ? 'task' : url.includes('/deliverables') || url.includes('/deliveries') ? 'deliverable' : 'event';
+        publish('data:changed', { type, action: url.includes('DELETE') ? 'deleted' : 'updated', url, method });
       } else if (url && url.includes('/teams')) {
         queryClient.invalidateQueries({ queryKey: ['teams'] });
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-        publish('data:changed', { url, method });
+        publish('data:changed', { type: 'team', action: 'updated', url, method });
       } else if (url && url.includes('/notifications')) {
         queryClient.invalidateQueries({ queryKey: ['notifications'] });
-        publish('data:changed', { url, method });
+        publish('data:changed', { type: 'notification', action: 'updated', url, method });
       } else if (url && url.includes('/users')) {
         queryClient.invalidateQueries({ queryKey: ['users'] });
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-        publish('data:changed', { url, method });
+        publish('data:changed', { type: 'user', action: url.includes('DELETE') ? 'deleted' : 'created', url, method });
       }
     }
   }

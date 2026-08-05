@@ -73,9 +73,9 @@ export const api = {
    * @param {Object} [params] - Query parameters
    * @returns {Promise<Object>} Response data
    */
-  get: (path, params) => {
+  get: (path, params, options) => {
     const qs = params ? "?" + new URLSearchParams(params).toString() : "";
-    return apiFetch(`${path}${qs}`);
+    return apiFetch(`${path}${qs}`, options);
   },
   /**
    * Sends a POST request.

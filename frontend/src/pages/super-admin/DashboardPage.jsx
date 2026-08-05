@@ -42,6 +42,19 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const formatTime = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - d;
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHr = Math.floor(diffMs / 3600000);
+    if (diffMin < 1) return 'Just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHr < 24) return `${diffHr}h ago`;
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
   if (loading) return <LoadingState message="Loading dashboard..." />;
   if (error) return <ErrorState message={error} onRetry={fetchData} />;
 
@@ -49,105 +62,98 @@ export default function DashboardPage() {
     if (status === 'healthy') return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
     if (status === 'warning') return <AlertTriangle className="w-4 h-4 text-amber-500" />;
     if (status === 'error') return <XCircle className="w-4 h-4 text-red-500" />;
-    return <Clock className="w-4 h-4 text-gray-400" />;
+    return <Clock className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />;
   };
 
   const recentOrgs = orgs.slice(0, 5);
 
+  const s = {
+    card: { background: 'var(--bg-card)', border: '1px solid var(--border-light)', borderRadius: '16px' },
+    text: { color: 'var(--text-dark)' },
+    textSecondary: { color: 'var(--text-secondary)' },
+    textMuted: { color: 'var(--text-muted)' },
+    textHeading: { color: 'var(--text-heading)' },
+    divider: { borderTop: '1px solid var(--border-light)' },
+  };
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Overview of your SaaS platform</p>
+        <h1 className="text-2xl font-bold" style={s.textHeading}>Dashboard</h1>
+        <p className="text-sm mt-1" style={s.textSecondary}>Overview of your SaaS platform</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         <StatCard title="Organizations" value={stats?.total_organizations || 0} icon={Building2} color="blue" />
         <StatCard title="Active Orgs" value={stats?.active_organizations || 0} icon={CheckCircle2} color="green" />
-        <StatCard title="Total Users" value={stats?.total_users || 0} icon={Users} color="purple" />
-        <StatCard title="Total Projects" value={stats?.total_projects || 0} icon={FolderKanban} color="cyan" />
-        <StatCard title="Modules" value={stats?.total_modules || 0} icon={Puzzle} color="amber" />
-        <StatCard title="Plans" value={stats?.total_plans || 0} icon={CreditCard} color="blue" />
         <StatCard title="Trial Orgs" value={stats?.trial_organizations || 0} icon={Clock} color="purple" />
         <StatCard title="Suspended" value={stats?.suspended_organizations || 0} icon={AlertTriangle} color="red" />
+        <StatCard title="Modules" value={stats?.total_modules || 0} icon={Puzzle} color="amber" />
+        <StatCard title="Plans" value={stats?.total_plans || 0} icon={CreditCard} color="blue" />
+        <StatCard title="Total Users" value={stats?.total_users || 0} icon={Users} color="purple" />
+        <StatCard title="Total Projects" value={stats?.total_projects || 0} icon={FolderKanban} color="cyan" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <div className="rounded-xl p-5" style={s.card}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Organizations</h2>
-            <button onClick={() => navigate('/super-admin/organizations')} className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+            <h2 className="text-lg font-semibold" style={s.textHeading}>Organizations</h2>
+            <button onClick={() => navigate('/super-admin/organizations')} className="text-sm hover:underline flex items-center gap-1"
+              style={{ color: 'var(--color-primary)' }}>
               View all <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
           </div>
           <div className="space-y-3">
             {recentOrgs.map((org) => (
-              <div key={org.id} onClick={() => navigate(`/super-admin/organizations/${org.id}`)} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors">
+              <div key={org.id} onClick={() => navigate(`/super-admin/organizations/${org.id}`)}
+                className="flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors"
+                style={{ background: 'transparent' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                    <Building2 className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'var(--bg-hover)' }}>
+                    <Building2 className="w-4 h-4" style={s.textMuted} />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{org.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{org.subscription?.plan?.name || org.type || 'Standard'} &middot; {org.users_count || 0} users</p>
+                    <p className="text-sm font-medium" style={s.textHeading}>{org.name}</p>
+                    <p className="text-xs" style={s.textSecondary}>{org.subscription?.plan?.name || org.type || 'Standard'} &middot; {org.users_count || 0} users</p>
                   </div>
                 </div>
                 <StatusBadge status={org.status} size="sm" />
               </div>
             ))}
-            {recentOrgs.length === 0 && <p className="text-sm text-gray-400 text-center py-4">No organizations yet</p>}
+            {recentOrgs.length === 0 && <p className="text-sm text-center py-4" style={s.textMuted}>No organizations yet</p>}
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <div className="rounded-xl p-5" style={s.card}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Activity</h2>
-            <button onClick={() => navigate('/super-admin/activity')} className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+            <h2 className="text-lg font-semibold" style={s.textHeading}>Recent Activity</h2>
+            <button onClick={() => navigate('/super-admin/activity')} className="text-sm hover:underline flex items-center gap-1"
+              style={{ color: 'var(--color-primary)' }}>
               View all <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-1">
             {logs.map((log) => (
-              <div key={log.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                <div className="mt-0.5">{getHealthIcon(log.status)}</div>
+              <div key={log.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors"
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                <div>{getHealthIcon(log.status)}</div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm text-gray-900 dark:text-white">
+                  <p className="text-sm" style={s.text}>
                     <span className="font-medium">{log.user}</span>{' '}
-                    <span className="text-gray-500 dark:text-gray-400">{log.action}</span>{' '}
+                    <span style={s.textSecondary}>{log.action}</span>{' '}
                     {log.target && <span className="font-medium">{log.target}</span>}
                   </p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{log.created_at}</p>
                 </div>
+                <p className="text-xs whitespace-nowrap" style={s.textMuted}>{formatTime(log.created_at)}</p>
               </div>
             ))}
-            {logs.length === 0 && <p className="text-sm text-gray-400 text-center py-4">No activity yet</p>}
+            {logs.length === 0 && <p className="text-sm text-center py-4" style={s.textMuted}>No activity yet</p>}
           </div>
         </div>
       </div>
-
-      {health && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">System Health</h2>
-            <button onClick={() => navigate('/super-admin/health')} className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
-              Full report <ArrowUpRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {Object.entries(health).filter(([k]) => !['overall'].includes(k)).slice(0, 8).map(([key, check]) => (
-              <div key={key} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/30">
-                {getHealthIcon(check?.status)}
-                <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">
-                    {key.replace(/([A-Z])/g, ' $1').trim()}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{check?.status || 'unknown'}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

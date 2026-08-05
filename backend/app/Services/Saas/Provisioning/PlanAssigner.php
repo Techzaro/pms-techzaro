@@ -24,7 +24,7 @@ class PlanAssigner
      * Assign a plan to an organization.
      *
      * @param Organization $organization The organization.
-     * @param string|null $planSlug The plan slug (e.g., "professional"). Null = default plan.
+     * @param string|null $planSlug The plan slug (e.g., "standard"). Null = default plan.
      * @param string $billingPeriod The billing period (monthly/yearly).
      *
      * @return \App\Models\Master\OrganizationSubscription|null

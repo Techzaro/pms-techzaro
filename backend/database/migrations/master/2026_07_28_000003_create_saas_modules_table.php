@@ -23,7 +23,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('slug')->unique();
             $table->text('description')->nullable();
-            $table->string('category')->default('core'); // core, premium, enterprise
+            $table->string('category')->default('core'); // core, standard, enterprise
             $table->boolean('is_active')->default(true);
             $table->boolean('is_default')->default(false); // enabled for all plans by default
             $table->unsignedSmallInteger('sort_order')->default(0);

@@ -7,7 +7,7 @@
  * user can update their credentials without leaving the page.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MdEdit } from "react-icons/md";
@@ -16,7 +16,7 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import Breadcrumb from "../components/Breadcrumb";
 import API_URL from "../config/api";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import { authToken, getCurrentRole, getUser, setUser, normalizeRole } from "../utils/auth";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
@@ -86,9 +86,9 @@ function MyProfile() {
     markViewed: markMyViewed,
   } = useActivityHighlight("user", profileData?.user?.id, profileData?.activity_max_id || 0, changes);
 
-  const { isDirty: passwordIsDirty, setIsDirty: setPasswordIsDirty, handleClose: handlePasswordClose, ConfirmDialog: PasswordConfirmDialog } = useConfirmOnClose(() => {
+  const passwordInitialValues = useMemo(() => ({ old_password: "", new_password: "", confirm_password: "" }), []);
+  const { isDirty: passwordIsDirty, handleClose: handlePasswordClose, markSaved: markPasswordSaved, resetBaseline: resetPasswordBaseline, ConfirmDialog: PasswordConfirmDialog } = useUnsavedChanges(passwordInitialValues, passwordForm, () => {
     setIsPasswordModalOpen(false);
-    setPasswordIsDirty(false);
   });
   useEscapeKey(isPasswordModalOpen, handlePasswordClose);
 
@@ -182,7 +182,7 @@ function MyProfile() {
   const openPasswordModal = () => {
     setPasswordForm({ old_password: "", new_password: "", confirm_password: "" });
     setPasswordErrors({});
-    setPasswordIsDirty(false);
+    resetPasswordBaseline({ old_password: "", new_password: "", confirm_password: "" });
     setIsPasswordModalOpen(true);
   };
 
@@ -244,6 +244,7 @@ function MyProfile() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to change password");
 
+      markPasswordSaved();
       setIsPasswordModalOpen(false);
       showSuccessMessage("Password", "changed");
     } catch (err) {
@@ -736,7 +737,7 @@ function MyProfile() {
                       id="old-password"
                       name="old_password"
                       value={passwordForm.old_password}
-                      onChange={(e) => { handlePasswordChange(e); setPasswordIsDirty(true); }}
+                      onChange={(e) => handlePasswordChange(e)}
                       placeholder="Enter current password"
                       className={passwordErrors.old_password ? "field-error" : ""}
                       style={{ width: "100%", padding: "8px 36px 8px 32px", border: "1px solid var(--border-color)", borderRadius: "6px", fontSize: "14px", outline: "none", boxSizing: "border-box" }}
@@ -756,7 +757,7 @@ function MyProfile() {
                   id="new-password"
                   name="new_password"
                   value={passwordForm.new_password}
-                  onChange={(e) => { handlePasswordChange(e); setPasswordIsDirty(true); }}
+                  onChange={(e) => handlePasswordChange(e)}
                   placeholder="Enter new password"
                   label="New Password"
                   error={passwordErrors.new_password}
@@ -766,7 +767,7 @@ function MyProfile() {
                   id="confirm-password"
                   name="confirm_password"
                   value={passwordForm.confirm_password}
-                  onChange={(e) => { handlePasswordChange(e); setPasswordIsDirty(true); }}
+                  onChange={(e) => handlePasswordChange(e)}
                   placeholder="Confirm new password"
                   label="Confirm New Password"
                   showStrength={false}

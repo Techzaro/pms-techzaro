@@ -23,7 +23,7 @@ use Illuminate\Support\Str;
  *     --admin-name="John Doe" \
  *     --admin-email="admin@acme.com" \
  *     --admin-password="ChangeMe123!" \
- *     --plan="professional"
+ *     --plan="standard"
  */
 class TenantProvisionCommand extends Command
 {
@@ -33,7 +33,7 @@ class TenantProvisionCommand extends Command
                             {--admin-name= : Administrator full name}
                             {--admin-email= : Administrator email address}
                             {--admin-password= : Administrator password}
-                            {--plan= : Plan slug (starter, professional, enterprise). Default: professional}
+                            {--plan= : Plan slug (starter, standard, enterprise). Default: standard}
                             {--domain= : Primary domain (auto-generated from slug if omitted)}
                             {--type=standard : Organization type (owner, standard)}
                             {--status=active : Organization status (active, trial, inactive)}

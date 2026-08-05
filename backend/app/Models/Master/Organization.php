@@ -111,6 +111,18 @@ class Organization extends Model
         );
     }
 
+    /** Organization-specific trial configuration override (optional). */
+    public function trialSetting(): HasOne
+    {
+        return $this->hasOne(OrganizationTrialSetting::class);
+    }
+
+    /** Subscription history records. */
+    public function subscriptionHistory(): HasMany
+    {
+        return $this->hasMany(OrganizationSubscriptionHistory::class)->orderBy('created_at', 'desc');
+    }
+
     /*
     |------------------------------------------------------------------
     | Helpers

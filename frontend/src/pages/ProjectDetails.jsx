@@ -62,7 +62,7 @@ import { useSubmit } from "../hooks/useSubmit";
 import { useNotification } from "../context/NotificationContext";
 import { showSuccessMessage } from "../utils/notify";
 import { useActivityHighlight } from "../hooks/useActivityHighlight";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import "../components/layout/ActivityHighlight.css";
 import "./ProjectDetails.css";
 import "./TaskDetails.css";
@@ -790,9 +790,12 @@ function ProjectDetails() {
     setVisibilitySelected({});
   };
 
-  const { isDirty: visIsDirty, setIsDirty: setVisIsDirty, handleClose: handleVisClose, ConfirmDialog: VisConfirmDialog } = useConfirmOnClose(closeVisibility);
+  const visInitialValues = useMemo(() => ({}), []);
+  const { isDirty: visIsDirty, handleClose: handleVisClose, markSaved: markVisSaved, resetBaseline: resetVisBaseline, ConfirmDialog: VisConfirmDialog } = useUnsavedChanges(visInitialValues, visibilitySelected, closeVisibility);
 
-  const { isDirty: mgrIsDirty, setIsDirty: setMgrIsDirty, handleClose: handleMgrClose, ConfirmDialog:MgrConfirmDialog } = useConfirmOnClose(() => setShowManagerModal(false));
+  const mgrInitialValues = useMemo(() => ({ selectedManagerId: null }), []);
+  const currentMgrValues = useMemo(() => ({ selectedManagerId }), [selectedManagerId]);
+  const { isDirty: mgrIsDirty, handleClose: handleMgrClose, markSaved: markMgrSaved, resetBaseline: resetMgrBaseline, ConfirmDialog:MgrConfirmDialog } = useUnsavedChanges(mgrInitialValues, currentMgrValues, () => setShowManagerModal(false));
 
   const { submitting: milestoneToggling, run: runMilestoneToggle } = useSubmit();
 
@@ -890,6 +893,7 @@ function ProjectDetails() {
       const selected = {};
       users.forEach((u) => { if (u.is_visible) selected[u.id] = true; });
       setVisibilitySelected(selected);
+      resetVisBaseline({ ...selected });
     } catch {
       setVisibilityUsers([]);
       setVisibilitySelected({});
@@ -913,6 +917,7 @@ function ProjectDetails() {
         _notifHandled: true,
       });
       if (!res.ok) throw new Error("Failed to save visibility");
+      markVisSaved();
       closeVisibility();
     } catch (err) {
       console.error("Save visibility error:", err);
@@ -956,7 +961,8 @@ function ProjectDetails() {
   };
 
   const openManagerEdit = () => {
-    setSelectedManagerId(project.creator?.id || null);
+    const initialMgrId = project.creator?.id || null;
+    setSelectedManagerId(initialMgrId);
     setManagerDropdownOpen(false);
     setShowManagerModal(true);
     const members = project.members || [];
@@ -966,6 +972,7 @@ function ProjectDetails() {
     } else {
       setManagerUsers(members);
     }
+    resetMgrBaseline({ selectedManagerId: initialMgrId });
   };
 
   const handleManagerSelect = (userId) => {

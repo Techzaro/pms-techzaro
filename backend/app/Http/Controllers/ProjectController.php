@@ -186,6 +186,42 @@ class ProjectController extends Controller
             'milestones.*.status' => 'nullable|string|max:32',
         ]);
 
+        // Enforce plan project limits
+        $org = $request->attributes->get('currentOrganization');
+        if ($org && !$org->isOwner()) {
+            $subscription = \App\Models\Master\OrganizationSubscription::on('mysql_master')
+                ->where('organization_id', $org->id)
+                ->with('plan')
+                ->latest()
+                ->first();
+
+            if ($subscription && $subscription->plan) {
+                $maxProjects = $subscription->plan->max_projects;
+
+                if ($subscription->plan->slug === 'trial') {
+                    $trialSetting = \App\Models\Master\OrganizationTrialSetting::on('mysql_master')
+                        ->where('organization_id', $org->id)
+                        ->first();
+                    if ($trialSetting) {
+                        $maxProjects = $trialSetting->max_projects;
+                    }
+                }
+
+                if ($maxProjects < 9999) {
+                    // Count projects created within current subscription period only (resets on renewal)
+                    $currentProjectCount = Project::where('created_at', '>=', $subscription->starts_at)
+                        ->where('created_at', '<=', $subscription->ends_at)
+                        ->count();
+                    if ($currentProjectCount >= $maxProjects) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Project limit reached ({$currentProjectCount}/{$maxProjects}). Please upgrade your plan to add more projects.",
+                        ], 403);
+                    }
+                }
+            }
+        }
+
         $milestones = $validated['milestones'] ?? null;
         unset($validated['milestones']);
         $existingFileNames = $validated['existing_file_names'] ?? null;

@@ -36,6 +36,7 @@ Route::post('/login', [AuthController::class, 'login']);
 // Password reset (no auth required)
 Route::post('/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'forgotPassword']);
 Route::post('/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'resetPassword']);
+Route::get('/email-policy/{slug}', [\App\Http\Controllers\PasswordResetController::class, 'getEmailPolicy']);
 
 // First-time password change (token-based auth, NOT auth:sanctum — avoids multi-tenant connection issues)
 Route::put('/user/first-time-change-password', [AuthController::class, 'firstTimeChangePassword']);
@@ -489,6 +490,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware(\App\Http\Middleware\RoleMiddleware::class . ':admin')->group(function () {
         Route::get('/organization-settings/email-policy', [\App\Http\Controllers\OrganizationSettingsController::class, 'getEmailPolicy']);
         Route::put('/organization-settings/email-policy', [\App\Http\Controllers\OrganizationSettingsController::class, 'updateEmailPolicy']);
+        Route::get('/organization-settings/branding', [\App\Http\Controllers\OrganizationSettingsController::class, 'getBranding']);
+        Route::put('/organization-settings/branding', [\App\Http\Controllers\OrganizationSettingsController::class, 'updateBranding']);
+        Route::get('/organization-settings/subscription', [\App\Http\Controllers\OrganizationSettingsController::class, 'getSubscription']);
+        Route::get('/organization-settings/subscription-history', [\App\Http\Controllers\OrganizationSettingsController::class, 'getSubscriptionHistory']);
     });
 
     /*

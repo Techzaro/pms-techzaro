@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useEscapeKey } from "../hooks/useEscapeKey";
-import useConfirmOnClose from "../hooks/useConfirmOnClose";
+import useUnsavedChanges from "../hooks/useUnsavedChanges";
 import API_URL from "../config/api";
 import { authToken } from "../utils/auth";
 import { notify, showSuccessMessage } from "../utils/notify";
@@ -19,9 +19,6 @@ const REQUIREMENTS = [
  * Includes options for force logout and disabling password recovery.
  */
 export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
-  const { isDirty, setIsDirty, handleClose, ConfirmDialog } = useConfirmOnClose(onClose);
-  useEscapeKey(true, handleClose);
-
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNew, setShowNew] = useState(false);
@@ -29,6 +26,11 @@ export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
   const [forceLogout, setForceLogout] = useState(true);
   const [disableRecovery, setDisableRecovery] = useState(true);
   const [loading, setLoading] = useState(false);
+
+  const initialValues = useMemo(() => ({ newPassword: '', confirmPassword: '', forceLogout: false, disableRecovery: false }), []);
+  const currentValues = useMemo(() => ({ newPassword, confirmPassword, forceLogout, disableRecovery }), [newPassword, confirmPassword, forceLogout, disableRecovery]);
+  const { isDirty, handleClose, markSaved, ConfirmDialog } = useUnsavedChanges(initialValues, currentValues, onClose);
+  useEscapeKey(true, handleClose);
 
   const allValid = REQUIREMENTS.every((r) => r.test(newPassword));
 
@@ -69,6 +71,7 @@ export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
 
       showSuccessMessage("Password", "updated");
       if (onSuccess) onSuccess(data);
+      markSaved();
       onClose();
     } catch (err) {
       notify.error(err.message || "Failed to change password.");
@@ -192,7 +195,7 @@ export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
             <input
               type={showNew ? "text" : "password"}
               value={newPassword}
-              onChange={(e) => { setNewPassword(e.target.value); setIsDirty(true); }}
+              onChange={(e) => setNewPassword(e.target.value)}
               placeholder="Enter new password"
               style={inputStyle}
             />
@@ -223,7 +226,7 @@ export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
             <input
               type={showConfirm ? "text" : "password"}
               value={confirmPassword}
-              onChange={(e) => { setConfirmPassword(e.target.value); setIsDirty(true); }}
+              onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Confirm new password"
               style={inputStyle}
             />
@@ -243,7 +246,7 @@ export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
             <input
               type="checkbox"
               checked={forceLogout}
-              onChange={(e) => { setForceLogout(e.target.checked); setIsDirty(true); }}
+              onChange={(e) => setForceLogout(e.target.checked)}
               style={{ width: 16, height: 16, accentColor: "#2563eb", cursor: "pointer" }}
             />
             <div>
@@ -258,7 +261,7 @@ export default function AdminChangePasswordModal({ user, onClose, onSuccess }) {
             <input
               type="checkbox"
               checked={disableRecovery}
-              onChange={(e) => { setDisableRecovery(e.target.checked); setIsDirty(true); }}
+              onChange={(e) => setDisableRecovery(e.target.checked)}
               style={{ width: 16, height: 16, accentColor: "#2563eb", cursor: "pointer" }}
             />
             <div>

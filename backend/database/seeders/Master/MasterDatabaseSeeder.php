@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
  *
  * Seeds the saas_master database with:
  * 1. Feature modules
- * 2. Subscription plans (Starter, Professional, Enterprise)
+ * 2. Subscription plans (Starter, Standard, Enterprise)
  * 3. Plan-module mappings
  * 4. TechXaro PMS as Tenant #1 (Owner type, Enterprise plan)
  *
@@ -49,10 +49,10 @@ class MasterDatabaseSeeder extends Seeder
             ['name' => 'User Profiles',     'slug' => 'profiles',          'description' => 'Full user profiles with documents, employment, and emergency details',    'category' => 'core',      'is_default' => true,  'sort_order' => 10],
             ['name' => 'Company Documents', 'slug' => 'company_documents', 'description' => 'Company-wide document management with logo and QR code',                  'category' => 'core',      'is_default' => true,  'sort_order' => 11],
             ['name' => 'Work Timers',       'slug' => 'work_timers',       'description' => 'Time tracking with start/pause/resume and session history',               'category' => 'core',      'is_default' => true,  'sort_order' => 12],
-            ['name' => 'Reports',           'slug' => 'reports',           'description' => 'Performance reports, team analytics, and export capabilities',            'category' => 'premium',   'is_default' => false, 'sort_order' => 20],
-            ['name' => 'Audit Logs',        'slug' => 'audit_logs',        'description' => 'Full audit trail with export, user agent tracking, and change history',   'category' => 'premium',   'is_default' => false, 'sort_order' => 21],
-            ['name' => 'Guest Portal',      'slug' => 'guest_portal',      'description' => 'Client portal with limited access for external stakeholders',             'category' => 'premium',   'is_default' => false, 'sort_order' => 22],
-            ['name' => 'Delegation',        'slug' => 'delegation',        'description' => 'Task and deliverable delegation with approval chains',                    'category' => 'premium',   'is_default' => false, 'sort_order' => 23],
+            ['name' => 'Reports',           'slug' => 'reports',           'description' => 'Performance reports, team analytics, and export capabilities',            'category' => 'standard',   'is_default' => false, 'sort_order' => 20],
+            ['name' => 'Audit Logs',        'slug' => 'audit_logs',        'description' => 'Full audit trail with export, user agent tracking, and change history',   'category' => 'standard',   'is_default' => false, 'sort_order' => 21],
+            ['name' => 'Guest Portal',      'slug' => 'guest_portal',      'description' => 'Client portal with limited access for external stakeholders',             'category' => 'standard',   'is_default' => false, 'sort_order' => 22],
+            ['name' => 'Delegation',        'slug' => 'delegation',        'description' => 'Task and deliverable delegation with approval chains',                    'category' => 'standard',   'is_default' => false, 'sort_order' => 23],
             ['name' => 'Recurring Tasks',   'slug' => 'recurring_tasks',   'description' => 'Recurring task generation with customizable schedules',                   'category' => 'enterprise','is_default' => false, 'sort_order' => 30],
         ];
 
@@ -67,6 +67,14 @@ class MasterDatabaseSeeder extends Seeder
 
         $plans = [
             [
+                'name' => 'Trial', 'slug' => 'trial',
+                'description' => 'Free 14-day trial with full access to Starter features',
+                'price_monthly' => 0.00, 'price_yearly' => 0.00,
+                'max_users' => 5, 'max_projects' => 5, 'max_storage_gb' => 5,
+                'trial_duration' => 14, 'trial_duration_unit' => 'days',
+                'is_active' => true, 'is_default' => false, 'sort_order' => 0,
+            ],
+            [
                 'name' => 'Starter', 'slug' => 'starter',
                 'description' => 'Perfect for small teams getting started with project management',
                 'price_monthly' => 29.00, 'price_yearly' => 290.00,
@@ -74,7 +82,7 @@ class MasterDatabaseSeeder extends Seeder
                 'is_active' => true, 'is_default' => true, 'sort_order' => 1,
             ],
             [
-                'name' => 'Professional', 'slug' => 'professional',
+                'name' => 'Standard', 'slug' => 'standard',
                 'description' => 'For growing teams that need advanced features and reporting',
                 'price_monthly' => 79.00, 'price_yearly' => 790.00,
                 'max_users' => 50, 'max_projects' => 50, 'max_storage_gb' => 50,
@@ -101,12 +109,13 @@ class MasterDatabaseSeeder extends Seeder
         $allModules = SaasModule::pluck('id')->toArray();
 
         $starterModules = ['projects','tasks','deliverables','teams','events','notifications','chat','drafts','activities','profiles','company_documents','work_timers'];
-        $professionalModules = array_merge($starterModules, ['reports','audit_logs','guest_portal','delegation']);
-        $enterpriseModules = array_merge($professionalModules, ['recurring_tasks']);
+        $standardModules = array_merge($starterModules, ['reports','audit_logs','guest_portal','delegation']);
+        $enterpriseModules = array_merge($standardModules, ['recurring_tasks']);
 
         $map = [
+            'trial'        => $starterModules,
             'starter'      => $starterModules,
-            'professional' => $professionalModules,
+            'standard'     => $standardModules,
             'enterprise'   => $enterpriseModules,
         ];
 
