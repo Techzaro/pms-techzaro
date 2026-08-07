@@ -103,6 +103,7 @@ function ApplicationHistoryTab() {
         requestId={selectedRequest}
         onBack={() => setSelectedRequest(null)}
         onRefresh={fetchApplications}
+        isAdmin={true}
       />
     );
   }

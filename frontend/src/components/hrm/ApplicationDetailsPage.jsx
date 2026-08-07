@@ -2,10 +2,14 @@ import React, { useState, useEffect } from "react";
 import API_URL from "../../config/api";
 import { authToken } from "../../utils/auth";
 import { ArrowLeft, Clock, User, Shield, CheckCircle, XCircle, RotateCcw, Lock, RefreshCw, FileText } from "lucide-react";
+import HRMAdminActions from "./HRMAdminActions";
+import HRMStatusTimeline from "./HRMStatusTimeline";
 import "./ApplicationDetailsPage.css";
 
-function ApplicationDetailsPage({ requestId, onBack, onRefresh }) {
+function ApplicationDetailsPage({ requestId, onBack, onRefresh, isAdmin = false }) {
   const [data, setData] = useState(null);
+  const [employeeStats, setEmployeeStats] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [adminStatus, setAdminStatus] = useState("");
   const [adminRemarks, setAdminRemarks] = useState("");
@@ -25,6 +29,7 @@ function ApplicationDetailsPage({ requestId, onBack, onRefresh }) {
       const json = await res.json();
       if (json.success) {
         setData(json.data.application);
+        setEmployeeStats(json.data.employee_stats);
         setAdminStatus(json.data.application.status || "");
       }
     } catch (err) {
@@ -34,7 +39,12 @@ function ApplicationDetailsPage({ requestId, onBack, onRefresh }) {
     }
   };
 
-  const handleUpdateStatus = async (newStat) => {
+  const handleUpdateStatus = async (actionType, adminRemarks) => {
+    let newStat = "Pending";
+    if (actionType === "approve") newStat = "Approved";
+    if (actionType === "reject") newStat = "Rejected";
+    if (actionType === "remove") newStat = "Cancelled";
+
     setSubmittingStatus(true);
     try {
       const token = authToken();
@@ -77,6 +87,13 @@ function ApplicationDetailsPage({ requestId, onBack, onRefresh }) {
           <div className="user-info">
             <h3>{data.employee?.name}</h3>
             <p><User size={13} /> {data.employee?.email}</p>
+            {isAdmin && employeeStats && (
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px', fontSize: '12px' }}>
+                <span style={{ padding: '2px 8px', background: '#f1f5f9', color: '#1e293b', borderRadius: '4px', fontWeight: '500' }}>Total: <strong>{employeeStats.total}</strong></span>
+                <span style={{ padding: '2px 8px', background: '#ecfdf5', color: '#065f46', borderRadius: '4px', fontWeight: '500' }}>Approved: <strong>{employeeStats.approved}</strong></span>
+                <span style={{ padding: '2px 8px', background: '#fffbeb', color: '#92400e', borderRadius: '4px', fontWeight: '500' }}>Pending: <strong>{employeeStats.pending}</strong></span>
+              </div>
+            )}
           </div>
         </div>
         <div className="banner-status-box">
@@ -84,32 +101,7 @@ function ApplicationDetailsPage({ requestId, onBack, onRefresh }) {
         </div>
       </div>
 
-      <div className="admin-decision-card">
-        <div className="decision-header">
-          <Shield size={18} color="#0082ff" />
-          <h3>Admin Decision Panel</h3>
-        </div>
-        <div className="decision-form">
-          <textarea
-            className="pms-textarea"
-            rows={2}
-            placeholder="Decision remarks..."
-            value={adminRemarks}
-            onChange={(e) => setAdminRemarks(e.target.value)}
-          />
-          <div className="decision-actions" style={{marginTop: '10px', display: 'flex', gap: '10px'}}>
-            <button className="btn-decision btn-approve" disabled={submittingStatus} onClick={() => handleUpdateStatus("Approved")}>
-              <CheckCircle size={15} /> Approve
-            </button>
-            <button className="btn-decision btn-return" disabled={submittingStatus} onClick={() => handleUpdateStatus("Returned")}>
-              <RotateCcw size={15} /> Return
-            </button>
-            <button className="btn-decision btn-reject" disabled={submittingStatus} onClick={() => handleUpdateStatus("Rejected")}>
-              <XCircle size={15} /> Reject
-            </button>
-          </div>
-        </div>
-      </div>
+      {isAdmin && <HRMAdminActions onAction={handleUpdateStatus} />}
 
       <div className="pms-card mt-4">
         <div className="pms-card-header"><FileText size={18} /> <h4>Request Details</h4></div>
@@ -122,35 +114,42 @@ function ApplicationDetailsPage({ requestId, onBack, onRefresh }) {
             {data.fields?.map((f, i) => {
               let displayVal = f.field_value;
               
-              // Formatting Logic for Dates / Times
               if (displayVal) {
-                 // Check if valid JSON (for daterange)
                  try {
                     const parsed = JSON.parse(displayVal);
                     if (parsed.start && parsed.end) {
                        displayVal = `${new Date(parsed.start).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} to ${new Date(parsed.end).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`;
                     }
                  } catch (e) {
-                    // Check if standard Date YYYY-MM-DD
                     if (/^\d{4}-\d{2}-\d{2}$/.test(displayVal)) {
                        displayVal = new Date(displayVal).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
                     }
-                    // Check if standard Time HH:mm
                     else if (/^([01]\d|2[0-3]):([0-5]\d)$/.test(displayVal)) {
                        const [h, m] = displayVal.split(':');
                        const date = new Date();
                        date.setHours(h, m);
                        displayVal = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
                     }
-                    // Check if datetime-local YYYY-MM-DDTHH:mm
                     else if (/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):([0-5]\d)$/.test(displayVal)) {
                        displayVal = new Date(displayVal).toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
                     }
                  }
                  
-                 // If it is a file upload URL, display as link
                  if (typeof displayVal === 'string' && displayVal.startsWith('/storage/')) {
-                    displayVal = <a href={displayVal} target="_blank" rel="noreferrer" style={{ color: "#2563eb", textDecoration: "underline" }}>View Attachment</a>;
+                    const baseUrl = API_URL.replace('/api', '');
+                    const fullUrl = `${baseUrl}${displayVal}`;
+                    displayVal = (
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <button 
+                          onClick={() => setPreviewUrl(fullUrl)}
+                          className="btn-pms-primary"
+                          style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                        >
+                          <FileText size={14} /> Preview Document
+                        </button>
+                        <a href={fullUrl} target="_blank" rel="noreferrer" style={{ color: "var(--pms-primary)", textDecoration: "underline", fontSize: '12px', alignSelf: 'center', fontWeight: '500' }}>Download Original</a>
+                      </div>
+                    );
                  }
               }
 
@@ -168,15 +167,26 @@ function ApplicationDetailsPage({ requestId, onBack, onRefresh }) {
       </div>
       
       <div className="pms-card mt-4">
-        <div className="pms-card-header"><h4>Audit History</h4></div>
-        <div className="pms-card-body">
-          <ul>
-            {data.history?.map((h, i) => (
-              <li key={i}><strong>{h.action}</strong> to {h.new_status} on {new Date(h.created_at).toLocaleString()} by {h.performed_by?.name || 'Admin'} - {h.comments}</li>
-            ))}
-          </ul>
+        <div className="pms-card-header"><h4>Application Timeline</h4></div>
+        <div className="pms-card-body" style={{ padding: "0" }}>
+          <HRMStatusTimeline status={data.status} />
         </div>
       </div>
+
+      {previewUrl && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ width: '100%', maxWidth: '800px', display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+            <button onClick={() => setPreviewUrl(null)} style={{ background: 'white', color: 'black', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Close Preview</button>
+          </div>
+          <div style={{ width: '100%', maxWidth: '800px', height: '80vh', background: 'white', borderRadius: '8px', overflow: 'hidden' }}>
+            {previewUrl.toLowerCase().match(/\.(jpeg|jpg|gif|png)$/) != null ? (
+              <img src={previewUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            ) : (
+              <iframe src={previewUrl} style={{ width: '100%', height: '100%', border: 'none' }} title="Document Preview" />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

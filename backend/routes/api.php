@@ -730,10 +730,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Complete HRM Application Request History & Immutable Audit Trail Routes
     Route::get('/hrm/application-history', [HrmApplicationHistoryController::class, 'index']);
-    Route::get('/hrm/application-history/{type}/{id}', [HrmApplicationHistoryController::class, 'show']);
-    Route::post('/hrm/application-history/{type}/{id}/comments', [HrmApplicationHistoryController::class, 'addComment']);
-    Route::post('/hrm/application-history/{type}/{id}/attachments', [HrmApplicationHistoryController::class, 'uploadAttachment']);
-    Route::patch('/hrm/application-history/{type}/{id}/status', [HrmApplicationHistoryController::class, 'updateStatus']);
+    Route::get('/hrm/application-history/all/{id}', [HrmApplicationHistoryController::class, 'show']);
+    Route::post('/hrm/application-history/all/{id}/comments', [HrmApplicationHistoryController::class, 'addComment']);
+    Route::post('/hrm/application-history/all/{id}/attachments', [HrmApplicationHistoryController::class, 'uploadAttachment']);
+    Route::patch('/hrm/application-history/all/{id}/status', [HrmApplicationHistoryController::class, 'updateStatus']);
 
     // Dynamic Admin Custom Application Types Routes
     Route::get('/hrm/application-types', [HrmApplicationTypeController::class, 'index']);

@@ -43,7 +43,8 @@ import {
   Info,
 } from "lucide-react";
 import "./MemberHrmDashboard.css";
-
+import HRMDynamicFormRenderer from "../../components/hrm/HRMDynamicFormRenderer";
+import ApplicationDetailsPage from "../../components/hrm/ApplicationDetailsPage";
 async function apiRequest(path, options = {}) {
   const token = authToken();
   const res = await fetch(`${API_URL}${path}`, {
@@ -137,6 +138,26 @@ export default function MemberHrmDashboard() {
   const [editingReqId, setEditingReqId] = useState(null);
   const [dynamicFormState, setDynamicFormState] = useState({});
   const [formStep, setFormStep] = useState(1);
+  const [formResetKey, setFormResetKey] = useState(Date.now());
+  const [reqAttachments, setReqAttachments] = useState(null);
+  const [filePreviews, setFilePreviews] = useState([]);
+  const [memberLightboxUrl, setMemberLightboxUrl] = useState(null);
+
+  const handleMemberFileChange = (e) => {
+    const files = Array.from(e.target.files);
+    setReqAttachments(files);
+    
+    const previews = files.map(file => {
+      const isImage = file.type.startsWith('image/');
+      return {
+        name: file.name,
+        size: (file.size / 1024 / 1024).toFixed(2) + ' MB',
+        isImage,
+        url: isImage ? URL.createObjectURL(file) : null
+      };
+    });
+    setFilePreviews(previews);
+  };
 
   // Real-Time Leave Application Form State
   const [leaveType, setLeaveType] = useState("Casual Leave");
@@ -570,6 +591,61 @@ export default function MemberHrmDashboard() {
       setSubmittingLeave(false);
     }
   };
+  // Unified Dynamic Form Submit
+  const handleDynamicFormSubmit = async ({ requestType, data }) => {
+    setSubmittingReq(true);
+    try {
+      const token = authToken();
+      const formData = new FormData();
+      
+      const matchedType = appTypes.find(t => t.name === requestType || t.id === requestType);
+      if (!matchedType) {
+        throw new Error(`Application type '${requestType}' not found in database. Please ask admin to configure this type.`);
+      }
+
+      formData.append("application_type_id", matchedType.id);
+      formData.append("title", data.subject || `${requestType} Request`);
+      if (data.comments) formData.append("description", data.comments);
+
+      if (Object.keys(data).length > 0) {
+        Object.keys(data).forEach(key => {
+          if (key === "subject" || key === "comments") return; // Skip standard fields already mapped
+          if (key === "global_attachment" || key === "attachment" || key === "receipts" || key === "attachments") {
+            const files = data[key];
+            if (files && files.length > 0) {
+              formData.append(`dynamic_fields[${key}]`, files[0]);
+            }
+          } else if (typeof data[key] === "object") {
+            formData.append(`dynamic_fields[${key}]`, JSON.stringify(data[key]));
+          } else {
+            formData.append(`dynamic_fields[${key}]`, data[key]);
+          }
+        });
+      }
+
+      const res = await fetch(`${API_URL}/hrm/member/request-form`, {
+        method: "POST",
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Accept": "application/json"
+        },
+        body: formData,
+      });
+      
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.message || "Failed to submit request.");
+
+      notify(resData.message || `${requestType} submitted successfully ✔`);
+      setFormResetKey(Date.now()); // Trigger full reset of HRMDynamicFormRenderer
+      loadMemberSummary(false);
+    } catch (err) {
+      notify(err.message || "Failed to submit application.", "error");
+    } finally {
+      setSubmittingReq(false);
+    }
+  };
+
+  const [selectedHistoryId, setSelectedHistoryId] = useState(null);
 
   // Submit HR Request Form
   const handleSubmitHrRequest = async (e) => {
@@ -610,6 +686,7 @@ export default function MemberHrmDashboard() {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
+          "Accept": "application/json"
         },
         body: formData,
       });
@@ -725,6 +802,26 @@ export default function MemberHrmDashboard() {
   return (
     <main className="mem-page" id="member-hrm-portal">
       {toast && <div className={`mem-toast mem-toast--${toast.kind}`} role="alert">{toast.message}</div>}
+
+
+
+
+      {/* SUB-MODULE CONTENT */}
+      {activeTab === "overview" && (
+        <section className="mem-card" id="section-member-summary">
+
+          
+      {/* LIGHTBOX PREVIEW MODAL */}
+      {memberLightboxUrl && (
+        <div className="mem-modal-overlay" style={{ zIndex: 10000, background: "rgba(0,0,0,0.8)" }} onClick={() => setMemberLightboxUrl(null)}>
+          <div style={{ position: "relative", maxWidth: "90%", maxHeight: "90%", display: "flex", justifyContent: "center", alignItems: "center" }}>
+            <button style={{ position: "absolute", top: "-40px", right: "-40px", background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: "16px", padding: "8px" }} onClick={() => setMemberLightboxUrl(null)}>
+              <X size={32} />
+            </button>
+            <img src={memberLightboxUrl} alt="Preview" style={{ maxWidth: "100%", maxHeight: "85vh", objectFit: "contain", borderRadius: "8px", boxShadow: "0 10px 25px rgba(0,0,0,0.5)" }} onClick={(e) => e.stopPropagation()} />
+          </div>
+        </div>
+      )}
 
       {/* ONLINE WARNING REMOVAL REASON MODAL */}
       {warningModalOpen && selectedWarning && (
@@ -1039,12 +1136,6 @@ export default function MemberHrmDashboard() {
           )}
         </div>
       </section>
-
-
-
-      {/* SUB-MODULE CONTENT */}
-      {activeTab === "overview" && (
-        <section className="mem-card" id="section-member-summary">
           <div className="mem-card-header">
             <h2 className="mem-card-title"><Calendar size={19} /> Monthly Working Summary ({summary.month_name})</h2>
             <p className="mem-card-desc">Your attendance and work hour overview for the current month.</p>
@@ -1103,336 +1194,73 @@ export default function MemberHrmDashboard() {
         </section>
       )}
 
-      {activeTab === "leaves" && (
-        <section className="mem-card" id="section-leave-application">
+      {selectedHistoryId && (
+        <ApplicationDetailsPage 
+          requestId={selectedHistoryId} 
+          onBack={() => setSelectedHistoryId(null)}
+          onRefresh={() => loadMemberSummary(false)}
+        />
+      )}
+
+      {!selectedHistoryId && (activeTab === "leaves" || activeTab === "applications" || activeTab === "requests" || activeTab === "workmode" || activeTab === "corrections" || activeTab === "claims") && (
+        <section className="mem-card" id="section-applications">
           <div className="mem-card-header">
-            <h2 className="mem-card-title"><Calendar size={19} /> Leave Application Form &amp; History</h2>
+            <h2 className="mem-card-title"><FileText size={19} /> Application Requests &amp; History</h2>
             <p className="mem-card-desc">
-              Submit formal leave applications directly to HR Management for review. Track decision status audit logs in real-time.
+              Submit and manage your leave, advance salary, expense, and other HR requests dynamically.
             </p>
           </div>
 
           <div style={{ background: "var(--bg-card-alt)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "20px", marginBottom: "28px" }}>
             <p className="mem-section-sub" style={{ margin: "0 0 16px" }}>
-              <FileText size={16} /> New Leave Application Request
+              <FileText size={16} /> New Application Request
             </p>
-
-            <form onSubmit={handleSubmitHrRequest} className="mem-form" style={{ maxWidth: "100%", position: "relative", minHeight: "450px" }}>
-              {/* STEP 1: APPLICATION TYPE & SUBJECT */}
-              <div style={{ display: formStep === 1 ? 'block' : 'none', animation: 'fadeIn 0.4s ease-out' }}>
-                <div style={{ marginBottom: "20px", paddingBottom: "15px", borderBottom: "1px solid var(--border-color)" }}>
-                  <h3 style={{ margin: 0, color: "var(--text-heading)", fontSize: "16px" }}>Step 1: Select Application Type</h3>
-                  <p style={{ margin: "4px 0 0", color: "var(--text-secondary)", fontSize: "13px" }}>Choose the type of request you are submitting.</p>
-                </div>
-                
-                <div className="mem-form-grid" style={{ gridTemplateColumns: "1fr" }}>
-                  <div className="mem-form-group">
-                    <label className="mem-form-label">
-                      Application Category <span style={{ color: "var(--color-danger)" }}>*</span>
-                    </label>
-                    <select
-                      className="mem-input"
-                      value={requestCategory}
-                      onChange={(e) => setRequestCategory(e.target.value)}
-                      required
-                    >
-                      {appTypes && appTypes.length > 0 ? (
-                        appTypes.map((t) => (
-                          <option key={t.id || t.name} value={t.name}>{t.name}</option>
-                        ))
-                      ) : (
-                        <option value="General HR Application">General HR Application</option>
-                      )}
-                    </select>
-                  </div>
-
-                  <div className="mem-form-group">
-                    <label className="mem-form-label">
-                      Application Subject / Title <span style={{ color: "var(--color-danger)" }}>*</span>
-                    </label>
-                    <input
-                      type="text"
-                      className="mem-input"
-                      placeholder="Brief subject or title of your application..."
-                      value={requestSubject}
-                      onChange={(e) => setRequestSubject(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="mem-form-actions" style={{ justifyContent: "flex-end", marginTop: "20px" }}>
-                  <button
-                    type="button"
-                    className="mem-btn mem-btn--primary"
-                    onClick={() => {
-                      if (!requestCategory || !requestSubject) return alert("Please fill out all required fields.");
-                      setFormStep(2);
-                    }}
-                  >
-                    Next Step <span style={{ marginLeft: "6px" }}>→</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* STEP 2: DYNAMIC FIELDS & ATTACHMENTS */}
-              <div style={{ display: formStep === 2 ? 'block' : 'none', animation: 'fadeIn 0.4s ease-out' }}>
-                <div style={{ marginBottom: "20px", paddingBottom: "15px", borderBottom: "1px solid var(--border-color)" }}>
-                  <h3 style={{ margin: 0, color: "var(--text-heading)", fontSize: "16px" }}>Step 2: Provide Required Details</h3>
-                  <p style={{ margin: "4px 0 0", color: "var(--text-secondary)", fontSize: "13px" }}>Fill out the required dynamic fields for {requestCategory}.</p>
-                </div>
-
-                <div className="mem-form-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
-                  {appTypes?.find(t => t.name === requestCategory || t.id === requestCategory)?.fields?.map(f => {
-                     let inputType = 'text';
-                     const dbType = (f.field_type || '').toLowerCase();
-                     if (dbType === 'file upload' || dbType === 'file') inputType = 'file';
-                     else if (dbType === 'date') inputType = 'date';
-                     else if (dbType === 'time') inputType = 'time';
-                     else if (dbType === 'datetime') inputType = 'datetime-local';
-                     else if (dbType === 'checkbox') inputType = 'checkbox';
-                     else if (dbType === 'number') inputType = 'number';
-                     
-                     // Interactive logic for Half Day
-                     const halfDayField = appTypes.find(t => t.name === requestCategory || t.id === requestCategory)?.fields?.find(x => x.field_name === 'half_day');
-                     const isHalfDaySelected = halfDayField && dynamicFormState[halfDayField.id] && dynamicFormState[halfDayField.id].includes('Half Day');
-                     
-                     // Hide start_time / end_time if half day is NOT selected
-                     if ((f.field_name === 'start_time' || f.field_name === 'end_time') && !isHalfDaySelected) {
-                        return null;
-                     }
-                     
-                     // Date Range Specific Component
-                     if (dbType === 'daterange') {
-                        const drState = dynamicFormState[f.id] ? JSON.parse(dynamicFormState[f.id]) : { start: '', end: '' };
-                        let totalDays = 0;
-                        if (drState.start && drState.end) {
-                           const start = new Date(drState.start);
-                           const end = new Date(drState.end);
-                           totalDays = Math.max(0, Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1);
-                        }
-                        
-                        return (
-                          <div className="mem-form-group" key={f.id} style={{ gridColumn: '1 / -1' }}>
-                            <label className="mem-form-label">
-                              {f.field_label} {f.is_required && <span style={{ color: "var(--color-danger)" }}>*</span>}
-                            </label>
-                            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                               <input type="date" className="mem-input" required={f.is_required} value={drState.start} 
-                                      onChange={e => setDynamicFormState({...dynamicFormState, [f.id]: JSON.stringify({ ...drState, start: e.target.value })})} />
-                               <span>to</span>
-                               <input type="date" className="mem-input" required={f.is_required} value={drState.end} 
-                                      onChange={e => setDynamicFormState({...dynamicFormState, [f.id]: JSON.stringify({ ...drState, end: e.target.value })})} />
-                               {totalDays > 0 && <span style={{ marginLeft: "10px", padding: "4px 8px", background: "#e0e7ff", color: "#4338ca", borderRadius: "12px", fontSize: "12px", fontWeight: "600" }}>{totalDays} Days</span>}
-                            </div>
-                            <input type="hidden" id={`dyn_field_${f.id}`} value={totalDays > 0 ? JSON.stringify(drState) : ''} />
-                          </div>
-                        );
-                     }
-                     
-                     return (
-                     <div className="mem-form-group" key={f.id}>
-                       <label className="mem-form-label">
-                         {f.field_label} {f.is_required && <span style={{ color: "var(--color-danger)" }}>*</span>}
-                       </label>
-                       {dbType === 'textarea' ? (
-                          <textarea id={`dyn_field_${f.id}`} className="mem-input" required={f.is_required} rows={3} value={dynamicFormState[f.id] || ''} onChange={e => setDynamicFormState({...dynamicFormState, [f.id]: e.target.value})} />
-                       ) : dbType === 'dropdown' || dbType === 'radio' ? (
-                          <select id={`dyn_field_${f.id}`} className="mem-input" required={f.is_required} value={dynamicFormState[f.id] || ''} onChange={e => setDynamicFormState({...dynamicFormState, [f.id]: e.target.value})}>
-                             <option value="">Select Option</option>
-                             {f.options && (typeof f.options === 'string' ? JSON.parse(f.options) : f.options).map((opt, i) => (
-                                <option key={i} value={opt}>{opt}</option>
-                             ))}
-                          </select>
-                       ) : inputType === 'checkbox' ? (
-                          <input id={`dyn_field_${f.id}`} type="checkbox" style={{width: '20px', height: '20px', display: 'block', marginTop: '10px'}} checked={!!dynamicFormState[f.id]} onChange={e => setDynamicFormState({...dynamicFormState, [f.id]: e.target.checked})} />
-                       ) : inputType === 'file' ? (
-                          <input id={`dyn_field_${f.id}`} type="file" className="mem-input" required={f.is_required} />
-                       ) : (
-                          <input id={`dyn_field_${f.id}`} type={inputType} className="mem-input" required={f.is_required} value={dynamicFormState[f.id] || ''} onChange={e => setDynamicFormState({...dynamicFormState, [f.id]: e.target.value})} />
-                       )}
-                     </div>
-                  )})}
-                </div>
-
-                <div className="mem-form-group" style={{ marginTop: "15px" }}>
-                  <label className="mem-form-label">
-                    Additional Application Details &amp; Reason (Optional)
-                  </label>
-                  <div style={{ marginBottom: "20px" }}>
-                    <ReactQuill
-                      theme="snow"
-                      placeholder="Provide complete background details, reason, or coverage notes for HR review..."
-                      value={requestDetails}
-                      onChange={setRequestDetails}
-                      style={{ backgroundColor: "white", borderRadius: "8px" }}
-                    />
-                  </div>
-                </div>
-
-                <div className="mem-form-group">
-                  <label className="mem-form-label">
-                    Attach Documents / Proofs (Multiple Files Supported)
-                  </label>
-                  <input
-                    type="file"
-                    multiple
-                    className="mem-input"
-                    onChange={handleMemberFileChange}
-                  />
-                  <span style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                    Select one or multiple supporting files (PDFs, receipts, medical notes, images). Click any image thumbnail below to preview.
-                  </span>
-
-                  {/* THUMBNAIL PREVIEW GRID FOR MEMBER */}
-                  {filePreviews.length > 0 && (
-                    <div style={{ marginTop: "12px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: "10px" }}>
-                      {filePreviews.map((f, i) => (
-                        <div key={i} style={{ border: "1px solid var(--border-color)", borderRadius: "8px", overflow: "hidden", background: "var(--bg-main)", fontSize: "11px", padding: "6px" }}>
-                          {f.isImage ? (
-                            <div style={{ height: "70px", borderRadius: "4px", overflow: "hidden", cursor: "pointer", position: "relative" }} onClick={() => setMemberLightboxUrl(f.url)}>
-                              <img src={f.url} alt={f.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                              <div style={{ position: "absolute", inset: 0, background: "rgba(0, 130, 255, 0.4)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10.5px", fontWeight: "700" }}>
-                                👁️ Review Pic
-                              </div>
-                            </div>
-                          ) : (
-                            <div style={{ height: "60px", background: "#e2e8f0", borderRadius: "4px", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700", color: "#475569" }}>
-                              📄 Document
-                            </div>
-                          )}
-                          <div style={{ marginTop: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: "600", color: "var(--text-heading)" }} title={f.name}>
-                            {f.name}
-                          </div>
-                          <div style={{ color: "var(--text-secondary)", fontSize: "10px" }}>{f.size}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="mem-form-actions" style={{ justifyContent: "space-between", marginTop: "20px" }}>
-                  <button type="button" className="mem-btn" style={{ background: "#f1f5f9", color: "#334155" }} onClick={() => setFormStep(1)}>
-                    <span style={{ marginRight: "6px" }}>←</span> Back
-                  </button>
-                  <button type="button" className="mem-btn mem-btn--primary" onClick={() => setFormStep(3)}>
-                    Review Information <span style={{ marginLeft: "6px" }}>→</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* STEP 3: REVIEW & SUBMIT */}
-              <div style={{ display: formStep === 3 ? 'block' : 'none', animation: 'fadeIn 0.4s ease-out' }}>
-                <div style={{ marginBottom: "20px", paddingBottom: "15px", borderBottom: "1px solid var(--border-color)" }}>
-                  <h3 style={{ margin: 0, color: "var(--text-heading)", fontSize: "16px" }}>Step 3: Review & Submit</h3>
-                  <p style={{ margin: "4px 0 0", color: "var(--text-secondary)", fontSize: "13px" }}>Please verify the information before submitting to HR.</p>
-                </div>
-
-                <div style={{ background: "#f8fafc", padding: "16px", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "20px" }}>
-                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "13px" }}>
-                     <div>
-                       <strong style={{ color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>Category</strong>
-                       <div>{requestCategory}</div>
-                     </div>
-                     <div>
-                       <strong style={{ color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>Subject</strong>
-                       <div>{requestSubject}</div>
-                     </div>
-                   </div>
-                   
-                   <hr style={{ margin: "16px 0", borderTop: "1px solid #e2e8f0" }} />
-                   
-                   <strong style={{ color: "var(--text-secondary)", display: "block", marginBottom: "8px", fontSize: "13px" }}>Dynamic Fields Data</strong>
-                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "13px" }}>
-                      {appTypes?.find(t => t.name === requestCategory || t.id === requestCategory)?.fields?.map(f => {
-                         let val = dynamicFormState[f.id] || '-';
-                         if (f.field_type.toLowerCase() === 'daterange') {
-                            const drState = dynamicFormState[f.id] ? JSON.parse(dynamicFormState[f.id]) : {};
-                            if (drState.start && drState.end) val = `${drState.start} to ${drState.end}`;
-                         } else if (f.field_type.toLowerCase() === 'checkbox') {
-                            val = dynamicFormState[f.id] ? 'Yes' : 'No';
-                         } else if (f.field_type.toLowerCase() === 'file upload' || f.field_type.toLowerCase() === 'file') {
-                            val = 'File Attached';
-                         }
-                         
-                         // Skip hidden half day fields
-                         const halfDayField = appTypes.find(t => t.name === requestCategory || t.id === requestCategory)?.fields?.find(x => x.field_name === 'half_day');
-                         const isHalfDaySelected = halfDayField && dynamicFormState[halfDayField.id] && dynamicFormState[halfDayField.id].includes('Half Day');
-                         if ((f.field_name === 'start_time' || f.field_name === 'end_time') && !isHalfDaySelected) return null;
-                         
-                         return (
-                            <div key={f.id}>
-                               <strong style={{ color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>{f.field_label}</strong>
-                               <div>{val}</div>
-                            </div>
-                         );
-                      })}
-                   </div>
-                </div>
-
-                <div className="mem-form-actions" style={{ justifyContent: "space-between", marginTop: "20px" }}>
-                  <button type="button" className="mem-btn" style={{ background: "#f1f5f9", color: "#334155" }} onClick={() => setFormStep(2)}>
-                    <span style={{ marginRight: "6px" }}>←</span> Edit Details
-                  </button>
-                  <button
-                    type="submit"
-                    className="mem-btn mem-btn--primary"
-                    disabled={submittingReq}
-                    style={{ background: "#10b981" }}
-                  >
-                    <Send size={16} /> {submittingReq ? "Submitting Application..." : "Confirm & Submit Application"}
-                  </button>
-                </div>
-              </div>
-            </form>
+            <div className="hrm-application-form-wrapper">
+              <HRMDynamicFormRenderer key={formResetKey} onSubmit={handleDynamicFormSubmit} />
+            </div>
           </div>
 
-          {/* MEMBER LEAVE HISTORY & DECISION AUDIT LOG TABLE */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
             <p className="mem-section-sub" style={{ margin: 0 }}>
-              <FileText size={16} /> Leave History &amp; Decision Audit Log
+              <List size={16} /> Application History
             </p>
-            <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-              Total Applications Logged: <strong>{leaveHistory.length}</strong>
-            </span>
           </div>
 
-          {leaveHistory.length === 0 ? (
+          {memberRequests.length === 0 && leaveHistory.length === 0 ? (
             <div className="mem-table-empty">
-              No leave applications submitted yet.
+              No applications submitted yet.
             </div>
           ) : (
             <div className="mem-table-wrap">
               <table className="mem-table">
                 <thead>
                   <tr>
-                    <th>Leave Type</th>
-                    <th>Dates &amp; Duration</th>
-                    <th>Reason</th>
+                    <th>Request Type</th>
+                    <th>Subject / Details</th>
                     <th>Status</th>
-                    <th>Reviewed By / Reason</th>
-                    <th>Applied On</th>
+                    <th>Submitted Date</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {leaveHistory.map((l) => (
-                    <tr key={l.id}>
-                      <td style={{ fontWeight: "600", color: "var(--text-heading)" }}>{l.leave_type}</td>
-                      <td>
-                        {l.start_date} to {l.end_date} (<strong>{l.total_days} Day(s)</strong>)
+                  {[...memberRequests, ...leaveHistory].sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).map((r) => (
+                    <tr key={r.id}>
+                      <td style={{ fontWeight: "600", color: "var(--text-heading)" }}>{r.category || r.leave_type || r.application_type || r.name}</td>
+                      <td style={{ fontWeight: "600", color: "var(--text-dark)", maxWidth: "250px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {r.subject || r.title || r.reason || "-"}
                       </td>
-                      <td style={{ maxWidth: "250px" }}>{l.reason}</td>
                       <td>
-                        <span className={`mem-badge ${l.status === "Approved" ? "mem-badge--success" : l.status === "Rejected" ? "mem-badge--danger" : "mem-badge--warning"}`}>
-                          {l.status === "Approved" ? "✔ Approved" : l.status === "Rejected" ? "❌ Not Approved" : "⏳ Pending HR"}
+                        <span className={`mem-badge ${r.status === "Approved" ? "mem-badge--success" : r.status === "Rejected" ? "mem-badge--danger" : "mem-badge--warning"}`}>
+                          {r.status || "Pending"}
                         </span>
                       </td>
-                      <td style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-                        {l.reviewer_name ? `By: ${l.reviewer_name}` : "Awaiting HR Decision"}
-                        {l.rejection_reason && <div style={{ color: "var(--color-danger)", marginTop: "2px", fontWeight: "600" }}>Reason: {l.rejection_reason}</div>}
-                      </td>
                       <td style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
-                        {l.created_at ? new Date(l.created_at).toLocaleDateString() : "-"}
+                        {r.created_at ? new Date(r.created_at).toLocaleDateString() : "-"}
+                      </td>
+                      <td>
+                        <button className="mem-btn mem-btn--secondary" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => setSelectedHistoryId(r.id)}>
+                          <Eye size={14} style={{ marginRight: '4px' }} /> View Details
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -1477,271 +1305,7 @@ export default function MemberHrmDashboard() {
         </section>
       )}
 
-      {activeTab === "workmode" && (
-        <section className="mem-card" id="section-workmode-wfh">
-          <div className="mem-card-header">
-            <h2 className="mem-card-title"><Laptop size={19} /> Work From Home (WFH) Request</h2>
-            <p className="mem-card-desc">
-              Submit an official Work From Home request to HR. Approved WFH requests grant remote clock-in authorization.
-            </p>
-          </div>
 
-          <form onSubmit={handleSubmitWfhRequest} className="mem-form">
-            <div className="mem-form-group">
-              <label className="mem-form-label">Target WFH Date</label>
-              <input type="date" className="mem-input" value={wfhDate} onChange={(e) => setWfhDate(e.target.value)} required />
-            </div>
-            <div className="mem-form-group">
-              <label className="mem-form-label">Reason / Remote Work Details</label>
-              <textarea className="mem-input" rows="4" placeholder="Provide reason for remote work request..." value={wfhReason} onChange={(e) => setWfhReason(e.target.value)} required />
-            </div>
-            <div className="mem-form-actions">
-              <button type="submit" className="mem-btn mem-btn--primary" disabled={submittingWfh}>
-                {submittingWfh ? "Submitting Request..." : "Submit WFH Request to HR"}
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
-
-      {activeTab === "corrections" && (
-        <section className="mem-card" id="section-attendance-corrections">
-          <div className="mem-card-header">
-            <h2 className="mem-card-title"><AlertTriangle size={19} /> Submit Attendance Correction</h2>
-            <p className="mem-card-desc">
-              Missed a clock-in or clock-out punch? Submit a correction request for HR review.
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmitCorrection} className="mem-form">
-            <div className="mem-form-grid mem-form-grid--3">
-              <div className="mem-form-group">
-                <label className="mem-form-label">Target Date</label>
-                <input type="date" className="mem-input" value={corrDate} onChange={(e) => setCorrDate(e.target.value)} required />
-              </div>
-              <div className="mem-form-group">
-                <label className="mem-form-label">Clock In Time</label>
-                <input type="time" className="mem-input" value={corrIn} onChange={(e) => setCorrIn(e.target.value)} required />
-              </div>
-              <div className="mem-form-group">
-                <label className="mem-form-label">Clock Out Time</label>
-                <input type="time" className="mem-input" value={corrOut} onChange={(e) => setCorrOut(e.target.value)} required />
-              </div>
-            </div>
-
-            <div className="mem-form-group">
-              <label className="mem-form-label">Reason for Correction</label>
-              <textarea className="mem-input" rows="3" placeholder="e.g. Internet / power outage prevented clock-in at 9:00 AM..." value={corrReason} onChange={(e) => setCorrReason(e.target.value)} required />
-            </div>
-
-            <div className="mem-form-actions">
-              <button type="submit" className="mem-btn mem-btn--primary" disabled={submittingCorr}>
-                {submittingCorr ? "Submitting..." : "Submit Correction Request"}
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
-
-      {(activeTab === "claims" || activeTab === "advance" || activeTab === "reimbursement") && (
-        <section className="mem-card" id="section-financial-claims">
-          <div className="mem-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
-            <div>
-              <h2 className="mem-card-title"><CreditCard size={19} /> Advance Salary &amp; Expense Claims</h2>
-              <p className="mem-card-desc" style={{ margin: "4px 0 0" }}>
-                Submit requests for salary advances, emergency loans, or out-of-pocket business expense reimbursements.
-              </p>
-            </div>
-
-            {/* SUB TOGGLE BUTTONS FOR FINANCIAL CLAIMS */}
-            <div style={{ display: "flex", gap: "6px", background: "var(--bg-card-alt)", padding: "4px", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
-              <button
-                type="button"
-                className={`mem-btn ${claimsSubTab === "advance" ? "mem-btn--primary" : ""}`}
-                style={{ padding: "6px 14px", fontSize: "12.5px", background: claimsSubTab === "advance" ? "var(--color-primary)" : "transparent", color: claimsSubTab === "advance" ? "#fff" : "var(--text-dark)" }}
-                onClick={() => setClaimsSubTab("advance")}
-              >
-                💵 Advance Salary &amp; Loan
-              </button>
-              <button
-                type="button"
-                className={`mem-btn ${claimsSubTab === "expense" ? "mem-btn--primary" : ""}`}
-                style={{ padding: "6px 14px", fontSize: "12.5px", background: claimsSubTab === "expense" ? "var(--color-primary)" : "transparent", color: claimsSubTab === "expense" ? "#fff" : "var(--text-dark)" }}
-                onClick={() => setClaimsSubTab("expense")}
-              >
-                🧾 Expense Reimbursement
-              </button>
-            </div>
-          </div>
-
-          {claimsSubTab === "advance" ? (
-            <form onSubmit={handleSubmitAdvance} className="mem-form">
-              <div className="mem-form-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
-                <div className="mem-form-group">
-                  <label className="mem-form-label">
-                    Requested Advance Amount (PKR / USD) <span style={{ color: "var(--color-danger)" }}>*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="500"
-                    step="100"
-                    className="mem-input"
-                    placeholder="e.g. 25000"
-                    value={advanceAmount}
-                    onChange={(e) => setAdvanceAmount(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="mem-form-group">
-                  <label className="mem-form-label">Target Payroll Deduction</label>
-                  <select
-                    className="mem-input"
-                    value={advanceDeductionMonth}
-                    onChange={(e) => setAdvanceDeductionMonth(e.target.value)}
-                  >
-                    <option value="Next Month Payroll">Deduct 100% in Next Month's Payroll</option>
-                    <option value="2 Months Installments">Split in 2 Monthly Installments (50% / 50%)</option>
-                    <option value="3 Months Installments">Split in 3 Monthly Installments (33% / 33% / 34%)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="mem-form-group">
-                <label className="mem-form-label">
-                  Reason &amp; Emergency Details <span style={{ color: "var(--color-danger)" }}>*</span>
-                </label>
-                <textarea
-                  className="mem-input"
-                  rows="4"
-                  placeholder="State the reason for requesting an advance salary / emergency loan..."
-                  value={advanceReason}
-                  onChange={(e) => setAdvanceReason(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="mem-form-actions">
-                <button type="submit" className="mem-btn mem-btn--primary" disabled={submittingAdvance}>
-                  <Send size={16} /> {submittingAdvance ? "Submitting Request..." : "Submit Advance Salary Request"}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <form onSubmit={handleSubmitExpense} className="mem-form">
-              <div className="mem-form-grid mem-form-grid--3">
-                <div className="mem-form-group">
-                  <label className="mem-form-label">Expense Category</label>
-                  <select
-                    className="mem-input"
-                    value={expenseCategory}
-                    onChange={(e) => setExpenseCategory(e.target.value)}
-                  >
-                    <option value="Travel & Fuel">🚗 Travel, Fuel &amp; Conveyance</option>
-                    <option value="Client Meeting & Meals">🍽 Client Meeting &amp; Meals</option>
-                    <option value="Office Supplies & Stationary">📝 Office Supplies &amp; Stationary</option>
-                    <option value="Software & Tools Subscriptions">💻 Software &amp; Tool Subscriptions</option>
-                    <option value="Hardware & Equipment">🖥 Hardware &amp; Peripherals</option>
-                    <option value="Medical & Health">🏥 Medical Expense</option>
-                    <option value="Other Business Expense">📦 Other Business Expense</option>
-                  </select>
-                </div>
-
-                <div className="mem-form-group">
-                  <label className="mem-form-label">
-                    Claim Amount (PKR / USD) <span style={{ color: "var(--color-danger)" }}>*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    step="0.01"
-                    className="mem-input"
-                    placeholder="e.g. 4500"
-                    value={expenseAmount}
-                    onChange={(e) => setExpenseAmount(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="mem-form-group">
-                  <label className="mem-form-label">Date Expense Incurred</label>
-                  <input
-                    type="date"
-                    className="mem-input"
-                    value={expenseDate}
-                    onChange={(e) => setExpenseDate(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="mem-form-group">
-                <label className="mem-form-label">
-                  Expense Description &amp; Receipt Notes <span style={{ color: "var(--color-danger)" }}>*</span>
-                </label>
-                <textarea
-                  className="mem-input"
-                  rows="4"
-                  placeholder="Provide detailed description of expense incurred, vendor name, invoice/receipt reference..."
-                  value={expenseNotes}
-                  onChange={(e) => setExpenseNotes(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="mem-form-actions">
-                <button type="submit" className="mem-btn mem-btn--primary" disabled={submittingExpense}>
-                  <Send size={16} /> {submittingExpense ? "Submitting Claim..." : "Submit Expense Claim"}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* SUBMITTED FINANCIAL REQUESTS HISTORY TABLE */}
-          <div style={{ marginTop: "28px", paddingTop: "20px", borderTop: "1px solid var(--border-color)" }}>
-            <p className="mem-section-sub" style={{ margin: "0 0 12px" }}>
-              <FileText size={16} /> Submitted Financial Requests &amp; Approval History
-            </p>
-
-            {memberRequests.length === 0 ? (
-              <div className="mem-table-empty">
-                No financial requests or expense claims submitted yet.
-              </div>
-            ) : (
-              <div className="mem-table-wrap">
-                <table className="mem-table">
-                  <thead>
-                    <tr>
-                      <th>Request Type</th>
-                      <th>Subject / Amount</th>
-                      <th>Details</th>
-                      <th>Status</th>
-                      <th>Submitted Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {memberRequests.map((r) => (
-                      <tr key={r.id}>
-                        <td style={{ fontWeight: "600", color: "var(--text-heading)" }}>{r.category}</td>
-                        <td style={{ fontWeight: "600", color: "var(--text-dark)" }}>{r.subject}</td>
-                        <td style={{ fontSize: "12px", color: "var(--text-secondary)", whiteSpace: "pre-line", maxWidth: "300px" }}>{r.details}</td>
-                        <td>
-                          <span className={`mem-badge ${r.status === "Approved" ? "mem-badge--success" : r.status === "Rejected" ? "mem-badge--danger" : "mem-badge--warning"}`}>
-                            {r.status === "Approved" ? "✔ Approved" : r.status === "Rejected" ? "❌ Rejected" : "⏳ Pending Review"}
-                          </span>
-                        </td>
-                        <td style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
-                          {r.created_at ? new Date(r.created_at).toLocaleDateString() : "-"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </section>
-      )}
 
       {activeTab === "offer" && (
         <section className="mem-card" id="section-offer-salary">

@@ -87,34 +87,10 @@ class HrmMemberPortalController extends Controller
             $presentCount = $monthAttendances->whereIn('status', ['Present', 'Late', 'Completed'])->count();
             $lateCount = $monthAttendances->where('status', 'Late')->count();
 
-            $approvedLeaves = DB::table('hrm_leave_requests')
-                ->where('user_id', $user->id)
-                ->where('status', 'Approved')
-                ->where('start_date', 'like', "{$currentMonth}%")
-                ->get();
-
-            $approvedLeavesCount = $approvedLeaves->sum('total_days');
-
-            $wfhApprovedCount = DB::table('hrm_wfh_requests')
-                ->where('user_id', $user->id)
-                ->where('status', 'Approved')
-                ->where('request_date', 'like', "{$currentMonth}%")
-                ->count();
-
-            $leaveHistory = DB::table('hrm_leave_requests')
-                ->leftJoin('users as reviewer', 'hrm_leave_requests.approved_by', '=', 'reviewer.id')
-                ->where('hrm_leave_requests.user_id', $user->id)
-                ->select('hrm_leave_requests.*', 'reviewer.name as reviewer_name')
-                ->orderBy('hrm_leave_requests.created_at', 'desc')
-                ->get();
-
-            $latestLeaveDecision = DB::table('hrm_leave_requests')
-                ->leftJoin('users as reviewer', 'hrm_leave_requests.approved_by', '=', 'reviewer.id')
-                ->where('hrm_leave_requests.user_id', $user->id)
-                ->whereIn('hrm_leave_requests.status', ['Approved', 'Rejected'])
-                ->orderBy('hrm_leave_requests.updated_at', 'desc')
-                ->select('hrm_leave_requests.*', 'reviewer.name as reviewer_name')
-                ->first();
+            $approvedLeavesCount = 0;
+            $wfhApprovedCount = 0;
+            $leaveHistory = collect([]);
+            $latestLeaveDecision = null;
 
             $monthWorkMins = $monthAttendances->sum('work_duration_minutes');
             $weekWorkMins = $weekAttendances->sum('work_duration_minutes');
@@ -197,7 +173,7 @@ class HrmMemberPortalController extends Controller
                 });
 
             $memberRequests = $allRequests;
-            $leaveHistory = $allRequests;
+            $leaveHistory = [];
 
             $customDocuments = DB::table('hrm_employee_documents')
                 ->where(function ($q) use ($user) {
@@ -331,6 +307,8 @@ class HrmMemberPortalController extends Controller
         $request->validate([
             'application_type_id' => 'required|exists:hrm_application_types,id',
             'title' => 'required|string',
+            'description' => 'nullable|string',
+            'priority' => 'nullable|string',
             'dynamic_fields' => 'nullable|array',
         ]);
 
@@ -348,6 +326,7 @@ class HrmMemberPortalController extends Controller
                 'request_number' => $requestNumber,
                 'title' => $request->title,
                 'description' => $request->description,
+                'priority' => $request->priority ?? 'Medium',
                 'status' => 'Pending',
                 'submitted_at' => now(),
             ]);
@@ -370,7 +349,6 @@ class HrmMemberPortalController extends Controller
                         'field_value' => $valueToSave,
                     ]);
                 }
-            }
             }
 
             \App\Models\HrmRequestHistory::create([

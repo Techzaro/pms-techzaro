@@ -57,7 +57,7 @@ class HrmApplicationHistoryController extends Controller
                 'stats' => $stats,
             ],
             'filters' => [
-                'employees' => User::where('organization_id', $user->organization_id)->select('id', 'name')->get(),
+                'employees' => User::select('id', 'name')->get(),
                 'types' => HrmApplicationType::where('organization_id', $user->organization_id)->select('id', 'name')->get(),
                 'statuses' => ['Pending', 'Approved', 'Rejected', 'Returned', 'Cancelled', 'Closed'],
             ]
@@ -76,11 +76,18 @@ class HrmApplicationHistoryController extends Controller
 
         if (!$record) return response()->json(['success' => false, 'message' => 'Not found.'], 404);
 
+        $employeeStats = [
+            'total' => \App\Models\HrmMemberRequest::where('employee_id', $record->employee_id)->count(),
+            'approved' => \App\Models\HrmMemberRequest::where('employee_id', $record->employee_id)->where('status', 'Approved')->count(),
+            'pending' => \App\Models\HrmMemberRequest::where('employee_id', $record->employee_id)->where('status', 'Pending')->count(),
+        ];
+
         return response()->json([
             'success' => true,
             'data' => [
                 'application' => $record,
                 'audits' => $record->history,
+                'employee_stats' => $employeeStats,
             ]
         ]);
     }

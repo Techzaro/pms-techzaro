@@ -347,7 +347,7 @@ class HrmAttendanceController extends Controller
 
         $wfhRequests = DB::table('hrm_wfh_requests')->where('request_date', $today)->get();
         $snapshots = DB::table('hrm_work_snapshots')->whereDate('captured_at', $today)->orderBy('captured_at', 'desc')->get();
-        $leaves = DB::table('hrm_leave_requests')->where('start_date', '<=', $today)->where('end_date', '>=', $today)->get();
+        $leaves = [];
 
         return response()->json([
             'success' => true,
@@ -367,18 +367,7 @@ class HrmAttendanceController extends Controller
         $user = $this->resolveAuth($request);
         if (!$user) return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
 
-        $leaves = DB::table('hrm_leave_requests')
-            ->join('users', 'hrm_leave_requests.user_id', '=', 'users.id')
-            ->leftJoin('users as reviewer', 'hrm_leave_requests.approved_by', '=', 'reviewer.id')
-            ->select(
-                'hrm_leave_requests.*',
-                'users.name as user_name',
-                'users.email as user_email',
-                'users.department',
-                'reviewer.name as reviewer_name'
-            )
-            ->orderBy('hrm_leave_requests.created_at', 'desc')
-            ->get();
+        $leaves = [];
 
         return response()->json(['success' => true, 'leaves' => $leaves, 'standardized_types' => self::STANDARDIZED_LEAVE_TYPES]);
     }
@@ -396,56 +385,7 @@ class HrmAttendanceController extends Controller
             'reason' => 'required|string',
         ]);
 
-        return DB::transaction(function () use ($user, $request) {
-            $start = strtotime($request->start_date);
-            $end = strtotime($request->end_date);
-            $totalDays = max(1, round(($end - $start) / (60 * 60 * 24)) + 1);
-
-            $id = DB::table('hrm_leave_requests')->insertGetId([
-                'user_id' => $user->id,
-                'leave_type' => $request->leave_type,
-                'start_date' => $request->start_date,
-                'end_date' => $request->end_date,
-                'total_days' => $totalDays,
-                'reason' => $request->reason,
-                'status' => 'Pending',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            // Save multi-file attachments if uploaded
-            $files = $request->file('attachments') ?: ($request->file('files') ?: []);
-            if (!is_array($files) && $files) {
-                $files = [$files];
-            }
-
-            foreach ($files as $file) {
-                if ($file && $file->isValid()) {
-                    $originalName = $file->getClientOriginalName();
-                    $path = $file->store('hrm_documents', 'public');
-
-                    DB::table('hrm_request_attachments')->insert([
-                        'request_type' => 'Leave Application',
-                        'request_id' => $id,
-                        'user_id' => $user->id,
-                        'file_name' => $originalName,
-                        'file_path' => '/storage/' . $path,
-                        'file_size' => $file->getSize(),
-                        'file_type' => $file->getClientMimeType(),
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-                }
-            }
-
-            \App\Services\HrmAuditLogger::log('Leave Application', $id, $user, 'Application Submitted', null, 'Pending', $request->reason, [], $request);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Leave application submitted successfully to HR for real-time review ✔',
-                'data' => ['leave_id' => $id, 'total_days' => $totalDays]
-            ]);
-        });
+        return response()->json(['success' => false, 'message' => 'Deprecated endpoint, use dynamic forms.']);
     }
 
     // 9. Respond to Leave Request
@@ -459,25 +399,7 @@ class HrmAttendanceController extends Controller
         $status = $request->input('status', 'Approved');
         $rejectionReason = $request->input('rejection_reason');
 
-        return DB::transaction(function () use ($id, $status, $user, $rejectionReason, $request) {
-            $prev = DB::table('hrm_leave_requests')->where('id', $id)->first();
-            $prevStatus = $prev ? $prev->status : 'Pending';
-
-            DB::table('hrm_leave_requests')->where('id', $id)->update([
-                'status' => $status,
-                'approved_by' => $user->id,
-                'rejection_reason' => $rejectionReason,
-                'updated_at' => now(),
-            ]);
-
-            $action = ($status === 'Approved') ? 'Approved' : (($status === 'Rejected') ? 'Rejected' : 'Status Changed');
-            \App\Services\HrmAuditLogger::log('Leave Application', $id, $user, $action, $prevStatus, $status, $rejectionReason ?: "Leave application {$status}", [], $request);
-
-            return response()->json([
-                'success' => true,
-                'message' => "Leave application {$status} ✔"
-            ]);
-        });
+        return response()->json(['success' => false, 'message' => 'Deprecated endpoint, use dynamic forms.']);
     }
 
     // 10. Get Attendance Corrections List
@@ -639,11 +561,6 @@ class HrmAttendanceController extends Controller
             ->join('users', 'hrm_attendance_corrections.user_id', '=', 'users.id')
             ->select('hrm_attendance_corrections.*', 'users.name as user_name', 'users.email as user_email', 'users.department');
 
-        $leaveQuery = DB::table('hrm_leave_requests')
-            ->join('users', 'hrm_leave_requests.user_id', '=', 'users.id')
-            ->leftJoin('users as reviewer', 'hrm_leave_requests.approved_by', '=', 'reviewer.id')
-            ->select('hrm_leave_requests.*', 'users.name as user_name', 'users.email as user_email', 'users.department', 'reviewer.name as reviewer_name');
-
         $wfhQuery = DB::table('hrm_wfh_requests')
             ->join('users', 'hrm_wfh_requests.user_id', '=', 'users.id')
             ->select('hrm_wfh_requests.*', 'users.name as user_name', 'users.email as user_email', 'users.department');
@@ -659,20 +576,19 @@ class HrmAttendanceController extends Controller
             ->select('hrm_warnings.*', 'users.name as user_name', 'users.email as user_email', 'users.department', 'admin.name as removed_by_name');
 
         $memQuery = DB::table('hrm_member_requests')
-            ->join('users', 'hrm_member_requests.user_id', '=', 'users.id')
+            ->join('users', 'hrm_member_requests.employee_id', '=', 'users.id')
             ->select('hrm_member_requests.*', 'users.name as user_name', 'users.email as user_email', 'users.department');
 
         if (!$isAdminOrManager) {
             $corrQuery->where('hrm_attendance_corrections.user_id', $user->id);
-            $leaveQuery->where('hrm_leave_requests.user_id', $user->id);
             $wfhQuery->where('hrm_wfh_requests.user_id', $user->id);
             $screenQuery->where('hrm_screen_requests.user_id', $user->id);
             $warnQuery->where('hrm_warnings.user_id', $user->id);
-            $memQuery->where('hrm_member_requests.user_id', $user->id);
+            $memQuery->where('hrm_member_requests.employee_id', $user->id);
         }
 
         $corrections = $corrQuery->orderBy('hrm_attendance_corrections.created_at', 'desc')->get();
-        $leaves = $leaveQuery->orderBy('hrm_leave_requests.created_at', 'desc')->get();
+        $leaves = [];
         $wfhRequests = $wfhQuery->orderBy('hrm_wfh_requests.created_at', 'desc')->get();
         $screenRequests = $screenQuery->orderBy('hrm_screen_requests.created_at', 'desc')->get();
         $warningRemovals = $warnQuery->orderBy('hrm_warnings.created_at', 'desc')->get();
