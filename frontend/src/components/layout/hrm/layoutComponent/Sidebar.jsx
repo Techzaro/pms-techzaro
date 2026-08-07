@@ -129,6 +129,8 @@ function Sidebar() {
     return currentTab === tabVal;
   };
 
+  const isApplicationsRoute = location.pathname.toLowerCase().includes("hrm/applications");
+
   const isPerformanceRoute = location.pathname.toLowerCase().includes("hrm/performance");
   const isPerformanceTabActive = (tabVal) => {
     if (!isPerformanceRoute) return false;
@@ -184,6 +186,15 @@ function Sidebar() {
       sessionStorage.setItem("hrm_performanceOpen", "false");
       setRecruitmentOpen(false);
       sessionStorage.setItem("hrm_recruitmentOpen", "false");
+    } else {
+      setAttendanceOpen(false);
+      sessionStorage.setItem("hrm_attendanceOpen", "false");
+      setPerformanceOpen(false);
+      sessionStorage.setItem("hrm_performanceOpen", "false");
+      setRecruitmentOpen(false);
+      sessionStorage.setItem("hrm_recruitmentOpen", "false");
+      setWorkforceOpen(false);
+      sessionStorage.setItem("hrm_workforceOpen", "false");
     }
   }, [location.pathname, location.search]);
 
@@ -191,6 +202,11 @@ function Sidebar() {
   useEffect(() => {
     setIsMobileOpen(false);
   }, [location.pathname]);
+
+  // Broadcast sidebar open/close state to the Header for logo visibility (matches PMS)
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("sidebar-state", { detail: { open: isMobileOpen } }));
+  }, [isMobileOpen]);
 
   // Listen for toggle-sidebar event
   useEffect(() => {
@@ -202,25 +218,10 @@ function Sidebar() {
   const toggleMobile = () => setIsMobileOpen((prev) => !prev);
   const toggleTablet = () => setIsTabletExpanded((prev) => !prev);
 
-  const handleMouseLeave = () => {
-    if (window.innerWidth <= 1200 && window.innerWidth >= 769) {
-      setIsTabletExpanded(false);
-    }
-  };
-
-  const handleSidebarClick = (e) => {
-    if (window.innerWidth <= 1200 && window.innerWidth >= 769) {
-      e.stopPropagation();
-      setIsTabletExpanded(true);
-    }
-  };
-
   return (
     <>
       <div
         className={`sidebar ${isMobileOpen ? "sidebar--open" : ""} ${isTabletExpanded ? "sidebar--tablet-expanded" : ""}`}
-        onMouseLeave={handleMouseLeave}
-        onClick={handleSidebarClick}
       >
         {/* Mobile header */}
         <div className="sidebar-mobile-header">
@@ -356,13 +357,13 @@ function Sidebar() {
                     >
                       Punch Logs &amp; Attendance
                     </Link>
-                    <Link
+                    {/* <Link
                       to={rolePath("hrm/attendance?tab=pending")}
                       className={`sidebar-sub-link ${isAttendanceTabActive("pending") ? "active" : ""}`}
                       onClick={(e) => e.stopPropagation()}
                     >
                       Member Requests &amp; Approvals
-                    </Link>
+                    </Link> */}
                     <Link
                       to={rolePath("hrm/attendance?tab=manual")}
                       className={`sidebar-sub-link ${isAttendanceTabActive("manual") ? "active" : ""}`}
@@ -394,6 +395,16 @@ function Sidebar() {
                   </div>
                 )}
               </div>
+
+              {/* Applications */}
+              <Link
+                to={rolePath("hrm/applications")}
+                className={`sidebar-link ${isApplicationsRoute ? "active" : ""}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MdFactCheck />
+                <span>Applications</span>
+              </Link>
 
               {/* Performance & Evaluation Dropdown */}
               <div
@@ -489,14 +500,15 @@ function Sidebar() {
           ) : (
             /* MEMBER HUB NAVIGATION LINKS */
             <>
-              <Link
-                to={rolePath("hrm/member-dashboard?tab=attendance")}
-                className={`sidebar-link ${isMemberTabActive("attendance") ? "active" : ""}`}
+               <Link
+                to={rolePath("hrm/member-dashboard?tab=corrections")}
+                className={`sidebar-link ${isMemberTabActive("corrections") ? "active" : ""}`}
                 onClick={(e) => e.stopPropagation()}
               >
-                <MdCalendarToday />
+                <MdReceiptLong />
                 <span>Attendance</span>
               </Link>
+
 
               <Link
                 to={rolePath("hrm/member-dashboard?tab=leaves")}
@@ -504,36 +516,12 @@ function Sidebar() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <MdWorkHistory />
-                <span>Leave Requests</span>
+                <span>Requests</span>
               </Link>
 
-              <Link
-                to={rolePath("hrm/member-dashboard?tab=wfh")}
-                className={`sidebar-link ${isMemberTabActive("wfh") ? "active" : ""}`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MdCorporateFare />
-                <span>WFH Applications</span>
-              </Link>
+            
 
-              <Link
-                to={rolePath("hrm/member-dashboard?tab=claims")}
-                className={`sidebar-link ${isMemberTabActive("claims") ? "active" : ""}`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MdAttachMoney />
-                <span>Advance Salary &amp; Expenses</span>
-              </Link>
-
-              <Link
-                to={rolePath("hrm/member-dashboard?tab=corrections")}
-                className={`sidebar-link ${isMemberTabActive("corrections") ? "active" : ""}`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MdReceiptLong />
-                <span>Attendance Corrections</span>
-              </Link>
-
+            
               <Link
                 to={rolePath("hrm/notice-board")}
                 className={`sidebar-link ${isActiveOrStart("hrm/notice-board") ? "active" : ""}`}

@@ -31,6 +31,8 @@ use App\Http\Controllers\HrmGlobalSettingsController;
 use App\Http\Controllers\HrmShiftController;
 use App\Http\Controllers\HrmWarningController;
 use App\Http\Controllers\HrmPerformanceController;
+use App\Http\Controllers\HrmApplicationHistoryController;
+use App\Http\Controllers\HrmApplicationTypeController;
 use App\Http\Controllers\NotificationSettingController;
 
 /*
@@ -725,6 +727,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/hrm/warnings/{id}/reject', [HrmWarningController::class, 'rejectRemoval']);
     Route::post('/hrm/departments/sync-policy', [HrmWarningController::class, 'syncDepartmentSettings']);
     Route::get('/hrm/departments/settings', [HrmWarningController::class, 'getDepartmentSettings']);
+
+    // Complete HRM Application Request History & Immutable Audit Trail Routes
+    Route::get('/hrm/application-history', [HrmApplicationHistoryController::class, 'index']);
+    Route::get('/hrm/application-history/{type}/{id}', [HrmApplicationHistoryController::class, 'show']);
+    Route::post('/hrm/application-history/{type}/{id}/comments', [HrmApplicationHistoryController::class, 'addComment']);
+    Route::post('/hrm/application-history/{type}/{id}/attachments', [HrmApplicationHistoryController::class, 'uploadAttachment']);
+    Route::patch('/hrm/application-history/{type}/{id}/status', [HrmApplicationHistoryController::class, 'updateStatus']);
+
+    // Dynamic Admin Custom Application Types Routes
+    Route::get('/hrm/application-types', [HrmApplicationTypeController::class, 'index']);
+    Route::post('/hrm/application-types', [HrmApplicationTypeController::class, 'store']);
+    Route::patch('/hrm/application-types/{id}', [HrmApplicationTypeController::class, 'update']);
+    Route::put('/hrm/application-types/{id}', [HrmApplicationTypeController::class, 'update']);
+    Route::delete('/hrm/application-types/{id}', [HrmApplicationTypeController::class, 'destroy']);
 
     // Performance & Evaluation Routes
     Route::get('/hrm/performance/summary', [HrmPerformanceController::class, 'getPerformanceSummary']);

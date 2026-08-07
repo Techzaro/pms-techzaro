@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use App\Models\HrmCandidate;
 use App\Models\HrmOfferLetter;
 
@@ -175,10 +176,28 @@ class HrmMemberPortalController extends Controller
                 $salarySlips = DB::table('hrm_salary_slips')->where('user_id', $user->id)->get();
             }
 
-            $memberRequests = DB::table('hrm_member_requests')
-                ->where('user_id', $user->id)
+                        // Consolidated Applications Aggregation across all HRM tables for member
+            $allRequests = \App\Models\HrmMemberRequest::with(['type', 'history.performedBy'])
+                ->where('employee_id', $user->id)
                 ->orderBy('created_at', 'desc')
-                ->get();
+                ->get()
+                ->map(function ($r) {
+                    $r->table_type = 'Member Request';
+                    $r->category = $r->type ? $r->type->name : 'Member Request';
+                    $r->category_name = $r->category;
+                    $r->subject = $r->title;
+                    $r->details = $r->description;
+                    
+                    // Get latest admin remark
+                    $latestHistory = $r->history->where('action', 'Status Updated')->first();
+                    $r->admin_remark = $latestHistory ? $latestHistory->comments : null;
+                    $r->reviewer_name = $latestHistory && $latestHistory->performedBy ? $latestHistory->performedBy->name : null;
+                    
+                    return $r;
+                });
+
+            $memberRequests = $allRequests;
+            $leaveHistory = $allRequests;
 
             $customDocuments = DB::table('hrm_employee_documents')
                 ->where(function ($q) use ($user) {
@@ -310,32 +329,71 @@ class HrmMemberPortalController extends Controller
         if (!$user) return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
 
         $request->validate([
-            'category' => 'required|string',
-            'subject' => 'required|string',
-            'details' => 'required|string',
+            'application_type_id' => 'required|exists:hrm_application_types,id',
+            'title' => 'required|string',
+            'dynamic_fields' => 'nullable|array',
         ]);
 
-        $payload = [
-            'user_id' => $user->id,
-            'category' => $request->category,
-            'subject' => $request->subject,
-            'details' => $request->details,
-            'status' => 'Pending',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ];
+        try {
+            DB::beginTransaction();
 
-        if (Schema::hasColumn('hrm_member_requests', 'user_email')) {
-            $payload['user_email'] = $user->email;
+            $appType = \App\Models\HrmApplicationType::find($request->application_type_id);
+            $prefix = $appType && $appType->slug ? strtoupper(substr($appType->slug, 0, 3)) : 'REQ';
+            $requestNumber = $prefix . '-' . date('Ymd') . '-' . rand(1000, 9999);
+
+            $memberRequest = \App\Models\HrmMemberRequest::create([
+                'organization_id' => $user->organization_id,
+                'employee_id' => $user->id,
+                'application_type_id' => $request->application_type_id,
+                'request_number' => $requestNumber,
+                'title' => $request->title,
+                'description' => $request->description,
+                'status' => 'Pending',
+                'submitted_at' => now(),
+            ]);
+
+                        if ($request->has('dynamic_fields') && is_array($request->dynamic_fields)) {
+                foreach ($request->dynamic_fields as $fieldName => $fieldValue) {
+                    $valueToSave = $fieldValue;
+                    if ($request->hasFile("dynamic_fields.{$fieldName}")) {
+                        $file = $request->file("dynamic_fields.{$fieldName}");
+                        $path = $file->store('hrm/member_requests', 'public');
+                        $valueToSave = '/storage/' . $path;
+                    } elseif (is_array($fieldValue)) {
+                        $valueToSave = json_encode($fieldValue);
+                    }
+                    
+                    \App\Models\HrmMemberRequestField::create([
+                        'organization_id' => $user->organization_id,
+                        'request_id' => $memberRequest->id,
+                        'field_name' => $fieldName,
+                        'field_value' => $valueToSave,
+                    ]);
+                }
+            }
+            }
+
+            \App\Models\HrmRequestHistory::create([
+                'organization_id' => $user->organization_id,
+                'request_id' => $memberRequest->id,
+                'performed_by' => $user->id,
+                'action' => 'Submitted',
+                'new_status' => 'Pending',
+                'comments' => 'Application submitted by employee.',
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Application submitted successfully',
+                'data' => ['request_id' => $memberRequest->id]
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Submit Member Request Error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Failed to submit application'], 500);
         }
-
-        $id = DB::table('hrm_member_requests')->insertGetId($payload);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'HR Request submitted successfully ✔',
-            'data' => ['request_id' => $id]
-        ]);
     }
 
     // Submit Attendance Correction Request
@@ -362,6 +420,8 @@ class HrmMemberPortalController extends Controller
             'updated_at' => now(),
         ]);
 
+        \App\Services\HrmAuditLogger::log('Attendance Correction', $id, $user, 'Application Submitted', null, 'Pending', $request->reason, [], $request);
+
         return response()->json([
             'success' => true,
             'message' => 'Attendance Correction Request submitted successfully for HR approval ✔',
@@ -369,3 +429,5 @@ class HrmMemberPortalController extends Controller
         ]);
     }
 }
+
+

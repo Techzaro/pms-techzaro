@@ -195,167 +195,30 @@
   display: none;
 }
 
-@media (max-width: 1023px) and (min-width: 769px) {
-  .sidebar {
-    position: sticky;
-    top: 0;
-    left: auto;
-    width: 68px;
-    height: 100%;
-    max-height: calc(100vh - 100px);
-    margin-top: 0px;
-    border-radius: 0 16px 16px 0;
-    transform: none;
-    padding: 12px 8px;
-    overflow: hidden;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
-    cursor: pointer;
-    z-index: 100;
-  }
-
-  .sidebar:hover,
-  .sidebar--tablet-expanded {
-    width: 230px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-    cursor: default;
-  }
-
-  .sidebar-mobile-header {
-    display: none !important;
-  }
-
-  .sidebar-tablet-header {
-    display: none !important;
-  }
-
-  .sidebar-tablet-backdrop {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: var(--color-backdrop);
-    z-index: 10000;
-  }
-
-  .sidebar--tablet-expanded ~ .sidebar-tablet-backdrop {
-    display: block;
-  }
-
-  .sidebar-backdrop {
-    display: none !important;
-  }
-
-  .sidebar-link {
-    width: 52px;
-    height: 52px;
-    padding: 0;
-    margin-bottom: 6px;
-    justify-content: center;
-    border-radius: 14px;
-    position: relative;
-    overflow: hidden;
-    flex-shrink: 0;
-    pointer-events: auto;
-  }
-
-  .sidebar-link svg {
-    font-size: 22px;
-    margin: 0;
-    flex-shrink: 0;
-    transition: transform 0.2s ease;
-  }
-
-  .sidebar-link span {
-    opacity: 0;
-    width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    transition: opacity 0.2s ease 0.05s;
-    flex-shrink: 0;
-    font-size: 14px;
-    font-weight: 500;
-    pointer-events: none;
-  }
-
-  .sidebar-link.active:not(.sidebar-dropdown-group) {
-    background: var(--color-primary);
-    color: white;
-  }
-
-  .sidebar-link.active:not(.sidebar-dropdown-group) svg {
-    color: white;
-  }
-
-  .sidebar:hover .sidebar-link,
-  .sidebar--tablet-expanded .sidebar-link {
-    width: 100%;
-    height: 44px;
-    padding: 0 14px;
-    justify-content: flex-start;
-    gap: 14px;
-    pointer-events: auto;
-  }
-
-  .sidebar:hover .sidebar-link span,
-  .sidebar--tablet-expanded .sidebar-link span {
-    opacity: 1;
-    width: auto;
-    pointer-events: auto;
-  }
-
-  .sidebar hr {
-    margin: 10px 0;
-    opacity: 0;
-    transition: opacity 0.2s ease 0.1s;
-  }
-
-  .sidebar:hover hr,
-  .sidebar--tablet-expanded hr {
-    opacity: 1;
-  }
-
-  .sidebar-bottom {
-    margin-top: auto;
-  }
-
-  .sidebar:hover .sidebar-bottom .sidebar-link,
-  .sidebar--tablet-expanded .sidebar-bottom .sidebar-link {
-    width: 100%;
-    padding: 0 14px;
-    justify-content: flex-start;
-  }
-
-  .sidebar:hover .sidebar-bottom .sidebar-link span,
-  .sidebar--tablet-expanded .sidebar-bottom .sidebar-link span {
-    opacity: 1;
-    width: auto;
-  }
-
-  .sidebar > div:nth-child(2) {
-    display: flex;
-    flex-direction: column;
-  }
-}
-
-@media (max-width: 768px) {
+/* ── Tablet & Mobile: ≤1200px — Overlay drawer (matches PMS) ── */
+@media (max-width: 1200px) {
   .sidebar {
     position: fixed;
     top: 0;
     left: 0;
-    width: 280px;
+    width: 230px;
     height: 100vh;
+    max-height: 100vh;
     margin-top: 0;
-    border-radius: 0 16px 16px 0;
+    border-radius: 0;
     transform: translateX(-100%);
-    z-index: 100;
+    z-index: 10005;
     padding: 20px;
     flex-direction: column;
     gap: 0;
     border: none;
-    box-shadow: 4px 0 24px var(--shadow-lg);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+    transition: transform 0.3s ease;
+    overflow-y: auto;
   }
 
-  .sidebar--open {
+  .sidebar--open,
+  .sidebar--tablet-expanded {
     transform: translateX(0);
   }
 
@@ -416,9 +279,16 @@
   .sidebar-backdrop {
     display: block;
     position: fixed;
-    inset: 0;
-    background: var(--color-backdrop);
-    z-index: 99;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 10004;
+  }
+
+  .sidebar-tablet-backdrop {
+    display: none;
   }
 
   .sidebar > div:nth-child(2) {
@@ -433,9 +303,16 @@
   .sidebar-link {
     width: 100%;
     padding: 12px 14px;
-    margin-bottom: 10px;
+    margin-bottom: 6px;
     font-size: 14px;
     white-space: normal;
+  }
+
+  .sidebar-link span {
+    opacity: 1;
+    width: auto;
+    overflow: visible;
+    pointer-events: auto;
   }
 
   .sidebar-link.logout-link {
@@ -448,6 +325,19 @@
   }
 }
 
+/* ── Mobile: ≤768px — Wider drawer ── */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 280px;
+    border-radius: 0 16px 16px 0;
+  }
+
+  .sidebar-link {
+    margin-bottom: 10px;
+  }
+}
+
+/* ── Small Mobile: ≤480px ── */
 @media (max-width: 480px) {
   .sidebar {
     width: 100%;
@@ -596,32 +486,17 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 
-@media (max-width: 1023px) and (min-width: 769px) {
-  .hrm-layout .sidebar {
-    position: sticky;
-    top: 0;
-    width: 68px;
-    height: 100%;
-    max-height: calc(100vh - 100px);
-    overflow: hidden;
-  }
-  .hrm-layout .sidebar:hover,
-  .hrm-layout .sidebar--tablet-expanded {
-    width: 230px;
-  }
-}
-
-@media (max-width: 768px) {
+@media (max-width: 1200px) {
   .hrm-layout .sidebar {
     position: fixed !important;
     top: 0 !important;
     left: 0 !important;
-    width: 280px !important;
+    width: 230px !important;
     height: 100vh !important;
     max-height: 100vh !important;
-    border-radius: 0 16px 16px 0 !important;
+    border-radius: 0 !important;
     transform: translateX(-100%);
-    z-index: 10001 !important;
+    z-index: 10005 !important;
     padding: 20px !important;
     flex-direction: column !important;
     gap: 0 !important;
@@ -629,7 +504,8 @@
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15) !important;
   }
 
-  .hrm-layout .sidebar--open {
+  .hrm-layout .sidebar--open,
+  .hrm-layout .sidebar--tablet-expanded {
     transform: translateX(0) !important;
   }
 
@@ -645,5 +521,18 @@
     width: 100% !important;
     padding: 12px 14px !important;
   }
+
+  .hrm-layout .sidebar-link span {
+    opacity: 1 !important;
+    width: auto !important;
+    overflow: visible !important;
+    pointer-events: auto !important;
+  }
 }
 
+@media (max-width: 768px) {
+  .hrm-layout .sidebar {
+    width: 280px !important;
+    border-radius: 0 16px 16px 0 !important;
+  }
+}

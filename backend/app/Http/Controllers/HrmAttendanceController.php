@@ -413,6 +413,33 @@ class HrmAttendanceController extends Controller
                 'updated_at' => now(),
             ]);
 
+            // Save multi-file attachments if uploaded
+            $files = $request->file('attachments') ?: ($request->file('files') ?: []);
+            if (!is_array($files) && $files) {
+                $files = [$files];
+            }
+
+            foreach ($files as $file) {
+                if ($file && $file->isValid()) {
+                    $originalName = $file->getClientOriginalName();
+                    $path = $file->store('hrm_documents', 'public');
+
+                    DB::table('hrm_request_attachments')->insert([
+                        'request_type' => 'Leave Application',
+                        'request_id' => $id,
+                        'user_id' => $user->id,
+                        'file_name' => $originalName,
+                        'file_path' => '/storage/' . $path,
+                        'file_size' => $file->getSize(),
+                        'file_type' => $file->getClientMimeType(),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
+
+            \App\Services\HrmAuditLogger::log('Leave Application', $id, $user, 'Application Submitted', null, 'Pending', $request->reason, [], $request);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Leave application submitted successfully to HR for real-time review ✔',
@@ -432,13 +459,19 @@ class HrmAttendanceController extends Controller
         $status = $request->input('status', 'Approved');
         $rejectionReason = $request->input('rejection_reason');
 
-        return DB::transaction(function () use ($id, $status, $user, $rejectionReason) {
+        return DB::transaction(function () use ($id, $status, $user, $rejectionReason, $request) {
+            $prev = DB::table('hrm_leave_requests')->where('id', $id)->first();
+            $prevStatus = $prev ? $prev->status : 'Pending';
+
             DB::table('hrm_leave_requests')->where('id', $id)->update([
                 'status' => $status,
                 'approved_by' => $user->id,
                 'rejection_reason' => $rejectionReason,
                 'updated_at' => now(),
             ]);
+
+            $action = ($status === 'Approved') ? 'Approved' : (($status === 'Rejected') ? 'Rejected' : 'Status Changed');
+            \App\Services\HrmAuditLogger::log('Leave Application', $id, $user, $action, $prevStatus, $status, $rejectionReason ?: "Leave application {$status}", [], $request);
 
             return response()->json([
                 'success' => true,
@@ -480,6 +513,8 @@ class HrmAttendanceController extends Controller
             'updated_at' => now(),
         ]);
 
+        \App\Services\HrmAuditLogger::log('Attendance Correction', $id, $user, 'Application Submitted', null, 'Pending', $request->input('reason'), [], $request);
+
         return response()->json(['success' => true, 'message' => 'Correction request submitted.', 'data' => ['id' => $id]]);
     }
 
@@ -493,10 +528,16 @@ class HrmAttendanceController extends Controller
 
         $status = $request->input('status', 'Approved');
 
+        $prev = DB::table('hrm_attendance_corrections')->where('id', $id)->first();
+        $prevStatus = $prev ? $prev->status : 'Pending';
+
         DB::table('hrm_attendance_corrections')->where('id', $id)->update([
             'status' => $status,
             'updated_at' => now(),
         ]);
+
+        $action = ($status === 'Approved') ? 'Approved' : (($status === 'Rejected') ? 'Rejected' : 'Status Changed');
+        \App\Services\HrmAuditLogger::log('Attendance Correction', $id, $user, $action, $prevStatus, $status, "Correction request {$status}", [], $request);
 
         return response()->json(['success' => true, 'message' => "Correction request {$status} ✔"]);
     }
@@ -518,6 +559,8 @@ class HrmAttendanceController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        \App\Services\HrmAuditLogger::log('WFH Request', $id, $user, 'Application Submitted', null, 'Pending', $reason, [], $request);
 
         try {
             DB::table('hrm_notifications')->insert([
@@ -546,11 +589,17 @@ class HrmAttendanceController extends Controller
 
         $status = $request->input('status', 'Approved');
 
+        $prev = DB::table('hrm_wfh_requests')->where('id', $id)->first();
+        $prevStatus = $prev ? $prev->status : 'Pending';
+
         DB::table('hrm_wfh_requests')->where('id', $id)->update([
             'status' => $status,
             'rejection_reason' => $request->input('rejection_reason'),
             'updated_at' => now(),
         ]);
+
+        $action = ($status === 'Approved') ? 'Approved' : (($status === 'Rejected') ? 'Rejected' : 'Status Changed');
+        \App\Services\HrmAuditLogger::log('WFH Request', $id, $user, $action, $prevStatus, $status, $request->input('rejection_reason') ?: "WFH request {$status}", [], $request);
 
         return response()->json(['success' => true, 'message' => "WFH request {$status} ✔"]);
     }
@@ -583,44 +632,51 @@ class HrmAttendanceController extends Controller
         $user = $this->resolveAuth($request);
         if (!$user) return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
 
-        $corrections = DB::table('hrm_attendance_corrections')
-            ->join('users', 'hrm_attendance_corrections.user_id', '=', 'users.id')
-            ->select('hrm_attendance_corrections.*', 'users.name as user_name', 'users.email as user_email', 'users.department')
-            ->orderBy('hrm_attendance_corrections.created_at', 'desc')
-            ->get();
+        $role = strtolower(trim($user->role ?? 'member'));
+        $isAdminOrManager = in_array($role, ['admin', 'superadmin', 'super_admin', 'manager', 'hr_manager', 'hr', 'owner', 'management']);
 
-        $leaves = DB::table('hrm_leave_requests')
+        $corrQuery = DB::table('hrm_attendance_corrections')
+            ->join('users', 'hrm_attendance_corrections.user_id', '=', 'users.id')
+            ->select('hrm_attendance_corrections.*', 'users.name as user_name', 'users.email as user_email', 'users.department');
+
+        $leaveQuery = DB::table('hrm_leave_requests')
             ->join('users', 'hrm_leave_requests.user_id', '=', 'users.id')
             ->leftJoin('users as reviewer', 'hrm_leave_requests.approved_by', '=', 'reviewer.id')
-            ->select('hrm_leave_requests.*', 'users.name as user_name', 'users.email as user_email', 'users.department', 'reviewer.name as reviewer_name')
-            ->orderBy('hrm_leave_requests.created_at', 'desc')
-            ->get();
+            ->select('hrm_leave_requests.*', 'users.name as user_name', 'users.email as user_email', 'users.department', 'reviewer.name as reviewer_name');
 
-        $wfhRequests = DB::table('hrm_wfh_requests')
+        $wfhQuery = DB::table('hrm_wfh_requests')
             ->join('users', 'hrm_wfh_requests.user_id', '=', 'users.id')
-            ->select('hrm_wfh_requests.*', 'users.name as user_name', 'users.email as user_email', 'users.department')
-            ->orderBy('hrm_wfh_requests.created_at', 'desc')
-            ->get();
+            ->select('hrm_wfh_requests.*', 'users.name as user_name', 'users.email as user_email', 'users.department');
 
-        $screenRequests = DB::table('hrm_screen_requests')
+        $screenQuery = DB::table('hrm_screen_requests')
             ->join('users', 'hrm_screen_requests.user_id', '=', 'users.id')
             ->leftJoin('users as requester', 'hrm_screen_requests.requested_by', '=', 'requester.id')
-            ->select('hrm_screen_requests.*', 'users.name as user_name', 'users.email as user_email', 'users.department', 'requester.name as requester_name')
-            ->orderBy('hrm_screen_requests.created_at', 'desc')
-            ->get();
+            ->select('hrm_screen_requests.*', 'users.name as user_name', 'users.email as user_email', 'users.department', 'requester.name as requester_name');
 
-        $warningRemovals = DB::table('hrm_warnings')
+        $warnQuery = DB::table('hrm_warnings')
             ->join('users', 'hrm_warnings.user_id', '=', 'users.id')
             ->leftJoin('users as admin', 'hrm_warnings.removed_by', '=', 'admin.id')
-            ->select('hrm_warnings.*', 'users.name as user_name', 'users.email as user_email', 'users.department', 'admin.name as removed_by_name')
-            ->orderBy('hrm_warnings.created_at', 'desc')
-            ->get();
+            ->select('hrm_warnings.*', 'users.name as user_name', 'users.email as user_email', 'users.department', 'admin.name as removed_by_name');
 
-        $memberRequests = DB::table('hrm_member_requests')
+        $memQuery = DB::table('hrm_member_requests')
             ->join('users', 'hrm_member_requests.user_id', '=', 'users.id')
-            ->select('hrm_member_requests.*', 'users.name as user_name', 'users.email as user_email', 'users.department')
-            ->orderBy('hrm_member_requests.created_at', 'desc')
-            ->get();
+            ->select('hrm_member_requests.*', 'users.name as user_name', 'users.email as user_email', 'users.department');
+
+        if (!$isAdminOrManager) {
+            $corrQuery->where('hrm_attendance_corrections.user_id', $user->id);
+            $leaveQuery->where('hrm_leave_requests.user_id', $user->id);
+            $wfhQuery->where('hrm_wfh_requests.user_id', $user->id);
+            $screenQuery->where('hrm_screen_requests.user_id', $user->id);
+            $warnQuery->where('hrm_warnings.user_id', $user->id);
+            $memQuery->where('hrm_member_requests.user_id', $user->id);
+        }
+
+        $corrections = $corrQuery->orderBy('hrm_attendance_corrections.created_at', 'desc')->get();
+        $leaves = $leaveQuery->orderBy('hrm_leave_requests.created_at', 'desc')->get();
+        $wfhRequests = $wfhQuery->orderBy('hrm_wfh_requests.created_at', 'desc')->get();
+        $screenRequests = $screenQuery->orderBy('hrm_screen_requests.created_at', 'desc')->get();
+        $warningRemovals = $warnQuery->orderBy('hrm_warnings.created_at', 'desc')->get();
+        $memberRequests = $memQuery->orderBy('hrm_member_requests.created_at', 'desc')->get();
 
         return response()->json([
             'success' => true,

@@ -133,6 +133,10 @@ export default function MemberHrmDashboard() {
   const [requestSubject, setRequestSubject] = useState("");
   const [requestDetails, setRequestDetails] = useState("");
   const [submittingReq, setSubmittingReq] = useState(false);
+  const [appTypes, setAppTypes] = useState([]);
+  const [editingReqId, setEditingReqId] = useState(null);
+  const [dynamicFormState, setDynamicFormState] = useState({});
+  const [formStep, setFormStep] = useState(1);
 
   // Real-Time Leave Application Form State
   const [leaveType, setLeaveType] = useState("Casual Leave");
@@ -213,12 +217,16 @@ export default function MemberHrmDashboard() {
   const loadMemberSummary = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const [summaryRes, screenReqRes] = await Promise.all([
+      const [summaryRes, screenReqRes, appTypesRes] = await Promise.all([
         apiRequest("/hrm/member/summary"),
         apiRequest("/hrm/screen-requests/active").catch(() => ({ pending_request: null })),
+        apiRequest("/hrm/application-types").catch(() => ({ data: [] })),
       ]);
 
       setData(summaryRes);
+      if (appTypesRes && appTypesRes.data) {
+        setAppTypes(appTypesRes.data);
+      }
 
       if (
         screenReqRes.pending_request &&
@@ -566,20 +574,56 @@ export default function MemberHrmDashboard() {
   // Submit HR Request Form
   const handleSubmitHrRequest = async (e) => {
     e.preventDefault();
-    if (!requestSubject || !requestDetails) return;
+    if (!requestSubject || !requestCategory) return;
     setSubmittingReq(true);
     try {
-      const res = await apiRequest("/hrm/member/request-form", {
+      const token = authToken();
+      const matchedType = appTypes.find(t => t.name === requestCategory || t.id === requestCategory);
+      
+      if (!matchedType) {
+         alert("Please select a valid application type");
+         setSubmittingReq(false);
+         return;
+      }
+
+      const formData = new FormData();
+      formData.append("application_type_id", matchedType.id);
+      formData.append("title", requestSubject);
+      
+      if (requestDetails) {
+         formData.append("reason", requestDetails);
+      }
+      
+      if (Object.keys(dynamicFormState).length > 0) {
+         Object.keys(dynamicFormState).forEach(key => {
+            formData.append(`dynamic_fields[${key}]`, dynamicFormState[key]);
+         });
+      }
+      
+      if (reqAttachments && reqAttachments.length > 0) {
+         for (let i = 0; i < reqAttachments.length; i++) {
+            formData.append("attachments[]", reqAttachments[i]);
+         }
+      }
+
+      const res = await fetch(`${API_URL}/hrm/member/request-form`, {
         method: "POST",
-        body: JSON.stringify({
-          category: requestCategory,
-          subject: requestSubject,
-          details: requestDetails,
-        }),
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
       });
-      notify(res.message || "HR Request submitted successfully ✔");
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to submit HR request.");
+
+      notify(data.message || "HR Request submitted successfully ✔");
       setRequestSubject("");
       setRequestDetails("");
+      setReqAttachments(null);
+      setFilePreviews([]);
+      setDynamicFormState({});
+      setFormStep(1);
       loadMemberSummary(false);
     } catch (err) {
       notify(err.message || "Failed to submit HR request.", "error");
@@ -1073,109 +1117,272 @@ export default function MemberHrmDashboard() {
               <FileText size={16} /> New Leave Application Request
             </p>
 
-            <form onSubmit={handleSubmitLeaveApplication} className="mem-form" style={{ maxWidth: "100%" }}>
-              <div className="mem-form-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
-                <div className="mem-form-group" style={{ gridColumn: "1 / -1" }}>
-                  <label className="mem-form-label">
-                    Leave Category <span style={{ color: "var(--color-danger)" }}>*</span>
-                  </label>
-                  <select
-                    className="mem-input"
-                    value={leaveType}
-                    onChange={(e) => setLeaveType(e.target.value)}
-                  >
-                    <option value="Casual Leave">Casual Leave (Short Notice / Routine Personal)</option>
-                    <option value="Sick Leave">Sick Leave (Medical Illness / Recovery)</option>
-                    <option value="Annual Leave">Annual Paid Vacation Leave</option>
-                    <option value="Medical Leave">Medical Leave (Hospitalization / Emergency)</option>
-                    <option value="Half Day">Half Day Leave (Morning / Afternoon)</option>
-                    <option value="Hourly Leave">Hourly Permission (Max 3 Hours)</option>
-                    <option value="Maternity Leave">Maternity Leave</option>
-                    <option value="Paternity Leave">Paternity Leave</option>
-                    <option value="Bereavement Leave">Bereavement Leave</option>
-                    <option value="Comp Off">Compensatory Off (Comp Off)</option>
-                    <option value="Unpaid Leave">Unpaid Leave</option>
-                    <option value="Study Leave">Study / Examination Leave</option>
-                    <option value="Marriage Leave">Marriage Leave</option>
-                    <option value="Business Trip">Business Trip / Official Duty</option>
-                  </select>
+            <form onSubmit={handleSubmitHrRequest} className="mem-form" style={{ maxWidth: "100%", position: "relative", minHeight: "450px" }}>
+              {/* STEP 1: APPLICATION TYPE & SUBJECT */}
+              <div style={{ display: formStep === 1 ? 'block' : 'none', animation: 'fadeIn 0.4s ease-out' }}>
+                <div style={{ marginBottom: "20px", paddingBottom: "15px", borderBottom: "1px solid var(--border-color)" }}>
+                  <h3 style={{ margin: 0, color: "var(--text-heading)", fontSize: "16px" }}>Step 1: Select Application Type</h3>
+                  <p style={{ margin: "4px 0 0", color: "var(--text-secondary)", fontSize: "13px" }}>Choose the type of request you are submitting.</p>
                 </div>
+                
+                <div className="mem-form-grid" style={{ gridTemplateColumns: "1fr" }}>
+                  <div className="mem-form-group">
+                    <label className="mem-form-label">
+                      Application Category <span style={{ color: "var(--color-danger)" }}>*</span>
+                    </label>
+                    <select
+                      className="mem-input"
+                      value={requestCategory}
+                      onChange={(e) => setRequestCategory(e.target.value)}
+                      required
+                    >
+                      {appTypes && appTypes.length > 0 ? (
+                        appTypes.map((t) => (
+                          <option key={t.id || t.name} value={t.name}>{t.name}</option>
+                        ))
+                      ) : (
+                        <option value="General HR Application">General HR Application</option>
+                      )}
+                    </select>
+                  </div>
 
-                <div className="mem-form-group">
-                  <label className="mem-form-label">
-                    Start Date <span style={{ color: "var(--color-danger)" }}>*</span>
-                  </label>
-                  <input
-                    type="date"
-                    className="mem-input"
-                    value={leaveStartDate}
-                    onChange={(e) => setLeaveStartDate(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="mem-form-group">
-                  <label className="mem-form-label">
-                    End Date <span style={{ color: "var(--color-danger)" }}>*</span>
-                  </label>
-                  <input
-                    type="date"
-                    className="mem-input"
-                    value={leaveEndDate}
-                    onChange={(e) => setLeaveEndDate(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* LIVE LEAVE DURATION SUMMARY CALCULATOR */}
-              {leaveStartDate && leaveEndDate && (
-                <div className="mem-info-banner" style={{ marginBottom: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <Clock size={16} />
-                      <span style={{ fontSize: "13px", fontWeight: "600" }}>
-                        Calculated Requested Duration: <strong>{(() => {
-                          const start = new Date(leaveStartDate);
-                          const end = new Date(leaveEndDate);
-                          if (isNaN(start) || isNaN(end)) return 1;
-                          const diffTime = Math.abs(end - start);
-                          return Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
-                        })()} Day(s)</strong> ({leaveStartDate} to {leaveEndDate})
-                      </span>
-                    </div>
-                    <span className="mem-badge mem-badge--info">
-                      {leaveType}
-                    </span>
+                  <div className="mem-form-group">
+                    <label className="mem-form-label">
+                      Application Subject / Title <span style={{ color: "var(--color-danger)" }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="mem-input"
+                      placeholder="Brief subject or title of your application..."
+                      value={requestSubject}
+                      onChange={(e) => setRequestSubject(e.target.value)}
+                      required
+                    />
                   </div>
                 </div>
-              )}
 
-              <div className="mem-form-group">
-                <label className="mem-form-label">
-                  Detailed Reason for Leave Application <span style={{ color: "var(--color-danger)" }}>*</span>
-                </label>
-                <textarea
-                  className="mem-input"
-                  rows="3"
-                  placeholder="Provide detailed reason for leave request and work coverage details..."
-                  value={leaveReason}
-                  onChange={(e) => setLeaveReason(e.target.value)}
-                  required
-                />
-                <span style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                  HR Management will be notified in real-time upon submission.
-                </span>
+                <div className="mem-form-actions" style={{ justifyContent: "flex-end", marginTop: "20px" }}>
+                  <button
+                    type="button"
+                    className="mem-btn mem-btn--primary"
+                    onClick={() => {
+                      if (!requestCategory || !requestSubject) return alert("Please fill out all required fields.");
+                      setFormStep(2);
+                    }}
+                  >
+                    Next Step <span style={{ marginLeft: "6px" }}>→</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="mem-form-actions" style={{ justifyContent: "flex-end", borderTop: "1px solid var(--border-color)", paddingTop: "14px" }}>
-                <button
-                  type="submit"
-                  className="mem-btn mem-btn--primary"
-                  disabled={submittingLeave}
-                >
-                  <Send size={16} /> {submittingLeave ? "Submitting to HR..." : "Submit Real-Time Leave Application"}
-                </button>
+              {/* STEP 2: DYNAMIC FIELDS & ATTACHMENTS */}
+              <div style={{ display: formStep === 2 ? 'block' : 'none', animation: 'fadeIn 0.4s ease-out' }}>
+                <div style={{ marginBottom: "20px", paddingBottom: "15px", borderBottom: "1px solid var(--border-color)" }}>
+                  <h3 style={{ margin: 0, color: "var(--text-heading)", fontSize: "16px" }}>Step 2: Provide Required Details</h3>
+                  <p style={{ margin: "4px 0 0", color: "var(--text-secondary)", fontSize: "13px" }}>Fill out the required dynamic fields for {requestCategory}.</p>
+                </div>
+
+                <div className="mem-form-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                  {appTypes?.find(t => t.name === requestCategory || t.id === requestCategory)?.fields?.map(f => {
+                     let inputType = 'text';
+                     const dbType = (f.field_type || '').toLowerCase();
+                     if (dbType === 'file upload' || dbType === 'file') inputType = 'file';
+                     else if (dbType === 'date') inputType = 'date';
+                     else if (dbType === 'time') inputType = 'time';
+                     else if (dbType === 'datetime') inputType = 'datetime-local';
+                     else if (dbType === 'checkbox') inputType = 'checkbox';
+                     else if (dbType === 'number') inputType = 'number';
+                     
+                     // Interactive logic for Half Day
+                     const halfDayField = appTypes.find(t => t.name === requestCategory || t.id === requestCategory)?.fields?.find(x => x.field_name === 'half_day');
+                     const isHalfDaySelected = halfDayField && dynamicFormState[halfDayField.id] && dynamicFormState[halfDayField.id].includes('Half Day');
+                     
+                     // Hide start_time / end_time if half day is NOT selected
+                     if ((f.field_name === 'start_time' || f.field_name === 'end_time') && !isHalfDaySelected) {
+                        return null;
+                     }
+                     
+                     // Date Range Specific Component
+                     if (dbType === 'daterange') {
+                        const drState = dynamicFormState[f.id] ? JSON.parse(dynamicFormState[f.id]) : { start: '', end: '' };
+                        let totalDays = 0;
+                        if (drState.start && drState.end) {
+                           const start = new Date(drState.start);
+                           const end = new Date(drState.end);
+                           totalDays = Math.max(0, Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1);
+                        }
+                        
+                        return (
+                          <div className="mem-form-group" key={f.id} style={{ gridColumn: '1 / -1' }}>
+                            <label className="mem-form-label">
+                              {f.field_label} {f.is_required && <span style={{ color: "var(--color-danger)" }}>*</span>}
+                            </label>
+                            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                               <input type="date" className="mem-input" required={f.is_required} value={drState.start} 
+                                      onChange={e => setDynamicFormState({...dynamicFormState, [f.id]: JSON.stringify({ ...drState, start: e.target.value })})} />
+                               <span>to</span>
+                               <input type="date" className="mem-input" required={f.is_required} value={drState.end} 
+                                      onChange={e => setDynamicFormState({...dynamicFormState, [f.id]: JSON.stringify({ ...drState, end: e.target.value })})} />
+                               {totalDays > 0 && <span style={{ marginLeft: "10px", padding: "4px 8px", background: "#e0e7ff", color: "#4338ca", borderRadius: "12px", fontSize: "12px", fontWeight: "600" }}>{totalDays} Days</span>}
+                            </div>
+                            <input type="hidden" id={`dyn_field_${f.id}`} value={totalDays > 0 ? JSON.stringify(drState) : ''} />
+                          </div>
+                        );
+                     }
+                     
+                     return (
+                     <div className="mem-form-group" key={f.id}>
+                       <label className="mem-form-label">
+                         {f.field_label} {f.is_required && <span style={{ color: "var(--color-danger)" }}>*</span>}
+                       </label>
+                       {dbType === 'textarea' ? (
+                          <textarea id={`dyn_field_${f.id}`} className="mem-input" required={f.is_required} rows={3} value={dynamicFormState[f.id] || ''} onChange={e => setDynamicFormState({...dynamicFormState, [f.id]: e.target.value})} />
+                       ) : dbType === 'dropdown' || dbType === 'radio' ? (
+                          <select id={`dyn_field_${f.id}`} className="mem-input" required={f.is_required} value={dynamicFormState[f.id] || ''} onChange={e => setDynamicFormState({...dynamicFormState, [f.id]: e.target.value})}>
+                             <option value="">Select Option</option>
+                             {f.options && (typeof f.options === 'string' ? JSON.parse(f.options) : f.options).map((opt, i) => (
+                                <option key={i} value={opt}>{opt}</option>
+                             ))}
+                          </select>
+                       ) : inputType === 'checkbox' ? (
+                          <input id={`dyn_field_${f.id}`} type="checkbox" style={{width: '20px', height: '20px', display: 'block', marginTop: '10px'}} checked={!!dynamicFormState[f.id]} onChange={e => setDynamicFormState({...dynamicFormState, [f.id]: e.target.checked})} />
+                       ) : inputType === 'file' ? (
+                          <input id={`dyn_field_${f.id}`} type="file" className="mem-input" required={f.is_required} />
+                       ) : (
+                          <input id={`dyn_field_${f.id}`} type={inputType} className="mem-input" required={f.is_required} value={dynamicFormState[f.id] || ''} onChange={e => setDynamicFormState({...dynamicFormState, [f.id]: e.target.value})} />
+                       )}
+                     </div>
+                  )})}
+                </div>
+
+                <div className="mem-form-group" style={{ marginTop: "15px" }}>
+                  <label className="mem-form-label">
+                    Additional Application Details &amp; Reason (Optional)
+                  </label>
+                  <div style={{ marginBottom: "20px" }}>
+                    <ReactQuill
+                      theme="snow"
+                      placeholder="Provide complete background details, reason, or coverage notes for HR review..."
+                      value={requestDetails}
+                      onChange={setRequestDetails}
+                      style={{ backgroundColor: "white", borderRadius: "8px" }}
+                    />
+                  </div>
+                </div>
+
+                <div className="mem-form-group">
+                  <label className="mem-form-label">
+                    Attach Documents / Proofs (Multiple Files Supported)
+                  </label>
+                  <input
+                    type="file"
+                    multiple
+                    className="mem-input"
+                    onChange={handleMemberFileChange}
+                  />
+                  <span style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                    Select one or multiple supporting files (PDFs, receipts, medical notes, images). Click any image thumbnail below to preview.
+                  </span>
+
+                  {/* THUMBNAIL PREVIEW GRID FOR MEMBER */}
+                  {filePreviews.length > 0 && (
+                    <div style={{ marginTop: "12px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: "10px" }}>
+                      {filePreviews.map((f, i) => (
+                        <div key={i} style={{ border: "1px solid var(--border-color)", borderRadius: "8px", overflow: "hidden", background: "var(--bg-main)", fontSize: "11px", padding: "6px" }}>
+                          {f.isImage ? (
+                            <div style={{ height: "70px", borderRadius: "4px", overflow: "hidden", cursor: "pointer", position: "relative" }} onClick={() => setMemberLightboxUrl(f.url)}>
+                              <img src={f.url} alt={f.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              <div style={{ position: "absolute", inset: 0, background: "rgba(0, 130, 255, 0.4)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10.5px", fontWeight: "700" }}>
+                                👁️ Review Pic
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ height: "60px", background: "#e2e8f0", borderRadius: "4px", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700", color: "#475569" }}>
+                              📄 Document
+                            </div>
+                          )}
+                          <div style={{ marginTop: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: "600", color: "var(--text-heading)" }} title={f.name}>
+                            {f.name}
+                          </div>
+                          <div style={{ color: "var(--text-secondary)", fontSize: "10px" }}>{f.size}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mem-form-actions" style={{ justifyContent: "space-between", marginTop: "20px" }}>
+                  <button type="button" className="mem-btn" style={{ background: "#f1f5f9", color: "#334155" }} onClick={() => setFormStep(1)}>
+                    <span style={{ marginRight: "6px" }}>←</span> Back
+                  </button>
+                  <button type="button" className="mem-btn mem-btn--primary" onClick={() => setFormStep(3)}>
+                    Review Information <span style={{ marginLeft: "6px" }}>→</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* STEP 3: REVIEW & SUBMIT */}
+              <div style={{ display: formStep === 3 ? 'block' : 'none', animation: 'fadeIn 0.4s ease-out' }}>
+                <div style={{ marginBottom: "20px", paddingBottom: "15px", borderBottom: "1px solid var(--border-color)" }}>
+                  <h3 style={{ margin: 0, color: "var(--text-heading)", fontSize: "16px" }}>Step 3: Review & Submit</h3>
+                  <p style={{ margin: "4px 0 0", color: "var(--text-secondary)", fontSize: "13px" }}>Please verify the information before submitting to HR.</p>
+                </div>
+
+                <div style={{ background: "#f8fafc", padding: "16px", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "20px" }}>
+                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "13px" }}>
+                     <div>
+                       <strong style={{ color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>Category</strong>
+                       <div>{requestCategory}</div>
+                     </div>
+                     <div>
+                       <strong style={{ color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>Subject</strong>
+                       <div>{requestSubject}</div>
+                     </div>
+                   </div>
+                   
+                   <hr style={{ margin: "16px 0", borderTop: "1px solid #e2e8f0" }} />
+                   
+                   <strong style={{ color: "var(--text-secondary)", display: "block", marginBottom: "8px", fontSize: "13px" }}>Dynamic Fields Data</strong>
+                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "13px" }}>
+                      {appTypes?.find(t => t.name === requestCategory || t.id === requestCategory)?.fields?.map(f => {
+                         let val = dynamicFormState[f.id] || '-';
+                         if (f.field_type.toLowerCase() === 'daterange') {
+                            const drState = dynamicFormState[f.id] ? JSON.parse(dynamicFormState[f.id]) : {};
+                            if (drState.start && drState.end) val = `${drState.start} to ${drState.end}`;
+                         } else if (f.field_type.toLowerCase() === 'checkbox') {
+                            val = dynamicFormState[f.id] ? 'Yes' : 'No';
+                         } else if (f.field_type.toLowerCase() === 'file upload' || f.field_type.toLowerCase() === 'file') {
+                            val = 'File Attached';
+                         }
+                         
+                         // Skip hidden half day fields
+                         const halfDayField = appTypes.find(t => t.name === requestCategory || t.id === requestCategory)?.fields?.find(x => x.field_name === 'half_day');
+                         const isHalfDaySelected = halfDayField && dynamicFormState[halfDayField.id] && dynamicFormState[halfDayField.id].includes('Half Day');
+                         if ((f.field_name === 'start_time' || f.field_name === 'end_time') && !isHalfDaySelected) return null;
+                         
+                         return (
+                            <div key={f.id}>
+                               <strong style={{ color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>{f.field_label}</strong>
+                               <div>{val}</div>
+                            </div>
+                         );
+                      })}
+                   </div>
+                </div>
+
+                <div className="mem-form-actions" style={{ justifyContent: "space-between", marginTop: "20px" }}>
+                  <button type="button" className="mem-btn" style={{ background: "#f1f5f9", color: "#334155" }} onClick={() => setFormStep(2)}>
+                    <span style={{ marginRight: "6px" }}>←</span> Edit Details
+                  </button>
+                  <button
+                    type="submit"
+                    className="mem-btn mem-btn--primary"
+                    disabled={submittingReq}
+                    style={{ background: "#10b981" }}
+                  >
+                    <Send size={16} /> {submittingReq ? "Submitting Application..." : "Confirm & Submit Application"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

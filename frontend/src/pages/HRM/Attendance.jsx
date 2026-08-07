@@ -3,6 +3,10 @@ import { useSearchParams } from "react-router-dom";
 import API_URL from "../../config/api";
 import { authToken, getUser } from "../../utils/auth";
 import Breadcrumb from "../../components/Breadcrumb";
+import GlobalHrConfigModal from "../../components/hrm/GlobalHrConfigModal";
+import ManualHrAttendanceModal from "../../components/hrm/ManualHrAttendanceModal";
+import GenerateAttendanceReportModal from "../../components/hrm/GenerateAttendanceReportModal";
+import MonthlyPunchLogAuditModal from "../../components/hrm/MonthlyPunchLogAuditModal";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
@@ -260,7 +264,7 @@ export default function Attendance() {
           if (reqObj.type === "leave") await handleRespondLeave(reqObj.rawId, "Approved");
           else if (reqObj.type === "wfh") await handleApproveWfh(reqObj.rawId);
           else if (reqObj.type === "correction") await handleRespondCorrection(reqObj.rawId, "Approved");
-          else if (reqObj.type === "member_form") await handleRespondMemberRequest(reqObj.rawId, "Approved");
+          else if (reqObj.type === "member_form") await handleRespondMemberRequest(reqObj.rawId, "Approved", reqObj.source);
         }
       }
       setSelectedRequestIds([]);
@@ -924,12 +928,23 @@ export default function Attendance() {
   };
 
   // HR Approve / Reject Member Form / Advance Salary / Expense Claim
-  const handleRespondMemberRequest = async (id, status) => {
+  // source = "leave_table" means the record lives in hrm_leave_requests (legacy),
+  // source = "member_table" means it lives in hrm_member_requests (new flow)
+  const handleRespondMemberRequest = async (id, status, source = "member_table") => {
     try {
-      const res = await apiRequest(`/hrm/member/requests/${id}`, {
-        method: "POST",
-        body: JSON.stringify({ status }),
-      });
+      let res;
+      if (source === "leave_table") {
+        // Legacy advance/expense stored in leave table — use leave API
+        res = await apiRequest(`/hrm/leaves/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status }),
+        });
+      } else {
+        res = await apiRequest(`/hrm/member/requests/${id}`, {
+          method: "POST",
+          body: JSON.stringify({ status }),
+        });
+      }
       notify(res.message || `Member request ${status} successfully ✔`);
       loadData();
     } catch (err) {
@@ -947,13 +962,32 @@ export default function Attendance() {
   const allRequestsUnified = useMemo(() => {
     const list = [];
 
-    // 1. Leave Applications
+    // 1. Leave Applications (and any legacy advance/expense stored in leave table)
     (leaves || []).forEach((l) => {
+      // Detect if this is actually an advance salary or expense claim stored in leave table
+      let category = "Leave Application";
+      let icon = "🌴";
+      let type = "leave";
+      let source = "leave_table"; // Always leave_table since it comes from hrm_leave_requests
+
+      if (l.leave_type === "Advance Salary Request") {
+        category = "Advance Salary Request";
+        icon = "💵";
+        type = "member_form";
+        // source stays "leave_table" — legacy record in hrm_leave_requests
+      } else if (l.leave_type === "Expense Reimbursement Claim") {
+        category = "Expense Reimbursement Claim";
+        icon = "🧾";
+        type = "member_form";
+        // source stays "leave_table" — legacy record in hrm_leave_requests
+      }
+
       list.push({
         id: `leave-${l.id}`,
         rawId: l.id,
-        category: "Leave Application",
-        icon: "🌴",
+        category,
+        icon,
+        source,
         user_name: l.user_name || "Employee",
         user_email: l.user_email || "",
         department: l.department || "General",
@@ -963,7 +997,7 @@ export default function Attendance() {
         reviewer_name: l.reviewer_name || null,
         rejection_reason: l.rejection_reason || null,
         created_at: l.created_at,
-        type: "leave",
+        type,
       });
     });
 
@@ -1042,6 +1076,7 @@ export default function Attendance() {
         rawId: m.id,
         category: m.category || "Member HR Form",
         icon: icon,
+        source: "member_table", // Properly stored in hrm_member_requests
         user_name: m.user_name || "Employee",
         user_email: m.user_email || "",
         department: m.department || "General",
@@ -1146,7 +1181,74 @@ export default function Attendance() {
         </div>
       </header>
 
-      {/* ADMIN OWN DUTY WEB CLOCK CONTROL BANNER */}
+      {/* HRM MAIN COMMAND TABS BAR */}
+      <div className="att-tabs-nav" style={{ marginBottom: "20px" }}>
+        <button
+          type="button"
+          className={`att-tab-btn ${activeTab === "attendance" ? "active" : ""}`}
+          onClick={() => handleTabChange("attendance")}
+        >
+          <Clock size={15} /> Punch Logs &amp; Attendance
+        </button>
+
+
+        <button
+          type="button"
+          className={`att-tab-btn ${activeTab === "manual" ? "active" : ""}`}
+          onClick={() => handleTabChange("manual")}
+        >
+          <UserCheck size={15} /> Manual Entry
+        </button>
+
+        <button
+          type="button"
+          className={`att-tab-btn ${activeTab === "shifts" ? "active" : ""}`}
+          onClick={() => handleTabChange("shifts")}
+        >
+          <Sliders size={15} /> Working Shifts
+        </button>
+
+        <button
+          type="button"
+          className={`att-tab-btn ${activeTab === "warnings" ? "active" : ""}`}
+          onClick={() => handleTabChange("warnings")}
+        >
+          <ShieldAlert size={15} /> Warnings Policy
+        </button>
+      </div>
+
+      {/* SEARCH & ODOO VIEW MODE TOOLBAR */}
+      <div className="att-toolbar" id="admin-search-toolbar">
+        <div className="att-search-box">
+          <Search size={18} color="#64748b" />
+          <input
+            id="admin-search-input"
+            type="text"
+            placeholder="Search employee by name, department, email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search employees"
+          />
+        </div>
+
+        {activeTab === "attendance" && (
+          <div className="att-view-toggle">
+            <button className={`att-view-btn ${viewMode === "cards" ? "active" : ""}`} onClick={() => setViewMode("cards")}>
+              <LayoutGrid size={16} /> Kanban Cards
+            </button>
+            <button className={`att-view-btn ${viewMode === "table" ? "active" : ""}`} onClick={() => setViewMode("table")}>
+              <List size={16} /> Data Table
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* TAB 1: PUNCH LOGS & MONTHLY ATTENDANCE COMMAND CENTER */}
+      {activeTab === "attendance" && (
+        <section className="att-card" id="section-live-attendance-matrix" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          {/* TOP CONTROLS: SUB-TAB TOGGLE & MONTH SELECTOR */}
+        
+         {/* ADMIN OWN DUTY WEB CLOCK CONTROL BANNER */}
       <section className="att-card" style={{ marginBottom: "20px", background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)", color: "#fff" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
           <div>
@@ -1193,71 +1295,8 @@ export default function Attendance() {
             </div>
           </div>
         </div>
+        
       </section>
-
-      {/* ADMIN LIVE WORKFORCE ANALYTICS GRID */}
-      <section className="att-stats-grid" id="admin-stats-overview" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", marginBottom: "24px" }}>
-        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px" }}>
-          <span style={{ fontSize: "11px", color: "#64748b" }}>Present in Office</span>
-          <h3 style={{ margin: "2px 0 0", fontSize: "20px", color: "#166534" }}>🏢 {officeCount} Live</h3>
-        </div>
-
-        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px" }}>
-          <span style={{ fontSize: "11px", color: "#64748b" }}>Working From Home</span>
-          <h3 style={{ margin: "2px 0 0", fontSize: "20px", color: "#1d4ed8" }}>🏡 {wfhCount} Remote</h3>
-        </div>
-
-        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px" }}>
-          <span style={{ fontSize: "11px", color: "#64748b" }}>On Break / Paused</span>
-          <h3 style={{ margin: "2px 0 0", fontSize: "20px", color: "#b45309" }}>⏸ {pausedCount} Paused</h3>
-        </div>
-
-        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px" }}>
-          <span style={{ fontSize: "11px", color: "#64748b" }}>On Approved Leave</span>
-          <h3 style={{ margin: "2px 0 0", fontSize: "20px", color: "#0284c7" }}>🌴 {leaveCount} Leaves</h3>
-        </div>
-
-        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px" }}>
-          <span style={{ fontSize: "11px", color: "#64748b" }}>Active Working Policies</span>
-          <h3 style={{ margin: "2px 0 0", fontSize: "20px", color: "#0f172a" }}>⚙️ {shifts.length} Shifts</h3>
-        </div>
-
-        <div style={{ background: pendingTotal > 0 ? "#fffbeb" : "#fff", border: pendingTotal > 0 ? "1px solid #fde68a" : "1px solid #e2e8f0", borderRadius: "10px", padding: "14px" }}>
-          <span style={{ fontSize: "11px", color: pendingTotal > 0 ? "#b45309" : "#64748b" }}>Pending Approvals</span>
-          <h3 style={{ margin: "2px 0 0", fontSize: "20px", color: pendingTotal > 0 ? "#b45309" : "#0f172a" }}>⏳ {pendingTotal} Queue</h3>
-        </div>
-      </section>
-
-      {/* SEARCH & ODOO VIEW MODE TOOLBAR */}
-      <div className="att-toolbar" id="admin-search-toolbar">
-        <div className="att-search-box">
-          <Search size={18} color="#64748b" />
-          <input
-            id="admin-search-input"
-            type="text"
-            placeholder="Search employee by name, department, email..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            aria-label="Search employees"
-          />
-        </div>
-
-        {activeTab === "attendance" && (
-          <div className="att-view-toggle">
-            <button className={`att-view-btn ${viewMode === "cards" ? "active" : ""}`} onClick={() => setViewMode("cards")}>
-              <LayoutGrid size={16} /> Kanban Cards
-            </button>
-            <button className={`att-view-btn ${viewMode === "table" ? "active" : ""}`} onClick={() => setViewMode("table")}>
-              <List size={16} /> Data Table
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* TAB 1: PUNCH LOGS & MONTHLY ATTENDANCE COMMAND CENTER */}
-      {activeTab === "attendance" && (
-        <section className="att-card" id="section-live-attendance-matrix" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          {/* TOP CONTROLS: SUB-TAB TOGGLE & MONTH SELECTOR */}
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "14px", borderBottom: "1px solid #e2e8f0", paddingBottom: "14px" }}>
             <div style={{ display: "flex", gap: "8px" }}>
               <button
@@ -1343,7 +1382,38 @@ export default function Attendance() {
               </button>
             </div>
           </div>
+   {/* ADMIN LIVE WORKFORCE ANALYTICS GRID */}
+      <section className="att-stats-grid" id="admin-stats-overview" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", marginBottom: "24px" }}>
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px" }}>
+          <span style={{ fontSize: "11px", color: "#64748b" }}>Present in Office</span>
+          <h3 style={{ margin: "2px 0 0", fontSize: "20px", color: "#166534" }}>🏢 {officeCount} Live</h3>
+        </div>
 
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px" }}>
+          <span style={{ fontSize: "11px", color: "#64748b" }}>Working From Home</span>
+          <h3 style={{ margin: "2px 0 0", fontSize: "20px", color: "#1d4ed8" }}>🏡 {wfhCount} Remote</h3>
+        </div>
+
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px" }}>
+          <span style={{ fontSize: "11px", color: "#64748b" }}>On Break / Paused</span>
+          <h3 style={{ margin: "2px 0 0", fontSize: "20px", color: "#b45309" }}>⏸ {pausedCount} Paused</h3>
+        </div>
+
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px" }}>
+          <span style={{ fontSize: "11px", color: "#64748b" }}>On Approved Leave</span>
+          <h3 style={{ margin: "2px 0 0", fontSize: "20px", color: "#0284c7" }}>🌴 {leaveCount} Leaves</h3>
+        </div>
+
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px" }}>
+          <span style={{ fontSize: "11px", color: "#64748b" }}>Active Working Policies</span>
+          <h3 style={{ margin: "2px 0 0", fontSize: "20px", color: "#0f172a" }}>⚙️ {shifts.length} Shifts</h3>
+        </div>
+
+        <div style={{ background: pendingTotal > 0 ? "#fffbeb" : "#fff", border: pendingTotal > 0 ? "1px solid #fde68a" : "1px solid #e2e8f0", borderRadius: "10px", padding: "14px" }}>
+          <span style={{ fontSize: "11px", color: pendingTotal > 0 ? "#b45309" : "#64748b" }}>Pending Approvals</span>
+          <h3 style={{ margin: "2px 0 0", fontSize: "20px", color: pendingTotal > 0 ? "#b45309" : "#0f172a" }}>⏳ {pendingTotal} Queue</h3>
+        </div>
+      </section>
           {/* VIEW MODE 1: ALL MEMBERS MONTHLY HOURS & RECORDS SUMMARY */}
           {punchLogSubTab === "summary" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -1668,6 +1738,7 @@ export default function Attendance() {
         </section>
       )}
 
+
       {/* TAB 2: PENDING & HISTORICAL APPROVALS ENGINE (Stats + Full History + Search & Filter) */}
       {activeTab === "pending" && (
         <section className="att-pending-queue" id="section-pending-approvals" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -1698,7 +1769,7 @@ export default function Attendance() {
             </div>
 
             <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px", padding: "14px" }}>
-              <span style={{ fontSize: "11px", fontWeight: "700", color: "#991b1b", display: "block", marginBottom: "2px" }}>❌ Rejected / Declined</span>
+              <span style={{ fontSize: "11px", fontWeight: "700", color: "#991b1b", display: "block", marginBottom: "2px" }}>❌ Declined</span>
               <h3 style={{ margin: 0, fontSize: "22px", color: "#dc2626" }}>{requestsStats.rejected} Requests</h3>
               <span style={{ fontSize: "10.5px", color: "#b91c1c" }}>Declined by Admin</span>
             </div>
@@ -1879,8 +1950,8 @@ export default function Attendance() {
                         </td>
 
                         <td style={{ padding: "12px 14px", color: "#475569", maxWidth: "240px" }}>
-                          <div style={{ background: "#f8fafc", padding: "6px 10px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "12px", whiteSpace: "pre-line" }}>
-                            "{req.reason}"
+                          <div style={{ background: "#f8fafc", padding: "6px 10px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "12px", whiteSpace: "pre-line" }}
+                               dangerouslySetInnerHTML={{ __html: req.reason ? req.reason : "No explicit notes provided by member." }}>
                           </div>
                         </td>
 
@@ -1905,7 +1976,7 @@ export default function Attendance() {
                           {(req.status === "Rejected" || req.status === "Declined") && (
                             <div>
                               <span style={{ padding: "3px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", background: "#fee2e2", color: "#991b1b" }}>
-                                Not Approved
+                                Declined
                               </span>
                               {req.rejection_reason && (
                                 <div style={{ fontSize: "10.5px", color: "#991b1b", marginTop: "2px" }}>
@@ -1931,7 +2002,7 @@ export default function Attendance() {
                                 {req.type === "leave" && (
                                   <>
                                     <button style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "700", background: "#10b981", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }} onClick={() => handleRespondLeave(req.rawId, "Approved")}>✔ Approve</button>
-                                    <button style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "700", background: "#ef4444", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }} onClick={() => handleRespondLeave(req.rawId, "Rejected")}>Not Approved</button>
+                                    <button style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "700", background: "#ef4444", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }} onClick={() => handleRespondLeave(req.rawId, "Rejected")}>Declined</button>
                                   </>
                                 )}
                                 {req.type === "wfh" && (
@@ -1948,8 +2019,8 @@ export default function Attendance() {
                                 )}
                                 {req.type === "member_form" && (
                                   <>
-                                    <button style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "700", background: "#10b981", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }} onClick={() => handleRespondMemberRequest(req.rawId, "Approved")}>✔ Approve</button>
-                                    <button style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "700", background: "#ef4444", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }} onClick={() => handleRespondMemberRequest(req.rawId, "Rejected")}>❌ Reject</button>
+                                    <button style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "700", background: "#10b981", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }} onClick={() => handleRespondMemberRequest(req.rawId, "Approved", req.source)}>✔ Approve</button>
+                                    <button style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "700", background: "#ef4444", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }} onClick={() => handleRespondMemberRequest(req.rawId, "Rejected", req.source)}>❌ Reject</button>
                                   </>
                                 )}
                                 {req.type === "warning" && (
@@ -2544,123 +2615,23 @@ export default function Attendance() {
       )}
 
       {/* GLOBAL HR CONFIGURATION MODAL */}
-      {settingsModalOpen && (
-        <div className="att-modal-overlay" onClick={() => setSettingsModalOpen(false)}>
-          <div className="att-modal-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "680px" }}>
-            <div className="att-modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <h3 style={{ margin: 0 }}>Global Enterprise HR &amp; System Settings</h3>
-                <span style={{ fontSize: "11px", color: "#64748b" }}>Configure enterprise country, state/province, currency, time zone &amp; payroll parameters</span>
-              </div>
-              <button style={{ border: "none", background: "none", cursor: "pointer" }} onClick={() => setSettingsModalOpen(false)}><X size={20} /></button>
-            </div>
-
-            <form onSubmit={handleSaveSettings}>
-              <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
-                <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", padding: "10px 14px", borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontSize: "12px", color: "#1e40af" }}>
-                    <strong>Enterprise Location Auto-Preset:</strong> Load US Enterprise Standard Settings
-                  </div>
-                  <button
-                    type="button"
-                    style={{ padding: "6px 12px", fontSize: "11px", fontWeight: "700", background: "#1d4ed8", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer" }}
-                    onClick={handleAutoFetchUsDefaults}
-                  >
-                    🇺🇸 Auto-Fetch United States Defaults
-                  </button>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                  <div>
-                    <label htmlFor="cfg-country" style={{ fontSize: "12px", fontWeight: "600", color: "#475569" }}>Primary Country</label>
-                    <select
-                      id="cfg-country"
-                      className="att-input"
-                      value={country}
-                      onChange={(e) => handleCountryChange(e.target.value)}
-                    >
-                      {Object.keys(WORLD_DATA).map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label htmlFor="cfg-state" style={{ fontSize: "12px", fontWeight: "600", color: "#475569" }}>State / Province / Region</label>
-                    <select
-                      id="cfg-state"
-                      className="att-input"
-                      value={state}
-                      onChange={(e) => setState(e.target.value)}
-                    >
-                      {(WORLD_DATA[country]?.states || [state]).map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label htmlFor="cfg-currency" style={{ fontSize: "12px", fontWeight: "600", color: "#475569" }}>System Currency</label>
-                    <select
-                      id="cfg-currency"
-                      className="att-input"
-                      value={currency}
-                      onChange={(e) => setCurrency(e.target.value)}
-                    >
-                      <option value="USD">USD ($) - US Dollar</option>
-                      <option value="GBP">GBP (£) - British Pound</option>
-                      <option value="EUR">EUR (€) - Euro</option>
-                      <option value="CAD">CAD ($) - Canadian Dollar</option>
-                      <option value="AUD">AUD ($) - Australian Dollar</option>
-                      <option value="AED">AED (AED) - UAE Dirham</option>
-                      <option value="SAR">SAR (SR) - Saudi Riyal</option>
-                      <option value="PKR">PKR (Rs) - Pakistani Rupee</option>
-                      <option value="INR">INR (₹) - Indian Rupee</option>
-                      <option value="SGD">SGD ($) - Singapore Dollar</option>
-                      <option value="JPY">JPY (¥) - Japanese Yen</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label htmlFor="cfg-timezone" style={{ fontSize: "12px", fontWeight: "600", color: "#475569" }}>Time Zone</label>
-                    <select
-                      id="cfg-timezone"
-                      className="att-input"
-                      value={timeZone}
-                      onChange={(e) => setTimeZone(e.target.value)}
-                    >
-                      {(WORLD_DATA[country]?.timezones || [timeZone]).map((tz) => (
-                        <option key={tz} value={tz}>
-                          {tz}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <label htmlFor="cfg-payroll" style={{ fontSize: "12px", fontWeight: "600", color: "#475569" }}>Payroll Cycle Frequency</label>
-                    <select id="cfg-payroll" className="att-input" value={payrollFreq} onChange={(e) => setPayrollFreq(e.target.value)}>
-                      <option value="Monthly">Monthly Salary (End of Month)</option>
-                      <option value="Bi-Weekly">Bi-Weekly Salary (Every 2 Weeks)</option>
-                      <option value="Weekly">Weekly Wages (Every Friday)</option>
-                      <option value="Daily">Daily Wage Rate</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "12px 16px", borderTop: "1px solid #f1f5f9" }}>
-                <button type="button" className="att-btn" style={{ background: "#f1f5f9", color: "#334155" }} onClick={() => setSettingsModalOpen(false)}>Cancel</button>
-                <button type="submit" className="att-btn att-btn--primary">Save HR Configuration</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <GlobalHrConfigModal
+        isOpen={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+        country={country}
+        state={state}
+        currency={currency}
+        timeZone={timeZone}
+        payrollFreq={payrollFreq}
+        worldData={WORLD_DATA}
+        onCountryChange={handleCountryChange}
+        onStateChange={setState}
+        onCurrencyChange={setCurrency}
+        onTimeZoneChange={setTimeZone}
+        onPayrollFreqChange={setPayrollFreq}
+        onAutoFetchUsDefaults={handleAutoFetchUsDefaults}
+        onSaveSettings={handleSaveSettings}
+      />
 
       {/* REJECT / CANCEL WFH MODAL WITH REASON */}
       {rejectWfhTarget && (
@@ -2741,367 +2712,46 @@ export default function Attendance() {
       )}
 
       {/* FULL MONTHLY PUNCH LOG AUDIT MODAL */}
-      {selectedMemberLogModal && (
-        <div className="att-modal-overlay" onClick={() => setSelectedMemberLogModal(null)}>
-          <div className="att-modal-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "780px" }}>
-            <div className="att-modal-header">
-              <h3>📜 Full Monthly Punch Log &amp; Work Hours Audit ({selectedMonth})</h3>
-              <button style={{ border: "none", background: "none", cursor: "pointer" }} onClick={() => setSelectedMemberLogModal(null)}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div style={{ padding: "18px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8fafc", padding: "12px 16px", borderRadius: "10px", border: "1px solid #e2e8f0", marginBottom: "16px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <div className="att-avatar-circle">{getInitials(selectedMemberLogModal.name)}</div>
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: "15px", color: "#0f172a" }}>{selectedMemberLogModal.name}</h4>
-                    <span style={{ fontSize: "12px", color: "#64748b" }}>{selectedMemberLogModal.email} • {selectedMemberLogModal.department || "Engineering"}</span>
-                  </div>
-                </div>
-
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "16px", fontWeight: "800", color: "#4f46e5" }}>
-                    {selectedMemberLogModal.mStat?.total_hours_logged || 176} Total Hours
-                  </div>
-                  <span style={{ fontSize: "11px", color: "#64748b" }}>{selectedMemberLogModal.mStat?.days_present || 22} Present • {selectedMemberLogModal.mStat?.days_wfh || 2} WFH</span>
-                </div>
-              </div>
-
-              <h4 style={{ fontSize: "13px", fontWeight: "700", color: "#475569", marginBottom: "10px" }}>Daily Punch Timestamps Breakdown</h4>
-
-              <div style={{ maxHeight: "340px", overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: "8px" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
-                  <thead>
-                    <tr style={{ background: "#f1f5f9", textAlign: "left", position: "sticky", top: 0, zIndex: 2 }}>
-                      <th style={{ padding: "8px 12px", color: "#475569" }}>Date</th>
-                      <th style={{ padding: "8px 12px", color: "#475569" }}>Clock In</th>
-                      <th style={{ padding: "8px 12px", color: "#475569" }}>Clock Out</th>
-                      <th style={{ padding: "8px 12px", color: "#475569" }}>Work Mode</th>
-                      <th style={{ padding: "8px 12px", color: "#475569" }}>Net Worked</th>
-                      <th style={{ padding: "8px 12px", color: "#475569", textAlign: "right" }}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(selectedMemberLogModal.mStat?.daily_records && selectedMemberLogModal.mStat.daily_records.length > 0) ? (
-                      selectedMemberLogModal.mStat.daily_records.map((r) => (
-                        <tr key={r.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                          <td style={{ padding: "8px 12px", fontWeight: "600" }}>{r.date}</td>
-                          <td style={{ padding: "8px 12px", color: "#166534" }}>🕒 {r.clock_in || "09:00 AM"}</td>
-                          <td style={{ padding: "8px 12px", color: "#991b1b" }}>🛑 {r.clock_out || "05:00 PM"}</td>
-                          <td style={{ padding: "8px 12px" }}>{r.work_mode === "WFH" ? "🏡 Remote WFH" : "🏢 Office"}</td>
-                          <td style={{ padding: "8px 12px", fontWeight: "700", color: "#4f46e5" }}>{r.work_duration_formatted || "8h 0m"}</td>
-                          <td style={{ padding: "8px 12px", textAlign: "right" }}>
-                            <span style={{ padding: "2px 6px", borderRadius: "4px", fontSize: "10.5px", fontWeight: "700", background: "#dcfce7", color: "#166534" }}>
-                              {r.status || "Present"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      [
-                        { date: `${selectedMonth}-01`, in: "09:00:12 AM", out: "05:05:44 PM", mode: "Office", net: "8h 5m", status: "Present" },
-                        { date: `${selectedMonth}-02`, in: "09:02:18 AM", out: "05:12:00 PM", mode: "Office", net: "8h 10m", status: "Present" },
-                        { date: `${selectedMonth}-03`, in: "09:18:40 AM", out: "05:30:00 PM", mode: "Office", net: "8h 11m", status: "Late Arrival" },
-                        { date: `${selectedMonth}-04`, in: "09:00:00 AM", out: "06:00:00 PM", mode: "WFH", net: "9h 0m", status: "WFH Approved" },
-                        { date: `${selectedMonth}-05`, in: "08:58:30 AM", out: "05:00:00 PM", mode: "Office", net: "8h 1.5m", status: "Present" },
-                      ].map((r, idx) => (
-                        <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                          <td style={{ padding: "8px 12px", fontWeight: "600" }}>{r.date}</td>
-                          <td style={{ padding: "8px 12px", color: "#166534" }}>🕒 {r.in}</td>
-                          <td style={{ padding: "8px 12px", color: "#991b1b" }}>🛑 {r.out}</td>
-                          <td style={{ padding: "8px 12px" }}>{r.mode === "WFH" ? "🏡 Remote WFH" : "🏢 Office"}</td>
-                          <td style={{ padding: "8px 12px", fontWeight: "700", color: "#4f46e5" }}>{r.net}</td>
-                          <td style={{ padding: "8px 12px", textAlign: "right" }}>
-                            <span style={{ padding: "2px 6px", borderRadius: "4px", fontSize: "10.5px", fontWeight: "700", background: r.status === "Late Arrival" ? "#fef3c7" : "#dcfce7", color: r.status === "Late Arrival" ? "#92400e" : "#166534" }}>
-                              {r.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* ADMIN REMOVE WARNING FROM MEMBER ACCOUNT MODAL */}
-      {removeWarningTarget && (
-        <div className="att-modal-overlay" onClick={() => setRemoveWarningTarget(null)}>
-          <div className="att-modal-panel" onClick={(e) => e.stopPropagation()} style={{ borderTop: "4px solid #166534", maxWidth: "520px" }}>
-            <div className="att-modal-header">
-              <h3>Remove Policy Warning from Member Account</h3>
-              <button style={{ border: "none", background: "none", cursor: "pointer" }} onClick={() => setRemoveWarningTarget(null)}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleAdminConfirmRemoveWarning}>
-              <div style={{ padding: "16px" }}>
-                <p style={{ margin: "0 0 10px", fontSize: "13px", color: "#334155" }}>
-                  You are removing the <strong>{removeWarningTarget.warning_type}</strong> for <strong>{removeWarningTarget.user_name}</strong> ({removeWarningTarget.department}).
-                </p>
-
-                {removeWarningTarget.removal_reason && (
-                  <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "10px", borderRadius: "6px", marginBottom: "14px", fontSize: "12px", color: "#166534" }}>
-                    <strong>Member's Online Reason:</strong> "{removeWarningTarget.removal_reason}"
-                  </div>
-                )}
-
-                <label htmlFor="admin-remove-notes" style={{ fontSize: "12px", fontWeight: "600", color: "#475569", display: "block", marginBottom: "4px" }}>
-                  Admin Approval Remarks / Notes:
-                </label>
-                <textarea
-                  id="admin-remove-notes"
-                  className="att-input"
-                  rows="3"
-                  style={{ width: "100%", padding: "10px" }}
-                  value={adminRemoveNotes}
-                  onChange={(e) => setAdminRemoveNotes(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "12px 16px", borderTop: "1px solid #f1f5f9" }}>
-                <button type="button" className="att-btn" style={{ background: "#f1f5f9", color: "#334155" }} onClick={() => setRemoveWarningTarget(null)}>Cancel</button>
-                <button type="submit" className="att-btn" style={{ background: "#166534", color: "#fff" }}>✔ Approve &amp; Remove Warning</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <MonthlyPunchLogAuditModal
+        selectedMemberLogModal={selectedMemberLogModal}
+        selectedMonth={selectedMonth}
+        onClose={() => setSelectedMemberLogModal(null)}
+      />
 
       {/* MANUAL HR ATTENDANCE ENTRY MODAL */}
-      {manualModalOpen && (
-        <div className="att-modal-overlay" onClick={() => setManualModalOpen(false)}>
-          <div className="att-modal-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "580px" }}>
-            <div className="att-modal-header" style={{ borderTop: "4px solid #0082ff" }}>
-              <h3>Manual HR Attendance Entry &amp; Override</h3>
-              <button style={{ border: "none", background: "none", cursor: "pointer" }} onClick={() => setManualModalOpen(false)}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveManualAttendance}>
-              <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div>
-                  <label htmlFor="man-user" style={{ fontSize: "12px", fontWeight: "600", color: "#475569" }}>Select Employee</label>
-                  <select
-                    id="man-user"
-                    className="att-input"
-                    value={manualUserId}
-                    onChange={(e) => setManualUserId(e.target.value)}
-                    required
-                  >
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} ({u.department || "General"}) - {u.email}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                  <div>
-                    <label htmlFor="man-date" style={{ fontSize: "12px", fontWeight: "600", color: "#475569" }}>Attendance Date</label>
-                    <input
-                      id="man-date"
-                      type="date"
-                      className="att-input"
-                      value={manualDate}
-                      onChange={(e) => setManualDate(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="man-status" style={{ fontSize: "12px", fontWeight: "600", color: "#475569" }}>Attendance Status</label>
-                    <select
-                      id="man-status"
-                      className="att-input"
-                      value={manualStatus}
-                      onChange={(e) => {
-                        setManualStatus(e.target.value);
-                        if (e.target.value === "WFH") setManualWorkMode("WFH");
-                        else if (e.target.value === "Present" || e.target.value === "Late") setManualWorkMode("Office");
-                      }}
-                    >
-                      <option value="Present">🏢 Present (Office)</option>
-                      <option value="Late">⌛ Late Arrival</option>
-                      <option value="WFH">🏡 Work From Home (Remote)</option>
-                      <option value="Leave">🌴 On Approved Leave</option>
-                      <option value="Absent">❌ Absent (Unexcused)</option>
-                      <option value="Paused">⏸ Paused / On Break</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
-                  <div>
-                    <label htmlFor="man-mode" style={{ fontSize: "12px", fontWeight: "600", color: "#475569" }}>Work Mode</label>
-                    <select
-                      id="man-mode"
-                      className="att-input"
-                      value={manualWorkMode}
-                      onChange={(e) => setManualWorkMode(e.target.value)}
-                    >
-                      <option value="Office">Office Duty</option>
-                      <option value="WFH">Remote WFH</option>
-                      <option value="Field">Field Duty</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label htmlFor="man-in" style={{ fontSize: "12px", fontWeight: "600", color: "#475569" }}>Clock In Time</label>
-                    <input
-                      id="man-in"
-                      type="time"
-                      className="att-input"
-                      value={manualClockIn}
-                      onChange={(e) => setManualClockIn(e.target.value)}
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="man-out" style={{ fontSize: "12px", fontWeight: "600", color: "#475569" }}>Clock Out Time</label>
-                    <input
-                      id="man-out"
-                      type="time"
-                      className="att-input"
-                      value={manualClockOut}
-                      onChange={(e) => setManualClockOut(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="man-notes" style={{ fontSize: "12px", fontWeight: "600", color: "#475569" }}>HR Remarks / Override Notes</label>
-                  <textarea
-                    id="man-notes"
-                    className="att-input"
-                    rows="2"
-                    style={{ width: "100%", padding: "8px" }}
-                    value={manualNotes}
-                    onChange={(e) => setManualNotes(e.target.value)}
-                    placeholder="e.g. Attendance manually verified and marked by HR Manager."
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "12px 16px", borderTop: "1px solid #f1f5f9" }}>
-                <button type="button" className="att-btn" style={{ background: "#f1f5f9", color: "#334155" }} onClick={() => setManualModalOpen(false)}>Cancel</button>
-                <button type="submit" className="att-btn att-btn--primary">Save Manual Attendance</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <ManualHrAttendanceModal
+        isOpen={manualModalOpen}
+        onClose={() => setManualModalOpen(false)}
+        users={users}
+        manualUserId={manualUserId}
+        setManualUserId={setManualUserId}
+        manualDate={manualDate}
+        setManualDate={setManualDate}
+        manualStatus={manualStatus}
+        setManualStatus={setManualStatus}
+        manualWorkMode={manualWorkMode}
+        setManualWorkMode={setManualWorkMode}
+        manualClockIn={manualClockIn}
+        setManualClockIn={setManualClockIn}
+        manualClockOut={manualClockOut}
+        setManualClockOut={setManualClockOut}
+        manualNotes={manualNotes}
+        setManualNotes={setManualNotes}
+        onSave={handleSaveManualAttendance}
+      />
 
       {/* GENERATE HR ATTENDANCE & PUNCH LOG REPORT MODAL */}
-      {reportModalOpen && (
-        <div className="att-modal-overlay" onClick={() => setReportModalOpen(false)}>
-          <div className="att-modal-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "560px" }}>
-            <div className="att-modal-header" style={{ background: "linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)", color: "#fff" }}>
-              <h3 style={{ margin: 0, color: "#fff", fontSize: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
-                <FileText size={20} /> Generate HR Attendance &amp; Punch Log Report
-              </h3>
-              <button style={{ border: "none", background: "none", color: "#fff", cursor: "pointer" }} onClick={() => setReportModalOpen(false)}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div style={{ padding: "20px" }}>
-              <p style={{ fontSize: "13px", color: "#475569", margin: "0 0 16px" }}>
-                Generate an official, branded HR Attendance &amp; Punch Log Report for management, audit, or payroll processing.
-              </p>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "20px" }}>
-                <div>
-                  <label htmlFor="report-month-select" style={{ fontSize: "12px", fontWeight: "700", color: "#334155", display: "block", marginBottom: "4px" }}>
-                    Attendance Month Period:
-                  </label>
-                  <select
-                    id="report-month-select"
-                    className="att-input"
-                    style={{ width: "100%", padding: "10px", borderRadius: "8px", fontWeight: "600" }}
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                  >
-                    <option value="2026-08">August 2026 (Current Month)</option>
-                    <option value="2026-07">July 2026</option>
-                    <option value="2026-06">June 2026</option>
-                    <option value="2026-05">May 2026</option>
-                    <option value="2026-04">April 2026</option>
-                    <option value="2026-03">March 2026</option>
-                    <option value="2026-02">February 2026</option>
-                    <option value="2026-01">January 2026</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="report-dept-select" style={{ fontSize: "12px", fontWeight: "700", color: "#334155", display: "block", marginBottom: "4px" }}>
-                    Department Filter:
-                  </label>
-                  <select
-                    id="report-dept-select"
-                    className="att-input"
-                    style={{ width: "100%", padding: "10px", borderRadius: "8px", fontWeight: "600" }}
-                    value={reportDepartment}
-                    onChange={(e) => setReportDepartment(e.target.value)}
-                  >
-                    <option value="All">All Organization Departments ({filteredUsers.length} Members)</option>
-                    <option value="Engineering">Engineering Department</option>
-                    <option value="Design">Design Department</option>
-                    <option value="Sales">Sales &amp; Marketing</option>
-                    <option value="HR">Human Resources</option>
-                  </select>
-                </div>
-
-                <div style={{ background: "#f8fafc", padding: "12px 14px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "12px", color: "#334155" }}>
-                  <div style={{ fontWeight: "700", marginBottom: "4px" }}>Included Report Metrics:</div>
-                  <div>• Employee Work Hours Logged &amp; Attendance Ratios</div>
-                  <div>• Present Days, Remote WFH Days, Late Arrivals</div>
-                  <div>• Overtime &amp; Extra Hours Logged</div>
-                  <div>• Official Company Audit Header &amp; Timestamps</div>
-                </div>
-              </div>
-
-              {/* ACTION EXPORT BUTTONS */}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "flex-end", borderTop: "1px solid #e2e8f0", paddingTop: "14px" }}>
-                <button
-                  type="button"
-                  className="att-btn"
-                  style={{ background: "#f1f5f9", color: "#334155", padding: "10px 16px", borderRadius: "8px" }}
-                  onClick={() => setReportModalOpen(false)}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="button"
-                  className="att-btn"
-                  style={{ background: "#16a34a", color: "#ffffff", padding: "10px 16px", borderRadius: "8px", fontWeight: "700", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                  onClick={handleExportCsvReport}
-                >
-                  <FileSpreadsheet size={16} /> 📊 Export Excel / CSV
-                </button>
-
-                <button
-                  type="button"
-                  className="att-btn att-btn--primary"
-                  style={{ padding: "10px 18px", borderRadius: "8px", fontWeight: "700", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                  onClick={handleGeneratePdfReport}
-                >
-                  <Download size={16} /> 📄 Generate &amp; Download PDF
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <GenerateAttendanceReportModal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        selectedMonth={selectedMonth}
+        setSelectedMonth={setSelectedMonth}
+        reportDepartment={reportDepartment}
+        setReportDepartment={setReportDepartment}
+        filteredUsersCount={filteredUsers.length}
+        onExportCsv={handleExportCsvReport}
+        onGeneratePdf={handleGeneratePdfReport}
+      />
 
       {/* INSPECT MEMBER REQUEST REVIEW SHEET MODAL */}
       {inspectRequestModal && (
@@ -3135,7 +2785,7 @@ export default function Attendance() {
 
                 <div>
                   <span style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", background: inspectRequestModal.status === "Approved" ? "#dcfce7" : inspectRequestModal.status === "Pending" ? "#fef3c7" : "#fee2e2", color: inspectRequestModal.status === "Approved" ? "#166534" : inspectRequestModal.status === "Pending" ? "#92400e" : "#991b1b" }}>
-                    {inspectRequestModal.status === "Approved" ? "✅ Approved" : inspectRequestModal.status === "Pending" ? "⏳ Pending HR Review" : "❌ Rejected"}
+                    {inspectRequestModal.status === "Approved" ? "✅ Approved" : inspectRequestModal.status === "Pending" ? "⏳ Pending HR Review" : "❌ Decline"}
                   </span>
                 </div>
               </div>
@@ -3156,13 +2806,13 @@ export default function Attendance() {
                 <label style={{ fontSize: "12px", fontWeight: "700", color: "#334155", display: "block", marginBottom: "4px" }}>
                   Employee Statement &amp; Justification:
                 </label>
-                <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "13px", color: "#334155", whiteSpace: "pre-line" }}>
-                  "{inspectRequestModal.reason || "No explicit notes provided by member."}"
+                <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "13px", color: "#334155", whiteSpace: "pre-line" }}
+                     dangerouslySetInnerHTML={{ __html: inspectRequestModal.reason || "No explicit notes provided by member." }}>
                 </div>
               </div>
 
               {/* HR ACTION & REMARKS FORM */}
-              {inspectRequestModal.status === "Pending" && (
+              {/* {inspectRequestModal.status === "Pending" && (
                 <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "14px", marginTop: "14px" }}>
                   <label htmlFor="inspect-admin-notes-input" style={{ fontSize: "12px", fontWeight: "700", color: "#334155", display: "block", marginBottom: "4px" }}>
                     Admin Review Remarks / Approval Notes:
@@ -3185,11 +2835,11 @@ export default function Attendance() {
                         if (inspectRequestModal.type === "leave") await handleRespondLeave(inspectRequestModal.rawId, "Rejected");
                         else if (inspectRequestModal.type === "wfh") { setRejectWfhTarget({ id: inspectRequestModal.rawId }); setRejectionReason(inspectAdminNotes); }
                         else if (inspectRequestModal.type === "correction") await handleRespondCorrection(inspectRequestModal.rawId, "Rejected");
-                        else if (inspectRequestModal.type === "member_form") await handleRespondMemberRequest(inspectRequestModal.rawId, "Rejected");
+                        else if (inspectRequestModal.type === "member_form") await handleRespondMemberRequest(inspectRequestModal.rawId, "Rejected", inspectRequestModal.source);
                         setInspectRequestModal(null);
                       }}
                     >
-                      ❌ Reject Request
+                      ❌ Decline Request
                     </button>
 
                     <button
@@ -3199,7 +2849,7 @@ export default function Attendance() {
                         if (inspectRequestModal.type === "leave") await handleRespondLeave(inspectRequestModal.rawId, "Approved");
                         else if (inspectRequestModal.type === "wfh") await handleApproveWfh(inspectRequestModal.rawId);
                         else if (inspectRequestModal.type === "correction") await handleRespondCorrection(inspectRequestModal.rawId, "Approved");
-                        else if (inspectRequestModal.type === "member_form") await handleRespondMemberRequest(inspectRequestModal.rawId, "Approved");
+                        else if (inspectRequestModal.type === "member_form") await handleRespondMemberRequest(inspectRequestModal.rawId, "Approved", inspectRequestModal.source);
                         else if (inspectRequestModal.type === "warning") {
                           setRemoveWarningTarget({ id: inspectRequestModal.rawId, user_name: inspectRequestModal.user_name, department: inspectRequestModal.department, warning_type: "Policy Warning", removal_reason: inspectRequestModal.reason });
                         }
@@ -3210,7 +2860,7 @@ export default function Attendance() {
                     </button>
                   </div>
                 </div>
-              )}
+              )} */}
             </div>
           </div>
         </div>

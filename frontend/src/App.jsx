@@ -71,6 +71,7 @@ const EmployeeDocuments=lazy(()=>import("./pages/HRM/EmployeeDocuments"))
 const Attendance=lazy(()=>import("./pages/HRM/Attendance"))
 const MemberHrmDashboard=lazy(()=>import("./pages/HRM/MemberHrmDashboard"))
 const HrmPerformance=lazy(()=>import("./pages/HRM/HrmPerformance"))
+const Applications=lazy(()=>import("./pages/HRM/Applications"))
 // =======================================================================================
 // =======================================================================================
 class ErrorBoundary extends Component {
@@ -224,29 +225,34 @@ function App() {
             <Route path="/:role/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
             <Route path="/:role/chat/:conversationId" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
 
-          {/* ================HRM ROUTES ============== */}
+          {/* ================ STRICT ROLE-BASED HRM ROUTES ============== */}
           <Route element={<HRMAdminLayout/>}>
-            <Route path="/HRM" element={<HRMAdmin/>} />
-            <Route path="/:role/HRM" element={<HRMAdmin/>} />
-            <Route path="/:role/hrm" element={<HRMAdmin/>} />
-            <Route path="/:role/RecruitmentOnboarding" element={<RecruitmentOnboarding/>} />
-            <Route path="/:role/hrm/recruitment" element={<RecruitmentOnboarding/>} />
-            <Route path="/:role/recruitment" element={<RecruitmentOnboarding/>} />
-            <Route path="/:role/OfferLetters" element={<OfferLetters/>} />
-            <Route path="/:role/offerletters" element={<OfferLetters/>} />
-            <Route path="/:role/hrm/offer-letters" element={<OfferLetters/>} />
-            <Route path="/:role/Workforce" element={<Workforce/>} />
-            <Route path="/:role/workforce" element={<Workforce/>} />
-            <Route path="/:role/hrm/workforce" element={<Workforce/>} />
-            <Route path="/:role/EmployeeDocuments" element={<EmployeeDocuments/>} />
-            <Route path="/:role/documents" element={<EmployeeDocuments/>} />
-            <Route path="/:role/hrm/documents" element={<EmployeeDocuments/>} />
-            <Route path="/:role/hrm/attendance" element={<Attendance/>} />
-            <Route path="/:role/attendance" element={<Attendance/>} />
-            <Route path="/:role/hrm/performance" element={<HrmPerformance/>} />
-            <Route path="/:role/performance" element={<HrmPerformance/>} />
-            <Route path="/:role/hrm/member-dashboard" element={<MemberHrmDashboard/>} />
-            <Route path="/member/hrm" element={<MemberHrmDashboard/>} />
+            {/* Admin / Manager Only HRM Routes */}
+            <Route path="/HRM" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><HRMAdmin/></RoleProtectedRoute>} />
+            <Route path="/:role/HRM" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><HRMAdmin/></RoleProtectedRoute>} />
+            <Route path="/:role/hrm" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><HRMAdmin/></RoleProtectedRoute>} />
+            <Route path="/:role/RecruitmentOnboarding" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><RecruitmentOnboarding/></RoleProtectedRoute>} />
+            <Route path="/:role/hrm/recruitment" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><RecruitmentOnboarding/></RoleProtectedRoute>} />
+            <Route path="/:role/recruitment" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><RecruitmentOnboarding/></RoleProtectedRoute>} />
+            <Route path="/:role/OfferLetters" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><OfferLetters/></RoleProtectedRoute>} />
+            <Route path="/:role/offerletters" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><OfferLetters/></RoleProtectedRoute>} />
+            <Route path="/:role/hrm/offer-letters" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><OfferLetters/></RoleProtectedRoute>} />
+            <Route path="/:role/Workforce" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Workforce/></RoleProtectedRoute>} />
+            <Route path="/:role/workforce" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Workforce/></RoleProtectedRoute>} />
+            <Route path="/:role/hrm/workforce" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Workforce/></RoleProtectedRoute>} />
+            <Route path="/:role/EmployeeDocuments" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><EmployeeDocuments/></RoleProtectedRoute>} />
+            <Route path="/:role/documents" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><EmployeeDocuments/></RoleProtectedRoute>} />
+            <Route path="/:role/hrm/documents" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><EmployeeDocuments/></RoleProtectedRoute>} />
+            <Route path="/:role/hrm/attendance" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Attendance/></RoleProtectedRoute>} />
+            <Route path="/:role/attendance" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Attendance/></RoleProtectedRoute>} />
+            <Route path="/:role/hrm/applications" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Applications/></RoleProtectedRoute>} />
+            <Route path="/:role/applications" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><Applications/></RoleProtectedRoute>} />
+            <Route path="/:role/hrm/performance" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><HrmPerformance/></RoleProtectedRoute>} />
+            <Route path="/:role/performance" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><HrmPerformance/></RoleProtectedRoute>} />
+            
+            {/* Member / Team Lead / Guest Portal HRM Routes */}
+            <Route path="/:role/hrm/member-dashboard" element={<RoleProtectedRoute allowedRoles={["member", "team_lead", "guest"]}><MemberHrmDashboard/></RoleProtectedRoute>} />
+            <Route path="/member/hrm" element={<ProtectedRoute><MemberHrmDashboard/></ProtectedRoute>} />
           </Route>
 
           {/* Candidate Public Offer Portal */}

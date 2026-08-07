@@ -594,12 +594,12 @@ html, body, #root {
   }
 }
 
-/* Responsive container safety for HRM layout */
-.hrm-layout .dashboard-content {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: hidden;
-  box-sizing: border-box;
+/* ── ≤1200px: Sidebar is overlay, content takes full width (matches PMS) ── */
+@media (max-width: 1200px) {
+  .hrm-layout .main-layout {
+    margin-left: 0;
+    width: 100%;
+  }
 }
 
 @media (max-width: 768px) {
@@ -610,4 +610,5 @@ html, body, #root {
     padding: 0 0 10px !important;
     gap: 0 !important;
   }
-}
+}
+

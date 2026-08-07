@@ -84,14 +84,14 @@
 }
 
 .att-tab-btn:hover {
-  color: #2563eb;
+  color: #0082ff;
   background: #f1f5f9;
 }
 
 .att-tab-btn.active {
-  color: #2563eb;
-  border-bottom-color: #2563eb;
-  background: #eff6ff;
+  color: #0082ff;
+  border-bottom-color: #0082ff;
+  background: rgba(0, 130, 255, 0.08);
 }
 
 .att-tab-badge {
